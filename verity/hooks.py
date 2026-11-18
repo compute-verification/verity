@@ -226,10 +226,17 @@ class HoldResident:
     until: int
 
 
-type Request = RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+@dataclass(frozen=True)
+class ReuseOldestFreed:
+    """A scheme's request that a freed range be handed out again only after every range freed before it, so a freed
+    range keeps its values as long as the workload has other ranges to hand out."""
+
+
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+                | ReuseOldestFreed)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "StartOnBoundary",
-           "StepBegan", "StepEnded", "ValueProduced"]
+           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
+           "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced"]

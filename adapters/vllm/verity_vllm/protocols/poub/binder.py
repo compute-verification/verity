@@ -1,22 +1,24 @@
 """`Binder`: the store's hooks into one in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, so the scheduler and
-the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.
+the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.  The
+KV blocks' and the steps' events are the adapter's (`verity_vllm.engine.kv_blocks`), which the binder subscribes to.
 
 ~~~text
 GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
 GPUModelRunner.initialize_kv_cache  after, unless profiling: the KV pool, a region per attention layer, every page filler
                                     (with kv=False, unregistered)
-BlockPool.get_new_blocks            after: kv_alloc of the pages it handed out (with kv=False, none)
-BlockPool.free_blocks               after: kv_free of the pages it freed (with kv=False, none), moved to the back of the free queue (FIFO
-                                    reuse, so a page freed inside a window is reused as late as the pool allows)
-BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
-Scheduler.schedule                  after: a verifier's message since the last pass ends the window, the next
-                                    challenge begins one; then kv_append of the scheduled tokens' slots, which closes
-                                    the last step's memory-map line (with its re-keys for the window just begun), and
-                                    begin_pass over the allocated pages, tagged with the step (a pass still open from
-                                    an earlier schedule is ended first)
-Scheduler.update_from_output        before: end_pass, with the device reader's roots, and end_step (the step's KV is
-                                    written by now, so a memory map takes its digests; the pages vLLM frees after
-                                    this, in update_from_output, are freed at this step)
+RangeAllocated                      kv_alloc of the pages (with kv=False, none)
+RangeFreed                          kv_free of the pages (with kv=False, none); the subscription asks ReuseOldestFreed,
+                                    so a page freed inside a window is reused as late as the pool allows
+RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
+RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
+StepBegan                           a verifier's message since the last pass ends the window, the next challenge begins
+                                    one; then kv_append of the step's writes, which closes the last step's memory-map
+                                    line (with its re-keys for the window just begun), and begin_pass over the
+                                    allocated pages, tagged with the step (a pass still open from an earlier step is
+                                    ended first)
+StepEnded                           end_pass, with the device reader's roots, and end_step (the step's KV is written by
+                                    now, so a memory map takes its digests; the pages vLLM frees after this are freed
+                                    at this step)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -28,7 +30,6 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import math
-import time
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -49,7 +50,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
+from verity.hooks import RangeAllocated, RangeWritten, ReuseOldestFreed, StepBegan, StepEnded
 
+from verity_vllm.engine import kv_blocks
 from verity_vllm.engine.hooks import Hooks
 
 if TYPE_CHECKING:
@@ -271,8 +274,8 @@ class Binder:
         self._in_window = False
         self._seed: bytes | None = None
         self._segments: Sequence[Segment] = ()
+        self._writes: list[Append] = []
         self.unregistered: dict[str, int] = {}
-        self.slots = 0
         self.filler: Any = None
 
     # --- registration -----------------------------------------------------------------------------------------------
@@ -307,7 +310,6 @@ class Binder:
             raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
         pages = int(kv_cache_config.num_blocks)
         if not self.kv:
-            self.slots = slots
             storages = {t.untyped_storage().data_ptr(): t.untyped_storage().nbytes() for t in caches}
             self.unregistered["kv"] = sum(storages.values())
             return
@@ -330,7 +332,6 @@ class Binder:
         held = sum(f.numel() for f in flats.values()) - sum(b.nbytes for b in backings)
         if held:
             self.unregistered["kv[unpaged]"] = held
-        self.slots = slots
         self.store.register_kv_pool("kv", backings, layout, block_bytes=self.block_bytes, codec=self.kv_codec,
                                     receipt=self.receipt, encode=False)
 
@@ -349,32 +350,21 @@ class Binder:
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 
-    def appends(self, sched: Any, so: Any) -> list[Append]:
-        """The slots each scheduled request writes this step: ``[computed - n, computed)`` of its pages (the
-        scheduler has already counted the step's tokens as computed)."""
-        stm = sched.kv_cache_manager.coordinator.single_type_managers[0]
-        out, slots = [], self.slots
-        for rid, n in so.num_scheduled_tokens.items():
-            end = int(sched.requests[rid].num_computed_tokens)
-            blocks, s = stm.req_to_blocks[rid], end - int(n)
-            while s < end:
-                pi, off = divmod(s, slots)
-                c = min(slots - off, end - s)
-                out.append(Append(blocks[pi].block_id, off, c))
-                s += c
-        return out
+    def on_event(self, e: kv_blocks.Event) -> None:
+        """One of the adapter's KV block events (`verity_vllm.engine.kv_blocks`)."""
+        if isinstance(e, StepBegan):
+            self.on_step(e)
+        elif isinstance(e, StepEnded):
+            self.end()
+        elif isinstance(e, RangeWritten):
+            if self.kv:
+                self._writes.append(Append(e.range, e.offset, e.count))
+        elif isinstance(e, RangeAllocated) and e.reused:
+            raise NotImplementedError("the store's binder runs without prefix caching")
+        elif self.kv:
+            (self.store.kv_alloc if isinstance(e, RangeAllocated) else self.store.kv_free)(list(e.ranges))
 
-    def on_free(self, pool: Any, blocks: Sequence[Any]) -> None:
-        """After `BlockPool.free_blocks`: the pages it freed go to filler, and (``fifo``) to the free queue's back."""
-        freed = [b for b in blocks if b.ref_cnt == 0 and not b.is_null]
-        if self.fifo and freed:
-            for b in freed:
-                pool.free_block_queue.remove(b)
-            pool.free_block_queue.append_n(freed)
-        if self.kv:
-            self.store.kv_free([b.block_id for b in freed])
-
-    def on_schedule(self, sched: Any, so: Any) -> None:
+    def on_step(self, step: StepBegan) -> None:
         if self.store.in_pass:
             self.end()
         for m in self.messages() if self.messages is not None else ():
@@ -382,13 +372,11 @@ class Binder:
             if m is not None:
                 self.store.begin_window(m, None if self.windows else self.registration)
                 self._in_window = True
-        t = time.perf_counter()
-        apps = self.appends(sched, so) if self.kv else []
-        self.store.counters.add("appends", time.perf_counter() - t)
-        s, self.step = self.step, self.step + 1
-        self.store.kv_append(apps, s)
+        apps, self._writes = self._writes, []
+        self.step = step.step + 1
+        self.store.kv_append(apps, step.step)
         if self.passes:
-            ps = self.store.begin_pass(None, step=s)
+            ps = self.store.begin_pass(None, step=step.step)
             self._segments, self._seed = ps.segments, ps.seed
 
     def z(self, seed: bytes) -> Callable[[str, int], bytes]:
@@ -441,59 +429,9 @@ class Binder:
 
             h.wrap(cls, "load_model", load)
             h.wrap(cls, "initialize_kv_cache", init_kv)
-        self._install_pool(h)
-        self._install_scheduler(h)
+        h.service("kv-blocks", lambda: kv_blocks.subscribe(self.on_event, *([ReuseOldestFreed()] if self.fifo else [])),
+                  kv_blocks.Subscription.cancel)
         return self
-
-    def _install_pool(self, h: Hooks) -> None:
-        from vllm.v1.core.block_pool import BlockPool
-        binder = self
-
-        def get_new(orig):
-            def get_new_blocks(pool, n):
-                blocks = orig(pool, n)
-                if binder.kv:
-                    binder.store.kv_alloc([b.block_id for b in blocks])
-                return blocks
-            return get_new_blocks
-
-        def free(orig):
-            def free_blocks(pool, ordered):
-                blocks = list(ordered)
-                orig(pool, blocks)
-                binder.on_free(pool, blocks)
-            return free_blocks
-
-        def touch(orig):
-            def refuse(pool, blocks):
-                if any(b.ref_cnt == 0 and not b.is_null for b in blocks):
-                    raise NotImplementedError("the store's binder runs without prefix caching")
-                return orig(pool, blocks)
-            return refuse
-
-        h.wrap(BlockPool, "get_new_blocks", get_new)
-        h.wrap(BlockPool, "free_blocks", free)
-        h.wrap(BlockPool, "touch", touch)
-
-    def _install_scheduler(self, h: Hooks) -> None:
-        from vllm.v1.core.sched.scheduler import Scheduler
-        binder = self
-
-        def schedule(orig):
-            def wrapped(sched, *a, **kw):
-                so = orig(sched, *a, **kw)
-                binder.on_schedule(sched, so)
-                return so
-            return wrapped
-
-        def update(orig):
-            def update_from_output(sched, so, out):
-                binder.end()
-                return orig(sched, so, out)
-            return update_from_output
-
-        h.wrap(Scheduler, "schedule", schedule)
-        h.wrap(Scheduler, "update_from_output", update)
 
     def uninstall(self) -> None:
         if self.hooks is not None:

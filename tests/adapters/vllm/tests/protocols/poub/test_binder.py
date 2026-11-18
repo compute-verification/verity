@@ -1,10 +1,9 @@
 """The binder's pieces on the CPU, against fake vLLM objects: the KV page layout read off a cache tensor's strides,
-weights and KV registration from a runner, the scheduler's appends, FIFO reuse of freed pages, a step's pass, and
-the binder installed on vLLM's classes under the stand-in for vLLM."""
+weights and KV registration from a runner, the KV block hook's events (`engine.kv_blocks`) as the store's steps, allocations
+and frees, a step's pass, and the binder installed on vLLM's classes under the stand-in for vLLM."""
 from __future__ import annotations
 
 import importlib.util
-from collections import deque
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -27,9 +26,12 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify import verify_opening
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
+from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, StepBegan, StepEnded
 
 from tests import fake_vllm
-from verity_vllm.engine.hooks import Hooks, Patch
+from tests.engine.test_kv_blocks import kv_classes
+from verity_vllm.engine import kv_blocks
+from verity_vllm.engine.hooks import Hooks, Patch, Service, live
 from verity_vllm.protocols.poub.binder import (
     KERNEL_BLOCK_SIZES,
     Binder,
@@ -76,22 +78,6 @@ def test_a_transposed_weight_is_backed_in_storage_order_and_a_strided_one_is_not
     b = TorchBacking.of_tensor(base[16:].t(), 1024)
     assert b.nbytes == 3 * 1024 and b.read(0, b.nbytes) == base[16:].numpy().tobytes()
     assert TorchBacking.of_tensor(base[:, :16], 1024) is None
-
-
-class Block:
-    def __init__(self, i: int) -> None:
-        self.block_id, self.ref_cnt, self.is_null = i, 0, i == 0
-
-
-class Queue:
-    def __init__(self, blocks) -> None:
-        self.q = deque(blocks)
-
-    def remove(self, b) -> None:
-        self.q.remove(b)
-
-    def append_n(self, bs) -> None:
-        self.q.extend(bs)
 
 
 def runner(shared: bool = False, interleaved: bool = False):
@@ -282,18 +268,14 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     with pytest.raises(RuntimeError, match="filler is registered"):
         b.register_filler(4096, "cpu")
     m = s.record_memory_map(registration=bytes(range(64)))
-    page = Block(1)
-    page.ref_cnt = 1
-    stm = SimpleNamespace(req_to_blocks={"a": [page]})
-    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
-                            requests={"a": SimpleNamespace(num_computed_tokens=SLOTS)})
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": SLOTS}))
+    b.on_event(RangeAllocated((1,), "a", step=0))
+    b.on_event(RangeWritten(1, 0, SLOTS, 0))
+    b.on_event(StepBegan(0, ("a",), SLOTS))
     r.kv_caches[0][:, 1] = 1.5
-    b.end()
-    page.ref_cnt = 0
-    b.on_free(SimpleNamespace(free_block_queue=Queue([Block(2), page])), [page])
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
-    b.end()
+    b.on_event(StepEnded(0))
+    b.on_event(RangeFreed((1,), step=0))
+    b.on_event(StepBegan(1))
+    b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
     with pytest.raises(RuntimeError, match="no KV pool"):
         s.kv_append([Append(1, 0, 1)], 2)
@@ -322,41 +304,33 @@ def test_a_fixed_schedule_of_no_passes_a_window_is_refused_and_one_with_no_last_
     assert [two() for _ in range(5)] == [[bytes(32)], [], [b"\x01" * 32], [], [b"\x02" * 32]]
 
 
-def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
+def test_steps_append_their_writes_and_free_the_freed_pages():
     s = NodeMemory()
     b = Binder(s, block_bytes=1024)
     r = runner()
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    blocks = [Block(i) for i in range(PAGES)]
-    pool = SimpleNamespace(free_block_queue=Queue(blocks[1:]))
-    a, c = blocks[1:3], blocks[3:4]
-    for x in (*a, *c):
-        x.ref_cnt = 1
-    s.kv_alloc([1, 2, 3])
-    stm = SimpleNamespace(req_to_blocks={"a": a, "c": c})
-    reqs = {"a": SimpleNamespace(num_computed_tokens=20), "c": SimpleNamespace(num_computed_tokens=3)}
-    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
-                            requests=reqs)
-    so = SimpleNamespace(num_scheduled_tokens={"a": 20, "c": 3})
-    assert b.appends(sched, so) == [Append(1, 0, 16), Append(2, 0, 4), Append(3, 0, 3)]
-    b.on_schedule(sched, so)
+    b.on_event(RangeAllocated((1, 2), "a", step=0))
+    b.on_event(RangeAllocated((3,), "c", step=0))
+    for w in (RangeWritten(1, 0, 16, 0), RangeWritten(2, 0, 4, 0), RangeWritten(3, 0, 3, 0)):
+        b.on_event(w)
+    b.on_event(StepBegan(0, ("a", "c"), 23))
     assert s.in_pass and s._open_pass.blocks[0].tolist() == [4, 5, 6, 7]
-    b.end()
+    b.on_event(StepEnded(0))
     assert not s.in_pass and b.step == 1
-    reqs["a"].num_computed_tokens = 21
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": 1}))
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
-    assert s.counters.calls["end_pass"] == 2
-    for x in a:
-        x.ref_cnt = 0
-    pool.free_block_queue.q = deque([blocks[4], blocks[5], *a])
-    b.on_free(pool, a)
-    assert [x.block_id for x in pool.free_block_queue.q] == [4, 5, 1, 2]
+    b.on_event(RangeWritten(2, 4, 1, 1))
+    b.on_event(StepBegan(1, ("a",), 1))
+    b.on_event(StepBegan(2))
+    assert s.counters.calls["end_pass"] == 2 and b.step == 3
+    b.on_event(RangeFreed((1, 2), step=2))
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
+    with pytest.raises(NotImplementedError, match="the store's binder runs without prefix caching"):
+        b.on_event(RangeAllocated((1,), "c", reused=True, step=2))
 
 
-EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(
-    single_type_managers=[SimpleNamespace(req_to_blocks={})])), requests={})
+def steps(b: Binder, n: int) -> None:
+    """``n`` empty steps after the binder's last."""
+    for _ in range(n):
+        b.on_event(StepBegan(b.step))
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
@@ -368,8 +342,7 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    for _ in range(8):
-        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+    steps(b, 8)
     assert [len(w.passes) for w in recs] == [2, 2, 2] and [w.challenge for w in recs] == sigma
     assert recs[1].passes[0].seed == chain(sigma[1], recs[0].passes[-1].root, 0)
     assert (recs[0].passes[0].root, recs[0].passes[0].segment_roots) == (b"\x01" * 64, ()) and b.stats()["windows"] == 3
@@ -391,7 +364,7 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
 
     def step() -> None:
-        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+        steps(b, 1)
 
     step()
     assert s._open_pass.seed is None
@@ -411,8 +384,8 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
 
 @pytest.mark.parametrize("passes", [True, False])
 def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
-    """The binder appends at `Scheduler.schedule`, before the step's forward writes its KV; the memory map takes the
-    step's digests at `end` (`Scheduler.update_from_output`), from the bytes the forward wrote.  A page vLLM frees after
+    """The binder appends at `StepBegan`, before the step's forward writes its KV; the memory map takes the step's
+    digests at `StepEnded`, from the bytes the forward wrote.  A page vLLM frees after
     that (a finished request's, in `update_from_output`) frees its appended blocks at the same step, whose line closes
     when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
@@ -427,19 +400,15 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     def open_step():
         return s._open_pass and s._open_pass.step
 
-    page = Block(1)
-    page.ref_cnt = 1
-    s.kv_alloc([1, 2])
-    stm = SimpleNamespace(req_to_blocks={"a": [page]})
-    sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
-                            requests={"a": SimpleNamespace(num_computed_tokens=SLOTS)})
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={"a": SLOTS}))
+    b.on_event(RangeAllocated((1, 2), "a", step=0))
+    b.on_event(RangeWritten(1, 0, SLOTS, 0))
+    b.on_event(StepBegan(0, ("a",), SLOTS))
     assert open_step() == (0 if passes else None)
     r.kv_caches[0][:, 1] = 1.5
-    b.end()
-    s.kv_free([2])
+    b.on_event(StepEnded(0))
+    b.on_event(RangeFreed((2,), step=0))
     assert m.text().count("\n") == 1
-    b.on_schedule(sched, SimpleNamespace(num_scheduled_tokens={}))
+    b.on_event(StepBegan(1))
     assert open_step() == (1 if passes else None)
     (step,) = memory_map.parse(m.text().splitlines())[1]
     kv = s.region("kv/0")
@@ -462,7 +431,7 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     for _ in range(3):
-        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+        steps(b, 1)
     pc, info = recs[0].passes[1], s.region("0.weight")
     data = [s._regions[0].backing.read(i * 4096, 4096) for i in range(info.blocks)]
     plan = rb.Plan.whole(len(data))
@@ -474,18 +443,19 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
 
 
 FIRST_RUNNER, RUNNER_V2 = "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner"
-SITES = {"runner": ("load_model", "initialize_kv_cache"), "pool": ("get_new_blocks", "free_blocks", "touch"),
-         "scheduler": ("schedule", "update_from_output")}
+RUNNER_SITES = ("load_model", "initialize_kv_cache")
 
 
 def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) -> SimpleNamespace:
-    """vLLM's model runner, block pool and scheduler as `Binder.install` finds them, under the stand-in for vLLM
-    (`tests.fake_vllm`): each method records its call in ``calls`` (the scheduler's, with whether the store had a pass
-    open) and answers with a value of its own.  As vLLM's, a runner has its model (``loads``) once its own `load_model`
-    ran and its KV caches (``binds``) once its own `initialize_kv_cache` did, so a hook that reads either does so after
-    vLLM's own.  The surface holds Model Runner V2 alone; with ``first_runner`` the first runner's module is there
-    too, with a class of its own."""
-    calls: list[tuple] = []
+    """vLLM's model runner, and its KV cache manager, block pool and scheduler (`kv_classes`), as `Binder.install` and the
+    KV block hook find them under the stand-in for vLLM (`tests.fake_vllm`): each method records its call in ``calls``
+    (the scheduler's, with whether the store had a pass open) and answers with a value of its own.  As vLLM's, a runner
+    has its model (``loads``) once its own `load_model` ran and its KV caches (``binds``) once its own
+    `initialize_kv_cache` did, so a hook that reads either does so after vLLM's own.  The surface holds Model Runner V2
+    alone; with ``first_runner`` the first runner's module is there too, with a class of its own."""
+    fake = fake_vllm.install(monkeypatch, extra=[f"{FIRST_RUNNER}:GPUModelRunner"] if first_runner else ())
+    kv = kv_classes(fake, lambda: store.in_pass)
+    calls = kv.calls
 
     def runner_class():
         class GPUModelRunner:
@@ -506,54 +476,14 @@ def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) ->
 
         return GPUModelRunner
 
-    class BlockPool:
-        """As vLLM's: a freed page goes back on the free queue, here at its front."""
-
-        def __init__(self) -> None:
-            self.blocks = [Block(i) for i in range(PAGES)]
-            self.free_block_queue = Queue(self.blocks[1:])
-
-        def get_new_blocks(self, n):
-            got = [self.free_block_queue.q.popleft() for _ in range(n)]
-            for b in got:
-                b.ref_cnt = 1
-            calls.append(("get_new_blocks", n))
-            return got
-
-        def free_blocks(self, ordered):
-            calls.append(("free_blocks", type(ordered).__name__))
-            for b in ordered:
-                b.ref_cnt -= 1
-                self.free_block_queue.q.appendleft(b)
-
-        def touch(self, blocks):
-            calls.append(("touch", [b.block_id for b in blocks]))
-            return "touched"
-
-    class Scheduler:
-        def __init__(self) -> None:
-            vars(self).update(vars(EMPTY))
-            self.output = SimpleNamespace(num_scheduled_tokens={})
-
-        def schedule(self, *a, **kw):
-            calls.append(("schedule", a, kw, store.in_pass))
-            return self.output
-
-        def update_from_output(self, so, out):
-            calls.append(("update_from_output", so is self.output, out, store.in_pass))
-            return "outputs"
-
-    fake = fake_vllm.install(monkeypatch, extra=[f"{FIRST_RUNNER}:GPUModelRunner"] if first_runner else ())
     runners = [runner_class()]
     fake.set(f"{RUNNER_V2}:GPUModelRunner", runners[0])
     if first_runner:
         runners.append(runner_class())
         fake.set(f"{FIRST_RUNNER}:GPUModelRunner", runners[1])
-    fake.set("vllm.v1.core.block_pool:BlockPool", BlockPool)
-    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
-    owners = [*((c, SITES["runner"]) for c in runners), (BlockPool, SITES["pool"]), (Scheduler, SITES["scheduler"])]
-    return SimpleNamespace(calls=calls, runners=runners, pool=BlockPool, scheduler=Scheduler,
-                           sites={(cls, name): vars(cls)[name] for cls, names in owners for name in names})
+    return SimpleNamespace(calls=calls, runners=runners, pool=kv.pool, manager=kv.manager, scheduler=kv.scheduler,
+                           sites={(cls, name): vars(cls)[name] for cls in runners for name in RUNNER_SITES},
+                           kv_sites=kv.sites)
 
 
 @pytest.fixture
@@ -574,19 +504,23 @@ def binder():
 @pytest.mark.parametrize("first_runner", [False, True])
 def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, binder, first_runner):
     """`Binder.install` wraps the two methods of each runner module that is there (the first runner's is skipped where
-    it is absent, as under the surface), the pool's three and the scheduler's two, each under the hooks' tag; a
-    runner's wrappers hand back what vLLM's own methods returned, and its loaded model's weights are registered;
-    `uninstall` leaves each class holding what it held, and does nothing on a binder never installed."""
+    it is absent, as under the surface), each under the hooks' tag, and subscribes to the KV block hook, a service of
+    its hooks, which puts the hook's own patches on; a runner's wrappers hand back what vLLM's own methods returned,
+    and its loaded model's weights are registered; `uninstall` leaves each class holding what it held, and does
+    nothing on a binder never installed."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s, first_runner)
     assert (importlib.util.find_spec(FIRST_RUNNER) is not None) == first_runner
     b = binder(s, block_bytes=1024)
     assert b.install() is b
     hooks = b.hooks
-    assert hooks is not None and len(v.sites) == (9 if first_runner else 7) == len(hooks.entries)
-    assert all(vars(cls)[name] is not own for (cls, name), own in v.sites.items())
+    assert hooks is not None and len(v.sites) == (4 if first_runner else 2) == len(hooks.entries) - 1
+    sites = {**v.sites, **v.kv_sites}
+    assert all(vars(cls)[name] is not own for (cls, name), own in sites.items())
     patches = [e for e in hooks.entries if isinstance(e, Patch)]
     assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-store") for cls, name in v.sites}
+    assert [(e.name, e.tag) for e in hooks.entries if isinstance(e, Service)] == [("kv-blocks", "verity-store")]
+    assert {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(v.kv_sites)
     for i, cls in enumerate(v.runners):
         r = cls()
         r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
@@ -595,7 +529,8 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
         assert v.calls[-1] == ("initialize_kv_cache", True)
     assert [x.name for x in s.layout().regions] == [f"{i}.weight" for i in range(len(v.runners))]
     b.uninstall()
-    assert all(vars(cls)[name] is own for (cls, name), own in v.sites.items()) and hooks.entries == ()
+    assert all(vars(cls)[name] is own for (cls, name), own in sites.items()) and hooks.entries == ()
+    assert live(kv_blocks.TAG) == ()
     Binder(NodeMemory()).uninstall()
 
 
@@ -616,9 +551,10 @@ def test_installed_a_profiling_kv_cache_registers_nothing_and_the_real_one_regis
 
 @pytest.mark.parametrize("kv", [True, False])
 def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touched_back(monkeypatch, binder, kv):
-    """`BlockPool.get_new_blocks` allocates the store's pages and `free_blocks` frees them, moved to the back of
-    vLLM's free queue, when it is handed an iterator too; `touch` of a freed page (a prefix-cache hit) is refused, and
-    of a page in use or the null block is vLLM's own. With ``kv=False`` the same calls reach no store."""
+    """Through the KV block hook, `BlockPool.get_new_blocks` allocates the store's pages and `free_blocks` frees them,
+    moved to the back of vLLM's free queue (the binder asks ReuseOldestFreed); `touch` of a freed page (a prefix-cache hit)
+    is refused, and of a page in use or the null block is vLLM's own. With ``kv=False`` the same calls reach no
+    store."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s)
     binder(s, block_bytes=1024, kv=kv).install()
@@ -628,7 +564,7 @@ def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touche
     assert [x.block_id for x in got] == [1, 2, 3] and v.calls[-1] == ("get_new_blocks", 3)
     assert s.pool.allocated[[1, 2, 3]].all() and not s.pool.allocated[4] if kv else s._pool is None
     assert pool.touch([got[0], pool.blocks[0]]) == "touched" and v.calls[-1] == ("touch", [1, 0])
-    assert pool.free_blocks(iter(got[:2])) is None and v.calls[-1] == ("free_blocks", "list")
+    assert pool.free_blocks(got[:2]) is None and v.calls[-1] == ("free_blocks", "list")
     assert [x.block_id for x in pool.free_block_queue.q] == [4, 5, 1, 2]
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3] if kv else s._pool is None
     with pytest.raises(NotImplementedError, match="the store's binder runs without prefix caching"):
