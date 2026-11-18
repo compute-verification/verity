@@ -251,4 +251,84 @@ def RegisteredCircuitRequirement : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * (2 ^ a * (((qr * τ : ℕ) : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ)
 
+/-- **A registered circuit's held and moved bits from an accepted refresh audit, at the deployed parameters.**
+`RegisteredCircuitRequirement`'s audit, binding and bound under refresh: every credited key is fresh (the lifetime cap
+holds for every tile a pass reads, the registration's included: `RateSketch.LifetimeCappedAll`, in place of
+`RateSketch.LifetimeCapped`), every credited payload is seasoned (`RateSketch.Seasoned`: committed at the registration
+or `L` or more windows before the pass, a re-key inheriting its origin's birth at `seen`), and each append's choices
+read only the coins of the appends before `seen` of it (`RateSketch.ChoosesBefore`: at a fresh append the append-coin
+rule; at a re-key, that its commitment is its origin's, the code's re-key carrying its origin's payload by reference
+at the origin the public rota names). Under those, `ResourceAccounting.Assumptions.SeasonedRebuilds` takes the place
+of `ResourceAccounting.Assumptions.CircuitCarriers`: every pass device rebuilds at most `X_r·τ` bits of all its tiles,
+with no carrier term. So the carrier's `C` leaves `γ`, and with it `SquaringFloor`, `ChainSum`, the gate model's
+property and restricted class of `W` and the cap on the audit's reads; and `owned` and the moved bits drop their filter
+on the registration, so registered blocks earn `W` credit while a pass may plan them. The bound is
+`RegisteredCircuitRequirement`'s, at `γ = γ_sketch(X_r·τ + k·32768)`.
+
+**What it is and is not.** The order is the session's own, its appends and its coins, not yet the proof layer's one
+log. It is for one scheme, per session: a payload another scheme credits, or a value of the workload chosen after a
+bandwidth key's coin, is outside it. Which payloads a plan may credit is the plan's admission, a parameter of the code
+and not fixed here. A registered block is born before the session against this session's coins only. A re-key whose
+stored form encodes a payload other than its origin's (a laundered origin) is a tile whose receipts are not correct on
+the committed store, paid in the sampling term as any such tile is.
+
+Stated, not proved: its proof is `RegisteredCircuitRequirement`'s with `SeasonedRebuilds` for the carrier step. -/
+def RefreshedCircuitRequirement : Prop :=
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L T M : ℕ) (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
+    (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
+    (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
+    (steer : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
+    (joined : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → ℕ) (seen : Fin T → Fin T)
+    (A : RateSketch.SketchSummaryRun a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
+    {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
+    (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)
+    (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
+    (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
+    (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)
+    (plan : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → Finset ℕ)
+    (addr : RateSketch.StackedCoins Ω Ca T n P N ρ G → ℕ → Fin T × Fin M),
+    7 ≤ n → 0 < P → 0 < N →
+    Assumptions.SketchRank 16 128 12 ε →
+    Assumptions.KeyBinding T M δ enc →
+    (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
+    Assumptions.SeasonedRebuilds (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
+      joined choose seen (Xr * τ) L →
+    Assumptions.SteeredLayout layout steer →
+    RateSketch.LifetimeCappedAll layout joined L →
+    RateSketch.Seasoned layout joined seen L →
+    RateSketch.ChoosesBefore choose seen →
+    (∀ x, (p x).Deadlines (bind x) τ ∧ (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
+      ∀ w j,
+        let e := (p x).toExecution
+        Requirement.StoreMatches W e (ℓ x) (σ x) 32768 (bind x w j) ∧
+        Requirement.PlanMatches W e (ℓ x) (plan x w j) 32768 (bind x w j) ∧
+        Requirement.OneBlockEach (ℓ x) (grp x)
+          (Requirement.reads W e (bind x w j) \ Requirement.creditedReads W e (ℓ x) (bind x w j)) ∧
+        Set.InjOn (addr x) ↑(plan x w j) ∧
+        ∀ b ∈ plan x w j, addr x b ∈ Set.range (layout (RateSketch.SketchPrefix.of x.2 w j) x.1)) →
+    let γ := RateSketch.gammaSketch N 128 ρ S (Lr * τ) (Xr * τ + k * 32768)
+    let owned := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (t : ℕ) =>
+      Requirement.blocks (ℓ x) (Requirement.creditedReads W (p x).toExecution (ℓ x) t)
+    let credit := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (t : ℕ) =>
+      let e := (p x).toExecution
+      max (Requirement.bitsAt W (ℓ x) (Requirement.credited W e (ℓ x) t) (owned x t))
+        (Requirement.bits W (Requirement.reads W e t) -
+          ((Requirement.reads W e t \ Requirement.creditedReads W e (ℓ x) t).image (grp x)).card * 32768)
+    let tiles := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) =>
+      Finset.univ.filter fun i : Fin N => layout (RateSketch.SketchPrefix.of x.2 w j) x.1 i ∈
+        (owned x (bind x w j)).image (addr x)
+    let store := RateSketch.programmed (RateSketch.steeredStore enc choose layout)
+    let win := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) =>
+      A.win w x.2 fun j => steer (RateSketch.SketchPrefix.of x.2 w j) x.1
+    pr (fun x : RateSketch.StackedCoins Ω Ca T n P N ρ G =>
+      (∀ w t, (x.2 w).2.2 t ∈ (win x w).correctOn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) : ℕ)) : ℝ) <
+            ((∑ w, ∑ j, credit x (bind x w j) : ℕ) : ℝ) - (0.0015 + γ) * (n * P * N * 32768) ∨
+          ∃ w, (((win x w).readsIn (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1 (tiles x w) : ℕ) : ℝ) <
+            ((∑ j, credit x (bind x w j) : ℕ) : ℝ) - (0.01 + γ) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+        (n * P : ℝ≥0∞) * (2 ^ a * (((qr * τ : ℕ) : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ)
+
 end ResourceAccounting.Guarantees

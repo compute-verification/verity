@@ -1138,6 +1138,37 @@ theorem StackedRunConservationSketchDeployed :
   rw [show 8 * 12 = 96 from rfl]
   ring
 
+/-- **PoUB at the deployed parameters with a store per pass, under refresh**,
+`ResourceAccounting.Guarantees.RefreshedRunConservationSketchDeployed`. -/
+theorem RefreshedRunConservationSketchDeployed :
+    ResourceAccounting.Guarantees.RefreshedRunConservationSketchDeployed := by
+  intro n P N ρ S L q G X qtot T M ε δ Ω Ca Ch _ _ enc choose slot A hn hP hN hrank hKB hB hX
+  let view := coinStore enc choose slot
+  have hcor : ∀ (o : Ω × (Fin T → Ca)) (x x' : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
+      (∀ v, v < w → x v = x' v) → (x w).1 = (x' w).1 → (x w).2.1 = (x' w).2.1 →
+      (A.win w x).correctOn (programmed view o x w) (x w).1 (x w).2.1 =
+        (A.win w x').correctOn (programmed view o x' w) (x' w).1 (x' w).2.1 := by
+    intro o x x' w hlt hσ hp
+    have hη : (fun v : {v : Fin n // v < w} => x v.1) = fun v => x' v.1 := funext fun v => hlt v.1 v.2
+    have hwin : A.win w x = A.win w x' := by
+      simp only [SketchDeployedRun.win]
+      rw [hη]
+    have hpre : ∀ j, SketchPrefix.of x w j = SketchPrefix.of x' w j := fun j => by
+      simp only [SketchPrefix.of]
+      rw [hη, hσ, hp]
+    have hprog : programmed view o x w = programmed view o x' w := funext fun j => by
+      simp only [programmed]
+      rw [hpre j]
+    rw [hwin, hprog, hσ, hp]
+  have hu := SketchDeployedRun.pr_unpaidOn_le A view δ (hKB.uniformBut_coinStore choose slot) 12 X qtot ε
+    (by norm_num) hrank (fun w η j ι c Es σ R O => hX w η j ι c σ Es R O) hB
+  refine (SketchDeployedRun.pr_deployed_of_unpaid_causal
+    (fun o x w => (A.win w x).correctOn (programmed view o x w) (x w).1 (x w).2.1)
+    (fun o x w => (A.win w x).readsOn (programmed view o x w) (x w).1 (x w).2.1)
+    hcor X hn hP hN _ hu).trans (le_of_eq ?_)
+  rw [show 8 * 12 = 96 from rfl]
+  ring
+
 /-- **PoUB with relaying side sources on a programmed store, with stacking**,
 `ResourceAccounting.Guarantees.StackedRunConservationRelay`. -/
 theorem StackedRunConservationRelay : ResourceAccounting.Guarantees.StackedRunConservationRelay := by

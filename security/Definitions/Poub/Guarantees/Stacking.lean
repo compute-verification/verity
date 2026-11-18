@@ -13,7 +13,7 @@ import Mathlib.Basic.ENNReal.Real
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Poub/Carrier.lean`). Five guarantees, whose proofs are in
+(`Definitions/Poub/Carrier.lean`). Six guarantees, whose proofs are in
 `security/Proofs/Poub/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
@@ -26,6 +26,8 @@ contents are a circuit's values, which depend on the encodings only through the 
   carriers' sectors. The stacked stock is charged in every pass's rebuilds: `X` grows by the carriers' bits under the
   property, `8·R_in·life` input bits and `1024·(c_ρ·reads·life)/E` encoded bits over a carrier's life of `life`
   windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
+* `RefreshedRunConservationSketchDeployed`: the same session under refresh, every pass rebuilding at most `X` bits
+  with no carrier term (`ResourceAccounting.Assumptions.SeasonedRebuilds` gives that from refresh's conditions).
 * `StackedRunConservationRelay`: the relay form, in the general class (`RemoteRunConservationRelay`), where a
   carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
   Its store is one for the session, made by the same rule.
@@ -190,6 +192,58 @@ def StackedRunConservationSketchDeployed : Prop :=
           ∃ w, (((A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
               (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
             (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L (X + C))) * (P * N * 32768)))
+      ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
+        (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
+
+/-- **PoUB at the deployed parameters with a store per pass, under refresh: every pass rebuilds at most `X` bits.**
+`StackedRunConservationSketchDeployed`'s game and bound, with its carrier hypothesis replaced by a rebuild bound with
+no carrier term: every pass device rebuilds at most `X` bits at every store, the shortfall terms read at `X` where the
+stacked one has `X + C`, and neither `SquaringFloor`, `ChainSum` nor the carrier's parameters. The store is the stacked
+one: `T` appends, the registration first, each append's choices `choose c ω a κ_<a` fixed before its own coin keys its
+blocks (`RateSketch.coinStore`), so the store a pass reads holds the encodings of what each append committed. The
+error is the stacked one:
+
+  `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + (n·P)·δ`.
+
+**The reading.** Refresh keeps every credited key fresh and every credited payload seasoned, so a pass's tiles carry
+no carrier and the rebuild bound needs no `C`: that step is `ResourceAccounting.Assumptions.SeasonedRebuilds`, the
+premise that gives this hypothesis from `RateSketch.LifetimeCappedAll`, `RateSketch.Seasoned` and
+`RateSketch.ChoosesBefore`. A re-key commits no payload of its own: its payload is its origin's, by reference, at the
+origin the public rota names, so in the game its choices are its origin's. A re-key whose stored form encodes another
+payload (a laundered origin) is a tile whose receipts are not correct on the committed store, paid in this bound's
+sampling term as any such tile is, unless its sectors are rebuilt, which `X` counts. The order is the session's own,
+its appends and coins, not the proof layer's one log; the bound is for one scheme, per session.
+
+Proof: `ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed`: the stacked proof from the rebuild
+bound on, at `X`: an unpaid window has a rank-poor sign matrix or an unpaid pass, an unpaid pass is moved to uniform
+blocks by `KeyBinding` at its prefix and bounded there by the deployed guarantee's one-pass bound, and the samples are
+causal in the passes' correct receipts.
+
+Frozen (no-function, hash): `RemoteRunConservationSketchDeployed`'s game on a store per pass made by the append-coin
+rule, in the random-oracle and ideal encoding models, under the per-pass hash budget and `KeyBinding`. -/
+def RefreshedRunConservationSketchDeployed : Prop :=
+  ∀ (n P N ρ S L q G X qtot T M : ℕ) (ε δ : ℝ≥0∞) {Ω Ca Ch : Type} [Fintype Ω]
+    [Fintype Ca] (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
+    (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
+    (slot : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Fin N ↪ Fin T × Fin M)
+    (A : RateSketch.SketchDeployedRun n P N 128 ρ 512 S L q 16 G 2773),
+    7 ≤ n → 0 < P → 0 < N →
+    Assumptions.SketchRank 16 128 12 ε →
+    Assumptions.KeyBinding T M δ enc →
+    (∀ w η j ι, Assumptions.SketchHashBudget ((A.window w η).device j ι) qtot) →
+    (∀ w η j ι c σ Es R O,
+      let dv := (A.window w η).device j ι c
+      let D := RateSketch.Data.ofParts Es R
+      (dv.prog σ D).rebuilds O D * 256 ≤ X) →
+    pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) =>
+      (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
+        (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
+        ((((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
+              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
+            (1 - (0.0015 + RateSketch.gammaSketch N 128 ρ S L X)) * (n * P * N * 32768) ∨
+          ∃ w, (((A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
+              (x.2 w).1 (x.2 w).2.1 : ℕ) : ℝ) <
+            (1 - (0.01 + RateSketch.gammaSketch N 128 ρ S L X)) * (P * N * 32768)))
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
