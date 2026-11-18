@@ -199,21 +199,93 @@ structure Ref where
 
 def Ref.toJson (r : Ref) : Json := Json.arr #[Json.str (if r.p then "p" else "n"), Lean.toJson r.i, Lean.toJson r.j]
 
+/-- A lane of a grid (PROTOCOL.md §3): leaves of parameter or node `i` from `base`, `e` apart within a run, and its levels
+`(radix, step)`, innermost first, the last one unbounded. -/
+structure Lane where
+  p : Bool
+  i : Nat
+  base : Int
+  e : Int
+  levels : Array (Nat × Int)
+  deriving Inhabited, BEq
+
+/-- The periods a lane's levels count: their radices' product. -/
+def Lane.periods (l : Lane) : Nat := l.levels.foldl (fun a (r, _) => a * r) 1
+
+/-- The leaf of lane `l` at period `t`, offset `o` in its run (`refs.grid_ref`'s arithmetic). -/
+def Lane.leafAt (l : Lane) (t o : Nat) : Int := Id.run do
+  let mut leaf := l.base + (o : Int) * l.e
+  let mut t := t
+  for n in [0:l.levels.size] do
+    let (r, d) := l.levels[n]!
+    if n + 1 == l.levels.size then
+      leaf := leaf + (t : Int) * d
+    else
+      leaf := leaf + ((t % r : Nat) : Int) * d
+      t := t / r
+  return leaf
+
+/-- The least and greatest leaf lane `l` of a whole grid of runs of `run` reaches (`refs.lane_bounds`). -/
+def Lane.bounds (run : Nat) (l : Lane) : Int × Int :=
+  (#[(run, l.e)] ++ l.levels).foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0))
+    (l.base, l.base)
+
 inductive Part where
   | affine (p : Bool) (i base count : Nat)
   | strided (p : Bool) (i : Nat) (base : Int) (inner : Nat) (os is : Int) (count : Nat)
   | explicit (items : Array Ref)
+  | grid (run : Nat) (lanes : Array Lane)
   deriving Inhabited
 
 def Part.count : Part → Nat
   | .affine _ _ _ c => c
   | .strided _ _ _ _ _ _ c => c
   | .explicit it => it.size
+  | .grid run lanes => lanes.size * run * ((lanes[0]?.map Lane.periods).getD 0)
 
 @[inline] def Part.get : Part → Nat → Ref
   | .affine p i b _, k => ⟨p, i, b + k⟩
   | .strided p i b inner os is _, k => ⟨p, i, (b + ((k / inner : Nat) : Int) * os + ((k % inner : Nat) : Int) * is).toNat⟩
   | .explicit it, k => it[k]!
+  | .grid run lanes, k =>
+    let l := lanes[k % (lanes.size * run) / run]!
+    ⟨l.p, l.i, (l.leafAt (k / (lanes.size * run)) (k % run)).toNat⟩
+
+/-- Adjacent levels where one continues the other, merged (`refs._merged_levels`). -/
+def mergedLevels (lv : Array (Nat × Int)) : Array (Nat × Int) :=
+  lv.foldl (fun out (r, d) => match out.back? with
+    | some (r', d') => if d == (r' : Int) * d' then out.pop.push (r' * r, d') else out.push (r, d)
+    | none => out.push (r, d)) #[]
+
+/-- Whether the grid `(run, lanes)` needs the grid form: no affine, strided or explicit part spells it (`refs.spell`,
+which tries those first, after merging). -/
+def gridNeeded (run : Nat) (lanes : Array Lane) : Bool := Id.run do
+  let mut lanes := lanes.map fun l => { l with levels := mergedLevels l.levels }
+  let mut run := run
+  let g := lanes.size
+  if g ≥ 2 then
+    let l0 := lanes[0]!
+    if lanes.all (fun l => l.p == l0.p && l.i == l0.i && l.e == l0.e && l.levels == l0.levels) then
+      let c := lanes[1]!.base - l0.base
+      if (List.range g).all (fun j => lanes[j]!.base == l0.base + (j : Int) * c) && (run == 1 || c == (run : Int) * l0.e) then
+        lanes := #[{ l0 with e := if run == 1 then c else l0.e }]
+        run := run * g
+  if lanes.size == 1 then
+    let l := lanes[0]!
+    let mut e := l.e
+    let mut lv := l.levels
+    for _ in [0:l.levels.size] do
+      match lv[0]? with
+      | some (r, d) =>
+        if run == 1 || d == (run : Int) * e then
+          e := if run == 1 then d else e
+          run := run * r
+          lv := mergedLevels (lv.extract 1 lv.size)
+        else break
+      | none => break
+    if lv.size ≤ 1 then return false
+  if run == 1 && lanes.all (·.levels.isEmpty) then return false
+  return true
 
 /-- A flat sequence of parts (a concatenation spliced in), with each part's first index. -/
 structure Seq where
@@ -289,6 +361,32 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
     let vals := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
     let some (p, i) := within s i (vals.foldl min vals.head!) (vals.foldl max vals.head!) | throw noLeaf
     return #[.strided p i b inner os is c]
+  if let .ok g := j.getObjVal? "grid" then
+    let shape := s!"grid-shape: grid {g.compress} is not [run, [[space, index, base, inner_stride, [[radix, step], ...]], ...]]"
+    let low : Int := -(2 ^ 62 : Nat)
+    let .arr #[run, .arr ls] := g | throw shape
+    let some run := natJ? run | throw shape
+    if run == 0 || ls.isEmpty then throw shape
+    let lanes ← ls.mapM fun l => do
+      let .arr #[sp, i, b, e, .arr lv] := l | throw shape
+      let (some p, some i, some b, some e) := (space sp, natJ? i, intJ? b, intJ? e) | throw shape
+      if b < low || e < low then throw shape
+      let levels ← lv.mapM fun x => do
+        let .arr #[r, d] := x | throw shape
+        let (some r, some d) := (natJ? r, intJ? d) | throw shape
+        if r < 2 || d < low then throw shape
+        pure (r, d)
+      pure ({ p, i, base := b, e, levels } : Lane)
+    if lanes.any (·.periods != lanes[0]!.periods) then
+      throw s!"grid-shape: grid {g.compress}: its lanes' radices multiply to different period counts"
+    if !gridNeeded run lanes then throw s!"grid-spelled: grid {g.compress}: an affine, strided or explicit part spells it"
+    for l in lanes do
+      let (lo, hi) := l.bounds run
+      let ok := match leaves l.p l.i with
+        | some n => 0 ≤ lo && hi < n
+        | none => false
+      if !ok then throw s!"grid-overrun: references {j.compress} reach outside a lane's parameter or node"
+    return #[.grid run lanes]
   if let .ok e := j.getObjVal? "explicit" then
     let .arr items := e | throw "explicit references are a list"
     let rs ← items.mapM fun r => match r with
@@ -299,7 +397,7 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
         | none => throw s!"references {j.compress} name no leaf of a parameter or a node"
       | _ => throw s!"references {j.compress} name no leaf of a parameter or a node"
     return #[.explicit rs]
-  throw s!"references {j.compress}: not affine, strided, explicit, concat or alias"
+  throw s!"references {j.compress}: not affine, strided, explicit, grid, concat or alias"
 
 def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) :=
   parsePartsIn Steps.FUEL j leaves args
@@ -657,6 +755,35 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
     for k in [0:n] do
       step
       if wAt S (at_ k) != wAt t (a + k) then return false
+    return true
+  | .grid run lanes =>
+    -- lane by lane: one width, or the residues its run and levels reach within an array element; else leaf by leaf
+    let laneOk := fun (w : Nat) (l : Lane) => match s.ty? l.p l.i with
+      | none => true
+      | some S =>
+        s.homo? l.p l.i == some w ||
+        let (lo, hi) := l.bounds run
+        rangeWidths S lo.toNat (hi.toNat + 1) == [w] ||
+        match cover S lo.toNat (hi.toNat + 1) with
+        | (.array _ f, off) =>
+          let L := f.leaves
+          L > 0 &&
+          match (#[(run, l.e)] ++ l.levels).foldlM (init := [0]) fun (acc : List Nat) (r, d) => do
+              let R ← residues d r L 4096
+              let c := (acc.flatMap fun x => R.map fun y => (x + y) % L).eraseDups
+              if c.length ≤ 4096 then some c else none with
+          | some A =>
+            let r0 := ((l.base - (off : Int)) % (L : Int)).toNat
+            A.all fun x => wAt f ((r0 + x) % L) == w
+          | none => false
+        | _ => false
+    if let some w := ht then
+      if lanes.all (laneOk w) then return true
+    for k in [0:q.count] do
+      step
+      let r := q.get k
+      if let some S := s.ty? r.p r.i then
+        if wAt S r.j != wAt t (a + k) then return false
     return true
 
 /-- The first leaf of part `q`, read as `t`'s leaves `a …`, that names a leaf of another width than `t` gives it, as an
@@ -1200,6 +1327,7 @@ def Prog.orderViolation (P : Prog) : Option Json := Id.run do
             | .affine p idx _ c => if c > 0 then #[(p, idx)] else #[]
             | .strided p idx _ _ _ _ c => if c > 0 then #[(p, idx)] else #[]
             | .explicit it => it.map fun r => (r.p, r.i)
+            | .grid _ lanes => lanes.map fun l => (l.p, l.i)
           for (p, idx) in names do
             if !(if p then idx < body.params.size else idx < k) then
               return some (Json.mkObj [("definition", Json.str defn.key), ("node", Lean.toJson k), ("arg", Lean.toJson i),
