@@ -10478,6 +10478,37 @@
    },
    "type_hash": "d9b8e7b73eac9ecfe5a11f3aac654fa4c7271ac81a31d054620e4857781dd60f"
   },
+  "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial (h : RecDeploy.KSFixture) :",
+    "  Exists fun aux =>",
+    "    Exists fun nOf =>",
+    "      Exists fun hd =>",
+    "        Exists fun recRest =>",
+    "          ∀ (b : RecDeploy.Brings),",
+    "            Not",
+    "              (Claims.RecGeneric.KSLinkOnC FlockDeploy.sha512",
+    "                (RecDeploy.recBoundAt Flock.Readable.relation",
+    "                    (have __src := RecDeploy.deployedB b;",
+    "                    { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC, rd := __src.rd,",
+    "                      zl := __src.zl, ref := __src.ref, setup := __src.setup })",
+    "                    (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll",
+    "                (RecDeploy.bdDeployed Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)",
+    "                  (FlockDeploy.deployPlainTrimR Flock.Readable.relation RecDeploy.DeployedR.rdR).cols",
+    "                  RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR",
+    "                  RecDeploy.DeployedR.wR)",
+    "                (RecDeploy.deployZkRec Flock.Readable.relation) FlockDeploy.KS.CpDep (fun x => True) 0)"
+   ],
+   "assumptions": ["RecDeploy.KSFixture"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Hm96Hiding", "RecDeploy.KSFixture"],
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+   },
+   "type_hash": "5dbd55ce6cc5a3a5afc8e743f7ae1f843e78b8088f49bba2f9d98126ed0e1777"
+  },
   "Flock.Guarantees.recursiveKSEvery_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -11604,15 +11635,6 @@
    "type_hash": "a593b5f16de693fd90b73a64aabe94764151f7633be9ae62bffeb85d6b825bb2",
    "unfolded_hash": "8d054dd09e0c02971e9c53c1d3aa1ae06e25f28a99b80aa4cbd109bdc3a3ce7d"
   },
-  "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
-   "owner": "@proofs"
-  },
-  "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial": {
-   "owner": "@proofs"
-  },
-  "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest": {
-   "owner": "@proofs"
-  },
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveKSEvery : Flock.Guarantees.RecursiveKSEvery"],
@@ -11625,6 +11647,19 @@
    },
    "type_hash": "b0762ee76e540857155f04ce96e2067f673eb3eeb64c5c4e8bc40079397be698",
    "unfolded_hash": "a4fdf17f7e8431732f8b34b3a574606fa957f1d8aed73fa3d80ed872214c345f"
+  },
+  "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.RecursiveKSEveryDeployed : Flock.Guarantees.RecursiveKSEveryDeployed"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Hm96Hiding"],
+    "reads": []
+   },
+   "type_hash": "ce7333947c7502b4d1e45e6b98da6c3b6d135d807d604023475fd39b757c030a",
+   "unfolded_hash": "86b0e9851bf0d40ebc741d9805f0fac770902002d02df80be67e91dcfaf34371"
   },
   "Flock.SecurityProofs.RecursiveRanRegistered": {
    "owner": "@proofs",
@@ -17905,6 +17940,84 @@
     "reads": ["RecDeploy.TopsAt"]
    },
    "type_hash": "919b736c4f268f4e62f60470e03dc36df20b42a164798dbf71c33334c1a0d8df"
+  },
+  "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest (h : RecDeploy.HonestFixture) :",
+    "  Exists fun mask =>",
+    "    Exists fun b0 =>",
+    "      Exists fun x =>",
+    "        Exists fun aux =>",
+    "          Exists fun nOf =>",
+    "            Exists fun hd =>",
+    "              Exists fun recRest =>",
+    "                Exists fun decI =>",
+    "                  Exists fun w =>",
+    "                    Exists fun ω =>",
+    "                      Exists fun r =>",
+    "                        And",
+    "                          (∀ (s : Nat),",
+    "                            instLTNat.lt s (RecDeploy.nS x) →",
+    "                              Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512",
+    "                                (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd recRest)",
+    "                                (RecDeploy.deployZkRec Flock.Readable.relation)",
+    "                                (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) Claims.Recursion.Form.Dense",
+    "                                (RecDeploy.showsPart RecDeploy.recRead",
+    "                                  (have __src :=",
+    "                                    RecDeploy.VStarHonest.bringsAt mask (RecDeploy.VStarBuild.IrDep x)",
+    "                                      (RecDeploy.deployedB b0) x;",
+    "                                  { tr := RecDeploy.recTr aux nOf hd recRest, hs := __src.hs, nC := __src.nC,",
+    "                                    rd := __src.rd, zl := __src.zl, ref := __src.ref, setup := __src.setup }))",
+    "                                (RecDeploy.cmtTr RecDeploy.recRead) s x (Claims.coinSeq r)",
+    "                                (List.map Prod.fst",
+    "                                  (Claims.run FlockDeploy.sha512",
+    "                                      (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                        (RecDeploy.HonestHalf.bLAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest)",
+    "                                        w)",
+    "                                      (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest).V",
+    "                                      x ω r).msgs))",
+    "                          (And",
+    "                            (∀ (T : Type)",
+    "                              (C :",
+    "                                Claims.Bridge.CoinTree FlockDeploy.Coin T",
+    "                                  ((RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest).V.k",
+    "                                    x))",
+    "                              (τ : T),",
+    "                              Eq",
+    "                                (Claims.Bridge.runCM FlockDeploy.sha512",
+    "                                    (Claims.Bridge.CProver.ofProver",
+    "                                      (RecDeploy.refP (RecDeploy.HonestHalf.IAt decI).V",
+    "                                        (RecDeploy.HonestHalf.bLAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                          recRest)",
+    "                                        w))",
+    "                                    (RecDeploy.HonestHalf.DAt mask (RecDeploy.VStarBuild.IrDep x) b0 x aux nOf hd",
+    "                                        recRest).V",
+    "                                    x C ω r τ).out",
+    "                                Claims.Out.acc)",
+    "                            (And",
+    "                              (Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My",
+    "                                FlockSoundness.Discharge.ZkView.saltHash",
+    "                                (ENNReal.ofReal",
+    "                                  (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                    FlockSoundness.Discharge.ZkView.saltHash)))",
+    "                              (Ne",
+    "                                (ENNReal.ofReal",
+    "                                  (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "                                    FlockSoundness.Discharge.ZkView.saltHash))",
+    "                                ENNReal.instTop.top)))"
+   ],
+   "assumptions": ["RecDeploy.HonestFixture"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["RecDeploy.HonestFixture"],
+    "reads": ["RecDeploy.TopsAt"]
+   },
+   "type_hash": "fcc93145433a01d0578c2742a1a2fd3bcf6263722fd6c8512df54ed024976d02"
   },
   "ResourceAccounting.SecurityProofs.AccelAdditive": {
    "owner": "@compute-research",
@@ -51823,6 +51936,13 @@
     "Flock.Guarantees.RecursiveKSEveryAtRec": "6973164900252223a5f8960d548f8e8967714212276790bb666edd9d169793fc"
    }
   },
+  "Proofs.Flock.RecGeneric.AtFlockCommitted": {
+   "digest": "c34dd4da70f93b8a45b4fcf192abb05e97003c8bbb46d965aecf0ad393b17b13",
+   "definitions": {
+    "Claims.RecGeneric.KSLinkOnC": "ed0bceeda24be8e0d05e2622fd4e98ef3f8b90d4775930dfeaf6aa1d38fd1d8a",
+    "Claims.RecGeneric.linkRhs": "c4ecaab4b86e9129f94d6e4c55d7d857546546c030cc08ba9e8aa2ebbf9b5167"
+   }
+  },
   "Proofs.Flock.RecGeneric.AtFlockCompiled": {
    "digest": "200dcd907c5193fbd3bc33e1393eab07001a13e266ee52991f466b0d48ebae0c",
    "definitions": {
@@ -52020,6 +52140,13 @@
    "digest": "07f6076027a8730806da2c9746ccff167890da067568b99a4beb49d538aaa83b",
    "definitions": {
     "Claims.Bridge.CProver.ofProver": "b85c8160bfbe49a2e681eaed7b3432d1305ff4c9ba5ecf4f4ca8003c1f0fa35a"
+   }
+  },
+  "Proofs.Flock.Recursive.KSEveryCoinTreeStatement": {
+   "digest": "43fcaf81638ec58c8aa083cc87fd5435eee4fcd5dd003487bf37ac395d5ef167",
+   "definitions": {
+    "Flock.Guarantees.RecursiveKSEveryDeployed": "f1ae6d6a624e3f5088f279458f876af108799e01d84b26013fc0ea66d01a8978",
+    "Flock.Guarantees.RecursiveKSEveryDeployedAt": "63d2ecbb2733e01b370d9d68c257085467876d5846e9661c2106b577628ae017"
    }
   },
   "Proofs.Flock.Recursive.KSNontrivial": {
