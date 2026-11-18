@@ -30,6 +30,7 @@ NONE_MADE = "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, 
 #: served_composite.sh up to its composing: its settings, `say` and `exe`, this file sourced, the call, then the products,
 #: which are handed no directory of ONSITE_SKIP (its `skips`)
 STEP = """set -uo pipefail
+TREE=$PWD
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 exe() { echo "exe $*" >> "$CALLS"; return 1; }
 . "$ONSITE_PIECES"
@@ -93,7 +94,8 @@ def _step(tmp_path: Path, d: Path, out: Path, python: str | None = None) -> tupl
         _exe(tree / script, f'#!/bin/sh\necho "{script} $*" >> "$CALLS"\n')
     py = _exe(tmp_path / "python", python or f'#!/bin/sh\nprintf "%s\\n" "$1" >> "{argv}"\nexec {sys.executable} "$@"\n')
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path / "home"), "D": str(d), "OUT": str(out),
-           "P": str(d / "private" / "composite"), "PY": str(py), "ONSITE_PIECES": str(ONSITE_PIECES), "CALLS": str(calls)}
+           "P": str(d / "private" / "composite"), "PY": str(py), "ONSITE_PIECES": str(ONSITE_PIECES), "CALLS": str(calls),
+           "PYTHONPATH": str(ROOT)}
     r = subprocess.run(["bash", "-c", STEP], env=env, cwd=tree, check=False, capture_output=True, text=True)
     log = d / "private" / "composite" / "onsite_cases.log"
     lines = [(head, json.loads(body)) for head, _, body in (line.partition(" ") for line in log.read_text().splitlines())]
