@@ -19,7 +19,7 @@
   "calibration/machine_model/verity_machine_model/skip.py": 1,
   "calibration/pouw/dc/analyze.py": 3,
   "calibration/pouw/dc/census.py": 9,
-  "calibration/pouw/sass_census/diff_menu.py": 5,
+  "calibration/pouw/sass_census/diff_menu.py": 1,
   "calibration/pouw/theory/fold_min.py": 3,
   "calibration/pouw/theory/fold_routes.py": 5,
   "infra/control/top_watch.py": 1,
