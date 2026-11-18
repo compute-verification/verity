@@ -30,6 +30,8 @@ LOCAL = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC
          "PEARLC_CHALLENGER_PEER": "", "DEVELOPMENT": "1"}
 PEARLPLUS = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "PEARLC_CHALLENGER_GATE": "gate-command",
              "PEARLC_CHALLENGER_PEER": "peer-1", "H1_KEY_SHA512": KEY}
+#: what remote's file asks of Pearl+: its class and the uniform tie
+ASKED = {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2", "PEARLPLUS_TIE_UNIFORM": "1"}
 OPTIONAL = {"PEARLC_CHALLENGER_LANE", "MAIN_FILE", "V3C_CLASS", "CLASSES", "PEARLPLUS_TIE_UNIFORM"}
 
 
@@ -85,7 +87,7 @@ def test_without_bindings_no_key_blocks_and_pearl_pluss_coins_are_the_workloads_
     for on in ((), ("--on", T.PROVER_NODE)):
         rc, got, err = dry(capsys, *on)
         assert rc == 0 and [x["unbound"] for x in got["dry"]] == [[]], err
-        assert hooks_of(got) == LOCAL
+        assert hooks_of(got) == LOCAL | ASKED
     assert T.unbound(cfg, {}) == []
     variables = T.variables(cfg, {})
     assert [k for k, v in variables.items() if "<" in v] == []
@@ -144,9 +146,8 @@ def test_the_runners_variables_under_remote_are_pearl_pluss_and_onsites_carry_no
     cfg = R.load(CONFIG, REG)
     serve = T.SERVE.variables(cfg, BINDINGS)
     assert {k: serve[k] for k in ("REPO", "PRECISION", "SLOTS", "WINDOW_STEPS", "LOAD")} == {
-        "REPO": "verity-int8/Llama-3.2-1B-INT8", "PRECISION": "verity_int8", "SLOTS": "4", "WINDOW_STEPS": "16",
-        "LOAD": "varied"}
-    variables = serve | {"DEVELOPMENT": "1"} | PEARLPLUS | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
+        "REPO": "unsloth/Llama-3.2-1B", "PRECISION": "bfloat16", "SLOTS": "4", "WINDOW_STEPS": "2", "LOAD": "fixed"}
+    variables = serve | {"DEVELOPMENT": "1"} | PEARLPLUS | ASKED | {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": "[]"}
     assert T.variables(cfg, BINDINGS) == variables
     both = {"challenger": {"pearl-plus": {**BINDINGS["challenger"]["pearl-plus"], "lane": "vllm-2",
                                           "main-file": "/tmp/main.json"}}}
@@ -162,7 +163,7 @@ def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload
                                                                                    **{"window-steps": 2}))
     assert rc == 0, err
     assert {k: hooks_of(got).get(k) for k in ("V3C_CLASS", "CLASSES")} == {"V3C_CLASS": "4,27,2", "CLASSES": "4,27,2"}
-    for params, workload in (({"class": "4,27,2"}, {}), ({"class": "5,27,2"}, {"window-steps": 2})):
+    for params, workload in (({"class": "4,27,2"}, {"window-steps": 16}), ({"class": "5,27,2"}, {"window-steps": 2})):
         rc, _, err = dry(capsys, config=remote(tmp_path, params, **workload))
         assert rc == 2 and "refused params: Pearl+'s class" in err, err
     for bad in ("4,27", "4,0,2", "a,b,c", 4):
@@ -173,8 +174,8 @@ def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload
 
 
 def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
-    assert "PEARLPLUS_TIE_UNIFORM" not in T.variables(R.load(CONFIG, REG), BINDINGS)
-    assert R.load(CONFIG, REG)["params"][PP] == {"tie-uniform": False}
+    assert T.variables(R.load(CONFIG, REG), BINDINGS)["PEARLPLUS_TIE_UNIFORM"] == "1"
+    assert R.load(CONFIG, REG)["params"][PP] == {"class": "4,27,2", "tie-uniform": True}
     for asked, want in ((True, "1"), (False, None)):
         rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"tie-uniform": asked}))
         assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
@@ -201,7 +202,7 @@ def test_the_workload_runs_once_with_pearl_pluss_hooks(tmp_path, capsys, monkeyp
     here = sorted(p["name"] for p in R.load(CONFIG, REG)["party"] if p["machine"] == T.PROVER_NODE)
     assert said(capsys.readouterr().out, "PARTY") == [{"party": p, "refused": None} for p in here] and "workers" in here
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == PEARLPLUS | {"SLOTS": "4", "WINDOW_STEPS": "16"}
+    assert hooks == PEARLPLUS | ASKED | {"SLOTS": "4", "WINDOW_STEPS": "2"}
 
 
 def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_path, capsys, monkeypatch):
@@ -214,7 +215,7 @@ def test_without_bindings_the_workload_runs_with_no_gate_and_no_placeholder(tmp_
     rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--state", str(state)], REG)
     assert rc == 0 and set(parties(capsys).values()) == {None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | {"SLOTS": "4", "WINDOW_STEPS": "16"}
+    assert hooks == {k: v for k, v in LOCAL.items() if k != "DEVELOPMENT"} | ASKED | {"SLOTS": "4", "WINDOW_STEPS": "2"}
 
 
 HANDED = "HANDOFF the final record, composed off this node: on COMPOSE_NODE (auditor-2)"
