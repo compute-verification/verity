@@ -4,9 +4,13 @@ its own and makes no ring; a take no ring has room for waits for a give, and eve
 taken inside inference mode take copies outside it.  The copies that land in the arena on a card are the e2e's.  And a
 pass's hm96 salts (`fresh_into`, `PassSalts`): the next leaves of its own keyed stream, its key drawn at its first fill and
 dropped at its end, a fill after it or in a forked process refused by name, one card fill on the caller's stream with no
-host bytes; the card's bytes are `sha512_stream`'s card tests'.
+host bytes, and every fill in `verity_torch` naming its run's current pass; the card's bytes are `sha512_stream`'s card
+tests'.
 """
 from __future__ import annotations
+
+import ast
+from pathlib import Path
 
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT
@@ -207,3 +211,42 @@ def test_on_a_card_one_fill_launch_on_the_given_stream_else_the_current_one(keys
     assert [f[:3] for f in fills] == [(("lib", dev), PH.SALT_INDEX, 0), (("lib", dev), PH.SALT_INDEX, 32)]
     assert [f[3]["stream"] for f in fills] == [123, 777]
     assert log == [("slice", HM96_SALT * 32), ("view", (32, HM96_SALT)), ("slice", HM96_SALT * 7), ("view", (7, HM96_SALT))]
+
+
+#: every salts fill in `verity_torch`, by module of `pearl_c` and enclosing function
+FILLS = {("ends.py", "_close"), ("graphs.py", "_graph_call"), ("grouped.py", "_gemm_grouped"), ("lanes_device.py", "_lanes"),
+         ("lanes_device.py", "_replay_lanes"), ("whole_calls.py", "whole_replay")}
+
+
+def _binds_current_pass(f: ast.AST) -> bool:
+    """Whether function `f` binds ``cur`` to its run's current pass (``self.cur`` or ``run.cur``) and to nothing else."""
+    got = set()
+    for a in ast.walk(f):
+        if isinstance(a, ast.Assign) and len(a.targets) == 1:
+            names, values = a.targets[0], a.value
+            pairs = zip(names.elts, values.elts, strict=True) if isinstance(names, ast.Tuple) and isinstance(values, ast.Tuple) \
+                else [(names, values)]
+            got |= {ast.unparse(v) for n, v in pairs if isinstance(n, ast.Name) and n.id == "cur"}
+    return bool(got) and got <= {"self.cur", "run.cur"}
+
+
+def test_every_salts_fill_names_its_runs_current_pass():
+    """Each `fresh_into` call in `verity_torch` is one of `FILLS` and passes ``salts=`` its run's current pass's: a fill
+    before any begin is the run's first pass's, dropped at its end or the next begin, and one after an end is refused by
+    name (`NO_OPEN_PASS`).  A new fill is added to `FILLS` with how it reaches its pass."""
+    root = Path(PH.__file__).parents[2]
+    found = set()
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(), str(path))
+        for f in ast.walk(tree):
+            if not isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for call in ast.walk(f):
+                if not (isinstance(call, ast.Call) and getattr(call.func, "id", getattr(call.func, "attr", None)) == "fresh_into"):
+                    continue
+                at = (path.name if path.parent.name == "pearl_c" else str(path.relative_to(root)), f.name)
+                salts = {k.arg: ast.unparse(k.value) for k in call.keywords}.get("salts")
+                assert salts == "self.cur.salts" or (salts == "cur.salts" and _binds_current_pass(f)), \
+                    f"{at} line {call.lineno}: a fill names its run's current pass (salts=self.cur.salts), not {salts}"
+                found.add(at)
+    assert found == FILLS, f"the salts fills are {sorted(found)}: list a new one in FILLS with how it reaches its pass"
