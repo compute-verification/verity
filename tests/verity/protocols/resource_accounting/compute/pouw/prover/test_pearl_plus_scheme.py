@@ -22,12 +22,14 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
-def test_bound_refuses_a_charge_it_does_not_state() -> None:
+def test_bound_reads_its_term_at_the_parameters_given() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
-    with pytest.raises(ValueError, match="pearl-plus: its delta_scheme .* is not said"):
-        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names)
+    with pytest.raises(ValueError, match=r"Pouw.PearlC.δPearlC is evaluated at \['q', 'N'\], and \['N'\] were not given"):
+        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64})
+    got = S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64, "N": 2**20})
+    assert got.term == "Pouw.PearlC.δPearlC" and got.delta_scheme == Fraction(2**64 + 2**20, 2**128)
     with pytest.raises(ValueError, match="charges are"):
-        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0})
+        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0}, {"q": 1, "N": 1})
 
 
 CTX = {"pearl-plus": {"challenger": "127.0.0.1:1", "kernel": "k.so"}}

@@ -15,13 +15,14 @@ sampling rate stand under the tie to its tables, with the weaker tie its record 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, Term, register
 
 OPTION = "pouw:pearl-c-h100-v1-h3"
 #: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
@@ -150,6 +151,10 @@ PEARL_PLUS = register(Scheme(
     log=(Order("weightsRoot", "pouw/salt"), Order("commitment", "pouw/draw")),
     charges=(Charge("inert-work", "rho"), Charge("sample", "epsilon"), Charge("over-bound-tiles", "over_cap_draws"),
              Charge("excluded-rows", "give_up")),
+    delta_scheme=Term("Pouw.PearlC.δPearlC", ("q", "N"), lambda q, N: Fraction(q + N, 2**128)),
+    over="399 × the MACs credited: each passed tile's credited cells times the record's kept width |K|",
+    under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
+          "at g₀ = 1/400)",
     settings={"tie-uniform": False},
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
