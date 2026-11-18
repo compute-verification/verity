@@ -28,7 +28,7 @@ custody, an uncounted egress, the node's memory outside the declared tiers (`und
 leaves out (`wipe_period.store_gaps`) and each link leaving the node that no network attester counts
 (`wipe_party.link`).
 The wipe scheme's attach (`wipe_served.attach`) runs the subprotocol on this node, with the side its launcher hands it
-(`benchmarks/pous/streamed_wipe/demo.sh` on one GPU, through `verity_vllm.messages.Exchange.attach`).
+(`benchmarks/pous/streamed_wipe/served_wipe.sh` on one GPU, through `verity_vllm.messages.Exchange.attach`).
 """
 
 from __future__ import annotations

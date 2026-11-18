@@ -328,7 +328,7 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
 def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
     """With no judge built already the wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
     judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
-    demo.sh. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
+    the launcher. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
     one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
     d, home = tmp_path / "wipe", tmp_path / "home"
     home.mkdir()

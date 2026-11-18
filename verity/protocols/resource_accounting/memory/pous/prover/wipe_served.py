@@ -18,7 +18,7 @@ What its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings`` and ``pr
 - ``pins``: the application's ``[[pin]]`` entries, read-only. Its ``memory-challenger`` pin for ``wipe`` is the one
   key the verifier trusts, and all of them are the deployment's pins (`period.deployment`);
 - ``configuration``: the committed configuration's hash, or absent;
-- ``trusted``: a key the run pins for the wipe itself (`demo.sh`'s ``--trusted-sha512``), trusted in place of the pins'
+- ``trusted``: a key the run pins for the wipe itself (the launcher's ``WIPE_KEY_SHA512``), trusted in place of the pins'
   key; the pins still decide the premise, so a key they don't give reads rehearsal (`wipe_party.placement`);
 - ``node``: the wiped server's id (this host's name by default);
 - ``judge``: the Lean ``wipe-protocol`` executable. Without it the Python's accept decides nothing (`wipe_period.NO_JUDGE`);
@@ -205,7 +205,9 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
     served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins) else "run"}
-    return Wiped(answer, json.loads((private / "wipe.json").read_text()) | {"served": served})
+    record = json.loads((private / "wipe.json").read_text()) | {"served": served}
+    (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
+    return Wiped(answer, record)
 
 
 __all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check_settings",
