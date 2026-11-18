@@ -1,7 +1,9 @@
 """The honest responder, the prover's side of PoUS's timed audit: each challenged index answered from the stored encoding.
 
-`server_root` is the root the server reports for its `C` at setup, which the verifier's `setup.check_server_root`
-compares with its own. `HonestResponder` answers an `audit.simulate` round as an oracle program with no queries, and gives a root-only memory
+`server_root` is the root the server reports for its `C` at setup. On a served run only the tie compares that root
+(`period.tie`, and `PousCheck.RunProtocol.tie` with `SetupProtocol.check`, which hold it to the root of the `C*` setup
+decoded), run by the prover's piece on the developer's node with both sides from the prover's case; no auditor-side entry
+compares it. `HonestResponder` answers an `audit.simulate` round as an oracle program with no queries, and gives a root-only memory
 attester the audit path; `responder` answers a `protocol.TimedAudit` run through its scheme's `respond`.
 """
 from __future__ import annotations
