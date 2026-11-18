@@ -1297,12 +1297,12 @@ def _without(stage: str | None):
         setattr(ref, name, whole)
 
 
-def _program_wires(text: str, tids, cuts) -> list[dict] | None:
-    """The wires the Program `text`'s root states (`reference.program_wires`), None where it refuses them."""
+def _program_wires(text: str, tids, cuts) -> list[dict] | Exception:
+    """The wires the Program `text`'s root states (`reference.program_wires`), or what it raised refusing them."""
     try:
         return ref.program_wires(json.loads(text), tids, cuts)
-    except (ValueError, KeyError, TypeError):
-        return None
+    except (ValueError, KeyError, TypeError) as e:
+        return e
 
 
 def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
@@ -1319,7 +1319,7 @@ def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
         return None
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
     wires = _program_wires(text, lays, doc.get("cuts", {}))
-    if wires is None:
+    if isinstance(wires, Exception):
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
@@ -1490,7 +1490,7 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
-        case["spot"] = None if wires is None else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
+        case["spot"] = None if isinstance(wires, Exception) else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
                                                    "wires": wires}
 
 
