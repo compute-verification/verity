@@ -824,8 +824,10 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   obtain ⟨cm, roots, -, -, -, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨l, start, openings, os, -, -, hop, -, -, hr, -⟩ := Properties.Challenger.Coins.stream_ok hstream
-  rw [challengerStream_ok hstream, ← zipIdx_filter_length, hr, List.length_range']
+  obtain ⟨l, start, openings, os, hl, -, hop, -, -, hr, -⟩ := Properties.Challenger.Coins.stream_ok hstream
+  obtain ⟨L, hL, hs⟩ := challengerStream_size hstream
+  obtain rfl : L = l := jsonStrIs_inj hL (by rw [hl]; simp [_root_.Spot.jsonStrIs])
+  rw [hs, hr, List.length_range']
   rw [hop] at hops
   exact Nat.mul_le_mul (le_refl _) hops
 
