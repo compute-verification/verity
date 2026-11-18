@@ -41,14 +41,14 @@ proofs only from the record, so no check of the record establishes either fact:
 
 Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/
 def RecordCustodyExec {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Audit.SamplingDesign n) : Prop :=
+    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.DecodeZL.RecordsLive I dj wr ∧ ∀ ω, Discharge.DecodeZL.SampleOk I dj mPts (L.draw ω)
 
 /-- **The record is the live session's, without `--zk`, under hidden outputs** (`live-verifier`, as
 `RecordCustodyExec`): the record is the live session's (`RecordsLive`), and at every sample of `L` its sample file proves
 the sampled proof blocks and the hidden-output statement sets up at it with `mPts` link points (`SampleOkH`). -/
 def RecordCustodyExecH {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Audit.SamplingDesign n) : Prop :=
+    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.DecodeZL.RecordsLive I dj wr ∧ ∀ ω, Discharge.HiddenDec.SampleOkH I dj mPts (L.draw ω)
 
 end FlockSoundness.Assumptions

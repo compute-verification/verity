@@ -100,7 +100,7 @@ files' constants, are within `F`, when on `C` the units unbound under any openin
 opens a value are (`hgame`), and every value `val` opens passes `Cm` under `roots` (`hval`). -/
 theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
     {C : Verity.Boolean.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
-    {P : FlockSoundness.Audit.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
+    {P : Spot.Sampling.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
     {κ₀ : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Option Bool} {κ : Fin C.N → Option Bool} (hκ : HEq κ₀ κ)
     (hcon : ∀ g, Verity.parsedConsts (some r) g = κ₀ g)
     {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {roots : List Claims.Msg} {val : ℕ → Option Bool}

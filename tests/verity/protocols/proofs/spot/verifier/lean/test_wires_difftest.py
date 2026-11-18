@@ -259,30 +259,6 @@ def ordered(templates, wires, order):
     return None
 
 
-def reference_sampled(j):
-    """The sampled proof blocks' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
-    _keys(j, {"templates", "cuts", "wires", "drawn", "reads", "writes"})
-    drawn, reads, writes = set(), {}, {}
-    for d in _list(j["drawn"], "drawn"):
-        if len(_list(d, "a drawn unit")) != 2:
-            raise D.Reject("a drawn unit is [template, unit]")
-        drawn.add((_str(d[0], "template"), _nat(d[1], "unit")))
-    for d in _list(j["reads"], "reads"):
-        if len(_list(d, "a read")) != 5:
-            raise D.Reject("a read is [template, unit, port, row, string]")
-        reads.setdefault((_str(d[0], "t"), _nat(d[1], "u"), _str(d[2], "p"), _nat(d[3], "r")), _str(d[4], "s"))
-    for d in _list(j["writes"], "writes"):
-        if len(_list(d, "a write")) != 4 or not _int(d[1]):
-            raise D.Reject("a write is [template, unit, out, string]")
-        writes.setdefault((_str(d[0], "t"), d[1], _str(d[2], "o")), _str(d[3], "s"))
-    got = expand(j)
-    if got.get("ok") is False:
-        return got
-    rows = [(q, tuple(wr)) for q, (wr, _) in got["entries"].items() if q[:2] in drawn]
-    bad = sorted(q for q, wr in rows if not (q in reads and wr in writes and reads[q] == writes[wr]))
-    return {"ok": True, "accepted": not bad, "checked": len(rows), "bad": [list(q) for q in bad]}
-
-
 # --- strategies ------------------------------------------------------------------------------------------------------
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text("ab/1", max_size=3),
@@ -392,50 +368,15 @@ def _orders(draw, templates: dict, wires: list):
     return order
 
 
-@st.composite
-def sampled_instances(draw, broken: bool = False):
-    """An instance of `instances` with some units sampled, and public strings for most of their wired rows and writers,
-    mostly equal, some another string or missing."""
-    j = draw(instances())
-    del j["queries"]
-    got = expand(j) if not broken else {"ok": False}
-    drawn = [[draw(st.sampled_from(NAMES)), draw(st.integers(0, 9))] for _ in range(draw(st.integers(0, 4)))]
-    reads, writes = [], []
-    if got.get("ok") is not False:
-        for q, (wr, _) in got["entries"].items():
-            if draw(st.integers(0, 2)):
-                drawn.append(list(q[:2]))
-            s = draw(st.sampled_from(["s", "s", "s", "t"]))
-            if draw(st.integers(0, 9)):
-                reads.append([*q, s])
-            if draw(st.integers(0, 9)):
-                writes.append([*wr, draw(st.sampled_from(["s", s]))])
-    j |= {"drawn": drawn, "reads": reads, "writes": writes}
-    if broken:
-        j[draw(st.sampled_from(["drawn", "reads", "writes", "wires"]))] = draw(JSON)
-    return j
-
-
 INPUTS = st.one_of(*[instances() for _ in range(6)], instances(broken=True), JSON)
-SAMPLED_INPUTS = st.one_of(*[sampled_instances() for _ in range(6)], sampled_instances(broken=True), JSON)
 WIRES = D.Port(PIECES, "wires", reference, INPUTS, package=PACKAGE, of_record="lean")
 WIRES_UNROLLED = D.Port(PIECES, "wires_unrolled", reference, INPUTS, package=PACKAGE, of_record="lean")
-
-WIRES_DRAWN = D.Port(PIECES, "wires_drawn", reference_sampled, SAMPLED_INPUTS, package=PACKAGE, of_record="lean")
-WIRES_SAMPLED_UNROLLED = D.Port(PIECES, "wires_drawn_unrolled", reference_sampled, SAMPLED_INPUTS, package=PACKAGE,
-                              of_record="lean")
 
 pieces = D.server_fixture(WIRES)
 
 
 @pytest.mark.parametrize("port", [WIRES, WIRES_UNROLLED], ids=["wires", "wires_unrolled"])
 def test_a_wires_piece_agrees(pieces, port):
-    stats = D.run(port, examples=1500, server=pieces)
-    assert stats.outputs > 1000 and stats.rejects > 0, stats
-
-
-@pytest.mark.parametrize("port", [WIRES_DRAWN, WIRES_SAMPLED_UNROLLED], ids=["wires_drawn", "wires_drawn_unrolled"])
-def test_a_sampled_wires_piece_agrees(pieces, port):
     stats = D.run(port, examples=1500, server=pieces)
     assert stats.outputs > 1000 and stats.rejects > 0, stats
 
@@ -540,74 +481,3 @@ def test_the_order(pieces, name, j, want):
     assert got["ok"] is True if want is True else got == want
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(got)), fn
-
-
-def test_the_sampled_check_reads_only_sampled_proof_blocks(pieces):
-    """The gather with unit 1 sampled: its three wired rows are checked; unit 0's row that is not its writer's is not."""
-    j = _gather()
-    del j["queries"]
-    j |= {"drawn": [["A", 1]],
-          "reads": [["A", 1, "k", 0, "s3"], ["A", 1, "k", 1, "s4"], ["A", 1, "k", 2, "s5"], ["A", 0, "k", 0, "bad"]],
-          "writes": [["G", u, "o0", f"s{u}"] for u in range(6)]}
-    want = {"ok": True, "accepted": True, "checked": 3, "bad": []}
-    assert reference_sampled(j) == want
-    for fn in ("wires_drawn", "wires_drawn_unrolled"):
-        assert pieces.call(fn, j) == ("output", D.canonical(want))
-    j["drawn"] = [["A", 0], ["A", 1]]
-    want = {"ok": True, "accepted": False, "checked": 6, "bad": [["A", 0, "k", 0], ["A", 0, "k", 1], ["A", 0, "k", 2]]}
-    assert reference_sampled(j) == want
-    for fn in ("wires_drawn", "wires_drawn_unrolled"):
-        assert pieces.call(fn, j) == ("output", D.canonical(want))
-
-
-#: `OneStageZk.WIRES_TEMPLATE` and `OneStageZk.WIRES_SAMPLED`
-WIRES_TEMPLATE = ("wiring: a template of the wiring is not one range of the verifier's partition holding exactly its "
-                  "units: a template's unit u is the population's unit first + u")
-WIRES_SAMPLED = ("wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its "
-                 "member's public file is not the writer's row's in the writer's member's")
-
-
-def _window(**change) -> dict:
-    """The gather as a per-member window (`OneStageZk.membersWiresPiece`): `G`'s units are the population's 0 to 5, in
-    members ``G/c0`` (4 units) and ``G/c1`` (2), and `A`'s are 6 and 7, member ``A/c0``; a `G` unit w's ``o0`` row is
-    the string ``s<w>``, and `A`'s unit u's ``k`` rows (``k#0`` to ``k#2``) are its writers', ``s<3u + c>``.
-    ``change``: a member's ports or a slot's rows by name, or the instance's other keys."""
-    wiring = {k: v for k, v in _gather().items() if k != "queries"}
-    members = {"G/c0": (0, 4), "G/c1": (4, 2), "A/c0": (6, 2)}
-    ports = {"G/c0": ["x", "o0"], "G/c1": ["x", "o0"], "A/c0": ["k#0", "k#1", "k#2", "o0"]}
-    rows = {"G/c0": [[f"x{w}", f"s{w}"] for w in range(4)], "G/c1": [[f"x{w}", f"s{w}"] for w in (4, 5)],
-            "A/c0": [[f"s{3 * u + c}" for c in range(3)] + [f"a{u}"] for u in range(2)]}
-    ports |= change.pop("ports", {})
-    rows |= change.pop("rows", {})
-    return {"wiring": wiring, "ranges": [["G", 0, 6], ["A", 6, 2]], "sample": [0, 6, 7],
-            "members": [{"name": n, "first": f, "count": c, "ports": ports[n], "rows": rows[n]}
-                        for n, (f, c) in members.items()]} | change
-
-
-def _tampered(unit: int, row: int, s: str) -> dict:
-    """``A/c0``'s rows with its unit ``unit``'s ``k#<row>`` the string ``s``."""
-    rows = [[f"s{3 * u + c}" for c in range(3)] + [f"a{u}"] for u in range(2)]
-    rows[unit][row] = s
-    return {"A/c0": rows}
-
-
-@pytest.mark.parametrize("name, j, want", [
-    ("an honest window", _window(), None),
-    ("a wired row of a unit of the sample that is not its writer's", _window(rows=_tampered(1, 2, "bad"), sample=[7]),
-     WIRES_SAMPLED),
-    ("an unsampled unit's wired row that is not its writer's", _window(rows=_tampered(1, 2, "bad"), sample=[0, 6]), None),
-    ("a wired row and its writer's both empty", _window(rows=_tampered(1, 2, "") | {
-        "G/c1": [["x4", "s4"], ["x5", ""]]}, sample=[7]), WIRES_SAMPLED),
-    ("a member with no port of the row's name", _window(ports={"A/c0": ["k#0", "k#1", "k#9", "o0"]}, sample=[7]),
-     WIRES_SAMPLED),
-    ("a template whose range is not its units", _window(ranges=[["G", 0, 5], ["A", 5, 2]]), WIRES_TEMPLATE),
-    ("a template in two ranges", _window(ranges=[["G", 0, 3], ["G", 3, 3], ["A", 6, 2]]), WIRES_TEMPLATE),
-    ("a wiring SPOT refuses", _window(wiring={**_window()["wiring"], "wires": [
-        {**_gather()["wires"][0], "writer": "H"}]}), "proofs: wiring: SPOT's check refuses it (template, wire 0)"),
-], ids=lambda x: x if isinstance(x, str) else "")
-def test_the_per_member_forms_wires(pieces, name, j, want):
-    """The per-member form's wires check (`OneStageZk.wiresOn`): each wired row of a unit of the sample is its writer's output
-    row in the members' rows, by its port's name in its member (a cut row ``port#r``) and its writer's ``out``, neither
-    empty; an unsampled unit is not read; each template of the wiring is one range of the partition of its units; and
-    a wiring SPOT's check refuses is refused as the parameters' parser refuses it."""
-    assert pieces.call("members_wires", j) == ("output", D.canonical({"refusal": want})), name

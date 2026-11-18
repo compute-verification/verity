@@ -10,8 +10,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangeWritten, ReuseOldestFreed, StepBegan,
-                          StepEnded)
+from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues,
+                          ReuseOldestFreed, StepBegan, StepEnded)
 
 from tests import fake_vllm
 from verity_vllm import messages
@@ -19,7 +19,8 @@ from verity_vllm.engine import hooks, kv_blocks
 
 PAGES, SLOTS = 6, 16
 SITES = {"manager": ("allocate_slots",), "pool": ("get_new_blocks", "free_blocks", "touch"),
-         "scheduler": ("schedule", "update_from_output")}
+         "scheduler": ("schedule", "update_from_output"), "runner": ("load_model", "initialize_kv_cache")}
+FIRST_RUNNER, RUNNER_V2 = kv_blocks.RUNNERS
 
 
 class Block:
@@ -38,11 +39,40 @@ class Queue:
         self.q.extend(bs)
 
 
-def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None) -> SimpleNamespace:
-    """vLLM's KV cache manager, block pool and scheduler, set on the installed stand-in ``fake``: each method records its
-    call in ``calls`` (the scheduler's with ``state()`` at the call) and answers with a value of its own; a freed block
-    goes to the free queue's front, as vLLM's does, and ``touch`` only records."""
+def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None, first_runner: bool = False,
+               held: Callable[[], dict[str, Any]] = dict) -> SimpleNamespace:
+    """vLLM's model runner, KV cache manager, block pool and scheduler, set on the installed stand-in ``fake``: each
+    method records its call in ``calls`` (the scheduler's with ``state()`` at the call) and answers with a value of its
+    own; a freed block goes to the free queue's front, as vLLM's does, and ``touch`` only records.  As vLLM's, a runner
+    has its model (``loads``) once its own `load_model` ran and its KV caches (``binds``) once its own
+    `initialize_kv_cache` did, from ``held()``'s ``model`` and ``kv_caches``; its other attributes are the rest of
+    ``held()``.  The surface holds Model Runner V2 alone; with ``first_runner`` the first runner's module is there
+    too (``fake`` installed with it), with a class of its own."""
     calls: list[tuple] = []
+
+    def runner_class():
+        class GPUModelRunner:
+            def __init__(self) -> None:
+                h = held()
+                self.loads, self.binds = h.pop("model", None), h.pop("kv_caches", None)
+                vars(self).update(h)
+
+            def load_model(self, *a, **kw):
+                calls.append(("load_model", a, kw))
+                self.model = self.loads
+                return "loaded"
+
+            def initialize_kv_cache(self, kv_cache_config, is_profiling=False):
+                calls.append(("initialize_kv_cache", is_profiling))
+                self.kv_caches = self.binds
+                return "kv"
+
+        return GPUModelRunner
+
+    runners = [runner_class()] + ([runner_class()] if first_runner else [])
+    fake.set(f"{RUNNER_V2}:GPUModelRunner", runners[0])
+    if first_runner:
+        fake.set(f"{FIRST_RUNNER}:GPUModelRunner", runners[1])
 
     class BlockPool:
         def __init__(self) -> None:
@@ -94,8 +124,9 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
     fake.set("vllm.v1.core.block_pool:BlockPool", BlockPool)
     fake.set("vllm.v1.core.kv_cache_manager:KVCacheManager", KVCacheManager)
     fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
-    owners = [(KVCacheManager, SITES["manager"]), (BlockPool, SITES["pool"]), (Scheduler, SITES["scheduler"])]
-    return SimpleNamespace(calls=calls, pool=BlockPool, manager=KVCacheManager, scheduler=Scheduler,
+    owners = [(KVCacheManager, SITES["manager"]), (BlockPool, SITES["pool"]), (Scheduler, SITES["scheduler"]),
+              *((r, SITES["runner"]) for r in runners)]
+    return SimpleNamespace(calls=calls, pool=BlockPool, manager=KVCacheManager, scheduler=Scheduler, runners=runners,
                            sites={(cls, name): vars(cls)[name] for cls, names in owners for name in names})
 
 
@@ -218,3 +249,21 @@ def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkey
     sched.schedule()
     assert heard[-2:] == [RangeFreed((2,), step=2), StepBegan(2, (), 0)] and got[1].ref_cnt == 0
     assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 3, 4, 5]
+
+
+def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):
+    """After vLLM's own `load_model`, the loaded model's parameters, each by name; after vLLM's own
+    `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's ranges with each layer's
+    cache a store."""
+    caches = [SimpleNamespace(numel=lambda: 2 * PAGES * SLOTS * 64, element_size=lambda: 2)] * 2
+    w = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 1, data="w")
+    model = SimpleNamespace(named_parameters=lambda: [("w", w)])
+    v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {
+        "model": model, "kv_caches": caches, "cache_config": SimpleNamespace(block_size=SLOTS),
+        "kernel_block_sizes": [SLOTS]})
+    heard = subscribe()
+    r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
+    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"),))]
+    assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
+    assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
+    assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]

@@ -66,7 +66,7 @@ open FlockDeploy (Coin)
 open RecDeploy.CoinTie
 
 theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as :=
-  FlockSoundness.Audit.SampleExec.qsort_perm as lt
+  Spot.Sampling.SampleExec.qsort_perm as lt
 
 theorem utf8_inj {s t : String} (h : s.toUTF8.toList = t.toUTF8.toList) : s = t := by
   rw [byteArray_toList_eq, byteArray_toList_eq] at h
@@ -224,7 +224,7 @@ theorem staged_coinTie_unique {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPa
     exact Option.some.inj hsrc
   rw [hrec] at hdec
   obtain ⟨R', hRead', sp, hsp, hall⟩ := coinTie_core
-    (fun a lt x hx => (FlockSoundness.Audit.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
+    (fun a lt x hx => (Spot.Sampling.SampleExec.mem_qsort a lt x).1 hx) hic hR hdec hfind
   obtain ⟨R'', hRead'', huniq⟩ := coinTie_unique hic hR hdec hfind
   rw [hRead] at hRead' hRead''
   cases hRead'

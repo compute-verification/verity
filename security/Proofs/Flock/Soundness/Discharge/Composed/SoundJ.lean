@@ -43,7 +43,7 @@ only through the positions the sample reads and `ρ`, a bound on every table's r
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 

@@ -51,8 +51,8 @@ WL=$TREE/adapters/vllm/workloads/$ROW.json; LOGS=$W/logs; PORT=${PORT:-$(( 18200
 fail() { stop_group; echo "SERVE-FRESH FAILED $1: $2"; exit 1; }
 refuse() { echo "serve_fresh: $1" >&2; echo "SERVE-FRESH FAILED check: $1"; exit 3; }
 
-if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=$VENV/bin:${CUDA_HOME:-/usr/local/cuda}/bin:$PATH
+[ -n "${CUDA_HOME:-}" ] || refuse "CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)"
+export CUDA_HOME PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 [ -n "$GPU" ] && export CUDA_VISIBLE_DEVICES=$GPU
 if [ "$DRY" = 1 ]; then
   echo "serve_fresh --dry-run: tree $TREE"

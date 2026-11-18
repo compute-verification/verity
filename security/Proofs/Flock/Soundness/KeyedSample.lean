@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.Audit.RegDraw
-public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Spot.Sampling.RegDraw
+public import Proofs.Spot.Sampling.Window
 public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Flock.Soundness.ExecSampleOS
 public import Proofs.Flock.Soundness.PlanDraw
 import all Init.Data.String.Defs
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Std.Data.HashMap.Lemmas
 
@@ -48,7 +48,9 @@ The window (`PlanDraw.executionPhase`, `plan.draw` for each call under one key, 
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.KeyedSample
+namespace Spot.Sampling.KeyedSample
+
+open FlockSoundness
 
 open Game Finset SampleExec
 open scoped ENNReal
@@ -349,9 +351,11 @@ theorem loopPK_streamsOf {k L : ℕ} (G : Fin k → Fin L → Fin 256) (n : ℕ)
       obtain ⟨r, rest⟩ := rr
       exact ih _ fun j hj => hl j (List.mem_cons_of_mem _ hj)
 
-end FlockSoundness.Audit.KeyedSample
+end Spot.Sampling.KeyedSample
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal
@@ -381,9 +385,11 @@ theorem subsetOn_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
           (fun t ht => absurd ht (Nat.not_lt_zero t))
     _ = (subset n k hk).missProb B := by rw [subset_escape, hcard, Nat.sub_zero]
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
-namespace FlockSoundness.Audit.KeyedSample
+namespace Spot.Sampling.KeyedSample
+
+open FlockSoundness
 
 open Game Finset SampleExec Randomness
 open scoped ENNReal
@@ -509,9 +515,11 @@ theorem sampleOn_units (T : ℕ → ℕ → ByteArray) : ∀ (WS : List (List Pa
             List.mem_append_right _ (by simpa using h2 i hi)⟩
 
 
-end FlockSoundness.Audit.KeyedSample
+end Spot.Sampling.KeyedSample
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset SampleExec Randomness
 open scoped ENNReal
@@ -711,7 +719,7 @@ theorem keyedExecutionPhase_escape_le (σ : Fin n → Fin M) (k : Fin M → ℕ)
             executionPhaseTest WS k B fun j => ⟨Array.ofFn fun b => UInt8.ofFin (f j b)⟩) + η := hA4 B hinj
       _ ≤ (stratified σ k hk).missProb B + η := by gcongr
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
 namespace FlockSoundness.Randomness
 
@@ -889,7 +897,9 @@ theorem frames_inj' {l l' : List Part} (hs : (frames l).size < 2 ^ 64) (h : fram
 
 end FlockSoundness.Randomness
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset Randomness
 open scoped ENNReal
@@ -993,9 +1003,11 @@ theorem keyedExecutionPhase_escape_le_of_names (σ : Fin n → Fin M) (k : Fin M
       simp only [hadm, ↓reduceIte] at hd
       exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset Randomness
 open scoped ENNReal
@@ -1119,4 +1131,4 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
 
 end Audits
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign

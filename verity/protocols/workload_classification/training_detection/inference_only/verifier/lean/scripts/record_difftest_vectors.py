@@ -67,6 +67,9 @@ Then an opening that declares its `row` (`ROW_ROLE`): the served shape's record 
 that returns the row opened, taken where it is the first of the reader's two outputs, the second its verdict, and
 refused with the declarations where it is the verdict's own output, no output, an input row or no string; and the one
 whose row is its verdict's output under no pin (`ROW_UNPINNED`), refused with the declarations as under the pin.
+Then one template in two root nodes (`SPLITS`): the served shape's `Norm` batch split into two root nodes of half
+its members each, side by side and with `Gemm`'s node between, each taken with the served shape's verdict, its units
+numbered across the two; and the record stating one unit fewer than their sum, refused with its templates.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -1013,7 +1016,10 @@ def shaped() -> list[dict]:
     Then a row format (`FORMATS`), each at two slots and three positions under the same policy and pin but the last,
     a `passed_on` weight under the policy of exactly what its blocks hold. A format the registration log holds is
     taken; one it does not is refused (`formats`), and the case is counted without that stage; one the form's shape
-    refuses is edited into the accepted record and refused with the declarations (`inputs`)."""
+    refuses is edited into the accepted record and refused with the declarations (`inputs`).
+
+    Then `Norm`'s batch split into two root nodes (`SPLITS`, `split`): side by side and with `Gemm`'s between, each
+    taken with the served shape's verdict, and with the record one unit short of their sum, refused (`templates`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1143,6 +1149,35 @@ def shaped() -> list[dict]:
         count = select["args"][0]["refs"]["affine"][3]
         select["args"][0]["refs"] = {"affine": ["n", nodes.index(units(nodes)[2]), 0, count]}
 
+    def split(apart: bool):
+        """`Norm`'s batch split into two root nodes of half its members each, the second right after the first or,
+        `apart`, after `Gemm`'s: one template in two root nodes, its units numbered across them."""
+        def edit(nodes: list, desc: dict) -> None:
+            norm = units(nodes)[2]
+            k, n = nodes.index(norm), norm["n"]
+            h = n // 2
+            second = copy.deepcopy(norm)
+            for node, m in ((norm, h), (second, n - h)):
+                node["n"] = m
+                for a in node["args"]:
+                    _, src, start, count = a["refs"]["affine"]
+                    per = count // n
+                    a["refs"]["affine"] = ["n", src, start + (per * h if node is second else 0), per * m]
+                    a["type"] = _halved(desc, a["type"], m)
+                node["out"] = _halved(desc, node["out"], m)
+            at = k + 2 if apart else k + 1
+            nodes.insert(at, second)
+            moved = {i: i + (i >= at) for i in range(len(nodes))}
+            ret = desc["definitions"][desc["root"]]["body"]["ret"]["concat"]
+            for j, r in reversed(list(enumerate(ret))):
+                _, i, start, count = r["affine"]
+                if i == k:
+                    ret[j:j + 1] = [{"affine": ["n", k, start, count * h // n]},
+                                    {"affine": ["n", at, start, count * (n - h) // n]}]
+                else:
+                    r["affine"][1] = moved[i] if i > k else i
+        return edit
+
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
     first("2x3 a row every unit shares", lowered(2, 3), 28, reroot=shared, broken="own-rows")
     first("2x3 a row of computed gates", lowered(2, 3), 29, reroot=computed, broken="own-rows")
@@ -1187,6 +1222,11 @@ def shaped() -> list[dict]:
     first(f"2x3 {ROW_UNPINNED}", lowered(2, 3),
           47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE), pins=[],
           edit=opening(row=ROW_ROLE[ROW_VERDICT][1]), broken=ROW_ROLE[ROW_VERDICT][0])
+    for k, (what, (apart, short)) in enumerate(SPLITS.items()):
+        first(f"2x3 {what}", lowered(2, 3),
+              48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + k,
+              reroot=split(apart), broken="templates" if short else None,
+              edit=(lambda d: d["templates"][2].__setitem__(1, d["templates"][2][1] - 1)) if short else None)
     return out
 
 
@@ -1436,6 +1476,24 @@ def case(seed: int) -> dict:
     if stage in EARLY:
         made["case"]["spot"] = None
     return made | {"shape": "random", "broken": stage, "how": how}
+
+
+#: `Norm`'s batch split into two root nodes (`split`): by its shape, whether `Gemm`'s node lies between the two, and
+#: whether the record states one unit fewer than their sum (refused `templates`)
+SPLITS: dict[str, tuple[bool, bool]] = {
+    "a template in two root nodes": (False, False),
+    "a template in two root nodes with another between": (True, False),
+    "a template in two root nodes, its units not their sum": (False, True),
+}
+
+
+def _halved(desc: dict, t: int, m: int) -> int:
+    """The index of the descriptor's type `t`, an Array, at length `m`, added to its types where it has none."""
+    types = desc["types"]
+    want = [types[t][0], m, types[t][2]]
+    if want not in types:
+        types.append(want)
+    return types.index(want)
 
 
 def _rewrite(made: dict, edit) -> None:
@@ -1928,7 +1986,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE) + 1 + len(SPLITS)
 
 
 def results(case: dict) -> dict:

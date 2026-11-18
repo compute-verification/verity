@@ -50,11 +50,11 @@ DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
-# DeepGEMM and FlashInfer JIT-compile with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one.
+# DeepGEMM and FlashInfer JIT-compile with CUDA_HOME's nvcc.
 # vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH; FLASHINFER=1 (the default, as a serving
 # install with a CUDA toolkit has it) puts the nvcc on PATH: FlashInfer's sampler, autotune and fused all-reduce + RMSNorm.
 # FLASHINFER=0 leaves it off, and its sampler too.
-CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
+CUDA_HOME="${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}"
 export CUDA_HOME
 # FlashInfer's JIT finds CUDA_HOME's headers and libraries itself: an inherited CPATH or LIBRARY_PATH could mix toolkits
 unset CPATH LIBRARY_PATH

@@ -61,6 +61,12 @@ def hexes (j : Json) (k : String) : E (Array ByteArray) := do
     | _ => throw s!"{k} holds a non-string"
   | _ => throw s!"{k} is not an array"
 
+/-- `salts`: a tree's salts, one a row in rank order, or null for a plain tree. -/
+def salts (j : Json) : E (Option (Array ByteArray)) := do
+  match ← field j "salts" with
+  | .null => pure none
+  | _ => some <$> hexes j "salts"
+
 def part : Json → E Part
   | .obj kv => match kv.get? "b", kv.get? "s", kv.get? "i" with
     | some (.str h), none, none => return .bytes (← unhex h)
@@ -95,15 +101,11 @@ def outcome (kind : String) (i : Json) : E Json := do
       | h => throw s!"no frame hash {h}"
     return hexJ (← Domain.mk? h (← unhexField i "binding") (← int i "owner") (← nat i "count")).id
   | "commit_rows" =>
-    let key ← match ← field i "salt_key" with
-      | .null => pure none
-      | .str s => pure (some (← unhex s))
-      | _ => throw "salt_key is hex or null"
-    return hexJ (← commitRows (← unhexField i "binding") (← int i "owner") (← hexes i "rows") (← str i "hash") key
-      (← nat i "nonce") (← bool i "digests") (← bool i "public"))
+    return hexJ (← commitRows (← unhexField i "binding") (← int i "owner") (← hexes i "rows") (← str i "hash")
+      (← salts i) (← bool i "digests") (← bool i "public"))
   | "transcript" =>
     return hexJ (← transcriptRoot (← unhexField i "salt") (← unhexField i "weights_root") (← hexes i "digests")
-      (← str i "hash") (← unhexField i "salt_key"))
+      (← str i "hash") (← salts i))
   | "verify" =>
     let d ← rowsDomain (← unhexField i "binding") (← int i "owner") (← nat i "count") (← str i "hash") (← bool i "digests")
     let root ← unhexField i "root"
