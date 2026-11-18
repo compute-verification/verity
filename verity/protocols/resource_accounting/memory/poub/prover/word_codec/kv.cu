@@ -1362,10 +1362,15 @@ static_assert(MT * HW % 32 == 0 && 32 % HW == 0, "whole decoder warps, a token's
 // (g', t') = S[g'] and S[g' + 8] at 128 wi + 8κ .. 8κ + 3, then 8κ + 4 .. 8κ + 7, wi its word of head g, as ±1 bytes;
 // kv_rc_pass). After the tile lane (g', t') holds head g's share of σ for tokens 2t' and 2t' + 1, rows g' and g' + 8,
 // which go to rc_sk[(slot KV_HEADS + g) 16 + row]; rc_receipt_kernel sums a slot's KV_HEADS shares and hashes σ.
+// At 512 bits (HW = 8) warp i holds four tokens, 4 i + u, column 2u + h holding token u's K (h = 0) or V (h = 1)
+// words; K word t' and V word t' share k-lane t', so each k-step runs one MMA against K's signs (kRcA[g][κ]) and one
+// against V's (kRcA[g][RK + κ]), and lane (g', t') adds the first's column 2t' to the second's 2t' + 1: token
+// 4 i + t''s share, rows g' and g' + 8.
 constexpr int RK = WB / 8;
-constexpr bool RC3_OK = MMA_OK && HW == 4 && TLE == 4096 && TL_BYTES == 4096;
-constexpr int rc_smem(int rc) { return mws_smem() + (rc == 3 ? RK * 32 * 16 : 0); }
-__device__ uint4 kRcA[KV_HEADS][RK][32];
+constexpr int RKA = HW == 8 ? 2 * RK : RK;
+constexpr bool RC3_OK = MMA_OK && (HW == 4 || HW == 8) && TLE == 4096 && TL_BYTES == 4096;
+constexpr int rc_smem(int rc) { return mws_smem() + (rc == 3 ? RKA * 32 * 16 : 0); }
+__device__ uint4 kRcA[KV_HEADS][RKA][32];
 __constant__ u64 kKvMid[8];
 
 __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u32 a3, u32 b0, u32 b1) {
@@ -1373,6 +1378,16 @@ __device__ __forceinline__ void imma16832(int (&d)[4], u32 a0, u32 a1, u32 a2, u
       "{%0, %1, %2, %3};"
       : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
       : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+
+// Form 13's k-steps at HW = 8: a lane's A at a[32 κ] (K's signs) and a[32 (RK + κ)] (V's), its raw word x as B.
+__device__ __forceinline__ void rc_kv8(const uint4 *a, const u32 (&x)[NL], int (&ck)[4], int (&cv)[4]) {
+#pragma unroll
+  for (int kk = 0; kk < RK; ++kk) {
+    const uint4 u = a[32 * kk], v = a[32 * (RK + kk)];
+    imma16832(ck, u.x, u.y, u.z, u.w, x[2 * kk], x[2 * kk + 1]);
+    imma16832(cv, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
+  }
 }
 
 __device__ __forceinline__ void ldg_word(const u32 *p, u32 (&x)[NL]) {
@@ -1419,7 +1434,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
       for (int l = 0; l < NL; ++l) td[l] = s[l];
     }
     if constexpr (RC == 3)
-      for (int v = threadIdx.x; v < RK * 32; v += MWT) reinterpret_cast<uint4 *>(bbuf)[v] = kRcA[g][v / 32][v % 32];
+      for (int v = threadIdx.x; v < RKA * 32; v += MWT) reinterpret_cast<uint4 *>(bbuf)[v] = kRcA[g][v / 32][v % 32];
     __syncthreads();
     if (w >= MW) {
       const int d = threadIdx.x - 32 * MW, t = d / HW, j = d % HW;
@@ -1436,7 +1451,7 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
         const bool next = has(tile + 1);
         if (next) prefetch_word_l2(reinterpret_cast<const u32 *>(kv) + word(tile + 1) * NL);
         if (tile) tweak_step(tw, td);
-        if constexpr (RC == 3) {
+        if constexpr (RC == 3 && HW == 4) {
           int c[4] = {};
           const uint4 *a = reinterpret_cast<const uint4 *>(bbuf) + lane;
 #pragma unroll
@@ -1450,6 +1465,15 @@ __global__ void __launch_bounds__(MWT, 2) attn_mma_ws_kernel(const uint8_t *__re
           for (int e = 0; e < 4; ++e) {
             const int n = 2 * t4 + (e & 1);
             if (8 * i + n < nt) rc_sk[((s0 + n) * KV_HEADS + g) * 16 + gid + 8 * (e >> 1)] = c[e];
+          }
+        } else if constexpr (RC == 3) {
+          int ck[4] = {}, cv[4] = {};
+          rc_kv8(reinterpret_cast<const uint4 *>(bbuf) + lane, x, ck, cv);
+          const int i = w - MW, gid = lane >> 2, t4 = lane & 3;
+          if (4 * i + t4 < nt) {
+            int *o = rc_sk + (((u64)seq * ctx + t0 + tile * MT + 4 * i + t4) * KV_HEADS + g) * 16 + gid;
+            o[0] = ck[0] + cv[1];
+            o[8] = ck[2] + cv[3];
           }
         }
         if (t < nt) decode_word_t<true>(x, tw, k);
@@ -1488,9 +1512,11 @@ using sx::be64;
 // WB wi + 8κ .. + 3 (x, y) and + 4 .. + 7 (z, w), as bytes 0x01 (+1) and 0xFF (−1).
 __global__ void __launch_bounds__(128) rc_a_kernel(const uint8_t *__restrict__ bits) {
   const int e = blockIdx.x * blockDim.x + threadIdx.x;
-  if (e >= KV_HEADS * RK * 32) return;
-  const int g = e / (RK * 32), kk = e / 32 % RK, lane = e % 32, gid = lane >> 2, t4 = lane & 3;
-  const int wi = (t4 < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) + g * (HB / WB) + t4, byte = (WB * wi + 8 * kk) / 8;
+  if (e >= KV_HEADS * RKA * 32) return;
+  const int g = e / (RKA * 32), kk = e / 32 % RKA, lane = e % 32, gid = lane >> 2, t4 = lane & 3;
+  const int k8 = HW == 8 ? kk % RK : kk;
+  const int wi = (HW == 8 ? kk / RK * (TL_BYTES / 2 / WB) : t4 < HW / 2 ? 0 : TL_BYTES / 2 / WB - HW / 2) +
+                 g * (HB / WB) + t4, byte = (WB * wi + 8 * k8) / 8;
   const u32 lo = bits[512 * gid + byte], hi = bits[512 * (gid + 8) + byte];
   const auto pm = [](u32 b) {
     u32 r = 0;
@@ -2089,7 +2115,7 @@ void kv_rc_shape(int *out) {
 int kv_rc_pass(const uint32_t *bits, const uint64_t *mid, cudaStream_t s) {
   if (!kv::RC3_OK) return -2;
   if (!bits || !mid) return -1;
-  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RK * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
+  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RKA * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
   if (cudaMemcpyToSymbolAsync(kv::kKvMid, mid, sizeof(uint64_t) * 8, 0, cudaMemcpyDeviceToDevice, s) != cudaSuccess)
     return launched();
   return launched();

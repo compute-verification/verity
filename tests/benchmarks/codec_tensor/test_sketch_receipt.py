@@ -126,21 +126,34 @@ def test_reader_sketch64_fragments_are_the_64_row_sketch():
     assert not np.array_equal(SR.signs(SEED, RD.ROWS64)[:SR.ROWS], SR.signs(SEED))
 
 
-def test_attention_sketches_each_token_layer():
-    """kv_attn form 13: the KV heads' MMA shares over their words (`kv_fragment_sketch` from the A table
-    `kv_sign_frags`) sum to σ of each token-layer, the heads' words partition the block, each head's share is S at its
-    positions, and the receipts' map is the KV region's blocks in store order."""
-    blocks = np.random.default_rng(13).integers(0, 256, (6, SR.BLOCK), dtype=np.uint8)
+@pytest.mark.parametrize("word", SR.KV_WORDS)
+def test_attention_sketches_each_token_layer(word):
+    """kv_attn form 13 at 128-byte words (HW = 4) and 64-byte (HW = 8): the KV heads' MMA shares over their words
+    (`kv_fragment_sketch` from the A table `kv_sign_frags`) sum to σ of each token-layer, the heads' words partition the
+    block, each head's share is S at its positions, and the receipts' map is the KV region's blocks in store order. Seven
+    token-layers, so a warp's last tile is partial at either width."""
+    blocks = np.random.default_rng(13).integers(0, 256, (7, SR.BLOCK), dtype=np.uint8)
     blocks[0], blocks[1] = 0x80, 0x7F
     s, e = SR.signs(SEED), blocks.view(np.int8).astype(np.int64)
     sigma = SR.sketches(SEED, blocks)
-    assert np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(SR.sign_bits(SEED))), sigma)
-    pos = [SR.kv_positions(g) for g in range(SR.KV_HEADS)]
+    assert np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(SR.sign_bits(SEED), word), word), sigma)
+    pos = [SR.kv_positions(g, word) for g in range(SR.KV_HEADS)]
     assert np.array_equal(np.sort(np.concatenate(pos)), np.arange(SR.BLOCK))
     assert np.array_equal(sum(e[:, p] @ s[:, p].T.astype(np.int64) for p in pos), sigma)
     slots, layers, nvec = 3, 2, 7
-    assert SR.rb.plan_of(SR.kv_vectors(slots, layers, nvec * SR.BLOCK), nvec + slots * layers) == SR.rb.Plan.of(
+    assert SR.rb.plan_of(SR.kv_vectors(slots, layers, nvec * SR.BLOCK, word), nvec + slots * layers) == SR.rb.Plan.of(
         range(nvec, nvec + slots * layers), nvec + slots * layers)
+
+
+def test_each_word_s_lane_map_needs_its_own_a_table():
+    """Form 13's 64-byte lane map against the 128-byte A table, and the 128-byte map against the 64-byte table, give
+    another σ, so the twin's agreement at each width tests its table; a width form 13 doesn't take is refused."""
+    blocks = np.random.default_rng(14).integers(0, 256, (4, SR.BLOCK), dtype=np.uint8)
+    bits, sigma = SR.sign_bits(SEED), SR.sketches(SEED, blocks)
+    assert not np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(bits, 128), 64), sigma)
+    assert not np.array_equal(SR.kv_fragment_sketch(blocks, SR.kv_sign_frags(bits, 64), 128), sigma)
+    with pytest.raises(ValueError):
+        SR.kv_sign_frags(bits, 96)
 
 
 def test_the_chained_pass_completes_the_driver_s_messages():
