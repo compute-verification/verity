@@ -2,6 +2,7 @@
 run verifier's credit is `tests/benchmarks/pouw/test_pearl_plus_scheme_credit.py`, beside the verifier's other tests."""
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from types import SimpleNamespace
 
@@ -38,8 +39,8 @@ def test_bound_reads_its_term_at_the_parameters_given() -> None:
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 1, "N": 1})
 
 
-def _gate(sid, root):
-    return {}
+def _gate(*words):
+    return {"session": words[2], "root": words[4], "commitment": "c"} if words[0] == "open" else {}
 
 
 SESSION = {"session": "s-1"}
@@ -296,7 +297,10 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_pa
     monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
     on = PS.Attached({**CTX, "private": str(tmp_path)})
     on.run = on.open({0: W0}, on.own)
-    assert opened == [(PS.OPTION, "127.0.0.1:1", SESSION, _gate, SV.weights_root({0: bytes([0]) * 64}), True, 0)]
+    [(entry, at, session, gate, root, opens, epoch)] = opened
+    w = SV.weights_root({0: bytes([0]) * 64})
+    assert (entry, at, session, root, opens, epoch) == (PS.OPTION, "127.0.0.1:1", SESSION, w, True, 0)
+    assert gate("s-1", "ab") == {"session": "s-1", "root": "ab", "commitment": "c"}
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial"})
     assert on.run.commits["coin_source"] == SV.H1_CHALLENGER and on.run.commits["session"] == {"gate": 1}
@@ -358,3 +362,25 @@ def test_the_epoch_number_is_spent_on_disk_before_its_session_opens(monkeypatch,
         (tmp_path / PS.EPOCH_FILE).write_text(torn)
         with pytest.raises(ValueError, match="refused rather than risk a number already used"):
             PS.spend_epoch(tmp_path)
+
+
+def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_path) -> None:
+    session = {"session": "s-1", "seq": 4, "root": "ab" * 64, "commitment": "cd" * 64, "host": "auditor.s-1"}
+    w = SV.weights_root({0: bytes([0]) * 64})
+    reports = {"configuration": {"scheme": "pearl-plus", "settings": {**PS.SETTINGS, **CTX["settings"]},
+                                 "record": {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}},
+               "summary": {"max_step_tokens": 64, "passes": [{"units": 3, "tiles": 9, "transcript_root": "ef"}],
+                           "challenger": {"closed": True}},
+               "commitment": {"coin_source": SV.H1_CHALLENGER, "session": session, "pass_index": 2,
+                              "weights_root": w.hex(), "salt": "00" * 32}}
+    for name, doc in reports.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps(doc))
+    got = PS.served_record(tmp_path)
+    assert got["arm"] == PS.OPTION and got["retained"] is False and got["max_step_tokens"] == 64
+    assert got["passes"] == [{"pass": 0, "timed": True, "units": 3, "tiles": 9, "transcript_root": "ef", "macs": None}]
+    coins = got["coins"]
+    assert (coins["source"], coins["reserved"], coins["pass_index"], coins["closed"]) == (SV.H1_CHALLENGER, SESSION, 2,
+                                                                                          {"closed": True})
+    assert coins["salt_after"] == PSALT.epoch_open_root(w, 2).hex()
+    assert coins["manifest_head"] == {"session": {k: session[k] for k in ("session", "seq", "root", "commitment")},
+                                      "pass_index": 2}
