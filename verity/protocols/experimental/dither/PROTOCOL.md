@@ -402,7 +402,7 @@ committed, so no soundness statement takes a hiding premise on it.
 **Seeds.** Every credited coin comes from streamed 512-bit seeds, each covering at most 512·N_max MACs, that is, at
 least 1/N_max unpredictable bits a credited MAC. That is 0.97 to 2.38 GB/s a GPU, and 7.7 to 19.0 GB/s an 8-GPU node.
 - Each replica's seeds are its own: no stream is broadcast across replicas.
-- Dither takes no Fiat–Shamir exception: its seeds are live coins, not main's per-matmul noise seeds.
+- Dither takes no Fiat–Shamir exception: its seeds are live coins, not PoUW's noise seeds.
 
 **Every stream is seeded per call.** d_A, d_B, U, V and the permutations of a served call come from the challenger's
 coin opened after the block's operand roots, the digest of the operand-root receipt and the call's index (`seeds` in

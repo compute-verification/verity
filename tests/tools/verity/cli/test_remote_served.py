@@ -294,9 +294,10 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
 
 
-def test_a_component_that_charges_nothing_reads_why_and_holds_no_verdict_open(tmp_path, monkeypatch):
-    """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line prints its
-    why in place of a verdict, with no row for it in the record, and the composed accept stands."""
+def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
+    """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
+    has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as
+    any component's: a reject of it makes the line reject and names it, and a missing row holds the line open."""
     from verity.protocols.resource_accounting import scheme as S
     nothing = S.Lacks("charges nothing: a stand-in that checks a policy")
     standin = S.Scheme("inference-only", "verity/inference-only/v0", nothing, nothing, (), (), ())
@@ -304,10 +305,18 @@ def test_a_component_that_charges_nothing_reads_why_and_holds_no_verdict_open(tm
     monkeypatch.setitem(S.SCHEMES, "inference-only", standin)
     assert T.charges_nothing("inference-only") == nothing.why and T.charges_nothing("pouw") is None
     cfg = R.load(CONFIG, REG)
-    written(tmp_path / "out" / "compose", YES, ACCEPTED)
+    base = tmp_path / "out" / "compose"
+    written(base, YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert (got["verdict"], got["reason"]) == ("accept", None)
-    assert got["components"] == {**ALL_ACCEPTED, "inference-only": nothing.why}
+    assert (got["verdict"], got["reason"], got["components"]) == ("accept", None, ALL_ACCEPTED)
+    assert got["charges_nothing"]["inference-only"] == nothing.why
+    written(base, {"composed": "reject", "product": "remote"}, {**ACCEPTED, "inference-only": {"verdict": "reject"}})
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("reject", "reject")
+    assert got["reason"] == "not accepted: inference-only reject"
+    written(base, YES, ACCEPTED)
+    got = T.remote_check(cfg, tmp_path)
+    assert (got["verdict"], got["components"]["inference-only"]) == ("undecided", "absent")
 
 
 def test_inference_onlys_row_is_the_composed_records_and_no_file_of_the_prover_nodes_side_changes_a_cell(tmp_path):
