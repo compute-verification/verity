@@ -150,7 +150,8 @@ theorem interiorShown_look {c : LiveCommitment} {log : Log} {label : String} (af
   | cons p fs ih =>
     by_cases hl : p.1 = label
     · simp [hl, Verity.Sampled.look]
-    · simp only [List.find?_cons, beq_iff_eq, hl, decide_false, List.map_cons] at hf ⊢
+    · have hb : (p.1 == label) = false := by simpa using hl
+      simp only [List.find?_cons, hb] at hf ⊢
       exact ih hf
 
 /-- **Roots that don't show a coin count none**: where a session's log, which commits no root, shows no coin of

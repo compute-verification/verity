@@ -201,12 +201,16 @@ theorem sampleCoins_roots {key : ChallengerKey} {w label : String} {after : Byte
       (∀ r ∈ Verity.Sampled.look roots label, r = after) ∧
       ∀ L, Verity.Sampled.look roots L =
         Verity.Sampled.sel L (Verity.Sampled.pairs (lines.tail.filter fun l => !treeLine l)) := by
-  obtain ⟨cm, roots, hts, hcm, -, hst⟩ := Verity.Sampled.drawCoins_ok h
+  obtain ⟨cm, roots, hts, hcm, hlab, hst⟩ := Verity.Sampled.drawCoins_ok h
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
-  obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
-  exact ⟨cm, roots, ls, lines, hts, hlog, hls, hall, (Verity.Sampled.releasedLogOf_ok hrr hcm).2.1⟩
+  obtain ⟨l, _, _, _, hl, -, -, -, -, -, hall⟩ := Properties.Challenger.Coins.stream_ok hst
+  obtain rfl : label = l := Verity.Sampled.jsonStrIs_inj hlab (by rw [hl]; simp [Spot.jsonStrIs])
+  refine ⟨cm, roots, ls, lines, hts, hlog, hls, fun r hr => ?_, (Verity.Sampled.releasedLogOf_ok hrr hcm).2.1⟩
+  obtain ⟨e, he, rfl⟩ := List.mem_map.1 hr
+  obtain ⟨he, hk⟩ := List.mem_filter.1 he
+  exact hall e he (beq_iff_eq.1 ((Bool.and_eq_true _ _).1 hk).2)
 
 /-- **The first session's read shows a family after one root where its roots do**, and its roots show the first
 sample's family after the sample's digest alone. -/
