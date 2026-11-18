@@ -30,10 +30,10 @@ theorem cost_const {n : ℕ} (L : SamplingDesign n) (a : ℝ) : cost L (fun _ =>
 theorem meanSamples_nonneg {n : ℕ} (L : SamplingDesign n) : 0 ≤ meanSamples L :=
   Finset.sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
-theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finset (Fin n)) :
+theorem bern_missProb_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finset (Fin n)) :
     ((Verity.SamplingDesign.bernoulli n num N).missProb B).toReal = (1 - (num : ℝ) / N) ^ B.card := by
   have hN : (N : ℝ) ≠ 0 := by exact_mod_cast NeZero.ne N
-  rw [SamplingDesign.bernoulli_escape h, ENNReal.toReal_pow]
+  rw [SamplingDesign.bernoulli_missProb h, ENNReal.toReal_pow]
   congr 1
   unfold SamplingDesign.bernFactor
   rw [mul_zero, zero_add, ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast, Nat.cast_sub h]
@@ -41,8 +41,8 @@ theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finse
 
 theorem bern_incl_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (u : Fin n) :
     ((Verity.SamplingDesign.bernoulli n num N).incl u).toReal = (num : ℝ) / N := by
-  have e := congrArg ENNReal.toReal (SamplingDesign.escape_singleton (Verity.SamplingDesign.bernoulli n num N) u)
-  rw [bern_escape_toReal h, Finset.card_singleton, pow_one,
+  have e := congrArg ENNReal.toReal (SamplingDesign.missProb_singleton (Verity.SamplingDesign.bernoulli n num N) u)
+  rw [bern_missProb_toReal h, Finset.card_singleton, pow_one,
     ENNReal.toReal_sub_of_le (incl_le_one _ u) ENNReal.one_ne_top, ENNReal.toReal_one] at e
   linarith
 
@@ -67,7 +67,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
       (Verity.SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
     rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ B))
-      (pow_nonneg ht0 _), bern_escape_toReal h]
+      (pow_nonneg ht0 _), bern_missProb_toReal h]
     exact pow_le_pow_of_le_one ht0 ht1 hB
   have hmiss_le : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
     iSup₂_le fun B hB => hbig B hB

@@ -10,7 +10,7 @@ import Proofs.Spot.Sampling.SamplingDesign
 # The stratified samplingDesign's count curve
 
 `miss K` is the largest escape of a set of at least `K` incorrect proof blocks (`SamplingDesign.miss`). Under the stratified samplingDesign a set's escape
-depends only on its count `c_s` in each stratum (`stratified_escape`). Stratum `s`'s escape falls by the factor
+depends only on its count `c_s` in each stratum (`stratified_missProb`). Stratum `s`'s escape falls by the factor
 `r_s(c) = (n_s − c − k_s)/(n_s − c)` when its `(c + 1)`-th unit is wrong, and that factor falls as `c` grows. So the
 likeliest set to escape fills the strata greedily, taking the largest factors first, as
 `verity.proofs.profile.Stratified.miss` computes it.
@@ -150,7 +150,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
   have hfib : ∀ B : Finset (Fin n), B.card = ∑ s, (B.filter (σ · = s)).card := fun B =>
     Finset.card_eq_sum_card_fiberwise (fun u _ => Finset.mem_univ (σ u))
   refine le_antisymm (iSup₂_le fun B hB => ?_) ?_
-  · rw [stratified_escape]
+  · rw [stratified_missProb]
     set c : Fin m → ℕ := fun s => (B.filter (σ · = s)).card with hc
     have hcN : ∀ s, c s ≤ (stratum σ s).card := fun s => by
       rw [hc]; simp only
@@ -203,7 +203,7 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
       rw [hfib B]
       exact le_of_eq (Finset.sum_congr rfl fun s _ => by rw [hfil, hTc])
     refine le_trans (le_of_eq ?_) ((stratified σ k hk).escape_le_miss hcard)
-    rw [stratified_escape]
+    rw [stratified_missProb]
     exact Finset.prod_congr rfl fun s _ => by rw [hfil, hTc]; rfl
 
 end SamplingDesign

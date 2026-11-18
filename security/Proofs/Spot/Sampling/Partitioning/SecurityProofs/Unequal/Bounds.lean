@@ -102,7 +102,7 @@ theorem achievability : Guarantees.Achievability := by
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
   refine ⟨SamplingDesign.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
-  · rw [bern_escape_toReal hnum]
+  · rw [bern_missProb_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)
           · rw [sub_nonneg, div_le_one hden0]
@@ -351,7 +351,7 @@ theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Samplin
     rcases le_or_gt K S.card with hKm | hKm
     · have htA' := htA (Finset.card_pos.1 (lt_of_lt_of_le hK0 hKm))
       have hmiss : ((restrict L S).miss K).toReal ≤ δ := miss_toReal_le_of hδ0.le fun B hB => by
-        rw [restrict_escape]
+        rw [restrict_missProb]
         refine hL _ ?_
         rw [sum_map_restrict]
         calc C = C / t * t := by field_simp

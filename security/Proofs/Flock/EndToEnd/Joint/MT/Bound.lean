@@ -49,14 +49,14 @@ namespace BlockRecMT
 variable {W : ℕ → StratifiedBlockMT}
 
 /-- The run's escapes, multiplied, are at most `exp(−Σ spend)`. -/
-theorem escape_prod_le (l : List (BlockRecMT W)) :
+theorem missProb_prod_le (l : List (BlockRecMT W)) :
     (l.map BlockRecMT.missProb).prod ≤ ENNReal.ofReal (Real.exp (-(l.map BlockRecMT.spend).sum)) := by
   induction l with
   | nil => simp
   | cons r l ih =>
       rw [List.map_cons, List.prod_cons, List.map_cons, List.sum_cons, neg_add, Real.exp_add,
         ENNReal.ofReal_mul (Real.exp_pos _).le]
-      exact mul_le_mul' (SamplingDesign.stratified_escape_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.incorrect) ih
+      exact mul_le_mul' (SamplingDesign.stratified_missProb_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.incorrect) ih
 
 end BlockRecMT
 
@@ -84,7 +84,7 @@ theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : 
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ) {l : List (BlockRecMT W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRecMT.missProb).prod) : Within W δ ands bits l := by
   refine ⟨hl, ?_, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩
-  have h1 := hl.trans (BlockRecMT.escape_prod_le l)
+  have h1 := hl.trans (BlockRecMT.missProb_prod_le l)
   rw [ENNReal.ofReal_le_ofReal_iff (Real.exp_pos _).le] at h1
   have h2 := Real.log_le_log hδ h1
   rw [Real.log_exp] at h2

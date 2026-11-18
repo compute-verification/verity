@@ -20,11 +20,11 @@ misses a set `B` of units.
 * `miss L K`: the largest missProb over sets of at least `K` units, the sampling term of the count
   curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that draws every unit (`miss_eq_zero_of_sample_univ`);
 * `incl L u`: the probability that `u` is drawn; a single unit escapes with `1 - incl L u`
-  (`escape_singleton`), and a set escapes with at most that for each of its members
-  (`escape_le_of_mem`).
+  (`missProb_singleton`), and a set escapes with at most that for each of its members
+  (`missProb_le_of_mem`).
 
 Core's uniform `k`-subset of `n` units, `Verity.SamplingDesign.subset n k`, has a missProb that is hypergeometric:
-`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
+`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_missProb`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 -/
 
@@ -61,24 +61,24 @@ theorem escape_le_one (L : SamplingDesign n) (B : Finset (Fin n)) : L.missProb B
   split_ifs <;> simp
 
 /-- Missing more units is less likely. -/
-theorem escape_anti (L : SamplingDesign n) {B B' : Finset (Fin n)} (h : B ⊆ B') : L.missProb B' ≤ L.missProb B :=
+theorem missProb_anti (L : SamplingDesign n) {B B' : Finset (Fin n)} (h : B ⊆ B') : L.missProb B' ≤ L.missProb B :=
   prCoin_mono fun _ hd => hd.mono_right h
 
-theorem escape_empty (L : SamplingDesign n) : L.missProb ∅ = 1 := by
+theorem missProb_empty (L : SamplingDesign n) : L.missProb ∅ = 1 := by
   unfold missProb prCoin
   simp only [Finset.disjoint_empty_right, ite_true]
   exact avg_const 1
 
 /-- A single unit escapes exactly when it is not drawn. -/
-theorem escape_singleton (L : SamplingDesign n) (u : Fin n) : L.missProb {u} = 1 - L.incl u := by
+theorem missProb_singleton (L : SamplingDesign n) (u : Fin n) : L.missProb {u} = 1 - L.incl u := by
   unfold missProb incl
   rw [← prCoin_not]
   exact congrArg prCoin (funext fun ω => propext Finset.disjoint_singleton_right)
 
 /-- A set escapes with at most the missProb of any one of its units. -/
-theorem escape_le_of_mem (L : SamplingDesign n) {B : Finset (Fin n)} {u : Fin n} (hu : u ∈ B) :
+theorem missProb_le_of_mem (L : SamplingDesign n) {B : Finset (Fin n)} {u : Fin n} (hu : u ∈ B) :
     L.missProb B ≤ 1 - L.incl u :=
-  (L.escape_anti (Finset.singleton_subset_iff.2 hu)).trans (L.escape_singleton u).le
+  (L.missProb_anti (Finset.singleton_subset_iff.2 hu)).trans (L.missProb_singleton u).le
 
 theorem escape_le_miss (L : SamplingDesign n) {K : ℕ} {B : Finset (Fin n)} (h : K ≤ B.card) :
     L.missProb B ≤ L.miss K :=
@@ -106,12 +106,12 @@ theorem miss_eq_zero_of_sample_univ (L : SamplingDesign n) (hL : ∀ ω, L.draw 
 theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
     (Verity.SamplingDesign.subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
   refine le_antisymm (iSup₂_le fun B hB => ?_) ?_
-  · rw [Verity.SamplingDesign.subset_escape]
+  · rw [Verity.SamplingDesign.subset_missProb]
     gcongr
   · obtain ⟨B, -, hB⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
       (by simpa using hK)
     have := escape_le_miss (Verity.SamplingDesign.subset n k hk) (K := K) hB.ge
-    rwa [Verity.SamplingDesign.subset_escape, hB] at this
+    rwa [Verity.SamplingDesign.subset_missProb, hB] at this
 
 /-- A uniform `k`-subset of `n` misses one given unit with probability `(n − k)/n`. -/
 theorem choose_ratio {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) :
@@ -152,12 +152,12 @@ theorem choose_sub_mul_pow_le (n k : ℕ) : ∀ b, b ≤ n →
 
 /-- **The product bound for the uniform subset**: a set escapes with at most the product of its
 units' miss probabilities, so inclusion probabilities alone give a valid bound. -/
-theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finset (Fin n)) :
+theorem subset_missProb_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finset (Fin n)) :
     (Verity.SamplingDesign.subset n k hk).missProb B ≤ ∏ u ∈ B, (1 - (Verity.SamplingDesign.subset n k hk).incl u) := by
   have hu : ∀ u, 1 - (Verity.SamplingDesign.subset n k hk).incl u = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
     intro u
-    rw [← escape_singleton, Verity.SamplingDesign.subset_escape, Finset.card_singleton, choose_ratio hk hn]
-  rw [Finset.prod_congr rfl fun u _ => hu u, Finset.prod_const, Verity.SamplingDesign.subset_escape, div_eq_mul_inv
+    rw [← missProb_singleton, Verity.SamplingDesign.subset_missProb, Finset.card_singleton, choose_ratio hk hn]
+  rw [Finset.prod_congr rfl fun u _ => hu u, Finset.prod_const, Verity.SamplingDesign.subset_missProb, div_eq_mul_inv
     (((n - k : ℕ) : ℝ≥0∞)), mul_pow, ← ENNReal.inv_pow, ← div_eq_mul_inv]
   have hc : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
   have hp : ((n : ℝ≥0∞)) ^ B.card ≠ 0 := pow_ne_zero _ (by exact_mod_cast (show n ≠ 0 by omega))
@@ -224,7 +224,7 @@ theorem bernoulli_avg_prod {num den : ℕ} [NeZero den] (h : num ≤ den) (f : F
   exact avg_bern h (f u)
 
 /-- **The Bernoulli missProb**: `((den − num)/den)^|B|`. -/
-theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
+theorem bernoulli_missProb {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
     (Verity.SamplingDesign.bernoulli n num den).missProb B = bernFactor num den 0 ^ B.card := by
   classical
   rw [← Finset.prod_const, ← bernoulli_avg_prod h (fun _ => 0) B, missProb, ← avg_ite_eq_prCoin]
@@ -239,7 +239,7 @@ theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Fin
 /-! ## The uniform subset is optimal
 
 Averaging `missProb B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
-sampling design (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
+sampling design (`avg_missProb_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
 `drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
 inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
 
@@ -268,14 +268,14 @@ theorem avg_card (L : SamplingDesign n) : avg (fun ω => ((L.draw ω).card : ℝ
 
 /-- **Averaging over `K`-sets.** For any sampling design, the missProb of a uniformly random `K`-set is the mean
 of `C(n - |S|, K) / C(n, K)` over the draw `S`. -/
-theorem avg_escape_subsets (M : SamplingDesign n) {K : ℕ} (hK : K ≤ n) :
+theorem avg_missProb_subsets (M : SamplingDesign n) {K : ℕ} (hK : K ≤ n) :
     avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => M.missProb B.1) =
       avg fun ω => (((n - (M.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
   classical
   unfold missProb prCoin
   rw [avg_comm]
   refine congrArg avg (funext fun ω => ?_)
-  rw [← Verity.SamplingDesign.subset_escape hK (M.draw ω)]
+  rw [← Verity.SamplingDesign.subset_missProb hK (M.draw ω)]
   unfold missProb prCoin
   refine congrArg avg (funext fun B => ?_)
   by_cases h : Disjoint (M.draw ω) B.1
@@ -358,8 +358,8 @@ theorem subset_minimax (L : SamplingDesign n) {k : ℕ} (hk : k ≤ n) (hmean : 
     have h1 : avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => (Verity.SamplingDesign.subset n k hk).missProb B.1) = (Verity.SamplingDesign.subset n k hk).miss K := by
       rw [subset_miss hk hK]
       refine (congrArg avg (funext fun B => ?_)).trans (avg_const _)
-      rw [Verity.SamplingDesign.subset_escape, B.2]
-    rw [← h1, avg_escape_subsets]
+      rw [Verity.SamplingDesign.subset_missProb, B.2]
+    rw [← h1, avg_missProb_subsets]
     refine (congrArg avg (funext fun ω => ?_)).trans (avg_const _)
     show _ = (((n - k).choose K : ℕ) : ℝ≥0∞) / _
     have : ((Verity.SamplingDesign.subset n k hk).draw ω).card = k := ω.2
@@ -387,7 +387,7 @@ theorem subset_minimax (L : SamplingDesign n) {k : ℕ} (hk : k ≤ n) (hmean : 
     _ = avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
         simp only [div_eq_mul_inv]
         rw [avg_mul_const]
-    _ = avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => L.missProb B.1) := (avg_escape_subsets L hK).symm
+    _ = avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => L.missProb B.1) := (avg_missProb_subsets L hK).symm
     _ ≤ L.miss K := hmax
 
 end SamplingDesign

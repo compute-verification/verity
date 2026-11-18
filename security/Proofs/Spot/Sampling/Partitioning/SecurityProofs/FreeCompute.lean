@@ -117,7 +117,7 @@ theorem ConverseExact : Guarantees.ConverseExact := by
   have havg : ∑ ω, c * (((n - S ω).choose K : ℝ) / (n.choose K : ℝ)) ≤ δ := by
     have h2 : avg (fun B : (Verity.SamplingDesign.subset n K hKn).Ω => L.missProb B.1) ≤ L.miss K :=
       (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
-    rw [L.avg_escape_subsets hKn] at h2
+    rw [L.avg_missProb_subsets hKn] at h2
     have h3 := ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one K)) h2
     refine le_trans (le_of_eq ?_) (h3.trans hδ)
     rw [havg_toReal]
@@ -262,7 +262,7 @@ theorem ServedGranularityChoice : Guarantees.ServedGranularityChoice := by
 theorem HeavyUnit : Guarantees.HeavyUnit := by
   intro n w C δ L hL u hu
   have h := hL {u} (by simpa using hu)
-  rw [SamplingDesign.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
+  rw [SamplingDesign.missProb_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
     ENNReal.toReal_one] at h
   linarith
 

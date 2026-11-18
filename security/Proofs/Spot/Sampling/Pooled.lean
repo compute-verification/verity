@@ -12,21 +12,21 @@ A monitoring period is `T` periods, each audited by a fresh uniform `kd`-subset 
 the samples before `t`, before sample `t` is made. It escapes when no period's sample hits its incorrect set (`Pooled.MissProb`),
 and its total is `Σ_t |W_t|` (`Pooled.total`), the incorrect proof blocks that went unaudited over the monitoring period, pooled.
 
-* `pooled_escape_prod`: when period `t`'s set has at least `w_t` units whatever the history, the adversary escapes
-  with at most `∏_t C(N − w_t, kd)/C(N, kd)`, each period's own `Verity.SamplingDesign.subset_escape`.
+* `pooled_missProb_prod`: when period `t`'s set has at least `w_t` units whatever the history, the adversary escapes
+  with at most `∏_t C(N − w_t, kd)/C(N, kd)`, each period's own `Verity.SamplingDesign.subset_missProb`.
 * `choose_div_le_one_sub_pow`, `prod_choose_div_le_pow`: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`, so the product is
   at most `(1 − kd/N)^M` once `Σ_t w_t ≥ M`.
-* `pooled_escape`: with the set sizes adaptive too, `Pr[missProb ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
-* `pooled_escape_adapted`: the same for a incorrect-set map on whole runs that doesn't look ahead
+* `pooled_missProb`: with the set sizes adaptive too, `Pr[missProb ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
+* `pooled_missProb_adapted`: the same for a incorrect-set map on whole runs that doesn't look ahead
   (`Periods.Predictable`), which is a `Pooled` (`Pooled.ofAdapted`).
 
 These are in `prCoin`. No theorem states them in `Claims.Pr` or at `δ` (with `q = kd/N`, since
 `(1 − q)^M ≤ e^{−qM}`, the total reaches `ln(1/δ)/q` on an missProb with probability at most `δ`).
 
 Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset samples. Period `t`'s missProb is
-adapted and its incorrect set predictable (`Pooled.adapted_escapes`, `Pooled.predictable`), and given any history period
-`t` escapes with `Verity.SamplingDesign.subset_escape` of its incorrect set (`Pooled.escape_update`): `pooled_escape_prod` is
-`Periods.prCoin_forall_le_prod` at those escapes, and `pooled_escape` is `Periods.prCoin_forall_sum_le_pow` at the
+adapted and its incorrect set predictable (`Pooled.adapted_missProb`, `Pooled.predictable`), and given any history period
+`t` escapes with `Verity.SamplingDesign.subset_missProb` of its incorrect set (`Pooled.missProb_update`): `pooled_missProb_prod` is
+`Periods.prCoin_forall_le_prod` at those escapes, and `pooled_missProb` is `Periods.prCoin_forall_sum_le_pow` at the
 weights `|W_t|` and `ρ = 1 − kd/N`.
 
 The network attester's leak bound, `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + ε_bind)`, adds each
@@ -78,12 +78,12 @@ theorem predictable (A : Pooled N kd hk T) :
   fun t _ _ h => congrArg (A t) (funext fun i => h _ (show (Fin.castLE t.isLt.le i).val < t.val from i.isLt))
 
 /-- Period `t`'s missProb reads the samples up to `t`. -/
-theorem adapted_escapes (A : Pooled N kd hk T) :
+theorem adapted_missProb (A : Pooled N kd hk T) :
     Periods.Adapted (Ω := fun _ => (Verity.SamplingDesign.subset N kd hk).Ω) fun t ω => Disjoint (ω t).1 (A.incorrect ω t) :=
   fun t ω ω' h => congrArg₂ (fun x y => Disjoint (Subtype.val x) y) (h t le_rfl) (A.predictable.adapted t ω ω' h)
 
 /-- Given any history, period `t` escapes with its sample's missProb of its incorrect set. -/
-theorem escape_update (A : Pooled N kd hk T) (ω : Fin T → (Verity.SamplingDesign.subset N kd hk).Ω) (t : Fin T) :
+theorem missProb_update (A : Pooled N kd hk T) (ω : Fin T → (Verity.SamplingDesign.subset N kd hk).Ω) (t : Fin T) :
     prCoin (fun a => Disjoint (Function.update ω t a t).1 (A.incorrect (Function.update ω t a) t)) =
       (Verity.SamplingDesign.subset N kd hk).missProb (A.incorrect ω t) := by
   have hw : ∀ a, A.incorrect (Function.update ω t a) t = A.incorrect ω t := fun a =>
@@ -139,30 +139,30 @@ theorem prod_choose_div_le_pow (hk : kd ≤ N) {T : ℕ} (w : Fin T → ℕ) (hw
 
 /-- **The product bound.** If period `t`'s incorrect set has at least `w t` units whatever the history, the adversary
 escapes every period with at most `∏_t C(N − w_t, kd)/C(N, kd)`. -/
-theorem pooled_escape_prod {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (w : Fin T → ℕ)
+theorem pooled_missProb_prod {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (w : Fin T → ℕ)
     (hw : ∀ t h, w t ≤ (A t h).card) :
     prCoin (fun ω => A.MissProb ω) ≤ ∏ t, ((N - w t).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) :=
-  Periods.prCoin_forall_le_prod (Ω := fun _ => (Verity.SamplingDesign.subset N kd hk).Ω) _ A.adapted_escapes _ fun t ω => by
-    rw [A.escape_update, Verity.SamplingDesign.subset_escape]
+  Periods.prCoin_forall_le_prod (Ω := fun _ => (Verity.SamplingDesign.subset N kd hk).Ω) _ A.adapted_missProb _ fun t ω => by
+    rw [A.missProb_update, Verity.SamplingDesign.subset_missProb]
     exact ENNReal.div_le_div_right (Nat.cast_le.2 (Nat.choose_le_choose kd (Nat.sub_le_sub_left (hw t _) N))) _
 
 /-- **The pooled missProb.** An adaptive adversary escapes every period's sample with at least `M` incorrect proof blocks over the
 monitoring period, pooled, with probability at most `(1 − kd/N)^M`. -/
-theorem pooled_escape {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (M : ℕ) :
+theorem pooled_missProb {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (M : ℕ) :
     prCoin (fun ω => A.MissProb ω ∧ M ≤ A.total ω) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M :=
   Periods.prCoin_forall_sum_le_pow (Ω := fun _ => (Verity.SamplingDesign.subset N kd hk).Ω) _ (fun t ω => (A.incorrect ω t).card)
-    A.adapted_escapes (fun t ω ω' h => congrArg Finset.card (A.predictable t ω ω' h)) one_sub_div_le_one
+    A.adapted_missProb (fun t ω ω' h => congrArg Finset.card (A.predictable t ω ω' h)) one_sub_div_le_one
     (fun t ω => by
-      rw [A.escape_update, Verity.SamplingDesign.subset_escape]
+      rw [A.missProb_update, Verity.SamplingDesign.subset_missProb]
       exact choose_div_le_one_sub_pow hk (by simpa using Finset.card_le_univ (A.incorrect ω t))) M
 
-/-- `pooled_escape` for a incorrect-set map on whole runs that doesn't look ahead. -/
-theorem pooled_escape_adapted {hk : kd ≤ N} {T : ℕ}
+/-- `pooled_missProb` for a incorrect-set map on whole runs that doesn't look ahead. -/
+theorem pooled_missProb_adapted {hk : kd ≤ N} {T : ℕ}
     (W : Fin T → (Fin T → (Verity.SamplingDesign.subset N kd hk).Ω) → Finset (Fin N))
     (hW : Periods.Predictable (Ω := fun _ => (Verity.SamplingDesign.subset N kd hk).Ω) W) (M : ℕ) :
     prCoin (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧ M ≤ ∑ t, (W t ω).card) ≤
       (1 - (kd : ℝ≥0∞) / N) ^ M := by
-  have h := pooled_escape (Pooled.ofAdapted W) M
+  have h := pooled_missProb (Pooled.ofAdapted W) M
   simp only [Pooled.MissProb, Pooled.total, Pooled.incorrect_ofAdapted hW] at h
   exact h
 
