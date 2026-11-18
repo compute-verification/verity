@@ -29,31 +29,33 @@ def test_seeds_are_a_prefix():
 def submit(**kw) -> list[str]:
     a = argparse.Namespace(**{"model": "llama-3.1-8b", "set": "c4", "ctx": 2048, "gpus": 0, "seeds": "0,1,2",
                               "plugin": None, "spec": ["adopted"], "max_min": 120, "campaign": "cmp-13",
-                              "on": run.NODE, "card": None, "python": None, "hf_home": None, **kw})
+                              "on": "a-node", "card": "NVIDIA H200", "python": "/venv/bin/python", "hf_home": "/hf",
+                              **kw})
     return run.submit_command(a, run.LOCAL_DATA)
 
 
-def test_another_machine_runs_once_the_run_names_its_card():
+def test_the_run_names_its_machine_and_its_card_and_the_job_holds_its_lease_to_it():
     cmd = submit(on="h100-box", card="NVIDIA H100 80GB HBM3", python="/opt/venv/bin/python", hf_home="/data/hf")
     assert cmd[:4] == ["research", "run", "--on", "h100-box"]
     env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")
     assert (env["PPL_CARD"], env["PPL_PY"], env["PPL_HF_HOME"]) == ("NVIDIA H100 80GB HBM3", "/opt/venv/bin/python",
                                                                     "/data/hf")
-    assert not {"PPL_CARD", "PPL_PY", "PPL_HF_HOME"} & {x.split("=")[0] for x in submit() if x.startswith("PPL_")}
 
 
-def test_another_machine_without_a_card_or_with_one_no_card_file_holds_is_refused():
-    with pytest.raises(SystemExit, match="--on h100-box is not vy-nebius-2: name its card with --card"):
-        submit(on="h100-box")
+def test_a_run_without_its_machine_or_card_or_with_a_card_no_card_file_holds_is_refused_by_name():
+    with pytest.raises(SystemExit, match="give --on, --card"):
+        submit(on=None, card=None)
+    with pytest.raises(SystemExit, match="give --python, --hf-home"):
+        submit(python=None, hf_home=None)
     with pytest.raises(SystemExit, match="'NVIDIA H100', the card nvidia-smi names here"):
-        submit(on="h100-box", card="NVIDIA H100")
+        submit(card="NVIDIA H100")
     with pytest.raises(SystemExit, match="at most 2 GPUs"):
-        submit(on="h100-box", card="NVIDIA H100 80GB HBM3", gpus=3)
+        submit(gpus=3)
 
 
 def test_submit_is_a_research_run_on_the_node_under_a_lease():
     cmd = submit()
-    assert cmd[:4] == ["research", "run", "--on", run.NODE] and cmd[-3:] == ["--", "bash", "benchmarks/ppl/job.sh"]
+    assert cmd[:4] == ["research", "run", "--on", "a-node"] and cmd[-3:] == ["--", "bash", "benchmarks/ppl/job.sh"]
     sent = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--send"]
     assert sent == [str(run.LOCAL_DATA / d["file"]) for d in windows.DATASETS.values()]
     env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")

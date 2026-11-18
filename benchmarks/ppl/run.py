@@ -2,9 +2,8 @@
 
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
                 [--data DIR] [--plugin FILE.py]... SPEC...                     on a GPU node: one results.json
-    run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
-          [--on MACHINE --card NAME [--python PY] [--hf-home DIR]]          (job.sh), or on MACHINE, whose card is NAME,
-                                                                            the datasets sent with it
+    run.py submit (eval's flags but --out) --on MACHINE --card NAME         the same as a `research run` on MACHINE, whose
+          --python PY --hf-home DIR [--max-min M] [--dry-run]               card is NAME (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
     run.py metrics RESULTS.json [--out DIR]                                 its metrics (metrics.toml), through the kit
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
@@ -44,7 +43,7 @@ import windows
 if TYPE_CHECKING:
     import numpy as np
 
-__all__ = ["BASELINE", "LOCAL_DATA", "NODE", "README", "arms_for", "load_plugins", "main", "merge", "parse_seeds",
+__all__ = ["BASELINE", "LOCAL_DATA", "README", "arms_for", "load_plugins", "main", "merge", "parse_seeds",
            "submit_command", "visible_gpus"]
 
 HERE = Path(__file__).resolve().parent
@@ -52,7 +51,6 @@ ROOT = HERE.parents[1]
 DATA = Path(settings.get("PPL_DATA"))
 LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
 HF_HOME = Path(settings.get("HF_HOME"))
-NODE = "vy-nebius-2"
 CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
@@ -238,20 +236,20 @@ def cmd_shard(task_path: str) -> int:
 
 
 def submit_command(a: argparse.Namespace, data: Path) -> list[str]:
-    """The `research run` that runs this eval on `a.on` (`NODE` by default) under a gpu-lease of the model's GPUs, from
-    the checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
-    the commit (paths relative to the repository's root). Another machine needs `a.card`, the name nvidia-smi gives its
-    card, which a card file must hold (`verity_bench.kit.card_short`) and the job holds its lease to; `a.python` and
-    `a.hf_home` replace `job.sh`'s Python and Hugging Face cache there."""
+    """The `research run` that runs this eval on the machine `a.on` under a gpu-lease of the model's GPUs, from the
+    checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in the
+    commit (paths relative to the repository's root). `a.card` is the name nvidia-smi gives the machine's card, which a
+    card file must hold (`verity_bench.kit.card_short`) and the job holds its lease to; `a.python` and `a.hf_home` are
+    the machine's Python with the eval's packages and its Hugging Face cache. Refused, by name, where one is missing."""
     gpus = a.gpus or models.get(a.model)["gpus"]
     if gpus > 2:
         raise SystemExit("a run leases at most 2 GPUs")
-    if a.on != NODE and not a.card:
-        raise SystemExit(f"--on {a.on} is not {NODE}: name its card with --card, as nvidia-smi names it")
-    if a.card:
-        from verity_bench import kit
-        kit.card_short(a.card, directory=CARD_FILES)
-    machine = [("PPL_CARD", a.card), ("PPL_PY", a.python), ("PPL_HF_HOME", a.hf_home)]
+    machine = {"--on": a.on, "--card": a.card, "--python": a.python, "--hf-home": a.hf_home}
+    if missing := [flag for flag, v in machine.items() if not v]:
+        raise SystemExit(f"a run names its machine, the machine's card, Python and Hugging Face cache: give "
+                         f"{', '.join(missing)}")
+    from verity_bench import kit
+    kit.card_short(a.card, directory=CARD_FILES)
     flags = f"--model {a.model} --set {a.set} --ctx {a.ctx} --gpus {gpus} --seeds {a.seeds}"
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)
@@ -260,7 +258,8 @@ def submit_command(a: argparse.Namespace, data: Path) -> list[str]:
     return ["research", "run", "--on", a.on, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
             "--cwd", "source", "--custody-ttl", "12h", *sends, "--env", f"GPU_LEASE_WHO={who}",
             "--env", f"PPL_GPUS={gpus}", "--env", f"PPL_MAX_MIN={a.max_min}", "--env", f"PPL_ARGS={flags}",
-            *(x for k, v in machine if v for x in ("--env", f"{k}={v}")), "--", "bash", "benchmarks/ppl/job.sh"]
+            "--env", f"PPL_CARD={a.card}", "--env", f"PPL_PY={a.python}", "--env", f"PPL_HF_HOME={a.hf_home}",
+            "--", "bash", "benchmarks/ppl/job.sh"]
 
 
 def cmd_submit(a: argparse.Namespace) -> int:
@@ -408,10 +407,11 @@ def main(argv: list[str]) -> int:
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
     q.add_argument("--max-min", type=int, default=120)
-    q.add_argument("--on", default=NODE, help="the machine (default: %(default)s); another needs --card")
-    q.add_argument("--card", help="the machine's card, as nvidia-smi names it; the job refuses a lease of another")
-    q.add_argument("--python", help="the machine's Python with the eval's packages (default: job.sh's)")
-    q.add_argument("--hf-home", help="the machine's Hugging Face cache (default: job.sh's)")
+    q.add_argument("--on", required=True, help="the machine")
+    q.add_argument("--card", required=True, help="the machine's card, as nvidia-smi names it; the job refuses a lease "
+                                                 "of another")
+    q.add_argument("--python", required=True, help="the machine's Python with the eval's packages")
+    q.add_argument("--hf-home", required=True, help="the machine's Hugging Face cache")
     q.add_argument("--campaign", default="cmp-13")
     q.add_argument("--dry-run", action="store_true")
     q = sub.add_parser("report")
