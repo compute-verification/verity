@@ -23,6 +23,7 @@ from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.protocols import spot
+from verity_vllm.protocols.interface import BUILD_BOUND
 
 POUW, POUS, SPOT = ALL
 CAPTURED = TargetProfile(protocols=(POUW, SPOT), compilation="piecewise")
@@ -191,5 +192,5 @@ def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeyp
 def test_spot_binds_a_rows_build_and_an_adapter_that_does_not_say_binds_none(monkeypatch):
     _both(monkeypatch, [])
     ctx = PO.Context(stage="commit", enabled=(POUS, SPOT))
-    assert spot.requires_build(SPOT.partition(":")[2], ctx) is True
-    assert PO.requires_build(SPOT, ctx) is True and PO.requires_build(POUS, ctx) is False
+    assert spot.requests(SPOT.partition(":")[2], ctx) == (BUILD_BOUND,)
+    assert [e for e, r in PO.requests(ctx) if r.fixes] == [SPOT]
