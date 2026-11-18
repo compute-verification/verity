@@ -4,3 +4,6 @@
 [former]
 "llama32-1b-1gpu-pouw-protocol-served-h200" = { spec = "llama32-1b-1gpu-pouw-protocol-served", card = "h200" }
 "llama32-1b-1gpu-pouw-protocol-served-h100" = { spec = "llama32-1b-1gpu-pouw-protocol-served", card = "h100" }
+"llama32-1b-bf16-rtx-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "rtx-pro-6000" }
+"llama32-1b-bf16-h200-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h200" }
+"llama32-1b-bf16-h100-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h100" }

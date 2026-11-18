@@ -358,7 +358,7 @@ def test_blocks_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
 
 
 def _serving_defaults_preset():
-    preset = resolve_spec("llama32-1b-bf16-rtx-served-arm").preset
+    preset = resolve_spec("llama32-1b-bf16-served-arm@rtx-pro-6000").preset
     return replace(preset, engine_settings={**preset.engine_settings, "serving_defaults": True})
 
 
