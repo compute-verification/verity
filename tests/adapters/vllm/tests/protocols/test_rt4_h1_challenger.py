@@ -40,6 +40,7 @@ else:
 
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
@@ -54,6 +55,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
+from tests.protocols.pouw_h1_salts import Seeded
 from verity_vllm.protocols import pouw
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
@@ -814,7 +816,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
 def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(monkeypatch):
     """Round s's root, the one round s's coin follows, changes with the A the window serves (its A and z
     tables are in the step's manifest rows), is the same for the same A, and changes with round s - 1's receipts."""
-    monkeypatch.setattr(PH.os, "urandom", lambda n: bytes(n))
+    monkeypatch.setattr(PV, "RunSalts", Seeded)
     served = [_serve(T._settings(), seed) for seed in (9, 10, 9)]
     roots = [[r["root"] for r in c["rounds"]] for c in served]
     assert roots[0] == roots[2] and len(roots[0]) == 3
@@ -827,7 +829,7 @@ def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(mon
     def window(receipt):
         rng = np.random.default_rng(12)
         torch.manual_seed(12)
-        run = PH.H1Run("t", T.SALT, {0: "q", 1: "o"}, [(32, T.K), (40, T.K)], 32, 2, rounds=T._rounds(2), key=T.KEY)
+        run = PH.H1Run("t", T.SALT, {0: "q", 1: "o"}, [(32, T.K), (40, T.K)], 32, 2, rounds=T._rounds(2), salts=Seeded())
         run.record(0, *T._tap(rng, 3, 32))
         with pytest.raises(RuntimeError, match="call 0's receipt before round 0's coin"):
             run.receipt(0, bytes(64))
