@@ -179,10 +179,12 @@ window_off() {  # the Commit's window from KEPT, the stages' run dir, to WD, its
 }
 stop() { window_off; records; echo "STOPPED at $1" | tee -a "$OUT/summary.txt"; exit "$2"; }
 
-PRED=$KEPT/predicted
-"$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED" > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" \
-  && [ -f "$PRED/predicted.json" ] || { tail -5 "$KEPT/predict_row.err"; stop "predict row" 9; }
-cp "$PRED/predicted.json" "$OUT/"
+predict() {  # predict row's Build of record for ROW into KEPT/predicted, its predicted.json into $OUT, where proof_layers.sh reads it
+  local pred=$KEPT/predicted
+  "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$pred" > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" \
+    && [ -f "$pred/predicted.json" ] && cp "$pred/predicted.json" "$OUT/" || { tail -5 "$KEPT/predict_row.err"; return 1; }
+}
+predict || stop "predict row" 9
 jit=$(find "$ROOT/cache" -type f 2>/dev/null | wc -l)
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
 hits=$(grep -rls --include='*.log' '^program cache hit' "$D" | wc -l)
