@@ -45,6 +45,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.network.prover.ids_protocol import (
+    ID_PAYLOAD,
+    id_request_fields,
+)
 from verity.protocols.resource_accounting.network.prover.workload import (
     TRAILER,
     id_event,
@@ -52,7 +56,6 @@ from verity.protocols.resource_accounting.network.prover.workload import (
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from verity_vllm.config import UsageError, option
-from verity.protocols.resource_accounting.network.prover.ids_protocol import ID_PAYLOAD, id_request_fields
 
 __all__ = ["BODY_BYTES", "GONE", "Broken", "Front", "Options", "address", "chunk_ids", "main", "serve", "server_request",
            "token_ids"]

@@ -116,7 +116,9 @@ def tl_log(x: np.ndarray, cfg: Cfg) -> np.ndarray:
     x = np.asarray(x, dtype=f32)
     if cfg.log_impl == "np":
         return np.log(x).astype(f32)
-    from verity_vllm.definitions.registry.sampling import nv_logf as _nv_logf_word   # (lazy: sampling.py imports this module)
+    from verity_vllm.definitions.registry.sampling import (
+        nv_logf as _nv_logf_word,  # (lazy: sampling.py imports this module)
+    )
     w = x.ravel().view(np.uint32)
     out = np.array([_nv_logf_word(int(v)) for v in w], dtype=np.uint32).view(f32)
     return out.reshape(x.shape)

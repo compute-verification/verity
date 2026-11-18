@@ -13,6 +13,7 @@ import types
 from pathlib import Path
 
 import pytest
+
 from verity_vllm.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[5]

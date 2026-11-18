@@ -10,6 +10,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`GreedyStopCheck_v1` on the combine of `TokenSelect_v1{V=320}`'s cut (20 chunks of 16 lanes) over two outputs and one
     stop id, and at GLM-5.3's served statics (154,880 lanes in 20 chunks, its three EOS ids) over two outputs at max_tokens."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import greedy_stop as X
 
     return [("GreedyStopCheck_v1:320:2:stop", lambda: bind(X.GreedyStopCheck, V=320, N=16, T=2, STOP=(3,), MAX_TOKENS=8,

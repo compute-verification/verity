@@ -6,7 +6,6 @@ its causality, the sequence's query and key counts), which `targets.attention_sp
 """
 from __future__ import annotations
 
-
 #: FA2's splitkv tile height (`run_mha_fwd_splitkv_align`: kBlockM = 64 at every head dim)
 KBLOCK_M = 64
 

@@ -97,7 +97,7 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
     {S : ByteArray → Array ByteArray → Option ExecutionPhase}
     (hD : ExecutionPhaseDeployed V ((K.withBinding T dev k).withProject V rd D
       (executionPhaseSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
-    (hCov : ExecutionPhaseCovers V k S)
+    (hCov : ExecutionPhaseCovers V k S) (hTwo : TwoStageBound V k)
     (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       (W.extend (executionPhaseSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω →
         Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
@@ -115,7 +115,7 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
         (fun _ _ => linkEmptyAt e (finish (V.signer θ) θ F c σ.1))
         (fun _ => roundEmptyAt e (finish (V.signer θ) θ F c σ.1)) (I W θ F c σ)) :
     V.SpotSound k :=
-  executionPhaseSpotSound_of_sample V k e rd (K.withBinding T dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
+  executionPhaseSpotSound_of_sample V k e rd (K.withBinding T dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov hTwo
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent ∧ FilesSent V o)
     (fun θ F c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) I
     (fun θ F W hW H => ExecutionPhase.avg_srcCoinsAt (hL θ F W hW) H)

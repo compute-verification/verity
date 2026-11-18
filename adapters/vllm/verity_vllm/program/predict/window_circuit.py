@@ -138,8 +138,8 @@ from typing import Any
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import io_shell as IO
 
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
@@ -261,8 +261,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 def population_digest(circuit: IF.Circuit) -> str:
-    """The digest of ``circuit``'s population Program, which its registered values' domains bind (`window_rows.state_value`'s
-    ``program``)."""
+    """The digest of the Program ``circuit`` registers (`Circuit.program`, its wired Program), which its registered values'
+    domains bind (`window_rows.state_value`'s ``program``)."""
     return program_digest(circuit.program()[0])
 
 
