@@ -7,7 +7,7 @@ import Proofs.Spot.Sampling.Partitioning.SecurityProofs.FreeCompute
 /-!
 # Exfiltration: a sampling design that certifies the target
 
-Independent samples with probability `q = num/N` (`SamplingDesign.bernoulli`) give a set of `K + 1` or more units the missProb
+Independent samples with probability `q = num/N` (`Verity.SamplingDesign.bernoulli`) give a set of `K + 1` or more units the missProb
 `(1 − q)^(K+1)` at most. When that is below `δ`, the harm bound `b·K` and the count `K` certify `b·K + locBits n K`
 (`bern_certifies`). Taking `q` just above `Λ/(K+1)`, or `1` when that is at least `1`, makes `1 − q < e^{−Λ/(K+1)}`, so the
 sampling design certifies at `n·q ≤ n·Λ/(K+1) + ε` samples (`exists_certifying_samplingDesign`). At `δ = 1` this still samples every unit with a small
@@ -31,7 +31,7 @@ theorem meanSamples_nonneg {n : ℕ} (L : SamplingDesign n) : 0 ≤ meanSamples 
   Finset.sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
 theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finset (Fin n)) :
-    ((SamplingDesign.bernoulli n num N).missProb B).toReal = (1 - (num : ℝ) / N) ^ B.card := by
+    ((Verity.SamplingDesign.bernoulli n num N).missProb B).toReal = (1 - (num : ℝ) / N) ^ B.card := by
   have hN : (N : ℝ) ≠ 0 := by exact_mod_cast NeZero.ne N
   rw [SamplingDesign.bernoulli_escape h, ENNReal.toReal_pow]
   congr 1
@@ -40,21 +40,21 @@ theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finse
   field_simp
 
 theorem bern_incl_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (u : Fin n) :
-    ((SamplingDesign.bernoulli n num N).incl u).toReal = (num : ℝ) / N := by
-  have e := congrArg ENNReal.toReal (SamplingDesign.escape_singleton (SamplingDesign.bernoulli n num N) u)
+    ((Verity.SamplingDesign.bernoulli n num N).incl u).toReal = (num : ℝ) / N := by
+  have e := congrArg ENNReal.toReal (SamplingDesign.escape_singleton (Verity.SamplingDesign.bernoulli n num N) u)
   rw [bern_escape_toReal h, Finset.card_singleton, pow_one,
     ENNReal.toReal_sub_of_le (incl_le_one _ u) ENNReal.one_ne_top, ENNReal.toReal_one] at e
   linarith
 
 theorem bern_meanSamples {n num N : ℕ} [NeZero N] (h : num ≤ N) :
-    meanSamples (SamplingDesign.bernoulli n num N) = n * ((num : ℝ) / N) := by
+    meanSamples (Verity.SamplingDesign.bernoulli n num N) = n * ((num : ℝ) / N) := by
   unfold meanSamples
   simp only [bern_incl_toReal h, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- **Independent samples certify `b·K + locBits n K`** once a set of `K + 1` escapes with less than `δ`. -/
 theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : ℝ}
     (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) :
-    CertifiesLeak (SamplingDesign.bernoulli n num N) (fun _ => b) δ ℓ := by
+    CertifiesLeak (Verity.SamplingDesign.bernoulli n num N) (fun _ => b) δ ℓ := by
   have hN : (0 : ℝ) < N := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne N)
   have ht0 : 0 ≤ 1 - (num : ℝ) / N := by
     rw [sub_nonneg, div_le_one hN]
@@ -64,21 +64,21 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
     linarith
   have hδ : 0 < δ := lt_of_le_of_lt (pow_nonneg ht0 _) hesc
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
-      (SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
+      (Verity.SamplingDesign.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
     rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ B))
       (pow_nonneg ht0 _), bern_escape_toReal h]
     exact pow_le_pow_of_le_one ht0 ht1 hB
-  have hmiss_le : (SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
+  have hmiss_le : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
     iSup₂_le fun B hB => hbig B hB
-  have hmiss : (SamplingDesign.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ :=
+  have hmiss : (Verity.SamplingDesign.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ :=
     lt_of_le_of_lt hmiss_le ((ENNReal.ofReal_lt_ofReal_iff hδ).2 hesc)
   unfold CertifiesLeak
   refine ⟨b * K, K, ?_, hmiss, by push_cast; exact hℓ⟩
   intro B hB
   have hcard : B.card ≤ K := by
     by_contra hc
-    exact absurd (hB.trans ((SamplingDesign.bernoulli n num N).escape_le_miss (K := K + 1) (by omega))) (not_le.2 hmiss)
+    exact absurd (hB.trans (SamplingDesign.escape_le_miss (Verity.SamplingDesign.bernoulli n num N) (K := K + 1) (by omega))) (not_le.2 hmiss)
   have hcard' : (B.card : ℝ) ≤ K := by exact_mod_cast hcard
   simp only [Finset.sum_const, nsmul_eq_mul]
   push_cast
@@ -119,7 +119,7 @@ theorem exists_certifying_samplingDesign (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 :
   have hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ := by
     rw [← hδeq]
     exact pow_lt_pow_left₀ hfac ht0 (Nat.succ_ne_zero K)
-  refine ⟨SamplingDesign.bernoulli n num N, bern_certifies hnum hesc hℓ, ?_⟩
+  refine ⟨Verity.SamplingDesign.bernoulli n num N, bern_certifies hnum hesc hℓ, ?_⟩
   rw [bern_meanSamples hnum]
   -- `num ≤ x·N + 1`, and `n/N ≤ ε`
   have hnum' : (num : ℝ) ≤ x * N + 1 := by

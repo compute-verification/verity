@@ -286,7 +286,7 @@ class Tables:
         got = self.held.get(name)
         if got is not None:
             return got
-        from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+        from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             registered_commit,
         )
@@ -315,7 +315,7 @@ class Tables:
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
         got = self.held[name] = registered_commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
-                                           schema=G.SCHEMA_SEG)
+                                           schema=SCHEMA_HM96_SHA512_ROW_SEG)
         return got
 
     def _vocab(self, name: str, stack: np.ndarray, width: int, b: int, V: int) -> np.ndarray:
