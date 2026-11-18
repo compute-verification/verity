@@ -80,8 +80,8 @@ def test_each_name_and_place_is_private(tmp_path, rel, rule):
 
 @pytest.mark.parametrize("rel", [*UNDECIDED, "out/c/manifest.json", "out/note.txt", "out/big.json"])
 def test_no_false_refusal(tmp_path, rel):
-    """A manifest with no salts beside it, the key's name in a file that is not JSON, and a JSON file over the scan's cap (never
-    read) stay uploadable, with the three names nobody has ruled on yet."""
+    """A manifest with no salts beside it, the key's name in a file that is not JSON, and a JSON file over the scan's
+    4 MiB limit (never read) stay uploadable, with the three names nobody has ruled on yet."""
     d = _private_run(tmp_path / "runs")
     _write(d, "out/c/manifest.json", '{"leaves": "leaves"}\n')
     _write(d, "out/note.txt", "hm96_salt_key\n")
