@@ -813,6 +813,8 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     assert got == {"record": R.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
     assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
     assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": R.digest(h1), "values": ["pearl-a/0/0"]}
+    c4 = {**pearl, "window": {**pearl["window"], "scheme": "pearl-c-nvfp4-v0"}}
+    assert "credited_by" not in RA.tie_row({"log": [c4], "outputs": outputs}), "pearl-c-nvfp4-v0's family is pearl-c4"
 
 
 @dataclass(frozen=True)

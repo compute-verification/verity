@@ -1698,6 +1698,7 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     retained aren't the class's outputs, round s the window's s-th step, whose calls the circuit cut at its linears reads."""
     if not getattr(a, "pearl_passes", None):
         return None
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
     from verity_vllm.program.predict import window_circuit as WC
     if not a.window_registration:
         raise ValueError("--pearl-passes: give --window-registration W, Pearl+'s window record of the passes "
@@ -1706,8 +1707,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
         raise ValueError("--h1-key is H1's prover key: a window tied to Pearl+'s W takes its salts from the passes' manifests")
     w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
     scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
-    if not scheme.startswith("pearl-c-"):
-        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme is {scheme}")
+    if getattr(BY_NAME.get(scheme), "family", None) != "pearl-c":
+        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme {scheme} is of no Pearl-C family")
     held = [p for p in json.loads((d / "served.json").read_text())["passes"] if p.get("units")]
     rounds = (json.loads((d / "retention.json").read_text())["rounds"] if (d / "retention.json").exists()
               else list(range(len(held))))

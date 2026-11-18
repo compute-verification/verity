@@ -2116,6 +2116,9 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
+    (tmp_path / "c4.json").write_text(json.dumps({"window": {"scheme": "pearl-c-nvfp4-v0"}, "registered": []}))
+    with pytest.raises(ValueError, match="pearl-c-nvfp4-v0 is of no Pearl-C family"):
+        tie(window_registration=str(tmp_path / "c4.json"))
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()
