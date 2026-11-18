@@ -1,4 +1,4 @@
-"""network-certifier-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
+"""network-attester-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network attester is driven tick by tick on a `VirtualClock`, its records attested by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
 id `deployment.json` names, and refuses a deployment whose start isn't the one attested, a record that isn't what
@@ -205,7 +205,7 @@ def test_a_response_cap_is_a_schedule_flag_rehearse_passes_to_serve():
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
-    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`id_form.id_request`), is answered with
+    """`rehearse --ids`: an `id_traffic` request, sent network-attester-form (`id_form.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
     from verity.protocols.resource_accounting.network.prover import scan_zk as sz

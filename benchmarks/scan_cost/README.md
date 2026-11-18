@@ -6,8 +6,9 @@ CPU machine. This benchmark runs it once at a fixed identity, puts two numbers o
 they are made of, and refuses to write them unless the round's answer is the pinned one.
 
 The two numbers are the proving seconds, and the Lean verifier's CPU seconds on one core, each for a second of
-execution phase. A candidate that makes the scan faster is compared with the baseline at that identity, stage by stage,
-and has a number only if the guard holds on its run.
+execution phase, each written with the scan class (the identity's `class`, `w63k4`) as its `member`. A candidate
+that makes the scan faster is compared with the baseline at that identity, stage by stage, and has a number only if
+the guard holds on its run.
 
 It states no measured figure. `baseline.json` names the baseline's run, the numbers are in that run's `result.json`
 and `out/scan_cost.json` in the evidence store, and `result.py table RUN` prints them.

@@ -283,10 +283,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the network certifier's execution phase {at.window} "
+    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the network attester's execution phase {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": f"registered: port o1 reads {at.head.value} at the network certifier's signed root, unit base + t row t; "
+           "link": f"registered: port o1 reads {at.head.value} at the network attester's signed root, unit base + t row t; "
                    "state the member's committed states at their registered root; o0 the verifier's words 1"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))

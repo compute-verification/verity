@@ -1,6 +1,6 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanStart`) and the egress buckets on the views it writes
 (`egress.EgressBucket`), on the network attester's own records: the network attester, driven tick by tick
-(`test_network_attester`'s harness), carries three network-certifier-form id requests on two lanes, the third
+(`test_network_attester`'s harness), carries three network-attester-form id requests on two lanes, the third
 queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
 state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
 admission bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its

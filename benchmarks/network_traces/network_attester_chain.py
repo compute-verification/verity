@@ -1,4 +1,4 @@
-"""network-certifier-chain: the network chain's reads of an active network attester's run (`network_attester_serve.py`'s directory, or the
+"""network-attester-chain: the network chain's reads of an active network attester's run (`network_attester_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a network attester
 rehearsal's. A network attester rehearsal's run (whose records came through the older network attester's proxy in front of the
 endpoint, under a network attester key with salted clock attestations) is refused by name (`PROXY`): on the network attester
@@ -29,7 +29,7 @@ the refusal stays with the form that reads them.
   end holds (`ACCEPTED_COUNTS`). Which execution phases were attested or refused, and how many problems the check
   found, follow the traffic: `checked` keeps them on the chain's private side (`WITNESS_KEYS`), out of the record.
 * `io`: the attested I/O, read off the records' cells alone, in a network attester rehearsal's attested I/O's keys: each
-  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
+  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-attester-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 * `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
@@ -62,7 +62,7 @@ sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a network attester rehearsal's run (its records through the older network attester's proxy in front of the endpoint): "
-         "the network certifier path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
+         "the network attester path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
 #: what only a network attester rehearsal's run holds (per strategy under a fetched gate run's ``out/``)
 ATTESTER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
@@ -91,7 +91,7 @@ ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("r
 #: which follows what the node sent and when
 WITNESS_KEYS = ("issuer_refused", "certified_windows", "rows", "problems")
 #: why `checked` refuses a run the network attester's own check refuses, its one word of it
-REFUSES = "the network certifier's own check refuses the run, which network_attester_serve.py check says on the witness"
+REFUSES = "the network attester's own check refuses the run, which network_attester_serve.py check says on the witness"
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -256,7 +256,7 @@ def checked(run: Path, deployed: bool = False) -> tuple[dict, dict]:
 
 def io(run: Path) -> dict:
     """The attested I/O (the module docstring's `io`): ``records`` in ingress order, `accepted` when every connection's
-    request is a network-certifier-form id request of a user no other names and every egress `DATA` cell an id-form cell
+    request is a network-attester-form id request of a user no other names and every egress `DATA` cell an id-form cell
     of a connection released by its bucket."""
     _, params = deployment(run)
     B, T = params.cell_bytes, params.window
@@ -270,7 +270,7 @@ def io(run: Path) -> dict:
                 try:
                     kind, q, payload = W.read_cell(f, B)
                 except ValueError as e:
-                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network certifier's: {e}"])
+                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network attester's: {e}"])
                     continue
                 if kind in (W.DATA, W.END) and q not in end:
                     data[q] += payload
@@ -285,7 +285,7 @@ def io(run: Path) -> dict:
         except (ValueError, KeyError, TypeError):
             ok = False
         if not ok:
-            violations.append([q, "a request that isn't a network-certifier-form id request"])
+            violations.append([q, "a request that isn't a network-attester-form id request"])
             continue
         if (first := users.setdefault(fields["user"], q)) != q:
             violations.append([q, f"a request whose user names connection {first} too"])

@@ -623,7 +623,7 @@ async def drive_network_attester(deployment: dict, endpoints: dict, served: str,
                 times = [t for t, kind in shim.arrivals if kind in (network_attester.DATA, network_attester.END)]
                 rec |= read_response(bytes(shim.data), times, params.payload, sent)
                 if shim.outcome != "end":
-                    rec.setdefault("error", f"the network certifier's connection ended: {shim.outcome}")
+                    rec.setdefault("error", f"the network attester's connection ended: {shim.outcome}")
                 conns[k] = ws.connection_log(k, round(t0_unix - origin + at, 6), sent - origin, request, shim, origin)
             except asyncio.CancelledError:
                 rec["error"] = "cancelled at the drain deadline"
@@ -702,7 +702,7 @@ def egress_base(network_attester) -> str:
         return "release a (the ingress end): egress cell i at a + D + i/r"
     if "before s + D" in doc:
         return "admission s: egress cell i at s + D + i/r"
-    return "unknown (the network certifier's docstring names neither a + D nor s + D)"
+    return "unknown (the network attester's docstring names neither a + D nor s + D)"
 
 
 def start_network_attester(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
@@ -827,7 +827,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
     t = clock()
     network_attester = sampler = None
-    key = Path(tempfile.mkdtemp(prefix="trace-corpus-network-certifier-")) if delay is not None else None
+    key = Path(tempfile.mkdtemp(prefix="trace-corpus-network-attester-")) if delay is not None else None
     with open(d / "server.log", "wb") as log:
         server = subprocess.Popen([*taskset(cpus and cpus["server"]), *argv], stdout=log, stderr=subprocess.STDOUT, env=env,
                                   start_new_session=True)
@@ -854,7 +854,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
                                      "warden/deployment.json)"}
             if tick:
                 meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": dep["origin_unix"], "run": dep["run_id"],
-                                "where": f"the network certifier ({NETWORK_ATTESTER_WHERE}; network_attester_serve.py serve --watermark)"}
+                                "where": f"the network attester ({NETWORK_ATTESTER_WHERE}; network_attester_serve.py serve --watermark)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),

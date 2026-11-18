@@ -288,10 +288,10 @@ def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and
 
 
 @pytest.fixture(scope="module")
-def certifier_run(tmp_path_factory):
+def attester_run(tmp_path_factory):
     """A network attester rehearsal's run as a fetched one holds it: its plan and calibration, and a deployment.json naming the
     network attester's key and links, which no active network attester's does."""
-    run = tmp_path_factory.mktemp("certifier") / "honest"
+    run = tmp_path_factory.mktemp("attester") / "honest"
     run.mkdir()
     docs = {"plan.json": {"windows": 2}, "calibration.json": {"grid": {}},
             "deployment.json": {"certifier_key": "00", "links": {"n2": "served"}, "session": "00" * 32, "run_id": "r"}}
@@ -300,18 +300,18 @@ def certifier_run(tmp_path_factory):
     return run
 
 
-def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, certifier_run):
+def test_a_attester_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path, attester_run):
     proxy = re.escape(WC.PROXY)
     for read in (WC.deployment, WC.certificates, WC.io, WC.link):
         with pytest.raises(SystemExit, match=f"{proxy}.*plan.json is there"):
-            read(certifier_run)
-    rc, _, _, held = _n2(certifier_run, tmp_path / "n2")
+            read(attester_run)
+    rc, _, _, held = _n2(attester_run, tmp_path / "n2")
     assert rc == 1 and re.search(proxy, held)
     with pytest.raises(SystemExit, match=proxy):
-        cr.main(["certs", "--warden-run", str(certifier_run), "--out", str(tmp_path / "certs.json")])
+        cr.main(["certs", "--warden-run", str(attester_run), "--out", str(tmp_path / "certs.json")])
     run = gate_run(tmp_path)
-    shutil.copyfile(certifier_run / "deployment.json", run / "out" / "deployment.json")
-    shutil.copyfile(certifier_run / "deployment.json", run / "witness" / "deployment.json")
+    shutil.copyfile(attester_run / "deployment.json", run / "out" / "deployment.json")
+    shutil.copyfile(attester_run / "deployment.json", run / "witness" / "deployment.json")
     with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a network attester's"):
         WC.certificates(run)
 
@@ -430,7 +430,7 @@ def test_the_chain_reads_the_served_nodes_public_endpoint_document_and_refuses_b
 
 
 def test_the_network_attester_path_requires_every_step_on_one_network_attester_run_and_refuses_a_attester_rehearsals(tmp_path,
-                                                                                                certifier_run):
+                                                                                                attester_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_ATTESTER_STUBBED)
@@ -455,7 +455,7 @@ def test_the_network_attester_path_requires_every_step_on_one_network_attester_r
         Path(getattr(steps, name)).write_text(json.dumps(doc))
 
     proxy = WC.PROXY
-    refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(certifier_run)},
+    refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(attester_run)},
             f"N2's summary names no network attester run: {proxy}")
     refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network attester run " + "11" * 32)
     refused("tie", lambda d: d | {"tie": {"honest": [True, True], "forged": [True, True]}}, "forged's refused")

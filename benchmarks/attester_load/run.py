@@ -2,6 +2,12 @@
 
     verity bench attester_load [--class w63k4] [--reps 5] [--requests 12] [--load 0.8] [--json] [--out DIR]
     verity bench attester_load --vllm-python VENV/bin/python [--model unsloth/Llama-3.2-1B]   the model arm too
+    bash benchmarks/attester_load/run.sh --on CARD --cores CORES   both arms, the model arm on a leased card (run.sh)
+
+The first form alone measures the stand-in arm's member, on a CPU node:
+
+    research run --on auto --project verity --source . --cwd clone -- bash -lc \\
+      'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu python benchmarks/attester_load/run.py'
 
 Each arm sends the same requests at the same evenly spaced load to one endpoint, through the network attester and
 straight to it, alternating, and measures each request's time to the first and to the last byte of its response. The
@@ -13,8 +19,11 @@ second for responses of k ids. The stub arm runs on a CPU against `network_attes
 model arm runs only where `--vllm-python` names a Python with vLLM, on a card, against vLLM's OpenAI server, in the bytes
 form, since that server answers in its own framing: the schedule and its cells' buckets are the id form's.
 
-It writes its three numbers only when its guard holds: a delay planted in the network attester's release
-(`--plant-ms` on its pacer) shows in the added time to the first byte, and the direct arm against itself reads near zero.
+Each arm writes the three numbers, `network-accounting/attester-added-first-byte`, `-added-last-byte` and
+`-tick-lateness`, under its member: the stub arm's `stub-cpu`, the model arm's its model and the leased card's
+short name in its card record (`llama-3.2-1b-h200` on an H200). An arm writes them only when its guard holds: a delay planted in the network
+attester's release (`--plant-ms` on its pacer) shows in the added time to the first byte, and the direct arm against
+itself reads near zero.
 """
 
 from __future__ import annotations
@@ -322,9 +331,15 @@ def stub(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
 
 
 def card() -> str | None:
+    """The leased GPU's name (`GPU_LEASE_UUID`'s first), else the first nvidia-smi lists, which ignores
+    CUDA_VISIBLE_DEVICES."""
     if shutil.which("nvidia-smi") is None:
         return None
-    r = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], capture_output=True, text=True)
+    from verity_bench import settings
+
+    lease = (settings.GPU_LEASE_UUID or "").split(",")[0].strip()
+    r = subprocess.run(["nvidia-smi", *(["-i", lease] if lease else []), "--query-gpu=name", "--format=csv,noheader"],
+                       capture_output=True, text=True)
     return (r.stdout.split("\n")[0].strip() or None) if r.returncode == 0 else None
 
 
@@ -332,9 +347,26 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9.]+", "-", text.lower().replace("nvidia", "")).strip("-")
 
 
+def model_member(model: str, gpu: str | None) -> str:
+    """The model arm's member: the model's name and the card's `short` from its card record (`kit.card_short`)."""
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
+    return f"{slug(model.rsplit('/', 1)[-1])}-{kit.card_short(gpu or '', directory=CARD_FILES)}"
+
+
+def not_served(model: str, log: Path, lines: int = 60) -> str:
+    """The model arm's refusal when vLLM didn't serve: the log's path and its last `lines` lines, since the log is in a
+    temporary directory the run doesn't keep."""
+    tail = log.read_text(errors="replace").splitlines()[-lines:] if log.is_file() else ["(no log)"]
+    return "\n".join([f"vLLM didn't serve {model} ({log}); its last {len(tail)} lines:", *tail])
+
+
 def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
-    """The model arm: vLLM's OpenAI server of `--model` on this machine's card, the network attester in the bytes form."""
+    """The model arm: vLLM's OpenAI server of `--model` on this machine's card, the network attester in the bytes form;
+    refused before serving unless one card record names the card."""
     gpu = card()
+    name = model_member(a.model, gpu)
     port = 18000 + secrets.randbelow(2000)
     with open(work / "vllm.log", "w") as log:
         server = subprocess.Popen([a.vllm_python, "-m", "vllm.entrypoints.openai.api_server", "--model", a.model,
@@ -348,9 +380,8 @@ def model_arm(a: argparse.Namespace, s: dict[str, int], work: Path) -> dict:
                 break
             except OSError:
                 if server.poll() is not None or time.monotonic() > deadline:
-                    raise SystemExit(f"vLLM didn't serve {a.model} ({work / 'vllm.log'})") from None
+                    raise SystemExit(not_served(a.model, work / "vllm.log")) from None
                 time.sleep(2)
-        name = f"{slug(a.model.rsplit('/', 1)[-1])}-{slug(gpu or 'none')}"
         return arm(name, ("127.0.0.1", port), s, a, work, egress="bytes", model=a.model,
                    fields={"card": gpu, "endpoint": f"vLLM's OpenAI server of {a.model}"})
     finally:
@@ -389,8 +420,8 @@ def render(doc: dict) -> str:
 
 
 def write(doc: dict, out: Path) -> int:
-    """The arms whose guard holds, as the three metrics through the harness kit's writer: under a research run its
-    result, else `out/result.json`."""
+    """The arms whose guard holds, as the three metrics through the harness kit's writer, each arm's under its member:
+    under a research run its result, else `out/result.json`."""
     from verity_bench import kit
 
     w = kit.writer(str(out))

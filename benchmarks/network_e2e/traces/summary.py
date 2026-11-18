@@ -885,11 +885,11 @@ FIELDS = """\
   server's `accept_unix` (uvicorn accepted the request's TCP connection) and `conn_request` (the request's place on that
   connection, 1 for its first), `headers_unix` (the app got the request) and `body_unix` (it had read the whole body), and
   the engine core's `engine_add_unix` and `engine_add_index` (when it handed the request to the scheduler, and its place
-  in that order, which FCFS's waiting queue keeps); through the network certifier, `network_attester`: its `ordinal` and `outcome` at the
-  client, and from the network certifier's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
+  in that order, which FCFS's waiting queue keeps); through the network attester, `network_attester`: its `ordinal` and `outcome` at the
+  client, and from the network attester's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
   cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null). Under `--admit tick`,
-  `release` and `bucket`: its number in the network certifier's release order and its release bucket, counted from the
-  trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a network certifier trace the network certifier's, as the
+  `release` and `bucket`: its number in the network attester's release order and its release bucket, counted from the
+  trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a network attester trace the network attester's, as the
   server got them (`raw/tick-feed.jsonl`) where they agree with its log (`summary.feed_releases`, and summary.json's
   `tick.releases`), elsewhere the client's stand-in's (`corpus.StandIn`).
 - `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
@@ -903,10 +903,10 @@ FIELDS = """\
   network attester (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
   outcome, and `where` the releases came from: a network certifier trace's watermark is warden.json's, its last line, the lost
   releases it named and its error).
-- `<trace>/warden/`, a network certifier trace's: what the network certifier published (`deployment.json`, `requests.records`,
+- `<trace>/warden/`, a network attester trace's: what the network attester published (`deployment.json`, `requests.records`,
   `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
   connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
-  `network_attester_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the network certifier's every tick,
+  `network_attester_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the network attester's every tick,
   publish and collection (`ticks.json`, `network_attester_probe.py`, with a spawned publisher's keeps as it wrote them in
   `publisher_keeps.jsonl` and its pid in `publisher.pid`), the host's load every 100 ms (`host.jsonl`,
   `host_sample.py`) and the client's event loop (`client_loop.json`, `corpus.drive_network_attester`); `<trace>.admitted/`,
@@ -940,7 +940,7 @@ def readme(s: dict) -> str:
         *([f"Admission: the certified tick (`--admit tick`, `verity_vllm.pipeline.serve_admit`), τ_b {tick['bucket_us']} µs, "
            f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
            f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
-           "network certifier each trace's meta.json `tick.where` names (a network certifier trace's own, the client's stand-in, "
+           "network attester each trace's meta.json `tick.where` names (a network attester trace's own, the client's stand-in, "
            "`corpus.StandIn`, for the others); each trace's gate log is its `tick` in summary.json.",
            ""] if tick else []),
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
@@ -1005,7 +1005,7 @@ def readme(s: dict) -> str:
         fed = {name: g["releases"] for name, g in gated.items() if g.get("releases")}
         if fed:
             lines += ["", "A network attester trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
-                          "certifier's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
+                          "attester's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
                           "left out of requests.jsonl, so the replay refuses the trace:", ""]
             lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the network attester logged no "
                       f"release for, {r['disagree']} disagree" for name, r in fed.items()]
@@ -1015,7 +1015,7 @@ def readme(s: dict) -> str:
         lines += ["", "## The network attester", "",
                   f"The network attester traces reach the server only through the active network attester ({', '.join(map(str, where))}): "
                   "`network_attester_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
-                  "cells on its schedule, D counted from the network certifier's "
+                  "cells on its schedule, D counted from the network attester's "
                   f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in network_attesters.values()}))}. Its records, "
                   "certificates and connection log are in `<trace>/warden/`, and `check` is `network_attester_serve.py check` of "
                   "them against the client shim's record of every cell.", "",
@@ -1032,8 +1032,8 @@ def readme(s: dict) -> str:
         probed = {name: w for name, w in network_attesters.items() if w.get("ticks") or w.get("client_loop")}
         if probed:
             lines += ["", "Where the trace probed them (`network_attester_probe.py`, `host_sample.py`, `corpus.drive_network_attester`), the "
-                      "network certifier's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
-                      "publisher's keep of each record (pack, sign and commit), the network certifier's collections, the host's 1-minute load "
+                      "network attester's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
+                      "publisher's keep of each record (pack, sign and commit), the network attester's collections, the host's 1-minute load "
                       "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "
                       "ran around each, are the trace's `network_attester.ticks.late` in summary.json.", "",
                       "| trace | cores (server / client / network attester) | ticks | lateness ms: " +
@@ -1053,8 +1053,8 @@ def readme(s: dict) -> str:
                              f"{(h.get('psi_ms') or {}).get('max')} | {c.get('stalls')} ({c.get('max_lag_ms')}) |")
         paced = {name: w["ticks"]["publisher"] for name, w in probed.items() if (w.get("ticks") or {}).get("publisher")}
         if paced:
-            lines += ["", ("Where the network certifier's publisher is a process of its own (`PublisherProcess`), whether it kept up "
-                           "(`summary.publisher_pace`): each record's lag from the network certifier's handing its close over to its "
+            lines += ["", ("Where the network attester's publisher is a process of its own (`PublisherProcess`), whether it kept up "
+                           "(`summary.publisher_pace`): each record's lag from the network attester's handing its close over to its "
                            "having been kept, the share of each window's span the publisher spent keeping that window's "
                            "records, and how long the run's end waited for the last ones past its last tick."), "",
                       ("| trace | records handed / kept | keep ms p50 / max | window busy p50 / max | lag s p50 / max "

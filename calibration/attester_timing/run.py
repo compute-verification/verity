@@ -89,7 +89,7 @@ import channel  # noqa: E402
 import parties  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 from parties import (  # noqa: E402
-    ATTACKS, CERTIFIERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, now, plan_of, span_s,
+    ATTACKS, ATTESTERS, HEADER_BYTES, LAUNCH_PRIORITY, OBSERVERS, distinct_cores, now, plan_of, span_s,
 )
 
 SCHEMA = "certifier-timing/result/v1"
@@ -322,11 +322,11 @@ def score(case: Path, observed: Path | None = None) -> dict:
     (`kernel`, `stamped`; `unstamped`: why its host's kernel gave none) and of the attester's own times (`sender`:
     a paced one's write ends, else its ticks' lateness), how many times the attester's host's cores entered an idle
     state that stops them while it ran (`halted`; None where the host gave no count, `parties.halts`), and what
-    makes it no measurement (`problems`). A record whose attester is none of `CERTIFIERS` is another benchmark's,
+    makes it no measurement (`problems`). A record whose attester is none of `ATTESTERS` is another benchmark's,
     and is refused."""
     cfg, server, attester = (json.loads((case / f"{n}.json").read_text()) for n in ("config", "server", "certifier"))
-    if cfg["certifier"] not in CERTIFIERS:
-        raise SystemExit(f"{case}: its attester is {cfg['certifier']!r}, none of {', '.join(CERTIFIERS)}: score it "
+    if cfg["certifier"] not in ATTESTERS:
+        raise SystemExit(f"{case}: its attester is {cfg['certifier']!r}, none of {', '.join(ATTESTERS)}: score it "
                          f"with the benchmark that recorded it")
     observer = json.loads((observed or case / "observer.json").read_text())
     pairs, problems = samples(cfg, server, observer)
@@ -471,7 +471,7 @@ def result(cases: list[dict], **more) -> dict:
 
 def _table(docs: list[dict]) -> str:
     """Results' rows as a Markdown table, each with what its cases ran with."""
-    head = ["run", "host", "observer's host", "certifier", "paced ms", "pin", "gate ms", "waker ms", "awake",
+    head = ["run", "host", "observer's host", "attester", "paced ms", "pin", "gate ms", "waker ms", "awake",
             "launch", "role", "attack", "observer", "bits/interval", "95%", "scored", "sender",
             "by the kernel's stamp", "95%", "merged", "halted"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
@@ -555,12 +555,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, required=True)
     p.add_argument("--wait-s", type=float, default=600.0, help="how long the attester waits for the observer")
     p.add_argument("--attack", default="write", choices=ATTACKS)
-    p.add_argument("--attester", default="network", choices=CERTIFIERS)
+    p.add_argument("--attester", default="network", choices=ATTESTERS)
     p.add_argument("--ignore", action="store_true", help="the server writes as for bit 0 whatever its bits")
     p.add_argument("--launch", type=_launch_arg, metavar="DEV,AFTER,OPEN[,MODE]")
     p = sub.add_parser("observe")
     p.add_argument("at", metavar="HOST:PORT")
-    p.add_argument("--attester", default="network", choices=CERTIFIERS)
+    p.add_argument("--attester", default="network", choices=ATTESTERS)
     p.add_argument("--observer", default="spin", choices=OBSERVERS)
     p.add_argument("--intervals", type=int, default=3000)
     p.add_argument("--interval-ms", type=int, default=100)

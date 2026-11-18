@@ -12,7 +12,7 @@ from typing import Sequence
 
 from verity.protocols.resource_accounting.network.prover import egress as EG
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
-from verity.protocols.resource_accounting.network.verifier.grid import Certifier, BlockGrid
+from verity.protocols.resource_accounting.network.verifier.grid import Attester, BlockGrid
 
 #: the token ids' range (GLM's vocabulary), and the bits an id takes
 V = 151_329
@@ -45,7 +45,7 @@ def serve(params: W.NetworkAttesterParams, arrivals: Sequence[int], responses: S
         c.egress = bytearray(b"".join(IT.id_event(x, P) for x in xs) + IT.TRAILER)
         c.egress_ended = True
         conns.append(c)
-    queue, active, grid, records = deque(conns), [], Certifier("responses", params.grid), []
+    queue, active, grid, records = deque(conns), [], Attester("responses", params.grid), []
     for t in range(windows * params.window):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()

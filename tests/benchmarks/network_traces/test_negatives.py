@@ -523,7 +523,7 @@ def test_a_changed_byte_of_a_network_attesters_committed_cell_doesnt_read_under_
 
 
 def test_frame_on_a_network_attester_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`network_attester_frame` on a network-certifier-serve run driven tick by tick (`relay_runs._run`): its egress registration
+    """`network_attester_frame` on a network-attester-serve run driven tick by tick (`relay_runs._run`): its egress registration
     (v2) is read under the network attester's key and the schedule, its bucket rows and signed wiring are committed
     under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
     and not with a payload byte changed; a run that kept no salts is not applicable."""
