@@ -483,7 +483,7 @@ PEARL_PLUS = register(Scheme(
     published=("MACs", Fraction(1)),
     channel_schemas=(PEARL_SALT,),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
-    premises=Lacks("Pearl+'s premises are its owner's to name"),
+    premises=("Verity.Vocab.PouwSound", "Pouw.PearlPlus.Setting.ChargeHolds"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
     tables=("pearl-a", "pearl-y", "pearl-b"),
     output_format="bf16",
@@ -491,4 +491,5 @@ PEARL_PLUS = register(Scheme(
     y_committed=True,
     salt_open_root=epoch_open_root,
     kernels=runs_on(KERNEL),
+    keeps_weight_copy=True,
 ))
