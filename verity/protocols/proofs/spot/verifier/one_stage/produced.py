@@ -38,6 +38,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
@@ -45,8 +46,6 @@ from . import registered as G
 FORMAT = "verity/registration/produced/v1"
 KEYS = ("draw", "format", "openings", "produced", "registration")
 PRODUCED_KEY = G.PRODUCED_KEY
-#: a row's hm96-sha512 commitment string ``b || c``
-BC_BYTES = 128
 _HEX = re.compile(r"[0-9a-f]+")
 
 
@@ -55,7 +54,7 @@ def _hex64(s: Any) -> bool:
 
 
 def _hex_bc(s: Any) -> bool:
-    return isinstance(s, str) and len(s) == 2 * BC_BYTES and bool(_HEX.fullmatch(s))
+    return isinstance(s, str) and len(s) == 2 * hm96.SHA512.proven_bytes and bool(_HEX.fullmatch(s))
 
 
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int, docket: str) -> CommitmentDomain:
@@ -214,5 +213,5 @@ def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] 
     return () if all(got.get(v) == r for v, r in want.items()) else ("P-opened",)
 
 
-__all__ = ["BC_BYTES", "FORMAT", "KEYS", "PRODUCED_KEY", "check", "commit", "domain", "entry", "known_port", "opened", "port",
+__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "commit", "domain", "entry", "known_port", "opened", "port",
            "record", "rows_of", "shared", "wanted"]

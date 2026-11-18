@@ -206,7 +206,7 @@ if [ "$CC" = "9.0" ]; then
   VENV=$VENV bash verity_vllm/ops/pod_fa3_tap.sh >"$OUT/fa3_tap.log" 2>&1; grep -q '^FA3-TAP-OK' "$OUT/fa3_tap.log" || fail FA3_TAP "$(tail -2 "$OUT/fa3_tap.log")"
   log "$(grep '^FA3-TAP-OK' "$OUT/fa3_tap.log" | tail -1)"
 fi
-if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by default (a row names each .so: config.RunEnv)
+if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by default, at the paths cli.MACHINE names
   VENV=$VENV FA2_TAP_ROW_GUARD=1 FA2_TAP_HDIMS=${FA2_TAP_HDIMS:-64,96,128,256} bash verity_vllm/ops/pod_fa2_tap.sh >"$OUT/fa2_tap_guarded.log" 2>&1; grep -q '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" || fail FA2_TAP_GUARDED "$(tail -2 "$OUT/fa2_tap_guarded.log")"
   log "$(grep '^FA2-TAP-OK' "$OUT/fa2_tap_guarded.log" | tail -1)"
   if [ "$CC" = "9.0" ]; then

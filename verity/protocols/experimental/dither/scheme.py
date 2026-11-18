@@ -34,5 +34,6 @@ DITHER = register(Scheme(
     charges=(Charge("sample", _EPS), Charge("egress", _EPS), Charge("answers", _EPS)),
     attach=attach,
     **dict.fromkeys(("parties", "channels", "colocated", "needs", "depends", "record", "symbol", "published",
-                     "channel_schemas", "record_owner", "tables", "number_format", "y_committed", "salt_open_root"), _NOT_RUN),
+                     "channel_schemas", "record_owner", "tables", "output_format", "product_family", "y_committed",
+                     "salt_open_root", "kernels"), _NOT_RUN),
 ))
