@@ -11,6 +11,7 @@ from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.prover import binder
+from verity.protocols.resource_accounting.memory.poub.prover.node_store import registry
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties, period
 
 
@@ -31,30 +32,80 @@ def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
     assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("declared", "memory", "steps")
     assert set(poub.POUB.processes) == {poub.SESSION_PROCESS} == {"poub-session"}
     assert S.PROCESSES[poub.SESSION_PROCESS] is poub.POUB.processes[poub.SESSION_PROCESS]
-    assert poub.prover("binder") is binder.Binder and set(poub.PROVER) == {"binder", poub.SESSION_PROCESS}
+    assert poub.prover("binder") is binder.Binder and poub.prover("schedule") is binder.Every
+    assert poub.prover("store") is registry.NodeMemory and poub.prover("tiles") is audit.NoiseTiles
+    assert set(poub.PROVER) == {"binder", "store", "schedule", "tiles", "weights", "region", poub.SESSION_PROCESS}
     assert poub.POUB.unit == poub.BANDWIDTH.unit == "bits"
 
 
+class Exchange:
+    def __init__(self) -> None:
+        self.requests, self.subscribed = [], []
+
+    def request(self, name, request) -> None:
+        self.requests.append((name, request))
+
+    def subscribe(self, name, hook, fn):
+        self.subscribed.append((name, hook))
+        return lambda: None
+
+
+def ctx(given=None, **launcher):
+    return {"settings": S.settings(poub.POUB, given or {}), **launcher}
+
+
 def test_the_binder_subscribes_under_the_declaration() -> None:
-    class Exchange:
-        def __init__(self) -> None:
-            self.requests, self.subscribed = [], []
-
-        def request(self, name, request) -> None:
-            self.requests.append((name, request))
-
-        def subscribe(self, name, hook, fn):
-            self.subscribed.append((name, hook))
-            return lambda: None
-
     ex = Exchange()
-    b = poub.POUB.attach(ex, {"store": None, "binder": {"passes": False}})
+    b = poub.POUB.attach(ex, ctx({"passes": False}))
     assert isinstance(b, binder.Binder) and not b.passes
     assert ex.requests == [("poub", poub.REUSE_OLDEST_FREED)]
     assert ex.subscribed == [("poub", "memory"), ("poub", "steps")]
     ex = Exchange()
     binder.Binder(None, fifo=False).install(ex)
     assert ex.requests == []
+
+
+def test_the_binder_holds_what_the_settings_say_over_a_store_read_back_from_it() -> None:
+    """The attach makes the store when the launcher hands none, and it is read back as the binder's ``store``; a
+    launcher's store is the one the binder holds; each setting reaches the binder, ``weight_blocks`` 0 as no limit."""
+    b = poub.POUB.attach(Exchange(), ctx())
+    assert isinstance(b.store, registry.NodeMemory)
+    assert (b.passes, b.kv, b.weight_blocks, b.messages, b.tiles, b.reader) == (True, True, None, None, None, None)
+    assert b.weights is binder.model_weights
+    store = registry.NodeMemory()
+    b = poub.POUB.attach(Exchange(), ctx({"passes": False, "kv": False, "weight_blocks": 5}, store=store))
+    assert b.store is store and (b.passes, b.kv, b.weight_blocks) == (False, False, 5)
+
+
+def test_a_window_is_the_fixed_schedule_with_the_launchers_challenge() -> None:
+    reader = lambda segments: bytes(64)  # noqa: E731
+    b = poub.POUB.attach(Exchange(), ctx({"window": 2}, challenge=lambda t: bytes([t]) * 32, reader=reader))
+    assert isinstance(b.messages, binder.Every) and b.messages.passes == 2 and isinstance(b.tiles, audit.NoiseTiles)
+    assert b.messages() == [bytes(32)] and b.messages() == [] and b.messages() == [b"\x01" * 32]
+    assert b.reader is reader and isinstance(b.receipt, binder.PoubReceipt)
+    with pytest.raises(ValueError, match="poub: window 2 with no challenge"):
+        poub.POUB.attach(Exchange(), ctx({"window": 2}))
+    with pytest.raises(ValueError, match="poub: window 0 with a challenge"):
+        poub.POUB.attach(Exchange(), ctx(challenge=lambda t: bytes(32)))
+
+
+def test_a_launchers_regions_follow_the_registered_values_and_a_wrong_shape_is_refused_by_name() -> None:
+    codec = object()
+    b = poub.POUB.attach(Exchange(), ctx(regions=lambda values: [("w.store", "T", "enc:w@0", codec)]))
+    got = b.weights([("w", "t")])
+    assert got == [binder.WeightRegion("w", "t", "param:w"), binder.WeightRegion("w.store", "T", "enc:w@0", codec=codec)]
+    for wrong in (("w.store", "T", "enc:w@0"), ["w.store", "T", "enc:w@0", codec], (1, "T", "enc:w@0", codec),
+                  ("w.store", "T", None, codec), binder.WeightRegion("w", "t", "param:w")):
+        b = poub.POUB.attach(Exchange(), ctx(regions=lambda values, wrong=wrong: [("ok", "T", "s", codec), wrong]))
+        with pytest.raises(ValueError, match=r"poub: regions' entry 1 is .*\(name, tensor, source, codec\)"):
+            b.weights([])
+
+
+@pytest.mark.parametrize("name, value", [("binder", {"passes": False}), ("passes", False), ("kv", False),
+                                         ("weight_blocks", 5), ("window", 2), ("refresh", False)])
+def test_a_setting_handed_beside_the_settings_is_refused_by_name(name, value) -> None:
+    with pytest.raises(ValueError, match=rf"poub: \['{name}'\] handed beside the settings"):
+        poub.POUB.attach(Exchange(), ctx(**{name: value}))
 
 
 def test_the_sessions_requests_refuse_a_run_it_cannot_follow() -> None:
@@ -102,14 +153,30 @@ def test_each_says_its_term_as_the_sketch_bounds_error_at_its_layout_and_its_two
         S.bound(poub.BANDWIDTH, Fraction(1, 100), 0, zero)
 
 
-def test_refresh_is_poubs_one_setting_off_by_default() -> None:
-    assert S.settings(poub.POUB, {}) == {"refresh": False} == S.settings(poub.POUB, {"refresh": False})
+def test_poubs_settings_are_refresh_and_what_its_binder_holds_each_refused_by_name() -> None:
+    defaults = {"refresh": False, "passes": True, "kv": True, "weight_blocks": 0, "window": 0}
+    assert S.settings(poub.POUB, {}) == defaults == S.settings(poub.POUB, dict(defaults)) == dict(poub.SETTINGS)
+    assert S.settings(poub.POUB, {"passes": False, "kv": False, "weight_blocks": 5}) == {
+        **defaults, "passes": False, "kv": False, "weight_blocks": 5}
+    assert S.settings(poub.POUB, {"window": 2})["window"] == 2
     with pytest.raises(ValueError, match=f"poub: refresh waits on {poub.REFRESH_GOAL}"):
         S.settings(poub.POUB, {"refresh": True})
     with pytest.raises(ValueError, match="has no setting"):
         S.settings(poub.POUB, {"lifetime": 2})
-    with pytest.raises(ValueError, match="is a bool"):
-        S.settings(poub.POUB, {"refresh": 1})
+    for name, wrong, kind in (("refresh", 1, "bool"), ("passes", 0, "bool"), ("kv", "no", "bool"),
+                              ("weight_blocks", True, "int"), ("weight_blocks", None, "int"), ("window", 2.0, "int")):
+        with pytest.raises(ValueError, match=f"poub.{name} is a {kind}"):
+            S.settings(poub.POUB, {name: wrong})
+    for name in ("weight_blocks", "window"):
+        with pytest.raises(ValueError, match=f"poub: {name} is a count, 0 or more, not -1"):
+            S.settings(poub.POUB, {name: -1})
+    with pytest.raises(ValueError, match="poub: window 2 with passes off"):
+        S.settings(poub.POUB, {"window": 2, "passes": False})
+
+
+def test_the_remote_session_keeps_a_weight_derived_copy_and_the_bandwidth_audit_keeps_none() -> None:
+    assert S.declared(poub.POUB, "keeps_weight_copy") is True
+    assert S.declared(poub.BANDWIDTH, "keeps_weight_copy") is False
 
 
 def test_what_each_lacks_says_why() -> None:

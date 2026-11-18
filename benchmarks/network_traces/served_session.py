@@ -57,7 +57,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept network attester run's attested I/O (`network_attester_chain.io`: each request's prompt and streamed ids as the
   network attester's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
-  prints only its path and counts.
+  prints only its path and the network attester run.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -83,9 +83,10 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
 --main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
 (``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the lane's gate key and the kept
 fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link carries the
-session's coins over ssh to that port of P's loopback, where the sample's client connects. The gate key and the network attester
-run's witness are the auditor's, so the sample never runs on the served node, which is the prover's: a ``--coin-peer``
-that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
+session's coins over ssh to that port of P's loopback, where the sample's client connects. A ``--coin-peer`` that is
+the kept run's peer (its request.json's) or `PEER` is the served node, the prover's: the sample runs there and job.json's
+``coin_peer`` says so (``{"name": P, "served_node": true}``); under ``VERITY_HOLD_PLACEMENT=1`` it is refused, the gate
+key and the network attester run's witness being the auditor's. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
 a node without one the chain samples on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
 history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
@@ -202,7 +203,9 @@ SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "Se
 #: sealed without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
            "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
-           "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
+           "--seal --retain-exclude hidden_m1"
+#: serve-openai's defaults the endpoint's flags leave out but `served_as` still holds serve.json to
+DEFAULTED = ("--scheme", "rows-sha512")
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
 #: the endpoint's map from its engine requests to the network attester's, in its serve dir: each engine request's
@@ -218,8 +221,8 @@ CERTIFIED = "certified-io.json"
 HAND_START = ("serve-openai run directly (--out SERVE_DIR, the serve dir `endpoint` reads as --from, outside every "
               "run's directory, where the serve refuses it; --required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
-              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
-              "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
+              "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40, which --seal requires "
+              "(72 GB of seals then needs about 112 GB free at the start). VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
               "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
@@ -589,20 +592,23 @@ def input_file(path: Path, what: str) -> Path:
     return path
 
 
-def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
+def coin_args(a: argparse.Namespace, fetch: Path) -> tuple[list[str], dict | None]:
     """The scan's sample arguments: none (every proof block), ``--draw K`` on the verifier's coins, or K on the gate's,
-    sampled on the auditor's side (`--coin-peer`)."""
+    sampled on ``--coin-peer``; and, for the gate's, the coin peer as the chain's record names it (``coin_peer``: its
+    name and whether it is the served node, the prover's, which is refused only under ``VERITY_HOLD_PLACEMENT=1``)."""
     if a.coins == "verifier":
-        return [] if a.draw is None else ["--draw", str(a.draw)]
+        return ([] if a.draw is None else ["--draw", str(a.draw)]), None
     if a.draw is None:
         raise Refused("--coins gate samples --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
         raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
                       "to the run's own lane's key), so the coin peer can't be checked")
-    if a.coin_peer in (served, PEER):
-        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the network attester run's "
-                      f"witness are the auditor's, so the sample runs where the chain does, {AUDITOR} by default")
+    on_served = a.coin_peer in (served, PEER)
+    if on_served and settings.hold_placement():
+        raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's, and {settings.HOLD_PLACEMENT}=1 holds "
+                      f"the sample off it: the gate key and the network attester run's witness are the auditor's, so the "
+                      f"sample runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
         raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
                       "(challenger-key current)")
@@ -610,8 +616,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused(f"no gate key {a.key}: the sample runs on the node that holds the lane's gate key, {AUDITOR}")
     key = input_file(a.challenger_key, "challenger key record")
     main = input_file(a.main, "--main") if a.main else first_parent(TREE, a.keep / a.run / "scan-main.txt")
-    return ["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
-            "--challenger-key", str(key), "--gate-key", str(a.key)]
+    return (["--draw", str(a.draw), "--challenger", f"gate:{a.gate}", "--main", str(main), "--peer", a.coin_peer,
+             "--challenger-key", str(key), "--gate-key", str(a.key)], {"name": a.coin_peer, "served_node": on_served})
 
 
 def attested_io(fetch: Path) -> tuple[dict, dict]:
@@ -635,14 +641,14 @@ def certified(a: argparse.Namespace) -> int:
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
     dep, io = attested_io(fetch)
     if not io["accepted"]:
-        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: "
+                      f"{len(io['violations'])} violation(s)")
     dest = a.keep / a.run / CERTIFIED
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump({"deployment": dep, "io": io}, f)
     dest.chmod(0o600)
-    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"], "requests": io["requests"],
-                      "tokens": io["tokens"]}), flush=True)
+    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"]}), flush=True)
     return 0
 
 
@@ -676,8 +682,9 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
 
 
 def served_as(serve: dict, port: int) -> list[str]:
-    """Each of `ENDPOINT`'s flags that serve.json shows the endpoint didn't serve with, beside what it recorded."""
-    words, off = shlex.split(ENDPOINT.format(port=port))[2:], []
+    """Each of `ENDPOINT`'s flags and `DEFAULTED`'s that serve.json shows the endpoint didn't serve with, beside what it
+    recorded."""
+    words, off = [*shlex.split(ENDPOINT.format(port=port))[2:], *DEFAULTED], []
     host, at = (serve.get("address") or [None, None])[:2]
     for i, w in enumerate(words):
         if not w.startswith("--"):
@@ -766,11 +773,14 @@ def chain(a: argparse.Namespace) -> int:
             raise Refused(f"{k}: the scan's sample and its coins are --draw and --coins's, which keep the sample off the "
                           "developer's node")
         env[k] = v
-    coins = coin_args(a, fetch)
+    coins, peer = coin_args(a, fetch)
     if any(c.isspace() for w in coins for c in w):
         raise Refused(f"{coins}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give paths without it")
     if scan := " ".join(coins):
         env["CR_SCAN_ARGS"] = f"{scan} {env.get('CR_SCAN_ARGS', '')}".strip()
+    env.pop("CR_COIN_PEER", None)
+    if peer is not None:
+        env["CR_COIN_PEER"] = json.dumps(peer, sort_keys=True)
     if endpoint:
         env.update({"CR_ENDPOINT": endpoint, **({"CR_EOS_IDS": a.eos_ids} if a.eos_ids else {})})
     return subprocess.run(["bash", str(HERE / "chain_record.sh")], cwd=TREE, env=env).returncode

@@ -4,8 +4,7 @@
 # name, outside a lease) sets the build's target, its architecture file nvcc's -gencode (probe.py gencode): sm_120a (an
 # RTX PRO 6000: one build), sm_90a (an H200 or H100: the int8 and f16/bf16 mma.sync forms native there, two groups),
 # sm_100a (a B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it
-# doesn't) or sm_89 (an L40S: four groups). A card no record holds, or an arch with no forms here, refuses and writes no
-# point.
+# doesn't). A card no record holds, or an arch with no forms here, refuses and writes no point.
 #
 #   research run --on NODE --project verity --source . --cwd source -- env GPU_LEASE_WHO=LANE \
 #     gpu-lease 1 --wait --on CARD --cores CORES --max-min 25 -- bash calibration/pouw/tensor_kinds/run.sh
@@ -32,7 +31,6 @@ echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"car
 case $ARCH in
   120) GROUPS_=(-1) ;;
   90) GROUPS_=(0 1) ;;
-  89) GROUPS_=(0 1 2 3) ;;
   100) GROUPS_=(0 1) ;;
   *) echo "tensor_kinds: no forms for TK_SM $ARCH" >&2; exit 2 ;;
 esac

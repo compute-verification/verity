@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import sqlite3
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -309,12 +310,19 @@ class Store:
 
     def ran(self, run: str, run_dir: Path, *, sub: str = "run", argv: list[str] | None = None, env: dict | None = None,
             validation: str = "passed", rc: int = 0, dirty: bool = False) -> None:
-        """The run's attempt: by default the door's node job `sub` under the door's lease."""
+        """The run's attempt: by default the door's node job `sub` under the door's lease. As `research` keeps them, its
+        run files hold no `kit.RESULT`, which is its result art's meta instead."""
 
         from research.store import canon
 
-        files = self.store.put_artifact("run-files/v1", {}, tree=run_dir)
+        kept = run_dir.parent / f"{run}-files"
+        shutil.copytree(run_dir, kept, ignore=shutil.ignore_patterns(kit.RESULT), dirs_exist_ok=True)
+        files = self.store.put_artifact("run-files/v1", {}, tree=kept)
         self.store.push(files)
+        result = None
+        if (run_dir / kit.RESULT).is_file():
+            result = self.store.put_artifact("bench-result/v1", json.loads((run_dir / kit.RESULT).read_text()))
+            self.store.push(result)
         start = f"{run[1:5]}-{run[5:7]}-{run[7:9]}T{run[10:12]}:{run[12:14]}:{run[14:16]}Z"
         if argv is None:
             argv = [*LEASE, "bash", R.NODE_JOB, sub, "--card", "h200"]
@@ -325,7 +333,7 @@ class Store:
             "conditions": {}, "key_conditions": [], "source": {"commit": SHA, "dirty": dirty}, "closure": None,
             "execution": {"start_utc": start, "machine": "vy-dc-h200"}, "cost": None,
             "status": {"state": "done" if rc == 0 else "failed", "rc": rc, "validation": validation},
-            "outputs": {"result": None, "run_files": files}, "telemetry": None,
+            "outputs": {"result": result, "run_files": files}, "telemetry": None,
         }
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
 

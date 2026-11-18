@@ -383,7 +383,7 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     wins = records(out, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1, 2] and all(w["seal"] == {"row_dir": str(out / "windows" / f"w{w['window']}"),
                                                                       "off_loop": True} for w in wins)
-    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", sc.REQUEST_USERS)) == 3
+    assert not (out / "seals.jsonl").exists() and len(records(tmp_path / "OUT", "windows.jsonl")) == 3
     assert not (tmp_path / "OUT" / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
     assert not s.windows.summary()["passed"] and s.windows.summary()["seals"]["awaiting"] == 3
     held.set()
@@ -826,6 +826,9 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
     assert sg.disk_floor_of(opts).path == tmp_path.resolve(), "the nearest directory --out is on"
     no_floor = cli.parse("serve-openai", [*base, "--disk-floor-gb", "0"], environ={})
     assert sg.disk_floor_of(no_floor) is None
+    unstated = [w for i, w in enumerate(base) if "--disk-floor-gb" not in base[max(i - 1, 0):i + 1]]
+    with pytest.raises(UsageError, match="^--seal needs --disk-floor-gb: "):
+        so.preflight(cli.parse("serve-openai", unstated, environ={}), which=lambda _: "/v/bin/ninja")
     assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=10) is None
     assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=11)["free_gb"] == 0.0
 

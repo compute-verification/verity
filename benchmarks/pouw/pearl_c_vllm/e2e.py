@@ -36,7 +36,7 @@ The run:
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify.sh` after the execution phase, whose verdict on each is the Lean's: the first two must be replay-verified
-  (development shortcut; the protocol's check is a ZK proof, PouwCheck) and the control rejected (the panel's rule).
+  (development shortcut; the protocol's check is a ZK proof, PouwVerifier) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -78,6 +78,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from verity_config.settings import of
+from verity.protocols.compose import schemes
 
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
@@ -147,7 +148,7 @@ SERVED_RECORD = "served.json"
 #: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
 #: promotion), which has no sm_90a record
 QUALITY = {"pearl_c_sm120": {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"},
-           "pearl_c_sm90": {"pearlc-v1": "pearl-c-h100-v1-h3"}}
+           "pearl_c_sm90": {"pearlc-v1": schemes.get("pearl-plus").option.partition(":")[2]}}
 #: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's execution phases: BOS and 2,047 tokens each, non-overlapping; its batch budget, one execution phase a step
@@ -422,15 +423,16 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
                for g in got)
     kept = whole_retained_check(run, forward, side) if run.hashing else None
     return {"check": "whole", "hashing": run.hashing, "calls": len(calls), "eager": want[2], "replays": [g[2] for g in got],
-            "replay_equals_eager": same, "staged": staged, "retained_equals_eager": kept,
-            "ok": (same and len(calls) == len(weights) and kept is not False
+            "replay_equals_eager": same, "staged": staged, "retained_equals_eager": None if kept is None else kept["ok"],
+            "retained": kept,
+            "ok": (same and len(calls) == len(weights) and (kept is None or kept["ok"])
                    and staged == ([False, True] * 2 if run.hashing else [False] * 4))}
 
 
-def whole_retained_check(run, forward, side) -> bool:
+def whole_retained_check(run, forward, side) -> dict:
     """A retained pass of `forward` made eagerly, and one replayed from a whole capture of a retained pass's kind: the same
-    records, call files (each call's rows and A tree) and commitment, byte for byte.  Each pass drops its retain directory
-    before it ends, so neither writes the weights' files, which the two would share."""
+    records, call files (each call's rows and A tree) and commitment, byte for byte (`retained_differences`).  Each pass
+    drops its retain directory before it ends, so neither writes the weights' files, which the two would share."""
     import shutil
     import tempfile
 
@@ -438,9 +440,9 @@ def whole_retained_check(run, forward, side) -> bool:
     keep, dirs = ("transcript_root", "activation_roots", "units", "tiles"), [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
 
     def ended() -> tuple:
-        recs, files = list(run.cur.records), list(run.cur.files)
+        recs, files, mms = list(run.cur.records), list(run.cur.files), list(run.cur.matmuls)
         run.cur.retain = None
-        return recs, files, {k: v for k, v in run.end().items() if k in keep}
+        return recs, files, {k: v for k, v in run.end().items() if k in keep}, mms
 
     try:
         run.graphs = False
@@ -465,12 +467,48 @@ def whole_retained_check(run, forward, side) -> bool:
         graph.replay()
         run.whole_replayed(calls)
         got = ended()
-        files = sorted(p.relative_to(dirs[0]) for p in (dirs[0] / "calls").iterdir())
-        return (got == want and files == sorted(p.relative_to(dirs[1]) for p in (dirs[1] / "calls").iterdir())
-                and all((dirs[0] / f).read_bytes() == (dirs[1] / f).read_bytes() for f in files))
+        return retained_differences(want, got, dirs)
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
+
+
+def retained_differences(want: tuple, got: tuple, dirs: list[Path]) -> dict:
+    """`whole_retained_check`'s verdict on an eager retained pass `want` and a replayed one `got`, each (records, call
+    files, commitment, matmuls), retained under ``dirs[0]`` and ``dirs[1]``: ``ok``, and for each part that differs (the
+    records, the call files' entries, the files on disk, the commitment) the first call it differs at, by its index in the
+    pass, its matmul (index, m₁₆ x k x n, weight) and its differing fields."""
+    out: dict = {}
+    for part, a, b in (("records", want[0], got[0]), ("call_files", want[1], got[1])):
+        if a != b:
+            at = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+            out[part] = {"calls": [len(a), len(b)], "first": at,
+                         "matmul": _matmul(want[3][at]) if at < len(want[3]) else None,
+                         "fields": _differing(a[at], b[at]) if at < min(len(a), len(b)) else ["count"]}
+    names = [sorted(str(p.relative_to(d)) for p in d.rglob("*") if p.is_file()) for d in dirs]
+    if names[0] != names[1]:
+        out["disk"] = {"only_eager": sorted(set(names[0]) - set(names[1]))[:8],
+                       "only_replayed": sorted(set(names[1]) - set(names[0]))[:8]}
+    elif bad := [f for f in names[0] if (dirs[0] / f).read_bytes() != (dirs[1] / f).read_bytes()]:
+        out["disk"] = {"differ": len(bad), "first": bad[:8]}
+    if want[2] != got[2]:
+        out["commitment"] = _differing(want[2], got[2])
+    return {"ok": not out, **out}
+
+
+def _matmul(mm) -> dict:
+    return {"index": mm.index, "shape": [mm.shape.m, mm.shape.k, mm.shape.n], "weight": mm.weight}
+
+
+def _differing(a, b, at: str = "") -> list[str]:
+    """The dotted names of the fields where `a` and `b` differ, through dataclasses and dicts."""
+    import dataclasses
+
+    if dataclasses.is_dataclass(a) and type(a) is type(b):
+        return [d for f in dataclasses.fields(a) for d in _differing(getattr(a, f.name), getattr(b, f.name), f"{at}{f.name}.")]
+    if isinstance(a, dict) and isinstance(b, dict):
+        return [d for k in sorted(set(a) | set(b), key=str) for d in _differing(a.get(k), b.get(k), f"{at}{k}.")]
+    return [] if a == b else [at.rstrip(".") or "value"]
 
 
 def schedule_check(run, weights: dict) -> dict:

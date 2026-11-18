@@ -110,7 +110,9 @@ export B
   nvidia-smi topo -m
 } > "$O/machine.txt" 2>&1
 
-FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+GENCODE=$(python3 "$TREE/benchmarks/kernels/machine.py" gencode "sm_$ARCH" 2>&1) ||
+  { say "PREFLIGHT: no build target for ARCH=$ARCH: $GENCODE"; exit 3; }
+FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 LEAF64=() NO_LEAF64=(--no-leaf64)
 if [[ " $ROWS " == *" 64 "* && "${ROWS_ARGS:-}" == *--leaf-ctas* ]]; then LEAF64=(-DLEAF_PASS64) NO_LEAF64=(); fi
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}

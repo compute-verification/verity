@@ -8,7 +8,8 @@ They are two protocols, each with its own verifier and its own store, and no set
   hook of the served run and has no setting.
 - `POUB` (``poub``, the adapter's option and the benchmarks' session): the remote session ``verity/remote-bandwidth/v0``
   over the node's own store (`prover.node_store`), which `prover.binder.Binder` keeps current from the served run's
-  ``memory`` and ``steps`` events, subscribed under `POUB`'s name. ``refresh`` is its one setting. The Commit's
+  ``memory`` and ``steps`` events, subscribed under `POUB`'s name. Its settings are `SETTINGS`: ``refresh`` and what
+  its binder holds. The Commit's
   session over that store is its process `SESSION_PROCESS` (`prover.commit_session`), which reads what the build
   declared.
 
@@ -98,9 +99,27 @@ def _bandwidth_attach(exchange: Any, ctx: Any) -> Any:
     raise LookupError(_P2_ATTACH)
 
 
-def _refresh(values: Mapping[str, Any]) -> str | None:
-    return f"refresh waits on {REFRESH_GOAL}: a session with it on, accepted by the Lean verifier" \
-        if values["refresh"] else None
+#: `POUB`'s settings, each what its binder holds: ``refresh``; ``passes``, the binder runs the passes itself (off for a
+#: session whose backend runs them); ``kv``, the KV pool is in the registration; ``weight_blocks``, the weight tensors
+#: registered in order while their blocks fit that many (0: every tensor); ``window``, the passes of a window on a fixed
+#: schedule for a run with no verifier (0: none)
+SETTINGS: Mapping[str, Any] = MappingProxyType(
+    {"refresh": False, "passes": True, "kv": True, "weight_blocks": 0, "window": 0})
+#: what a launcher hands `attach` beside the settings, each optional: ``store`` (a `NodeMemory`; `attach` makes one
+#: without it), ``challenge(t)`` (window ``t``'s challenge, with ``window``), ``reader(segments)`` (a pass's roots) and
+#: ``regions(values)`` (weight regions beside the registered values', each ``(name, tensor, source, codec)``)
+LAUNCHER = ("store", "challenge", "reader", "regions")
+
+
+def _check_settings(values: Mapping[str, Any]) -> str | None:
+    if values["refresh"]:
+        return f"refresh waits on {REFRESH_GOAL}: a session with it on, accepted by the Lean verifier"
+    for name in ("weight_blocks", "window"):
+        if values[name] < 0:
+            return f"{name} is a count, 0 or more, not {values[name]}"
+    if values["window"] and not values["passes"]:
+        return f"window {values['window']} with passes off: a binder that runs no pass ends no window"
+    return None
 
 
 def _bandwidth_reading(row: Mapping[str, Any]) -> S.Reading:
@@ -163,6 +182,9 @@ BANDWIDTH = S.register(S.Scheme(
     check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
     reader=_bandwidth_reading,
     premises=(_COUNTED,),
+    # For its session's life it holds a reference to storage's own encoded rows, a tree of salted leaves held to the
+    # store's root, and each pass's receipts: none yields the weights apart from the store it audits.
+    keeps_weight_copy=False,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
 ))
@@ -177,8 +199,8 @@ POUB = S.register(S.Scheme(
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
     charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
     delta_scheme=DELTA_SCHEME["poub"],
-    settings={"refresh": False},
-    check_settings=_refresh,
+    settings=SETTINGS,
+    check_settings=_check_settings,
     hooks=("declared", "memory", "steps"),
     requests=lambda ctx: requests(ctx),
     attach=lambda exchange, ctx: attach(exchange, ctx),
@@ -207,6 +229,11 @@ POUB = S.register(S.Scheme(
     reader=S.Lacks("no combined record has a row for the remote session"),
     premises=("ResourceAccounting.Assumptions.WorkHardness",
               "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
+    # Its binder registers views of the served tensors (`prover.binder.TorchBacking.of_tensor`), which keep the plain
+    # weights resident after storage releases them, and its session keeps two host copies of every block's payload,
+    # one of them plain (`prover.node_store.serving`: `payload_root`'s payloads and the audit store's encoded
+    # blocks). The commit that drops the views and the plain host copy changes this.
+    keeps_weight_copy=True,
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
                     S.Lacks("not a kernel scheme")),
 ))
@@ -236,8 +263,14 @@ def requests(ctx: Mapping[str, Any]) -> tuple[H.Request, ...]:
 #: own (it runs on a GPU through torch, which `verity` never imports; ``tests/import_order.toml`` lists this file as
 #: its loader), so the declaration names it and loads it on first use, as `verity.protocols.compose.schemes` loads a
 #: declaration by its scheme's name.
+_BINDER = "verity.protocols.resource_accounting.memory.poub.prover.binder"
 PROVER: Mapping[str, str] = MappingProxyType({
-    "binder": "verity.protocols.resource_accounting.memory.poub.prover.binder:Binder",
+    "binder": f"{_BINDER}:Binder",
+    "store": "verity.protocols.resource_accounting.memory.poub.prover.node_store.registry:NodeMemory",
+    "schedule": f"{_BINDER}:Every",
+    "tiles": "verity.protocols.resource_accounting.memory.poub.verifier.audit:NoiseTiles",
+    "weights": f"{_BINDER}:model_weights",
+    "region": f"{_BINDER}:WeightRegion",
     SESSION_PROCESS: "verity.protocols.resource_accounting.memory.poub.prover.commit_session:CommitSession",
 })
 
@@ -248,10 +281,45 @@ def prover(name: str) -> Any:
     return getattr(import_module(module), attribute)
 
 
+def _weights(regions: Any) -> Any:
+    """The binder's weight regions: the registered values', then ``regions(values)``' tuples, each refused by its
+    place unless it is ``(name, tensor, source, codec)`` with ``name`` and ``source`` strings."""
+    def weights(values: Any) -> list[Any]:
+        out = list(prover("weights")(values))
+        for i, r in enumerate(regions(values)):
+            if not (isinstance(r, tuple) and len(r) == 4 and isinstance(r[0], str) and isinstance(r[2], str)):
+                raise ValueError(f"{POUB.name}: regions' entry {i} is {r!r}: each is (name, tensor, source, codec), "
+                                 "name and source strings")
+            out.append(prover("region")(r[0], r[1], r[2], codec=r[3]))
+        return out
+    return weights
+
+
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
-    """`POUB` on a served run (`Scheme.attach`): the binder over ``ctx["store"]`` (a `NodeMemory`), built with
-    ``ctx["binder"]``'s keywords, installed on ``exchange``, which files its requests; returns the binder."""
-    return prover("binder")(ctx["store"], **ctx.get("binder", {})).install(exchange)
+    """`POUB` on a served run (`Scheme.attach`): its binder as ``ctx["settings"]`` state it (`SETTINGS`), over
+    ``ctx["store"]`` or a store of its own (read back as the binder's ``store``), with the launcher's callables
+    (`LAUNCHER`), installed on ``exchange``, which files its requests; returns the binder. With ``window`` it runs the
+    fixed schedule itself: ``challenge(t)`` every ``window`` passes, each receipt bound to the stub tiles
+    (`verifier.audit.NoiseTiles`). A setting handed beside the settings is refused by name, and so is a ``challenge``
+    without ``window`` or a ``window`` without one: what the binder holds is what the settings say."""
+    settings = ctx["settings"]
+    if beside := sorted(k for k in ("binder", *SETTINGS) if k in ctx):
+        raise ValueError(f"{POUB.name}: {beside} handed beside the settings: each is a setting of the declaration "
+                         f"({sorted(SETTINGS)}), given as one")
+    challenge = ctx.get("challenge")
+    if bool(settings["window"]) != (challenge is not None):
+        raise ValueError(f"{POUB.name}: window {settings['window']} with "
+                         f"{'no' if challenge is None else 'a'} challenge: a window's passes and its challenge go together")
+    kw: dict[str, Any] = {"passes": settings["passes"], "kv": settings["kv"],
+                          "weight_blocks": settings["weight_blocks"] or None}
+    if settings["window"]:
+        kw.update(messages=prover("schedule")(settings["window"], challenge), tiles=prover("tiles")())
+    if ctx.get("reader") is not None:
+        kw["reader"] = ctx["reader"]
+    if ctx.get("regions") is not None:
+        kw["weights"] = _weights(ctx["regions"])
+    store = ctx["store"] if ctx.get("store") is not None else prover("store")()
+    return prover("binder")(store, **kw).install(exchange)
 
 
 def session(verifier: str, **kw: Any) -> Any:
@@ -261,6 +329,6 @@ def session(verifier: str, **kw: Any) -> Any:
     return prover(SESSION_PROCESS)(verifier, **kw)
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "POUB", "PROVER",
-           "REFRESH_GOAL", "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "attach", "delta_sketch", "prover",
+__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "DELTA_SKETCH", "GOAL", "LAUNCHER", "POUB", "PROVER",
+           "REFRESH_GOAL", "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "SETTINGS", "attach", "delta_sketch", "prover",
            "requests", "session"]

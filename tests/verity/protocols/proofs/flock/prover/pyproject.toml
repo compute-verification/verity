@@ -19,15 +19,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "test_arena_layout.py",
     "test_challenger_audit.py",
-    "test_circuit.py",
-    "test_class_statement.py",
     "test_class_statement_redteam_1178.py",
-    "test_flock_rows.py",
     "test_flock_rows_vectors.py",
     "test_hm96_leaves.py",
     "test_inner_registered.py",
-    "test_ir_lowering.py",
-    "test_ir_sampling.py",
     "test_lean_coin_tree.py",
     "test_lean_forged_proofs.py",
     "test_lean_hidden_outputs.py",
@@ -41,7 +36,6 @@ untraced = [
     "test_lean_session_tables.py",
     "test_lean_shared_reads.py",
     "test_lean_typed_reads.py",
-    "test_lean_typed_statement.py",
     "test_lean_typed_template.py",
     "test_lean_verifier.py",
     "test_lean_verify_members.py",
@@ -56,9 +50,7 @@ untraced = [
     "test_rec_inner_stage.py",
     "test_ring_switch.py",
     "test_sha512_leaves.py",
-    "test_stage_typed.py",
     "test_stream_zk_server.py",
-    "test_typed_statement.py",
     "test_witness_host.py", "test_zc_round1.py", "test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
@@ -94,8 +86,10 @@ inputs = [
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
-# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check), while the suite's workers together hold under 6 GB
+# each: `--mem-gb` books one worker at worker_gb and each other at typical_worker_gb (suites.py's `workers_gb`)
 worker_gb = 16
+typical_worker_gb = 6
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # check runs it as six parts by test id (`lean-suites:verity-flock:K/6`, `suites.py`'s `id_part_of`), each collecting every
@@ -151,24 +145,10 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "test_circuit.py",
     "test_inner_registered.py",
-    "test_ir_lowering.py",
-    "test_ir_sampling.py",
     "test_lean_registered_bit_rows.py",
-    "test_stage_typed.py",
-    "test_typed_statement.py",
 ]
 paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_class_statement.py"]
-paths = [
-    "benchmarks/numerical/python/verity_numerical/bench",
-    "adapters/vllm/verity_vllm",
-    "tools/verity/circuit_check/src/circuit_check",
-    "verity",
-]
 
 [[tool.verity.tests.reads]]
 tests = ["test_class_statement_redteam_1178.py"]
@@ -178,18 +158,8 @@ paths = ["adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_ch
 tests = [
     "test_class_statement_unit_stager.py",
     "test_lean_hello.py",
-    "test_tmpl_statement.py",
-    "test_unit_range.py",
 ]
 paths = ["tests/verity/protocols/resource_accounting/compute/pouw/verifier", "tests/verity/protocols/experimental/pearl_c4"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_derive.py"]
-paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_flock_rows.py"]
-paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["test_keyed.py"]
@@ -214,19 +184,10 @@ tests = [
     "test_lean_served_registered.py",
     "test_lean_session_tables.py",
     "test_lean_typed_reads.py",
-    "test_lean_typed_statement.py",
     "test_lean_typed_template.py",
     "test_lean_verify_members.py",
 ]
 paths = ["tools/research/src/research"]
-
-[[tool.verity.tests.reads]]
-tests = ["test_ir_lowering_bench.py"]
-paths = [
-    "benchmarks/numerical/python/verity_numerical/bench",
-    "tools/research/src/research",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
-]
 
 [[tool.verity.tests.reads]]
 tests = ["test_lean_verifier.py", "test_lean_width_refusals.py"]
@@ -243,7 +204,7 @@ tests = [
 paths = ["verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["test_partition_units.py", "test_rec_shape.py"]
+tests = ["test_rec_shape.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/resource_accounting/network",

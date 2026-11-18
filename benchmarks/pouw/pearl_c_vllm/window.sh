@@ -14,7 +14,7 @@
 #     the benchmark's handle; KEEP_PRIORITY, KEEP_EXPIRES and KEEP_OWNER override them), and the window fails KEEP
 #     without one.
 # The verdicts run after the window, on the CPU (verify.sh <run id>: the Lean's, held to the Python twin); an ACCEPT is
-# replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).  Needs setup.sh's $WORK.
+# replay-verified (development shortcut; the protocol's check is a ZK proof, PouwVerifier).  Needs setup.sh's $WORK.
 # The venv's tools (ninja, which FlashInfer's JIT calls) come first on PATH, and FLASHINFER_CUDA_ARCH_LIST is setup.sh's, so
 # FlashInfer finds the sampling module setup.sh built, with the same flags, in the build's own cache (flashinfer_env.sh; a
 # ready.json whose library is elsewhere fails SETUP).  jit-built.txt lists every FlashInfer library
@@ -35,7 +35,7 @@
 # the machine's toolkit at 13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
 # PEARLC_KERNEL=verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
 # under `gpu-lease 1`: the ship is pearl_c_sm90/ship.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
-# VARIANTS=h100, SCHEME defaults to pearl-c-h100-v1-h3, and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
+# VARIANTS=h100, SCHEME defaults to the kernel scheme Pearl+ declares (compose.schemes' pearl-plus option), and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
 # with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
 # checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
 # (the research user's, where those nodes keep a run's data).
@@ -47,7 +47,8 @@ MODE=${MODE:-window}
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 case $K in
   pearl_c_sm90)
-    VARIANTS=h100; SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+    VARIANTS=h100
+    SCHEME=${SCHEME:-$(python3 -m verity.protocols.compose.schemes pearl-plus option)}; SCHEME=${SCHEME#*:}
     WORK=${WORK:-/workspace/research/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
     MODEL=${MODEL:?on $K, MODEL names the checkpoint directory}
     [ -x "$PY" ] || fail SETUP "no Python at $PY: VERITY_BENCH_VENV names the node's pinned-vLLM environment"
@@ -78,7 +79,9 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
   CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || fail STATEMENT "no CUDA toolkit 13.0 to build hm96_rows.cu"
-  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
+  GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") \
+    || fail STATEMENT "no -gencode for this machine's card to build hm96_rows.cu"
+  "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -cubin -o "$OUT/hm96_rows.cubin" \
     verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi

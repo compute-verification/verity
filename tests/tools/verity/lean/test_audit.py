@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from concurrent import futures
 from pathlib import Path
 
 import pytest
@@ -2736,6 +2737,23 @@ def test_facts_says_which_audits_keep_their_facts_document(tmp_path, monkeypatch
     assert got == kept
 
 
+@pytest.mark.parametrize("flags,asked", [([], False), (["--unread-facts"], True)])
+def test_unread_facts_asks_every_audit_of_the_run_for_unread_lean_s_facts(tmp_path, monkeypatch, flags, asked):
+    a = tmp_path / "a"
+    a.mkdir()
+    (a / A.POLICY).write_text("{}")
+    got = []
+
+    def fake(pkg, out, *args, built=lambda: None, write_unread=False, **_):
+        built()
+        got.append(write_unread)
+        return {"package": str(pkg), "seconds": {}, "failures": []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    assert A.main([str(a), "--no-replay", *flags, "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]) == 0
+    assert got == [asked]
+
+
 @pytest.mark.parametrize("kept_facts,keeps", [("all", [True, True]), ("own", [True, False]), ("none", [False, False])])
 def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(tmp_path, monkeypatch, kept_facts, keeps):
     pkg = tmp_path / "s"
@@ -2756,6 +2774,48 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
     monkeypatch.setattr(A, "proved", proved)
     rep = A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, kept_facts=kept_facts)
     assert seen == keeps and rep["failures"] == ["lean: stop after the provers' facts"]
+
+
+def stop(*_a, **_k):
+    raise RuntimeError("stop")
+
+
+class Now:
+    """An executor that runs each task as it is submitted, so a test sees what an audit submitted before it stopped."""
+
+    def __init__(self, *_a, **_k):
+        pass
+
+    def submit(self, fn, *args):
+        f = futures.Future()
+        f.set_result(fn(*args))
+        return f
+
+    def shutdown(self, *_a, **_k):
+        pass
+
+
+@pytest.mark.parametrize("unread,where,writes", [(True, "tree", True), (True, "root", True), (False, "tree", False),
+                                                 (True, "elsewhere", False)],
+                         ids=["unread-facts-in-tree", "unread-facts-in-checkout", "records-run", "outside-both"])
+def test_with_no_replay_security_writes_unread_lean_s_facts_only_under_unread_facts(tmp_path, monkeypatch, unread, where,
+                                                                                    writes):
+    """A records run (`--no-replay`) of `security` in a slot tree (`--tree`) writes `Unread.lean`'s facts only under
+    `--unread-facts`; a package of no tree check.py knows writes none."""
+    tree, root = tmp_path / "tree", tmp_path / "root"
+    pkg = {"tree": tree, "root": root, "elsewhere": tmp_path / "other"}[where] / "security"
+    pkg.mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["Proofs"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    monkeypatch.setattr(A, "TREE", tree)
+    monkeypatch.setattr(A, "ROOT", root)
+    monkeypatch.setattr(A, "ThreadPoolExecutor", Now)
+    monkeypatch.setattr(A, "facts_of", lambda *a, **k: {"modules": ["S"], "oleans": [], "pins": {}})
+    monkeypatch.setattr(A, "proved", stop)
+    wrote = []
+    monkeypatch.setattr(A, "unread_facts", lambda q, modules, *_: wrote.append((q, modules)) or {})
+    rep = A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, write_unread=unread)
+    assert wrote == ([(pkg, ["S"])] if writes else []), rep["failures"]
 
 
 SHAPE_SPEC = """namespace Control
@@ -3598,6 +3658,60 @@ requiresModuleSystem = true
 name = "DepTest"
 plugins = ["Plug:shared"]
 '''
+
+class Built(Exception):
+    """What a `--build` past the artifact-cache refusal reaches first (`reserved`, stubbed)."""
+
+
+def built(*a, **k):
+    raise Built
+
+
+def cached_node(tmp_path, monkeypatch, modules=True):
+    """A sandboxed node whose artifact cache (under `CHECK_CACHE`) indexes a module unless not ``modules``, and `check.py
+    --build` of a toy package there, returning its exit or raising `Built` once past the refusal."""
+    pkg, root = toy(tmp_path), HERE.parents[3]
+    monkeypatch.setenv("CHECK_CACHE", str(cache := tmp_path / "check-cache"))
+    (index := cache / "lean-artifacts" / A.sibling("module_keys").INDEX).mkdir(parents=True)
+    if modules:
+        (index / "k").write_text("")
+    monkeypatch.setattr(A, "reserved", built)
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    return pkg, cache / "lean-artifacts", lambda *flags: A.main([str(pkg), "--build", *flags, "--out", str(tmp_path / "out"),
+                                                                  "--repo", str(root)])
+
+
+def test_a_build_that_could_restore_from_the_nodes_artifact_cache_and_does_not_is_refused(tmp_path, monkeypatch, capsys):
+    """`--build` on a sandboxed node whose artifact cache indexes modules, with none of `--artifacts`, `--no-artifacts`,
+    `--fresh` or `--dev-cache`, refuses before any build and names the records route for each package it names."""
+    pkg, store, run = cached_node(tmp_path, monkeypatch)
+    assert run("--update") == 2
+    err = capsys.readouterr().err
+    assert f"lean_changed.py --records {A.rel(pkg)} --update\n" in err and f"--artifacts {store}" in err
+    assert run() == 2 and f"--records {A.rel(pkg)}\n" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("flags", [["--artifacts", "STORE"], ["--no-artifacts"], ["--fresh"], ["--dev-cache"]],
+                         ids=["candidate-check", "uncached-check", "fresh", "dev-cache"])
+def test_a_build_with_the_cache_or_cold_on_purpose_is_not_refused(tmp_path, monkeypatch, flags):
+    """The candidate's check (`lean_audit.py` passes `--artifacts`), the uncached check (`--no-artifacts`), `--fresh` and
+    `--dev-cache` build on a node the refusal covers."""
+    _, store, run = cached_node(tmp_path, monkeypatch)
+    with pytest.raises(Built):
+        run(*(str(store) if f == "STORE" else f for f in flags), "--update")
+
+
+def test_a_build_is_not_refused_without_the_sandbox_or_without_cached_modules(tmp_path, monkeypatch):
+    """A node whose builds aren't sandboxed keeps no artifact cache a build may read, and an empty cache restores nothing:
+    `--build` there builds as before."""
+    _, _, run = cached_node(tmp_path / "empty", monkeypatch, modules=False)
+    with pytest.raises(Built):
+        run("--update")
+    _, _, run = cached_node(tmp_path / "unsandboxed", monkeypatch)
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    with pytest.raises(Built):
+        run("--update")
+
 
 
 def test_the_dependencies_plugins_are_named_once_each():
@@ -9042,6 +9156,33 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     mtime = {p.stem: p.stat().st_mtime for p in cache.glob("*.json")}
     assert sorted(mtime) == ["A", "B", "Init", "Old", "Std", "Unrelated"]
     assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
+
+
+def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tmp_path, monkeypatch):
+    """A replay that checks nothing still takes minutes outside the phases `Replay.lean` reports. `replay_step` splits them
+    into the keys, the wait for `_HEAVY_REPLAY`, the plan, the cache's touch, the `lean` process and the store, and
+    `replay_in_steps` adds its own pass over the keys and its listed steps, read here from a clock the stubs move."""
+    clock = [0.0]
+    monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
+    facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
+
+    def keys(facts, toolchain, digest=None):
+        clock[0] += 3
+        return {m: m for m in facts["graph"]}
+
+    def run(cmd, cwd, log, timeout=None):
+        clock[0] += 7
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "replay_keys", keys)
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+    monkeypatch.setattr(A, "run", run)
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
+    assert fails == [] and stats["seconds"] == {"keys": 3, "wait": 0, "plan": 0, "touch": 0, "lean": 7, "store": 0}
+    monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "B", "threads": 1, "why": "w"}])
+    fails, stats = A.replay_in_steps(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
+    assert fails == [] and stats["seconds"]["first-keys"] == 3 and stats["seconds"]["keys"] == 3
 
 
 def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
