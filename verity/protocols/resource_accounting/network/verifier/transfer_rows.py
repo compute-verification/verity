@@ -61,7 +61,7 @@ from typing import Any
 from verity.commitments import hm96
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.merkle import CommitmentDomain
-from verity.protocols.resource_accounting.network.verifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
+from verity.protocols.resource_accounting.network.verifier.certificate import DIGEST_BYTES, Certificate, Direction, PublicKey, _text, _u
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
@@ -200,15 +200,6 @@ def read_witness(blob: bytes) -> list[bytes]:
     if not blob or len(blob) % SALT_BYTES:
         raise ValueError(f"a transfer's witness is {SALT_BYTES} bytes a row")
     return [blob[i:i + SALT_BYTES] for i in range(0, len(blob), SALT_BYTES)]
-
-
-def attest(issuer: Issuer, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
-           rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None, word_bits: int = WORD_BITS,
-           schema: str = SCHEMA) -> tuple[Transfer, Certificate | None]:
-    """The value's rows committed and their head signed by `issuer` for the link and execution phase (None when its
-    signer refuses)."""
-    t = Transfer.commit(link, direction, window, kind, program, value, rows, salts, word_bits, schema)
-    return t, issuer.sign(link, direction, window, t.head.digest())
 
 
 def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]:

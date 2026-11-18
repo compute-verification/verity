@@ -45,10 +45,9 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
-                     circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
+                     public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
     assert got["commitment"] == "ab"
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
-                                                          "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"public": sha(tmp_path / "pub-4.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["draw"] == evidence["draw"] and e["sessions"] == evidence["sessions"]
     assert e["proofs"] == {"sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
@@ -80,8 +79,7 @@ def test_two_sampled_members_statements_make_no_v2_case_and_each_alone_names_its
     evidence = {"draw": {"units": [1, 2]}, "sessions": names[1:], "verdicts": {"m1": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, names[1:], **a5.v2_proof(done[1:], zk=True))
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(m1 / "pub-2.bin"),
-                                                          "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"public": sha(m1 / "pub-2.bin"), "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names[1:]
     assert [x["name"] for x in e["proofs"]["sessions"]] == names[1:]
@@ -111,7 +109,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
     done = [{"mm": ms[1], "sdir": sdir}]
     got = a5.v2_proof(done, True)
     assert {k: v for k, v in got.items() if k != "proof"} == {
-        "circuit": "1" * 128, "public": "1" * 128, "registered": {"ports": {}}, "tables": []}
+        "public": "1" * 128, "registered": {"ports": {}}, "tables": []}
     assert (got["proof"].circuit, got["proof"].public, got["proof"].sessions) == (
         tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-3.bin", (sdir / "sessions" / "a",))
     iface = tmp_path / "circuit.json"
@@ -397,10 +395,10 @@ def test_the_per_member_proof_holds_every_member_and_the_sampled_ones_sessions(t
            staged(tmp_path, 2, "u/c0", 5, 4, lookups='{"ex2": {}, "rcp": {}}')]
     done = [session(tmp_path, mms[0], "a"), session(tmp_path, mms[2], "b")]
     got = a5.members_proof(mms, done, zk=True)
-    assert [(m.name, m.units, m.vus_per_block, m.circuit_sha512, m.public_sha512, m.registered) for m in got["members"]] == [
-        ("t/c0", ((0, 3),), 4, "00" * 64, mms[0]["st"]["public"], None),
-        ("t/c1", ((3, 5),), 4, "01" * 64, mms[1]["st"]["public"], reads),
-        ("u/c0", ((5, 9),), 4, "02" * 64, mms[2]["st"]["public"], None)]
+    assert [(m.name, m.units, m.vus_per_block, m.public_sha512, m.registered) for m in got["members"]] == [
+        ("t/c0", ((0, 3),), 4, mms[0]["st"]["public"], None),
+        ("t/c1", ((3, 5),), 4, mms[1]["st"]["public"], reads),
+        ("u/c0", ((5, 9),), 4, mms[2]["st"]["public"], None)]
     assert [m.proof.sessions for m in got["members"]] == [
         (tmp_path / "session-m0" / "sessions" / "a",), (), (tmp_path / "session-m2" / "sessions" / "b",)]
     assert got["members"][2].proof.circuit == tmp_path / "m2" / "circuit.txt"
@@ -434,11 +432,11 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
     got = a5.case_members(case, **proof)
     assert got["commitment"] == "ab"
     assert got["params"] == {"delta": "1/100", "proofs": {"members": {
-        "t/c0": {"circuit": "00" * 64, "public": mms[0]["st"]["public"], "registered": None, "units": [[0, 3]],
+        "t/c0": {"public": mms[0]["st"]["public"], "registered": None, "units": [[0, 3]],
                  "vus_per_block": 4},
-        "t/c1": {"circuit": "01" * 64, "public": mms[1]["st"]["public"], "registered": None, "units": [[3, 5]],
+        "t/c1": {"public": mms[1]["st"]["public"], "registered": None, "units": [[3, 5]],
                  "vus_per_block": 4},
-        "u/c0": {"circuit": "02" * 64, "public": mms[2]["st"]["public"], "registered": None, "units": [[5, 9]],
+        "u/c0": {"public": mms[2]["st"]["public"], "registered": None, "units": [[5, 9]],
                  "vus_per_block": 4}}}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["sessions"] == names and e["proved_units"] == [1, 6]

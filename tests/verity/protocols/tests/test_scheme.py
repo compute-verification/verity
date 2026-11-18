@@ -30,6 +30,11 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
 
 @pytest.fixture(autouse=True)
 def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    from verity.protocols.compose import schemes
+
+    # every declaration is imported into the real registry first: a module first imported under the empty one would
+    # register there, and stay loaded with its scheme gone from the real one for the rest of the process
+    schemes.load()
     monkeypatch.setattr(S, "SCHEMES", {})
 
 
@@ -250,6 +255,16 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"
+
+
+def test_unchecked_is_a_frozen_mapping_of_named_sentences_and_lists_nothing_by_default() -> None:
+    assert dict(_toy().unchecked) == {}
+    toy = _toy(unchecked={"toy-signed-by-the-auditor": "signed on the served node only"})
+    with pytest.raises(TypeError):
+        toy.unchecked["toy-signed-by-the-auditor"] = "checked"  # type: ignore[index]
+    assert S.sentences(toy) == ("signed on the served node only",) and S.sentences(_toy()) == ()
+    with pytest.raises(ValueError, match="toy-bandwidth: unchecked entry 'toy-signed' is not a sentence"):
+        _toy(unchecked={"toy-signed": {"nested": "mapping"}})
 
 
 def test_an_answers_entry_is_module_colon_attribute_and_a_lacks_is_refused_by_name() -> None:

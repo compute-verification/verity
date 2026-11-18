@@ -99,8 +99,8 @@ commitments and never published.
 4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the docket the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
-   when it receives the docket, and its `select` reads the verifier's coins only after that (a5's
-   `verifier-coins-before-the-registration`). A docket whose advice root postdates the sample is refused
+   when it receives the docket, and its `select` reads the challenger's coins only after that: a select on a docket the
+   stream never received is refused (`unknown`, `service.Stream`). A docket whose advice root postdates the sample is refused
    (`advice-root-after-the-draw`): the same advice re-committed after the coins, under fresh salts and so a fresh root, passes
    every check before the sample with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
 5. **The compiler is total.** `compile_advice` takes any input and returns either the requests or a `ValueError` naming why.
