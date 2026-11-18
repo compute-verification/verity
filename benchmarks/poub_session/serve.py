@@ -261,11 +261,10 @@ def engine(work: Path):
 
 
 def provers():
-    """PoUB's prover's serving loop and its store, which serving proves by; none of it the adapter's, vLLM's or a
-    GPU's (the adapter's `Binder` is imported where the engine is built)."""
+    """PoUB's prover's serving loop, which proves by the store PoUB's attach makes (the binder's ``store``); none of it
+    the adapter's, vLLM's or a GPU's."""
     from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
-    from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
-    return serving, NodeMemory
+    return serving
 
 
 def backend_class(serving):
@@ -411,14 +410,13 @@ def main(argv: list[str] | None = None) -> int:
     from verity_vllm.engine.build import hooked
     from verity.protocols.compose import schemes
 
-    serving, NodeMemory = provers()
-    store = NodeMemory()
-    binder = messages.current().attach(schemes.get("poub"), None, store=store, binder={"passes": False})
+    serving = provers()
+    binder = messages.current().attach(schemes.get("poub"), {"passes": False})
     with tempfile.TemporaryDirectory() as work:
         built, _, detach = hooked(lambda: engine(Path(work)))
         trace = Trace(built)
         clock = PassClock() if a.local else None
-        backend = backend_class(serving)(store, trace, clock=clock)
+        backend = backend_class(serving)(binder.store, trace, clock=clock)
         result, th = {}, None
         if a.local:
             lsock = wire.listen("127.0.0.1", 0)

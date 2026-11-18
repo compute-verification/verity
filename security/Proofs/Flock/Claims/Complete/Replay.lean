@@ -20,6 +20,8 @@ public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
 public import Proofs.Flock.Claims.Complete.Replay.RepRounds
+public import Proofs.Flock.Claims.Complete.Replay.Sizes
+public import Proofs.Flock.Claims.Complete.Replay.RoundBytes
 public import Proofs.Flock.Claims.Complete.Replay.ProverOk
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis

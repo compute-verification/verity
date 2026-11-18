@@ -830,6 +830,9 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
     assert sg.disk_floor_of(opts).path == tmp_path.resolve(), "the nearest directory --out is on"
     no_floor = cli.parse("serve-openai", [*base, "--disk-floor-gb", "0"], environ={})
     assert sg.disk_floor_of(no_floor) is None
+    unstated = [w for i, w in enumerate(base) if "--disk-floor-gb" not in base[max(i - 1, 0):i + 1]]
+    with pytest.raises(UsageError, match="^--seal needs --disk-floor-gb: "):
+        so.preflight(cli.parse("serve-openai", unstated, environ={}), which=lambda _: "/v/bin/ninja")
     assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=10) is None
     assert sg.DiskFloor(tmp_path, 100, usage=lambda _p: SimpleNamespace(free=160)).short(50, pending=11)["free_gb"] == 0.0
 
