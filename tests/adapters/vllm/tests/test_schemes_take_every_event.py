@@ -13,6 +13,7 @@ import torch
 from verity import hooks as H
 from verity.channel import Refused
 from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting.network.prover import admission as NA
 from verity_vllm import messages as M
 from verity_vllm.pipeline import scheme_plugin as SP
 
@@ -84,6 +85,35 @@ def test_a_scheme_takes_every_event(name, event, tmp_path, monkeypatch):
     ex = _attached(name, tmp_path)
     for e in _honest()[:ORDER.index(event)]:
         ex.emit(e)
+
+
+#: the network attester as the served path configures it in one process (`serve_openai.network_admission`)
+SERVED_TICK = {"order": "tick", "hold_ms": 1000, **SETTINGS["network-attester"]}
+
+
+@pytest.mark.parametrize("event", ORDER[1:], ids=[t.__name__ for t in ORDER[1:]])
+def test_the_network_attesters_served_attach_through_the_admission_handle_takes_every_event(event):
+    """The served path's attach (`serve_openai.network_admission`): the serving loop's three calls as one
+    `hooks.Admit`, each reaching the frontend, which then takes every event before ``event`` in an honest run's order."""
+    calls: list[tuple[str, object]] = []
+    admit = H.Admit(lambda adm: calls.append(("submit", adm)), lambda eid: calls.append(("abort", eid)),
+                    lambda rec: calls.append(("take", rec)))
+    ex = M.Exchange()
+    got = ex.attach(declarations.get("network-attester"), SERVED_TICK, source="--protocols-config", admit=admit)
+    assert type(got) is NA.Admitter and isinstance(got.front, NA.TickAdmit)
+    assert (got.front.forward, got.front.abort, got.front.take) == (admit.submit, admit.abort, admit.take)
+    assert [type(r) for _, r in ex.requests] == [H.StartOnBoundary, H.ServeRoute]
+    for e in _honest()[:ORDER.index(event)]:
+        ex.emit(e)
+
+
+@pytest.mark.parametrize("given", [{"submit": print, "abort": print, "take": print}, {}],
+                         ids=["loose-callables", "no-handle"])
+def test_the_network_attesters_served_attach_without_the_admission_handle_is_refused_by_name(given):
+    ex = M.Exchange()
+    with pytest.raises(ValueError, match=r"network-attester: .*verity\.hooks\.Admit, ctx's admit"):
+        ex.attach(declarations.get("network-attester"), SERVED_TICK, source="--protocols-config", **given)
+    assert ex.requests == []
 
 
 def test_a_handler_takes_only_the_events_it_names():

@@ -34,7 +34,7 @@ class Exchange:
 
 def tick(**cfg: Any) -> NA.Admitter:
     q: list[Any] = []
-    return NA.Admitter({"order": "tick", "hold_ms": 600_000, **TICK, **cfg}, submit=q.append, abort=q.append,
+    return NA.Admitter({"order": "tick", "hold_ms": 600_000, **TICK, **cfg}, admit=H.Admit(q.append, q.append),
                        clock=lambda: 0.0)
 
 
@@ -78,7 +78,7 @@ def test_without_submit_the_gate_alone_reads_its_records_from_pull():
 
 def test_release_order_makes_the_frontend_alone_and_files_nothing():
     q: list[Any] = []
-    a = NA.Admitter({"order": "release-order", "hold_ms": 250}, submit=q.append, abort=q.append)
+    a = NA.Admitter({"order": "release-order", "hold_ms": 250}, admit=H.Admit(q.append, q.append))
     assert a.gate is None and type(a.front) is NA.ReleaseOrder and a.front.hold_s == 0.25
     ex = Exchange()
     a.install(ex, "n")
@@ -88,9 +88,12 @@ def test_release_order_makes_the_frontend_alone_and_files_nothing():
 def test_what_a_configuration_lacks_is_refused():
     with pytest.raises(ValueError, match=r"order one of \['release-order', 'tick'\], not 'fifo'"):
         NA.Admitter({"order": "fifo"})
-    with pytest.raises(ValueError, match="frontend forwards each request through submit and abort"):
+    with pytest.raises(ValueError, match=r"release-order frontend forwards each request through the serving loop's "
+                                         r"hooks.Admit \(ctx's admit\)"):
         NA.Admitter({"order": "release-order"})
-    with pytest.raises(ValueError, match="frontend forwards each request through submit and abort"):
+    with pytest.raises(ValueError, match="admit is the serving loop's hooks.Admit, not tuple"):
+        NA.Admitter(TICK, admit=(print, print))
+    with pytest.raises(TypeError, match="submit"):
         NA.Admitter(TICK, submit=print)
     with pytest.raises(ValueError, match="tick bucket_us: a positive integer of microseconds"):
         NA.Admitter({"sat_us": 1, "free_us": 1})
@@ -125,9 +128,19 @@ def test_the_schemes_attach_installs_the_admission_its_context_configures_else_s
     from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER, START_ID_RELAY
     q: list[Any] = []
     ex = Exchange()
-    a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, "submit": q.append,
-                                     "abort": q.append, "take": q.append, "source": "--admit"})
+    a = NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK},
+                                     "admit": H.Admit(q.append, q.append, q.append), "source": "--admit"})
     assert type(a) is NA.Admitter and a.installed and a.front.take == q.append
     assert ex.requests[0] == (NETWORK_ATTESTER.name, H.StartOnBoundary(a.gate))
     ex = Exchange()
     assert NETWORK_ATTESTER.attach(ex, {}) is None and ex.requests == [(NETWORK_ATTESTER.name, START_ID_RELAY)]
+
+
+@pytest.mark.parametrize("loose", [{"submit": print, "abort": print, "take": print}, {"take": print}])
+def test_the_schemes_attach_refuses_the_admission_handed_loose_by_name(loose):
+    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
+    ex = Exchange()
+    with pytest.raises(ValueError, match=f"{', '.join(sorted(loose))} handed loose: the serving loop hands its "
+                                         "admission as one verity.hooks.Admit, ctx's admit"):
+        NETWORK_ATTESTER.attach(ex, {"settings": {"order": "tick", "hold_ms": 1000, **TICK}, **loose})
+    assert ex.requests == [] and ex.subscribers == []

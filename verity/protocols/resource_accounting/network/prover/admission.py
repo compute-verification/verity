@@ -713,34 +713,37 @@ class Admitter:
 
     ``cfg`` is a JSON object: ``order``, one of `ORDERS` (``tick`` by default), ``hold_ms``, and under ``tick`` the rest of
     `tick_config`'s (its ``log`` is the adapter's to write: the gate reads ``pull`` and writes ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
-    `verity.hooks.Gate`): `TickGate`, with the rule's token term; and, given ``submit``,
-    the frontend `TickAdmit`, which hands the gate its records through ``take`` (the gate's own `TickGate.take` by
-    default; where the gate runs on another thread, a call that queues them to it). `ValueError` names what ``cfg``
-    lacks. `install` files and subscribes both under `scheme_name`."""
+    `verity.hooks.Gate`): `TickGate`, with the rule's token term; and, given ``admit``, the serving loop's
+    `verity.hooks.Admit`, the frontend `TickAdmit`, which forwards through its ``submit`` and ``abort`` and hands the
+    gate its records through its ``take`` (the gate's own `TickGate.take` where that is None; where the gate runs on
+    another thread, a call that queues them to it). `ValueError` names what ``cfg`` lacks. `install` files and
+    subscribes both under `scheme_name`."""
 
     def __init__(self, cfg: Mapping[str, Any], *, source: str = "the network attester's admission",
-                 submit: Callable[[Any], None] | None = None, abort: Callable[[str], None] | None = None,
-                 take: Callable[[dict[str, Any]], None] | None = None,
-                 pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
+                 admit: H.Admit | None = None, pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
                  log: Callable[[dict[str, Any]], Any] | None = None, clock: Callable[[], float] = time.monotonic,
                  schedule: Callable[[float, Callable[[], None]], Any] | None = None) -> None:
         order = cfg.get("order", "tick") if isinstance(cfg, Mapping) else None
         if order not in ORDERS:
             raise ValueError(f"{source}: order one of {list(ORDERS)}, not {order!r}")
-        if (order == "release-order" or submit is not None) and (submit is None or abort is None):
-            raise ValueError(f"{source}: the {order} frontend forwards each request through submit and abort")
+        if admit is not None and not isinstance(admit, H.Admit):
+            raise ValueError(f"{source}: admit is the serving loop's hooks.Admit, not {type(admit).__name__}")
+        if order == "release-order" and admit is None:
+            raise ValueError(f"{source}: the {order} frontend forwards each request through the serving loop's "
+                             "hooks.Admit (ctx's admit)")
         self.gate: TickGate | None = None
         self.front: ReleaseOrder | TickAdmit | None = None
         self.installed = False
         self._off: list[Callable[[], None]] = []
         if order == "release-order":
-            self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000, schedule=schedule)
+            self.front = ReleaseOrder(admit.submit, admit.abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000,
+                                      schedule=schedule)
             return
         tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source)
         kw = {"hold_s": tc["hold_s"], "clock": clock, "pull": pull, "log": log}
         self.gate = TickGate(tc["tick"], token_ns=tc["token_ns"], **kw)
-        if submit is not None:
-            self.front = TickAdmit(submit, abort, take or self.gate.take)
+        if admit is not None:
+            self.front = TickAdmit(admit.submit, admit.abort, admit.take or self.gate.take)
 
     def install(self, exchange: Any, name: str | None = None) -> Admitter:
         """File and subscribe on ``exchange`` (the adapter's: ``request(name, request)``, and ``subscribe(name, hook,

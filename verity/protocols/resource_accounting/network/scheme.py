@@ -59,10 +59,14 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
 
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """The scheme on a served run's ``exchange`` under ``ctx["settings"]`` (`settings`). Under an ``order`` other than
-    ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``,
-    ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; else the id relay beside the workload
+    ``arrival``, its admission (`prover.admission.Admitter`, with ``ctx``'s ``source``, ``admit``, the serving loop's
+    `verity.hooks.Admit`, ``pull``, ``log``, ``clock`` and ``schedule``), installed and returned; ``submit``, ``abort``
+    or ``take`` handed loose, or neither ``admit`` nor ``pull``, is refused by name; else the id relay beside the workload
     (`START_ID_RELAY`). Where the front and the engine run in two processes (``ctx["process"]``), each process's side of
     the certified tick, on the server's feed directory (`prover.admission.FrontFeed`, `prover.admission.engine`)."""
+    if loose := sorted(set(ctx) & {"submit", "abort", "take"}):
+        raise ValueError(f"{NETWORK_ATTESTER.name}: {', '.join(loose)} handed loose: the serving loop hands its "
+                         "admission as one verity.hooks.Admit, ctx's admit")
     s = settings(ctx.get("settings", {}))
     if ctx.get("process") == H.FRONT:
         return FrontFeed(ctx["feed"], log=s["log"]).attach(exchange, NETWORK_ATTESTER.name)
@@ -72,7 +76,10 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
         for r in requests(ctx):
             exchange.request(NETWORK_ATTESTER.name, r)
         return None
-    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock", "schedule") if k in ctx}
+    if ctx.get("admit") is None and ctx.get("pull") is None:
+        raise ValueError(f"{NETWORK_ATTESTER.name}: order {s['order']} on the served path orders through the serving "
+                         "loop's verity.hooks.Admit, ctx's admit, and this attach has none")
+    kw = {k: ctx[k] for k in ("source", "admit", "pull", "log", "clock", "schedule") if k in ctx}
     return Admitter(s, **kw).install(exchange, NETWORK_ATTESTER.name)
 
 

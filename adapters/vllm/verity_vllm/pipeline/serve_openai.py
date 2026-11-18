@@ -659,8 +659,8 @@ def network_admission(loop: EngineLoop, sched: Any, opts: Any) -> tuple[Any, H.F
     the scheme that provides admission (`messages.providing`). Returns the admission hook (under ``tick``, the one the build put on ``sched``
     where it did, after the attester's gate, `loop.gate`; else None) and the attester's frontend."""
     from verity_vllm.engine import admission
-    got = M.current().attach(M.providing("admission"), admission_settings(opts), source="--protocols-config", submit=loop.submit,
-                             abort=loop.abort, take=loop.tick)
+    got = M.current().attach(M.providing("admission"), admission_settings(opts), source="--protocols-config",
+                             admit=H.Admit(loop.submit, loop.abort, loop.tick))
     loop.gate = got.gate
     if loop.gate is not None:
         loop.hook = admission.install(sched)

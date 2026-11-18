@@ -291,6 +291,17 @@ class Front(Protocol):
 
 
 @dataclass(frozen=True)
+class Admit:
+    """What the serving loop offers a scheme that orders its inputs' admission, its attach's ``ctx["admit"]``:
+    ``submit`` hands the loop an admitted input, ``abort`` ends input ``input`` there, and ``take`` hands one record of
+    what the scheme's gate orders by to the thread that steps the workload (None: the gate's own `Gate.take`)."""
+
+    submit: Callable[[Any], None]
+    abort: Callable[[str], None]
+    take: Callable[[Mapping[str, Any]], None] | None = None
+
+
+@dataclass(frozen=True)
 class StartOnBoundary:
     """A scheme's request to start inputs only when ``gate`` starts them (a window's boundary)."""
 
@@ -361,7 +372,7 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
                 | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
+__all__ = ["EVENTS", "HOOKS", "Admit", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
            "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",

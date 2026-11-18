@@ -953,7 +953,8 @@ def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed()
         {messages.providing("admission").name: {"order": "tick", "bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
     try:
         hook, order = so.network_admission(loop, sched, opts)
-        assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0
+        assert hook is built is loop.hook and loop.gate.hold_s == 1.0
+        assert (order.forward, order.abort, order.take) == (loop.submit, loop.abort, loop.tick)
         assert loop.gate.record() == {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000}
         assert [type(r).__name__ for _, r in messages.current().requests] == ["StartOnBoundary", "ServeRoute"]
     finally:
