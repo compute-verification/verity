@@ -1,5 +1,5 @@
 """That a cut Program is a wired one's cut under its circuit record (`Spot.Cut.check`, the `cut` piece) against the cut
-itself (`population.cut_wires`, else the wired builder over the record with no wires, which is what it returns): Lean
+itself (`population.cut_wires`): Lean
 accepts a pair exactly when the cut's digest is that one's, and each forged cut and each wired root the cut refuses is
 refused by name."""
 
@@ -20,7 +20,7 @@ from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
-from verity.circuits.population import WIRED_FIELDS, wired_population_program
+from verity.circuits.population import WIRED_FIELDS, cut_wires, wired_population_program
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, coll_concat, concat
 from verity.circuits.types import Array, Tuple, Value
@@ -99,20 +99,10 @@ def _desc(program) -> dict:
     return json.loads(D.canonical(codec.encode_program(program)))
 
 
-def cut_of(wired, rec: dict, templates) -> tuple:
-    """The cut and its query: circuits' cut where the tree has it, else the wired builder over the record with no wires."""
-    try:
-        from verity.circuits.population import cut_wires
-    except ImportError:
-        return wired_population_program(templates, {**rec, "wires": []})
-    cut, query, _ = cut_wires(wired, rec)
-    return cut, query
-
-
 def _case(wired, rec: dict, templates, cut=None) -> dict:
-    """The piece's input: the wired Program, a cut (default: the cut's), the record and the cut's query, with the
-    cut's digest (``want``), which the piece doesn't read."""
-    honest, query = cut_of(wired, rec, templates)
+    """The piece's input: the wired Program, a cut (default: circuits' `cut_wires`), the record and the cut's query,
+    with the cut's digest (``want``), which the piece doesn't read."""
+    honest, query, _ = cut_wires(wired, rec)
     return {"wired": _desc(wired), "cut": _desc(cut if cut is not None else honest), "record": rec, "query": query,
             "want": codec.program_digest(honest)}
 
@@ -162,7 +152,7 @@ def _cut_of_cut(c: I.Circuit) -> dict:
     """The cut as the wired Program, under the record with no wires: it cuts to itself."""
     wired, _ = c.program()
     rec = {**record(c), "wires": []}
-    cut, _ = cut_of(wired, record(c), list(c.templates))
+    cut, _, _ = cut_wires(wired, record(c))
     return _case(cut, rec, list(c.templates))
 
 
@@ -213,13 +203,8 @@ def test_a_forged_cut_is_refused_by_name(pieces, name, j, code):
 def test_a_wired_root_the_cut_refuses_is_refused(pieces, name, made, code):
     """Each wired root circuits' cut refuses by name, Lean refuses by the same name."""
     wired, rec, templates = made
-    try:
-        from verity.circuits.population import cut_wires
-    except ImportError:
-        pass
-    else:
-        with pytest.raises(ValueError, match=code):
-            cut_wires(wired, rec)
+    with pytest.raises(ValueError, match=code):
+        cut_wires(wired, rec)
     cut, query = wired_population_program(templates, {**rec, "wires": []})
     j = {"wired": _desc(wired), "cut": _desc(cut), "record": rec, "query": query}
     assert pieces.call("cut_why", j) == ("output", D.canonical({"refusal": code}))
