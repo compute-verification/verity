@@ -25,6 +25,7 @@ untraced = [
     "test_at_main.py",
     "test_auto.py",
     "test_binprov.py",
+    "test_branch_trial.py",
     "test_bucket_index.py",
     "test_budgets.py",
     "test_carry.py",

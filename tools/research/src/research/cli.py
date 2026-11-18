@@ -246,6 +246,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
+    ap.add_argument("--of-record", action="store_true",
+                    help="with --on: a run whose shipped tree isn't main's (HEAD not on origin/main, or uncommitted changes) is "
+                         "not made a trial (VERITY_BENCH_TRIAL=1, writing no point): for a point of record taken from a branch")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys, "
@@ -1570,6 +1573,39 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     return urls
 
 
+#: benchmarks' trial switch (`verity_bench.kit`'s TRIAL): a trial's measurements go to a file of their own and write no point
+TRIAL_ENV = "VERITY_BENCH_TRIAL"
+
+
+def branch_trial(source: Path | None, env: dict[str, str], of_record: bool) -> str | None:
+    """The line to print when the tree a run ships isn't `main`'s: its HEAD is no ancestor of the checkout's origin/main, or it has
+    uncommitted changes. Such a run is a trial (`env` gains TRIAL_ENV=1) unless it says otherwise (--of-record, or its own --env
+    TRIAL_ENV). None, `env` untouched, for a run of main's, one that says otherwise, or one that ships no tree; a checkout whose
+    origin/main or git state can't be read gets its line and keeps today's environment, since the launcher won't guess."""
+    from . import launcher
+
+    if source is None or of_record or TRIAL_ENV in env:
+        return None
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(launcher.git(*args), cwd=source, capture_output=True, text=True, env=launcher.git_env())
+
+    status = git("status", "--porcelain", "--untracked-files=all")
+    if status.returncode != 0 or git("rev-parse", "--verify", "-q", "origin/main").returncode != 0:
+        return (f"research run: can't tell whether {source} is main's (no git status or no origin/main there), so the run is not "
+                f"made a trial; pass --env {TRIAL_ENV}=1 if it is one")
+    ancestor = git("merge-base", "--is-ancestor", "HEAD", "origin/main").returncode
+    if ancestor not in (0, 1):
+        return f"research run: can't tell whether {source}'s HEAD is on origin/main, so the run is not made a trial"
+    why = [w for w, yes in (("its HEAD isn't on origin/main", ancestor == 1), ("it has uncommitted changes", bool(status.stdout.strip())))
+           if yes]
+    if not why:
+        return None
+    env[TRIAL_ENV] = "1"
+    return (f"research run: {source} isn't main's ({' and '.join(why)}), so the run is a trial ({TRIAL_ENV}=1: its measurements write "
+            f"no point); --of-record or --env {TRIAL_ENV}=0 takes a point of record from it")
+
+
 def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], command: list[str], queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
@@ -1584,6 +1620,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
     if queue:
         cpus = str(int((queue.get("job") or {}).get("cpus") or 1))
         env = {**dict.fromkeys(THREAD_POOL_VARS, cpus), **env}
+    if said := branch_trial(Path(ns.source).expanduser() if ns.source else None, env, getattr(ns, "of_record", False)):
+        print(said, file=sys.stderr)
     asked_cwd = remote.flag_value(harness_opts, "--cwd")
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
