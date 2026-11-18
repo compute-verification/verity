@@ -21,7 +21,8 @@ a reference: parameter `i`'s leaf `j` is bit `start i + j` of `x`, node `i`'s le
   the carry iteration `m − 1` returned, an `xs` argument its leaf `t` at reference `t + m · cnt`, a shared one the same
   every iteration. Its value is the last carry, then each iteration's `y`.
 
-Where it meets a primitive that is not a §9 gate, or a call deeper than the Program's Definitions, its value is `[]`.
+A reference reads its sequence's references in order (`Seq.toArray`). Where it meets a primitive that is not a §9 gate,
+or a callee not before its caller, its value is `[]`.
 -/
 
 @[expose] public section
@@ -43,9 +44,10 @@ def paramStarts (params : Array (String × Ty)) : Array Nat :=
 def refVal (x : List Bool) (st : Array Nat) (outs : Array (List Bool)) (r : Ref) : Bool :=
   if r.p then x.getD (st.getD r.i 0 + r.j) false else (outs.getD r.i []).getD r.j false
 
-/-- Bits `k 0, …, k (cnt − 1)` of argument `a`'s references. -/
+/-- Bits `k 0, …, k (cnt − 1)` of argument `a`'s references, in order (`Seq.toArray`). -/
 def argVals (v : Ref → Bool) (a : Arg) (cnt : Nat) (k : Nat → Nat) : List Bool :=
-  (List.range cnt).map fun t => v (a.seq.get (k t))
+  let rs := a.seq.toArray
+  (List.range cnt).map fun t => v (rs.getD (k t) default)
 
 /-- Definition `d`'s value on `x`, at most `fuel` calls deep. -/
 def evalDef? (P : Prog) : Nat → Nat → List Bool → Option (List Bool)
@@ -59,6 +61,7 @@ def evalDef? (P : Prog) : Nat → Nat → List Bool → Option (List Bool)
     let st := paramStarts defn.params
     let outs ← defn.body.nodes.toList.foldlM (init := (#[] : Array (List Bool))) fun outs nd => do
       let v := refVal x st outs
+      if d ≤ nd.fn then none
       let callee ← P.defs[nd.fn]?
       let leaves (i : Nat) : Nat := ((callee.params.getD i default).2).leaves
       match nd.form with
@@ -80,7 +83,8 @@ def evalDef? (P : Prog) : Nat → Nat → List Bool → Option (List Bool)
           let o ← callOf nd.fn ins
           return (o.take c, ys ++ o.drop c)
         return outs.push (carry ++ ys)
-    return (List.range defn.body.ret.count).map fun t => refVal x st outs (defn.body.ret.get t)
+    let rs := defn.body.ret.toArray
+    return (List.range defn.body.ret.count).map fun t => refVal x st outs (rs.getD t default)
 
 /-- **Boolean Definition `d`'s value on its parameter bits `x`**, low bit first in its parameters' order: its return's
 bits, `[]` where it is not Boolean. -/

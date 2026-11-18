@@ -1,7 +1,6 @@
 module
 
 public import Spot.Json
-public import Spot.ChallengerPin
 public import Spot.Program
 public import Spot.Bits
 public import Spot.Partition

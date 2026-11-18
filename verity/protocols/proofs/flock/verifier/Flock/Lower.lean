@@ -71,11 +71,11 @@ def gateOf? (id : String) : Option Gate :=
   else if family? "Xor" id then some .xor_
   else none
 
-/-- Where a node's output leaves are: a primitive node's one gate, or `count` copies at own columns `base + m · stride` of
+/-- Where a node's output leaves are: a primitive node's one gate, or `n` copies at own columns `base + m · stride` of
 a Definition whose leaf `l` is its column `rets[l]`. -/
 inductive Out where
   | gate (f : Form)
-  | copies (base stride : Nat) (rets : Array Nat)
+  | copies (base stride n : Nat) (rets : Array Nat)
   /-- a scan's `n` iterations at `base + m · stride`, each returning its `c` carry leaves then its `y`: the node's leaf
   `j < c` is the last iteration's carry leaf `j`, leaf `c + m · |y| + t` iteration `m`'s `y` leaf `t` -/
   | scan (base stride : Nat) (rets : Array Nat) (c n : Nat)
@@ -94,8 +94,9 @@ structure Pending where
   stride : Nat
   binds : Array Bind
 
-/-- A Definition being lowered: its rows and calls so far, its next own column, and its nodes' outputs. -/
+/-- A Definition being lowered: its inputs, its rows and calls so far, its next own column, and its nodes' outputs. -/
 structure Work where
+  ins : Nat := 0
   rows : Array (Nat × Form × Form) := #[]
   calls : Array Pending := #[]
   next : Nat := 0
@@ -137,37 +138,46 @@ def Work.op (w : Work) (g : Gate) (ops : Array Form) : V (Work × Form) :=
 def starts (params : Array (String × Ty)) : Array Nat :=
   (params.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.2.leaves)) (#[], 0)).1
 
+/-- The prefix of a refusal of a reference past the leaves of what it names, which `Program.decode` refuses too. -/
+def PAST : String := "a reference past its source's leaves"
+
 /-- Reference `r`'s form, the same for every copy. -/
 def Work.formOf (w : Work) (st : Array Nat) (r : Ref) : V Form :=
   if r.p then match st[r.i]? with
-    | some s => pure (Form.input (s + r.j))
+    | some s => if s + r.j < w.ins then pure (Form.input (s + r.j)) else throw s!"{PAST}: parameter {r.i} leaf {r.j}"
     | none => throw s!"parameter {r.i}: none"
   else match w.outs[r.i]? with
-    | some (.gate f) => if r.j == 0 then pure f else throw s!"node {r.i}: a gate has one leaf, not leaf {r.j}"
-    | some (.copies base stride rets) =>
+    | some (.gate f) => if r.j == 0 then pure f else throw s!"{PAST}: node {r.i} leaf {r.j}, of a gate's one"
+    | some (.copies base stride n rets) =>
       if rets.isEmpty then throw s!"node {r.i}: returns nothing"
-      else pure (Form.own (base + r.j / rets.size * stride + rets[r.j % rets.size]!))
+      else if r.j < n * rets.size then pure (Form.own (base + r.j / rets.size * stride + rets[r.j % rets.size]!))
+      else throw s!"{PAST}: node {r.i} leaf {r.j}"
     | some (.scan base stride rets c n) =>
       let y := rets.size - c
-      if r.j < c then pure (Form.own (base + (n - 1) * stride + rets[r.j]!))
+      if c + n * y ≤ r.j then throw s!"{PAST}: node {r.i} leaf {r.j}"
+      else if r.j < c then pure (Form.own (base + (n - 1) * stride + rets[r.j]!))
       else if y == 0 then throw s!"node {r.i}: a scan's leaf {r.j} past its carry, of no y"
       else pure (Form.own (base + (r.j - c) / y * stride + rets[c + (r.j - c) % y]!))
     | none => throw s!"node {r.i}: not an earlier node"
 
-/-- Reference `r` stepping by `s` leaves a copy, as one atom and its step: a parameter's leaves, or a node's copies whose
-members the step crosses whole. -/
-def Work.stepOf (w : Work) (st : Array Nat) (r : Ref) (s : Nat) : V Bind :=
+/-- Reference `r` stepping by `s` leaves a copy for `n` copies, as one atom and its step: a parameter's leaves, or a
+node's copies whose members the step crosses whole; the last copy's reference inside its source's leaves. -/
+def Work.stepOf (w : Work) (st : Array Nat) (r : Ref) (s n : Nat) : V Bind :=
   if r.p then match st[r.i]? with
-    | some s0 => pure ⟨2 * (s0 + r.j) + 1, 2 * s⟩
+    | some s0 =>
+      if s0 + r.j + (n - 1) * s < w.ins then pure ⟨2 * (s0 + r.j) + 1, 2 * s⟩
+      else throw s!"{PAST}: parameter {r.i} leaf {r.j} stepping {s} for {n} copies"
     | none => throw s!"parameter {r.i}: none"
   else match w.outs[r.i]? with
-    | some (.copies base stride rets) =>
+    | some (.copies base stride m rets) =>
       let L := rets.size
       if L == 0 || s % L != 0 then throw s!"node {r.i}: a batch argument stepping {s} leaves across its copies of {L}"
+      else if m * L ≤ r.j + (n - 1) * s then throw s!"{PAST}: node {r.i} leaf {r.j} stepping {s} for {n} copies"
       else pure ⟨2 * (base + r.j / L * stride + rets[r.j % L]!), 2 * (s / L * stride)⟩
-    | some (.scan base stride rets c _) =>
+    | some (.scan base stride rets c m) =>
       let y := rets.size - c
-      if r.j < c || y == 0 || s % y != 0 then
+      if c + m * y ≤ r.j + (n - 1) * s then throw s!"{PAST}: node {r.i} leaf {r.j} stepping {s} for {n} copies"
+      else if r.j < c || y == 0 || s % y != 0 then
         throw s!"node {r.i}: an argument stepping {s} leaves through a scan's carry, or across its iterations' y of {y}"
       else pure ⟨2 * (base + (r.j - c) / y * stride + rets[c + (r.j - c) % y]!), 2 * (s / y * stride)⟩
     | some (.gate _) => throw s!"node {r.i}: a batch argument stepping across one gate"
@@ -177,11 +187,26 @@ def Work.stepOf (w : Work) (st : Array Nat) (r : Ref) (s : Nat) : V Bind :=
 def partIx (q : Seq) (k : Nat) : Nat :=
   (List.range q.parts.size).foldl (fun i x => if q.starts[x]! ≤ k then x else i) 0
 
+/-- Whether `q`'s starts are its parts' running sums and its count their total, as `Seq.ofParts` makes them. -/
+def seqOk (q : Seq) : Bool :=
+  let (starts, count) := q.parts.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.count)) (#[], 0)
+  q.starts == starts && q.count == count
+
+/-- Reference `k` of `q`: its part's (`partIx`). -/
+def refAt (q : Seq) (k : Nat) : Ref :=
+  let i := partIx q k
+  q.parts[i]!.get (k - q.starts[i]!)
+
+/-- Reference `k` of `q`, refused past its count. -/
+def getRef (q : Seq) (k : Nat) : V Ref :=
+  if k < q.count then pure (refAt q k) else throw s!"{PAST}: reference {k} of {q.count}"
+
 /-- References `k0 + m · L` of `q` for `m < n`, as reference `k0` stepping `L` leaves a copy: within one affine part. -/
 def stepping (q : Seq) (k0 n L : Nat) (what : String) : V (Ref × Nat) :=
-  if n ≤ 1 then pure (q.get k0, 0) else
+  if n ≤ 1 then (·, 0) <$> getRef q k0 else
   let i := partIx q k0
-  if partIx q (k0 + (n - 1) * L) != i then throw s!"{what} across two parts of its references"
+  if q.count ≤ k0 + (n - 1) * L then throw s!"{PAST}: {what}'s reference {k0 + (n - 1) * L} of {q.count}"
+  else if partIx q (k0 + (n - 1) * L) != i then throw s!"{what} across two parts of its references"
   else match q.parts[i]! with
     | .affine p ix b _ => pure (⟨p, ix, b + (k0 - q.starts[i]!)⟩, L)
     | _ => throw s!"{what} stepping through references that are not affine"
@@ -191,7 +216,7 @@ it steps a copy. An argument mapped over an axis steps by its element's leaves w
 the same for every copy. -/
 def bindRef (a : Arg) (n t : Nat) : V (Ref × Nat) :=
   match a.dims with
-  | none => pure (a.seq.get t, 0)
+  | none => (·, 0) <$> getRef a.seq t
   | some (d, L) =>
     stepping a.seq ((t / L * d) * L + t % L) n L "a batch argument"
 
@@ -241,33 +266,35 @@ def gateDef (P : Prog) (f : Nat) : M (Nat × Array Nat) := do
 column the bindings name. -/
 def Work.place (w : Work) (e cols count : Nat) (bs : Array Bind) (rets : Array Nat) : Work :=
   { w with calls := w.calls.push { def_ := e, count, base := w.next, stride := cols, binds := bs },
-           next := w.next + count * cols, outs := w.outs.push (.copies w.next cols rets) }
+           next := w.next + count * cols, outs := w.outs.push (.copies w.next cols count rets) }
 
 /-- Node `x`'s bindings of its callee's inputs, copy 0's and their steps: each argument's references in order (a mapped
 argument's as many as its parameter's leaves), committing a form a copy reads that is not one reference. -/
-def Work.binds (w : Work) (st : Array Nat) (callee : Defn) (x : Node) : V (Work × Array Bind) := do
-  let mut w := w
-  let mut out := #[]
+def Work.binds (w : Work) (st : Array Nat) (callee : Defn) (x : Node) : V (Work × Array Bind) :=
   let n := if x.form == .batch then x.n else 1
-  for i in [0:x.args.size] do
+  (List.range x.args.size).foldlM (fun acc i =>
     let a := x.args[i]!
     let cnt := if x.form == .batch && a.dims.isSome then (callee.params[i]!.2).leaves else a.seq.count
-    for t in [0:cnt] do
-      let (r, s) ← if x.form == .batch then bindRef a n t else pure (a.seq.get t, 0)
+    (List.range cnt).foldlM (fun (acc : Work × Array Bind) t => do
+      let (w, out) := acc
+      let (r, s) ← if x.form == .batch then bindRef a n t else (·, 0) <$> getRef a.seq t
       if s == 0 then
         let (w', at_) := w.commit (← w.formOf st r)
-        w := w'
-        out := out.push ⟨at_, 0⟩
-      else out := out.push (← w.stepOf st r s)
-  return (w, out)
+        return (w', out.push ⟨at_, 0⟩)
+      else return (w, out.push (← w.stepOf st r s n))) acc) (w, #[])
+
+/-- A primitive node's operands: every reference of every argument, in order. -/
+def Work.opsOf (w : Work) (st : Array Nat) (x : Node) : V (Array Form) :=
+  x.args.toList.foldlM (fun ops a =>
+    (List.range a.seq.count).foldlM (fun ops t => do return ops.push (← w.formOf st (← getRef a.seq t))) ops) #[]
 
 /-- Reference `r` bound for every copy, stepping `s` leaves a copy: committed first when it is a form the same for every
 copy (`s = 0`). -/
-def Work.bindOne (w : Work) (st : Array Nat) (r : Ref) (s : Nat) : V (Work × Bind) := do
+def Work.bindOne (w : Work) (st : Array Nat) (r : Ref) (s n : Nat) : V (Work × Bind) := do
   if s == 0 then
     let (w', at_) := w.commit (← w.formOf st r)
     return (w', ⟨at_, 0⟩)
-  else return (w, ← w.stepOf st r s)
+  else return (w, ← w.stepOf st r s n)
 
 /-- A scan node's `n` iterations of template Definition `e` (`cols` columns, its returns `rets`, the first `c` its carry):
 copy 0 bound to `init`, copies `1 … n − 1` one `CALL` whose carry inputs are the previous copy's carry returns, stepping
@@ -285,19 +312,19 @@ def Work.scan (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : N
     let cnt := (callee.params[i]!.2).leaves
     for t in [0:cnt] do
       if i == 0 then
-        let (w', b) ← w.bindOne st (a.seq.get t) 0
+        let (w', b) ← w.bindOne st (← getRef a.seq t) 0 n
         w := w'
         first := first.push b
         carries := carries.push t
         rest := rest.push b
       else if i ≤ x.nxs then
         let (r, s) ← stepping a.seq t n cnt "a scan's xs"
-        let (w', b) ← w.bindOne st r s
+        let (w', b) ← w.bindOne st r s n
         w := w'
         first := first.push b
         rest := rest.push ⟨b.a + b.step, b.step⟩
       else
-        let (w', b) ← w.bindOne st (a.seq.get t) 0
+        let (w', b) ← w.bindOne st (← getRef a.seq t) 0 n
         w := w'
         first := first.push b
         rest := rest.push b
@@ -309,6 +336,40 @@ def Work.scan (w : Work) (st : Array Nat) (callee : Defn) (x : Node) (e cols : N
     else calls
   return { w with calls, next := base + n * cols, outs := w.outs.push (.scan base cols rets c n) }
 
+/-- Node `x` of Definition `d` (`defn`, its parameters from `st`) lowered onto `w`, `low` lowering a callee. -/
+def nodeStep (P : Prog) (low : Nat → M (Nat × Array Nat)) (defn : Defn) (d : Nat) (st : Array Nat) (w : Work)
+    (x : Node) : M Work := do
+  if d ≤ x.fn then throw s!"{defn.id}: a callee not before its caller"
+  if !x.args.all (seqOk ·.seq) then throw s!"{defn.id}: an argument's references are not its parts in order"
+  let callee := P.defs[x.fn]!
+  if x.form == .scan then
+    if callee.prim then throw s!"{defn.id}: a scan of a primitive"
+    let (e, rets) ← low x.fn
+    let cols := ((← get).defs[e]!).cols
+    StateT.lift (w.scan st callee x e cols rets)
+  else if callee.prim then
+    let some g := gateOf? callee.id | throw s!"{callee.id}: not a Boolean gate (PROTOCOL.md §9)"
+    if x.form == .batch then
+      let (e, rets) ← gateDef P x.fn
+      let cols := ((← get).defs[e]!).cols
+      let (w', bs) ← StateT.lift (w.binds st callee x)
+      return w'.place e cols x.n bs rets
+    else
+      let ops ← StateT.lift (w.opsOf st x)
+      let (w', f) ← StateT.lift (w.op g ops)
+      return { w' with outs := w'.outs.push (.gate f) }
+  else
+    let (e, rets) ← low x.fn
+    let cols := ((← get).defs[e]!).cols
+    let (w', bs) ← StateT.lift (w.binds st callee x)
+    return w'.place e cols (if x.form == .batch then x.n else 1) bs rets
+
+/-- Definition `defn`'s returns committed to its own columns, after its nodes. -/
+def Work.rets (w : Work) (st : Array Nat) (ret : Seq) : V (Work × Array Nat) :=
+  (List.range ret.count).foldlM (fun (acc : Work × Array Nat) t => do
+    let (w', c) := acc.1.commitOwn (← acc.1.formOf st (← getRef ret t))
+    return (w', acc.2.push c)) (w, #[])
+
 /-- Composite Definition `d` lowered, its callees first: its template Definition and its returns' columns. `fuel` bounds the
 call depth; a callee has a smaller index than its caller. -/
 def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
@@ -319,43 +380,15 @@ def lowerDef (P : Prog) : Nat → Nat → M (Nat × Array Nat)
     if defn.prim then throw s!"{defn.id}: a primitive is not lowered as a Definition"
     let body := defn.body
     let st := starts defn.params
-    let mut w : Work := {}
-    for x in body.nodes do
-      let callee := P.defs[x.fn]!
-      if x.form == .scan then
-        if callee.prim then throw s!"{defn.id}: a scan of a primitive"
-        let (e, rets) ← lowerDef P fuel x.fn
-        let cols := ((← get).defs[e]!).cols
-        w ← liftM (w.scan st callee x e cols rets)
-        continue
-      if callee.prim then
-        let some g := gateOf? callee.id | throw s!"{callee.id}: not a Boolean gate (PROTOCOL.md §9)"
-        if x.form == .batch then
-          let (e, rets) ← gateDef P x.fn
-          let cols := ((← get).defs[e]!).cols
-          let (w', bs) ← liftM (w.binds st callee x)
-          w := w'.place e cols x.n bs rets
-        else
-          let mut ops := #[]
-          for a in x.args do
-            for t in [0:a.seq.count] do ops := ops.push (← liftM (w.formOf st (a.seq.get t)))
-          let (w', f) ← liftM (w.op g ops)
-          w := { w' with outs := w'.outs.push (.gate f) }
-      else
-        let (e, rets) ← lowerDef P fuel x.fn
-        let cols := ((← get).defs[e]!).cols
-        let (w', bs) ← liftM (w.binds st callee x)
-        w := w'.place e cols (if x.form == .batch then x.n else 1) bs rets
-    let mut rets := #[]
-    for t in [0:body.ret.count] do
-      let (w', c) := w.commitOwn (← liftM (w.formOf st (body.ret.get t)))
-      w := w'
-      rets := rets.push c
+    if (defn.params.foldl (fun a p => a + p.2.leaves) 0) != defn.paramLeaves then
+      throw s!"{defn.id}: parameters of {defn.paramLeaves} leaves, not their types'"
+    if body.ret.count != defn.outLeaves then throw s!"{defn.id}: a return of {body.ret.count} leaves, its type {defn.outLeaves}"
+    if !seqOk body.ret then throw s!"{defn.id}: its return's references are not its parts in order"
+    let w ← body.nodes.toList.foldlM (nodeStep P (lowerDef P fuel) defn d st) { ins := defn.paramLeaves }
+    let (w, rets) ← StateT.lift (w.rets st body.ret)
     let r ← emit (w.finish defn.paramLeaves) rets
     modify fun s => { s with done := s.done.insert d r }
     return r
-where
-  liftM {α : Type} (x : V α) : M α := StateT.lift x
 
 /-- The output rows' first column: past `n` columns, aligned to `span`. -/
 def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
