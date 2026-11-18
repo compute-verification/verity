@@ -165,10 +165,10 @@ def AttentionV5(B, S, q, kc, vc):
     return _check_inf_attention(B, S, q, kc, vc, AttentionHeadV5, ())
 
 
-def _check_inf_attention(B, S, q, kc, vc, head, extra):
+def _check_inf_attention(B, S, q, kc, vc, head, extra, statics=()):
     T, NH, KVH, D = S.T, S.NH, S.KVH, S.D
     G = NH // KVH
-    head = bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
+    head = bind(head, T=T, D=D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM, **{s: getattr(S, s) for s in statics})
     outs = []
     for g in range(KVH):
         kg = _Coll(Array(T, Array(D, BF16)), strided_view(kc, g * D, D, KVH * D, 1, T * D))
