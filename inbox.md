@@ -1,0 +1,3 @@
+[2026-11-18T04:20Z] ff2f4405a741
+The collect branch moved to `4adffde89e0` (the scheme table work): merge it before your next push. Two more tests for item C that still name the deleted `new_salt_key`: `tests/benchmarks/pouw/test_pearl_c_vllm.py` 1534-1548 and `test_pouw_epoch_coins.py` 195. And nine vLLM-side tests fail on your change (errors: "takes N salts, not 32", the `no_salt_key` stub, `ends.py:338`, `served_y`), five of them in `tests/adapters/vllm/tests/protocols/test_pouw.py`: for each, either mend it against salts-as-data on the reference path, or, where it truly needs a seam that waits on another lane, say which seam; list all nine with their outcome in your return.
+
