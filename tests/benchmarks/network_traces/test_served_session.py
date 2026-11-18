@@ -384,9 +384,12 @@ def test_io_writes_the_kept_runs_attested_io_private_in_keep(tmp_path, monkeypat
     assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 0
     dest = keep / RUN / SS.CERTIFIED
     assert json.loads(dest.read_text()) == doc and dest.stat().st_mode & 0o777 == 0o600
-    assert not any(n in capsys.readouterr().out.encode() for n in SS.needles(ps))
-    doc["io"]["accepted"] = False
-    assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "doesn't read whole" in capsys.readouterr().err
+    printed = json.loads(capsys.readouterr().out)
+    assert printed == {"io": str(dest), "warden_run": doc["deployment"]["run_id"]}
+    doc["io"]["accepted"], doc["io"]["violations"] = False, [[3, "a bucket"]]
+    assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2
+    err = capsys.readouterr().err
+    assert "doesn't read whole off its cells: 1 violation(s)" in err and "a bucket" not in err
 
 
 def _full_shaped(src: Path, ps: list[list[int]]) -> list[bytes]:
@@ -491,6 +494,8 @@ def test_endpoint_refuses_on_its_serve_dir_and_flags(tmp_path, monkeypatch, caps
     serve = json.loads((src / "serve.json").read_text())
     for k, v, why in (("retain_exclude", None, "--retain-exclude hidden_m1 (serve.json: None)"),
                       ("sealed", None, "--seal (serve.json: None)"),
+                      ("scheme", None, "--scheme rows-sha512 (serve.json: None)"),
+                      ("scheme", "vllm-v1", "--scheme rows-sha512 (serve.json: 'vllm-v1')"),
                       ("address", ["127.0.0.1", 18783], "--port 18782 (serve.json: 18783)"),
                       ("admit", "arrival", "--protocols-config release-order (serve.json: 'arrival')")):
         (src / "serve.json").write_text(json.dumps(serve | {k: v}))

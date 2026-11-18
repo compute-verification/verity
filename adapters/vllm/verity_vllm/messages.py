@@ -265,8 +265,8 @@ def providing(role: str) -> schemes.Scheme:
 
 
 def option(entry: str | None) -> schemes.Scheme | None:
-    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which a launcher attaches by
-    name; None when none is."""
+    """The declared scheme whose option is ``entry`` (``name:scheme``, `Scheme.option`), which every launcher refuses,
+    naming the scheme's name to list instead; None when none is."""
     return next((s for s in declarations.load().values() if entry and s.option == entry), None)
 
 
@@ -276,9 +276,9 @@ def declaring(port: str) -> schemes.Scheme:
 
 
 def named(entry: str) -> schemes.Scheme | None:
-    """The declared scheme ``entry`` names, by its option (`option`) or by its name; None when it names none."""
-    found = option(entry)
-    return found if found is not None else declarations.load().get(entry)
+    """The declared scheme named ``entry``; None when none is (a declared scheme's option names it only to refuse it,
+    `option`)."""
+    return declarations.load().get(entry)
 
 
 #: what a storage scheme declares: its resource (`Scheme.resource`) and the workload's store among its needs (`Scheme.needs`)
