@@ -183,7 +183,7 @@ bits `[lo, hi)` of the field: the field `f` whose first word is `off` (`Spot.Edg
 the one leaf of its one field, at word 0, is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (off : ℕ) (l g lo hi : ℕ) : Prop :=
   ∃ f, Spot.Edges.fieldWord (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
-    l < (outRow (P.defs[sc.d]!) f).2.size ∧
+    0 < bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]! ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 

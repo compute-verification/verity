@@ -342,7 +342,7 @@ unit. -/
 theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → ℕ, Ranked S ρ := by
   obtain ⟨ρ, hρ⟩ := Spot.Wires.check_ranked hS
   refine ⟨ρ, ?_⟩
-  intro r wt wu out hw
+  intro r wt wu out off hw
   exact hρ _ _ (Spot.Wires.writerOf_reads hS hw)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

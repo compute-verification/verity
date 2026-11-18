@@ -27,13 +27,13 @@ a gate whose value has the leaf's bits. -/
 def LeafWide (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
   (∀ r l g lo hi, RowLeaf P rs W r l g lo hi →
       ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ (P.defs[p]!).ret = .value (hi - lo)) ∧
-    ∀ tid u sc out l g lo hi, UnitAt P rs tid u sc → OutLeaf P sc out l g lo hi →
+    ∀ tid u sc off l g lo hi, UnitAt P rs tid u sc → OutLeaf P sc off l g lo hi →
       ∃ p ops sc', P.gate g = .ok (p, ops, sc') ∧ (P.defs[p]!).ret = .value (hi - lo)
 
 /-- **What a unit returns is its own**: a leaf of a unit's output row is a gate of the unit or a leaf of one of
 the unit's reader rows. -/
 def ReturnsOwn (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
-  ∀ tid u sc out l g lo hi, UnitAt P rs tid u sc → OutLeaf P sc out l g lo hi →
+  ∀ tid u sc off l g lo hi, UnitAt P rs tid u sc → OutLeaf P sc off l g lo hi →
     (sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates) ∨
       ∃ r l' lo' hi', r.tid = tid ∧ r.unit = u ∧ RowLeaf P rs W r l' g lo' hi'
 
@@ -59,15 +59,16 @@ def GatesOwn (P : Prog) (rs : Array TRange) : Prop :=
 
 /-- **The wires rank the units**: a row's writer ranks below the row's unit. -/
 def Ranked (S : Spot.Wires.Summary) (ρ : String × ℤ → ℕ) : Prop :=
-  ∀ (r : Row) wt wu out, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) →
+  ∀ (r : Row) wt wu out off, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) →
     ρ (wt, wu) < ρ (r.tid, (r.unit : ℤ))
 
-/-- **A wired row holds its output**: the output row a reader row is wired to has no more bits than the row. -/
+/-- **A wired row holds its output**: the writer's field a reader row is wired to, the field with a bit that starts at
+the wire's offset, has no more bits than the row. -/
 def OutFits (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) : Prop :=
-  ∀ (r : Row) wt wu out sc sc' i f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) → 0 ≤ wu →
+  ∀ (r : Row) wt wu out off sc sc' i f, S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off) → 0 ≤ wu →
     UnitAt P rs r.tid r.unit sc → UnitAt P rs wt wu.toNat sc' → i < (P.defs[sc.d]!).params.size →
-    (P.defs[sc.d]!).params[i]!.1 = r.port → out = "o" ++ toString f →
-    f < (fieldsOf (P.defs[sc'.d]!).ret).length →
+    (P.defs[sc.d]!).params[i]!.1 = r.port → Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f = off →
+    f < (fieldsOf (P.defs[sc'.d]!).ret).length → 0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! →
     (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ≤
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0
 
