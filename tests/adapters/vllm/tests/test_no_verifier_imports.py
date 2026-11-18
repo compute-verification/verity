@@ -46,14 +46,10 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.challenger.remote",
         ),
         "verity_vllm/pipeline/edge.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/pipeline/expert_rows.py": ("proofs.spot.verifier.one_stage.registered",),
-        "verity_vllm/pipeline/expert_tables.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/pipeline/interior_links.py": (
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.second_stage",
         ),
-        "verity_vllm/pipeline/interior_rows.py": (
-            "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
-        ),
+        "verity_vllm/pipeline/interior_rows.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/registration_log.py": ("proofs.spot.verifier.one_stage.docket",),
         "verity_vllm/pipeline/serve_day.py": ("registration.verifier.registration",),
         "verity_vllm/pipeline/serve_tie.py": ("proofs.spot.verifier.one_stage.docket",),
@@ -62,7 +58,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.service",
         ),
         "verity_vllm/pipeline/window_sampling_design.py": ("proofs.spot.verifier.one_stage.draw",),
-        "verity_vllm/program/predict/node_window_values.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/program/predict/weights_tie.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.draw",
             "proofs.spot.verifier.one_stage.registered",
