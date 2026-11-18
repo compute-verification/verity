@@ -12,7 +12,7 @@ from verity.errors import InvalidArtifact
 
 from verity_vllm.check.replay import driver
 from verity_vllm.commitments.leaves import parse_shape_text
-from verity_vllm.pipeline import ids_front
+from verity_vllm.pipeline import id_relay
 
 NO_DECIMAL = "²"
 
@@ -57,9 +57,9 @@ def test_a_place_that_reads_bytes_takes_no_length_from_a_byte_that_is_no_ascii_d
 
     async def first(stated: bytes) -> bytes:
         reader = asyncio.StreamReader()
-        reader.feed_data(ids_front.COMPLETIONS + b"\r\ncontent-length: " + stated + ids_front.BLANK + body)
+        reader.feed_data(id_relay.COMPLETIONS + b"\r\ncontent-length: " + stated + id_relay.BLANK + body)
         reader.feed_eof()
-        return await ids_front._first(reader)
+        return await id_relay._first(reader)
 
-    assert asyncio.run(first(b"4")).endswith(ids_front.BLANK + body)             # a length: the head and the body
-    assert asyncio.run(first(length)).endswith(b"content-length: " + length + ids_front.BLANK)   # none: the head alone
+    assert asyncio.run(first(b"4")).endswith(id_relay.BLANK + body)             # a length: the head and the body
+    assert asyncio.run(first(length)).endswith(b"content-length: " + length + id_relay.BLANK)   # none: the head alone
