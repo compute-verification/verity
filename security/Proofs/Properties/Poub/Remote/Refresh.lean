@@ -33,7 +33,7 @@ theorem checkOpening_origin {reg : Registration} {digest : ByteArray} {appends :
   have hb : ¬ j < reg.blocks := Nat.not_lt.2 hj
   split at h
   · simp at h
-  simp only [hb, ↓reduceIte, ha, hq, Option.bind, Option.map] at h
+  simp only [ha, hq, Option.bind, Option.map] at h
   split at h
   · simp at h
   split at h

@@ -107,6 +107,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Poub.Remote.Line", "Proofs.Properties.Poub.Remote.Schedule", "Proofs.Properties.Poub.Remote.RecordAccepts",
   "Proofs.Properties.Poub.Remote.Shared", "Proofs.Properties.Poub.Remote.SharedLink",
   "Proofs.Properties.Poub.Remote.Live", "Proofs.Properties.Poub.Remote.Subprotocol",
+  "Proofs.Properties.Poub.Remote.Refresh",
   "Proofs.Flock.Claims.Bridge.CustodyZkP", "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Flock.SpotFlock.RunsAs.Round2", "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf", "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
