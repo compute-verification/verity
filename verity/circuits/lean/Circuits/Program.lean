@@ -1462,6 +1462,20 @@ private def decodeDefs (desc : Desc) (rootId programFn : String) : V (Nat × Dec
       if (st.defs[root]!).body.recut.isEmpty then .error (recutRefusal e rootId (.ok (root, st))) else .ok (root, st)
     | r => .error (recutRefusal e rootId r)
 
+/-- Decoded Definitions are one walk's. -/
+private theorem decodeDefs_walk {desc : Desc} {rootId programFn : String} {r : Nat × DecState}
+    (h : decodeDefs desc rootId programFn = .ok r) : ∃ recut, (goOf desc rootId programFn recut).run {} = .ok r := by
+  unfold decodeDefs at h
+  split at h
+  next r' hp => exact ⟨false, hp.trans h⟩
+  next =>
+    split at h
+    next root' st' hp =>
+      split at h
+      · cases h
+      · exact ⟨true, hp.trans h⟩
+    next => cases h
+
 /-- Decoded Definitions whose root reads no input node at another width are the plain walk's. -/
 private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root : Nat} {st : DecState}
     (h : decodeDefs desc rootId programFn = .ok (root, st)) (hr : (st.defs[root]!).body.recut = #[]) :
@@ -1476,9 +1490,11 @@ private theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {root
       · cases h
       · rename_i hne
         injection h with h
-        simp only [Prod.mk.injEq] at h
-        obtain ⟨rfl, rfl⟩ := h
-        simp [hr] at hne
+        have h1 : root' = root := congrArg Prod.fst h
+        have h2 : st' = st := congrArg Prod.snd h
+        subst h1 h2
+        rw [hr] at hne
+        exact absurd rfl hne
     next => cases h
 
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
