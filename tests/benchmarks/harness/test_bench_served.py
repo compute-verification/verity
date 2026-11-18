@@ -382,6 +382,19 @@ def test_the_1b_whole_step_spec_is_the_1b_pouw_spec_on_the_h100_with_the_whole_s
     assert whole == protocol
 
 
+@pytest.mark.parametrize("pinned", [True, False])
+def test_the_kernel_scheme_a_served_scheme_runs_on_a_card_is_its_declared_rows_name(pinned):
+    """`kernel_scheme` reads the scheme's declared ``kernels``, as the PoUW arm does (`bench_arm.py`'s
+    ``kernel_scheme(self.protocol, card, pinned=True)``); Pearl+ has no build for the RTX PRO 6000's architecture."""
+    from verity_bench.schemes import kernel_scheme
+
+    assert kernel_scheme("pearl-plus", "h100", pinned=pinned) == kernel_scheme("pearl-plus", "h200", pinned=pinned) \
+        == "pearl-c-h100-v1-h3"
+    with pytest.raises(LookupError, match="^rtx-pro-6000's architecture sm_120a has no build here: pearl-c-h100-v1-h3 is "
+                                          "built for sm_90a$"):
+        kernel_scheme("pearl-plus", "rtx-pro-6000", pinned=pinned)
+
+
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):
     """`llama31-8b-1gpu-pearl-c-whole-served` on one H200 is its preset there, the whole-step arm beside compiled stock
     alone, its setup building pearl_c_sm90's cubin; the arm takes the useful-work scheme by its registered name

@@ -56,7 +56,7 @@ from typing import TYPE_CHECKING, Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting import scheme as schemes
-from verity_vllm import config
+from verity_vllm import config, messages
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
@@ -222,6 +222,10 @@ def refusals(ctx: Context) -> tuple[str, ...]:
     sampled = ctx.scheme("sampled-proofs") is not None
     for entry, name in zip(ctx.enabled, names):
         scheme = entry.partition(":")[2]
+        if (declared := messages.option(entry)) is not None:
+            out.append(f"{entry}: names the declared scheme {declared.name}, which is attached by name on the build "
+                       "(messages.option: verity_vllm.LLM and serve-openai attach it), never installed as a protocol option")
+            continue
         try:
             mod = adapter(name)
         except _refused() as r:
