@@ -34,14 +34,12 @@ KEPT = {
              "and RangesDeclared.slots (a KV block's token slots, PoUB's binder); neutral: capacity, and a range's words",
     "slot_bytes": "RangesDeclared.slot_bytes, a KV slot's bytes (PoUB's binder); neutral: word_bytes",
     "slot": "ValueProduced.slot, the value's position in its port (the Commit's taps); neutral: index",
-    "linear": "RegisteredValues.linear, the values that are a linear layer's weight; no reader found; neutral: the "
-              "values a block reads as a registered operand, or delete it",
+    "linear": "RegisteredValues.linear, the registered values that are a linear layer's weight, for PoUS's weights; "
+              "neutral: operands, the values a block reads as a registered operand",
     "eager": "a Declared property (no compiled graph); PoUW and PoUS require it (their adapter wraps aren't "
              "graph-capturable); neutral: a property a scheme names, its value the adapter's",
     "async_steps": "a Declared property, a step scheduled before the last one's outputs are read (vLLM's async "
                    "scheduling; PoUB requires it off); neutral: overlapped_steps",
-    "in_process": "a Declared property, the steps taken in this process (vLLM's engine core in process; the "
-                  "adapter's build sets it, no scheme requires it); neutral: local_steps, or delete it",
 }
 
 
