@@ -59,7 +59,7 @@ LAYER = {
     "verity_vllm.engine.served_seed": "core",                  # the served seed rule's functions; imports only engine.hooks
 }
 
-#: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`) and the commitment scheme's
+#: the packages a tree may not hold, PoUB's session on the engine (`verity_vllm.protocols.poub`) and the commitment scheme's
 #: reference: placed where present
 OPTIONAL = ("verity_vllm.protocols.poub", "verity_vllm.commitments")
 

@@ -109,7 +109,7 @@ def test_the_guarantee_and_its_assumptions_come_from_the_locks() -> None:
     mine = g[R.GUARANTEE]
     assert {"ecr/sha-512", "cr/sha-512", "euf-cma/lms-sha512-n64"} <= set(mine["assumptions"])
     assert "Verity.Vocab.PouwSound" in mine["open"] and "Verity.Vocab.SpotSound" in g[R.COMPOSITE]["open"]
-    assert len(mine["open"]) == 4 and "four open premises" in R.DESCRIPTION
+    assert len(mine["open"]) == 5 and "five open premises" in R.DESCRIPTION
     for t in R.terms(P):
         assert set(t.assumptions) <= set(mine["assumptions"]), t.name
 
@@ -117,7 +117,7 @@ def test_the_guarantee_and_its_assumptions_come_from_the_locks() -> None:
 def test_the_output_says_which_part_it_is_and_what_is_left_out(capsys: pytest.CaptureFixture[str]) -> None:
     assert R.main([]) == 0
     out = capsys.readouterr().out
-    for phrase in ("bound's formula proved in Lean under four open premises", "value evaluated in Python",
+    for phrase in ("bound's formula proved in Lean under five open premises", "value evaluated in Python",
                    "SPOT's part only", "pouw (Pearl+): open, not in the total", "Verity.Vocab.PouwSound",
                    "inference-only policy: open, not in the total", "Verity.Vocab.InferenceOnlySound",
                    "without the forgery term", f"- binding: {R.ECR_NOTE}"):

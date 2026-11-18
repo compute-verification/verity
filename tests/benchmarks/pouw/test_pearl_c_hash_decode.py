@@ -163,9 +163,23 @@ def test_a_pd_launchs_dynamic_shared_memory_size_is_read_only_as_a_floor():
     assert len(lines) > len(defs)
 
 
-def levels(dom, values: list[bytes], schema, salt_key: bytes, nonce: int) -> bytes:
-    """An `audit.HM96` tree's levels as the kernels lay them out, each value salted by `audit.hm96_salt`."""
-    salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]
+def salts_into(host, bufs: dict[str, int], sizes: dict[str, int]) -> dict[str, bytes]:
+    """Each tree's hm96 salts for a test (any bytes: the kernels only read them), written into its ``salts_<tree>`` buffer,
+    which is allocated where `bufs` has none: by tree, `R.HM_SALT` bytes a leaf in leaf order."""
+    out = {}
+    for name, size in sizes.items():
+        if name.startswith("salts_"):
+            out[name[6:]] = hashlib.shake_256(f"pearl-c-test-salts/{name}/{size}".encode()).digest(size)
+            if name not in bufs:
+                bufs[name] = host.alloc(size)
+            host.array(bufs[name])[:size] = np.frombuffer(out[name[6:]], np.uint8)
+    return out
+
+
+def levels(dom, values: list[bytes], schema, salts: bytes) -> bytes:
+    """An `audit.HM96` tree's levels as the kernels lay them out, value i under bytes 192 i … 192 i + 191 of `salts`."""
+    assert len(salts) == R.HM_SALT * len(values)
+    salted = [v + salts[R.HM_SALT * i:R.HM_SALT * (i + 1)] for i, v in enumerate(values)]
     return b"".join(b"".join(lv) for lv in tree_levels(dom, [dom.leaf(i, i, schema, v) for i, v in enumerate(salted)]))
 
 
@@ -180,14 +194,15 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
     rng = np.random.default_rng(mr)
     a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)] + [bytes(4 * k)] * (m - mr)
     c, u = (rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32) for _ in range(2))
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     tiles = R.cdiv(mr, R.TILE) * (n // R.TILE)
     dom_a = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96)
     epoch = audit.Epoch(audit.Workload((Matmul(idx, Shape(mr, k, n), w),)), {w: root_b}, salt)
     dom_t = audit.transcript_domain(epoch, tiles, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": dom_t.domain_id, "line_b": bytes(32)}
     bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, mr).items()}
+    salts = salts_into(host, bufs, R.Pipeline.sizes(m, n, k, mr))
     bufs["pd_count"] = host.alloc(16)
     for name, words in (("c", c), ("u", u)):
         host.array(bufs[name])[:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
@@ -201,7 +216,7 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
     assert not {x for f in names for x in R.Pipeline.FUSED[f]} & set(by)
 
     digests = [C.row_digest(r) for r in a_rows[:mr]]
-    tree_a = levels(dom_a, a_rows[:mr], ROW_SCHEMA, salt_key, idx)
+    tree_a = levels(dom_a, a_rows[:mr], ROW_SCHEMA, salts["a"])
     seeds = [C.row_seed(salt, d, root_b, idx, r, "h3") for r, d in enumerate(digests)]
     seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
     leaves = [C.leaf(C.Checked(c[r0:mr][:64, c0:c0 + 64].tolist(), u[r0:mr][:64, c0:c0 + 64].tolist()), "h3")
@@ -210,7 +225,7 @@ def test_pd_writes_pearl_c_h3s_bytes_and_the_no_write_control_fails(host, m, mr,
             "seeds_a": b"".join(seeds), "lkeys_a": b"".join(C.line_key(s) for s in seeds),
             "ea_codes": b"".join(bytes(C.sample_line(C.S512Seed(seeds[t]), 0, 0, 0) if t < mr else
                                        C.sample_line(C.S512Seed(seed_a), 0, 0, t)) for t in range(m)),
-            "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, TILE_SCHEMA, salt_key, audit.HM96_TRANSCRIPT)}
+            "leaves": b"".join(leaves), "tree_t": levels(dom_t, leaves, TILE_SCHEMA, salts["t"])}
     assert set(want) == {*R.PD_OUTPUTS, "tree_t"} and len(want["tree_a"]) == pipe.size["tree_a"]
     assert len(want["tree_t"]) == pipe.size["tree_t"] and len(want["ea_codes"]) == pipe.size["ea_codes"]
 
@@ -258,11 +273,12 @@ def test_a_split_commitment_outside_pd_writes_the_unsplit_steps_bytes(host, m, m
     split, fillers = form != "serial", form != "split-nofill"
     rng = np.random.default_rng(100 + mr)
     a_rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(mr)] + [bytes(4 * k)] * (m - mr)
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     dom_a = rows_domain(activation_binding(salt, idx), idx, mr, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
     bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, mr).items()}
+    salts = salts_into(host, bufs, R.Pipeline.sizes(m, n, k, mr))
     pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(a_rows)), 0,
                       bufs=bufs, m_real=mr, split_a=split, fillers=fillers)
     assert pipe.pd is None
@@ -278,7 +294,7 @@ def test_a_split_commitment_outside_pd_writes_the_unsplit_steps_bytes(host, m, m
         assert {x for x in names if by[x][0] == "commit"} == set(names) - {"pad_a", "lines_ea"} and by["lines_ea"][0] == "forming"
 
     digests = [C.row_digest(r) for r in a_rows[:mr]]
-    tree_a = levels(dom_a, a_rows[:mr], ROW_SCHEMA, salt_key, idx)
+    tree_a = levels(dom_a, a_rows[:mr], ROW_SCHEMA, salts["a"])
     seeds = [C.row_seed(salt, d, root_b, idx, r, "h3") for r, d in enumerate(digests)]
     seed_a = C.unit_seed_a(salt, tree_a[-64:], root_b, idx, "h3")
     want = {"rowdig_a": b"".join(digests), "tree_a": tree_a, "seed_a": bytes(seed_a), "line_a": C.line_key(seed_a),
@@ -317,11 +333,12 @@ def test_pd_commits_zero_form_writes_its_bytes_without_reading_the_zero_rows(hos
     rng = np.random.default_rng(3)
     a = rng.integers(0, 256, (m, 4 * k), dtype=np.uint8)
     a[mr:] = 0
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     dom_a = rows_domain(activation_binding(salt, idx), idx, m, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
     bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, m).items()}
+    salts = salts_into(host, bufs, R.Pipeline.sizes(m, n, k, m))
     bufs["pd_count"] = host.alloc(16)
     rows = host.put(a.tobytes())
     pipe = R.Pipeline(host, m, n, k, "sm120", {name: host.put(v) for name, v in keys.items()}, rows, 0, bufs=bufs, m_real=m)
@@ -361,11 +378,12 @@ def test_pd_commit_reads_a_calls_bf16_rows_in_place_of_their_fp32_words(host):
     halves = rng.integers(0, 2**16, (mr, k), dtype=np.uint16)
     words = np.zeros((m, k), np.uint32)
     words[:mr] = halves.astype(np.uint32) << 16
-    salt, salt_key, root_b = bytes(range(32)), bytes(range(100, 132)), hashlib.sha512(b"root_b").digest()
+    salt, root_b = bytes(range(32)), hashlib.sha512(b"root_b").digest()
     dom_a = rows_domain(activation_binding(salt, idx), idx, m, audit.HM96)
-    keys = {"salt_key": salt_key, "hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
+    keys = {"hm": audit.hm96_kernel_constants(), "unit": salt + root_b + idx.to_bytes(8, "little"),
             "dom_a": dom_a.domain_id, "dom_b": bytes(64), "dom_t": bytes(64), "line_b": bytes(32)}
     bufs = {name: host.alloc(size) for name, size in R.Pipeline.sizes(m, n, k, m).items()}
+    salts = salts_into(host, bufs, R.Pipeline.sizes(m, n, k, m))
     bufs["pd_count"] = host.alloc(16)
     rows, other = host.put(words.astype("<u4").tobytes()), host.put(bytes([0x5A]) * (4 * k * m))
     b16 = host.put(halves.astype("<u2").tobytes())

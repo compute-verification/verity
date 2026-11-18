@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues,
+from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
                           ReuseOldestFreed, StepBegan, StepEnded)
 
 from tests import fake_vllm
@@ -319,3 +319,35 @@ def test_a_built_engine_has_one_step_emitter(monkeypatch, subscribe):
     assert [e for e in heard if isinstance(e, StepBegan | StepEnded)] == [StepBegan(0, (), 1), StepEnded(0)]
     off()
     assert "schedule" not in vars(sched) and len(hooks.live(kv_blocks.TAG)) == len(v.sites)
+
+
+def test_a_released_value_is_empty_from_its_load_and_restored_at_the_last_detach(monkeypatch):
+    """A `ReleaseValue` empties every parameter on the value's storage (a tied one too) once vLLM's own `load_model`
+    has run, and the last detach sets each to what ``restore()`` gives; a value the model has no parameter of is
+    refused by name."""
+    import torch
+    model = torch.nn.Module()
+    model.proj = torch.nn.Linear(4, 2, bias=False)
+    model.head = torch.nn.Linear(4, 2, bias=False)
+    model.head.weight = model.proj.weight
+    model.other = torch.nn.Linear(4, 2, bias=False)
+    v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {"model": model})
+    messages.close()
+    back = torch.arange(8.0).view(2, 4)
+    messages.current().request("test", ReleaseValue("proj.weight", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        v.runners[0]().load_model()
+        assert model.proj.weight.numel() == model.head.weight.numel() == 0 and model.other.weight.numel() == 8
+    finally:
+        off()
+    assert torch.equal(model.proj.weight, back) and model.head.weight is model.proj.weight
+    messages.close()
+    messages.current().request("test", ReleaseValue("nope", lambda: back))
+    off = kv_blocks.attach()
+    try:
+        with pytest.raises(RuntimeError, match="registered value nope released"):
+            v.runners[0]().load_model()
+    finally:
+        off()
+        messages.close()

@@ -33,6 +33,9 @@ from pathlib import Path
 
 from verity.device import load_card, skus
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/serve_tax"))
+import serve_tax as S
+
 CARDS = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 METRIC = "vllm/prod-serving-cost-glm53"
 #: the id a priced point goes under, which the serving cost's door declares
@@ -229,7 +232,7 @@ def kind_seconds(trace: Path, windows: list[dict], per_request: int) -> dict:
 
 
 def trace_of(d: Path) -> Path:
-    traces = sorted((d / "server").glob("step_trace.*.jsonl.gz"))
+    traces = [t for t in S.step_traces(d) if t.suffix == ".gz"]
     if not traces:
         raise SystemExit(f"{d.name}: no step trace, so no schedule to price")
     return traces[0]
@@ -303,7 +306,7 @@ def lifetime(d: Path, ref: Path, u: dict, counters: dict | None, pu: dict | None
     ref_s = sum(w["seconds"] for w in ref_windows)
     ours_k = kind_seconds(trace_of(d), windows, per_request)
     ref_k = (kind_seconds(trace_of(ref), ref_windows, per_request)
-             if any((ref / "server").glob("step_trace.*.jsonl.gz")) else None)
+             if any(t.suffix == ".gz" for t in S.step_traces(ref)) else None)
     pre_measured = ours_k["prefill"] - ref_k["prefill"] if ref_k else None
     priced = added(base, failed) if priced_prefill is None else added(added(base, failed), priced_prefill)
     return {"dir": d.name, "reference": ref.name, "pass": p, "cards": cards, "decode_steps": len(decode),

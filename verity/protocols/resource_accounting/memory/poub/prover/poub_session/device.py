@@ -1284,7 +1284,7 @@ class GpuBackend:
         torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
-        self.salt_key = self.rng.bytes(32)
+        self.salt_key = secrets.token_bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)

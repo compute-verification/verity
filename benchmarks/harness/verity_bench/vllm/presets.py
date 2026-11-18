@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import asdict, dataclass, field, replace
+import tomllib
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 from collections.abc import Mapping
@@ -20,6 +21,9 @@ SOURCE_ROOT = Path(__file__).resolve().parents[4]
 FORMER_SPEC = "benchmarks/specs/{name}.toml"
 FORMER_SPECS = PurePosixPath(FORMER_SPEC).parent.as_posix()
 GPUS = gpus()
+#: Each spec id a run was recorded under before its spec named no card, as the spec and card it is now: read for a stored
+#: run's record alone (`former_spec`); no launch takes one
+FORMER_IDS = Path(__file__).resolve().parents[1] / "data" / "former_spec_ids.toml"
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
 RESERVED_ENV = re.compile(r"VERITY_BENCH_\w*|RESEARCH_\w*|GPU_LEASE_\w*|CUDA_VISIBLE_DEVICES|CUDA_DEVICE_ORDER|PYTHONPATH|PATH")
@@ -28,19 +32,25 @@ GREEDY: Mapping[str, float] = {"temperature": 0.0}
 
 
 @dataclass(frozen=True)
-class Preset:
-    """One reproducible model, precision, machine, and engine configuration."""
+class SpecPreset:
+    """One reproducible model, precision and engine configuration, as a spec's file writes it: no card."""
 
     id: str
     model: str
     precision: str
-    gpu_id: str
     gpu_count: int
     revision: str | None = None
     case: str | None = None
     engine_settings: Mapping[str, Any] = field(default_factory=dict)
     vllm_pin: str = VLLM_PIN
     model_digest: str | None = None
+
+
+@dataclass(frozen=True)
+class Preset(SpecPreset):
+    """A spec's preset on the card a run is on (`gpu_id`, the card's `short`, `resolve_spec`)."""
+
+    gpu_id: str = field(kw_only=True)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,8 +86,19 @@ class ArmSettings:
 
 
 @dataclass(frozen=True)
+class CardSettings:
+    """What a spec's run takes on one of its cards in place of the spec's own (`[card_settings.SHORT]`): only where the
+    card needs it."""
+
+    env: Mapping[str, str] = field(default_factory=dict)
+    setup: str | None = None
+    admission: Admission | None = None
+
+
+@dataclass(frozen=True)
 class BenchmarkSpec:
-    """One runnable benchmark configuration before its named sweep is resolved."""
+    """One runnable benchmark configuration before its named sweep and its card are resolved: the cards it runs on
+    (``cards``, by their `short`; none where any card will do), and what differs on one (``card_settings``)."""
 
     schema: str
     backend: str
@@ -86,7 +107,9 @@ class BenchmarkSpec:
     sweep: str
     reps: int
     eager: bool
-    preset: Preset
+    preset: SpecPreset
+    cards: tuple[str, ...] = ()
+    card_settings: Mapping[str, CardSettings] = field(default_factory=dict)
     arm_modules: tuple[str, ...] = ()
     arm_settings: Mapping[str, ArmSettings] = field(default_factory=dict)
     env: Mapping[str, str] = field(default_factory=dict)
@@ -140,27 +163,75 @@ def former_name(spec: str | Path) -> str | None:
     return path.name.removesuffix(".toml") if under == FORMER_SPECS or under.endswith("/" + FORMER_SPECS) else None
 
 
+def split_card(spec: str | Path) -> tuple[str, str | None]:
+    """A spec argument as (the spec, the card it names): ``SPEC@CARD`` names the card by its `short`, and so does a path
+    recorded for one (``.../SPEC@CARD.toml``, `jobs._relative_spec`'s); else no card."""
+
+    text = Path(spec).as_posix() if isinstance(spec, Path) else spec
+    head, _, name = text.rpartition("/")
+    stem, toml, _ = name.partition(".toml")
+    if "@" not in stem:
+        return text, None
+    stem, card = stem.split("@", 1)
+    return (f"{head}/" if head else "") + stem + toml, card
+
+
+def former_spec(spec_id: str) -> tuple[str, str] | None:
+    """The spec and card a former spec id is now (`FORMER_IDS`), for reading a run recorded under it; None for any
+    other id."""
+
+    return former_specs().get(spec_id)
+
+
+def former_specs() -> dict[str, tuple[str, str]]:
+    """Every former spec id (`FORMER_IDS`) as the spec and card it is now."""
+
+    return {old: (entry["spec"], entry["card"]) for old, entry in tomllib.loads(FORMER_IDS.read_text())["former"].items()}
+
+
+def current_spec(spec_id: str) -> str:
+    """The name a stored run's spec id has now: ``SPEC@CARD`` for a former id (`FORMER_IDS`), else the id itself."""
+
+    now = former_spec(spec_id)
+    return spec_id if now is None else f"{now[0]}@{now[1]}"
+
+
 def _spec_path(spec: str | Path) -> Path:
     path = Path(spec)
     if path.is_file():
         return path
-    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
+    name = former_name(spec) or str(spec)
+    named = SPEC_ROOT / f"{name}.toml"
     if named.is_file():
         return named
+    if now := former_spec(name):
+        raise ConfigError(f"spec {name!r} is {now[0]!r} on the {now[1]}, `{now[0]}@{now[1]}`: its former id names a "
+                          "stored run's spec, and no run is launched under it")
     raise ConfigError(f"no benchmark spec {spec!r}")
 
 
+def _card_shorts() -> set[str]:
+    from verity_bench import kit
+
+    return {c["short"] for c in kit._gpu_cards(kit.cards_directory()) if c.get("short")}
+
+
 def load_spec(spec: str | Path) -> BenchmarkSpec:
-    path = _spec_path(spec)
+    """The spec file ``spec`` names, by id or path (a card it names set aside, `split_card`), as written: on no card."""
+
+    path = _spec_path(split_card(spec)[0])
     doc = load(path, BenchmarkSpec)
     if doc.schema != "verity-bench/vllm-spec/v0" or doc.backend != "vllm":
         raise ConfigError(f"{path}: expected a verity-bench/vllm-spec/v0 document")
     if doc.id != doc.preset.id:
         raise ConfigError(f"{path}: spec id {doc.id!r} differs from preset id {doc.preset.id!r}")
-    if doc.preset.gpu_id not in GPUS:
-        raise ConfigError(f"{path}: unknown GPU id {doc.preset.gpu_id!r}")
-    if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[doc.preset.gpu_id].count_per_node:
-        raise ConfigError(f"{path}: gpu_count is outside {doc.preset.gpu_id!r}'s per-node capacity")
+    if unknown := sorted(set(doc.cards) - (set(GPUS) & _card_shorts())):
+        raise ConfigError(f"{path}: cards {unknown} are no card's `short` (calibration/hardware/cards) with a GPU id")
+    for card in doc.cards:
+        if doc.preset.gpu_count < 1 or doc.preset.gpu_count > GPUS[card].count_per_node:
+            raise ConfigError(f"{path}: gpu_count is outside {card!r}'s per-node capacity")
+    if stray := sorted(set(doc.card_settings) - set(doc.cards)):
+        raise ConfigError(f"{path}: card_settings {stray} name no card of the spec's cards {list(doc.cards)}")
     unknown = sorted(set(doc.preset.engine_settings) - set(ENGINE_SETTINGS))
     if unknown:
         raise ConfigError(f"{path}: unknown engine_settings {unknown}; known: {list(ENGINE_SETTINGS)}")
@@ -168,13 +239,16 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
         raise ConfigError(f"{path}: arms must be nonempty and reps and warmups must be positive")
     if doc.max_warmups is not None and doc.max_warmups < doc.warmups:
         raise ConfigError(f"{path}: max_warmups must be at least warmups")
-    bad = sorted(name for name in doc.env if not ENV_NAME.fullmatch(name) or RESERVED_ENV.fullmatch(name))
+    envs = [*doc.env, *(name for on in doc.card_settings.values() for name in on.env)]
+    bad = sorted(name for name in envs if not ENV_NAME.fullmatch(name) or RESERVED_ENV.fullmatch(name))
     if bad:
         raise ConfigError(f"{path}: env names must be upper-case and not the dispatcher's, queue's or launcher's: {bad}")
-    if doc.setup is not None:
-        setup = PurePosixPath(doc.setup)
+    for given in (doc.setup, *(on.setup for on in doc.card_settings.values())):
+        if given is None:
+            continue
+        setup = PurePosixPath(given)
         if setup.is_absolute() or ".." in setup.parts or not (SOURCE_ROOT / setup).is_file():
-            raise ConfigError(f"{path}: setup {doc.setup!r} must name a script in the source tree, relative to its root")
+            raise ConfigError(f"{path}: setup {given!r} must name a script in the source tree, relative to its root")
     for name, arm in doc.arm_settings.items():
         variant = name.partition("@")[2] in SERVED_EXECUTIONS
         if name not in doc.arms or not (":" in name or variant):
@@ -204,8 +278,37 @@ def load_sweep(name: str) -> Sweep:
     return doc
 
 
+def run_card(doc: BenchmarkSpec, card: str | None) -> str:
+    """The card a run of ``doc`` is on: the one named, else the spec's one card, else the card the driver reports here
+    (`verity_bench.kit.card_short`); refused, naming the spec's cards, where it is none of them."""
+
+    if card is None and len(doc.cards) == 1:
+        card = doc.cards[0]
+    if card is None:
+        from verity_bench import kit
+
+        found = kit.host_stamp()["card"]
+        if found == "none":
+            raise ConfigError(f"spec {doc.id!r} runs on {' or '.join(doc.cards) or 'any card'}, and no card is here: name "
+                              f"one, `{doc.id}@CARD`")
+        card = kit.card_short(found)
+    if doc.cards and card not in doc.cards:
+        raise ConfigError(f"spec {doc.id!r} runs on {', '.join(doc.cards)}, not the {card}")
+    if card not in GPUS:
+        raise ConfigError(f"spec {doc.id!r}: the {card} is no GPU of verity_config's registry ({', '.join(GPUS)})")
+    if doc.preset.gpu_count > GPUS[card].count_per_node:
+        raise ConfigError(f"spec {doc.id!r}: gpu_count is outside {card!r}'s per-node capacity")
+    return card
+
+
 def resolve_spec(spec: str | Path) -> ResolvedSpec:
+    """The spec ``spec`` names (an id or a path, ``@CARD`` naming its card, `split_card`) on its run's card (`run_card`),
+    with what the spec sets for that card (``card_settings``) in place of its own."""
+
     doc = load_spec(spec)
+    card = run_card(doc, split_card(spec)[1])
+    on = doc.card_settings.get(card, CardSettings())
+    preset = Preset(**{f.name: getattr(doc.preset, f.name) for f in fields(SpecPreset)}, gpu_id=card)
     return ResolvedSpec(
         schema=doc.schema,
         backend=doc.backend,
@@ -214,12 +317,12 @@ def resolve_spec(spec: str | Path) -> ResolvedSpec:
         sweep=load_sweep(doc.sweep),
         reps=doc.reps,
         eager=doc.eager,
-        preset=doc.preset,
+        preset=preset,
         arm_modules=doc.arm_modules,
         arm_settings=doc.arm_settings,
-        env=doc.env,
-        setup=doc.setup,
-        admission=doc.admission,
+        env={**doc.env, **on.env},
+        setup=on.setup or doc.setup,
+        admission=on.admission or doc.admission,
         warmups=doc.warmups,
         max_warmups=doc.max_warmups,
     )

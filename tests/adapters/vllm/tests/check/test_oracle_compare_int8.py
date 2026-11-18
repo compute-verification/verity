@@ -82,7 +82,7 @@ def test_a_views_allocation_and_offset_are_numbers_as_int_reads_them(stated, rea
 
 def test_a_call_boundary_member_is_read_at_its_modules_producer_instances():
     o = _oracle([(LIN, "Int8RowQuant_v1{K=4}", p, [_view(1, p * K, [K], "int8"), _view(2, p, [], "float32")]) for p in range(3)]
-                + [(LIN, "ScaledMmS8_v1{K=4,N=8}", p, [_view(3, p * 8, [8], "bfloat16")]) for p in range(3)])
+                + [(LIN, "ScaledMmS8_v3{K=4,N=8}", p, [_view(3, p * 8, [8], "bfloat16")]) for p in range(3)])
     prod = OC.producers_of({"identities": [{"family": "call_boundaries", "op_path": f"{LIN}/row_quant_7", "output_member": "1",
                                             "spec": "Int8RowQuant_v1"}]})[(f"{LIN}/row_quant_7", "1")]
     assert prod == {"spec": "Int8RowQuant_v1", "ordinal": None, "operand": None, "interior": True}
@@ -91,7 +91,7 @@ def test_a_call_boundary_member_is_read_at_its_modules_producer_instances():
     b, why, n = o.member_bytes(0, f"{LIN}/row_quant_7", "0", "r0", producer=prod)
     assert b == _span(1, 0, 3 * K)
     assert o.member_bytes(0, f"{LIN}/row_quant_7", "1", "r0", producer={"spec": "Int8RowQuant_v1"})[1] == "no fold instance of this op at this step"
-    b, _why, _n = o.member_bytes(0, LIN, "0", "r0", producer={"spec": "ScaledMmS8_v1"})
+    b, _why, _n = o.member_bytes(0, LIN, "0", "r0", producer={"spec": "ScaledMmS8_v3"})
     assert b == _span(3, 0, 3 * 8 * 2)
 
 

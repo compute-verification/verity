@@ -9,8 +9,8 @@ agree.  run.py compares the device's buffers with these bytes before it times an
 
   uv run python benchmarks/pouw/pearl_c_sm90/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-The instance is a one-unit epoch as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree under a
-fixed prover salt key (`SALT_KEY`), the salt from the salt coin of the gate's test challenger (`test_challenger`,
+The instance is a one-unit epoch as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it: B's `audit.HM96` row tree, each
+leaf under its salt in the fixture's fixed salts (`salts_of`; check.json's `salts` names each tree's file), the salt from the salt coin of the gate's test challenger (`test_challenger`,
 `Epoch.start`) opened after B's root, A's HM96 row tree, seed_A from A's committed root (so E_A's padding line key is an
 output the device derives, `line_a`) and each row's seed and line key from its SHA-512 row digest.  Writes
 OUT_DIR/check.json (the shape, keys, seeds, the coin commitment and the salt coin's opening, and per buffer its file, dtype
@@ -35,16 +35,16 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT.parent / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
+sys.path.insert(0, str(ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier"))
 
 
 import pearl_c_vectors as CV  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.circuits.silicon import fp32  # noqa: E402
 from verity.circuits.kernels.tc import group_sum_total_batch  # noqa: E402
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
-                                                         Epoch, Workload, activation_binding, commit_rows, hm96_kernel_constants,
-                                                         hm96_salt, rows_domain, transcript_domain, weight_binding, weights_root)
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (HM96, HM96_SALT, ROW_SCHEMA, TILE_SCHEMA,  # noqa: E402
+                                                         Epoch, Workload, activation_binding, hm96_kernel_constants,
+                                                         rows_domain, transcript_domain, weight_binding, weights_root)
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, CoinOpening  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C  # noqa: E402
@@ -61,8 +61,6 @@ VARIANTS = (H100,)
 H100_UNPROMOTED = replace(H100, name="h100-unpromoted", g=None)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm90-gpu-check/coins"
-#: the check's prover hm96 salt key (a served run samples its own)
-SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm90-gpu-check/salt-key").digest()
 
 
 def test_challenger() -> Challenger:
@@ -80,19 +78,27 @@ def test_challenger() -> Challenger:
     return Challenger(0, entropy)
 
 
-def tree_bytes(domain, values: list[bytes], schema: str, salt_key: bytes, nonce: int) -> bytes:
-    """An `audit.HM96` tree's levels as the kernels lay them out: level 0 (each value under its salt, then pads), then each
-    level above."""
-    leaves = [domain.leaf(i, i, schema, v + hm96_salt(salt_key, nonce, i)) for i, v in enumerate(values)]
+def salts_of(tree: str, count: int) -> bytes:
+    """The fixture's hm96 salts of tree `tree` ("a": A's rows, "b": B's rows, "t": the tiles), `HM96_SALT` bytes a leaf in
+    leaf order, as the kernels read them from ``salts_<tree>``: fixed bytes, so the fixture is.  A serving caller's are
+    fresh bytes from the operating system."""
+    return hashlib.shake_256(f"verity-pouw/pearl-c-sm90-gpu-check/salts_{tree}".encode()).digest(HM96_SALT * count)
+
+
+def tree_bytes(domain, values: list[bytes], schema: str, salts: bytes) -> bytes:
+    """An `audit.HM96` tree's levels as the kernels lay them out: level 0 (value i under salt i of `salts`, then pads), then
+    each level above."""
+    assert len(salts) == HM96_SALT * len(values), (len(salts), len(values))
+    leaves = [domain.leaf(i, i, schema, v + salts[HM96_SALT * i:HM96_SALT * (i + 1)]) for i, v in enumerate(values)]
     return b"".join(b"".join(level) for level in tree_levels(domain, leaves))
 
 
-def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salt_key: bytes
+def epoch_of(matmul: Matmul, b_rows: list[bytes], coins: Challenger, salts_b: bytes
              ) -> tuple[Epoch, CoinOpening, bytes, bytes]:
     """A one-unit epoch on B's rows as `verity.protocols.resource_accounting.compute.pouw.verifier.audit` starts it, from `coins`' salt coin
     opened after B's root: (epoch, the salt coin's opening, B's tree bytes, its root)."""
     dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), HM96)
-    tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salt_key, HM96_WEIGHTS + matmul.weight)
+    tree_b = tree_bytes(dom_b, b_rows, ROW_SCHEMA, salts_b)
     roots = {matmul.weight: tree_b[-64:]}
     opening = coins.open("salt", weights_root(roots))
     return Epoch.start(Workload((matmul,)), roots, coins.commitment, opening), opening, tree_b, tree_b[-64:]
@@ -280,19 +286,18 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
     coins = test_challenger()
-    epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, SALT_KEY)
-    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, h, SALT_KEY, HM96_WEIGHTS + WEIGHT).commitment.root
+    tiles = len(scheme.tiles(mm.shape))
+    salts = {"a": salts_of("a", m), "b": salts_of("b", n), "t": salts_of("t", tiles)}
+    epoch, salt_opening, tree_b, root_b = epoch_of(mm, rb, coins, salts["b"])
     dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, h)
-    tree_a = tree_bytes(dom_a, ra, ROW_SCHEMA, SALT_KEY, INDEX)
+    tree_a = tree_bytes(dom_a, ra, ROW_SCHEMA, salts["a"])
     root_a = tree_a[-64:]
-    assert root_a == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, h, SALT_KEY, INDEX).commitment.root
     ctx = Context(epoch.salt, mm, root_a, root_b)
     noise = scheme.noise(ctx)
     seeds = scheme.row_seeds(ctx, ra, range(m))
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
-    keys["salt_key"] = SALT_KEY
-    dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
-    manifest = {"schema": "verity-pouw/pearl-c-sm90-gpu-check/v1", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
+    dom_t = transcript_domain(epoch, tiles, h)
+    manifest = {"schema": "verity-pouw/pearl-c-sm90-gpu-check/v2", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
                 "hashing": scheme.hashing, "weight": WEIGHT, "coins": coins.commitment.to_json(), "salt_opening": salt_opening.to_json(),
                 "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
@@ -300,6 +305,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     kf = Out(out_dir)
     kf.put("hm", hm96_kernel_constants(), "u8")
     manifest["key_files"] = kf.files
+    sf = Out(out_dir)
+    for tree, x in salts.items():
+        sf.put(f"salts_{tree}", x, "u8")
+    manifest["salts"] = {name.removeprefix("salts_"): f for name, f in sf.files.items()}
     o = Out(out_dir)
     o.put("tree_a", tree_a, "u8")
     o.put("tree_b", tree_b, "u8")
@@ -376,7 +385,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("y", glue_y(u, inv["a"], inv["b"]), "u16")
         lv = tile_leaves(c, u, m, n)
         v.put("leaves", lv, "u8")
-        v.put("tree_t", tree_bytes(dom_t, lv, TILE_SCHEMA, SALT_KEY, HM96_TRANSCRIPT), "u8")
+        v.put("tree_t", tree_bytes(dom_t, lv, TILE_SCHEMA, salts["t"]), "u8")
         agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n)
         manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device, hashing="h3").name, "g": device.g,
                                              "files": v.files, "crosscheck": agree}
