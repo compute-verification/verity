@@ -470,7 +470,8 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert replay["verdict"] == "undecided" and len(calls) == 1
     assert replay["reason"].startswith(f"the memory attester's session on {mc.ATTESTER_MACHINE} did not complete: RuntimeError: "
-                                       f"the side on {AUDITOR} refused: a session has run for the request's `audit`")
+                                       f"the side on {mc.ATTESTER_MACHINE} refused: a session has run for the request's "
+                                       "`audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
 
 
@@ -1300,15 +1301,52 @@ def _public(*dirs: Path) -> bytes:
 
 def test_no_machine_name_reaches_storages_public_output_or_its_answer(served, tmp_path, monkeypatch):
     """An accepted PoUS piece with the node, the memory attester's host and its address each distinctively named: no
-    byte of the piece's public output (``answer.json``, ``pous.json``) or of the answer it returns holds any of them or
-    this machine's own name; the placement names the machines by their parties (`memory_attester.machines`) and the
+    byte of the piece's public output (``answer.json``, ``pous.json``) or of the answer it returns holds any of them, the
+    node's name in hex or this machine's own name; the placement names the machines by their parties (`memory_attester.machines`) and the
     premise reads as it does under any names."""
     node, host, address = "node-zq7-distinct", "attester-xk4-distinct", ("192.0.2.177", 47999)
     answer, _ = _run(served, tmp_path, monkeypatch, host=host, node=node, address=address)
     assert answer["verdict"] == "accept", answer["reason"]
     said = _public(served.out) + json.dumps(answer).encode()
-    for name in (node, host, address[0], str(address[1]), node.encode().hex(), socket.gethostname()):
+    for name in (node, host, address[0], node.encode().hex(), socket.gethostname()):
         assert name.encode() not in said, name
     where = answer["profile"]["placement"]
     assert where["parties"] == {"memory_attester": mc.ATTESTER_MACHINE, "prover": mc.PROVER_MACHINE,
                                 "verifier": mc.PROVER_MACHINE} and where["kind"] == "own-host"
+
+
+def test_no_machine_name_reaches_a_refused_storage_pieces_public_output_or_its_answer(served, tmp_path, monkeypatch):
+    """A PoUS piece the memory attester refuses (a second session under the window's binding, whose side names its host
+    in the refusal) with the node, the attester's host and its address each distinctively named: the piece is
+    undecided, saying the side refused, and no byte of its public output or of its answer holds any of the names."""
+    node, host, address = "node-zq7-distinct", "attester-xk4-distinct", ("192.0.2.177", 47999)
+    auditor = Auditor(tmp_path)
+    first, _ = _run(served, tmp_path, monkeypatch, auditor, host=host, node=node, address=address)
+    assert first["verdict"] == "accept", first["reason"]
+    monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: auditor.sources[0])
+    again, _ = _run(served, tmp_path, monkeypatch, auditor, host=host, node=node, address=address)
+    assert again["verdict"] == "undecided" and f"the side on {mc.ATTESTER_MACHINE} refused" in again["reason"], again
+    said = _public(served.out) + json.dumps(again).encode()
+    for name in (node, host, address[0], node.encode().hex(), socket.gethostname()):
+        assert name.encode() not in said, name
+
+
+def test_no_machine_name_reaches_a_refused_bandwidth_audits_public_output_or_its_answer(tmp_path):
+    """A bandwidth session the party refused, its reason naming the node, the party's address and this machine as a side
+    or a socket would: the audit is undecided, saying why, and no byte of ``answer.json``, ``bandwidth.json`` or the
+    answer `decide` returns holds any of the names; each reads as its party's machine."""
+    node, address = "node-zq7-distinct", "192.0.2.177"
+    why = f"the party at {address}:47999 refused node {node} ({socket.gethostname()})"
+    private, public = tmp_path / "private", tmp_path / "public"
+    private.mkdir()
+    (private / BW.SESSION).write_text(json.dumps({
+        "answer": {"verdict": "refused", "reason": why}, "verifier_record": {"verdict": "refused", "reason": why},
+        "verifier_rc": 0, "request": {"node": node}, "steps": [], "r_bytes_per_s": None, "party_host": address,
+        "setup_s": 0.0, "session_wall_s": 0.0}))
+    got = BW.decide(private, public, bind=b"\x01" * 32, window=3, trusted_sha512=BW_KEY,
+                    deployment=_deployment("ab" * 64))
+    assert got["verdict"] == "undecided", got
+    assert f"the party at {mc.ATTESTER_MACHINE}:47999 refused node {mc.PROVER_MACHINE}" in got["reason"], got
+    said = _public(public) + json.dumps(got).encode()
+    for name in (node, address, socket.gethostname()):
+        assert name.encode() not in said, name

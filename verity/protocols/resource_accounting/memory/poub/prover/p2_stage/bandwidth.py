@@ -791,6 +791,9 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
                     summary |= {"decided_by": period.decided_by(case_exe), "lean_s": round(time.perf_counter() - t, 3)}
                 p2_case.write(private, kept, judged)
                 out = public_answer(judged, bind, scope, r_bytes_per_s, private)
+    if out.get("reason"):
+        out = out | {"reason": mc.unnamed(out["reason"], (doc["request"].get("node"), socket.gethostname()),
+                                          (doc.get("party_host"),))}
     _write(public / "answer.json", out)
     _write(public / "bandwidth.json", summary | {"verdict": out["verdict"], "reason": out["reason"]})
     return out

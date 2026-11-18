@@ -45,11 +45,12 @@ refused() { cat "$DIR/refused.txt"; stamp refused; exit 3; }
 attach() { "$PY" - "$@" "$DIR" "$SERVE_DIR" "$WINDOW" "$SETTINGS" "${WIPE_NODE:-$(hostname)}" \
   "${WIPE_KEY_SHA512:-}" "${WIPE_PROTOCOL_EXE:-}" "${VERITY_PINS:-}" "${VERITY_CONFIGURATION:-}" \
   "${VERITY_PROTOCOLS_CONFIG:-}" "${GPU_LEASE_UUID:-}" "${WIPE_OWN_LEASE:+own}" "$CTRL" <<'EOF'
-import json, os, shutil, sys, tempfile
+import json, os, shutil, socket, sys, tempfile
 from pathlib import Path
 from verity import hooks as H
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_served as WS
 from verity.protocols.resource_accounting.memory.pous.scheme import MEMORY_ATTESTER
 from verity.runtime.stream import Side
@@ -61,8 +62,16 @@ mode, d, serve_dir, window, given, node, trusted, judge, pins, configuration, ap
 d, wipe = Path(d), schemes.get("wipe")
 
 
+def unnamed(why):
+    """``why`` with the machines' own names put by party (`memory_attester.unnamed`): this node's, and the challenger's
+    host and address as the settings give them."""
+    at = globals().get("doc") or {}
+    address = str(at.get("address") or "")
+    return mc.unnamed(why, (node, socket.gethostname()), (at.get("host"), address or None, address.rpartition(":")[0] or None))
+
+
 def refused(why):
-    (d / "refused.txt").write_text(f"WIPE REFUSED: {why}\n")
+    (d / "refused.txt").write_text(f"WIPE REFUSED: {unnamed(why)}\n")
     sys.exit(3)
 
 
@@ -109,7 +118,7 @@ try:
 except ValueError as e:
     refused(str(e).removeprefix("wipe: "))
 except Exception as e:
-    print(f"WIPE FAILED: the wipe raised {type(e).__name__}: {e}"[:600], flush=True)
+    print(unnamed(f"WIPE FAILED: the wipe raised {type(e).__name__}: {e}")[:600], flush=True)
     sys.exit(1)
 finally:
     for m in made:
@@ -129,7 +138,7 @@ card = lease.split(",")[0] or ran["card"]
 print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reason"], "protocol": answer["protocol"],
                             "decided_by": s.get("decided_by"), "k": s.get("k"), "segments": s.get("segments"),
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"),
-                            "t1": s.get("t1"), "server": ran["server"], "card": card, "key_pin": ran["key_pin"],
+                            "t1": s.get("t1"), "server": mc.PROVER_MACHINE, "card": card, "key_pin": ran["key_pin"],
                             "exit": 0 if answer["verdict"] == "accept" else 1}, sort_keys=True), flush=True)
 sys.exit(0 if answer["verdict"] == "accept" else 1)
 EOF

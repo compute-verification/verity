@@ -83,7 +83,7 @@ import os
 import re
 import time
 import tomllib
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -446,6 +446,18 @@ def machines(node: str, host: str) -> tuple[str, str]:
     """The prover's and the memory attester's machines as a placement names them (`PROVER_MACHINE`, and
     `ATTESTER_MACHINE` unless `host` is `node`): the two names given are compared, and neither is written."""
     return PROVER_MACHINE, PROVER_MACHINE if host == node else ATTESTER_MACHINE
+
+
+def unnamed(text: str, prover: Iterable[str | None] = (), attester: Iterable[str | None] = ()) -> str:
+    """``text`` with every name the prover's machine (``prover``) or the memory attester's (``attester``) goes by put
+    as its party's machine (`PROVER_MACHINE`, `ATTESTER_MACHINE`; the prover's where one name is both, as `machines`),
+    longest first, in one pass and only where it stands as a name of its own, not inside a longer word: a refusal's
+    words, which a side, a socket or the system wrote, as a placement names the machines."""
+    label = {n: ATTESTER_MACHINE for n in attester if n} | {n: PROVER_MACHINE for n in prover if n}
+    if not label:
+        return text
+    names = "|".join(re.escape(n) for n in sorted(label, key=len, reverse=True))
+    return re.sub(rf"(?<![\w.-])(?:{names})(?![\w-])", lambda m: label[m[0]], text)
 
 
 def unchecked() -> dict[str, dict[str, str]]:

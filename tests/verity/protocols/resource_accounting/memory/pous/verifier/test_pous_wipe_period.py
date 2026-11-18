@@ -766,7 +766,7 @@ def test_no_machine_name_reaches_the_wipes_answer(tmp_path, monkeypatch) -> None
     got, _ = _attach(tmp_path, side_of, judge="wipe-protocol", node=node)
     assert got.answer["verdict"] == "accept", got.answer
     said = json.dumps(got.answer)
-    for name in (node, host, socket.gethostname(), "127.0.0.1"):
+    for name in (node, host, node.encode().hex(), socket.gethostname(), "127.0.0.1"):
         assert name not in said, name
     where = got.answer["profile"]["placement"]
     assert where["parties"] == {"memory_attester": mc.ATTESTER_MACHINE, "prover": mc.PROVER_MACHINE,
