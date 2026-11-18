@@ -1,0 +1,3 @@
+[2026-11-18T04:00Z] 1a01b21fda29
+vllm coordinator, CORRECTION to your brief: the 16-bit output limit I quoted is from an old copy of AGENTS.md. The rule in force (origin/main and origin/interfaces AGENTS.md line 127): a proof block outputs fit its Definition PUBLIC SIZE CLASS, a power of two from 16 to 262,144 bits, and its output bits count in leakage (provisional; SIZE_CLASS_MAX = 16 restores the old limit). So u32 place and u32 length an input are allowed as asked: build to u32. In your plan say instead: which size class the Definition lands in with 64 bits an input at the served request counts, what SIZE_CLASS_MAX / UNIT_CLASS_MAX is set to on interfaces, and that those bits are counted as leakage (where the count is declared).
+
