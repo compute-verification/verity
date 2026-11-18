@@ -1563,7 +1563,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
     (`KeptIngress`): the caller passes it, since SPOT reads the attester's record as a certified input and imports
     neither the attester nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
     doesn't give the window's scan or the caller passed no reader."""
-    from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS, scan_state_rows as SR
 
     if kept_ingress is None:
         raise ValueError("a window's scan reads the network attester run its serve kept, or that it kept none, by the "
@@ -1573,7 +1573,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: 
         return None
     params, io, phases = kept
     T = params.window
-    cls.scan.serves(params)
+    IS.Class(**cls.scan.shape).serves(params)
     if T != cls.buckets:
         raise ValueError(f"the kept run's execution phases are {T} buckets, not a window of class {cls}'s "
                          f"{cls.buckets}: serve at the class's scan schedule")
