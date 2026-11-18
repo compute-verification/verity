@@ -239,6 +239,19 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Launch:
+    """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
+    the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine; and
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party."""
+
+    binds: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    development: str = ""
+    reaches: str = ""
+
+
+@dataclass(frozen=True)
 class Reading:
     """What a scheme's ``reader`` reads of the row its run left: its certified quantity's ``value``, in the unit it
     publishes (``published``); the ``error`` the run established it except with, and ``error_from``, the key of the
@@ -289,7 +302,8 @@ class Scheme:
     and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
     name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
-    against the committed root once at build.
+    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    it (`Launch`), a `Lacks` where it launches nothing.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -339,6 +353,7 @@ class Scheme:
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
     kernels: Kernels | Lacks = UNDECLARED
     keeps_weight_copy: bool | Lacks = UNDECLARED
+    pieces: Mapping[str, Launch] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -377,6 +392,18 @@ class Scheme:
             if not unit or type(per) is not Fraction or per <= 0:
                 raise ValueError(f"{self.name}: published is (the record's unit, a positive Fraction from its own "
                                  f"unit), not {self.published!r}")
+        if not isinstance(self.pieces, Lacks):
+            principal = {} if isinstance(self.parties, Lacks) else {r.name: r.principal for r in self.parties}
+            for party, p in self.pieces.items():
+                if principal.get(party) != "developer":
+                    raise ValueError(f"{self.name}: its pieces are its declared developer-side parties' "
+                                     f"{sorted(n for n, k in principal.items() if k == 'developer')}, not {party!r}")
+                if p.development and p.development not in (*p.binds, *p.optional):
+                    raise ValueError(f"{self.name}: {party}'s development binding {p.development!r} is one of its "
+                                     "binds or optional")
+                if p.reaches and principal.get(p.reaches) != "auditor":
+                    raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+            object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
@@ -595,7 +622,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Charge", "Circuits", "Kernels", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
            "unbounded"]

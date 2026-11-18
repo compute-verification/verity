@@ -616,7 +616,7 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
     assert (small.model, small.revision, small.case) == (pinned.model, pinned.revision, pinned.case)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
-    assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
+    assert [(m.name, m.key) for m in protocol.members] == [("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)]
 
 
 def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> dict:
