@@ -2106,7 +2106,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
                                  f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
     stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
     with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
-        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
+        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
 
 
