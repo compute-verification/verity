@@ -9,6 +9,7 @@ TINY's slots and the class of record's.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
@@ -241,13 +243,19 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
 def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     """Where no scan ran (`prove_path`'s window commit), `standin_state` is the scan state rows that give each slot its row
     and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
-    lanes alone. It is committed under the committer's key at `STATE_NONCE` plus the window's index, a per-window value in
-    its reading port's rows, and `Rows` takes it as the scan state."""
+    lanes alone. It is a per-window value in its reading port's rows, each row under 192 fresh bytes from the OS, so a
+    second commit of the same rows opens the same rows under other salts and another root; `Rows` takes it as the scan
+    state."""
     low, _f, values, _w, slots = window
-    v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
+    heads = [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]
+    v, again = (WR.standin_state(PROGRAM, CLASS, heads, window=RUN) for _ in range(2))
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
-    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and max(WW.weight_nonces(values).values()) < WR.STATE_NONCE
+    salts = [bytes(s) for s in (*v.salts, *again.salts)]
+    assert list(again.rows) == list(v.rows) and len(set(salts)) == 2 * CLASS.buckets
+    assert {len(s) for s in salts} == {192} and again.entry()["root"] != v.entry()["root"]
+    ref = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, list(v.rows), list(v.salts), schema=CR.SCHEMA_V2, window=RUN)
+    assert ref.entry() == v.entry()
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 
@@ -296,8 +304,8 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
             assert IS.token_row(scan, IS.decode(scan, rows[SLOTS_CLASS.anchor(k)]))[SLOTS_CLASS.lane(k)] == \
                 ((1, len(p), p) if q else (0, 0, ()))
             heads.append(([int(bool(q)), len(p), *p, *[0] * (SLOTS_CLASS.prompt - len(p))], 2 if q else 0))
-        got = WR.state_value(PROGRAM, SLOTS_CLASS, rows, KEY, w, window=RUN)
-        standin = WR.standin_state(PROGRAM, SLOTS_CLASS, heads, KEY, w, window=RUN)
+        got = WR.state_value(PROGRAM, SLOTS_CLASS, rows, window=RUN)
+        standin = WR.standin_state(PROGRAM, SLOTS_CLASS, heads, window=RUN)
         assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
     assert SS.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
@@ -316,7 +324,7 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     ingress, outputs = _traffic(CLASS, [ids[:lp] for _o, lp, _m, ids in LANES], (0, 0))
     rows, starts = SS.scan_state(CLASS, ingress, outputs, CLASS.buckets)
     assert starts == [1, 2]
-    v = WR.state_value(PROGRAM, CLASS, rows, KEY, 1, window=RUN)
+    v = WR.state_value(PROGRAM, CLASS, rows, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
@@ -672,10 +680,6 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
-    assert WR.index_salt(KEY, 3) == hm96_salt(KEY, WR.INDEX_NONCE + 3, 0) and WR.INDEX_NONCE >= WR.STATE_NONCE + (1 << 32)
-    assert len({bytes(v.salts[0]) for v in got.values()} | {WR.index_salt(KEY, 0)}) == len(got) + 1
-    with pytest.raises(ValueError, match="a window's index is a u32"):
-        WR.index_salt(KEY, 1 << 32)
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
     assert down.shape == (8, 1024) and np.array_equal(down.reshape(-1), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
@@ -804,12 +808,12 @@ def _runs(rows) -> list[tuple[str, int, Any]]:
 
 
 def _two(window) -> dict[str, tuple[Any, list[WR.Slot]]]:
-    """The window at two occupancies, each its stand-in scan state (`standin_state`, window 0's under `KEY`) and slots:
+    """The window at two occupancies, each its stand-in scan state (`standin_state`) and slots:
     `LANES` with slot 0 served (its request's values), and `OTHER_LANES`, every node computed."""
     low, _f, _v, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
-    state = {k: WR.standin_state(PROGRAM, CLASS, [([occ, lp, *ids], m) for occ, lp, m, ids in lanes], KEY, 0, window=RUN)
+    state = {k: WR.standin_state(PROGRAM, CLASS, [([occ, lp, *ids], m) for occ, lp, m, ids in lanes], window=RUN)
              for k, lanes in (("served", LANES), ("other", OTHER_LANES))}
     return {"served": (state["served"], [s0, slots[1]]),
             "other": (state["other"], [WR.Slot(low.fn, CLASS, r, weights) for r in OTHER])}
@@ -877,15 +881,14 @@ def _public(c, d: Path) -> dict[str, Any]:
 @pytest.mark.slow
 def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(window, tmp_path):
     """The window at two occupancies (`_two`), each closed and written by `Window.write` as `prove_path`'s window commit
-    writes it (its stand-in scan state a value of the window's, its class and index public, its index salt window 0's
-    under `KEY`), has one public record: every public file is byte for byte the other's once each hiding commitment (a
-    root, a row's ``b || c``, a registered read's path) and each digest over one (a public body's, the leaf layer, the
-    registration's) is replaced by its role. The labels, the index's hiding leaf, the unit files, the table refs, the
-    domains and the registration's provenance all agree, and the index and its salt are prover only. What the labels test
-    can't reach: everything else `Window.write` makes public. Slow (minutes) for the two windows' closes, as the test
-    above."""
+    writes it (its stand-in scan state a value of the window's, its class and index public), has one public record:
+    every public file is byte for byte the other's once each hiding commitment (a root, a row's ``b || c``, a registered
+    read's path) and each digest over one (a public body's, the leaf layer, the registration's) is replaced by its role.
+    The labels, the index's hiding leaf under one index salt for both, the unit files, the table refs, the domains and
+    the registration's provenance all agree, and the index and its salt are prover only. What the labels test can't
+    reach: everything else `Window.write` makes public. Slow (minutes) for the two windows' closes, as the test above."""
     low, _f, values, *_ = window
-    pub = {}
+    pub, salt = {}, os.urandom(CS.SALT_BYTES)
     for name, (state, slots) in _two(window).items():
         vals = {**values, SS.SCAN_STATE: state}
         win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
@@ -894,7 +897,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
         c = win.close()
         prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
                 "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: state.entry()}}}
-        win.write(c, tmp_path / name, prov, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+        win.write(c, tmp_path / name, prov, registrar=REG, index_salt=salt)
         pub[name] = _public(c, tmp_path / name)
     assert pub["served"] == pub["other"]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])
@@ -902,19 +905,24 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
 
 @pytest.mark.slow
 def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
-    """Slow (minutes) for the window's close, which no cheaper path to `Window.write` skips."""
+    """Written as `prove_path` writes it, with no index salt given, its index salt is 192 fresh bytes read back from the
+    window's ``index-salt.bin`` under the index leaf it registers. Slow (minutes) for the window's close, which no cheaper
+    path to `Window.write` skips."""
     low, _f, values, _w, slots = window
     c, words = low.circuit, SS.words(CLASS.scan)
     assert c.registered.values == (SS.SCAN_STATE,)
     program, digest = c.program()[0], WC.population_digest(c)
     assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
-    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 0, window=RUN)
+    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], window=RUN)
     vals = {**values, SS.SCAN_STATE: state}
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
     win.supply(CR)
     WR.Rows(low, slots, vals).record(win)
-    win.write(win.close(), tmp_path, {}, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+    win.write(win.close(), tmp_path, {}, registrar=REG)
     rec = json.loads((tmp_path / "registration.json").read_text())
+    kept = (tmp_path / CS.INDEX_SALT).read_bytes()
+    assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
+    assert CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
     (e,) = rec["registered"]
     scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]

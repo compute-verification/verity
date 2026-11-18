@@ -39,11 +39,12 @@ or its Definition's function of the window's values), every input by reference b
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
 them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
-by its hiding leaf under `index_salt`.
+by its hiding leaf under the salt `Window.write` draws from the OS and keeps in ``index-salt.bin``.
 """
 from __future__ import annotations
 
 import bisect
+import os
 import re
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -56,10 +57,10 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
-    registered_salts,
 )
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
@@ -70,7 +71,6 @@ from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
-from . import window_weights as WW
 from .window_builder import WEIGHTS, _spans
 from .window_circuit import Lowered, WindowClass
 
@@ -85,11 +85,6 @@ FORMS = ("node", "evaluated")
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
-#: the salt nonce of window 0's stand-in scan state under the committer's key (`standin_state`), each next window's the
-#: next: above every weight parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
-STATE_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
-#: the salt nonce of window 0's index (`index_salt`), each next window's the next: above every window's scan state's
-INDEX_NONCE = STATE_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -709,25 +704,23 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], key: bytes, index: int, *,
-                window: str) -> G.Registered:
+def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *, window: str) -> G.Registered:
     """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
-    bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows committed under the committer's secret ``key`` at salt
-    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under ``program``, its circuit's
-    `window_circuit.population_digest`, and the execution phase's open root ``window``. It is the
-    prover's side of the tree (its rows, salts and levels) for the window's prover and the scan's alike: the scan's state
-    ports open their rows in it, by its root and domain."""
-    if not 0 <= index < 1 << 32:
-        raise ValueError(f"window {index}: a window's index is a u32")
+    bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows, each under 192 fresh bytes from the OS, a
+    per-window value under ``program``, its circuit's `window_circuit.population_digest`, and the execution phase's open
+    root ``window``. It is the prover's side of the tree (its rows, salts and levels) for the window's prover and the
+    scan's alike: the scan's state ports open their rows in it, by its root and domain, and its salts exist only in it and
+    in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`)."""
     bits = np.asarray(rows, dtype=np.uint16)
     if bits.shape != (cls.buckets, IS.state_bits(cls.scan)) or bits.max(initial=0) > 1:
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return registered_commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, bytes(32), 0, keep_rows=True,
+                             row_salts=os.urandom(cls.buckets * CS.SALT_BYTES), window=window)
 
 
-def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
+def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], *,
                   window: str) -> G.Registered:
     """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
     ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
@@ -738,17 +731,8 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
         s.occ, s.fields, s.max_tokens = int(row[0]), int(row[1]), int(max_tokens)
         for p, v in enumerate(row[2:]):
             s.ids[IS.position(scan, p)] = int(v)
-    return state_value(program, cls, [IS.encode(scan, st) for st in states], key, index, window=window)
+    return state_value(program, cls, [IS.encode(scan, st) for st in states], window=window)
 
 
-def index_salt(key: bytes, index: int) -> bytes:
-    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): sampled under the
-    committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
-    takes, so the committer samples it again from its key alone."""
-    if not 0 <= index < 1 << 32:
-        raise ValueError(f"window {index}: a window's index is a u32")
-    return registered_salts(key, INDEX_NONCE + index, 1)
-
-
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",
-           "Slot", "index_salt", "positions", "scan_slots", "standin_state", "state_value"]
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
+           "standin_state", "state_value"]
