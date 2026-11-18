@@ -85,12 +85,15 @@ theorem keyProg_unit_card (u : Fin n) :
 
 /-- **`Γ`'s unit**: every unit of the committed circuit has one gate for each of its file's rows. -/
 theorem gateARow : GateARow := by
-  intro tags cf tables pf r hr
-  refine (ofFile_iff hr
-    (fun C n P => ∀ u : Fin n, C.size (P.gates u) = (Spot.FilePart.ofCircuit r.D.unroll r.n).m)).2 fun u => ?_
-  show (Finset.univ.filter fun g : Fin (Layout.keyN r.D.unroll r.hU r.n) =>
-    (Placed.keyProg r.D.unroll r.hU r.n).unit g = some u).card = _
-  rw [keyProg_unit_card]
-  rfl
+  intro tags cf tables pf
+  cases hr : parsedOf tags cf tables pf with
+  | none => exact fun u => absurd u.isLt (by simp [unitsOfFile, hr, Parsed.units])
+  | some r =>
+    refine (ofFile_iff hr (fun C n P => ∀ u : Fin n, C.size (P.gates u) =
+      (some r : Option Parsed).elim 0 fun r => (Spot.FilePart.ofCircuit r.D.unroll r.n).m)).2 fun u => ?_
+    show (Finset.univ.filter fun g : Fin (Layout.keyN r.D.unroll r.hU r.n) =>
+      (Placed.keyProg r.D.unroll r.hU r.n).unit g = some u).card = _
+    rw [keyProg_unit_card]
+    rfl
 
 end Flock.Bridge

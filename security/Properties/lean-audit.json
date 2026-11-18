@@ -14903,6 +14903,10 @@
    "Properties.NetworkPeriod.rowsStartCharged": {
     "function": "NetworkVerifier.Period.check",
     "outcome": "accept"
+   },
+   "Flock.Bridge.gateARow": {
+    "function": "Flock.Bridge.parsedOf",
+    "outcome": "none"
    }
   },
   "frozen": {
