@@ -83,7 +83,7 @@ namespace FlockComplete.ZkTables.Level0
 
 open Flock
 
-variable {coin : ℕ → ℕ → F128} {resp : ℕ → Claims.Msg} (hc : ∀ k, coinOf (resp k) = coin k)
+variable {coin : ℕ → ℕ → F128} {resp : ℕ → Hash.Msg} (hc : ∀ k, coinOf (resp k) = coin k)
 include hc
 
 /-- The lane coins at replies whose coins are `coin`'s are `chS`'s. -/
@@ -123,17 +123,17 @@ set_option maxHeartbeats 1000000 in
 coins are `coin`'s, returns, and its PIOP ends at round `p₀` having switched to the basis `b`, its proof's
 out-of-domain value, lane messages and pair's sums are level 0's clear values at the coins from `p₀` on the packed
 table `g` and `b` (`l0Clear`), plus the pads, at each value's layout position. -/
-theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims.Msg)
+theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Hash.Msg)
     (hc : ∀ k, FlockComplete.coinOf (resp k) = coin k) (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ)
     (dom : ByteArray) (g : Array F128) (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (p0 : ℕ) (b : Array F128) {t₀ : Transcript} {l : Array Claims.Msg}
+    (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (p0 : ℕ) (b : Array F128) {t₀ : Transcript} {l : Array Hash.Msg}
     (hb : ∀ zp lp ss T sws t₃ l₃,
       ((piopFw (FlockComplete.asksCut coin n) st (Zk.PadLayout.new st.m st.kLog sch.k0) g
           (fun i => vals[i]! + pads.h[i]!) (FlockComplete.flat cm0.cap) ic.root extras).run t₀).go l =
         (.ok ((zp, lp, ss, T, sws), t₃), l₃) →
       FlockComplete.basisVals sws (st.m - 7) = b ∧ l₃.size = p0)
-    {p : Zk.ZkProof} {t : Transcript} {l' : Array Claims.Msg}
+    {p : Zk.ZkProof} {t : Transcript} {l' : Array Hash.Msg}
     (h : ((repFwC (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g cm0 extras pads ic
       vals extra lanePad salt).run t₀).go l = (.ok (p, t), l')) :
     p.proof.ligerito.oodValues[0]! =

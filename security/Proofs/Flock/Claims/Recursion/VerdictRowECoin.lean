@@ -77,7 +77,7 @@ def alphaOf (info : RecAlgebra.Info RecAlgebra.Lin) (ℓ : ℕ) : Array F128 :=
 /-- **The `coef` a `rec-open` piece reads off the statement and the coins**: at a statement that sets up, the verifier
 rows at table `table`'s shape, its extra claims at the first coin's link points, rep `2 table + rep`'s `canonRounds` at
 the coins after the link and no comb; the `coef` they register for query `query` of level `level`. -/
-def coefRead (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : Array F128 :=
+def coefRead (x : Hash.Msg) (cs : List Coin) (q : OpenPiece) : Array F128 :=
   match setupOf false x with
   | some v =>
     match verifierRows
@@ -95,7 +95,7 @@ def coefRead (x : Claims.Msg) (cs : List Coin) (q : OpenPiece) : Array F128 :=
 
 namespace DecAt
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128) (i : ℕ)
 
 /-- **A piece reads its query's `coef`**: at a decision where the rep streams' names are distinct, a piece of table `i`
@@ -153,7 +153,7 @@ theorem coefRead_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : 
 /-- **`hcoef`, the coin tie, in `targetE`'s form**: at a decision of an inner statement read at the dense form and a
 table `i` of the statement, every piece of rep `r` of table `i` reads the verifier's `coef` for its query through
 `coefRead`. -/
-theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
+theorem hcoef {xo : Hash.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
     ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val →

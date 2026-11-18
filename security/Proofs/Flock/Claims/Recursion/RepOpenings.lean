@@ -73,7 +73,7 @@ theorem CollIn.mono {A B A' B' : List ByteArray} (h : CollIn A B) (hA : ∀ x �
   exact ⟨u, hA u hu, v, hB v hv, hne, heq⟩
 
 /-- **A collision across two logged lists is a collision among the calls**: each list's inputs are inputs of `l`. -/
-theorem CollIn.tied {A B : List ByteArray} {l : List (Claims.Msg × Claims.Msg)} (h : CollIn A B)
+theorem CollIn.tied {A B : List ByteArray} {l : List (Hash.Msg × Hash.Msg)} (h : CollIn A B)
     (hA : ∀ b ∈ A, Claims.toMsg b ∈ l.map Prod.fst) (hB : ∀ b ∈ B, Claims.toMsg b ∈ l.map Prod.fst) :
     Claims.TiedColl sha512 l := by
   obtain ⟨u, hu, v, hv, hne, heq⟩ := h

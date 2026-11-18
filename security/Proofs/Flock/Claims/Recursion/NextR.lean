@@ -98,12 +98,12 @@ noncomputable section
 /-! ## Rows -/
 
 /-- **How a round's rows join**: tag `0`, then the rows, every length in variable-length bytes (`encV`). -/
-def joinR (rs : List Claims.Msg) : Claims.Msg := 0 :: encVL encVB (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
+def joinR (rs : List Hash.Msg) : Hash.Msg := 0 :: encVL encVB (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
 
-theorem joinR_head (rs : List Claims.Msg) : ∃ a, joinR rs = 0 :: a := ⟨_, rfl⟩
+theorem joinR_head (rs : List Hash.Msg) : ∃ a, joinR rs = 0 :: a := ⟨_, rfl⟩
 
 /-- An element-level message read back as its rows. -/
-def rowsOf : Claims.Msg → Option (List ByteArray)
+def rowsOf : Hash.Msg → Option (List ByteArray)
   | 0 :: body =>
     match (rdVLs rdVB).run body with
     | some (v, []) => some v
@@ -111,7 +111,7 @@ def rowsOf : Claims.Msg → Option (List ByteArray)
   | _ => none
 
 /-- **A joined round reads back as its rows**, at every length. -/
-theorem rowsOf_joinR' (rs : List Claims.Msg) :
+theorem rowsOf_joinR' (rs : List Hash.Msg) :
     rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) := by
   have h := rdVLs_encVL (r := rdVB) (e := encVB) (l := rs.map fun r => (⟨r.toArray⟩ : ByteArray))
     (fun b _ rest => rdVB_encVB b rest) []
@@ -165,7 +165,7 @@ theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = 64) : isNodeR
     rw [List.toList_toArray, ← hl, List.drop_left]
 
 /-- `rowsOf_joinR'` at its earlier bounds. -/
-theorem rowsOf_joinR {rs : List Claims.Msg} (_hl : rs.length < 2 ^ 64) (_hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
+theorem rowsOf_joinR {rs : List Hash.Msg} (_hl : rs.length < 2 ^ 64) (_hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
     rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) :=
   rowsOf_joinR' rs
 
@@ -408,12 +408,12 @@ theorem fitsRep_absorbedFrom {c : RepCtx} {rows : List (List ByteArray)} {a : Fl
     h.levels, by rw [e]; exact h.elems⟩
 
 /-- The rep's round messages: each round's framed bytes. -/
-def framesOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List Claims.Msg := (chunksOf c p T).map encs
+def framesOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List Hash.Msg := (chunksOf c p T).map encs
 
 open Classical in
 /-- **A rep's proof read from its opened rounds**: a proof and `T` that fit them, with the last message's proof `q`
 where no frame reads; and the rep's round messages, the chosen proof's framed bytes. None where nothing fits. -/
-def readRep (c : RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) : Option (Flock.Proof × List Claims.Msg) :=
+def readRep (c : RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) : Option (Flock.Proof × List Hash.Msg) :=
   if h : ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2 then
     some (absorbedFrom c (Classical.choose h).1 q,
       framesOf c (absorbedFrom c (Classical.choose h).1 q) (Classical.choose h).2)
@@ -421,7 +421,7 @@ def readRep (c : RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) : Opti
 
 /-- **(a) at a rep**: the proof `readRep` reads fits the rep's opened rounds, and its round messages are its framed
 bytes. -/
-theorem readRep_fits {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.Proof} {ms : List Claims.Msg}
+theorem readRep_fits {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.Proof} {ms : List Hash.Msg}
     (h : readRep c rows q = some (p, ms)) : ∃ T, FitsRep c rows p T ∧ ms = framesOf c p T := by
   by_cases hx : ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2
   · rw [readRep, dif_pos hx] at h
@@ -432,7 +432,7 @@ theorem readRep_fits {c : RepCtx} {rows : List (List ByteArray)} {q p : Flock.Pr
 
 /-- **What `readRep` reads of the last message changes no absorbed value**: read with another last-message proof `q'`,
 the proof is the first's absorbed fields with `q'`'s others, and the round messages are the same. -/
-theorem readRep_last {c : RepCtx} {rows : List (List ByteArray)} {q q' p p' : Flock.Proof} {ms ms' : List Claims.Msg}
+theorem readRep_last {c : RepCtx} {rows : List (List ByteArray)} {q q' p p' : Flock.Proof} {ms ms' : List Hash.Msg}
     (h : readRep c rows q = some (p, ms)) (h' : readRep c rows q' = some (p', ms')) :
     p' = absorbedFrom c p q' ∧ ms' = ms := by
   by_cases hx : ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2
@@ -449,7 +449,7 @@ theorem readRep_last {c : RepCtx} {rows : List (List ByteArray)} {q q' p p' : Fl
 /-- **Every rep's proof, read from its opened rounds**, rep `k` from the `k`-th block of the rounds after the link,
 with the last message's `k`-th proof where no frame reads; and the round messages, rep by rep. -/
 def readPs (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (rss : List (List ByteArray))
-    (cs : List Coin) (fl : FinalP) : Option (Array Flock.Proof × List Claims.Msg) :=
+    (cs : List Coin) (fl : FinalP) : Option (Array Flock.Proof × List Hash.Msg) :=
   if fl.ps.size = 2 * sts.size ∧ (repLens spec sts).sum = rss.length then
     ((List.range (2 * sts.size)).mapM fun k =>
       readRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k []) fl.ps[k]!).map
@@ -476,7 +476,7 @@ theorem mapM_some_get {α β : Type} {f : α → Option β} : ∀ {l : List α} 
 
 /-- **(a) at every rep**: each proof `readPs` reads fits its rep's opened rounds. -/
 theorem readPs_fits {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
-    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
+    {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Hash.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) :
     pf.1.size = 2 * sts.size ∧ ∀ (k : ℕ) (hk : k < pf.1.size), ∃ T,
       FitsRep (repCtx spec sts c₁ r₀ cs k) ((cutLens (repLens spec sts) rss).getD k []) pf.1[k] T := by
@@ -504,13 +504,13 @@ structure DecR where
   sts : Array Stmt
   link : List ByteArray × List ByteArray
   c₁ : Coin
-  mids : List (Claims.Msg × Coin)
+  mids : List (Hash.Msg × Coin)
   f : FinalP
 
 /-- **The rep streams' rounds as the reader fixes them**: rep `k`, in `spec.repStreams`' order, takes the `k`-th block
 of the round messages `ms`; its round `j` counts its schedule's coins `n`, holds the first `n` values of its coin among
 `cs`, and retains its message. -/
-def recStreams (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) (cs : List Coin) :
+def recStreams (spec : SessionSpec) (sts : Array Stmt) (ms : List Hash.Msg) (cs : List Coin) :
     Array (Array Flock.Round) :=
   ((List.range (2 * sts.size)).map fun k =>
     (((cutLens (repLens spec sts) ms).getD k []).mapIdx fun j m =>
@@ -521,7 +521,7 @@ def recStreams (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) (c
 /-- **The record the reader hands over**: the honest record's form at SHA-512, at the link's `root_B`, the first
 coin's link points, the reader's streams (`recStreams`) and the proofs' files. -/
 def recJ (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (ms : List Claims.Msg) (cs : List Coin) (ps : Array Flock.Proof) : Json :=
+    (ms : List Hash.Msg) (cs : List Coin) (ps : Array Flock.Proof) : Json :=
   FlockComplete.JsonRT.recordObj spec (Claims.hOf sha512) link.1.toArray (pointsOf spec c₁)
     (recStreams spec sts ms cs) (filesAt (tabsOf sts) (pointsOf spec c₁) ps)
 
@@ -534,7 +534,7 @@ def ShapedAt (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (ps : Array F
 reads) where its statement is the statement, round 0's rows' nodes as the link (`linkR`), the rounds after it as the
 reps' proofs (`readPs`) where they are shaped for their files (`ShapedAt`), the round messages their framed bytes,
 each with its round's coin, and the record the reader's (`recJ`) at the statement. -/
-def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Option DecR := do
+def decR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Option DecR := do
   let v ← setupOf false x
   let a ← as.getLast?
   let a₁ ← as.head?
@@ -548,10 +548,10 @@ def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
   pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
     ⟨x, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩
 
-theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_some {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (v : Ins × SessionSpec × Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (rss : List (List ByteArray))
-      (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Claims.Msg),
+      (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Hash.Msg),
       setupOf false x = some v ∧ cs.head? = some c₁ ∧ (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧
       as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
       readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
@@ -575,14 +575,14 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
     (Option.filter_eq_some_iff.1 h9).1, (Option.some.inj h).symm⟩
 
 /-- **The reading fixes the last message's statement**: a decision's statement is the statement. -/
-theorem decR_stmt {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_stmt {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) : d.f.stmt = x := by
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, -, -, -, -, rfl⟩ := decR_some h
   rfl
 
 /-- **The reading refuses proofs not shaped for their files**: a decision's proofs are each shaped at the shape its
 file is read at. -/
-theorem decR_shaped {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_shaped {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) : ShapedAt d.spec d.sts d.c₁ d.f.ps := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨v, -, h⟩ := Option.bind_eq_some_iff.1 h
@@ -600,7 +600,7 @@ theorem decR_shaped {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
 /-- **(a) Every absorbed value of a decided proof is read from an opened round**: at a decision, round 0's rows and
 the later rounds' rows read back from the element-level messages, and rep `k`'s proof fits the `k`-th block of the
 later rounds' rows, at its table's level-0 nodes among round 0's (`FitsRep`). -/
-theorem decR_fits {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_fits {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)),
       (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
@@ -612,13 +612,13 @@ theorem decR_fits {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
   exact ⟨r₀, rss, h6, h7, readPs_fits h9⟩
 
 /-- **(b) At a decision, round 0 carries no public words**: the link's are each table's empty word. -/
-theorem decR_publics {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_publics {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) : d.link.2 = d.sts.toList.map fun _ => ByteArray.empty := by
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, -, -, h8, -, rfl⟩ := decR_some h
   exact linkR_publics h8
 
 /-- **(b) S8 passes at a decision**, on each of the link's public words, at every table. -/
-theorem decR_s8 {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_s8 {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) (st : Stmt) :
     ∀ p ∈ d.link.2, (Setup.ofCircuit st).publics p = pure () := by
   obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, -, -, h8, -, rfl⟩ := decR_some h
@@ -626,7 +626,7 @@ theorem decR_s8 {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List 
 
 /-- **(b) Every word round 0 carries is a `root_B` node** (`rec-cap`'s): at a decision, the link's `root_B` are round
 0's rows' nodes, each table's joined, with no node left over. -/
-theorem decR_rootB {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem decR_rootB {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ r₀, (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧
       d.link.1 = (cutLens (level0Lens d.sts) r₀).map (·.foldl (· ++ ·) ByteArray.empty) ∧
@@ -638,7 +638,7 @@ theorem decR_rootB {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Li
 
 /-- **`nextR`'s step**: a coin where the deployed plain verifier answers one; else decide where `decR` reads; else
 refuse. -/
-def actR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : ActS :=
+def actR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : ActS :=
   match act false x as cs with
   | .coin c => .coin c
   | _ =>
@@ -647,7 +647,7 @@ def actR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
     | none => .rej
 
 /-- **The element-level step at the deployed reader.** -/
-def nextR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
+def nextR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) :
     Claims.OC Claims.Out :=
   match actR rd x as cs with
   | .rej => .ret .rej
@@ -655,16 +655,16 @@ def nextR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims
   | .decide s _ _ link c₁ mids f => outOf (decisionSF s x link c₁ mids f)
 
 /-- **A coin is answered as the plain verifier answers it** (`deploySplit`'s `hcoin`). -/
-theorem nextR_coin (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → Claims.Msg) : ∀ (x : Claims.Msg)
-    (as : List Claims.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
+theorem nextR_coin (rd : Hash.Msg → Option FinalP) (H : Hash.Msg → Hash.Msg) : ∀ (x : Hash.Msg)
+    (as : List Hash.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
     ((nextR rd x as cs).eval H).1 = .msg c.bytes := by
   intro x as cs c h
   simp only [nextR, actR, h, Claims.OC.eval]
 
 /-- **A decision is `decR`'s.** -/
-theorem actR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem actR_decide {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
     decR rd x as cs = some ⟨s, spec, sts, link, c₁, mids, f⟩ := by
   unfold actR at h
   split at h
@@ -674,17 +674,17 @@ theorem actR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
     | none => intro h; cases h
     | some d => intro h; cases h; rfl
 
-theorem nextR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextR_decide {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
     nextR rd x as cs = outOf (decisionSF s x link c₁ mids f) := by
   simp only [nextR, h]
 
 /-- **A decision of `nextR` accepts exactly where the setup at `hOf H` returns a session at which `decisionAtS`
 returns.** -/
-theorem nextR_acc_iff (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+theorem nextR_acc_iff (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
     ((nextR rd x as cs).eval H).1 = .acc ↔ ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
       ((decisionAtS s spec' sts' x link c₁ mids f).run.eval H).1 = .ok () := by
@@ -698,16 +698,16 @@ theorem nextR_acc_iff (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Optio
     exact hd
 
 /-- The record's value the verdict reads at a session: the coins substituted, the proof digests the files'. -/
-def jAt (H : Claims.Msg → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalP) : Json :=
+def jAt (H : Hash.Msg → Hash.Msg) (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : FinalP) : Json :=
   coinSubJ spec c₁ mids (shaSubJ spec ((filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).map
     (FlockComplete.dgOf spec (Claims.hOf H))) f.j)
 
 /-- **The verdict on the decoded proofs and the checks after it make a decision of `nextR` accept**, at the session
 the setup at `hOf H` returns, where each proof is shaped for its file and the rep streams' names are distinct. -/
-theorem nextR_acc_of (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalP}
+theorem nextR_acc_of (H : Hash.Msg → Hash.Msg) {rd : Hash.Msg → Option FinalP} {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : FinalP}
     (h : actR rd x as cs = .decide s spec sts link c₁ mids f) {spec' : SessionSpec} {sts' : Array Stmt}
     (hs : setupWith (Claims.hOf H) s.read = .ok (spec', sts'))
     (hsh : ∀ (k : ℕ) (hk : k < f.ps.size),
@@ -725,7 +725,7 @@ theorem nextR_acc_of (H : Claims.Msg → Claims.Msg) {rd : Claims.Msg → Option
 
 /-- **The reading at the last step**: `decR` reads (`actR` decides), and the record value's fields custody reads are
 there with their shapes. -/
-def ReadOkR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (cs : List Coin) : Prop :=
+def ReadOkR (rd : Hash.Msg → Option FinalP) (x : Hash.Msg) (ms : List Hash.Msg) (cs : List Coin) : Prop :=
   match actR rd x ms cs with
   | .decide _ spec _ _ c₁ mids f => ∃ lv, liveOfJ spec (coinSubJ spec c₁ mids f.j) = .ok lv
   | _ => False
@@ -746,8 +746,8 @@ theorem VerdictR.mem_all (q : VerdictR) : q ∈ VerdictR.all := by
   cases q <;> decide
 
 /-- What check `q` asks of a decision. -/
-def VerdictR.At (H : Claims.Msg → Claims.Msg) (q : VerdictR) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalP) : Prop :=
+def VerdictR.At (H : Hash.Msg → Hash.Msg) (q : VerdictR) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : FinalP) : Prop :=
   match q with
   | .setup => ∃ v, setupWith (Claims.hOf H) s.read = .ok v
   | .shaped => ∀ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') → ∀ (k : ℕ) (hk : k < f.ps.size),
@@ -760,15 +760,15 @@ def VerdictR.At (H : Claims.Msg → Claims.Msg) (q : VerdictR) (s : Ins) (x : Cl
       checksAtJ s spec' x link c₁ mids ⟨f.stmt, f.j, #[]⟩ (jAt H spec' sts' c₁ mids f) = .ok ()
 
 /-- Check `q` at the prover's messages: at a decision, what it asks of it; elsewhere nothing (the reading fails). -/
-def holdsR (H : Claims.Msg → Claims.Msg) (rd : Claims.Msg → Option FinalP) (q : VerdictR) (x : Claims.Msg)
-    (ms : List Claims.Msg) (cs : List Coin) : Prop :=
+def holdsR (H : Hash.Msg → Hash.Msg) (rd : Hash.Msg → Option FinalP) (q : VerdictR) (x : Hash.Msg)
+    (ms : List Hash.Msg) (cs : List Coin) : Prop :=
   match actR rd x ms cs with
   | .decide s _ _ link c₁ mids f => q.At H s x link c₁ mids f
   | _ => True
 
 /-- **The reading and the five checks make the last step accept.** -/
-theorem nextR_sound (H : Claims.Msg → Claims.Msg) (rd : Claims.Msg → Option FinalP) (x : Claims.Msg)
-    (ms : List Claims.Msg) (cs : List Coin) (hr : ReadOkR rd x ms cs) (hc : ∀ q : VerdictR, holdsR H rd q x ms cs) :
+theorem nextR_sound (H : Hash.Msg → Hash.Msg) (rd : Hash.Msg → Option FinalP) (x : Hash.Msg)
+    (ms : List Hash.Msg) (cs : List Coin) (hr : ReadOkR rd x ms cs) (hc : ∀ q : VerdictR, holdsR H rd q x ms cs) :
     ((nextR rd x ms cs).eval H).1 = .acc := by
   unfold ReadOkR at hr
   unfold holdsR at hc

@@ -145,7 +145,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import credit as
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
@@ -238,7 +238,7 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
 def z_only(com: dict) -> dict:
     """``com`` as a prover that registers its records' z alone states it: its z tables' entries rows of 2 R C words, no y."""
     words = 2 * R * C
-    return dict(com, registered=[dict(e, words=words, domain=G.domain(com["program_sha512"], e["value"], words, e["leaves"],
+    return dict(com, registered=[dict(e, words=words, domain=RV.domain(com["program_sha512"], e["value"], words, e["leaves"],
                                                                        window=com["window_root"]).domain_id.hex())
                                  if e["value"].startswith("zy@") else e for e in com["registered"]])
 
@@ -246,7 +246,7 @@ def z_only(com: dict) -> dict:
 def unrooted(com: dict) -> dict:
     """``com`` as a prover that registers its per-execution-phase values with no execution phase root states it (the form
     before execution phase roots): every entry's domain the registered domain of its value with no execution phase bound."""
-    return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
+    return dict(com, registered=[dict(e, domain=RV.domain(com["program_sha512"], e["value"], e["words"],
                                                          e["leaves"]).domain_id.hex()) for e in com["registered"]])
 
 
@@ -292,21 +292,21 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0"]}, "pub": pub, "o1": ok}
 
 
-def ok_registration(win: SimpleNamespace, com: dict) -> G.Registered:
+def ok_registration(win: SimpleNamespace, com: dict) -> RV.Registered:
     """The verifier's own registration of an execution phase's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
     salt), under its own Program's digest and the execution phase's open root (`h1unit.window_open_root`, the verifier's own), from
     the execution phase's name, its b/<K> root and the Program's population alone."""
     return U.register_ok(win.obj["program"], com["window"], win.tp.population, U.window_open_root(com))
 
 
-def roots_of(com: dict, okr: G.Registered) -> dict[str, tuple[int, str]]:
+def roots_of(com: dict, okr: RV.Registered) -> dict[str, tuple[int, str]]:
     """Every registered value a statement of the execution phase reads, each its rows and root: the commitment's (the prover's), and
     the verifier's own ``ok`` (``okr``, `ok_registration`)."""
     return U.registered_of(com) | {U.OK_VALUE: (okr.leaves, okr.root.hex())}
 
 
 def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int,
-                    okr: G.Registered) -> dict[str, tuple[str, int, str]]:
+                    okr: RV.Registered) -> dict[str, tuple[str, int, str]]:
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
     registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and the
     ok port's at the verifier's own ``ok`` (``okr``, `ok_registration`) and its path there."""
@@ -318,7 +318,7 @@ def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int,
 
 
 def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int],
-                    okr: G.Registered) -> tuple[dict, dict]:
+                    okr: RV.Registered) -> tuple[dict, dict]:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (`h1unit.registered_reads`, under
     its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 execution phase's own reads
     (`h1unit.unit_reads`) at the sampled ``units``. Returns what it wrote and the file."""
@@ -415,13 +415,13 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     return None if why is None else list(why)
 
 
-def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
+def unrooted_ok(win: SimpleNamespace, com: dict) -> RV.Registered:
     """The execution phase's ok rows as `ok_registration` registers them, the same rows and salts, but under the registered domain
     of ``ok`` with no execution phase root: the ok a session opens when its ``--registered`` file states ok's domain without the
     execution phase's open root (the Lean verifier roots known rows at the domain the file gives)."""
     n = int(win.tp.population)
-    return G.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
-                               [U.ok_salt(com["window"], u) for u in range(n)], G.WORD_BITS, U.V2, None)
+    return RV.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
+                               [U.ok_salt(com["window"], u) for u in range(n)], RV.WORD_BITS, U.V2, None)
 
 
 def forge(base: Path, out: Path, pub: bytes, outs: dict, rows: dict, circuit: Path) -> list[dict]:
