@@ -27,9 +27,9 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
   g (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
   (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
-  sample's openings coin, `W + t / g`, which only the sample's last window's close releases, an append's pushed onto the
-  session's append coins. A coin set is never replaced by another, and an event that releases a challenge or samples a
-  window's openings from a coin never set is an error (`unset`);
+  sample's openings coin, `W + t / g`, which only the sample's last window's close releases, an append's the session's
+  append coin of the append's slot. A coin set is never replaced by another, and an event that releases a challenge or
+  samples a window's openings from a coin never set is an error (`unset`);
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
@@ -154,8 +154,8 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it.
--/
+or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it;
+an append's is the append coin of its slot (`Session.append`), the slots before it it skipped left empty. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
   let set (i : Nat) : Except String Session.State :=
@@ -173,7 +173,14 @@ def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) :
     else if t.toNat + 1 ≠ min (t.toNat / g * g + g) s.params.windows then
       throw s!"window {t} is not its draw's last: only that window's close releases the draw's openings coin"
     else set (s.params.windows + t.toNat / g)
-  | .append .. => pure { s with appendCoins := s.appendCoins.push c }
+  | .append _ _ _ slot =>
+    let σ := slot.getD s.appends.size
+    match s.appendCoins[σ]? with
+    | some x =>
+      if x.isEmpty || x == c then pure { s with appendCoins := s.appendCoins.set! σ c }
+      else throw s!"append coin {σ} is released once: the challenger sent another"
+    | none =>
+      pure { s with appendCoins := (s.appendCoins ++ Array.replicate (σ - s.appendCoins.size) ByteArray.empty).push c }
   | _ => throw "only a start, a boundary, a close or an append releases a coin"
 
 /-- Why event `e`'s result `res` read a coin of `s`, the session after it, sampled `g` windows a coin, that the

@@ -213,7 +213,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_MANIFEST_JOBS", int, None, VALUE, "concurrent component builds of the required-value manifest"),
     S("VERITY_PROTOCOLS", csv, (), VALUE, "the schemes attached by name inside vLLM's own server (`pipeline.scheme_plugin`), "
       "comma-separated, an application's protocols line; unset, none"),
-    S("VERITY_PROTOCOLS_CONFIG", json.loads, None, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
+    S("VERITY_PROTOCOLS_CONFIG", json.loads, {}, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
       "front and its engine share (required with a scheme); the engine's out, the run output its schemes' reports go "
       "under, and private, the directory each scheme's own goes under (serve-openai's too); gate, infra's challenger gate command; and each "
       "scheme's settings under its name"),
@@ -269,8 +269,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses"),
     S("NCCL_NTHREADS", str, None, VALUE, "NCCL's CUDA threads per block, one block a channel"),
     S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL may use"),
+    S("OUT", str, None, WHERE, "the research run's output directory, which custody uploads whole (`serve_guard.inside_run`)"),
     S("PYTHONPATH", str, None, WHERE, "the interpreter's module search path, which the source identity records as the environment "
       "holds it"),
+    S("RESEARCH_RUN_DIR", str, None, WHERE, "the research run's directory, which custody uploads (`serve_guard.inside_run`)"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
     S("RESEARCH_SOURCE_SHA", str, None, WHERE, "the commit of the tree the research runner shipped, which the source identity takes "
       "where `--sha` names none and a row's records carry"),
