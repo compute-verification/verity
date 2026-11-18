@@ -907,7 +907,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
     "verity/protocols/resource_accounting/network/scheme.py",
 ]
