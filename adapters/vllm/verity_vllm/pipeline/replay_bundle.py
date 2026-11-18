@@ -7,6 +7,7 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     weights/tree.json the committed weights root and the tree under it (`register_weights`): geo digest, chunk, the registered tensors
                       [name, dtype, shape, nbytes] in order and their tensor roots; `extra` names the registered tensors whose bytes
                       are in the bundle (buffers and engine constants, not checkpoint tensors)
+    weights/tree.salts/ the registration's salt file (`verity.commitments.salt_file`): every registered tensor's row salts, by name
     weights/extra/    those tensors' bytes, `<index>.bin` by their position in `names`
     binding_map.json  the run's binding map (`binding_map_p<pair>.json`)
     context.json      everything else the replay reads: the requests, sampling, served tokens, stop rule of record, the replay's
@@ -36,6 +37,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.commitments import salt_file as SF
+
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
@@ -327,6 +331,11 @@ def write_store_files(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, e
         digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree, extra = extras if extras is not None else weights_extra(com, rc, extra_names)
     (p / "weights" / "extra").mkdir(parents=True, exist_ok=True)
+    salts = {n: ys for n, ys in (getattr(com, "weights_salts", None) or {}).items() if ys}
+    if tree.get("scheme") == step_rows.NAME and any(int(nb) for *_e, nb in tree["names"]) and not salts:
+        raise ValueError("replay bundle: the committer holds no salts for its rows-sha512 weights registration (register_weights)")
+    if salts:
+        SF.write(SF.beside(p / "weights" / "tree.json"), salts)
     for i, _name, raw in extra:
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw)
     wdoc = tree | {"extra": {name: i for i, name, _raw in extra}}
