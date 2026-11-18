@@ -17,7 +17,7 @@ atoms form a skip set (`SkipSetU`).
   per unit of `fragCount`.
 
 The sample side is in `RowSeedSkip.lean`: `ttOutRowSeed_skipClass` bounds a skip-class program's saving under the named
-assumption `Assumptions.FragDraw` at `Λ = 100`, (C4) and (C6), through the union bound `qtree_union_bound`.
+assumption `Assumptions.FragSample` at `Λ = 100`, (C4) and (C6), through the union bound `qtree_union_bound`.
 -/
 
 @[expose] public section

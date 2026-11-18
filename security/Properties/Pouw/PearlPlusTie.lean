@@ -31,10 +31,10 @@ root and the call's index: `yCell`, the unscale (`Rule.yOf`) of the tile's U at 
   entries (`TileTiedAtW`) hold more than ε of the run's ticket weight with probability at most δ + q / 2^256, wherever
   (1 − ε)^t ≤ δ and the play's finder (`Run.finder`, declared at `q` SHA-512 calls) meets `ecr/sha-512`
   (`Claims.ExpectedCR`). The share is of ticket weight, not of tiles. `CoinBytesGiveUniformTickets` and
-  `DrawIsOnItsStreams` carry the tickets to the streams of the run's sample key.
+  `SampleIsOnItsStreams` carry the tickets to the streams of the run's sample key.
 * `PeriodYAtWIsTheCall`, **the period's statement for one sequence of runs**: over the coins of a monitoring period's
   execution phases, each run committed before its own coin (`Runs.CommittedBeforeCoin`) and each sample `t` tickets on
-  its phase's coin (`Runs.DrawIsTickets`), the runs of one sequence accepted up to some phase have ∏ (1 − wrong share)
+  its phase's coin (`Runs.SampleIsTickets`), the runs of one sequence accepted up to some phase have ∏ (1 − wrong share)
   below 1 − ε with probability at most δ + q / 2^256, wherever (1 − ε)^t ≤ δ, however many phases the period has. So a
   sequence's accepted prefix holds wrong shares summing to at most −ln(1 − ε): at 459 samples and δ = 1/100, about 1.0%
   of one phase's ticket weight over the whole period.
@@ -81,7 +81,7 @@ has no such order, so each of its phases is a sequence of its own, and those are
 and never multiplied. `Runs.CommittedBeforeCoin` is all the statements need of the order: a phase's run (its manifests,
 W, its table) reads no coin of its own phase or of a later phase of its sequence. It may read any coin of another
 sequence, so nothing is assumed between sequences. That each phase's coin is uniform given everything before is
-`Runs.DrawIsTickets` over a uniform coin, which the challenger's log gives a real run
+`Runs.SampleIsTickets` over a uniform coin, which the challenger's log gives a real run
 (`FlockSoundness.Assumptions.UniformRandomBytes`, `Properties.Challenger.CoinsFromLog` and `SampledByDevice`).
 
 The two period statements are separate because their conjunction at one δ is false. A prefix end chosen after the
@@ -367,10 +367,10 @@ def AcceptedIsHeldToW : Prop :=
 /-! ## The run's statement -/
 
 /-- `t` tickets of the tiles `tk`: one sample of the run. -/
-abbrev TicketDraws (tk : List ((ℕ × ℕ) × ℕ)) (t : ℕ) : Type := Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length
+abbrev TicketSamples (tk : List ((ℕ × ℕ) × ℕ)) (t : ℕ) : Type := Fin t → _root_.Pouw.Ticket (weightsOf tk) tk.length
 
 /-- The tiles `t` tickets name, in the sample's order. -/
-def drawnAt (tk : List ((ℕ × ℕ) × ℕ)) {t : ℕ} (c : TicketDraws tk t) : List (ℕ × ℕ) :=
+def drawnAt (tk : List ((ℕ × ℕ) × ℕ)) {t : ℕ} (c : TicketSamples tk t) : List (ℕ × ℕ) :=
   List.ofFn fun j => tileOf tk (c j)
 
 open Classical in
@@ -388,9 +388,9 @@ noncomputable def Run.incorrectShare (R : Run) : ℝ :=
 the messages checking the opener's rows on `c` and the table's hashes (`Run.hashed`). Its coins are the play's, `t`
 tickets, and its cost is declared at the budget `q` for the play's whole SHA-512 work, the prover's own included, which
 the reader computes from the prover's time (as `Claims.BAt`). -/
-noncomputable def Run.finder (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
-    (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) : _root_.Claims.Finder where
-  S := TicketDraws (tickets R.passes) t
+noncomputable def Run.finder (R : Run) (t : ℕ) [Nonempty (TicketSamples (tickets R.passes) t)]
+    (O : TicketSamples (tickets R.passes) t → Opener) (q : ℕ) : _root_.Claims.Finder where
+  S := TicketSamples (tickets R.passes) t
   out c := (collisionIn (R.hashed (O c) (drawnAt (tickets R.passes) c))).map msgPair
   cost _ := q
 
@@ -402,11 +402,11 @@ the tiles its table does not tie at W's entries hold more than ε of its ticket 
 δ + q / 2^256. So except with that, on accept, every credited cell's y at W's entries is the call's function of the A
 row and the weight's row at W's entries (`yCell`), apart from tiles of at most ε of the ticket weight. -/
 def YAtWIsTheCall : Prop :=
-  ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
-    (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
+  ∀ (R : Run) (t : ℕ) [Nonempty (TicketSamples (tickets R.passes) t)]
+    (O : TicketSamples (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
-    _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
+    _root_.Pouw.pr (fun c : TicketSamples (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         ε < R.incorrectShare) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
@@ -435,12 +435,12 @@ def Runs.CommittedBeforeCoin {Ω : Type} {n : ℕ} (P : Runs Ω n) : Prop :=
 
 /-- **Each phase's sample is `t` tickets on its coin**: over the phase's own coin, the others held, the tiles it
 samples fall in any event no more often than the tiles of `t` uniform tickets of its run do. A coin on which the sample
-refuses falls in none. For the verdict's sample it is `DrawIsOnItsStreams` with `CoinBytesGiveUniformTickets`, the
+refuses falls in none. For the verdict's sample it is `SampleIsOnItsStreams` with `CoinBytesGiveUniformTickets`, the
 phase's coin its sample key's streams. -/
-def Runs.DrawIsTickets {Ω : Type} [Fintype Ω] {n : ℕ} (P : Runs Ω n) (t : ℕ) : Prop :=
+def Runs.SampleIsTickets {Ω : Type} [Fintype Ω] {n : ℕ} (P : Runs Ω n) (t : ℕ) : Prop :=
   ∀ (x : Fin n → Ω) (k : Fin n) (E : List (ℕ × ℕ) → Prop),
     _root_.Pouw.pr (fun ω : Ω => ∃ d : List (ℕ × ℕ), P.drawn (Function.update x k ω) k = some d ∧ E d) ≤
-      _root_.Pouw.pr (fun c : TicketDraws (tickets (P.run x k).passes) t =>
+      _root_.Pouw.pr (fun c : TicketSamples (tickets (P.run x k).passes) t =>
         E (drawnAt (tickets (P.run x k).passes) c))
 
 /-- **Phase `k`'s run is accepted** on the period's coins `x`: its coin samples, and the run is accepted on that sample
@@ -477,7 +477,7 @@ noncomputable def Runs.finder {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (
 
 /-- **PoUW's period bound for the tile sample, one sequence.** For a monitoring period of `n` execution phases, each
 run committed before its coin (`Runs.CommittedBeforeCoin`) and each sample `t` tickets on its phase's coin
-(`Runs.DrawIsTickets`), ε, δ with (1 − ε)^t ≤ δ and a budget `q` at which the period's finder meets `ecr/sha-512`: for
+(`Runs.SampleIsTickets`), ε, δ with (1 − ε)^t ≤ δ and a budget `q` at which the period's finder meets `ecr/sha-512`: for
 each sequence `a`, over the period's coins, some phase of `a` and every earlier one of `a` are accepted while those
 phases' ∏ (1 − wrong share) is below 1 − ε, with probability at most δ + q / 2^256, whatever `n` is. So except with
 that, the phases of a sequence before its first refusal together hold wrong shares summing to at most −ln(1 − ε), each
@@ -487,7 +487,7 @@ statement; `FleetYAtWIsTheCall` pools them. -/
 def PeriodYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    P.CommittedBeforeCoin → P.DrawIsTickets t →
+    P.CommittedBeforeCoin → P.SampleIsTickets t →
     _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.tiedUpTo x k < 1 - ε) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
@@ -503,7 +503,7 @@ never multiplied. A sequence refused before its end in `ends` is not counted; gi
 prefixes to them, each end counting in |ends|. -/
 def FleetYAtWIsTheCall : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (ends : Finset (Fin n)) (t q : ℕ) (δ : ℝ), 0 < δ →
-    P.CommittedBeforeCoin → P.DrawIsTickets t →
+    P.CommittedBeforeCoin → P.SampleIsTickets t →
     _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     _root_.Pouw.pr (fun x : Fin n → Ω => ∃ K : Finset (Fin n), K ⊆ ends ∧ K.Nonempty ∧
       (∀ k ∈ K, P.AcceptedUpTo x k) ∧
@@ -591,11 +591,11 @@ tickets, the run is accepted on the tiles they name with openings its table hold
 (`cellsAt R.passes ε`) of its credited cells are untied, with probability at most δ + q / 2^256. So except with that,
 on accept, the run's untied cells are the give-up (`givenUpCells`) and at most n(ε) credited cells. -/
 def UntiedCellsAtW : Prop :=
-  ∀ (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
-    (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
+  ∀ (R : Run) (t : ℕ) [Nonempty (TicketSamples (tickets R.passes) t)]
+    (O : TicketSamples (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
     _root_.Claims.ExpectedCR sha512Msg (R.finder t O q) →
-    _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
+    _root_.Pouw.pr (fun c : TicketSamples (tickets R.passes) t =>
       R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
         cellsAt R.passes ε < (R.untiedCredited.card : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
@@ -620,7 +620,7 @@ phase's ticket weight times its most cells a unit of ticket weight. -/
 def PeriodUntiedCellsAtW : Prop :=
   ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (P : Runs Ω n) (t q : ℕ) (ε δ : ℝ),
     0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    P.CommittedBeforeCoin → P.DrawIsTickets t →
+    P.CommittedBeforeCoin → P.SampleIsTickets t →
     _root_.Claims.ExpectedCR sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.cellsUpTo x k ε < (P.untiedUpTo x k : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)

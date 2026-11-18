@@ -41,7 +41,7 @@ FIFO certifier releases exactly `n t`. Over `T` buckets this uses `∑ n t ≤ T
 def ReleasedSelf : Prop :=
   ∀ (S : ℕ) (n : ℕ → Fin (S + 1)), released S (fun t => (n t : ℕ)) = n
 
-/-- **The certifier never releases more than was enqueued.** -/
+/-- **The network attester never releases more than was enqueued.** -/
 def SumReleasedLe : Prop :=
   ∀ (T S : ℕ) (enq : ℕ → ℕ),
     ∑ t ∈ Finset.range T, (released S enq t : ℕ) ≤ ∑ t ∈ Finset.range T, enq t
@@ -97,7 +97,7 @@ def NoFaultOfAccepted : Prop :=
     (i : ℕ) (hi : i < (I.actRun z n).length) (hend : winEnd i < n),
     ¬ I.certifier.fault (I.actRun z n)[i]
 
-/-- **W4 at the certifier: timing is occupancy.** Under packing, every recorded egress row is the fill of some frame
+/-- **W4 at the network attester: timing is occupancy.** Under packing, every recorded egress row is the fill of some frame
 sequence at its count, written as a one-bucket grid. -/
 def RecordedRowEqFill : Prop :=
   ∀ {L K S : ℕ} {In Act Wire : Type} (w : Certifier L K S In Act Wire) (hW4 : Packed w)

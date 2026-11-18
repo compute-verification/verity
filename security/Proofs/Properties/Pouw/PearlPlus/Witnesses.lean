@@ -36,7 +36,7 @@ ones are at one honest pass of the deployed scheme (`honestPass`, loaded from `h
 samples its one tile, and `check` accepts its run at no samples, since a sampled tile of the deployed scheme is replayed on the
 noise `check` derives itself (`fixedNoise` at k = 1,024), past what the kernel reaches. A sampled tile's are at a test
 instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads the pass, samples its tile, derives its noise
-(`testNoise`) and passes the tile on it (`acceptMeans_drawn`). `TileAcceptMeans`' `honest` ones are that tile on the test
+(`testNoise`) and passes the tile on it (`acceptMeans_sampled`). `TileAcceptMeans`' `honest` ones are that tile on the test
 noise and on the noise `check` derives for it (`tileAcceptMeans_derived`). `WorkIsTheCredit`'s are the credit both runs
 publish: the honest pass's at no samples, and the test pass's at one, a test instance's, crediting nothing.
 -/
@@ -450,7 +450,7 @@ theorem Witness.plan_honestRun0 :
 
 /-- `check` accepts the honest pass's run at no samples: its pass loads, and it excludes no row, so no tile is opened. A
 sampled tile of the deployed scheme is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k
-noise lines and R² FP32 chains of k = 1,024), past what the kernel reaches; `acceptMeans_drawn` is a sampled tile's, of a
+noise lines and R² FP32 chains of k = 1,024), past what the kernel reaches; `acceptMeans_sampled` is a sampled tile's, of a
 test instance at k = 128. -/
 theorem acceptMeans_honest : (check (honestRun 0) noOpening).accept = true := by
   simp only [check, plan_honestRun0]
@@ -1041,7 +1041,7 @@ theorem tileAcceptMeans_derived : checkTile testPass (noiseOf testPass 0) 0 test
 
 /-- `check` accepts the test pass's run at one sample, read as a test instance's: the pass loads, the sample names its one tile,
 the prover opens it, and it passes on the noise the replay derives. -/
-theorem acceptMeans_drawn : (check testRun testOpener).accept = true := by
+theorem acceptMeans_sampled : (check testRun testOpener).accept = true := by
   simp only [check, test_plan, test_replay] <;> rfl
 
 /-- The honest pass's run at no samples publishes its credit at Pearl's assumption at t = 0 and X_O = 0. -/
@@ -1052,9 +1052,9 @@ theorem workIsTheCredit_honest : (check (honestRun 0) noOpening).accept = true �
 
 /-- The test pass's run at one sample publishes its credit at t = 1 and X_O = 0, which, a test instance's, credits
 nothing. -/
-theorem workIsTheCredit_drawn : (check testRun testOpener).accept = true ∧
+theorem workIsTheCredit_sampled : (check testRun testOpener).accept = true ∧
     (check testRun testOpener).work = some (testCredit true (creditAtAssumption [testPass] 1 0 DELTA)) := by
-  refine ⟨acceptMeans_drawn, ?_⟩
+  refine ⟨acceptMeans_sampled, ?_⟩
   simp only [check, test_plan, test_replay] <;> rfl
 
 /-- A verdict that accepts every run (`acceptAllCheck`) publishes no work. -/

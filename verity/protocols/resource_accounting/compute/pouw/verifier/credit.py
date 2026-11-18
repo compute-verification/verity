@@ -60,7 +60,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   auditor's ledger opens on the sample root, run from a commit the host's pins log records on main's first-parent line
   (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover hands in. The
   ledger opens it withheld (`challenger.withheld_on`, else `challenger.WITHHELD`; Lean
-  `Properties.Pouw.Credit.DrawWithheld`): its challenger released its coin root only after the prover's sample root, so
+  `Properties.Pouw.Credit.SampleWithheld`): its challenger released its coin root only after the prover's sample root, so
   the sample rests on no hiding of that root. So a credit bit changed after the sampling coin
   changes the sample root and is refused, and the credited set is the rows whose bit is true.
 * **The sampled proof blocks are the sampling coin's** (`drawn`): `core_check.draw_twin`'s rule under the sampling design ``work:k``

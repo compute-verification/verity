@@ -52,9 +52,9 @@ follow them into the spec:
   `wRe`, `DCells`), affine products (`AffProd`), degree-2 errors (`CubeQuad`, `pairDiff`) and the spot check's
   deficiency (`spotDef`);
 * the staged spot check (`StagePlay`, `StagedPlay`, `DStage`) and an adversary's window run on it (`StagedRun`);
-* the spot check over a round's overlapping samples: its bit points (`drawInd`, `mergeAt`), K∥'s products (`AffMulAt`),
+* the spot check over a round's overlapping samples: its bit points (`sampleInd`, `mergeAt`), K∥'s products (`AffMulAt`),
   the per-draw deficiency (`ovDef`), the play (`OvPlay`, its game and errors), the round's bits, cell-blocks, samples
-  and coins (`OBits`, `OCells`, `ODraws`, `OSpot`), and an adversary's window run on it (`OverlapRun`);
+  and coins (`OBits`, `OCells`, `OSamples`, `OSpot`), and an adversary's window run on it (`OverlapRun`);
 * the parity luck's scope: one-sided products of any form (`LeftOnly`, `RightOnly`, `OneSided`; per sample,
   `OneSidedAt`), `Z/2³²` read mod 2 (`toF2`), a cell-block's frame (`dFrame`), products two-sided at a frame
   (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across samples, `SlpG.ChargePureAt`).
@@ -376,7 +376,7 @@ section Overlap
 variable {St : ℕ} {ι : Fin St → Type} [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] {R : Type} [CommRing R]
 
 /-- The round's bit point at samples `U`: sample `s`'s bits are ones on `U s`. -/
-def drawInd (U : ∀ s, Finset (ι s)) : (Σ s, ι s) → R := fun v => bitInd (U v.1) v.2
+def sampleInd (U : ∀ s, Finset (ι s)) : (Σ s, ι s) → R := fun v => bitInd (U v.1) v.2
 
 /-- The round's bit point at samples `U` with sample `t`'s bits replaced by `z`. -/
 def mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) : (Σ s, ι s) → R :=
@@ -417,7 +417,7 @@ variable {A : Type} [CommRing A]
 check passes where the sampled cell's error vanishes at the sampled bits of every sample. -/
 noncomputable def game : {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
   | _, .done => .done
-  | _, .round e next => .round (fun _ => ovDef e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).game
+  | _, .round e next => .round (fun _ => ovDef e) (fun a => e a.1 (sampleInd a.2) = 0) fun a => (next a).game
 
 omit [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] [CommRing A] in
 /-- Round `w`'s error table along the realized coins. -/
@@ -596,12 +596,12 @@ abbrev OBits (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ
 abbrev OCells (St : ℕ) (n n' B : Fin St → ℕ) : Type := Σ t, DCells (n t) (n' t) (B t)
 
 /-- A round's samples with overlapping stages: sample `t`'s bits. -/
-abbrev ODraws (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
+abbrev OSamples (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
   ∀ t, Finset (DBits (n t) L np (B t) (n' t))
 
 /-- A round's coins with overlapping stages: the check's cell-block, among every stage's, and every stage's sample. -/
 abbrev OSpot (St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) : Type :=
-  OCells St n n' B × ODraws St n L np B n'
+  OCells St n n' B × OSamples St n L np B n'
 
 section ParityOverlapRound
 
@@ -610,13 +610,13 @@ variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : 
 /-- **K∥'s products for one-sided operands of any form**: at every bit point of the other samples, one-sided on sample
 `t`'s bits, for every sample `t`; each side may depend on the other samples' bits in any way. -/
 def OneSidedAt (π : (OBits St n L np B n' → Ar) → Ar) : Prop :=
-  ∀ (W : ODraws St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
+  ∀ (W : OSamples St n L np B n') (t : Fin St), OneSided fun z => π (mergeAt W t z)
 
 /-- **Charging purity across samples**: at every bit point of the samples, no product is two-sided at the frames of two
 cell-blocks, of any stages, whose words read it with odd coefficients (mod 2 through `φ`). -/
 def SlpG.ChargePureAt (φ : Ar →+* ZMod 2) (p₀ : Fin np) {N : ℕ} (P : SlpG (OBits St n L np B n') Ar N)
     (word : OCells St n n' B → Fin N) : Prop :=
-  ∀ (W : ODraws St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
+  ∀ (W : OSamples St n L np B n') (c c' : OCells St n n' B) i, c ≠ c' → φ (P.coef (word c) i) ≠ 0 →
     TwoSidedAt (dFrame p₀ c.2) φ (fun z => P.prod i (mergeAt W c.1 z)) → φ (P.coef (word c') i) ≠ 0 →
       ¬TwoSidedAt (dFrame p₀ c'.2) φ fun z => P.prod i (mergeAt W c'.1 z)
 

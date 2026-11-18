@@ -50,12 +50,12 @@ noncomputable def idle : Prover tw twRound 2 where
   absorb _ _ _ := ()
   answer _ := constAlg fun _ => (0, ())
 
-theorem idle_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) (r : Fin 3) : idle.timedUse o x r = 0 := by
+theorem idle_timedUse (o : Unit) (x : Fin 2 → TSample × Fin 2) (r : Fin 3) : idle.timedUse o x r = 0 := by
   show ∑ _b : Fin 2, ((0 : ℝ) + 0) = 0
   simp
 
 /-- The idle prover's sampling blocks leave the whole period to other work: 8 units of each job. -/
-theorem idle_fits (o : Unit) (x : Fin 2 → TDraw × Fin 2) : twPd.Fits (idle.timedUse o x) fun _ => 8 := by
+theorem idle_fits (o : Unit) (x : Fin 2 → TSample × Fin 2) : twPd.Fits (idle.timedUse o x) fun _ => 8 := by
   refine ⟨fun _ => by norm_num, fun r => ?_⟩
   rw [idle_timedUse]
   show (0 : ℝ) + ∑ j : Fin 3, (8 : ℝ) * (if j = r then 1 else 0) ≤ 1 * 8
@@ -166,7 +166,7 @@ theorem WorkMoment_nontrivial :
   intro h
   obtain ⟨D, M, Bad, -, -, hav, hbad, hfree⟩ := h idle
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
-    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+    (inferInstance : Nonempty (Unit × (Fin 2 → TSample × Fin 2)))
   refine absurd hav (not_le.2 (one_lt_avg fun ox => ?_))
   obtain ⟨hM, hfw⟩ := hfree ox (fun _ => 8) trivial (not_of_prob_le_zero hbad ox) (idle_fits ox.1 ox.2)
   have hD := shortfall_ge (D ox) hfw
@@ -207,7 +207,7 @@ theorem WorkSound_nontrivial :
     ¬ FreedSound tw twRound 2 (fun _ _ _ _ => True) twDev twPd 1 twε (∑ r, twμ r * (1 * twPd.hon r)) twκ := by
   intro h
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
-    (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
+    (inferInstance : Nonempty (Unit × (Fin 2 → TSample × Fin 2)))
   have hC : ∑ r, twμ r * (1 * twPd.hon r) = 14 := by
     change ∑ r : Fin 3, twμ r * (1 * twHon r) = 14
     norm_num [Fin.sum_univ_three, twμ, twHon]
@@ -225,17 +225,17 @@ replica's coins (`coin = id`), each replica's moment holds at the honest verdict
 coins are its own, the honest fleet reads no replica's coins, and the verdict accepts it. -/
 theorem FleetSound_honest_at (n : ℕ) :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) ∧
-      OwnDither twRound 2 (n + 1) (fun ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2 => ω) ∧
+      OwnDither twRound 2 (n + 1) (fun ω : Fin (n + 1) → Fin 2 → TSample × Fin 2 => ω) ∧
       CoinsConfidential (G := tw) (P := twRound) (k := 2) (N := n + 1)
-        (fun ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2 => ω) (fun _ _ => honest) ∧
-      ∀ (u : Fin (n + 1)) (ω : Fin (n + 1) → Fin 2 → TDraw × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
+        (fun ω : Fin (n + 1) → Fin 2 → TSample × Fin 2 => ω) (fun _ _ => honest) ∧
+      ∀ (u : Fin (n + 1)) (ω : Fin (n + 1) → Fin 2 → TSample × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
   ⟨witness_moment, fun _ => rfl, fun _ _ _ _ => rfl, fun u ω o => honest_passes o (ω u)⟩
 
 /-- `FleetSound`'s nontrivial witness at the fleet of `FleetSound_honest_at n`: at the verifier that accepts
 everything, `δ_coin = 1/2` and `κ_max = 0`, some prover's fleet breaks `FleetSound`'s bound: its event has
 probability 1. -/
 theorem FleetSound_nontrivial_at (n : ℕ) :
-    ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (n + 1) → Fin 2 → TDraw × Fin 2) =>
+    ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (n + 1) → Fin 2 → TSample × Fin 2) =>
       ∃ S : Finset (Fin (n + 1)), S.Nonempty ∧ ∃ z : Fin (n + 1) → twPd.J → ℝ,
         (∀ u ∈ S, A.Passes (fun _ _ _ _ => True) twDev oω.1 (oω.2 u) ∧ twPd.Fits (A.timedUse oω.1 (oω.2 u)) (z u)) ∧
         ¬ ∃ d : Fin (n + 1) → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ twPd.FreedWithin 1 (z u) (1 / 7 + d u / 14) 14) ∧
@@ -270,16 +270,16 @@ theorem FleetSound_nontrivial_at (n : ℕ) :
 /-- **`FleetSound`'s honest witness**: `FleetSound_honest_at` at a fleet of two replicas of the witness. -/
 theorem FleetSound_honest :
     MomentSound tw twRound 2 twVerdict twDev twPd 1 (fun _ => 1 / 7) 14 twη (fun _ => 0) ∧
-      OwnDither twRound 2 (1 + 1) (fun ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2 => ω) ∧
+      OwnDither twRound 2 (1 + 1) (fun ω : Fin (1 + 1) → Fin 2 → TSample × Fin 2 => ω) ∧
       CoinsConfidential (G := tw) (P := twRound) (k := 2) (N := 1 + 1)
-        (fun ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2 => ω) (fun _ _ => honest) ∧
-      ∀ (u : Fin (1 + 1)) (ω : Fin (1 + 1) → Fin 2 → TDraw × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
+        (fun ω : Fin (1 + 1) → Fin 2 → TSample × Fin 2 => ω) (fun _ _ => honest) ∧
+      ∀ (u : Fin (1 + 1)) (ω : Fin (1 + 1) → Fin 2 → TSample × Fin 2) (o : Unit), honest.Passes twVerdict twDev o (ω u) :=
   FleetSound_honest_at 1
 
 /-- **`FleetSound`'s nontrivial witness**: `FleetSound_nontrivial_at` at the fleet of two replicas of
 `FleetSound_honest`. -/
 theorem FleetSound_nontrivial :
-    ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (1 + 1) → Fin 2 → TDraw × Fin 2) =>
+    ∃ A : Prover tw twRound 2, ¬ prob (fun oω : Unit × (Fin (1 + 1) → Fin 2 → TSample × Fin 2) =>
       ∃ S : Finset (Fin (1 + 1)), S.Nonempty ∧ ∃ z : Fin (1 + 1) → twPd.J → ℝ,
         (∀ u ∈ S, A.Passes (fun _ _ _ _ => True) twDev oω.1 (oω.2 u) ∧ twPd.Fits (A.timedUse oω.1 (oω.2 u)) (z u)) ∧
         ¬ ∃ d : Fin (1 + 1) → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ twPd.FreedWithin 1 (z u) (1 / 7 + d u / 14) 14) ∧

@@ -14,8 +14,8 @@ public import Proofs.Flock.Soundness.Audit.StratifiedProj
   `C(N − |B|, K)/C(N, K)`, by `Properties.Served.SecurityProofs.miss_ge`'s induction through
   `Equiv.Perm.decomposeFin` with equality at each step: the first image misses `B` with probability `1 − |B|/N`, and
   given it misses, the rest is a uniform permutation of `N − 1` places that must miss a set of exactly `|B|` of them.
-* `tileStratumAcceptProb`: the tile coordinate (`tileDraw`) misses `B` exactly when the permutation's `k s_T`-prefix misses
-  the stratum's places whose proof blocks are in `B` (`disjoint_tileDraw_iff`), `|B.filter (σ · = s_T)|` of them
+* `tileStratumAcceptProb`: the tile coordinate (`tileSample`) misses `B` exactly when the permutation's `k s_T`-prefix misses
+  the stratum's places whose proof blocks are in `B` (`disjoint_tileSample_iff`), `|B.filter (σ · = s_T)|` of them
   (`card_tilesIn`), so `miss_eq` is `TileStratumAcceptProb`.
 * `tileStratumAcceptProb_eq_proj`: that is `FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`'s factor, so the tile
   coordinate at a uniform permutation misses every `B` exactly as `SamplingDesign.stratified σ k hk`'s coordinate `s_T` does, and
@@ -127,10 +127,10 @@ noncomputable def tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (
   Finset.univ.filter fun t => tileAt σ sT t ∈ B
 
 /-- **The tile coordinate misses `B` exactly when the permutation's `k s_T`-prefix misses `B`'s places.** -/
-theorem disjoint_tileDraw_iff {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
+theorem disjoint_tileSample_iff {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT)))
     (B : Finset (Fin nB)) :
-    Disjoint (tileDraw σ k hk sT π) B ↔ ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B := by
+    Disjoint (tileSample σ k hk sT π) B ↔ ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B := by
   rw [Finset.disjoint_left, forall_mem_subsetDraw]
   constructor
   · intro h i hi hT
@@ -159,9 +159,9 @@ theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : F
 hypergeometric factor. -/
 theorem tileStratumAcceptProb : TileStratumAcceptProb := by
   intro nB mB σ k hk sT B
-  have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
+  have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileSample σ k hk sT π) B) =
       fun π => ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B :=
-    funext fun π => propext (disjoint_tileDraw_iff σ k hk sT π B)
+    funext fun π => propext (disjoint_tileSample_iff σ k hk sT π B)
   rw [h, miss_eq (k sT) (tileCount σ sT) _ (hk sT), card_tilesIn]
 
 /-- **The tile coordinate is the stratified sample's coordinate `s_T`**: at a uniform permutation of the stratum it misses
@@ -169,7 +169,7 @@ every `B` exactly as `SamplingDesign.stratified σ k hk`'s coordinate `s_T` does
 tile coin is the sampling block's sample restricted to the tile stratum. -/
 theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB)) :
-    ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
+    ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileSample σ k hk sT π) B) =
       FlockSoundness.Game.prCoin
         (fun ω : (FlockSoundness.Audit.SamplingDesign.stratified σ k hk).Ω => Disjoint (ω sT).1 B) := by
   have hpos : (0 : ℝ) < ((tileCount σ sT).choose (k sT) : ℝ) := by exact_mod_cast Nat.choose_pos (hk sT)
@@ -182,7 +182,7 @@ theorem tileStratumAcceptProb_eq_proj {nB mB : ℕ} (σ : Fin nB → Fin mB) (k 
 theorem tileStratumAcceptProb_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB))
     (hc : (B.filter (σ · = sT)).card + k sT ≤ tileCount σ sT) :
-    ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
+    ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileSample σ k hk sT π) B) =
       ENNReal.ofReal (Real.exp (-FlockSoundness.Audit.SamplingDesign.stratumRisk σ k sT (B.filter (σ · = sT)).card)) := by
   rw [tileStratumAcceptProb_eq_proj]
   exact FlockSoundness.Audit.SamplingDesign.stratified_proj_escape_eq_exp σ k hk sT B hc

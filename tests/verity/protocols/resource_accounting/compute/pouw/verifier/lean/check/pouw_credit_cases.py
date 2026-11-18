@@ -26,8 +26,8 @@ An `outcome` case is a `drawn` case's arguments and one accepted proof outcome f
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an unsampled unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
-A `window-drawn` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorDrawn` gives the
-J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditDrawn`): the execution phase's open root, its sample (its coin's live
+A `window-drawn` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorSampled` gives the
+J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditSampled`): the execution phase's open root, its sample (its coin's live
 opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
 mutations break the coin's opening, the root and receipts the sample is keyed by, the descriptor's hex and K's form, and
 give a K past the execution phase's units.

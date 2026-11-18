@@ -12,7 +12,7 @@ decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd �
 `q^k ≤ δ` (`exact_iff`) and holds from some `k` on (`exact_mono`); the bisection finds the least such `k`
 (`leastAbove_spec`).
 
-`draw_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each sample's
+`sample_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each sample's
 miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
 when `K′ = N` the sample takes every tile and the chance is 0 (`missProb_zero`).
 -/
@@ -292,7 +292,7 @@ theorem missProb_zero {N B : Nat} : ∀ k, N - B < k → missProb N B k = 0
       simp [missFactor, this, Rat.div_def]
     · rw [missProb_zero k (by omega)]; simp
 
-theorem draw_misses (eps δ : Rat) (credited n w : Int) (B k : Nat) (hd : KPrimeDomain eps δ credited n w)
+theorem sample_misses (eps δ : Rat) (credited n w : Int) (B k : Nat) (hd : KPrimeDomain eps δ credited n w)
     (hk : kPrime eps δ credited n w = .ok k) : MissBounded eps δ credited n w B k := by
   intro hB hcov
   obtain ⟨k', hk', h1, hkN, hlt, -⟩ := kPrime_least eps δ credited n w hd

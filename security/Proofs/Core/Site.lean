@@ -407,7 +407,7 @@ def node : List Loc :=
 /-- A link between two ends at `β` bits a second. -/
 def link (id : String) (ends : String × String) (β latency : ℕ) : Link := { id, ends, β := some β, latency }
 
-/-- The onsite site's first entry: the node, its uplink split by a certifier, and a memory challenger linked to it. -/
+/-- The onsite site's first entry: the node, its uplink split by a network attester, and a memory challenger linked to it. -/
 def onsite : Entry := .site "genesis"
   { sheets := [sheetA, sheetB]
     locs := node ++ [own "cert0" .certifier "site0" "key0", own "chal0" .challenger "site0" ""]

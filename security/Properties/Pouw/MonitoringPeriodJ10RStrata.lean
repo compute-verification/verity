@@ -44,16 +44,16 @@ except with probability `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s)))`, 
 `S`, are at least the sum over `S` of each stratum's `(1 − ε_s(j))₊` of its live words in the windows before the first
 window `Credit.window` refuses.
 
-* `BlockDraw`, `Rest`, `StrataCoin`: the sampling block's stratified sample, one permutation of each of its strata, sampled
+* `BlockSample`, `Rest`, `StrataCoin`: the sampling block's stratified sample, one permutation of each of its strata, sampled
   independently (`FlockSoundness.Audit.SamplingDesign.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
-  `k s` images, `tileDraw`); the rest of it beside stratum `s`; and a window's coins, its rounds' coins and the block's
+  `k s` images, `tileSample`); the rest of it beside stratum `s`; and a window's coins, its rounds' coins and the block's
   sample.
 * `atStratum`, `pathsCongr`, `pathsAt`, `pullAt`, `creditAt`: stratum `s`'s view. A window's coins split at `s`
   (`Equiv.piSplitAt`) are the one-stratum statement's `Coin` at `s_T = s` and `Ξ = Rest σ s`: the rounds' coins, the
   stratum's permutation and the rest of the block's sample. The period's coins split window by window, and a period-wide
   input (`Credit.window`'s inputs, the service's openings, a tile's place) is read on them.
 * `layerAt`, `runAt`, `relAt`, `rightAt`: `tileLayer`, `tileRun`, `pinnedAt` and `j10rAtCoin` at stratum `s`'s view.
-* `StrataSampleIsCoin`: on every accepted window, the proof blocks `Credit.window`'s sample demands (`creditDrawn`) are the window
+* `StrataSampleIsCoin`: on every accepted window, the proof blocks `Credit.window`'s sample demands (`creditSampled`) are the window
   proof blocks of the tile strata's coordinates of the block's sample, `k s` of stratum `s` for each `s ∈ S`.
 * `stratumLive`: stratum `s`'s live words in the windows before the first refusal.
 * `H1J10RCheckedCreditMonitoringPeriodStrata`: the statement.
@@ -108,15 +108,15 @@ open ResourceAccounting.TS ResourceAccounting.Compose ResourceAccounting.Assumpt
 /-! ## The sampling block's sample and stratum `s`'s view of it -/
 
 /-- **The sampling block's sample**: a permutation of each stratum `s` of `σ`, independently; stratum `s`'s sample is the
-proof blocks of its first `k s` images (`tileDraw`). -/
-abbrev BlockDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := (s : Fin mB) → Equiv.Perm (Fin (tileCount σ s))
+proof blocks of its first `k s` images (`tileSample`). -/
+abbrev BlockSample {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := (s : Fin mB) → Equiv.Perm (Fin (tileCount σ s))
 
 /-- **The rest of the block's sample beside stratum `s`**: the other strata's permutations. -/
 abbrev Rest {nB mB : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) : Type :=
   (j : {j : Fin mB // j ≠ s}) → Equiv.Perm (Fin (tileCount σ j.1))
 
 /-- **A window's coins over the block's strata**: its `m` rounds' coins and the block's sample. -/
-abbrev StrataCoin (C : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := Paths C m × BlockDraw σ
+abbrev StrataCoin (C : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) : Type := Paths C m × BlockSample σ
 
 /-- **Stratum `s`'s view of a window's coins**: the one-stratum statement's `Coin` at `s_T = s`, the rounds' coins (`r`
 of them, `r = m`), then the block's sample split at `s` into the stratum's permutation and the rest. -/
@@ -186,8 +186,8 @@ noncomputable def layerAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds
 /-! ## The sample and the credit -/
 
 /-- **`Credit.window`'s sample is the block's sample at the tile strata**: on every path and every window `Credit.window`
-credits, the proof blocks its sample demands proofs of (`creditDrawn`) are the window proof blocks (`unitOf`) of the tile strata's
-coordinates of the block's sample at the window's coins, `tileDraw`'s `k s` proof blocks of stratum `s` for each `s ∈ S`, and
+credits, the proof blocks its sample demands proofs of (`creditSampled`) are the window proof blocks (`unitOf`) of the tile strata's
+coordinates of the block's sample at the window's coins, `tileSample`'s `k s` proof blocks of stratum `s` for each `s ∈ S`, and
 no others. At one stratum it is `TileSampleIsCoin`'s body on the block's sample; read per stratum it would be false at a
 window over two non-empty strata. A code fact once its code exists. Code change: the verifier samples the tiles
 inside the sampling block's stratified sample, as one subcircuit of the integrity registration, one stratum a `K`, and
@@ -198,8 +198,8 @@ def StrataSampleIsCoin {C : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k 
     (hk : ∀ s, k s ≤ (stratum σ s).card) (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ)
     (ws : CreditExecutionPhases (StrataCoin C m σ) n) : Prop :=
   ∀ (x : Paths (StrataCoin C m σ) n) (w : Fin n), ExecutionPhaseAccepts (ws.reg x w) (ws.ev x w) →
-    ∃ d : Array ℕ, creditDrawn (ws.reg x w) (ws.ev x w) = .ok d ∧
-      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s ((coinAt x w).2 s), unitOf b = u
+    ∃ d : Array ℕ, creditSampled (ws.reg x w) (ws.ev x w) = .ok d ∧
+      ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileSample σ k hk s ((coinAt x w).2 s), unitOf b = u
 
 open Classical in
 /-- **Stratum `s`'s live words over the accepted prefix**: the words of the stratum's live tiles (`ExecutionPhasePlay.liveAt` of its

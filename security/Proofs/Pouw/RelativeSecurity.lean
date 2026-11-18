@@ -5533,7 +5533,7 @@ theorem mergeAt_ne (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) {s :
 
 omit [∀ t, Fintype (ι t)] in
 theorem mergeAt_self (U : ∀ s, Finset (ι s)) (t : Fin St) :
-    mergeAt U t (bitInd (U t)) = (drawInd U : (Σ s, ι s) → R) := by
+    mergeAt U t (bitInd (U t)) = (sampleInd U : (Σ s, ι s) → R) := by
   funext ⟨s, v⟩
   by_cases h : s = t
   · subst h
@@ -5602,7 +5602,7 @@ omit [∀ t, Fintype (κ t)] in
 /-- One cell's pass probability with overlapping samples equals the spot check's on its own sample with the other
 samples' bits as the cell: swapping sample `t`'s bits for fresh ones is an involution. -/
 theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
-    prob (fun U : ∀ s, Finset (ι s) => e (drawInd U) = 0) =
+    prob (fun U : ∀ s, Finset (ι s) => e (sampleInd U) = 0) =
       prob fun b : (∀ s, Finset (ι s)) × Finset (ι t) => e (mergeAt b.1 t (bitInd b.2)) = 0 := by
   classical
   let φ : (∀ s, Finset (ι s)) × Finset (ι t) → (∀ s, Finset (ι s)) × Finset (ι t) :=
@@ -5610,7 +5610,7 @@ theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
   have hφ : Function.Involutive φ := fun b => by
     simp only [φ, Function.update_idem, Function.update_self, Function.update_eq_self]
   rw [prob_equiv hφ.toPerm (fun b : (∀ s, Finset (ι s)) × Finset (ι t) => e (mergeAt b.1 t (bitInd b.2)) = 0),
-    ← prob_fst (β := Finset (ι t)) fun U : ∀ s, Finset (ι s) => e (drawInd U) = 0]
+    ← prob_fst (β := Finset (ι t)) fun U : ∀ s, Finset (ι s) => e (sampleInd U) = 0]
   congr 1
   funext b
   have hs : hφ.toPerm.symm b = φ b := rfl
@@ -5622,16 +5622,16 @@ theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
 its own sample's bits at every bit point of the other samples', a uniform cell and uniform samples find a zero with
 probability at most `1 − ¼ d`, `d` the share of cells and samples at which the cell is uncertified. -/
 theorem prob_ov_le (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) (he : ∀ c U, CubeQuad fun z => e c (mergeAt U c.1 z)) :
-    prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤ 1 - (1 - 3 / 4) * ovDef e := by
+    prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (sampleInd a.2) = 0) ≤ 1 - (1 - 3 / 4) * ovDef e := by
   classical
   rw [prob_eq_expect, expect_prod, ovDef, prob_eq_expect, expect_prod]
   have hpt : ∀ c : Σ t, κ t,
-      expect (fun U : ∀ s, Finset (ι s) => if e (c, U).1 (drawInd (c, U).2) = 0 then (1 : ℝ) else 0) ≤
+      expect (fun U : ∀ s, Finset (ι s) => if e (c, U).1 (sampleInd (c, U).2) = 0 then (1 : ℝ) else 0) ≤
         1 + -(1 - 3 / 4) * expect fun U : ∀ s, Finset (ι s) =>
           if ∃ S : Finset (ι (c, U).1.1), S.card ≤ 2 ∧ e (c, U).1 (mergeAt (c, U).2 (c, U).1.1 (bitInd S)) ≠ 0
           then (1 : ℝ) else 0 := by
     intro c
-    rw [← prob_eq_expect (fun U : ∀ s, Finset (ι s) => e c (drawInd U) = 0), prob_cell_eq (e c) c.1,
+    rw [← prob_eq_expect (fun U : ∀ s, Finset (ι s) => e c (sampleInd U) = 0), prob_cell_eq (e c) c.1,
       ← prob_eq_expect (fun U : ∀ s, Finset (ι s) =>
         ∃ S : Finset (ι c.1), S.card ≤ 2 ∧ e c (mergeAt U c.1 (bitInd S)) ≠ 0)]
     have := prob_spot_le (fun (U : ∀ s, Finset (ι s)) (z : ι c.1 → R) => e c (mergeAt U c.1 z)) (he c)
@@ -6531,16 +6531,16 @@ noncomputable def ovDefP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) 
 bits given, as `prob_ov_le`. -/
 theorem prob_ovP_le (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) :
-    prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤
+    prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (sampleInd a.2) = 0) ≤
       1 - (1 - 427 / 500) * ovDefP fr φ e := by
   classical
   rw [prob_eq_expect, expect_prod, ovDefP, prob_eq_expect, expect_prod]
   have hpt : ∀ c : Σ t, κ t,
-      expect (fun U : ∀ s, Finset (ι s) => if e (c, U).1 (drawInd (c, U).2) = 0 then (1 : ℝ) else 0) ≤
+      expect (fun U : ∀ s, Finset (ι s) => if e (c, U).1 (sampleInd (c, U).2) = 0 then (1 : ℝ) else 0) ≤
         1 + -(1 - 427 / 500) * expect fun U : ∀ s, Finset (ι s) =>
           if ParShort (fr (c, U).1) φ (fun z => e (c, U).1 (mergeAt (c, U).2 (c, U).1.1 z)) then (1 : ℝ) else 0 := by
     intro c
-    rw [← prob_eq_expect (fun U : ∀ s, Finset (ι s) => e c (drawInd U) = 0), prob_cell_eq (e c) c.1,
+    rw [← prob_eq_expect (fun U : ∀ s, Finset (ι s) => e c (sampleInd U) = 0), prob_cell_eq (e c) c.1,
       ← prob_eq_expect (fun U : ∀ s, Finset (ι s) => ParShort (fr c) φ fun z => e c (mergeAt U c.1 z))]
     have := prob_spot_parity_le (fun _ : ∀ s, Finset (ι s) => fr c) (fun _ => hfr c) φ
       fun (U : ∀ s, Finset (ι s)) (z : ι c.1 → A) => e c (mergeAt U c.1 z)
@@ -6555,7 +6555,7 @@ namespace OvPlay
 noncomputable def gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
     {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
   | _, .done => .done
-  | _, .round e next => .round (fun _ => ovDefP fr φ e) (fun a => e a.1 (drawInd a.2) = 0) fun a => (next a).gameP fr φ
+  | _, .round e next => .round (fun _ => ovDefP fr φ e) (fun a => e a.1 (sampleInd a.2) = 0) fun a => (next a).gameP fr φ
 
 theorem accepts_gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
     ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t) × (∀ s, Finset (ι s))) n),
@@ -6695,7 +6695,7 @@ def RoundsHypKOv (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w j, (prog w).isProd j = true → AffMulAt ((prog w).prod j)) ∧
         (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
           dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
-        (∀ w (W : ODraws St n L np B n') c c',
+        (∀ w (W : OSamples St n L np B n') c c',
           (∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 →
             P.errAt x w c (mergeAt W c.1 (bitInd U)) = 0) →
           (∀ U : Finset (DBits (n c'.1) L np (B c'.1) (n' c'.1)), U.card ≤ 2 →
@@ -6723,7 +6723,7 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
         (∀ w j, (prog w).isProd j = true → AffMulAt ((prog w).prod j)) ∧
         (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
           dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
-        (∀ w (W : ODraws St n L np B n') c c',
+        (∀ w (W : OSamples St n L np B n') c c',
           (∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 →
             P.errAt x w c (mergeAt W c.1 (bitInd U)) = 0) →
           (∀ U : Finset (DBits (n c'.1) L np (B c'.1) (n' c'.1)), U.card ≤ 2 →
@@ -6745,7 +6745,7 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
     rw [mergeAt_mk]
   · obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
     set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
-    let cert : Fin R → ODraws St n L np B n' → OCells St n n' B → Prop := fun w W c =>
+    let cert : Fin R → OSamples St n L np B n' → OCells St n n' B → Prop := fun w W c =>
       ∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 → P.errAt x w c (mergeAt W c.1 (bitInd U)) = 0
     have hprod : ∀ w W, (L : ℝ) * ((univ.filter fun c => cert w W c).card : ℝ) ≤
         ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) := fun w W => by
@@ -6768,8 +6768,8 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
       rw [hs, Finset.card_sigma]
       exact_mod_cast this
     have hcor : ∀ w, C * (1 - ovDef (P.errAt x w)) =
-        expect fun W : ODraws St n L np B n' => ((univ.filter fun c => cert w W c).card : ℝ) := fun w => by
-      have hd : ovDef (P.errAt x w) = expect fun W : ODraws St n L np B n' =>
+        expect fun W : OSamples St n L np B n' => ((univ.filter fun c => cert w W c).card : ℝ) := fun w => by
+      have hd : ovDef (P.errAt x w) = expect fun W : OSamples St n L np B n' =>
           prob fun c : OCells St n n' B => ¬cert w W c := by
         rw [ovDef, prob_eq_expect, expect_prod_swap]
         congr 1
@@ -6778,7 +6778,7 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
         congr 1
         funext c
         simp only [cert, not_forall, exists_prop]
-      have hW : ∀ W : ODraws St n L np B n', ((univ.filter fun c => cert w W c).card : ℝ) =
+      have hW : ∀ W : OSamples St n L np B n', ((univ.filter fun c => cert w W c).card : ℝ) =
           C + -C * prob fun c : OCells St n n' B => ¬cert w W c := fun W => by
         rw [prob_eq_card]
         have hsplit := Finset.card_filter_add_card_filter_not (s := (univ : Finset (OCells St n n' B)))
@@ -6835,7 +6835,7 @@ variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : 
 the other samples: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
-    (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+    (W : OSamples St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
     (vq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar) (j : Fin N) (c : OCells St n n' B) :
     ParityForm (dFrame p₀ c.2) φ (charged (dFrame p₀ c.2) φ (P.coef j) fun i z => P.prod i (mergeAt W c.1 z)).card
       fun z => P.val (mergeAt W c.1 z) j - dPrefix (pc c.1) (vq c.1) w c.2.1 c.2.2.1 c.2.2.2.val z := by
@@ -6855,7 +6855,7 @@ open Classical in
 `L` products per cell-block, of any stage, not short of products. -/
 theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
-    (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+    (W : OSamples St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
     (vq : ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar) (word : OCells St n n' B → Fin N)
     (hpure : P.ChargePureAt φ p₀ word) :
     L * (univ.filter fun c : OCells St n n' B => ¬ParShort (dFrame p₀ c.2) φ
@@ -7034,7 +7034,7 @@ theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP fr φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
-  let full : Fin R → ODraws St n L np B n' → OCells St n n' B → Prop := fun w W c =>
+  let full : Fin R → OSamples St n L np B n' → OCells St n n' B → Prop := fun w W c =>
     ¬ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z)
   have hprod : ∀ w W, (L : ℝ) * ((univ.filter fun c => full w W c).card : ℝ) ≤
       ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) := fun w W => by
@@ -7042,14 +7042,14 @@ theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
     simp only [full, fr, hE, mergeAt_mk]
     exact_mod_cast h1
   have hcor : ∀ w, C * (1 - ovDefP fr φ (P.errAt x w)) ≤
-      expect fun W : ODraws St n L np B n' => ((univ.filter fun c => full w W c).card : ℝ) := fun w => by
-    have hd : ovDefP fr φ (P.errAt x w) = expect fun W : ODraws St n L np B n' =>
+      expect fun W : OSamples St n L np B n' => ((univ.filter fun c => full w W c).card : ℝ) := fun w => by
+    have hd : ovDefP fr φ (P.errAt x w) = expect fun W : OSamples St n L np B n' =>
         prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
       rw [ovDefP, prob_eq_expect, expect_prod_swap]
       congr 1
       funext W
       rw [prob_eq_expect]
-    have ha : C * (1 - ovDefP fr φ (P.errAt x w)) = expect fun W : ODraws St n L np B n' =>
+    have ha : C * (1 - ovDefP fr φ (P.errAt x w)) = expect fun W : OSamples St n L np B n' =>
         C + -C * prob fun c : OCells St n n' B => ParShort (fr c) φ fun z => P.errAt x w c (mergeAt W c.1 z) := by
       rw [hd, expect_const_add_mul]
       ring

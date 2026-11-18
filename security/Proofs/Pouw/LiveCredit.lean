@@ -67,7 +67,7 @@ served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T
 * `Dead`, `dead_iff_rows`, `population`: a tile is dead iff every one of its rows is at or past `m`. Its admit bits
   `[i < m]` are then all 0, so its receipt is `h1tile`'s canonical dead-tile receipt. The sample's population is the live
   tiles.
-* `population_work`, `credit_le_work`, `zero_call`, `population_admits`, `dead_not_drawn`, `live_credit`: over that
+* `population_work`, `credit_le_work`, `zero_call`, `population_admits`, `dead_not_sampled`, `live_credit`: over that
   population. Its work, `Σ_c ⌈m_c/R⌉·(n_c/C)·R·C·K_c`, is at least the credit. A call with `m = 0` has no unit and earns
   0. Each unit holds a row that serves an admitted request, no dead tile is a unit, and every `m_c` is at most `T` and at
   most what its round's entries take.
@@ -374,7 +374,7 @@ theorem zero_call {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι → �
   omega
 
 /-- **No dead tile is in the population**: a tile whose rows are all at or past its call's `m` is never sampled. -/
-theorem dead_not_drawn {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι → ℕ) (u : Σ _ : ι, ℕ × ℕ)
+theorem dead_not_sampled {ι : Type} (calls : Finset ι) {R C M : ℕ} (m n : ι → ℕ) (u : Σ _ : ι, ℕ × ℕ)
     (hd : Dead R (m u.1) u.2.1) : u ∉ population calls R C M m n := by
   intro hu
   simp only [population, mem_sigma, mem_product, liveBlocks, mem_filter, mem_range] at hu
@@ -434,7 +434,7 @@ theorem live_credit {ι σ : Type} (calls : Finset ι) (step : ι → σ) (n K m
     dense_credit_of_sessions calls step n K m T sess dec hchk vals heval hok hm,
     credit_le_work calls m n K hR hC hRM hmM hCn,
     fun u hu => population_admits calls step m n v hv hm hu,
-    fun u hd => dead_not_drawn calls m n u hd,
+    fun u hd => dead_not_sampled calls m n u hd,
     fun c _ h0 => zero_call calls m n h0 (K c)⟩
 
 /-! ## `PouwLiveSlots_v2`: each request's cap is its public `max_tokens` -/

@@ -110,7 +110,7 @@ theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0
   refine ⟨hacc, d, hd, drawOf (hk s) (coinAt y w).2 i,
     (hmem _).2 ⟨s, hsS, tileAt σ s (drawOf (hk s) (coinAt y w).2 i), ?_, rfl⟩, hrel⟩
   rw [coinAt_view hM σ s y w]
-  unfold tileDraw
+  unfold tileSample
   exact Finset.mem_image.2 ⟨i, Finset.mem_univ _, rfl⟩
 
 /-- **Stratum `s`'s live words on its view** are its `creditLive` at the period's `Credit.window` inputs there. -/

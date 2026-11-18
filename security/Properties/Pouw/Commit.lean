@@ -115,14 +115,14 @@ def EpochSaltAccepts : Prop :=
 
 /-- A coin `draw_coin` gives is the opened one, from an epoch with a coin commitment whose sampling coin the opening opens after
 what the verifier recorded. -/
-def DrawCoinAccepts : Prop :=
-  ∀ cc o after coin, drawCoin cc o after = .ok (.ok coin) → ∃ c, cc = some c ∧ CoinOpens c o "draw" after ∧ coin = o.coin
+def SamplingCoinAccepts : Prop :=
+  ∀ cc o after coin, flipCoin cc o after = .ok (.ok coin) → ∃ c, cc = some c ∧ CoinOpens c o "draw" after ∧ coin = o.coin
 
 /-! ## Samples -/
 
 /-- A work-weighted sample (`Sampled.select`) gives `t` tickets, each a position of the ticket list. -/
-def DrawShape : Prop :=
-  ∀ key tickets t ids, weightedDraw key tickets t = .ok ids → ids.length = t ∧ ∀ i ∈ ids, i < tickets.length
+def SampleShape : Prop :=
+  ∀ key tickets t ids, weightedSample key tickets t = .ok ids → ids.length = t ∧ ∀ i ∈ ids, i < tickets.length
 
 /-! ## Binding -/
 

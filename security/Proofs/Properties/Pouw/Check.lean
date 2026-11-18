@@ -233,7 +233,7 @@ theorem acceptedIsTheService's : AcceptedIsTheService's := by
   obtain ⟨f, draw, -, ⟨hp, hc, hs, -⟩, -, rfl⟩ := acceptMeans p c e pub prof h
   exact ⟨hp, hc, draw, hs, rfl⟩
 
-theorem acceptedDraw : AcceptedDraw := by
+theorem acceptedSample : AcceptedSample := by
   intro p c e pub prof h
   obtain ⟨f, draw, ⟨-, -, -, -, -, -, hw, hs, -, -, hpop, hlaw, -⟩,
     ⟨-, -, -, -, -, -, -, -, -, hsz, hasc, hall⟩, -, rfl⟩ := acceptMeans p c e pub prof h

@@ -112,7 +112,7 @@ retried sample.
 the coin record's (`after-coin`); given a class, the retained rounds must be exactly its rounds (`heldToLoad`).
 
 **Skipping inert work.** `inertBoundCheck` replays a sampled tile's inert work exactly and requires at most ρ of the
-credited cells' credit. A tile over it is credited nothing and enlarges ε_s (`overInertBoundDraws`): `exceeds the cap`.
+credited cells' credit. A tile over it is credited nothing and enlarges ε_s (`overInertBoundSamples`): `exceeds the cap`.
 Inert work below the bound, and any other skip, is what TT_OUT rev1 bounds.
 
 **Crediting cheap or padded rows.** `rowsFailure`: a credited row must pass the noise floor and liveness (`floorOK`,

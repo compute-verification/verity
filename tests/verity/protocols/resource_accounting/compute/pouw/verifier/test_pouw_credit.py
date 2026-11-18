@@ -1229,7 +1229,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
     """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work sampling design
     samples a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
     share of the work is missed with probability above 9/10. At the same sample the work form (C, W, 1) holds, every set
-    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
+    of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkSampleMisses`)."""
     (n_a, w_a), (n_b, w_b) = light, heavy
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
     n = n_a + n_b

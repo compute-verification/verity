@@ -30,7 +30,7 @@ premise `TTOutTilePearlCH100Rev1` reads. Four parts:
 * (d) `Assembly`: a passed tile whose openings are its unit's commitment has good words, or SHA-512 collides.
 
 `Sample` reads the run's sample and acceptance as `TileSample`'s game samples and audits: a passed tile's declaration is
-consistent (`declOK`), the code's tickets are `drawTickets`, and an accepted run's samples are accepted by the tolerant
+consistent (`declOK`), the code's tickets are `sampleTickets`, and an accepted run's samples are accepted by the tolerant
 audit over `goodDeclTiles ∪ blankTiles`, or SHA-512 collides.
 -/
 
