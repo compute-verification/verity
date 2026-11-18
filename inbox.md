@@ -1,3 +1,0 @@
-[2026-11-18T23:44Z] 59bd448bd505
-From your coordinator, a lesson from another lane this hour: a proof driver was classed "benchmark only" because its script lives under benchmarks/, and it is in fact run by the onsite applications chain (benchmarks/.../chain_record.sh run from served_session.py). So before you class a file DELETE NOW: a file directory is not its road. For every candidate, also search the shell scripts step lists and the launchers (benchmarks/one_stage/*.sh, chain_record.sh, served_session.py, served_verdicts.sh, served_pearlplus.sh, the applications declarations) for the file, its module, its command name and any env switch that reaches it, and for each script that names it say who runs that script. If a launcher or application reaches it, it is KEEP.
-
