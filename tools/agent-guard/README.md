@@ -33,9 +33,7 @@ payload's key names, and of the payload's other values only `model` and `generat
 payload has it as a string, cut at 64 characters; never the command, a path or an address. The model rule adds a line
 for each turn it settles: the event `model_refusal` or `model_ok`, with the turn's id, its model and the launch model
 (`launch_model`). Past about 4 MB it is renamed to `.1` and started again. `inbox.py check`, `selftest` and `guard` read
-from it whether a shell hook has run for an agent, `inbox.py check` also whether the tool-call hook has run on the VM (a
-`task_hook.py` line of event `preToolUse`, which each Task or MCP call it is handed leaves; the Task log holds Task calls
-alone, so an empty one shows nothing), and `inbox.py turns` the model each of an agent's turns names there.
+from it whether a shell hook has run for an agent, and `inbox.py turns` the model each of an agent's turns names there.
 Each VM's log is its own.
 
 The model rule (`shell_hook.model_reason`) tells an agent whose turn runs on another model than it was launched on. A
