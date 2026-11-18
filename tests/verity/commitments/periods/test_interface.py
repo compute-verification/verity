@@ -647,8 +647,9 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     """A member's wired port, held in its writer template's output tree: its header entry (`rows.shared_ports`,
     `rows.shared_entries`) is that tree's value, one position and one path per row of its table, the leaves it reads
     (`rows.Binding.leaves`), each path climbing to the tree's root, and the verifier's read of it (`rows.own_reads`, seeded
-    with no port) names the same value and root as a tree port of the writer template's field, its reads the verifier's
-    program's. A member with no wired port gets no ``x`` entry."""
+    with no port) names the same value and root, its reads those leaves from the member's first unit, as the served
+    route's Program has the wire cut to an input row (`interface.served_program`). A member with no wired port gets no
+    ``x`` entry."""
     w, c, doc = _held_window(tmp_path, monkeypatch)
     ms, tree = w.members, WI.tree(GID, "o0")
     roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
@@ -660,7 +661,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
         assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
         assert e["positions"] == w.leaves(m, "x").tolist()
-        assert read["tree"] == {"template": GID, "field": "o0"} and read["reads"] == [] and "reads_from" not in read
+        assert read["reads"] == w.reads(m, "x").tolist() and read["reads_from"] == m.base and "tree" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
             leaf = row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]), m.schema("x"))
             assert _climb(dom, i, leaf, bytes.fromhex(path)) == c.roots[tree]
@@ -679,8 +680,9 @@ def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_the
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
     mine = I.window_of_record(doc, SAMPLING_DESIGN, by_id)
     assert mine.members == win.window.members and mine.partition_digest == win.window.partition_digest
-    with pytest.raises(ValueError, match=r"\['partition', 'program'\] are not the ones its templates make"):
-        I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    stepped = I.window_of_record({**doc, "wires": [{**doc["wires"][0], "step": [0]}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
+    assert stepped.partition_digest == mine.partition_digest and (
+        [stepped.reads(m, "x").tolist() for m in stepped.members if m.wired] != [mine.reads(m, "x").tolist() for m in mine.members if m.wired])
     with pytest.raises(ValueError, match="order: wire 0"):
         I.window_of_record({**doc, "wires": [{**doc["wires"][0], "base": 2}, *doc["wires"][1:]]}, SAMPLING_DESIGN, by_id)
     for bad, why in [({k: v for k, v in doc.items() if k != "cap"}, "one or the other"), ({**doc, "members": []}, "one or the other"),
@@ -870,6 +872,37 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
     units, wires = layer_chain()
     with pytest.raises(ValueError, match="cycle: no order of the ranges"):
         I.ordered(units, wires, {GID: range(0, units[GID], REQUESTS)})
+
+
+def test_one_ranks_order_is_the_order_with_no_ranks():
+    """`chain` as one rank (its first unit 0) orders as with no ranks given, so its record's digest is the same."""
+    c = chain()
+    n, starts = c.units[GID], {GID: range(0, c.units[GID], REQUESTS)}
+    assert I.ordered(c.units, c.wires, starts, {GID: [0]}) == I.ordered(c.units, c.wires, starts) == c.order
+
+    def digest(order):
+        return hashlib.sha512(canonical_json(replace(c, order=order).description())).hexdigest()
+
+    assert digest(I.ordered({GID: n}, c.wires, starts, {GID: [0]})) == digest(c.order)
+
+
+def test_two_ranks_reading_each_other_step_by_step_order_inside_each_rank():
+    """Two ranks of two steps, rank r's units ``2r`` and ``2r + 1``: each rank's step 1 reads the other rank's step 0, so
+    a template's ranges can't rise across the ranks and with no ranks given there is no order. Given the ranks, the ranges
+    rise inside each rank and the order alternates by step, which `check_order` accepts. A rank's step 0 reading its own
+    step 1 is still refused: inside a rank its ranges rise."""
+    units = {GID: 4}
+    wires = (I.Wire(GID, "x", GID, "o0", at=1, radix=(1,), base=2, step=(0,)),
+             I.Wire(GID, "x", GID, "o0", at=3, radix=(1,), base=0, step=(0,)))
+    starts, ranks = {GID: range(4)}, {GID: [0, 2]}
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, wires, starts)
+    order = I.ordered(units, wires, starts, ranks)
+    assert order == ((GID, 0, 1), (GID, 2, 1), (GID, 1, 1), (GID, 3, 1))
+    I.check_order(units, wires, order)
+    back = (*wires, I.Wire(GID, "x", GID, "o0", at=0, radix=(1,), base=1, step=(0,)))
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(units, back, starts, ranks)
 
 
 EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")

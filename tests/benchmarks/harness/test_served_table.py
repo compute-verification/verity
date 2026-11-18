@@ -232,10 +232,10 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     markdown = served_render.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
     assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
-    assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
+    assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | piece | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
     assert ("| PoUS bandwidth audit | — | `llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000` | b8-p512-mixed | — | — | — | — "
-            "| no passing run |") in markdown
+            "| — | no passing run |") in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
 
 
@@ -250,6 +250,28 @@ def test_a_trial_run_is_never_a_points_row_however_new(tmp_path):
     assert (b8["run"], b8["art"]) == ("r20261024-020000-0001", kept)
     assert table["skipped"] == [{"spec": COMMIT_SPEC, "point": "b8-p512-mixed", "run": "r20261024-030000-0002", "art": trial,
                                  "why": "a trial run (VERITY_BENCH_TRIAL): its measurements are its own, never a row"}]
+
+
+def test_a_row_says_who_ran_its_results_gates_and_not_recorded_for_a_result_that_predates_the_field(tmp_path):
+    """A row stands on its result's gates, which the served run's own process ran: the row says so from the result
+    (`checked_by`), and a result stored before the field says `not recorded`, never a runner read into it."""
+
+    producer = Producer(tmp_path)
+    old = _result("b8-p512-mixed", 1.0)
+    old["gates"] = [{k: v for k, v in g.items() if k != "checked_by"} for g in old["gates"]]
+    producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", old)
+    producer.ran("r20261024-020000-0002", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 1.0))
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda line: None, **BY_SPEC)
+    rows = _commit_rows(table)
+    assert (rows["b8-p512-mixed"]["checked_by"], rows["b32-p512-mixed"]["checked_by"]) == (None, "piece")
+    markdown = served_render.render(table)
+    cells = {point: line.split(" | ")[7] for point in rows for line in markdown.splitlines()
+             if line.startswith("| Commit |") and f"| {point} |" in line}
+    assert cells == {"b8-p512-mixed": "not recorded", "b32-p512-mixed": "piece"}
+    assert "`gates checked by` is who ran them as the result says (`piece`: run by the developer's piece; no auditor-side" in markdown
+    assert "its record doesn't say who ran its gates, so `checked by` is `not recorded` until it does" in markdown
+    assert " verified" not in markdown
 
 
 def test_a_run_recorded_under_the_specs_former_directory_counts_beside_one_under_todays(tmp_path, monkeypatch):
@@ -447,7 +469,7 @@ def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_st
     assert why["r20991231-000000-0000"] == "not in the store or on its remote"
 
     markdown = served_render.render(table)
-    assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
+    assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | not recorded | "
             f"r20261024-210000-0001 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
     assert "per step, not per token" in markdown
     with pytest.raises(ValueError, match="label that art instead"):
@@ -589,7 +611,7 @@ def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_sa
                               *((audit, member) for member in members), (POUW, "llama-3.2-1b-h100")}
     assert got["by"][audit, None]["value"] == pytest.approx(500.0) and got["by"][audit, None]["device"] == RTX
     for member, spec in members.items():
-        assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | {none} | — |" in out
+        assert f"| PoUS bandwidth audit | — | `{spec}` | — | — | — | — | — | — | {none} | — |" in out
         assert (got["by"][audit, member]["value"], got["by"][audit, member]["why"]) == (
             None, f"no served ratio at {spec}/b32-p512-mixed: {none}")
     assert got["validation"]["status"] == "passed"
@@ -598,7 +620,7 @@ def test_the_bandwidth_audits_members_are_written_from_their_records_runs_and_sa
     producer.label("r20261117-170000-0004", "run_of_record", "pous-bandwidth-audit", "2026-11-17T18:00:00Z")
     out, got = table("after")
     assert f"| PoUS bandwidth audit | {H200} | `{BIG}` | b32-p512-mixed | 2.500× ± 0.000 |" in out
-    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | {none} | — |" in out
+    assert f"| PoUS bandwidth audit | — | `{SMALL}` | — | — | — | — | — | — | {none} | — |" in out
     member = got["by"][audit, "llama-3.1-8b-h200"]
     assert (member["value"], member["device"], member["inputs"][1]) == (pytest.approx(150.0), H200,
                                                                         "r20261117-170000-0004")

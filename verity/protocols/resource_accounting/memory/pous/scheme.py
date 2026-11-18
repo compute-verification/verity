@@ -36,7 +36,7 @@ from typing import Any
 from verity.commitments import domains
 from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_served, workload
+from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
@@ -131,6 +131,7 @@ POUS = register(Scheme(
     needs=frozenset({"store"}),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     record="space",
     symbol="S0",
     published=("bits", Fraction(1)),
@@ -146,11 +147,13 @@ POUS = register(Scheme(
 
 
 def _wipe_check_settings(values: Any) -> str | None:
+    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
     return wipe_served.check_settings(values)
 
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
-    return wipe_served.attach(exchange, ctx)
+    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
+    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER})
 
 
 WIPE = register(Scheme(
@@ -162,9 +165,9 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
-    settings={"store": "cuda", "segments": wipe_served.UNSET["segments"],
-              "reserve_bytes": wipe_run.CONFIG["reserve_bytes"], "tier": wipe_served.UNSET["tier"],
-              "limit_ns": wipe_period.LIMIT_NS, "reads": wipe_served.UNSET["reads"]},
+    # loading the declaration loads no prover file: test_wipe_served holds these to wipe_run.CONFIG and wipe_served.UNSET
+    settings={"store": "cuda", "segments": 0, "reserve_bytes": 1 << 30, "tier": "", "limit_ns": wipe_period.LIMIT_NS,
+              "reads": 0},
     check_settings=_wipe_check_settings,
     attach=_wipe_attach,
     over="the prior content's bits kept through an accepted wipe, in bits",
@@ -185,6 +188,7 @@ WIPE = register(Scheme(
     needs=frozenset(),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
+    answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     record="wipe",
     # the wipe holds labels from a key fresh for the wipe, and closes its store and the card's memory before the attach
     # returns: it touches no weight and keeps nothing resident

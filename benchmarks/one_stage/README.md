@@ -122,7 +122,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
   The bandwidth audit's session runs inside PoUS's piece, over the store that piece holds
-  (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
+  (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_piece.py collect-bandwidth`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run

@@ -18,6 +18,7 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 
 HERE = (Path(__file__).resolve().parent)
@@ -75,7 +76,7 @@ def _ports() -> dict:
 
 def _record() -> dict:
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **e} for i, (p, e) in enumerate(_ports().items())]
-    return R.record(program(), QUERY, S.selection_sampling_design(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+    return DK.record(program(), QUERY, S.selection_sampling_design(RULE, N), S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
                     work_table=S.selection_table(RULE, program(), QUERY, TABLE))
 
 

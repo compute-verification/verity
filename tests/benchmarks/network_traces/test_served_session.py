@@ -99,7 +99,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.NETWORK_ATTESTER_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --protocols-config "
                                     "'{\"network-attester\": {\"order\": \"release-order\"}}' "
-                                    "--seal --retain-exclude hidden_m1")
+                                    "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
     run = shlex.split(doc["runs"]["chain"])
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
@@ -435,7 +435,7 @@ def test_endpoint_publishes_only_the_steps_public_document_and_keeps_its_report_
     assert paths == set(CR.ENDPOINT_PUBLIC) and pub["format"] == CR.ENDPOINT_PUBLIC_FORMAT
     assert (pub["verdict"], pub["at"], pub["warden_run"], pub["io"], pub["advice"]) == (
         "accepted", CR.SERVED_NODE, RUN, {"accepted": True, "violations": 0},
-        {"bound": True, "rebuilt": True, "commit_windows": 1, "bound_windows": 1})
+        {"bound": True, "rebuilt": True})
     whole = keep / SS.ART
     assert whole.stat().st_mode & 0o777 == 0o600 and json.loads(whole.read_text())["chain"]["bits"]["commit_windows"]
     assert sorted(p.name for p in (keep / "records").iterdir()) == sorted(SS.SERVED)
@@ -474,7 +474,7 @@ def test_a_field_the_table_doesnt_list_is_never_written(tmp_path, monkeypatch, c
     assert not [m for m in ("1234", "e0", "user-0", '"rows"', '"records"', '"tokens"', '"seed"', '"requests"',
                             '"bound_why"') if m in text]
     assert not [n for n in SS.needles(ps) if n in text.encode()]
-    assert json.loads(text)["advice_bits"] == {"T": 10, "v0_total": 9, "derived": 3}
+    assert json.loads(text)["advice_bits"] == {"T": 10}
     shutil.rmtree(out)
     monkeypatch.setattr(CR, "network_attester_endpoint_step",
                         lambda e: {"verdict": "accepted", "why": ["e0"], "warden_run": RUN})

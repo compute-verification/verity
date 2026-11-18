@@ -52,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -95,7 +96,7 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
     drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
@@ -259,7 +260,7 @@ def tied_v1_case(w: dict) -> dict:
     query = P.template_instances_query(templates)
     sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = DK.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=DD.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
     params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
