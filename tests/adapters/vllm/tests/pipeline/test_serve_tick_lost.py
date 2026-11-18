@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import Any
 
 import pytest
+from verity import hooks as H
 from verity import release as REL
 
 from tests.pipeline.test_serve_admit_tick import RUN, TICK, read_all, request
@@ -93,7 +94,7 @@ class TickServer(Server):
         self.windows.admitted = counted
         ex = messages.current()
         got = messages.providing("admission").attach(ex, {"settings": {"order": "tick", "hold_ms": 60_000, **TICK.record()},
-                                              "submit": self.submit, "abort": self.loop.abort, "take": take,
+                                              "admit": H.Admit(self.submit, self.loop.abort, take),
                                               "clock": lambda: 0.0})
         self.gate = self.loop.gate = got.gate
         self.ticked = self.loop.hook = admission.install(self.engine.sched, ex, external_id)
