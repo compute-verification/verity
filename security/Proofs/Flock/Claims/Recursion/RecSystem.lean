@@ -179,8 +179,8 @@ variable (IV : Claims.Verifier Coin) (b : Brings)
 
 /-- `simMStop`'s coins: its first part's and one per session. -/
 noncomputable def stopCoins (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) (x : Claims.Msg) :
+    (S₀ : Claims.Simulator) (SO : Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool) (x : Hash.Msg) :
     (simMStop IV b T₀ NB ΩB S₀ SO s).C x ≃ S₀.C x × ((j : Fin (nS x)) → (SO x j).C) :=
   Claims.ZKMal.iterCoins T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s))
     (Claims.ZKMal.censorSim S₀ s (kPre IV)) (fun j x => (SO x j).C)
@@ -188,10 +188,10 @@ noncomputable def stopCoins (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonem
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) x (nS x)
 
 /-- **`simMStop`'s transcript**: its first part's, cut where the stop fires, then one `stepS` per session. -/
-theorem simMStop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
+theorem simMStop_eval (H : Hash.Msg → Hash.Msg) (ask : List Hash.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
-    (x : Claims.Msg) (c : (simMStop IV b T₀ NB ΩB S₀ SO s).C x) :
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool)
+    (x : Hash.Msg) (c : (simMStop IV b T₀ NB ΩB S₀ SO s).C x) :
     (Claims.SP.eval H ask ((simMStop IV b T₀ NB ΩB S₀ SO s).prog x c)).1 =
       (List.finRange (nS x)).foldl (fun τ (j : Fin (nS x)) => stepS H ask SO x
           (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
@@ -207,10 +207,10 @@ theorem simMStop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg →
 
 /-- **`ZKmalAt` at `simMStop` carries over to another first-part simulator** whose transcripts are the first's on
 coins in bijection. -/
-theorem zkAt_simMStop_swap (H : Claims.Msg → Claims.Msg) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
-    [Fintype ΩB] [Nonempty ΩB] (S₀ S₀' : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim)
-    (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool) (x : Claims.Msg) (e₀ : S₀'.C x ≃ S₀.C x)
-    (he₀ : ∀ (ask : List Claims.Msg → Claims.Out) c,
+theorem zkAt_simMStop_swap (H : Hash.Msg → Hash.Msg) (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB]
+    [Fintype ΩB] [Nonempty ΩB] (S₀ S₀' : Claims.Simulator) (SO : Hash.Msg → ℕ → Claims.Recursion.OSim)
+    (s : Hash.Msg → List (Hash.Msg × Hash.Msg) → Bool) (x : Hash.Msg) (e₀ : S₀'.C x ≃ S₀.C x)
+    (he₀ : ∀ (ask : List Hash.Msg → Claims.Out) c,
       (Claims.SP.eval H ask (S₀'.prog x c)).1 = (Claims.SP.eval H ask (S₀.prog x (e₀ c))).1)
     {N Ω WP : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {k : ℕ} {P : WP → Claims.Prover (N × Ω)}
     {RA : WP → Prop} {ε γ : ℝ}
@@ -232,13 +232,13 @@ end Swap
 by `preOf`), its stage message `stgOf` and the deployed stop `sR`; session `j` of `(nums x j).rounds + 1` rounds at the
 V\* statement `xsOf` stages, with the witness `wit` gives, on `G`'s coins; its simulator's coins `CB t`, and its
 bound's terms the record's per-session error and `4t·3^t`. -/
-noncomputable def recCompiled (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
+noncomputable def recCompiled (IV : Claims.Verifier Coin) (ivScope : Hash.Msg → Bool) (b : Brings)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (R : Type) [Fintype R] [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (G : Proto Claims.Flock.Wit) (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)]
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (G : Proto Claims.Flock.Wit) (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)]
     [∀ t x j, Nonempty (CB t x j)] (t : ℕ) :
     Verity.Rec.Compiled Claims.Flock.Wit Claims.Flock.Wit Salt XorBytes where
   kI x := IV.k (xIOf x)
@@ -273,7 +273,7 @@ noncomputable def recCompiled (IV : Claims.Verifier Coin) (ivScope : Claims.Msg 
 `Hello`, the session prover `G.prover` (through `relabP`), the outer record's relation, the models' simulator at the
 attempt budget `t`, and its proved error and collision weight. -/
 noncomputable def recOuter (relO : Readable.Parsed → Readable.Relation) (G : Proto Claims.Flock.Wit)
-    [Fintype G.Coin] (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
+    [Fintype G.Coin] (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
     (t : ℕ) : Verity.ZkSystem Claims.Flock.Wit (fun _ => G.Nonce) (fun _ => G.Rand) where
   k x := (deployZkRec relO).V.k x + 1
   P w _ := Verity.relabP G.prover w
@@ -284,16 +284,16 @@ noncomputable def recOuter (relO : Readable.Parsed → Readable.Relation) (G : P
 
 section Recursion
 
-variable (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
+variable (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Hash.Msg → Bool)
   (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
   (R : Type) [Fintype R] [Nonempty R]
-  (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-  (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-  (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-  (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+  (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+  (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+  (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+  (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
   (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-  (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-  (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)] (t : ℕ)
+  (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+  (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)] (t : ℕ)
 
 include IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t
 
@@ -306,7 +306,7 @@ local notation "𝔊" => recCompiled IV ivScope b I R dI dg wo wit G CB t
 set_option hygiene false in
 local notation "𝔒" => recOuter relO G Mc nL nB t
 
-theorem recStart_eq (T : Type) (x : Claims.Msg) : ∀ j, (𝔊).start x j = (parts IV 𝔟 T).start x j
+theorem recStart_eq (T : Type) (x : Hash.Msg) : ∀ j, (𝔊).start x j = (parts IV 𝔟 T).start x j
   | 0 => rfl
   | j + 1 => by
     show (𝔊).start x j + (𝔊).n x j = (parts IV 𝔟 T).start x j + (parts IV 𝔟 T).n x j
@@ -314,8 +314,8 @@ theorem recStart_eq (T : Type) (x : Claims.Msg) : ∀ j, (𝔊).start x j = (par
     all_goals rfl
 
 /-- **`Rec.Compiled.lay`'s prover at the deployed objects is the masked run's** (`lay`), session by session. -/
-theorem layProver_rec (w : Claims.Flock.Wit) (x : Claims.Msg) :
-    ∀ (m : ℕ) (hist : List (Claims.Msg × Claims.Msg))
+theorem layProver_rec (w : Claims.Flock.Wit) (x : Hash.Msg) :
+    ∀ (m : ℕ) (hist : List (Hash.Msg × Hash.Msg))
       (ω : ((preTape IV b R x).N × (preTape IV b R x).Ω) × (ℕ → G.Nonce × G.Rand)),
       (Layout.prover ((𝔊).lay x) (fun w => (𝔊).P₀ w x) (Verity.Rec.slotP 𝔒 G.Nonce G.Rand) m w).next x hist ω =
         ((lay IV 𝔟 (preOf IV b R x) wit).prover (preP IV 𝔟 (preOf IV b R x)) G.prover m w).next x hist ω
@@ -331,7 +331,7 @@ theorem layProver_rec (w : Claims.Flock.Wit) (x : Claims.Msg) :
     all_goals rfl
 
 /-- **The deployed record's prover is `Rec.prover`'s**: the masked reference prover with the stop, read flat. -/
-theorem prover_rec_next (w : Claims.Flock.Wit) (x : Claims.Msg) (hist : List (Claims.Msg × Claims.Msg))
+theorem prover_rec_next (w : Claims.Flock.Wit) (x : Hash.Msg) (hist : List (Hash.Msg × Hash.Msg))
     (ω : (preTape IV b R x).at 0 G.Nonce G.Rand (nS x)) :
     (Verity.Rec.prover 𝔒 𝔊 w x).next x hist ω =
       ((Claims.ZKMal.stopP (refPM IV 𝔟 (preOf IV b R x) wit G.prover w) (sR IV ivScope 𝔟) (kPre IV)).comap
@@ -340,8 +340,8 @@ theorem prover_rec_next (w : Claims.Flock.Wit) (x : Claims.Msg) (hist : List (Cl
     (layProver_rec IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t w x (nS x) hist
       (Layout.flatten (preTape IV b R x) 0 G.Nonce G.Rand (nS x) ω))
 
-theorem zkAt_rec_prover (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) {k : ℕ} {RA : Claims.Flock.Wit → Prop}
-    {C : Type} [Fintype C] {prog : C → Claims.SP (List (Claims.Msg × Claims.Out))} {ε γ : ℝ}
+theorem zkAt_rec_prover (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) {k : ℕ} {RA : Claims.Flock.Wit → Prop}
+    {C : Type} [Fintype C] {prog : C → Claims.SP (List (Hash.Msg × Claims.Out))} {ε γ : ℝ}
     (h : ZKmalAt H k (fun w => Verity.Rec.prover 𝔒 𝔊 w x) RA x C prog ε γ) :
     ZKmalAt H k (fun w => (Claims.ZKMal.stopP (refPM IV 𝔟 (preOf IV b R x) wit G.prover w) (sR IV ivScope 𝔟)
       (kPre IV)).comap (Layout.flatten (preTape IV b R x) 0 G.Nonce G.Rand (nS x))) RA x C prog ε γ :=
@@ -350,7 +350,7 @@ theorem zkAt_rec_prover (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) {k : �
 
 /-- **`Rec.sim` at the deployed objects is `simMStop` at the claim's first-part simulator**: the same sessions after
 the same stop, the first part `Rec.Compiled.S₀`'s zero messages, which are `simPre`'s on the coins of `simPreCoins`. -/
-theorem zkAt_rec_sim (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
+theorem zkAt_rec_sim (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (hI : I.V.k (xIOf x) = IV.k (xIOf x))
     {N Ω WP : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {k : ℕ} {P : WP → Claims.Prover (N × Ω)}
     {RA : WP → Prop} {ε γ : ℝ}
     (h : ZKmalAt H k P RA x ((Verity.Rec.sim 𝔒 𝔊 fun _ _ => Claims.Recursion.goesOn).C x)
@@ -360,7 +360,7 @@ theorem zkAt_rec_sim (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (hI : I.V.
         (soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t)) (sR IV ivScope 𝔟)).C x)
       ((simMStop IV 𝔟 (preTape IV b R x) G.Nonce G.Rand (simPre (deployRec IV ivScope 𝔟) I)
         (soOf ((G.withSim Mc).simulatorE t (t * 3 ^ t)) (CB t)) (sR IV ivScope 𝔟)).prog x) ε γ := by
-  have he₀ : ∀ (ask : List Claims.Msg → Claims.Out) (c : (simPre (deployRec IV ivScope 𝔟) I).C x),
+  have he₀ : ∀ (ask : List Hash.Msg → Claims.Out) (c : (simPre (deployRec IV ivScope 𝔟) I).C x),
       (Claims.SP.eval H ask ((simPre (deployRec IV ivScope 𝔟) I).prog x c)).1 =
         (Claims.SP.eval H ask ((𝔊).S₀.prog x (simPreCoins hI (b.nC x) c))).1 := fun ask c =>
     (simPre_eval IV 𝔟 ivScope I H ask x c).trans ((Claims.ZKMal.prefixRun_cast hmLeaf maskX (saltH H) ask hI
@@ -391,7 +391,7 @@ theorem recOuter_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x �
 
 /-- **Z2, the first part's strings are hm96 commitments**: each inner round's of the digest `dI` reads, and the stage
 round's of the staged values' digests `dg` reads, neither reading the salts it commits under. -/
-theorem recCompiled_commits (H : Claims.Msg → Claims.Msg) : (𝔊).Commits H := by
+theorem recCompiled_commits (H : Hash.Msg → Hash.Msg) : (𝔊).Commits H := by
   intro x w _
   refine ⟨fun ρ h => asX (dI w ρ h),
     fun p h j => asX ((dg w (p.1, saltsOn p.2) (h.take (IV.k (xIOf x)))).getD j 0), fun t₀ h => ⟨fun hh => ?_,
@@ -439,11 +439,11 @@ theorem recCompiled_witnessIn
 /-- **Z4, each session's shape is public**: `VO`'s rounds at each staged statement, the leaf counts within the
 record's (`hzl`), the coin bijections (`hCB`), and the session's coins `G`'s at every statement. -/
 theorem recCompiled_byShape (ht : 0 < t)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (δ₁ : ℝ≥0) : (𝔊).ByShape 𝔒 δ₁ := by
@@ -472,11 +472,11 @@ theorem recSystem_zk (ht : 0 < t) (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x 
     (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding FlockDeploy.sha512)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (hW : LiveWit FlockDeploy.sha512 IV ivScope 𝔟 I (preTape IV b R) (preOf IV b R) wit
@@ -497,27 +497,27 @@ end Recursion
 `zkStop_deployRecMStop_commit_sha512`, on its premises, as `Verity.SecurityProofs.RecZK` at the deployed recursion
 (`recSystem_zk`): the record's prover is `Rec.prover`'s (`zkAt_rec_prover`), `SimStop` is `Rec.sim`'s on bijective
 coins (`zkAt_rec_sim`, `zkAt_simStop`), and `εzkStop` and `γzk` are `Rec.system`'s bound's terms. -/
-theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
+theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
-    (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+    (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
     (R : Type) [Fintype R] [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-    (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+    (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
     (hk : VM.k = kM IV b) (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding FlockDeploy.sha512)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (hW : LiveWit FlockDeploy.sha512 IV ivScope (b.commit R dI dg wo) I (preTape IV b R) (preOf IV b R) wit
@@ -561,37 +561,37 @@ theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Clai
 masked record with the deployed stop, the released prover (`Verity.haltP`, at any halt test reading the witness, the
 tape, the prover's coins `K x` and the history) is `ZKmalRLeak` at the leaky `SimStop`, from `zkStop_of_recZK`
 (`Verity.zkStop_leak_haltP`). -/
-theorem recRelease_leak (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Claims.Msg → Bool)
+theorem recRelease_leak (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Hash.Msg → Bool)
     (I : Claims.Recursion.Inner Coin Claims.Flock.Wit) (relO : Readable.Parsed → Readable.Relation)
     (VM : Claims.Verifier Coin)
-    (iv : (Claims.Msg → Claims.Msg) → (x : Claims.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
+    (iv : (Hash.Msg → Hash.Msg) → (x : Hash.Msg) → (Fin (VM.k x) → Coin) → List Claims.Flock.Wit → Claims.Seen)
     (R : Type) [Fintype R] [Nonempty R]
-    (dI : Claims.Flock.Wit → R → List (Claims.Msg × Claims.Msg) → Fin 64 → UInt8)
-    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → List (Fin 64 → UInt8))
-    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
-    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (dI : Claims.Flock.Wit → R → List (Hash.Msg × Hash.Msg) → Fin 64 → UInt8)
+    (dg : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → List (Fin 64 → UInt8))
+    (wo : Claims.Flock.Wit → R × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → (R × (ℕ → Salt)) × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (G : Proto Claims.Flock.Wit) [Fintype G.Coin] (Mp : ∀ x, G.Nonce → G.TPreModel x)
-    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Claims.Msg → ℕ)
-    (CB : ℕ → Claims.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
+    (Mc : ∀ x, G.Nonce → (Fin (G.K x) → G.Coin) → G.TCoinModel x) (nL nB : Hash.Msg → ℕ)
+    (CB : ℕ → Hash.Msg → ℕ → Type) [∀ t x j, Fintype (CB t x j)] [∀ t x j, Nonempty (CB t x j)]
     (hk : VM.k = kM IV b) (hI : ∀ x, I.V.k (xIOf x) = IV.k (xIOf x))
     (hK : ∀ x, G.K x = VO.k x - 1) (hnL : ∀ x ν, (Mp x ν).size ≤ nL x) (hnB : ∀ x ν c, (Mc x ν c).size ≤ nB x)
     (hL : G.TMsgLink FlockDeploy.sha512 (Claims.Flock.R (deployZkRec relO).parse) Mp Mc) (hOK : G.TablesOK Mp Mc)
     (hC : G.Binding FlockDeploy.sha512)
-    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hzl : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
       nL (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).1 ∧
         nB (xsOf IV b x j u) ≤ (b.zl (staged b.st x (pick b.st x j) j)).2)
-    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg),
+    (hCB : ∀ t, 0 < t → ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg),
       u.length = (parts IV b ((preTape IV b R x).N × (preTape IV b R x).Ω)).start x j →
         Nonempty (CB t x j ≃ ((G.withSim Mc).simulatorE t (t * 3 ^ t)).C (xsOf IV b x j u)))
     (hW : LiveWit FlockDeploy.sha512 IV ivScope (b.commit R dI dg wo) I (preTape IV b R) (preOf IV b R) wit
       (Claims.Flock.R (deployZkRec relO).parse))
-    {K : Claims.Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] {t : ℕ} (ht : 0 < t) {δ₁ : ℝ≥0}
+    {K : Hash.Msg → Type} [∀ x, Fintype (K x)] [∀ x, Nonempty (K x)] {t : ℕ} (ht : 0 < t) {δ₁ : ℝ≥0}
     (hδ : Claims.Hm96Hiding (deployRec IV ivScope (b.commit R dI dg wo)).mask
       ((deployRec IV ivScope (b.commit R dI dg wo)).saltHash FlockDeploy.sha512) δ₁)
-    (halt : Claims.Flock.Wit → (x : Claims.Msg) →
+    (halt : Claims.Flock.Wit → (x : Hash.Msg) →
       (((preTape IV b R x).iter 0 G.Nonce G.Rand (nS x)).N × ((preTape IV b R x).iter 0 G.Nonce G.Rand (nS x)).Ω) →
-        K x → List (Claims.Msg × Claims.Msg) → Bool) :
+        K x → List (Hash.Msg × Hash.Msg) → Bool) :
     Claims.ZKmalRLeak (fun x => ((preTape IV b R x).iter 0 G.Nonce G.Rand (nS x)).N)
       (fun x => ((preTape IV b R x).iter 0 G.Nonce G.Rand (nS x)).Ω) K FlockDeploy.sha512 VM.k
       (Verity.haltP VM.k

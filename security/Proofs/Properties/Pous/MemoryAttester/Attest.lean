@@ -615,7 +615,7 @@ theorem periodSigned : PeriodSigned := by
 
 /-- `findColl` finds a collision whenever the list holds two different inputs with one output. -/
 theorem findColl_isSome :
-    ∀ l : List (Claims.Msg × Claims.Msg), (∃ q ∈ l, ∃ q' ∈ l, q.1 ≠ q'.1 ∧ q.2 = q'.2) → (Claims.findColl l).isSome := by
+    ∀ l : List (Hash.Msg × Hash.Msg), (∃ q ∈ l, ∃ q' ∈ l, q.1 ≠ q'.1 ∧ q.2 = q'.2) → (Claims.findColl l).isSome := by
   intro l
   induction l with
   | nil => rintro ⟨q, hq, _⟩; simp at hq

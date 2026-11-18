@@ -311,7 +311,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A plain statement in scope with hidden outputs and plain SHA-512 leaves sets up its one table at its sample**:
 `plain_setupHiddenT` at `flock-leaf/sha512-unsalted`. -/
-theorem plain_setupHiddenU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_setupHiddenU {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") {d : Json}
@@ -327,7 +327,7 @@ open Classical Discharge.Tables Claims.Bridge.PlainSample in
 /-- **The deployed plain decoders are right at `plainTab` for the verdict at the sample, at hidden outputs and plain
 SHA-512 leaves, at a record writer**: `plain_hdecHLfAtK_of` at `LeafForm.plain`. -/
 theorem plain_hdecHUAtK_of (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -359,7 +359,7 @@ open Classical Discharge.Tables Claims.Bridge.PlainSample in
 SHA-512 leaves**: `plain_hdecHUAt` with `plainVerdictAtK keep` for `plainVerdictAt` (`plain_hdecHUAtK_of` at
 `wrPDK`). -/
 theorem plain_hdecHUAtK (keep : Bool → Bool)
-    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
     (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")

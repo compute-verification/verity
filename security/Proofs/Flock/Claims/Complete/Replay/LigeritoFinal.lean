@@ -83,10 +83,10 @@ point `q ‖ bits(y)` is the multilinear extension of `b` there, the honest prov
 which `L + k` bodies have been sent (`k` its position), returns a proof on which the verifier's model, at the replies'
 coins, ends with `lhsE yr ext res = s`. -/
 def Honest : Prop :=
-  ∀ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (m : ℕ) (sch : Schedule) (T : F128)
+  ∀ (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (m : ℕ) (sch : Schedule) (T : F128)
     (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
-    (basisAt : Array F256 → ℕ → Array F256) (t : Transcript) (l : Array Claims.Msg) (P : LigeritoProof)
-    (t' : Transcript) (l' : Array Claims.Msg),
+    (basisAt : Array F256 → ℕ → Array F256) (t : Transcript) (l : Array Hash.Msg) (P : LigeritoProof)
+    (t' : Transcript) (l' : Array Hash.Msg),
     fast100 m = some sch → tb.size = 2 ^ sch.n → b.size = 2 ^ sch.n → dot tb b = T →
     cm0.rows = encodeRows (sch.levels.getD 0 default) tb →
     (∀ q e y, q.size + e = sch.n → y < 2 ^ e →
@@ -105,13 +105,13 @@ end Lg
 /-- **A returning rep runs the honest Ligerito** on its table, at ring switching's `T` and the batched basis of its
 switched claims, from where its ring switch stopped, with as many bodies sent as the rep's start and that position;
 its proof's cap is the commitment's. -/
-theorem repP_lig (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_lig (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (ht : t.k = 0) (l : Array Claims.Msg) {full : Array F128}
+    (hm : 14 ≤ st.m) (t : Transcript) (ht : t.k = 0) (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     p.cap = cm0.cap ∧ ∃ l₃ t₄,
@@ -181,10 +181,10 @@ theorem repP_lig (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st :
 /-- **What the session walk establishes at table `i`'s rep `r`, on the packed table**: the table's level-0 commitment
 is a `commitP` of the trace's packed table at the schedule's level `0`, and the honest rep on that table and
 commitment, run from the rep's first send on and from its own transcript's start, returns the decoded proof. -/
-def RepWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
+def RepWalkP {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) (i r : ℕ) :
     Prop :=
-  ∃ (cm0 : Commit) (s0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (l : Array Claims.Msg)
-    (t' : Transcript) (l' : Array Claims.Msg),
+  ∃ (cm0 : Commit) (s0 : ℕ → ByteArray) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (l : Array Hash.Msg)
+    (t' : Transcript) (l' : Array Hash.Msg),
     commitP o.hs o.tabs[i]!.merkle ((o.sch i).levels.getD 0 default) (packed (o.trace i) o.tabs[i]!.m) s0 = .ok cm0 ∧
     l.size = repStart o.spec o.sts (2 * i + r) ∧
     ((repP (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.tabs[i]! (o.sch i) (o.trace i)
@@ -193,14 +193,14 @@ def RepWalkP {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable
 
 /-- **Ring switching's claim is the packed table's** at every rep: `Σ_y packed(y)·basisVals(y) = T` at the rep's
 claims and ring-switch coins. -/
-def RsSum (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RsSum (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     dot (packed (o.trace i) o.tabs[i]!.m) (basisVals (Rs.sws (o.claims i r) (o.rsCoins i r)) (o.tabs[i]!.m - 7)) =
       Rs.T (o.trace i) (o.claims i r) (o.rsCoins i r)
 
 /-- **The verifier's basis is the batched basis's multilinear extension** at every rep: `basis sws` at `q ‖ bits(y)`
 is `Σ_w basisVals(w)·eq(q ‖ bits(y), w)`, at the rep's switched claims. -/
-def BasisOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def BasisOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ∀ q e y, q.size + e = (o.sch i).n → y < 2 ^ e →
     FlockSoundness.Refine.gOf (basis (Rs.sws (o.claims i r) (o.rsCoins i r)) q e)[y]! =
       FlockSoundness.Model.bHat FlockSoundness.execArith (o.sch i).n
@@ -209,7 +209,7 @@ def BasisOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.
 
 /-- **Ligerito's final identity at a rep** the walk runs on its packed table, from the honest Ligerito's, ring
 switching's claim and the verifier's basis. -/
-theorem _root_.FlockComplete.Run.lgFinal_at {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.lgFinal_at {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2)
     (hw : RepWalkP o i r) (hH : Lg.Honest) (hT : RsSum H rel) (hB : BasisOk H rel) :
     FlockSoundness.Refine.lhsE (o.proof i r).ligerito.finalProof.yr (o.lgOut i r).1.2.2.2
@@ -233,7 +233,7 @@ theorem _root_.FlockComplete.Run.lgFinal_at {H : Claims.Msg → Claims.Msg} {rel
 
 /-- **Ligerito's final identity** (`LgFinal`) at every rep the walk runs on its packed table, from the honest
 Ligerito's, ring switching's claim and the verifier's basis. -/
-theorem lgFinal_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem lgFinal_of (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hw : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RepWalkP o i r) (hH : Lg.Honest) (hT : RsSum H rel)
     (hB : BasisOk H rel) : LgFinal H rel :=
   fun o i hi r hr => o.lgFinal_at hi hr (hw o i hi r hr) hH hT hB

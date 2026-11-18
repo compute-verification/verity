@@ -78,7 +78,7 @@ theorem range_map_getElem! {β : Type} [Inhabited β] (g : ℕ → β) {n i : �
   simp
 
 /-- **A rep's proof carries its commitment's cap.** -/
-theorem repP_cap (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_cap (resp : ℕ → Hash.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t : Transcript) :
     Ret ((repP (asksS resp) hsP st sch tr tbl cm0 extras salt nonce).run t) fun pt => pt.1.cap = cm0.cap := by
@@ -92,7 +92,7 @@ theorem repP_cap (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch
 
 /-- **Rep `k`'s sends** in the plain session (`Replay.repP_count`): its zerocheck's, lincheck's, its ring switch's at
 its table's extra claims at the link's points, and Ligerito's at its table's `fast100` schedule. -/
-def sendsP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup) (k : ℕ) : ℕ :=
+def sendsP (resp : ℕ → Hash.Msg) (spec : SessionSpec) (tabs : Array Setup) (k : ℕ) : ℕ :=
   (3 + (tabs[k / 2]!.m - 6)) + (3 + (tabs[k / 2]!.fold.kLog - 6)) +
     (2 + (match tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) with
       | .ok e => e.size
@@ -103,7 +103,7 @@ def sendsP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (tabs : Array Setup)
 commitment, with the table's extra claims `e` at the link's points and rep `k % 2`'s salts and nonces, `repP` returns
 `pt` from the empty transcript at the rep's domain, after the link's send and the earlier reps' (`sendsP`), and `f` is
 its proof's file. -/
-def RepRunP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
+def RepRunP (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (schs : Array Schedule) (trs : Array Trace) (cms : Array Commit) (tape : Tape) (k : ℕ) (f : ByteArray) : Prop :=
   ∃ e pt l l', tabs[k / 2]!.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
     l.size = 1 + ((List.range k).map (sendsP resp spec tabs)).sum ∧
@@ -114,9 +114,9 @@ def RepRunP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : Se
 
 /-- **The plain session, rep by rep**, at any number of tables: each table's `fast100` schedule and level-0
 commitment, and the `k`th proof file is rep `k`'s (`RepRunP`). -/
-theorem sessionP_repRuns (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) (spec : SessionSpec)
+theorem sessionP_repRuns (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) (spec : SessionSpec)
     (tabs : Array Setup) (trs : Array Trace) (tape : Tape) (hts : tabs.size = spec.tables.size)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs trs tape).go #[] = (.ok r, bodies)) :
     ∃ schs cms, (∀ i < tabs.size, fast100 tabs[i]!.m = some schs[i]! ∧
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) tabs[i]!.merkle (schs[i]!.levels.getD 0 default)
@@ -153,7 +153,7 @@ theorem sessionP_repRuns (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.
   have hsch : ∀ i < tabs.size, fast100 tabs[i]!.m = some schs[i]! := fun i hi => by
     rw [getElem!_pos tabs i hi, getElem!_pos schs i (by omega)]
     exact hf₁ i hi (by omega)
-  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       l.size = 1 + ((List.range k).map (sendsP resp spec tabs)).sum ∧
       b.2.size = k ∧ ∀ j < k, RepRunP resp (Claims.hOf H) spec tabs schs trs cms tape j b.2[j]!) ?_
     (by exact ⟨by simp, rfl, by simp⟩) hF
@@ -235,7 +235,7 @@ theorem fileCaps_size (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (pfs
 
 /-- The reply rep `k`'s zerocheck reads its `z` from in the plain session: after the link's send and the earlier reps'
 (`JsonRT.sendsP`), the rep's third. -/
-def zAtP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) : ℕ :=
+def zAtP (resp : ℕ → Hash.Msg) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) : ℕ :=
   1 + ((List.range k).map (JsonRT.sendsP resp spec (tabsOf sts))).sum + 2
 
 /-- **The honest session's files decode to honest reps**: at a `sessionS` run whose replies start with the coin `c₁`,
@@ -244,12 +244,12 @@ file `k` decodes at `shapeAt` to the proof table `k / 2`'s rep returned (`filePs
 table's level-0 node count, which is an honest rep of `repCtx` at the coins `cs` wherever its `finalC` is the
 zerocheck's at that rep's `z`, whose `finalC` is the zerocheck's at the reply `zAtP`, and which is shaped at
 `shapeAt`. -/
-theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
+theorem sessionS_reps {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Hash.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} (hc : resp 0 = c₁.bytes)
     (hts : sts.size = spec.tables.size)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs)) (r₀ : List ByteArray) (cs : List Coin) :
     pfs.size = 2 * sts.size ∧ ∀ k < 2 * sts.size,
       decodeProof (shapeAt (tabsOf sts) (pointsOf spec c₁) k) pfs[k]! = .ok (filePs spec sts c₁ pfs)[k]! ∧
@@ -320,12 +320,12 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
 /-- **The honest run's last message carries its reps' proofs**: at a statement that sets up, where the pure session
 returns, the last message is `Final.encode` of the statement, the record and `filesAt` of the proofs its files decode
 to (`filePs`), each an honest rep (`sessionS_reps`). -/
-theorem honestRun_files {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {x : Claims.Msg}
+theorem honestRun_files {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {x : Hash.Msg}
     {w : Claims.Flock.Wit} {ω : Tape} {k : ℕ} (r : Fin k → Coin) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hx : setupOf false x = some (s, spec, sts)) (hts : sts.size = spec.tables.size)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec (Claims.coinSeq r 0)) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H (fun j => (Claims.coinSeq r j).bytes) spec sts w ω = (.ok (rec, pfs), bs)) :
     FlockComplete.honestRun H x w ω r = (bs.toList.map (List.cons 0), Final.encode ⟨x, rec,
       filesAt (tabsOf sts) (pointsOf spec (Claims.coinSeq r 0)) (filePs spec sts (Claims.coinSeq r 0) pfs)⟩) := by
@@ -353,14 +353,14 @@ replies that start with the first coin `c₁` and its tables are `TableOk` with 
 points, `decR` decides on the honest messages from the proofs the session's files decode to (`filePs`) and their
 tables' caps (`fileCaps`), wherever their rows fit a message, the last message reads as `filePs` at the statement and
 the files' `finalC` are at the reader's `z` (`FilesFinalC`). The files decode to proofs shaped for them. -/
-theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
-    {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
-    {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
+theorem sessionRun_decides {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {rd : Hash.Msg → Option FinalP}
+    {x last : Hash.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {resp : ℕ → Hash.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
     (hx : setupOf false x = some (s, spec, sts)) (hcs : cs.head? = some c₁) (hc : resp 0 = c₁.bytes)
     (hts : sts.size = spec.tables.size)
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
-    {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
+    {rec : String} {pfs : Array ByteArray} {bs : Array Hash.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs)
     (hfit0 : RowsFit ((capRows (fileCaps spec sts c₁ pfs)).map nodeRow))
