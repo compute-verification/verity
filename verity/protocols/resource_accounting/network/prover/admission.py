@@ -1,11 +1,11 @@
 """The network attester's admission on the served node: its release order (`ReleaseOrder`) and the certified tick
 (`TickGate`, `RuleGate`), the readers of its release headers and its watermark (`release_of`, `Watermark`), and the
-frontends that feed them: serve-openai's (`TickAdmit`) and a front in another process than its engine (`FrontFeed`). The
-adapter hands in what is its own: the engine loop's submit and abort, its server's routes and body check, the
-configuration it read, and the exchange of `verity.hooks` events and requests the gate and serve-openai's frontend
-attach to, both built and attached by one entry (`Admitter`). Nothing here imports the adapter or vLLM.
+frontends that feed them: a front that hands its engine each input (`TickAdmit`) and a front in another process than
+its engine (`FrontFeed`). The adapter hands in what is its own: its submit and abort of an input, the configuration it
+read, and the exchange of `verity.hooks` events and requests the gate and the frontend attach to, both built and
+attached by one entry (`Admitter`). Nothing here names a serving stack.
 
-`ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
+`ReleaseOrder` is a reorder buffer in front of the adapter's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
 is no hold to a bucket boundary (the boundary saves no step bits).
 
@@ -30,14 +30,15 @@ it is skipped and the held ones go on; if it comes after all it is forwarded at 
 
 **The certified tick** (``tick``, `TickGate`). Step k has a logical time T_k, an integer of microseconds, and before it the
 gate adds exactly the requests whose release bucket a has closed by then, (a + 1)·τ_b ≤ T_k, in release order. After a step
-that scheduled a token, T advances by τ_sat if vLLM's waiting queue is nonempty and by τ_free if it is empty; when nothing is
+that computed a slot, T advances by τ_sat if a started input is left waiting for a slot (`hooks.StepBegan.queued`) and by
+τ_free if none is; when nothing is
 running or waiting, T jumps to the close of the next release's bucket, so T_0 is the first release's. τ_b is the network
 attester's bucket and τ_sat, τ_free the engine class's (`Tick`), registered with the class: a configuration, not a
 run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
 once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n but
-the ones a line names lost. The rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request
-outside it until its step (a hold on release, driven by the adapter's admission hook, `verity_vllm.engine.admission`), so the
-scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
+the ones a line names lost. The rest of each step is the serving stack's own scheduler, unpatched: the gate holds a
+numbered request outside it until its step (`hooks.StartOnBoundary`: an input starts only when `ready` lets its step
+run), so the scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
 registered τ, which the encoder's replay recomputes (`advice_code.replay`, ``tick``) without timing advice. A release a
 watermark line names lost is skipped (``lost``): the gate doesn't wait for it, the later ones are admitted in order, and
 its request, should it reach the engine all the same, before that line or after it, is kept out of the scheduler
@@ -45,14 +46,14 @@ its request, should it reach the engine all the same, before that line or after 
 and counted (`TickGate.summary`): a request without the header (``unordered``), one of an older run (``stale``), one that
 comes after it was skipped (``late``). A released request that doesn't reach the engine, and that no line names lost,
 holds the later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that
-breaks, opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. Refused: a
-scheduler policy other than FCFS (the waiting queue must be the admission order) and more than one data-parallel engine.
-Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and, where the server's
-front runs in another process than its engine, `FrontFeed` on the front's hooks, which appends the releases and the
-watermark to a feed file that the engine's gate reads (`engine`). A request the gate drops is its frontend's to end, and
-each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the one in the engine with
-that error and aborts it (`TickAdmit`). Elsewhere the refusal goes to the adapter's front (`hooks.RefuseInput`), which
-ends the request in its server.
+breaks, opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. The
+gate requires that inputs start in the order it adds them, on one stream of steps; the adapter refuses a scheduler that
+can't give it that. Two frontends feed the gate: `TickAdmit`, where the front hands its engine each input itself (its
+watermark route in the server), and, where the server's front runs in another process than its engine, `FrontFeed` on
+the front's hooks, which appends the releases and the watermark to a feed file that the engine's gate reads (`engine`).
+A request the gate drops is its frontend's to end, and each refuses one that comes after its line with one sentence
+(`LOST`): `TickAdmit` answers the one in the engine with that error and aborts it; `FrontFeed` hands the refusal to the
+adapter's front (`hooks.RefuseInput`), which ends the request in its server.
 """
 from __future__ import annotations
 
@@ -79,10 +80,10 @@ CATCH_UPS = frozenset({"quiet", "marks", "open"})
 
 
 class ReleaseOrder:
-    """Forward each `Admission` to ``forward`` (the engine loop's ``submit``) in release order.
-    `key` reads a request's headers as the frontend receives it; `submit` and `abort` stand in for the engine loop's;
-    `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the HTTP
-    server's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
+    """Forward each `Admission` to ``forward`` (the adapter's ``submit``) in release order.
+    `key` reads a request's headers as the frontend receives it; `submit` and `abort` stand in for the adapter's;
+    `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the
+    front's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
 
     #: the release headers `key` reads, the release's number and its run
     headers = (RELEASE_HEADER, RUN_HEADER)
@@ -193,8 +194,8 @@ def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
-    # Imported where a line is read, not with the module, which the adapter's scheme plugin loads in each of vLLM's
-    # processes and which imports only the stdlib and this package.
+    # Imported where a line is read, not with the module, which an adapter loads in each of its serving processes and
+    # which imports only the stdlib and this package.
     from verity.protocols.resource_accounting.network.verifier.release import (
         read_watermark,
     )
@@ -218,7 +219,7 @@ def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None
 @dataclass(frozen=True)
 class Tick:
     """The certified tick's constants, in microseconds: the network attester's bucket τ_b, and the engine class's step
-    times τ_sat (a step after which vLLM's waiting queue is nonempty) and τ_free (one after which it is empty)."""
+    times τ_sat (a step that leaves a started input waiting for a slot) and τ_free (one that leaves none)."""
 
     bucket_us: int
     sat_us: int
@@ -250,7 +251,7 @@ class Tick:
 
 
 class TickGate:
-    """``--admit tick``, a gate on starting inputs (`verity.hooks.Gate`) and a subscriber of the ``steps`` hook, which
+    """The certified tick's gate on starting inputs (`verity.hooks.Gate`) and a subscriber of the ``steps`` hook, which
     `attach` files and subscribes on an exchange that the adapter's admission hook drives (the module docstring).
 
     The frontend's records come through `take`: a numbered request's release ``{"key", "run", "n", "bucket"}`` (``key``
@@ -577,17 +578,17 @@ def scheme_name() -> str:
 
 
 class TickAdmit:
-    """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
-    or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
-    queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
+    """The frontend of a front that hands its engine each input: `key` reads a request's release headers (`ValueError` on
+    a malformed or repeated N, the server's 400), `submit` hands the gate the release (through ``take``) just before the
+    request itself (``forward``), `passed` says a numbered request won't be submitted, and the
     watermark's route (`attach`, `serve_watermark`) feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
     a watermark line names lost is the gate's to drop and this frontend's to answer, since the engine never finishes a
     request its scheduler never saw: a request of it that is in the engine is answered with that error and aborted, and
     one that comes later is refused (`key`). A watermark that breaks forgets its run's lost releases: the gate is open
     then, and adds every request at once. The frontend sees no other opening of the gate (a watermark that stalls past
-    the hold, the engine loop's drain), so after one a line still has it abort or refuse the requests of the releases it
+    the hold, the engine's drain), so after one a line still has it abort or refuse the requests of the releases it
     names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
-    orders nothing. All of it runs on the HTTP server's event loop."""
+    orders nothing. All of it runs on the front's event loop."""
 
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
                  take: Callable[[dict[str, Any]], None]) -> None:

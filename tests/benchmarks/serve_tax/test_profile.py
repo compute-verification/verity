@@ -94,7 +94,8 @@ def test_pearl_plus_plans_on_one_gpu_with_a_reserved_session_a_lifetime_checked_
                                                  "and glm53 serves on 8"):
         S.profile_plan("coding-agent", "glm53", ["pearl-plus"], False, [own("s1"), own("s2")])
     sh = (S.HERE / "run.sh").read_text()
-    assert sh.count('${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}') == 2
+    assert '--find-load} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"}' in sh
+    assert '[ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")' in sh
 
 
 def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_declares_levels(
