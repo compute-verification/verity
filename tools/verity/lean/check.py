@@ -2967,7 +2967,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     list exempts nothing today, and would exempt a guarantee listed under that name later with the same statement: it
     fails `witnesses.unwitnessed-unlisted`, as a `witnesses` entry of no guarantee fails `witnesses.stale`, and `--update`
     drops it, its own audit not failing on it (`judge`). `--update` keeps an entry only while its guarantee is in scope
-    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list
+    without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`; a `below_one` entry also when
+    its statement changed) and adds none, so the list
     only shrinks (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side
     still lists: for that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry
     at its statement as built, in the form the lock run writes (`repaired`), to be written back."""
@@ -3014,7 +3015,15 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             else:
                 changed = (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
                     u is not None and u != unfolded and u != mv.get("unfolded_sha256"))
-            if changed:
+            if changed and half == "below_one":
+                at = {"type_hash": pin.get("type_sha256")} | ({"unfolded_hash": unfolded} if unfolded else {})
+                fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
+                                     f"listed the targets its honest witnesses have no `below_one` lemma at "
+                                     f"({', '.join(allow[g]['targets'])}), and the entry still names its statement before. "
+                                     f"Its witnesses stand and the entry stays: run `check.py --update`, which re-records "
+                                     f"it at the statement as built ({json.dumps(at)[1:-1]}) with the targets still "
+                                     f"uncovered, and reread its `why`. Removing it fails `witnesses.honest-error`"))
+            elif changed:
                 since = (f"witnesses: `unwitnessed` lists {g} without `unfolded_hash`, and its statement is the definition "
                          f"{pin['lift'].get('head')}, whose body its type hash doesn't cover, so the entry can't show the "
                          f"statement is the one it was listed with" if unkeyed else
@@ -3296,7 +3305,8 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
     another (moved, `--moved`, or lifted, `lifted_into`). An entry without `unfolded_hash` of a guarantee whose statement is
     a definition gets one only when its hash is that of the statement unfolded (the text before a lift), never at its type
     hash, which a restated body leaves as it is. A `below_one` entry keeps the targets still uncovered, all of them where
-    the walk left some unread (`targets_unread`). Every other entry drops, one of a name that is neither a guarantee of the
+    the walk left some unread (`targets_unread`), re-keyed at the statement as built where it changed: its targets are
+    read from the build. Every other entry drops, one of a name that is neither a guarantee of the
     lock nor among the records the update writes (``kept``) with them, and none is added."""
     out, ws, guarantees = {}, policy.get("witnesses") or {}, policy.get("guarantees") or {}
     wit = claim_witnesses(policy)
@@ -3312,11 +3322,12 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
         built, mv, was = pin.get("type_sha256"), pin.get("moved") or {}, unwitnessed_unfolded(v)
         unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
         if was is not None and was != unfolded and was != mv.get("unfolded_sha256"):
-            continue
-        if was is None and unfolded:
-            if h not in (unfolded, mv.get("unfolded_sha256")):
-                continue
-        elif not (h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv)))):
+            same = False
+        elif was is None and unfolded:
+            same = h in (unfolded, mv.get("unfolded_sha256"))
+        else:
+            same = h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv)))
+        if not same and half != "below_one":
             continue
         keyed = {"unfolded_hash": unfolded} if unfolded else {}
         if half is None:

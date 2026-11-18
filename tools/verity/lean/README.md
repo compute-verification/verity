@@ -208,7 +208,8 @@ keeps or drops from and never adds to.
   refused as `witnesses.honest-error`). The lemma binds the witness's own parameters and vocabulary by `∀` or names
   them, and may choose the files and commitments by `∃` only where the witness binds them. The walk unfolds only a
   part naming a constant of a module that declares or imports the error's; one that runs out of depth or budget or
-  raises is `witnesses.targets-unread`, and `--update` keeps the entry whole.
+  raises is `witnesses.targets-unread`, and `--update` keeps the entry whole. Where the guarantee's statement changed,
+  `--update` re-keys the entry at the statement as built rather than dropping it.
 - `compile_time`: the modules that must run code while they compile, one by one, each with its `why` and the `digest`
   of its file as it was reviewed (`listings`, `scans`). None may declare a guarantee or a definition a guarantee reads,
   so a proof-only tactic belongs in a module of its own. The package has a `lakefile.toml`, not a `lakefile.lean`.

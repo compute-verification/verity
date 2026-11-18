@@ -5705,6 +5705,38 @@ def test_an_honest_witness_bounded_by_an_error_is_held_to_a_below_one_lemma_or_a
         assert A.unwitnessed_kept(stale, unread, {}) == {"P.sound": entry}, "kept whole, never dropped as stale"
 
 
+def test_a_below_one_entry_of_a_changed_statement_is_re_recorded_at_its_hashes_not_dropped():
+    """A `below_one` entry whose guarantee's statement changed fails `witnesses.unwitnessed-changed`, saying the witnesses
+    stand and the entry is re-recorded at the statement as built; `--update` re-keys it, keeping the targets still
+    uncovered, and the lock it writes passes."""
+    def tgt(sub: str, below: bool = False) -> dict:
+        return {"witness": "P.sound_honest", "head": "Verity.Vocab.error", "vocab": "P.top", "params": None,
+                "subprotocol": sub, "below_one": below}
+
+    pol, f = witnessed(guarantee={"targets": [tgt("S.pouw"), tgt("S.wipe")]})
+    h = f["pins"]["P.sound"]["type_sha256"]
+    entry = {"type_hash": sha("its statement before"), "missing": "below_one", "targets": ["S.pouw", "S.wipe"],
+             "owner": "@soundness", "why": "the honest witness is at an instance whose published error is top"}
+    before = {**pol, "unwitnessed": {"P.sound": entry}}
+    [fail] = A.witness_failures(before, f, WOWN)
+    assert fail.code == "witnesses.unwitnessed-changed" and A.BOOKKEEPING.match(fail)
+    assert f'run `check.py --update`, which re-records it at the statement as built ("type_hash": "{h}")' in fail
+    assert "prove" not in fail and "remove its `unwitnessed` entry" not in fail
+    kept = A.unwitnessed_kept(before, f, {})
+    assert kept == {"P.sound": entry | {"type_hash": h}}
+    assert witness_codes({**pol, "unwitnessed": kept}, f) == []
+    one = facts(pins=f["pins"] | {"P.sound": f["pins"]["P.sound"] | {"targets": [tgt("S.pouw", True), tgt("S.wipe")]}},
+                own_modules=sorted(WOWN))
+    assert A.unwitnessed_kept(before, one, {}) == {"P.sound": entry | {"type_hash": h, "targets": ["S.wipe"]}}
+    lifted = facts(pins=f["pins"] | {"P.sound": f["pins"]["P.sound"] | {"lift": {"head": "P.Stmt",
+                                                                                   "unfolded_sha256": sha("unfolded")}}},
+                   own_modules=sorted(WOWN))
+    assert A.unwitnessed_kept(before, lifted, {}) == {"P.sound": entry | {"type_hash": h, "unfolded_hash": sha("unfolded")}}
+    half = {"type_hash": sha("its statement before"), "missing": "nontrivial", "why": "not yet proved"}
+    honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
+    assert A.unwitnessed_kept(honest_only, f, {}) == {}, "an entry exempting a witness still drops when its statement changed"
+
+
 def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
     """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
     that one side lists and whose entry the other side dropped: the check holds it to its witnesses
