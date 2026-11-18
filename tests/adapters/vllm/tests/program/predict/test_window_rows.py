@@ -672,7 +672,7 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
-    program = WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
+    program = WC.class_program(_registered(), WW.WEIGHTS_CLASS.positions).digest
     assert {v.program for p, v in got.items() if p != SS.SCAN_STATE} == {program}
     assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (CLASS.buckets, SS.words(CLASS.scan))
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),

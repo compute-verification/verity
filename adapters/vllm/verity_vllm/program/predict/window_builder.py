@@ -135,7 +135,15 @@ class _Builder:
     programs: int = 1
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
-    local: dict[tuple[int, str], int] = field(default_factory=dict)
+    #: the node being lowered, the slots ``[lo, hi)`` that lower it, and the first of them whose last position is its
+    node: int = 0
+    among: tuple[int, int] | None = None
+    ending: int | None = None
+    #: each slot's allocations of a template at a node so far, and each allocation's first unit and count
+    seen: dict[tuple[int, str, int], int] = field(default_factory=dict)
+    groups: dict[tuple[str, int, int, int, int], tuple[int, int]] = field(default_factory=dict)
+    #: each template's allocations' first units, a span each (`interface.ordered`'s ``starts``)
+    starts: dict[str, list[int]] = field(default_factory=dict)
     feeds: list[_Feed] = field(default_factory=list)
     #: each template port's row count, its first feed's: the cut `settle` gives it
     read_rows: dict[tuple[str, str], int] = field(default_factory=dict)
@@ -154,21 +162,34 @@ class _Builder:
     weights: tuple[tuple[str, int, int], ...] = ()
     params: dict[str, int] = field(default_factory=dict)
 
-    def unit(self, fn: Any, count: int = 1) -> tuple[str, int]:
-        """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. Every slot makes
-        the same allocations in the same order, so a slot's allocation of a template whose earlier ones took ``base`` of its
-        units takes units ``base · programs + slot · count`` on: each allocation's slots sit side by side, and the slots'
-        copies of a wire or read coalesce into one pattern."""
+    def unit(self, fn: Any, count: int = 1, among: tuple[int, int] | None = None) -> tuple[str, int]:
+        """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. The slots
+        ``among`` (default the node's, `among`) make the same allocations at a node in the same order, slot ``lo`` first, so
+        the allocation takes ``count · (hi - lo)`` units at once and slot s the ``count`` from ``(s - lo) · count`` on: each
+        allocation's slots sit side by side, and the slots' copies of a wire or read coalesce into one pattern."""
         tid = descriptor_id(fn)
         if self.label is None:
             raise Unexpressible(f"{tid}: a unit of no slot's step")
         slot = self.label[0]
+        lo, hi = among or self.among or (0, self.programs)
+        if not lo <= slot < hi:
+            raise ValueError(f"{tid}: a unit of slot {slot}, not of the slots [{lo}, {hi}) that lower node {self.node}")
         self.fns.setdefault(tid, fn)
-        base = self.local.get((slot, tid), 0)
-        self.local[(slot, tid)] = base + count
-        self.units[tid] = max(self.units.get(tid, 0), (base + count) * self.programs)
-        at = base * self.programs + slot * count
+        k = (slot, tid, self.node)
+        i = self.seen[k] = self.seen.get(k, -1) + 1
+        g = (tid, self.node, i, lo, hi)
+        if g not in self.groups:
+            if slot != lo:
+                raise Unexpressible(f"{tid}: slot {slot}'s allocation {i} at node {self.node}, which slot {lo}, the first of "
+                                    f"[{lo}, {hi}), didn't make")
+            self.groups[g] = (self.units.get(tid, 0), count)
+            self.units[tid] = self.units.get(tid, 0) + count * (hi - lo)
+        start, n = self.groups[g]
+        if n != count:
+            raise Unexpressible(f"{tid}: slot {slot} allocates {count} units at node {self.node} where slot {lo} took {n}")
+        at = start + (slot - lo) * count
         self.spans.setdefault(tid, []).append((at, count, *self.label))
+        self.starts.setdefault(tid, []).append(start)
         return tid, at
 
     def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
@@ -298,43 +319,47 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     return len(lay.cut(cuts)) + len(lay.outs)
 
 
-def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int]], axis: str,
-            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int]]:
-    """``groups`` (first unit, digits as ``(radix, axis)``, step), consecutive, with each run of like ones (one digits, their
-    steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
+def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int, int]], axis: str,
+            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int, int]]:
+    """``groups`` (first unit, digits as ``(radix, axis)``, step, first slot), consecutive, with each run of like ones (one
+    digits and first slot, their steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
     out, i = [], 0
     while i < len(groups):
-        at, digits, step = groups[i]
+        at, digits, step, slot = groups[i]
         j = i + 1
-        while j < len(groups) and groups[j][1] == digits and groups[j][2] == step + (j - i) * delta:
+        while j < len(groups) and groups[j][1] == digits and groups[j][3] == slot and groups[j][2] == step + (j - i) * delta:
             j += 1
-        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step))
+        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step, slot))
         i = j
     return out
 
 
 def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
-    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, an allocation's
-    slots' runs of one length at one step side by side, are one entry (the slot, then the run), and like entries that follow
-    on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused where a template's
-    units aren't such runs."""
+    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, consecutive slots'
+    runs of one length at one step side by side, are one entry (the slot from the first of them, then the run), and like
+    entries that follow on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused
+    where a run's slot is at or past ``slots``."""
     out = []
     for tid, spans_ in spans.items():
         merged: list[tuple[int, int, int, int]] = []
         for at, n, slot, step in sorted(spans_):
+            if not 0 <= slot < slots:
+                raise Unexpressible(f"{tid}: units from {at} are slot {slot}'s, not one of the circuit's {slots}")
             if merged and merged[-1][2:] == (slot, step):
                 merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
             else:
                 merged.append((at, n, slot, step))
-        groups = []
-        for i in range(0, len(merged), slots):
-            g = merged[i:i + slots]
-            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
-                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
-            groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
+        runs: list[list[tuple[int, int, int, int]]] = []
+        for r in merged:
+            if runs and (p := runs[-1][-1])[2] + 1 == r[2] and (p[1], p[3]) == (r[1], r[3]):
+                runs[-1].append(r)
+            else:
+                runs.append([r])
+        groups = [(g[0][0], ((len(g), "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3], g[0][2]) for g in runs]
         for axis, delta in (("-", 0), ("step", 1)):
             groups = _follow(groups, axis, delta)
-        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
+        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step, slot)
+                for at, d, step, slot in groups]
     return out
 
 
