@@ -14,6 +14,8 @@ import functools
 import hashlib
 import importlib.util
 import json
+import os
+import socket
 import sys
 import tempfile
 from dataclasses import replace
@@ -24,10 +26,15 @@ import numpy as np
 import pytest
 
 from verity.circuits import restrict as R
-from verity.circuits.codec import descriptor_chunks
+from verity.circuits.codec import descriptor_chunks, descriptor_id
+from verity.circuits.layout import resolve
+from verity.circuits.ops.boolean import versions as V
 from verity.commitments.periods import interface as I
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as ROW_V2
 from verity.protocols.proofs.spot.verifier.one_stage import one_circuit as OC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity_flock import class_statement as CS
+from verity_flock import ir_lower as IL
 
 ROOT = Path(__file__).resolve().parents[6]
 _TI = importlib.util.spec_from_file_location("periods_test_interface",
@@ -83,16 +90,6 @@ def drawn(win: Any) -> Any:
     return ms[int(np.random.default_rng(0).integers(len(ms)))]
 
 
-def c_s(member: Any) -> bytes:
-    """The drawn block's C_S, which prover and verifier both derive from C and the block's units: the block's Program
-    (`restrict.restrict`), its descriptor's bytes."""
-    r = registered()
-    try:
-        return R.restrict(r["C"], r["partition"], [(member.base, member.base + member.n)]).descriptor
-    except R.Refused as e:
-        raise Stop(f"prove: the prover's C_S for block {member.base} ({R.__file__}:restrict): {e}") from e
-
-
 def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
                 partition: dict | None = None) -> tuple[Any, Any]:
     r = registered()
@@ -141,10 +138,101 @@ def stage_draw() -> str:
     return f"block at unit {drawn(win).base}"
 
 
+def by_gate(block: R.Block) -> dict[int, int]:
+    """The committed trace's values (`TI.chain_values`) by C's descriptor gate, word level: every gate a unit of C reads or
+    returns."""
+    (xs, ws), (ys,) = TI.chain_values()
+    ins = {"x": xs.reshape(len(xs), -1), "w": ws.reshape(len(ws), -1)}
+    D, scope = block.bits.D, block.bits.C.root_scope
+    templates = set(registered()["partition"]["query"]["params"]["templates"])
+    out: dict[int, int] = {}
+
+    def put(g: int, v: Any) -> None:
+        if out.setdefault(g, int(v)) != int(v):
+            raise AssertionError(f"gate {g} of C holds two values of the trace")
+
+    u = 0
+    for k, node in enumerate(D.root.body.nodes):
+        if descriptor_id(node.fn) not in templates:
+            continue
+        n = node.n if node.form == "batch" else 1
+        per = node.out.leaves // n
+        names = [p for p, _t in node.fn.signature()[0]]
+        for m in range(n):
+            for name, x, ax in zip(names, node.args, node.axes if node.form == "batch" else [None] * len(node.args)):
+                if ax is None:
+                    rs = x.refs
+                elif ax == 0:
+                    L = x.type.elem.leaves
+                    rs = x.refs.slice(m * L, (m + 1) * L)
+                else:
+                    rs = x.take(ax, m).refs
+                for j in range(rs.count):
+                    put(resolve(scope, rs[j]), ins[name][u, j])
+            for j in range(per):
+                put(resolve(scope, ("n", k, m * per + j)), ys[u, j])
+            u += 1
+    return out
+
+
+def _hand_piece(*_a, **_k):
+    raise AssertionError("ir_lower._lower_gate (a hand piece) called on the chain's road")
+
+
+def prove_block(member: Any) -> dict[str, Any]:
+    """The drawn block's proof on the processor prover: C_S (`restrict`'s descriptor), its Definition lifted to bits through
+    the Boolean Definitions' own builders (`versions.block_circuit`), the hand pieces refused, staged on the trace's values
+    of its input gates (`Block.to_c_gate`), its outputs checked against the trace's on out(S), and proved in a live loopback
+    session of ``FLOCK_CIRCUIT``'s ``flock-circuit``."""
+    r = registered()
+    try:
+        block = R.restrict(r["C"], r["partition"], [(member.base, member.base + member.n)])
+    except R.Refused as e:
+        raise Stop(f"prove: the prover's C_S for block {member.base} ({R.__file__}:restrict): {e}") from e
+    values = by_gate(block)
+    D = R.program(block.descriptor)
+    fn = D.defs[D.program_fn_id]
+    params, ret = fn.signature()
+    if any(t.homogeneous_width() != 16 for _p, t in [*params, (None, ret)]):
+        raise Stop(f"prove: C_S of block {member.base} has a port of other than 16-bit words")
+    rows, at = {}, 0
+    for p, t in params:
+        rows[p] = np.array([[values[block.to_c_gate(at + j)] for j in range(t.leaves)]], dtype=np.uint16)
+        at += t.leaves
+    want = [values[g] for g in block.outputs]
+
+    def reference(_rows: dict, outs: dict) -> None:
+        got = [int(v) for j in range(len(ret.fields)) for v in outs[f"o{j}"][0]]
+        if got != want:
+            raise AssertionError(f"block {member.base}: C_S's outputs are not the trace's on out(S)")
+
+    binary = os.environ.get("FLOCK_CIRCUIT", "")
+    with tempfile.TemporaryDirectory() as d, pytest.MonkeyPatch.context() as mp:
+        mp.setattr(IL, "_lower_gate", _hand_piece)
+        bits = V.block_circuit(fn, V.boolean_table(D))
+        st = CS.UnitStager(bits, f"block/{member.base}", [(p, ROW_V2, 16 * t.leaves, [p]) for p, t in params],
+                           [(ROW_V2, (j,)) for j in range(len(ret.fields))])
+        st.reference_check = reference
+        staged = st.stage(rows, Path(d))
+        circuit = Path(d, "circuit.txt").read_bytes()
+        rec = {"block": [member.base, member.base + member.n], "c_s_bytes": len(block.descriptor), "inputs": len(block.inputs),
+               "outputs": len(block.outputs), "circuit_lines": circuit.count(b"\n"), "ands": staged.get("ands")}
+        if not (binary and Path(binary).is_file()):
+            raise Stop(f"prove: C_S staged {rec}; FLOCK_CIRCUIT names no flock-circuit build")
+        Path(d, "inst.bin").rename(Path(d, "inst-1.bin"))
+        Path(d, "pub.bin").rename(Path(d, "pub-1.bin"))
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        live = CS.prove(binary, Path(d), 1, port)
+    return {**rec, "live": live}
+
+
 def stage_prove() -> str:
     win, _c = committed()
-    c_s(drawn(win))
-    raise Stop("prove: C_S derived, and no processor prover takes it yet without the hand pieces (ROWS)")
+    got = prove_block(drawn(win))
+    assert got["live"].get("accepted") is True, f"prove: the processor prover's session was not accepted: {got['live']}"
+    return json.dumps({k: got[k] for k in ("block", "c_s_bytes", "circuit_lines", "ands")} | {"accepted": True})
 
 
 def stage_python_door() -> str:
