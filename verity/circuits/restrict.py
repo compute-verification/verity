@@ -38,7 +38,7 @@ and whose Definitions and Boolean map are C's (a word primitive's body is C's). 
 (`Block.to_c_gate`). On bits, its gates are in(S)'s bits, each gate's least significant first, then S's bit gates in order
 (`Block.to_c_bit`).
 `listing` writes the block on bits gate by gate, a test's reference: `verity/block-circuit/v1`; `I K O`; per input bit its
-binding (`run`, `registration`, or `wire` for a computed gate of C); per gate its kind and its operands; per output `out`
+binding (`run`, `registration`, `supplied`, or `wire` for a computed gate of C); per gate its kind and its operands; per output `out`
 and its gate, all in the block's numbering, one ASCII line each.
 """
 
@@ -56,7 +56,8 @@ from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from .layout import Circuit, resolve
-from .program import REGISTRATION, RUN, input_id, input_prim
+from . import supplied as SU
+from .program import REGISTRATION, RUN, SUPPLIED, input_id, input_prim
 from .refs import Affine, Coll, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
 
@@ -256,6 +257,17 @@ def _runs(gates: Sequence[int], key) -> list[list[int]]:
     return out
 
 
+def _spans(gates: Sequence[int]) -> list[list[int]]:
+    """``gates`` cut where they skip one: a supplied run's part is a range of its parameter's leaves (PROTOCOL.md §5.4)."""
+    out: list[list[int]] = []
+    for g in gates:
+        if out and out[-1][-1] + 1 == g:
+            out[-1].append(g)
+        else:
+            out.append([g])
+    return out
+
+
 def _spell(items: Sequence[tuple]) -> Any:
     parts: list[list] = []
     for s, i, leaf in items:
@@ -274,10 +286,20 @@ def _binding(bits: Bits, g: int) -> str:
 def _param_names(D: Any) -> dict[int, str]:
     """Each input gate of C's root, by the name of C's parameter whose node it is (`inputs`)."""
     body, out, k = D.root.body, {}, 0
-    for name, n in D.inputs:
+    for name, n, *_ in D.inputs:
         for _ in range(n):
             out.update(dict.fromkeys(range(body.offsets[k], body.offsets[k + 1]), name))
             k += 1
+    return out
+
+
+def _marks(D: Any) -> dict[str, tuple[dict, int]]:
+    """Each supplied parameter of C (PROTOCOL.md §5.4), by name: its mark and its first gate."""
+    body, out, k = D.root.body, {}, 0
+    for name, n, *mark in D.inputs:
+        if mark:
+            out[name] = (mark[0], body.offsets[k])
+        k += n
     return out
 
 
@@ -386,12 +408,13 @@ def listing_of(c: bytes) -> bytes:
 def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: list[int]) -> Any:
     D, C = bits.D, bits.C
     body, scope = D.root.body, C.root_scope
-    named = _param_names(D)
+    named, marks = _param_names(D), _marks(D)
 
     def reg(g: int) -> str | None:
-        return named[g] if _binding(bits, g) == REGISTRATION else None
+        return named[g] if _binding(bits, g) in (REGISTRATION, SUPPLIED) else None
 
-    in_runs = _runs(ins, lambda g: (bits.width[g], _binding(bits, g), reg(g)))
+    in_runs = [q for r in _runs(ins, lambda g: (bits.width[g], _binding(bits, g), reg(g)))
+               for q in (_spans(r) if _binding(bits, r[0]) == SUPPLIED else [r])]
     out_runs = _runs(outs, lambda g: bits.width[g])
     params = tuple((f"{reg(r[0])}/p{i}" if reg(r[0]) else f"p{i}", Array(len(r), Value(bits.width[r[0]])))
                    for i, r in enumerate(in_runs))
@@ -439,6 +462,9 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
 
     fn = CompositeDefinition("Block", 1, (), lambda S: (params, ret), build, register=False)
     registered = [n for (n, _), r in zip(params, in_runs) if _binding(bits, r[0]) == REGISTRATION]
+    supplied = {n: SU.part(reg(r[0]), marks[reg(r[0])][0], r[0] - marks[reg(r[0])][1], r[-1] + 1 - marks[reg(r[0])][1],
+                           bits.width[r[0]])
+                for (n, _), r in zip(params, in_runs) if _binding(bits, r[0]) == SUPPLIED}
     saved = list(P._BODY_LOOKUP)
 
     def lookup(p):
@@ -449,7 +475,7 @@ def _build(bits: Bits, words: Sequence[tuple[int, int]], ins: list[int], outs: l
 
     P.register_boolean_bodies(lookup)
     try:
-        return P.Program(fn, registered=registered)
+        return P.Program(fn, registered=registered, supplied=supplied)
     finally:
         P._BODY_LOOKUP[:] = saved
 
