@@ -1028,13 +1028,13 @@ theorem slotAt_rekey {p : Params} {N σ w k : Nat} (h : p.slotAt N σ = some (w,
 its slot's; no more windows joined than appends; a drawn window is final; at most `max 1 windows` windows, each but the
 last ended; and once the last window is drawn, every append has joined. -/
 structure RotaOn (P : Params) (N : Nat) (as : Array Append) (js : Array Nat) (ws : Array Win) : Prop where
-  onRota : P.refresh = true → ∀ a, a < as.size → OnRota P N as a
+  onRota : P.refresh = true → ∀ a : Nat, a < as.size → OnRota P N as a
   le : js.size ≤ as.size
-  win : P.refresh = true → ∀ a, a < js.size → js[a]? = (P.slotAt N (as[a]! : Append).slot).map (·.1)
-  final : ∀ u, (ws[u]! : Win).drawn.isSome → (ws[u]! : Win).final = true
+  win : P.refresh = true → ∀ a : Nat, a < js.size → js[a]? = (P.slotAt N (as[a]! : Append).slot).map (·.1)
+  final : ∀ u : Nat, (ws[u]! : Win).drawn.isSome → (ws[u]! : Win).final = true
   size : ws.size ≤ max 1 P.windows
-  bnd : ∀ u, u + 1 < ws.size → (ws[u]! : Win).boundaryNs.isSome
-  last : ∀ u, u + 1 = P.windows → (ws[u]! : Win).drawn.isSome → js.size = as.size
+  bnd : ∀ u : Nat, u + 1 < ws.size → (ws[u]! : Win).boundaryNs.isSome
+  last : ∀ u : Nat, u + 1 = P.windows → (ws[u]! : Win).drawn.isSome → js.size = as.size
 
 def Rota (s : State) : Prop := RotaOn s.params s.reg.blocks s.appends s.joined s.windows
 
@@ -1050,7 +1050,7 @@ theorem rota_init (params : Params) (reg : Registration) (coins appendCoins : Ar
 
 /-- `ws'` is `ws` with each window as drawn as it was, final if it was, and ended if it was. -/
 def WK (ws ws' : Array Win) : Prop :=
-  ws'.size = ws.size ∧ ∀ u, (ws'[u]! : Win).drawn = (ws[u]! : Win).drawn ∧
+  ws'.size = ws.size ∧ ∀ u : Nat, (ws'[u]! : Win).drawn = (ws[u]! : Win).drawn ∧
     ((ws[u]! : Win).final = true → (ws'[u]! : Win).final = true) ∧
     ((ws[u]! : Win).boundaryNs.isSome → (ws'[u]! : Win).boundaryNs.isSome)
 
