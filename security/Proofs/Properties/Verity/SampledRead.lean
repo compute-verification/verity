@@ -19,8 +19,8 @@ release log in v2's evidence line by line as v2's check does (`readLog`), with t
 digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask (`SampleRead`) with no premise
 (`sampleRead_logRead`, `sampleRead_coinsRead`).
 
-* **v2's challenger** (`drawCoins_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseNamed_ok`, `challengePhaseOf_ok`, `releasedRootsOf_ok`,
-  `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
+* **v2's challenger** (`drawCoins_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseNamed_ok`, `challengePhaseOf_ok`, `releasedLogOf_ok`,
+  `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines that commits no root (`LOG_COMMITTED`), the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
 * **What the read shows** (`fresh_readLog`, `countFresh_eq`, and `chunks_flatten` in `SampledLog`): the read's coins of
   the sample's family after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
@@ -33,7 +33,7 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
   `logRead` by its own name (`coinsRead_eq_logRead`), tells a tree's line apart, finds its tree and its stream with v2's
   own Bool tests (`treeStep`), takes the trees over the whole log, its head included, and reads each session's record
   as v2's `treesHeld` does (`recordsOn`). v2's loops then show it a log wherever v2 accepts (`coinTreesOf_fold`,
-  `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
+  `releasedLogOf_ok`, `treesHeld_records`), so it meets the sample's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
 * **The session's sampling design** (`samplingDesign_of_setsUp`, `coupled_sample_setsUp`, `coupled_sample_coins_setsUp`): v2's parameters in the
@@ -53,8 +53,6 @@ result (`of_triple`, in `SampledLog`).
 @[expose] public section
 
 set_option mvcgen.warning false
-
-open private pairs from Spot.ChallengerSession
 
 namespace Verity.Sampled
 
@@ -76,22 +74,22 @@ theorem closeMessage_spec (I : ByteArray) (host : String) (c : LiveCommitment) (
     (chain : ByteArray) (ended : Option String) :
     ⦃⌜True⌝⦄ closeMessage I host c session lines chain ended ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-theorem releasedRootsOf_spec (c : LiveCommitment) (l : List String) :
-    ⦃⌜True⌝⦄ releasedRootsOf c l ⦃⇓? r => ⌜releasedRootsOf c l = .ok r⌝⦄ := ok_spec _
+theorem releasedLogOf_spec (c : LiveCommitment) (l : List String) :
+    ⦃⌜True⌝⦄ releasedLogOf c l ⦃⇓? r => ⌜releasedLogOf c l = .ok r⌝⦄ := ok_spec _
 
 theorem logStr (j : Json) (s : String)
     (h : (match j with | .str s => pure s | _ => throw LOG_FORM : Flock.V String) = .ok s) : j = .str s := by
   cases j <;> first | (cases h; rfl) | cases h
 
 set_option maxHeartbeats 1000000 in
-theorem challengePhaseOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
+theorem challengePhaseOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Log × String}
     (h : challengePhaseOf key record log close = .ok r) :
-    ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧ releasedRootsOf r.1 lines = .ok r.2.1 := by
+    ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧ releasedLogOf r.1 lines = .ok r.2.1 := by
   refine of_triple (Q := fun r => ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧
-    releasedRootsOf r.1 lines = .ok r.2.1) ?_ h
+    releasedLogOf r.1 lines = .ok r.2.1) ?_ h
   clear h
   mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_spec, closeMessage_spec,
-    mapM_ok_spec, releasedRootsOf_spec]
+    mapM_ok_spec, releasedLogOf_spec]
   exact ⟨_, _, rfl, mapM_str (fun j s h => logStr j s h) ‹_›, ‹_›⟩
 
 theorem challengePhaseOf_spec (key : ChallengerKey) (record log close : Json) :
@@ -101,7 +99,7 @@ theorem hellos_spec {α β : Type} (f : α → Flock.V β) (l : List α) : ⦃�
   except_spec _
 
 set_option maxHeartbeats 1000000 in
-theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Log}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ sid, challengePhaseOf key (Spot.getD session "record") (Spot.getD session "log")
       (Spot.getD session "close") = .ok (r.1, r.2, sid) := by
@@ -112,7 +110,7 @@ theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Js
   all_goals exact ⟨_, ‹_›⟩
 
 theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
-    {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
+    {r : LiveCommitment × Log} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
     ∃ a, challengePhaseNamed a key session = .ok r := by
   unfold trustedChallengePhaseOf at h
   rw [bind_ok] at h
@@ -124,26 +122,38 @@ theorem trustedChallengePhaseOf_spec (ledger window : Json) (key : ChallengerKey
       ⦃⇓? r => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok r⌝⦄ := ok_spec _
 
 theorem challengerStream_spec (c : LiveCommitment) (segment : Json) (after : ByteArray)
-    (roots : Option (List ByteArray)) :
-    ⦃⌜True⌝⦄ challengerStream c segment after roots ⦃⇓? r => ⌜challengerStream c segment after roots = .ok r⌝⦄ :=
+    (log : Option Log) :
+    ⦃⌜True⌝⦄ challengerStream c segment after log ⦃⇓? r => ⌜challengerStream c segment after log = .ok r⌝⦄ :=
   ok_spec _
 
-/-- The roots of family `label` in the roots `roots`, as `sampleCoins` reads them. -/
-def look (roots : Roots) (label : String) : List ByteArray := ((roots.find? (·.1 == label)).map (·.2)).getD []
+/-- The roots of family `label` the log `log` records, in order. -/
+def look (log : Log) (label : String) : List ByteArray :=
+  (log.filter fun e => e.kind == .recorded && e.label == label).map (·.root)
 
+/-- What `sampleCoins` read when it accepts: the session's log, which commits no root, and the segment's coins of the
+family `label`, read against the session's commitment and that log. -/
 theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray} {coins : Json} {ξ : ByteArray}
     (h : sampleCoins key w label after coins = .ok ξ) :
-    ∃ cm roots, trustedChallengePhaseOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
-        (Spot.getD coins "pins") (Spot.getD coins "main") (Spot.getD coins "session") =
-          .ok (cm, roots) ∧
-      challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ := by
-  refine of_triple (Q := fun ξ => ∃ cm roots, trustedChallengePhaseOf (Spot.getD coins "ledger")
-    (Json.mkObj [("root", Json.str w)]) key (Spot.getD coins "pins") (Spot.getD coins "main")
-      (Spot.getD coins "session") = .ok (cm, roots) ∧
-    challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ) ?_ h
-  clear h
-  mvcgen [sampleCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_spec, challengerStream_spec]
-  all_goals exact fun h => ⟨_, _, ‹_›, h⟩
+    ∃ cm log, trustedChallengePhaseOf (Spot.getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+        (Spot.getD coins "pins") (Spot.getD coins "main") (Spot.getD coins "session") = .ok (cm, log) ∧
+      log.any (·.kind == .committed) = false ∧ Spot.jsonStrIs (Spot.getD (Spot.getD coins "segment") "label") label ∧
+      challengerStream cm (Spot.getD coins "segment") after (some log) = .ok ξ := by
+  unfold sampleCoins at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · split at h
+    · cases h
+    · rename_i v hv
+      split at h
+      · cases h
+      · rename_i hc
+        split at h
+        · split at h
+          · rename_i hl
+            exact ⟨v.1, v.2, hv, Bool.eq_false_iff.2 hc, hl, h⟩
+          · cases h
+        · cases h
+  · cases h
 
 theorem liveDomain_spec (s : String) (e : Nat) (fs : List (String × Nat)) :
     ⦃⌜True⌝⦄ liveDomain s e fs ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -170,43 +180,58 @@ theorem step_size {b coin : ByteArray} {n : Nat} {x : Option String} (hx : ∀ w
     | some w => exact (hx w rfl).elim
   rw [ByteArray.size_append, hb, hc hn, Nat.mul_succ]
 
-theorem zipIdx_filter_length (l : List ByteArray) (a : ByteArray) :
-    ((l.zipIdx.filter (fun x => x.1 == a)).map (·.2)).length = (l.filter (· == a)).length := by
-  rw [List.length_map]
-  conv => rhs; rw [← List.zipIdx_map_fst 0 l]
-  rw [List.filter_map, List.length_map]
-  rfl
+theorem stream_size {r : ByteArray} {log : Log} {label : String} {after : ByteArray} {start n m : Nat}
+    (h1 : (releasedAfter log label after == List.range' start n) = true) (h2 : r.size = COIN_BYTES * m) (hm : m = n) :
+    r.size = COIN_BYTES * (releasedAfter log label after).length := by
+  rw [eq_of_beq h1, List.length_range', h2, hm]
 
-theorem stream_size {r : ByteArray} {rs : List ByteArray} {after : ByteArray} {start n m : Nat}
-    (h1 : (((rs.zipIdx.filter (fun x => x.1 == after)).map (·.2)) == List.range' start n) = true)
-    (h2 : r.size = COIN_BYTES * m) (hm : m = n) : r.size = COIN_BYTES * (rs.filter (· == after)).length := by
-  rw [← zipIdx_filter_length, eq_of_beq h1, List.length_range', h2, hm]
+theorem jsonStrIs_inj {j : Json} {a b : String} (ha : Spot.jsonStrIs j a = true) (hb : Spot.jsonStrIs j b = true) :
+    a = b := by
+  cases j <;> simp_all [Spot.jsonStrIs]
 
 set_option maxHeartbeats 1000000 in
-/-- **The coins the stream opens**: 64 bytes each, as many as the roots of the family the log shows released after
-`after`. -/
-theorem challengerStream_ok {c : LiveCommitment} {segment : Json} {after : ByteArray} {rs : List ByteArray}
-    {ξ : ByteArray} (h : challengerStream c segment after (some rs) = .ok ξ) :
-    ξ.size = COIN_BYTES * (rs.filter (· == after)).length := by
-  refine of_triple (Q := fun ξ => ξ.size = COIN_BYTES * (rs.filter (· == after)).length) ?_ h
+theorem challengerStream_size {c : LiveCommitment} {segment : Json} {after : ByteArray} {log : Log} {ξ : ByteArray}
+    (h : challengerStream c segment after (some log) = .ok ξ) :
+    ∃ L, Spot.jsonStrIs (Spot.getD segment "label") L = true ∧
+      ξ.size = COIN_BYTES * (releasedAfter log L after).length := by
+  refine of_triple (Q := fun ξ => ∃ L, Spot.jsonStrIs (Spot.getD segment "label") L = true ∧
+      ξ.size = COIN_BYTES * (releasedAfter log L after).length) ?_ h
   clear h
   mvcgen [challengerStream, -Spec.throw_Except, throw_spec, openingOfJson_spec, liveReason_spec] invariants
   · ⇓? ⟨cur, out⟩ => ⌜out.size = COIN_BYTES * cur.prefix.length⌝
   all_goals first
     | (rw [List.length_append, List.length_singleton]; exact step_size ‹_› ‹_› ‹_›)
-    | exact stream_size ‹_› ‹_› (by simp)
+    | exact ⟨_, by simp_all [Spot.jsonStrIs], stream_size ‹_› ‹_› (by simp)⟩
+
+/-- **The coins the stream opens**: 64 bytes each, as many as the coins of the segment's family `label` the log shows
+released after `after`. -/
+theorem challengerStream_ok {c : LiveCommitment} {segment : Json} {after : ByteArray} {log : Log} {label : String}
+    {ξ : ByteArray} (h : challengerStream c segment after (some log) = .ok ξ)
+    (hl : Spot.jsonStrIs (Spot.getD segment "label") label = true) :
+    ξ.size = COIN_BYTES * (releasedAfter log label after).length := by
+  obtain ⟨L, hL, hs⟩ := challengerStream_size h
+  rwa [jsonStrIs_inj hl hL]
 
 /-! ### The roots the release log shows -/
+
+/-- The pairs of the lines `ls`, in order: a root's line and the line after it. -/
+def pairs : List String → List (String × String)
+  | a :: b :: rest => (a, b) :: pairs rest
+  | _ => []
+
+/-- The pairs `releasedLogOf` reads off the lines `ls`, after the root's line `pending` still to pair: each root's
+line reads with its family and root (`rootOf`), and none is left without its release. -/
+def PairsOk : Option String → List String → Prop
+  | none, [] => True
+  | some _, [] => False
+  | none, l :: ls => PairsOk (some l) ls
+  | some a, _ :: ls => (rootOf a).isSome ∧ PairsOk none ls
 
 /-- The roots of family `label` the root lines of the pairs `ps` show, in order. -/
 def sel (label : String) (ps : List (String × String)) : List ByteArray :=
   ps.filterMap fun x => match rootOf x.1 with
     | some (l, r) => if l = label then some r else none
     | none => none
-
-/-- The roots of family `label` in `releasedRootsOf`'s state. -/
-def lookA (roots : Array (String × Array ByteArray)) (label : String) : List ByteArray :=
-  ((roots.find? (·.1 == label)).map (·.2.toList)).getD []
 
 theorem rootOf_eq {a : String} {r : Json} {label root : String} {bytes : ByteArray} (he : event a = .ok r)
     (hl : Spot.getD r "label" = .str label) (hr : Spot.getD r "root" = .str root)
@@ -216,89 +241,151 @@ theorem rootOf_eq {a : String} {r : Json} {label root : String} {bytes : ByteArr
     cases Flock.unhex root <;> intro hb <;> first | (cases hb; rfl) | cases hb
   simp only [rootOf, he, hu, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def, hl, hr]
 
-theorem look_modify {bytes : ByteArray} {g : String × Array ByteArray → String × Array ByteArray}
-    (hg : ∀ x, g x = (x.1, x.2.push bytes)) (label ℓ : String) :
-    ∀ (l : List (String × Array ByteArray)) (k : Nat), l.findIdx? (·.1 == label) = some k →
-      (((l.modify k g).find? (·.1 == ℓ)).map (·.2.toList)).getD [] =
-        (((l.find? (·.1 == ℓ)).map (·.2.toList)).getD []) ++ (if label = ℓ then [bytes] else [])
-  | [], k, h => by simp at h
-  | x :: l, k, h => by
-    rw [List.findIdx?_cons] at h
-    by_cases hx : x.1 = label
-    · simp only [hx, beq_self_eq_true, ite_true, Option.some.injEq] at h
-      subst h
-      rw [List.modify_zero_cons, hg, List.find?_cons, List.find?_cons]
-      by_cases hℓ : label = ℓ
-      · subst hℓ
-        simp [hx]
-      · have : (x.1 == ℓ) = false := by simp [hx, hℓ]
-        simp [this, hℓ]
-    · have hb : (x.1 == label) = false := by simp [hx]
-      rw [hb] at h
-      simp only [Bool.false_eq_true, ite_false] at h
-      obtain ⟨k', hk', rfl⟩ := Option.map_eq_some_iff.1 h
-      rw [List.modify_succ_cons, List.find?_cons, List.find?_cons]
-      by_cases hℓ : x.1 = ℓ
-      · have : label ≠ ℓ := fun e => hx (hℓ.trans e.symm)
-        simp [hℓ, this]
-      · have : (x.1 == ℓ) = false := by simp [hℓ]
-        rw [this]
-        exact look_modify hg label ℓ l k' hk'
-
-theorem findIdx?_array {xs : Array (String × Array ByteArray)} {p : String × Array ByteArray → Bool} :
-    xs.findIdx? p = xs.toList.findIdx? p := by
-  rcases xs with ⟨l⟩
-  exact List.findIdx?_toArray _ _
-
-theorem roots_step {roots : Array (String × Array ByteArray)} {pre : List (String × String)} {x : String × String}
-    {r : Json} {label root : String} {bytes : ByteArray} {k : Nat}
-    {g : String × Array ByteArray → String × Array ByteArray} (hg : ∀ x, g x = (x.1, x.2.push bytes))
-    (hI : ∀ ℓ, lookA roots ℓ = sel ℓ pre) (he : event x.1 = .ok r) (hl : Spot.getD r "label" = .str label)
-    (hk : roots.findIdx? (·.1 == label) = some k) (hr : Spot.getD r "root" = .str root)
-    (hb : (Flock.unhex root).toOption = some bytes) :
-    ∀ ℓ, lookA (roots.modify k g) ℓ = sel ℓ (pre ++ [x]) := by
-  intro ℓ
-  rw [findIdx?_array] at hk
-  have e := look_modify hg label ℓ roots.toList k hk
-  rw [← Array.toList_modify, Array.find?_toList, Array.find?_toList] at e
-  unfold lookA
-  rw [e, ← lookA, hI ℓ]
-  unfold sel
-  simp only [List.filterMap_append, List.filterMap_cons, List.filterMap_nil, rootOf_eq he hl hr hb]
-  by_cases hℓ : label = ℓ <;> simp [hℓ]
-
-theorem lookA_init (fs : List (String × Nat)) (ℓ : String) :
-    lookA (fs.map fun x => ((x.1, #[]) : String × Array ByteArray)).toArray ℓ = [] := by
-  unfold lookA
-  rw [← Array.find?_toList, List.toList_toArray, List.find?_map]
-  cases List.find? _ fs <;> rfl
-
-theorem look_toList (roots : Array (String × Array ByteArray)) (ℓ : String) :
-    look (roots.toList.map fun (l, rs) => (l, rs.toList)) ℓ = lookA roots ℓ := by
-  unfold look lookA
-  rw [List.find?_map, Array.find?_toList, Option.map_map]
-  rfl
-
-theorem roots_post {r : Array (String × Array ByteArray)} {ps : List (String × String)}
-    (h : ∀ ℓ, lookA r ℓ = sel ℓ ps) : ∀ ℓ, look (r.toList.map fun x => (x.1, x.2.toList)) ℓ = sel ℓ ps :=
-  fun ℓ => (look_toList r ℓ).trans (h ℓ)
-
 theorem event_spec (l : String) : ⦃⌜True⌝⦄ event l ⦃⇓? r => ⌜event l = .ok r⌝⦄ := ok_spec _
 
-set_option maxHeartbeats 2000000 in
-/-- **The roots the release log shows, by family**: those of the root lines of its pairs, its head and its coin trees'
-lines aside. -/
-theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roots}
-    (h : releasedRootsOf c log = .ok roots) :
-    ∀ ℓ, look roots ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l)) := by
-  refine of_triple (Q := fun roots => ∀ ℓ, look roots ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ?_ h
-  clear h
-  mvcgen [releasedRootsOf, -Spec.throw_Except, throw_spec, event_spec] invariants
-  · ⇓? ⟨cur, roots⟩ => ⌜∀ ℓ, lookA roots ℓ = sel ℓ cur.prefix⌝
+theorem pairsOk_snoc : ∀ Q : List String, PairsOk none Q → ∀ {a : String} (b : String), (rootOf a).isSome →
+    PairsOk none (Q ++ [a, b]) ∧ pairs (Q ++ [a, b]) = pairs Q ++ [(a, b)]
+  | [], _, _, _, ha => ⟨show (rootOf _).isSome ∧ True from ⟨ha, trivial⟩, rfl⟩
+  | [_], h, _, _, _ => (show False from h).elim
+  | x :: y :: Q, h, a, b, ha => by
+    have h' : (rootOf x).isSome ∧ PairsOk none Q := h
+    obtain ⟨h1, h2⟩ := pairsOk_snoc Q h'.2 b ha
+    refine ⟨show (rootOf x).isSome ∧ PairsOk none (Q ++ [a, b]) from ⟨h'.1, h1⟩, ?_⟩
+    show (x, y) :: pairs (Q ++ [a, b]) = (x, y) :: pairs Q ++ [(a, b)]
+    rw [h2]
+    rfl
+
+theorem sel_snoc (ℓ : String) (ps : List (String × String)) {a b l : String} {r : ByteArray}
+    (ha : rootOf a = some (l, r)) : sel ℓ (ps ++ [(a, b)]) = sel ℓ ps ++ (if l = ℓ then [r] else []) := by
+  unfold sel
+  by_cases hl : l = ℓ <;> simp [List.filterMap_append, ha, hl]
+
+theorem look_push (out : Array Entry) {p e : Entry} (hp : p.kind = .recorded) (he : e.kind = .released) (ℓ : String) :
+    look ((out.push p).push e).toList ℓ = look out.toList ℓ ++ (if p.label = ℓ then [p.root] else []) := by
+  unfold look
+  by_cases hl : p.label = ℓ <;> simp [Array.toList_push, hp, he, hl]
+
+theorem releasedAfter_push (out : Array Entry) {p : Entry} (t i : Nat) (hp : p.kind = .recorded) (ℓ : String)
+    (x : ByteArray) :
+    releasedAfter ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩).toList ℓ x =
+      releasedAfter out.toList ℓ x ++ (if p.label = ℓ ∧ p.root = x then [p.index] else []) := by
+  unfold releasedAfter
+  by_cases hl : p.label = ℓ
+  · by_cases hr : p.root = x
+    · subst hr
+      simp [Array.toList_push, hp, hl, beq_bytes.2 rfl]
+    · have : (p.root == x) = false := Bool.eq_false_iff.2 fun h => hr (beq_bytes.1 h)
+      simp [Array.toList_push, hp, hl, hr, this]
+  · simp [Array.toList_push, hp, hl]
+
+/-- What the release log's entries `out` and the root's entry `pending` still to release show of the lines `P` read
+so far, where `out` commits no root: each family's releases after a root are as many as its records of that root, the
+lines pair up but for `pending`'s, which reads with its family and root, and each family's records are the roots its
+pairs' root lines show. -/
+def Inv (P : List String) (out : Array Entry) (pending : Option Entry) : Prop :=
+  out.toList.any (·.kind == .committed) = false →
+    (∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length) ∧
+    match pending with
+    | none => PairsOk none P ∧ ∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)
+    | some p => p.kind = .recorded ∧ ∃ Q a, P = Q ++ [a] ∧ PairsOk none Q ∧ rootOf a = some (p.label, p.root) ∧
+        ∀ ℓ, look out.toList ℓ = sel ℓ (pairs Q)
+
+theorem inv_init : Inv [] #[] none := fun _ => ⟨fun _ _ => rfl, trivial, fun _ => rfl⟩
+
+theorem inv_root {P : List String} {out : Array Entry} {a root label : String} {r : Json} {bytes : ByteArray}
+    {index t i : Nat} (hI : Inv P out none) (he : event a = .ok r) (hl : Spot.getD r "label" = .str label)
+    (hr : Spot.getD r "root" = .str root) (hb : (Flock.unhex root).toOption = some bytes) :
+    Inv (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) := by
+  intro hc
+  obtain ⟨hB, hP, hL⟩ := hI hc
+  exact ⟨hB, rfl, P, a, rfl, hP, rootOf_eq he hl hr hb, hL⟩
+
+theorem inv_release {P : List String} {out : Array Entry} {p : Entry} (b : String) (t i : Nat)
+    (hI : Inv P out (some p)) : Inv (P ++ [b]) ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩) none := by
+  intro hc
+  have hc0 : out.toList.any (·.kind == .committed) = false := by
+    simp only [Array.toList_push, List.any_append, Bool.or_eq_false_iff] at hc
+    exact hc.1.1
+  obtain ⟨hB, hk, Q, a, rfl, hQ, ha, hL⟩ := hI hc0
+  obtain ⟨hQ', hpairs⟩ := pairsOk_snoc Q hQ b (by rw [ha]; rfl)
+  have e : Q ++ [a] ++ [b] = Q ++ [a, b] := by simp
+  refine ⟨fun ℓ x => ?_, e ▸ hQ', fun ℓ => ?_⟩
+  · rw [releasedAfter_push _ _ _ hk, look_push _ hk rfl, List.length_append, hB ℓ x, List.filter_append,
+      List.length_append]
+    congr 1
+    by_cases hl : p.label = ℓ
+    · by_cases hr : p.root = x
+      · subst hr
+        simp [hl, beq_bytes.2 rfl]
+      · have : (p.root == x) = false := Bool.eq_false_iff.2 fun h => hr (beq_bytes.1 h)
+        simp [hl, hr, this]
+    · simp [hl]
+  · rw [e, look_push _ hk rfl, hpairs, sel_snoc ℓ _ ha, hL]
+
+theorem inv_commit {P : List String} {out : Array Entry} {q : Option Entry} {l : String} {k t i : Nat}
+    {b : ByteArray} : Inv P (out.push ⟨.committed, l, k, b, t, i⟩) q := by
+  intro hc
+  simp [Array.toList_push, List.any_append] at hc
+
+theorem inv_final {P : List String} {out : Array Entry} {q : Option Entry} (hI : Inv P out q) (hq : q = none)
+    (hc : out.toList.any (·.kind == .committed) = false) :
+    PairsOk none P ∧ (∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)) ∧
+      ∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length := by
+  subst hq
+  obtain ⟨hB, hP, hL⟩ := hI hc
+  exact ⟨hP, hL, hB⟩
+
+theorem rest_lines : ∀ (l : List String) (n : Nat),
+    ((l.zipIdx n).filter fun (x, _) => !treeLine x).map (·.1) = l.filter fun x => !treeLine x
+  | [], _ => rfl
+  | a :: l, n => by
+    rw [List.zipIdx_cons]
+    by_cases ha : treeLine a <;> simp [ha, rest_lines l (n + 1)]
+
+theorem rest_lines_tail (log : List String) :
+    ((log.zipIdx.drop 1).filter fun (x, _) => !treeLine x).map (·.1) = log.tail.filter fun x => !treeLine x := by
+  cases log with
+  | nil => rfl
+  | cons a l =>
+    rw [List.zipIdx_cons]
+    exact rest_lines l 1
+
+theorem none_of_not_isSome {q : Option Entry} (h : ¬q.isSome = true) : q = none := by
+  cases q <;> simp_all
+
+/-- `Inv` at `releasedLogOf`'s loop state: the lines of the entries `pre` read so far, its entries and its root still
+to release. -/
+def InvS (pre : List (String × Nat))
+    (st : MProd (Array (String × Nat)) (MProd (List (String × Nat)) (MProd (Array Entry) (Option Entry)))) : Prop :=
+  Inv (pre.map (·.1)) st.2.2.1 st.2.2.2
+
+set_option maxHeartbeats 4000000 in
+/-- **A log that commits no root pairs up**: where `releasedLogOf` reads the release log's lines to entries that
+commit no root, its lines after its head, its coin trees' lines aside, are a root's line and its release's in turn,
+each root's line reading with its family and root; each family's recorded roots are those its pairs' root lines show;
+and each family's releases after a root are as many as its records of that root. -/
+theorem releasedLogOf_ok {c : LiveCommitment} {log : List String} {out : Log} (h : releasedLogOf c log = .ok out)
+    (hc : out.any (·.kind == .committed) = false) :
+    PairsOk none (log.tail.filter fun l => !treeLine l) ∧
+      (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
+      ∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length := by
+  refine of_triple (Q := fun out => out.any (·.kind == .committed) = false →
+      PairsOk none (log.tail.filter fun l => !treeLine l) ∧
+      (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
+      ∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ?_ h hc
+  clear h hc
+  mvcgen [releasedLogOf, -Spec.throw_Except, throw_spec, event_spec] invariants
+  · ⇓? ⟨cur, st⟩ => ⌜InvS cur.prefix st⌝
+  all_goals simp only [InvS, List.map_append, List.map_cons, List.map_nil] at *
   all_goals first
-    | exact roots_step (fun _ => rfl) ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
-    | exact fun ℓ => lookA_init _ ℓ
-    | exact roots_post ‹_›
+    | exact inv_init
+    | exact inv_commit
+    | (subst_vars; exact inv_release _ _ _ ‹_›)
+    | (obtain rfl := none_of_not_isSome ‹_›; exact inv_root ‹_› ‹_› ‹_› ‹_› ‹_›)
+    | (intro hc
+       have := inv_final ‹_› (none_of_not_isSome ‹_›) hc
+       rw [rest_lines_tail] at this
+       exact this)
 
 /-! ## What the read shows -/
 
@@ -1138,57 +1225,6 @@ theorem coinTreesOf_fold (records : List Json) {lines : List String} {trees : Ar
     | exact fold_open ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› (Prod.mk.inj ‹_›).1 (Prod.mk.inj ‹_›).2 ‹_›
         fun _ => ⟨rfl, rfl⟩
 
-/-! ### The pairs -/
-
-/-- The pairs `releasedRootsOf` reads off the lines `ls`, after the root's line `pending` still to pair: each root's
-line reads with its family and root (`rootOf`), and none is left without its release. -/
-def PairsOk : Option String → List String → Prop
-  | none, [] => True
-  | some _, [] => False
-  | none, l :: ls => PairsOk (some l) ls
-  | some a, _ :: ls => (rootOf a).isSome ∧ PairsOk none ls
-
-theorem pairsOk_of : ∀ rest : List String, (∀ x ∈ pairs rest, (rootOf x.1).isSome) → rest.length % 2 = 0 →
-    PairsOk none rest
-  | [], _, _ => trivial
-  | [_], _, h => by simp at h
-  | a :: b :: rest, hp, h => by
-    have e : pairs (a :: b :: rest) = (a, b) :: pairs rest := rfl
-    rw [e] at hp
-    show (rootOf a).isSome ∧ PairsOk none rest
-    refine ⟨hp (a, b) (List.mem_cons_self ..), pairsOk_of rest (fun x hx => hp x (List.mem_cons_of_mem _ hx)) ?_⟩
-    simp only [List.length_cons] at h
-    omega
-
-theorem pairs_step {pre : List (String × String)} {x : String × String} {r : Json} {label root : String}
-    {bytes : ByteArray} (hI : ∀ y ∈ pre, (rootOf y.1).isSome) (he : event x.1 = .ok r)
-    (hl : Spot.getD r "label" = .str label) (hr : Spot.getD r "root" = .str root)
-    (hb : (Flock.unhex root).toOption = some bytes) : ∀ y ∈ pre ++ [x], (rootOf y.1).isSome := by
-  intro y hy
-  rcases List.mem_append.1 hy with hy | hy
-  · exact hI y hy
-  · rw [List.mem_singleton.1 hy, rootOf_eq he hl hr hb]
-    rfl
-
-theorem parity {n : ℕ} (h : ¬(n % 2 == 1) = true) : n % 2 = 0 := by
-  simp only [beq_iff_eq] at h
-  omega
-
-set_option maxHeartbeats 2000000 in
-/-- **The pairs v2's check reads, the read reads**: wherever `releasedRootsOf` accepts the release log, each root's
-line after its head, its coin trees' lines aside, reads with its family and root, and none is left without its
-release. -/
-theorem releasedRootsOf_pairsOk {c : LiveCommitment} {log : List String} {roots : Roots}
-    (h : releasedRootsOf c log = .ok roots) : PairsOk none (log.tail.filter fun l => !treeLine l) := by
-  refine of_triple (Q := fun _ => PairsOk none (log.tail.filter fun l => !treeLine l)) ?_ h
-  clear h
-  mvcgen [releasedRootsOf, -Spec.throw_Except, throw_spec, event_spec] invariants
-  · ⇓? ⟨cur, _⟩ => ⌜∀ y ∈ cur.prefix, (rootOf y.1).isSome⌝
-  all_goals first
-    | exact pairs_step ‹_› ‹_› ‹_› ‹_› ‹_›
-    | exact fun _ hy => nomatch hy
-    | exact pairsOk_of _ ‹_› (parity ‹_›)
-
 /-! ### The records -/
 
 theorem blobsGet_spec (bs : _root_.Core.Blobs) (h w : String) :
@@ -1336,7 +1372,7 @@ theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨key, hch, -⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
-  obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
+  obtain ⟨cm, roots, htsn, hcm, -, -⟩ := drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
   obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
@@ -1349,7 +1385,7 @@ theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   cases hl'
   obtain ⟨rs, hrs⟩ := Option.isSome_iff_exists.1 (treesHeld_records hth)
   rw [logRead_eq (caseOf_of hS hcase hp hc hev) hch hξ hl, hrs, Option.bind_some]
-  refine readLog_isSome _ _ rs ξ ?_ (releasedRootsOf_pairsOk hrr)
+  refine readLog_isSome _ _ rs ξ ?_ (releasedLogOf_ok hrr hcm).1
   rw [coinTreesOf_fold rs hct]
   rfl
 
@@ -1447,7 +1483,7 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   obtain ⟨key, hch, hafter⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
-  obtain ⟨cm, roots, hts, hstream⟩ := drawCoins_ok hraw
+  obtain ⟨cm, roots, hts, hcm, hlab, hstream⟩ := drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
@@ -1455,8 +1491,8 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   obtain ⟨rs, -, h⟩ := Option.bind_eq_some_iff.1 h
   rw [hafter] at hstream
   have hf : (freshCoins dr.label c.digest log).flatten = bitsOf ξ := by
-    rw [fresh_readLog _ _ _ _ h, countFresh_eq, ← releasedRootsOf_ok hrr,
-      chunks_flatten _ _ (challengerStream_ok hstream)]
+    rw [fresh_readLog _ _ _ _ h, countFresh_eq, ← (releasedLogOf_ok hrr hcm).2.1,
+      ← (releasedLogOf_ok hrr hcm).2.2, chunks_flatten _ _ (challengerStream_ok hstream hlab)]
   unfold ShowsSample
   rw [hafter]
   exact hf ▸ List.prefix_refl _
