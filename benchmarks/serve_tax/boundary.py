@@ -750,12 +750,12 @@ class KvPool:
         """The pool's root (the row-table kernels': one table a layer, one row a block, under its salts, `salted`),
         unless ``fingerprint`` is false each block's fingerprint (int64 per block and layer, a fixed random linear form of its words: only to locate a difference),
         and, with ``host``, its bytes copied there; all at once on three streams, waited on."""
+        if self.salts is None:
+            raise RuntimeError("a pool is hashed under its salts: salted(path) first")
         import torch
 
         from verity_vllm.commit import row_tables_device as RTD
 
-        if self.salts is None:
-            raise RuntimeError("a pool is hashed under its salts: salted(path) first")
         dev = self.storages[0].device
         cur = torch.cuda.current_stream(dev)
         out: dict[str, Any] = {}
