@@ -4,11 +4,10 @@ block takes in one compression, three compressions a leaf, and refuses a longer 
 from __future__ import annotations
 
 import ctypes
-import importlib.util
 import json
 import random
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import cuda_build
 import numpy as np
@@ -133,15 +132,17 @@ def test_a_one_part_str_index_fixes_every_blocks_message_length(lib):
     assert (out == 0xA5).all()
 
 
-def _torch_cuda():
-    if importlib.util.find_spec("torch") is None:
-        return None
-    import torch
-    return torch if torch.cuda.is_available() and cuda_build.gpu_name() is not None else None
+def _no_card() -> str | None:
+    """Why the card tests skip here, or None where they run."""
+    try:
+        import torch
+    except ImportError:
+        return "no torch"
+    return None if torch.cuda.is_available() and cuda_build.gpu_name() is not None else "no CUDA device or nvcc"
 
 
-TORCH = _torch_cuda()
-card = pytest.mark.skipif(TORCH is None, reason="no CUDA device, torch or nvcc")
+NO_CARD = _no_card()
+card = pytest.mark.skipif(NO_CARD is not None, reason=str(NO_CARD))
 
 
 @pytest.fixture(scope="module")
@@ -150,7 +151,7 @@ def device() -> ctypes.CDLL:
 
 
 def _card_fill(device: ctypes.CDLL, key: Key, index, first: int, leaves: int) -> bytes:
-    torch = cast(Any, TORCH)
+    import torch
     out = torch.full((leaves, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
     E.fill(device, out, key, index, first, stream=torch.cuda.current_stream().cuda_stream)
     return out.cpu().numpy().tobytes()
@@ -177,7 +178,7 @@ def test_the_card_gives_the_pinned_stream_vectors(device, case):
 
 @card
 def test_the_card_refuses_a_capturing_stream(device):
-    torch = cast(Any, TORCH)
+    import torch
     out = torch.full((32, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
     g, side = torch.cuda.CUDAGraph(), torch.cuda.Stream()
     with torch.cuda.stream(side), pytest.raises(E.Refused, match="REFUSED_CAPTURE"), torch.cuda.graph(g, stream=side):
@@ -188,7 +189,7 @@ def test_the_card_refuses_a_capturing_stream(device):
 
 @card
 def test_the_card_refuses_a_two_compression_head(device):
-    torch = cast(Any, TORCH)
+    import torch
     out = torch.full((2, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
     with pytest.raises(E.Refused, match="REFUSED_HEAD"):
         E.fill(device, out, KEY, ("salts", "t", 2**32 - 1), 0)
