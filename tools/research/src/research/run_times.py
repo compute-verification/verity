@@ -61,8 +61,6 @@ KINDS = (*run_records.KINDS, UNKNOWN)
 ASKED = ("started", "waiting", "left", "cancelled")
 ELSE = ("twin", "no slot", "no record")
 OUTCOMES = (*ASKED, "refused", *ELSE)
-#: a machine's address in ssh's own message, which is printed under the machine's name instead
-ADDRESS = re.compile(r"\b\d{1,3}(\.\d{1,3}){3}\b")
 EVENTS = "events/v1/"
 ENDED = ("finished", "errored")
 #: what slot.py says of a slot it can't take (its `blocked` and `held_why`), each under the name it is counted by
@@ -315,8 +313,10 @@ def read_nodes(names: list[str], first: str, last: str, *, reach: Callable | Non
         except Exception as e:  # noqa: BLE001  (not listed, not reachable: named as unread, never read as no runs)
             return str(e) or type(e).__name__
         if r.returncode:
-            err = r.stderr.decode(errors="replace").strip().splitlines()
-            return f"exit {r.returncode}: {ADDRESS.sub(name, err[-1]) if err else 'no output'}"
+            from .remote import name_addresses
+
+            err = name_addresses(r.stderr.decode(errors="replace"), machine=name).strip().splitlines()
+            return f"exit {r.returncode}: {err[-1] if err else 'no output'}"
         recs = parse(r.stdout.decode(errors="replace"))
         return recs if isinstance(recs, str) else [{**rec, "machine": name} for rec in recs]
 
