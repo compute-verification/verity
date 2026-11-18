@@ -30,7 +30,7 @@ from tests.program.predict.test_window_circuit import (
     state_row,
 )
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
-from tests.program.predict.test_window_rows import KEY, PROGRAM, _weights
+from tests.program.predict.test_window_rows import PROGRAM, _weights
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
@@ -154,7 +154,7 @@ def filled():
     rows_ = [state_row(CLASS.scan, lanes)] + [state_row(CLASS.scan, [(1, 1, 1, [99, 0, 0, 0])] * 2)] * (CLASS.buckets - 1)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, rows_, [hm96_salt(bytes(32), 0, j) for j in range(len(rows_))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]
     return low, slots, WR.Rows(low, slots, values)
 

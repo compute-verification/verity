@@ -724,3 +724,12 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
                       FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
     assert s["record"]["previous"] == got.docket.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q
+
+
+def test_round_two_of_record_holds_the_twin_to_the_leans_codes():
+    """`two_stage.round_two`: the Python twin's codes and the Lean run's, the same list, are the verdict; any other pair,
+    or either missing, is `disagree` alone."""
+    assert TS.round_two({"codes": []}, []) == {"ok": True, "codes": []}
+    assert TS.round_two({"codes": ["second-read"]}, ["second-read"]) == {"ok": False, "codes": ["second-read"]}
+    for python, lean in (({"codes": []}, ["second-read"]), ({"codes": ["second-read"]}, []), (None, []), ({"codes": []}, None)):
+        assert TS.round_two(python, lean) == {"ok": False, "codes": ["disagree"]}

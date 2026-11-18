@@ -19,15 +19,21 @@ approximate div/sqrt build, and only from a pinned toolkit.
 
 The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
 the transcripts the timed code emitted (panel rule (b): a measured panel row needs the verifier's acceptance of its own
-run's transcript). ``ctx["out_dir"]`` is the run's directory, and ``ctx["transcripts_dir"]`` its ``transcripts/``, where an
-arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention). The declaration (`check_verifier`):
+run's transcript). ``ctx["out_dir"]`` is the run's directory; ``ctx["passes_dir"]`` is the run's private passes
+directory (`bench.py --passes`, 0700, outside the run's directory, deleted after the verify step), and
+``ctx["transcripts_dir"]`` its ``transcripts/``, where an arm writes each shape's transcript (``transcripts/<arm>/<shape>/``
+by convention). A pass (its manifest, rows, trees and salts) never goes under the run's directory. The declaration
+(`check_verifier`):
 
-- ``transcript``: the file the verifier checks, relative to the run's directory, with ``{arm}`` and ``{shape}``; its sha256
-  is what the panel row cites.
+- ``transcript``: the file the verifier checks, relative to the passes directory, with ``{arm}`` and ``{shape}``; its
+  sha256 is what the panel row cites.
 - ``commands``: argv lists, run in order from the run's working directory. Placeholders: ``{python}`` (verify.py's
-  interpreter), ``{run_dir}``, ``{run_id}``, ``{commit}``, ``{arm}``; with ``per: "shape"`` (the default) they run once per
-  timed shape, with ``{shape}``, ``{transcript}`` (its absolute path) and ``{dir}`` (the transcript's directory) too; with
-  ``per: "run"`` once for the run (identical commands of several arms run once).
+  interpreter), ``{run_dir}``, ``{passes}`` (the passes directory), ``{run_id}``, ``{commit}``, ``{arm}``, ``{verdicts}``
+  (the directory under the run's ``verdicts/`` where a command writes what it decided, which the run keeps: never a
+  salt, a key, a row or a manifest); with ``per: "shape"`` (the default) they run once per timed shape, with ``{shape}``, ``{transcript}`` (its absolute
+  path), ``{dir}`` (the transcript's directory, in the passes directory) and ``{verdicts}`` that transcript's own
+  (``verdicts/<the transcript's directory, relative>/``) too; with ``per: "run"`` once for the run (identical commands of
+  several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
 - ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
   arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (a panel rule).
@@ -86,8 +92,8 @@ PARTS = {"before": ("row_seeds", "a_tree", "forming"), "gemm": ("gemm", "cleanup
 #: verity.protocols.resource_accounting.compute.pouw.verifier.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
 DEFERRED = frozenset({"tile_hash"})
 VERIFIER_FIELDS = {
-    "run": ("python", "run_dir", "run_id", "commit", "arm"),
-    "shape": ("python", "run_dir", "run_id", "commit", "arm", "shape", "transcript", "dir"),
+    "run": ("python", "run_dir", "passes", "run_id", "commit", "arm", "verdicts"),
+    "shape": ("python", "run_dir", "passes", "run_id", "commit", "arm", "shape", "transcript", "dir", "verdicts"),
 }
 
 STREAMS = ("fp8", "fp4")
@@ -286,7 +292,7 @@ def check_verifier(name: str, build: dict) -> dict | None:
 
 def _check_transcript(name: str, what: str, t: Any) -> None:
     if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
-        raise ArmError(f"arm {name}: verifier {what} must be a path inside the run's directory, not {t!r}")
+        raise ArmError(f"arm {name}: verifier {what} must be a path inside the passes directory, not {t!r}")
     if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
         raise ArmError(f"arm {name}: verifier {what} {t!r} must name {{arm}} and {{shape}}, and nothing else")
 

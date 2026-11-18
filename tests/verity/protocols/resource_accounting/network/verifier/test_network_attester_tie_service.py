@@ -401,11 +401,11 @@ def test_inputs_refuse_what_isnt_a_place_and_a_length_an_input():
         _inputs(SPAN, received=(2, -1))
 
 
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason="network/attester-behind-shared-interface")
 def test_the_inputs_are_the_registered_compilers_outputs():
-    """The tie's inputs come from the registered compiler's circuit's public outputs, each input's place in the order
-    and its length, not from the advice's bytes."""
-    assert TS.IngressInputs.compiled({"places": [0, 1, 2], "lengths": list(SPAN)}, RECEIVED) == _inputs(SPAN)
+    """The tie's inputs come from the registered compiler's circuit's ``lengths`` output, its arrival slots in certified
+    order with an empty slot 0, not from the advice's bytes."""
+    assert TS.IngressInputs.compiled({"lengths": list(SPAN)}, RECEIVED) == _inputs(SPAN)
+    assert TS.IngressInputs.compiled({"lengths": [SPAN[0], 0, 0, *SPAN[1:], 0]}, RECEIVED) == _inputs(SPAN)
 
 
 def test_only_the_tie_service_builds_an_ingress_tie_verdict():
