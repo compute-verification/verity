@@ -13,6 +13,7 @@ import pytest
 
 import verity_difftest
 from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean, _ports, _record, _spec, _stream
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.verifier.challenger import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
@@ -64,11 +65,11 @@ def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
 
 def test_every_check_runs_both_and_records_them():
     _, reg, draw = _drawn()
-    program, sampling_design = P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    program, sampling_design = PN.population_program(PAIR, 6), {"law": "subset", "k": 2}
     for v, py in ((V.check(_record(), program, QUERY, sampling_design, S.SCHEME, _ports(6)),
                    R.check(_record(), program, QUERY, sampling_design, S.SCHEME, _ports(6))),
-                  (V.check(_record(), P.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6)),
-                   R.check(_record(), P.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6))),
+                  (V.check(_record(), PN.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6)),
+                   R.check(_record(), PN.population_program(PAIR, 5), QUERY, sampling_design, S.SCHEME, _ports(6))),
                   (V.check_draw(draw.draw, reg.record, draw.law), D.check_draw(draw.draw, reg.record, draw.law)),
                   (V.check_draw({**draw.draw, "units": [0, 6]}, reg.record, draw.law),
                    D.check_draw({**draw.draw, "units": [0, 6]}, reg.record, draw.law)),
@@ -96,7 +97,7 @@ def test_the_declared_day_is_held_by_both():
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
     Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
     declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""
-    rec, program, sampling_design = _record(), P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    rec, program, sampling_design = _record(), PN.population_program(PAIR, 6), {"law": "subset", "k": 2}
     mine = {"blocks": [PAIR.id], "day": 0, "program": rec["program"]}
     other = {"blocks": [], "day": 1, "program": "0" * 128}
     for day, declared, codes in ((0, [mine, other], ()), (1, [mine, other], ("R2-declared",)),
@@ -120,7 +121,7 @@ def test_the_declared_day_is_held_by_both():
 def _window(design: dict, counts=(2, 18)) -> tuple:
     """A docket under `design` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the
     record, its program, its query and its ports."""
-    program = P.mixed_population_program(list(zip((PAIR, OTHER), counts)))
+    program = PN.mixed_population_program(list(zip((PAIR, OTHER), counts)))
     query = P.template_instances_query((PAIR, OTHER))
     part, n = P.partition(program, query), sum(counts)
     ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
@@ -242,7 +243,7 @@ def _lean_answering(monkeypatch, fn: str, answer):
 def test_a_disagreement_is_refused_naming_both(monkeypatch):
     stream, reg, draw = _drawn()
     _lean_answering(monkeypatch, "registration", lambda got: {"codes": ["R1-format"]})
-    v = V.check(_record(), P.population_program(PAIR, 6), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
+    v = V.check(_record(), PN.population_program(PAIR, 6), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
     assert v == Verdict(False, (V.DISAGREE,), {V.DISAGREE: {"lean": {"ok": False, "codes": ["R1-format"]},
                                                          "python": {"ok": True, "codes": [], "detail": {},
                                                                     "fanout": 1}}})
@@ -450,8 +451,8 @@ def test_the_switch_is_one_line(monkeypatch):
     assert lines == ['RECORD_VERDICT = "lean"'] and V.RECORD_VERDICT == "lean"
     _, reg, draw = _drawn()
     monkeypatch.setattr(V, "RECORD_VERDICT", "python")
-    v = V.check(_record(), P.population_program(PAIR, 5), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
-    py = R.check(_record(), P.population_program(PAIR, 5), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
+    v = V.check(_record(), PN.population_program(PAIR, 5), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
+    py = R.check(_record(), PN.population_program(PAIR, 5), QUERY, {"law": "subset", "k": 2}, S.SCHEME, _ports(6))
     assert v == py and v.verifiers["of_record"] == "python" and v.verifiers["lean"] == v.verifiers["python"]
     rec = V.audit_record(**_args(reg, draw))
     assert rec["verifiers"]["of_record"] == "python" and rec["verifiers"]["agree"]

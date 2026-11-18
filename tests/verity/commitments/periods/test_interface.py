@@ -1611,7 +1611,7 @@ class Bound(Held):
 
 
 #: core's ``one_stage.registered`` names `interface.registered_reads` reads, as the caller passes the module
-REG = type("REG", (), {"SCHEMA_KEY": "row_schema", "READS_V1": "verity/registered-reads/v1"})
+REG = type("REG", (), {"READS_V1": "verity/registered-reads/v1"})
 #: 12 units, unit u reading row u // 2 of six weight rows
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 

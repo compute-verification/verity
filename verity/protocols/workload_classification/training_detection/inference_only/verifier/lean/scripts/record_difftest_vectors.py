@@ -1297,12 +1297,12 @@ def _without(stage: str | None):
         setattr(ref, name, whole)
 
 
-def _program_wires(text: str, tids, cuts) -> list[dict] | None:
-    """The wires the Program `text`'s root states (`reference.program_wires`), None where it refuses them."""
+def _program_wires(text: str, tids, cuts) -> list[dict] | Exception:
+    """The wires the Program `text`'s root states (`reference.program_wires`), or what it raised refusing them."""
     try:
         return ref.program_wires(json.loads(text), tids, cuts)
-    except (ValueError, KeyError, TypeError):
-        return None
+    except (ValueError, KeyError, TypeError) as e:
+        return e
 
 
 def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
@@ -1319,7 +1319,7 @@ def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
         return None
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
     wires = _program_wires(text, lays, doc.get("cuts", {}))
-    if wires is None:
+    if isinstance(wires, Exception):
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
@@ -1490,7 +1490,7 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
-        case["spot"] = None if wires is None else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
+        case["spot"] = None if isinstance(wires, Exception) else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
                                                    "wires": wires}
 
 
@@ -2075,6 +2075,17 @@ EDGED = {
         "reads": [{"reader": "EdgeB_v1", "port": "y", "param": "weights/w", "at": 1, "radix": [1], "base": 0,
                    "step": [0]}]}), "inputs"),
     "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "not-topological"),
+    "an edge read through a grid, each run twice": (lambda: _ab(_mapped),
+                                                    _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 4]]]]], 3, form="grid"),
+                                                    None, "wires"),
+    "a grid of two lanes, an edge's and an input's": (lambda: _ab(_mapped), _repoint(
+        [2, [["n", 2, 0, 1, [[2, 4]]], ["n", 0, 2, 1, [[2, 4]]]]], 3, form="grid"), None, "own-rows"),
+    "a grid of radix 1": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[1, 4]]]]], 3, form="grid"), None,
+                          "program"),
+    "a grid an affine part spells": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[4, 2]]]]], 3, form="grid"),
+                                     None, "program"),
+    "a grid past its node": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 8]]]]], 3, form="grid"),
+                             None, "program"),
 }
 
 

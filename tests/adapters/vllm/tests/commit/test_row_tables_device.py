@@ -129,14 +129,11 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     file there, the device builds' too, which only nvcc compiles and no test without it reads."""
     pytest.importorskip("torch")
     from verity.protocols.resource_accounting.compute.pouw import prover
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        device as PD,
-    )
     from verity_torch.pouw.h1 import receipts
     from verity_torch.pouw.h1 import registered_device as RD
 
-    assert K.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
-    named = {*K.DEVICE_SOURCES, *K.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,
+    assert K.CUDA_DIR == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
+    named = {*K.DEVICE_SOURCES, *K.HOST_SOURCES, *RD.DEVICE_SOURCES,
              *RD.HOST_SOURCES, *RD.ZY_DEVICE_SOURCES, *RD.ZY_HOST_SOURCES, receipts.NOISE_CU}
     assert sorted(s for s in named if not (K.CUDA_DIR / s).is_file()) == []
 

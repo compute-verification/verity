@@ -51,7 +51,7 @@ OUT_VALUE = "rope_out"
 WORDS = 64
 SEED = 20261020
 #: `--schema`'s names for the row formats a served tree may be
-FORMATS = {"v1": G.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
+FORMATS = {"v1": RV.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 
 def program() -> tuple[Program, dict]:
@@ -72,7 +72,7 @@ def program() -> tuple[Program, dict]:
             P.template_instance_query(template))
 
 
-def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
+def stage(out: Path, seed: int = SEED, schema: str = RV.SCHEMA) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
@@ -84,7 +84,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     s = InputSet.open(synthetic_set(TM.rope_head(64), N, seed, out / "set")["path"])
     low = FC.lowering_for_set(s)
     x = np.asarray(s.port("x", 0, N), np.uint16).reshape(N, -1)
-    bits = {} if schema == G.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],
+    bits = {} if schema == RV.SCHEMA else {"port_bits": [16 * x.shape[1], 16 * WORDS],
                                           "seg_ports": frozenset({"cs"} if schema == G.SCHEMA_SEG else ())}
     text = FC.compose(low, s.subcircuit, partition=P.digest(part), program=P.program_digest(prog), statics=FC.set_statics(s),
                       **bits)
@@ -103,7 +103,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     reg = RV.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
     positions, refs = G.table(POS)
     rows, salts, entry = reg.statement(positions)
-    bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
+    bit_rows = RV.SCHEMA if schema == RV.SCHEMA else G.SCHEMA_V2
     reg_x = RV.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
@@ -115,7 +115,7 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
              salts={"x": x_salts, "cs": salts, "out": out_salts},
              registered={"cs": entry, "x": x_entry, "out": out_entry})
     tree, x_tree = ServedTree.of(reg), ServedTree.of(reg_x)
-    out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(bit_rows), "reads": list(range(N))}
+    out_port = {**reg_out.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(bit_rows), "reads": list(range(N))}
     (out / "served.json").write_text(json.dumps(dataclasses.asdict(tree), sort_keys=True))
     (out / "served-x.json").write_text(json.dumps(dataclasses.asdict(x_tree), sort_keys=True))
     (out / "out-port.json").write_text(json.dumps(out_port, sort_keys=True))
