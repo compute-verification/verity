@@ -1,7 +1,6 @@
 module
 
 public import Properties.Flock.Circuit.GateARow
-public import Properties.Verity.GateARow
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Bridge.BitsKeyProg
 
@@ -14,9 +13,6 @@ public import Proofs.Flock.Bridge.BitsKeyProg
 (`keyProg_unit_input`). So unit `u`'s gates are exactly its `nComp` rows (`keyProg_unit_iff`,
 `keyProg_unit_card`), and `nComp`, the unit net's computed rows and its constant stacked `units_per_vu` times, is the
 `m` SPOT's summary counts from the parsed file (`Spot.FilePart.ofCircuit`).
-
-`Verity.GateARow`, the form the remote statements take, says the same at files that parse and is equivalent
-(`gateARow_iff`).
 -/
 
 @[expose] public section
@@ -99,17 +95,5 @@ theorem gateARow : GateARow := by
       (Placed.keyProg r.D.unroll r.hU r.n).unit g = some u).card = _
     rw [keyProg_unit_card]
     rfl
-
-/-- **`Verity.GateARow` is `GateARow`**: the parse premise it takes is what `GateARow`'s `elim` reads. -/
-theorem gateARow_iff : Verity.GateARow ↔ GateARow := by
-  constructor
-  · intro h tags cf tables pf u
-    cases hr : parsedOf tags cf tables pf with
-    | none => exact absurd u.isLt (by simp [unitsOfFile, hr, Parsed.units])
-    | some r => exact h tags cf tables pf r hr u
-  · intro h tags cf tables pf r hr u
-    have := h tags cf tables pf u
-    rw [hr] at this
-    exact this
 
 end Flock.Bridge

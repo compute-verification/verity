@@ -8,8 +8,8 @@ public import Spot.FilePart
 
 `GateARow`, a count over the game's circuit of committed files that reads no play: the circuit of a file
 (`Flock.Bridge.circuitOfFile`, `Properties.Flock.Circuit.CircuitOf`) against the rows SPOT's summary of the
-parsed file counts (`Spot.FilePart`). It is proved (`Flock.Bridge.gateARow`). `Verity.GateARow`, which takes the parse
-as a premise, is equivalent (`Flock.Bridge.gateARow_iff`); `Properties.Verity.Committed` says what it ties.
+parsed file counts (`Spot.FilePart`). It is proved (`Flock.Bridge.gateARow`); `Properties.Verity.Committed` says what it
+ties.
 -/
 
 @[expose] public section
