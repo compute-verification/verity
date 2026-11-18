@@ -38,11 +38,12 @@ def rows (P : Prog) (ports : Array BlockFront.Port) : V (Array Row) := do
   let mut out : Array Row := #[]
   let mut last : Option (Nat × Nat) := none
   for p in ports do
-    let w ← writer P p.index
+    let g := BlockFront.Port.gate p
+    let w ← writer P g
     if last == some w then
-      out := out.modify (out.size - 1) fun (n, b, gs) => (n, b + p.width, gs.push p.index)
+      out := out.modify (out.size - 1) fun (n, b, gs) => (n, b + p.width, gs.push g)
     else
-      out := out.push (s!"g{p.index}", p.width, #[p.index])
+      out := out.push (s!"g{g}", p.width, #[g])
     last := some w
   return out
 
@@ -65,8 +66,8 @@ structure Cut where
   block : Compose.Block
 
 /-- Block `units` of `P` cut into rows, with the stand-in unit. -/
-def cut (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V Cut := do
-  let f ← BlockFront.front P units boolean
+def cut (P : Prog) (units : Array Nat) : V Cut := do
+  let f ← BlockFront.front P units
   let ins ← rows P f.ins
   let outs ← rows P f.outs
   let nIn := ins.foldl (fun a (_, b, _) => a + (b + 15) / 16) 0
@@ -75,24 +76,19 @@ def cut (P : Prog) (units : Array Nat) (boolean : Std.HashMap String String) : V
   return { front := f, ins, outs,
            block := { name := "block", body := .flat (standIn nIn nOut), ins := ins.map fun (n, b, _) => (n, b), outs := ow } }
 
-/-- The `block_file` piece: `{descriptor, units, boolean, partition}` (`block_front`'s input and the partition's digest)
+/-- The `block_file` piece: `{descriptor, units, partition}` (`block_front`'s input and the partition's digest)
 to `{ins, outs, rows, out_rows, meta}`: the front's ports `[gate, width]`, each row `[name, bits, gates]`, and META as
 the door's reader read it from the file, which it refuses unless the file reads back as the block. -/
 def piece (j : Json) : Except String Json := do
   let some d := (j.getObjValAs? String "descriptor").toOption | throw "descriptor is not a string"
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
   let some pd := (j.getObjValAs? String "partition").toOption | throw "partition is not a string"
-  let .ok (.obj bo) := j.getObjVal? "boolean" | throw "boolean is not an object"
-  let mut boolean : Std.HashMap String String := {}
-  for (k, v) in bo.toArray do
-    let Json.str s := v | throw s!"boolean['{k}'] is not a string"
-    boolean := boolean.insert k s
   let P ← decode d.toUTF8
-  let x ← cut P us boolean
+  let x ← cut P us
   let file ← Compose.compose x.block (hexOf (Sha512.hash d.toUTF8)) pd
   let c ← ProvedScope.circuitOf (Zk.tags Tags.circuit (Zk.maskLogOf file) 1) file []
   if !(← Test.Compose.agrees x.block c) then throw "the block's file read back is not the block"
-  let ports := fun (ps : Array BlockFront.Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.index, toJson p.width])
+  let ports := fun (ps : Array BlockFront.Port) => Json.arr (ps.map fun p => Json.arr #[toJson (BlockFront.Port.gate p), toJson p.width])
   let rowsJ := fun (rs : Array Row) => Json.arr (rs.map fun (n, b, gs) => Json.arr #[.str n, toJson b, toJson gs])
   return Json.mkObj [("ins", ports x.front.ins), ("outs", ports x.front.outs), ("rows", rowsJ x.ins),
     ("out_rows", rowsJ x.outs), ("meta", c.metaJ)]

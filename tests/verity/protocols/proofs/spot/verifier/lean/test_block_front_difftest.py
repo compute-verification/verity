@@ -181,7 +181,7 @@ def rows(program, ports) -> list:
 def test_the_block_files_ports_are_restricts_and_it_reads_back(pieces, member):
     program, text = chain()
     b = restricted(member)
-    j = {"descriptor": text, "units": [2 * member, 2 * member + 1], "boolean": BOOLEAN, "partition": "a" * 128}
+    j = {"descriptor": text, "units": [2 * member, 2 * member + 1], "partition": "a" * 128}
     kind, body = pieces.call("block_file", j)
     assert kind == "output", body
     out = json.loads(body)

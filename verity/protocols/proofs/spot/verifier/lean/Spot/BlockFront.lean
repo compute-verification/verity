@@ -44,7 +44,7 @@ open Lean (Json toJson)
 
 /-- A gate of C on the block's boundary and its width in bits. -/
 structure Port where
-  index : Nat
+  gate : Nat
   width : Nat
   deriving BEq, Inhabited, Repr
 
@@ -80,7 +80,7 @@ def sortDedup (xs : Array Nat) : Array Nat :=
 /-- Gates with their widths as ports, in increasing index, each once. -/
 def portsOf (xs : Array (Nat × Nat)) : Array Port :=
   (xs.qsort (·.1 < ·.1)).foldl (fun acc (g, w) =>
-    if acc.back?.map (·.index) == some g then acc else acc.push { index := g, width := w }) #[]
+    if acc.back?.map Port.gate == some g then acc else acc.push { gate := g, width := w }) #[]
 
 /-- A unit's operands, each with its width: its callee's parameter leaves in order. -/
 def operandsW (P : Prog) (x : Node) (m : Nat) : V (Array (Nat × Nat)) := do
@@ -291,7 +291,7 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
   for (k, m, _) in ms do
     for (g, w) in ← operandsW P root.body.nodes[k]! m do
       if !inside S g then read := read.push (g, w)
-  let ins := (portsOf read).map fun p => (p.index, p.width)
+  let ins := (portsOf read).map fun p => (Port.gate p, p.width)
   let mut inIdx : Std.HashMap Nat Nat := {}
   for (g, _) in ins do inIdx := inIdx.insert g inIdx.size
   let mut made : Std.HashMap Nat (Nat × Nat) := {}
@@ -328,7 +328,7 @@ def program (P : Prog) (units : Array Nat) : V Prog := do
         if inside S g then
           outs := outs.push (g, (ra j).2)
           if !made.contains g then made := made.insert g (t, (ra j).1)
-  let outPorts := (portsOf outs).map fun p => (p.index, p.width)
+  let outPorts := (portsOf outs).map fun p => (Port.gate p, p.width)
   let mut ret : Array Ref := #[]
   for (g, w) in outPorts do
     let (u, o) := made[g]!
@@ -380,7 +380,7 @@ def piece (j : Json) : Except String Json := do
   let some us := (j.getObjValAs? (Array Nat) "units").toOption | throw "units is not a list of naturals"
   let P ← decode d.toUTF8
   let f ← front P us
-  let ports := fun (ps : Array Port) => Json.arr (ps.map fun p => Json.arr #[toJson p.index, toJson p.width])
+  let ports := fun (ps : Array Port) => Json.arr (ps.map fun p => Json.arr #[toJson (Port.gate p), toJson p.width])
   return Json.mkObj [("ranges", .arr (f.ranges.map fun (lo, hi) => Json.arr #[toJson lo, toJson hi])),
     ("ins", ports f.ins), ("outs", ports f.outs),
     ("lift", .arr (f.lift.map fun (k, b) => Json.arr #[.str k, .str b]))]
