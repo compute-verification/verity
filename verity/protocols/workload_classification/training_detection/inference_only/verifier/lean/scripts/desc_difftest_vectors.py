@@ -386,12 +386,12 @@ def instance(seed: int) -> dict:
     first_empty = first_walk + len(walks())
     first_shared = first_empty + len(empties())
     first_mistyped = first_shared + len(shared())
-    first_grid = first_mistyped + len(mistyped())
-    if seed >= first_grid:
-        return {"instance": grids()[seed - first_grid], "shape": "grid", "theta_kind": None, "division": None,
-                "malformed": None}
     if seed >= first_mistyped:
-        return {"instance": mistyped()[seed - first_mistyped], "shape": "mistyped", "theta_kind": None,
+        mis = mistyped()
+        if seed >= first_mistyped + len(mis):
+            return {"instance": grids()[seed - first_mistyped - len(mis)], "shape": "grid", "theta_kind": None,
+                    "division": None, "malformed": None}
+        return {"instance": mis[seed - first_mistyped], "shape": "mistyped", "theta_kind": None,
                 "division": None, "malformed": None}
     if seed >= first_shared:
         return {"instance": shared()[seed - first_shared], "shape": "shared", "theta_kind": None, "division": None,
