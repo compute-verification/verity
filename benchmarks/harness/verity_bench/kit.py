@@ -299,22 +299,36 @@ def datasheet_bandwidth(name: str, *, directory: Path | None = None) -> int:
     return int(entry["value"])
 
 
-def card_arch(name: str, *, directory: Path | None = None) -> str:
-    """The ``arch`` of `card_record`'s record for ``name``: the target (``sm_90a``) machine code is built for."""
-    return card_record(name, directory=directory)["arch"]
+def card_arch(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
+    """The ``arch`` of `card_record`'s record for ``name``, or, for a build on a machine with no card, of the record
+    ``sku`` (its file's name in ``directory``): the target (``sm_90a``) machine code is built for."""
+    from verity.device import load_card
+
+    if (name is None) == (sku is None):
+        raise TypeError("card_arch takes the name nvidia-smi gives a card or a card file's sku, one of them")
+    if sku is None:
+        return card_record(name, directory=directory)["arch"]
+    directory = directory or cards_directory()
+    try:
+        card = load_card(sku, directory=directory)
+    except KeyError as e:
+        raise SystemExit(e.args[0]) from None
+    if card["kind"] != "gpu" or not card.get("arch"):
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no build target: it needs kind \"gpu\" and an `arch`")
+    return card["arch"]
 
 
-def card_gencode(name: str, *, directory: Path | None = None) -> str:
-    """nvcc's ``-gencode`` value for the card `card_arch` finds for ``name``: ``arch=<virtual>,code=<name>`` of its
-    ``arch``'s architecture file (`verity.device.load_architecture`, in the architectures beside the cards); refused by
-    name where no architecture file states it."""
+def card_gencode(name: str | None = None, *, sku: str | None = None, directory: Path | None = None) -> str:
+    """nvcc's ``-gencode`` value for the card `card_arch` finds for ``name`` or ``sku``: ``arch=<virtual>,code=<name>``
+    of its ``arch``'s architecture file (`verity.device.load_architecture`, in the architectures beside the cards);
+    refused by name where no architecture file states it."""
     from verity.device import load_architecture
 
     try:
-        arch = load_architecture(card_arch(name, directory=directory),
+        arch = load_architecture(card_arch(name, sku=sku, directory=directory),
                                  directory=cards_directory().parent / "architectures")
     except KeyError as e:
-        raise SystemExit(f"the card nvidia-smi names {name!r}: {e.args[0]}") from None
+        raise SystemExit(f"{f'card {sku!r}' if sku else f'the card nvidia-smi names {name!r}'}: {e.args[0]}") from None
     return f"arch={arch['virtual']},code={arch['name']}"
 
 

@@ -29,6 +29,7 @@ from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
+from verity.circuits.defs import recut_unread
 from verity.circuits.layout import WIDE_FAN_IN, resolve
 from verity.circuits.refs import Affine, Concat, Strided
 
@@ -111,6 +112,7 @@ def analyze(fn: Any, memo: dict[str, Support] | None = None) -> Support:
     """The support of every computation gate of `fn` over its own operands (bit k = parameter k), exactly: a callee's analysis
     is reused through each node whose arguments each come from one support (`memo`, by Definition id), and a node whose
     argument mixes supports (a constant-padded block), or a body with a scan, is expanded gate by gate."""
+    recut_unread(fn, "cross_call.analyze")
     memo = {} if memo is None else memo
     got = memo.get(fn.id)
     if got is not None:
@@ -584,6 +586,7 @@ def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
     partition is each member's own): each member is a Call over `fn`'s parameters, its operand runs its references
     (`verity.circuits.refs.runs`), checked as a Program's Calls are (`check_program`).  The recompute classes name each member's callee."""
     from verity.circuits.parts import n_members
+    recut_unread(fn, "cross_call.members_check")
     from verity.circuits.refs import runs
     keys: dict[str, str] = {}
     fns: dict[str, Any] = {}

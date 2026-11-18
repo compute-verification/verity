@@ -65,7 +65,7 @@ def lib() -> ctypes.CDLL:
         _lib.fa2_rows.restype = None
         _lib.fa2_rows.argtypes = (
             [ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3
-            + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 9 + [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
+            + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 5
         )
         for name in ("mufu_ex2_words", "mufu_rcp_words"):
             fn = getattr(_lib, name)
@@ -150,23 +150,17 @@ def kernel_geometry(seqlen_q: int, seqlen_k: int, rows: list[int] | np.ndarray) 
     return col_limit.astype(np.int32), nb.astype(np.int32)
 
 
-def _nudge(x: np.float32, ulps: int) -> np.float32:
-    if not ulps:
-        return x
-    return (np.array([x], np.float32).view(np.int32) + np.int32(ulps)).view(np.float32)[0]
-
 
 @dataclass
 class RowsResult:
     out: np.ndarray        # (n, D) u16 BF16 words
     out_f32: np.ndarray    # (n, D) u32 words before the BF16 cast
-    dbg: dict | None = None
     nonfinite: np.ndarray | None = None  # (n,) bool: a non-finite intermediate occurred -> the row is `unresolved`
 
 
 def attention_rows(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, kvh: np.ndarray, col_limit: np.ndarray, n_block_max: np.ndarray,
-    softmax_scale: float, tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0,
+    softmax_scale: float, tables: MufuTables,
 ) -> RowsResult:
     """``q`` (n, D) u16 words (one head's query per row); ``k``/``v`` (Lk, KVH, D) u16 canonical KV rows;
     ``kvh`` (n,) KV head per row; ``col_limit``/``n_block_max`` from :func:`kernel_geometry`."""
@@ -185,30 +179,17 @@ def attention_rows(
     out = np.zeros((n, D), np.uint16)
     out_f32 = np.zeros((n, D), np.uint32)
     flags = np.zeros(n, np.uint8)
-    max_blocks = int(n_block_max.max(initial=1))
-    dbg = None
-    ptrs = [None] * 5
-    if debug:
-        dbg = {
-            "s": np.zeros((n, max_blocks * KBLOCK_N), np.uint32),
-            "p": np.zeros((n, max_blocks * KBLOCK_N), np.uint32),
-            "m": np.zeros((n, max_blocks), np.uint32),
-            "l": np.zeros((n, 4), np.uint32),
-            "o_pre": np.zeros((n, D), np.uint32),
-        }
-        ptrs = [dbg[x].ctypes.data for x in ("s", "p", "m", "l", "o_pre")]
     lib().fa2_rows(
         q.ctypes.data, k.ctypes.data, v.ctypes.data, KVH, D, kvh.ctypes.data, col_limit.ctypes.data,
-        n_block_max.ctypes.data, n, KBLOCK_N, ctypes.c_float(float(_nudge(scale_log2(softmax_scale), scale_log2_nudge))),
-        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, *ptrs, max_blocks, int(variant),
-        flags.ctypes.data,
+        n_block_max.ctypes.data, n, KBLOCK_N, ctypes.c_float(float(scale_log2(softmax_scale))),
+        tables.ex2.ctypes.data, tables.rcp.ctypes.data, out.ctypes.data, out_f32.ctypes.data, flags.ctypes.data,
     )
-    return RowsResult(out, out_f32, dbg, (flags & 1).astype(bool))
+    return RowsResult(out, out_f32, (flags & 1).astype(bool))
 
 
 def attention_call(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, rows: np.ndarray, seqlen_q: int, seqlen_k: int, softmax_scale: float,
-    tables: MufuTables, *, debug: bool = False, variant: int = 0, scale_log2_nudge: int = 0,
+    tables: MufuTables,
 ) -> RowsResult:
     """One kernel call for one sequence: ``q`` (len(rows), H, D) words for the query rows ``rows``
     (0-based in the sequence), ``k``/``v`` (>= seqlen_k, KVH, D).  Returns (len(rows), H, D) words."""
@@ -219,8 +200,7 @@ def attention_call(
     col_limit, nb = kernel_geometry(seqlen_q, seqlen_k, rows)
     qf = q.reshape(nrow * H, D)
     kvh = np.repeat(np.arange(H, dtype=np.int32) // ngroups, 1)[None, :].repeat(nrow, 0).reshape(-1)
-    res = attention_rows(qf, k[:seqlen_k], v[:seqlen_k], kvh, np.repeat(col_limit, H), np.repeat(nb, H), softmax_scale, tables,
-                         debug=debug, variant=variant, scale_log2_nudge=scale_log2_nudge)
+    res = attention_rows(qf, k[:seqlen_k], v[:seqlen_k], kvh, np.repeat(col_limit, H), np.repeat(nb, H), softmax_scale, tables)
     res.out = res.out.reshape(nrow, H, D)
     res.out_f32 = res.out_f32.reshape(nrow, H, D)
     res.nonfinite = res.nonfinite.reshape(nrow, H)

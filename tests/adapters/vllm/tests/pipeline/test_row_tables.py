@@ -20,6 +20,7 @@ from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -109,7 +110,7 @@ def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tu
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
+    w = CS.Binding(*IF.listed_program([(DEFN, UNITS)], ()), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 
@@ -118,7 +119,7 @@ def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_t
     w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), **kw), s, got
+    return CS.commit(w, [g[0] for g in got], **kw), s, got
 
 
 def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
@@ -206,7 +207,7 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         committed(monkeypatch, table_salts={st: bytes(len(y)) for st, y in ys.items()}, segment_roots=recorded)
     w2, _, _ = window()
     with pytest.raises(ValueError, match="give table_salts"):
-        CS.commit(w2, [g[0] for g in _got], salt_key=bytes(32), segment_roots=recorded)
+        CS.commit(w2, [g[0] for g in _got], segment_roots=recorded)
     with pytest.raises(ValueError, match="bytes of salts"):
         RTB.step_roots(CTX, 1, s.outputs(1), salts=ys[1][:-1])
     with pytest.raises(ValueError, match="twice in one step"):
@@ -425,7 +426,7 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
     data[1]["rows"]["x"] = data[1]["rows"]["x"].copy()
     data[1]["rows"]["x"][0, 0] ^= 1                                  # chunk 1 reads table 1's row 1 otherwise than chunk 0
     with pytest.raises(ValueError, match="as another member reads it"):
-        CS.commit(w, data, salt_key=bytes(32))
+        CS.commit(w, data)
 
 
 @pytest.mark.parametrize("row_tables", [False, True])
