@@ -59,6 +59,7 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
@@ -217,9 +218,9 @@ def call_program(members) -> Program:
     return Program(bind(defn))
 
 
-SETUPS = [Setup(P.population_program(PAIR, n), P.template_instance_query(PAIR.id)) for n in (1, 3, 6)] + [
-    Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
-    Setup(P.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
+SETUPS = [Setup(PN.population_program(PAIR, n), P.template_instance_query(PAIR.id)) for n in (1, 3, 6)] + [
+    Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]), P.template_instances_query([PAIR.id, TRIPLE.id])),
+    Setup(PN.mixed_population_program([(PAIR, 1), (TRIPLE, 2), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id])),
     Setup(call_program((0, 2, 0, 3)), PO.query()), Setup(call_program((1, 2, 3)), PO.call_query(8))]
 
 
@@ -254,7 +255,7 @@ class RegisteredSetup(Setup):
 
     def _rows(self, v: str, w: int) -> tuple:
         """`Registered.commit`'s rows, salts, width and row format for `v` at `w` words."""
-        schema = self.formats.get(v, G.SCHEMA)
+        schema = self.formats.get(v, RV.SCHEMA)
         n, bits = len(G.parameter_gates(self.program, v)), G.width(self.program, v)
         k = G.row_leaves(self.program, v, w, schema)
         rows = [[(i * 40503 + 7) % (1 << bits) for i in range(r * w, (r + 1) * w)] for r in range(n // k)]
@@ -348,8 +349,8 @@ GENESIS = "9e" * 64
 #: The boundary's ports: `BLOCK`'s own, under its descriptor id, which the links round 2 derives from it read, each its
 #: three PAIR instances' rows a replay block, of PAIR's `x` and output each.
 BX, BOUT = (f"{codec.descriptor_id(BLOCK)}/{p}" for p in ("x", "o0"))
-BOUNDARY = Setup(P.population_program(BLOCK, 4), P.template_instance_query(BLOCK.id), names=(BOUT, BX), rows=(3, 3))
-INTERIOR = Setup(P.population_program(PAIR, 6), P.template_instance_query(PAIR.id))
+BOUNDARY = Setup(PN.population_program(BLOCK, 4), P.template_instance_query(BLOCK.id), names=(BOUT, BX), rows=(3, 3))
+INTERIOR = Setup(PN.population_program(PAIR, 6), P.template_instance_query(PAIR.id))
 PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR]}
 PROGRAMS[PO.program_sha512(Program(BLOCK))] = Program(BLOCK)
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
@@ -369,7 +370,7 @@ QUERIES = [s.query for s in SETUPS] + CALL_QUERIES + [
 def _population(members: tuple[tuple[int, int], ...]) -> str:
     """The canonical descriptor of the mixed population of `members`, `(template, instances)` pairs with the template an
     index into `MEMBERS`, its program put among `PROGRAMS`."""
-    program = P.mixed_population_program([(MEMBERS[t], n) for t, n in members])
+    program = PN.mixed_population_program([(MEMBERS[t], n) for t, n in members])
     PROGRAMS[PO.program_sha512(program)] = program
     return D.canonical(codec.encode_program(program))
 
@@ -1951,7 +1952,7 @@ def _record_of(s: Setup, values, sampling_design: dict, window: dict, log=(), bi
     if not sup:
         return rec
     filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding,
-                               schema=s.formats.get(v, G.SCHEMA)).entry()
+                               schema=s.formats.get(v, RV.SCHEMA)).entry()
               for v, rows in G.sources(sup).items()]
     return R.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries + filled, **kw)
 
@@ -2325,7 +2326,7 @@ REGISTERED_PARAMS = [
     _earlier_out,
     _earlier_value,
     _set("params", "row_schemas", lambda a, x: [
-        {"A": G.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
+        {"A": RV.SCHEMA}, {"A": G.SCHEMA_SEG}, {"B": G.SCHEMA_V2}, {"W": G.SCHEMA_V2}, {"T": G.SCHEMA_SEG}, {"x": G.SCHEMA_V2},
         {"S": G.SCHEMA_V2}, {"nope": G.SCHEMA_V2}, {"A": "u16"}, {"A": "hm96-sha512/row/v2 "}, {"A": 1}, ["A"], "A", None,
         {}][x % 15]),
     lambda a, x: a["params"].pop("row_schemas", None),
@@ -3304,7 +3305,7 @@ def fanout_cases(draw) -> dict:
                                                                             P.template_instance_query(TRIPLE.id),
                                                                             PO.query()]))
     if draw(st.integers(0, 4)) == 0:
-        program = P.population_program(PAIR, draw(st.integers(1, 6)))
+        program = PN.population_program(PAIR, draw(st.integers(1, 6)))
         PROGRAMS[PO.program_sha512(program)] = program
     else:
         source = st.tuples(st.integers(0, 1), st.integers(0, 9), st.integers(0, 9))
@@ -3938,8 +3939,8 @@ LINK_POINTS = D.Port(PIECES, "link_points", link_points, st.one_of(
 
 #: Windows a member of which can hold nine sampled proof blocks or eight, which open 4 link points and 3 at one unit a
 #: proof block: one template's 24 proof blocks, and PAIR's two with TRIPLE's eighteen, a stratum each.
-LINK_SETUPS = [Setup(P.population_program(PAIR, 24), P.template_instance_query(PAIR.id)),
-               Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 18)]), P.template_instances_query([PAIR.id, TRIPLE.id]))]
+LINK_SETUPS = [Setup(PN.population_program(PAIR, 24), P.template_instance_query(PAIR.id)),
+               Setup(PN.mixed_population_program([(PAIR, 2), (TRIPLE, 18)]), P.template_instances_query([PAIR.id, TRIPLE.id]))]
 PROGRAMS.update({s.sha512: s.program for s in LINK_SETUPS})
 
 
@@ -4904,7 +4905,7 @@ def _second_own(j):
 
 
 #: A two-template interior, PAIR's six slots then TRIPLE's four, its ports under their templates' names.
-SECOND_MIXED = Setup(P.mixed_population_program([(PAIR, 6), (TRIPLE, 4)]), P.template_instances_query([PAIR.id, TRIPLE.id]))
+SECOND_MIXED = Setup(PN.mixed_population_program([(PAIR, 6), (TRIPLE, 4)]), P.template_instances_query([PAIR.id, TRIPLE.id]))
 PROGRAMS[SECOND_MIXED.sha512] = SECOND_MIXED.program
 #: The boundary record round 2 reads: `BOUNDARY`'s ports at `BOUNDARY_ROOTS`, and registered values `w` and `w2`.
 SECOND_BOUNDARY = {"scheme": SCHEME, "population": BOUNDARY.population, "registered": [
@@ -5820,14 +5821,14 @@ WIDE_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, bo
      lambda B, S, x: B.batch(WIDE, x, axes=(0,))),
     ("Packs", lambda S: ((("x", Array(2, Array(8, Value(8)))),), Array(2, Array(8, Value(18)))),
      lambda B, S, x: B.batch(PACK, x, axes=(0,))))]
-REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
-    (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
-    (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
+REPLAY_PROGRAMS = [(PN.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
+    (PN.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
+    (PN.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
 PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
 #: The interiors of the three inlined token selects (`MULTI_REPLAYS`' last three) after a replay sample of two: each
 #: block's four chunks then its two combines, each block's four units then its two combines, and each block's two
 #: first chunks, its two second chunks, then its two combines.
-SECOND_SELECTS = [Setup(P.mixed_population_program(list(ts)), P.template_instances_query([t.id for t, _n in ts]))
+SECOND_SELECTS = [Setup(PN.mixed_population_program(list(ts)), P.template_instances_query([t.id for t, _n in ts]))
                   for ts in (((DUO, 8), (MERGE, 4)), ((UNIT, 8), (JOIN, 4)), ((SWAP, 4), (KEEP, 4), (LAST, 4)))]
 PROGRAMS.update({s.sha512: s.program for s in SECOND_SELECTS})
 #: A template whose one parameter has the name of its returned output, `o0`, and a template of two parameters, `a`
@@ -5845,13 +5846,13 @@ PORT_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, bo
      lambda B, S, x: B.call(OUT_NAMED, B.call(PAIR, x))),
     ("Both", lambda S: ((("x", Array(2, Value(8))), ("w", Value(8))), Value(8)),
      lambda B, S, x, w: B.call(BOTH, w, B.call(PAIR, x))))]
-PORT_INTERIORS = [Setup(P.mixed_population_program([(PAIR, 2), (t, 2)]), P.template_instances_query([PAIR.id, t.id]))
+PORT_INTERIORS = [Setup(PN.mixed_population_program([(PAIR, 2), (t, 2)]), P.template_instances_query([PAIR.id, t.id]))
                   for t in (ID8, OUT_NAMED, BOTH)]
-PROGRAMS.update({PO.program_sha512(p): p for p in (P.population_program(r, 2) for r in PORT_REPLAYS)})
+PROGRAMS.update({PO.program_sha512(p): p for p in (PN.population_program(r, 2) for r in PORT_REPLAYS)})
 PROGRAMS.update({s.sha512: s.program for s in PORT_INTERIORS})
 #: An interior under a check of two templates (`SECOND_MIXED`'s query, PAIR then TRIPLE) that its replay block's cells
 #: don't give: after a replay sample of two of `REPLAYS`' Two (PAIR, then TRIPLE), TRIPLE's two slots ahead of PAIR's.
-CROSSED_INTERIOR = Setup(P.mixed_population_program([(TRIPLE, 2), (PAIR, 2)]), SECOND_MIXED.query)
+CROSSED_INTERIOR = Setup(PN.mixed_population_program([(TRIPLE, 2), (PAIR, 2)]), SECOND_MIXED.query)
 PROGRAMS.update({PO.program_sha512(p): p for p in (CROSSED_INTERIOR.program, Program(REPLAYS[4]))})
 
 
@@ -6679,7 +6680,7 @@ def test_the_slots_of_a_population_of_nested_templates(pieces):
     batches apart, Lean's slots (`Partition.unitGates`, each callee's gates and each batch's offset read off one table) are
     the Python's whole (`TemplatePartition.gates` per unit), and the population's and the input class's gates are every
     gate of the program once."""
-    program = P.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
+    program = PN.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
                                           (PAIR, 290)])
     PROGRAMS[PO.program_sha512(program)] = program
     query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
@@ -6699,9 +6700,9 @@ def test_the_population_order_from_the_ranges_is_the_layouts(pieces):
     and the Python's (`partition.in_order`), at the docket's `n` and either side of it: on 2,000 units in seven root
     batches, whose strata put units apart and so fail it, on one batch of each of those templates, which passes at `n`
     only, and on `SETUPS`, out of order and in order."""
-    apart = P.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
+    apart = PN.mixed_population_program([(DEEP, 300), (PAIR, 250), (NEST, 400), (DEEP, 170), (QUAD, 500), (NEST, 90),
                                         (PAIR, 290)])
-    blocks = P.mixed_population_program([(DEEP, 470), (PAIR, 540), (NEST, 490), (QUAD, 500)])
+    blocks = PN.mixed_population_program([(DEEP, 470), (PAIR, 540), (NEST, 490), (QUAD, 500)])
     query = _json(P.template_instances_query([DEEP.id, PAIR.id, NEST.id, QUAD.id]))
     cases = [(apart, query, 2000, False), (blocks, query, 2000, True)]
     cases += [(s.program, _json(s.query), s.population, ok)
@@ -6854,7 +6855,7 @@ WIDE = CompositeDefinition("CoreSpotWide", 0, ("N",),
 
 def _template_population(template, n: int) -> dict:
     """The descriptor of `n` instances of `template`, its program put among `PROGRAMS`."""
-    program = P.population_program(template, n)
+    program = PN.population_program(template, n)
     PROGRAMS[PO.program_sha512(program)] = program
     return _json(codec.encode_program(program))
 
@@ -8467,8 +8468,8 @@ def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
     assert len({v["root"] for v in value.values()}) == len(RV.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
     seg = value[G.SCHEMA_SEG]
     cases = [(_read_linked(linked, 0, seg), []),
-             (_row_schema(_read_linked(linked, 0, seg), G.SCHEMA, reference=False), ["second-values"])]
-    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (G.SCHEMA, G.SCHEMA_V2)]
+             (_row_schema(_read_linked(linked, 0, seg), RV.SCHEMA, reference=False), ["second-values"])]
+    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (RV.SCHEMA, G.SCHEMA_V2)]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
@@ -8748,7 +8749,7 @@ def test_the_designs_rows_place_each_callers_units(pieces):
               (last, "o0", 2, two), (last, "r0", 2, two), (last, "r1", 2, two))),
     ]
     for r, links, wires, want in cases:
-        c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
+        c = {"program": _json(codec.encode_program(PN.population_program(r, 2))), "replay": codec.descriptor_id(r),
              "boundary": None}
         for port, mirror, expected in ((REPLAY_LINKS, replay_links, links), (REPLAY_WIRES, replay_wires, wires),
                                        (REPLAY_ROWS, replay_rows, want)):
@@ -8760,7 +8761,7 @@ def _derived_case(r, s: Setup, pieces) -> dict:
     """The second_statements piece's input for a run of no statements over interior `s` after a replay sample of two
     (`_second_case`), at the design each derives from replay block `r`'s Definition, Lean's the Python's whole
     (`replay_links`, `replay_wires`, `replay_rows`)."""
-    c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
+    c = {"program": _json(codec.encode_program(PN.population_program(r, 2))), "replay": codec.descriptor_id(r),
          "boundary": None}
     design = {}
     for name, port, mirror in (("links", REPLAY_LINKS, replay_links), ("wires", REPLAY_WIRES, replay_wires),
@@ -8855,7 +8856,7 @@ def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
              (uneven, None, None), (REPLAYS[3], None, None), (BLOCK, codec.descriptor_id(PAIR), None),
              (BLOCK, "Other_v0", None)]
     for r, key, want in cases:
-        c = {"program": _json(codec.encode_program(P.population_program(r, 2))),
+        c = {"program": _json(codec.encode_program(PN.population_program(r, 2))),
              "replay": key or codec.descriptor_id(r), "boundary": None}
         got = replay_returned(copy.deepcopy(c))
         assert got == want and D.replay(REPLAY_RETURNED, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
@@ -8908,7 +8909,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
             drawn = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
             assert len(drawn) == stratum["k"] >= 1, (stratum, out["draw"])
         other_counts = json.loads(_population(((0, 3), (1, 2))))
-        reordered = Setup(P.mixed_population_program([(TRIPLE, 3), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))
+        reordered = Setup(PN.mixed_population_program([(TRIPLE, 3), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))
         PROGRAMS[reordered.sha512] = reordered.program
         short = copy.deepcopy(rec)
         short["law"]["strata"][0]["k"] = 0

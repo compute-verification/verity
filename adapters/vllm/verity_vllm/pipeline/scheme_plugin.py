@@ -228,6 +228,16 @@ def route_of(scope: Mapping[str, Any]) -> str:
     return path
 
 
+def user_of(body: bytes) -> str | None:
+    """The ``user`` a request ``body`` (a JSON object) names; None where it names none, or isn't one."""
+    try:
+        req = json.loads(body)
+    except (UnicodeDecodeError, ValueError):
+        return None
+    user = req.get("user") if isinstance(req, dict) else None
+    return user if isinstance(user, str) else None
+
+
 def unseeded(body: bytes) -> str | None:
     """Why `Front` refuses a completions or chat request ``body``, None where it passes. A stochastic request must carry
     an integer ``seed``: vLLM gives one without a seed a seed it samples from ``np.random``, which nobody can recompute.
@@ -294,7 +304,7 @@ class Front:
     """vLLM's OpenAI server's ``--middleware`` with ``VERITY_PROTOCOLS`` set, the front's side: each scheme attached on
     this process's exchange (``process`` `hooks.FRONT`), a `hooks.ServeRoute` answered by its scheme's route (on a thread
     of its own, given the body as it streams in), and every other request handed to the schemes as an `hooks.InputArrived`
-    (its X-Request-Id, set where the client sent none, its first line, headers and body's length) before the server sees
+    (its X-Request-Id, set where the client sent none, its first line, headers, body's length and the user its body names) before the server sees
     it. Only `SAMPLED_PATHS` and `OTHER_PATHS` are served, and a sampled request only with its seed (`unseeded`): any
     other is answered 400, and a websocket closed. A scheme's `hooks.RefuseInput` answers it 400 with the reason too;
     an input refused before the server sees it is complete at the front at step 0 (`hooks.OutputsComplete`). Filed while the server has it, the server is given its
@@ -337,7 +347,7 @@ class Front:
         body = b""
         if path in SAMPLED_PATHS:
             body, receive = await _buffered(receive)
-        self.ex.emit(H.InputArrived(input, len(body), 0, headers, first_line))
+        self.ex.emit(H.InputArrived(input, len(body), 0, headers, first_line, user_of(body)))
         why = [w for _, w in self.ex.refused(input)]
         if path not in SAMPLED_PATHS | OTHER_PATHS:
             why.append(f"{path} is not served under a scheme: only {sorted(SAMPLED_PATHS | OTHER_PATHS)} and the schemes' "

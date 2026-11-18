@@ -54,7 +54,8 @@ class RegisteredValues:
 @dataclass(frozen=True)
 class InputArrived:
     """``steps``: input ``input`` of ``length`` values arrived, at ``step``, with the ``headers`` it came with (names
-    lower-cased) and its ``first_line``."""
+    lower-cased), its ``first_line`` and the ``user`` it names (None where it names none).  ``user`` is the input's own
+    value: a scheme keeps it to itself."""
 
     hook: ClassVar[str] = "steps"
     input: str
@@ -62,6 +63,7 @@ class InputArrived:
     step: int
     headers: Mapping[str, str] = field(default_factory=dict)
     first_line: str = ""
+    user: str | None = None
 
 
 @dataclass(frozen=True)
