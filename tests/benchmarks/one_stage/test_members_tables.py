@@ -27,7 +27,7 @@ from holes import waits_on
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
-@waits_on("restrict")
+@waits_on("restrict", "lower")
 def test_blobs_holding_a_table_no_circuit_looks_up_are_not_refused_for_it(tmp_path):
     """The audit's statement is of the second member alone, and neither member's circuit looks up a table. With
     ``rcp``'s table among the blobs, Lean and the Python run get as far as the first member's circuit, C_S

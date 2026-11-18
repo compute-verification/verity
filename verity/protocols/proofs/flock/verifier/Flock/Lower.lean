@@ -1,6 +1,6 @@
 module
 
-public import Flock.Tmpl
+public import Flock.TmplUnroll
 public import Circuits.Program
 
 /-!
@@ -24,6 +24,10 @@ Definition's own structure, in the description's size, and never from unrolled r
 - **The block.** The root holds the input rows (`z_c = z_c·z_c`, bit `i` at column `i`), places `d` once at the end of
   the input rows' words, copies `d`'s returns to the output rows, aligned to the output group's words, and ends with the
   constant, as `Flock.ReadNet.readTmpl` lays a read out. Input bit `i` is port bit `i`, the ports `inPorts` concatenated.
+
+`lower` ends by running the reader's checks on what it wrote (`selfCheck`), so its output passes them
+(`lower_checked`) and unrolls (`FlockSoundness.Lower.lower_unrolls`). A refusal there is `SELF_CHECK`'s, a completeness
+failure of the lowering, never a refusal of its input; the tests hold it to never happening on an honest Definition.
 
 `render` writes the template as `Tmpl.parse` reads it, and `inBit`/`outBit` name port bit `k`'s column. That the
 unrolled template evaluates as the Definition is a named premise of the guarantees over the door, not stated here.
@@ -359,7 +363,7 @@ def alignUp (n span : Nat) : Nat := (n + span - 1) / span * span
 /-- **The block's template**: Definition `d` of `P` and every Definition it reaches, one template Definition each, callees
 first, then the root: the input rows (port bit `i` at column `i`, every port bit a row), `d` placed once on them, its returns copied to the
 output rows, and the constant. `inPorts`/`outPorts` are the port widths in bits, ports concatenated, low bit first. -/
-def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
+def build (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := do
   let some defn := P.defs[d]? | throw s!"no Definition {d}"
   let N := defn.paramLeaves
   let Mo := defn.outLeaves
@@ -384,6 +388,44 @@ def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl := d
                    segs := if N == 0 then #[] else #[{ len := N, at_ := 0, step := 0, reps := 1, rstride := 0 }] }] }
   return { name := defn.key, root := s.defs.size, inGroups := #[⟨0, inW, inPorts⟩],
            outGroups := #[⟨oStart / WORD, outW, outPorts⟩], defs := s.defs.push root }
+
+/-- The prefix of a refusal at `selfCheck`: the lowering wrote a template the reader refuses, a completeness failure of
+`lower`, never a refusal of its input. -/
+def SELF_CHECK : String := "lower: completeness failure"
+
+/-- The first of the reader's five checks `t` fails. -/
+def selfWhy (t : Tmpl.Tmpl) : String :=
+  if !t.wellFormed then "not well-formed"
+  else if !t.apart then "a Definition's rows or copies overlap or leave its columns"
+  else if !t.ordered then "a row reads a column out of order, or an input column that is not a port bit"
+  else if !t.inputsT then "an input row is not a self row or empty, or an input port bit has no self row"
+  else "a port group is not an aligned power of two of words holding its ports"
+
+/-- `t` if it passes the checks the reader runs on every template (`Tmpl.unrollOk`'s, the layouts' aside), else refused
+under `SELF_CHECK`. -/
+def selfCheck (t : Tmpl.Tmpl) : V Tmpl.Tmpl :=
+  if t.wellFormed && t.apart && t.ordered && t.inputsT && t.groupsOk then pure t
+  else throw s!"{SELF_CHECK}: the template of {t.name} written by `lower` fails the reader's check: {selfWhy t}"
+
+/-- **The block's template** (`build`), refused under `SELF_CHECK` unless it passes the reader's checks. -/
+def lower (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) : V Tmpl.Tmpl :=
+  build P d inPorts outPorts >>= selfCheck
+
+/-- **What `lower` writes is a template the verifier's checks pass**: well formed, its copies apart, its rows and
+bindings in order, its input rows self rows over its port bits, its port groups aligned. -/
+theorem lower_checked {P : Prog} {d : Nat} {inP outP : Array Nat} {t : Tmpl.Tmpl}
+    (hl : lower P d inP outP = .ok t) :
+    t.wellFormed = true ∧ t.apart = true ∧ t.ordered = true ∧ t.inputsT = true ∧ t.groupsOk = true := by
+  unfold lower at hl
+  cases hb : build P d inP outP with
+  | error e => simp [hb, bind, Except.bind] at hl
+  | ok t' =>
+    simp only [hb, bind, Except.bind, selfCheck] at hl
+    split at hl
+    · rename_i h
+      cases hl
+      simpa [Bool.and_eq_true, and_assoc] using h
+    · cases hl
 
 /-! ## The text -/
 
