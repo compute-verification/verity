@@ -626,7 +626,7 @@ theorem probationKept : ProbationKept := by
   unfold Kept
   cases s.appends[a].origin <;> exact id
 
-/-! ## `CoinBySlot`, and `CoinAfterAppend` by slot -/
+/-! ## `CoinAfterAppend` and `CoinBySlot` -/
 
 /-- An event that leaves the appends as they were and answers with no `appended`. -/
 def NoAppend (s s' : State) (r : Result) : Prop := s'.appends = s.appends ∧ ∀ first c, r ≠ .appended first c
@@ -880,18 +880,7 @@ theorem answered_of_run {params : Params} {reg : Registration} {coins appendCoin
     (#[], State.init params reg coins appendCoins notBeforeNs) (inv_init _ _ _ _ _) rfl rfl
     ⟨rfl, by simp [appendedOf, State.init], fun e _ _ h => by simp at h⟩ (rs, s) hrun
 
-/-- `CoinAfterAppend` but its last conjunct, which the code makes true by slot: the coin is the append coin of the
-append's slot, `slot.getD k` (`k` without a slot named, as without refresh). -/
-theorem coinAfterAppend_bySlot : ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray)
-    (notBeforeNs : Nat) (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
-    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
-      rs.size = events.size ∧
-      ∀ e first c, rs[e]? = some (.appended first c) →
-        let k := (appendedOf (rs.extract 0 e)).size
-        ∃ root count origin slot, events[e]? = some (.append root count origin slot) ∧ ∃ hk : k < s.appends.size,
-          s.appends[k].root = root ∧ (s.appends[k].count : Int) = count ∧ s.appends[k].origin = origin ∧
-          s.appends[k].slot = slot.getD k ∧ s.appends[k].first = first ∧ s.appends[k].coin = c ∧
-          appendCoins[slot.getD k]? = some c := by
+theorem coinAfterAppend : CoinAfterAppend := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun
   obtain ⟨hsz, -, hold⟩ := answered_of_run hrun
   refine ⟨by simpa using hsz, fun e first c he => ?_⟩

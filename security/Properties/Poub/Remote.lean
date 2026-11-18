@@ -237,7 +237,9 @@ def ReceiptsBelowLimit : Prop :=
       ∀ t (ht : t < s.windows.size), s.windows[t].receipts < Session.RECEIPT_LIMIT
 
 /-- The appends are the store's next indices in order (append `k` starts where the one before it ends, the first at
-`N`, and the store ends at the last), and append `k` answered with the append coin of its slot, a slot at or past `k`. -/
+`N`, and the store ends at the last), and append `k` answered with the append coin of its slot, a coin of the family
+(`appendCoins[slot]?` is some), the slots strictly increasing along the appends: so each coin answers at most one
+append, and append `k`'s slot is at or past `k`. -/
 def AppendsInOrder : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
@@ -245,7 +247,8 @@ def AppendsInOrder : Prop :=
       s.extent = reg.blocks + (s.appends.toList.map (·.count)).sum ∧
       (∀ k (hk : k < s.appends.size), s.appends[k].first = reg.blocks + ((s.appends.toList.take k).map (·.count)).sum) ∧
       s.appends.size ≤ appendCoins.size ∧
-      ∀ k (hk : k < s.appends.size), k ≤ s.appends[k].slot ∧ s.appends[k].coin = appendCoins[s.appends[k].slot]!
+      (∀ k (hk : k + 1 < s.appends.size), s.appends[k].slot < s.appends[k + 1].slot) ∧
+      ∀ k (hk : k < s.appends.size), appendCoins[s.appends[k].slot]? = some s.appends[k].coin
 
 /-- The session's head is the chain over its appends, and every pass is bound to the chain over the appends received
 before it, a prefix of them, and reads only registered blocks and theirs: so its seed,

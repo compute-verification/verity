@@ -19,8 +19,8 @@ the window's check. They take no premise.
   (`JoinsInOrder`);
 * `OpensOrigin`: in an accepted window, every sampled block of a re-key append decodes under the append's coin to a
   payload whose leaf opens at the origin's position under the origin's root (`originLeaf`);
-* `CoinAfterAppend`: the `k`-th append coin leaves only in reply to the append the session records as its `k`-th, the
-  coins being sequential; `CoinBySlot` is the form with coins keyed by slot, which the code does not have.
+* `CoinAfterAppend`: an append coin leaves only in reply to the append the session records as its `k`-th, and it is
+  the coin of that append's slot; `CoinBySlot` is its form with refresh on, where every append names its slot.
 -/
 
 @[expose] public section
@@ -116,11 +116,12 @@ def appendedOf (rs : Array Session.Result) : Array (Nat × ByteArray) :=
     | .appended first coin => some (first, coin)
     | _ => none
 
-/-- **The `k`-th append coin leaves only in reply to the `k`-th recorded append.** In a session run on its events, the
+/-- **An append coin leaves only in reply to the append recorded in its slot.** In a session run on its events, the
 result of event `e` is `appended first c` only when event `e` is an append, which the session records as its `k`-th
-(`k` the `appended` results before `e`) with that root, count, origin and slot, starting at `first`, and `c` is append
-coin `k`: the coin leaves after the append's root and origin are received, an empty slot takes none, and no other
-result carries an append coin. Coins are sequential: coin `k` goes to the `k`-th used slot, whichever slot it is. -/
+(`k` the `appended` results before `e`) with that root, count, origin and slot, starting at `first`, and `c` is the
+append coin of its slot, `slot.getD k` (the slot it names, or `k` when it names none, as without refresh): the coin
+leaves after the append's root and origin are received, an empty slot's coin never leaves, and no other result
+carries an append coin. -/
 def CoinAfterAppend : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
@@ -131,12 +132,11 @@ def CoinAfterAppend : Prop :=
         ∃ root count origin slot, events[e]? = some (.append root count origin slot) ∧ ∃ hk : k < s.appends.size,
           s.appends[k].root = root ∧ (s.appends[k].count : Int) = count ∧ s.appends[k].origin = origin ∧
           s.appends[k].slot = slot.getD k ∧ s.appends[k].first = first ∧ s.appends[k].coin = c ∧
-          appendCoins[k]? = some c
+          appendCoins[slot.getD k]? = some c
 
-/-- **Coins keyed by slot (not the code's).** As `CoinAfterAppend`, but the coin answering the append in slot `σ` is
-member `σ` of the append-coin family, `appendCoins[σ]`, whatever appends came before; empty slots' members never leave.
-The code takes `appendCoins[appendSampled]`, the count of appends so far, so this holds only for runs that leave no
-slot before a used one empty. -/
+/-- **Coins keyed by slot.** As `CoinAfterAppend` with refresh on, where every append names its slot `σ`: the coin
+answering it is member `σ` of the append-coin family, `appendCoins[σ]`, whatever appends came before; empty slots'
+members never leave. -/
 def CoinBySlot : Prop :=
   ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
