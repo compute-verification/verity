@@ -20,6 +20,13 @@ plan reads lies in one of its runs (`block_mem`).
 reads is `Kept` at `t`. A new pass is past `refreshRefusal`'s `probation` arm (`prob_check`), which reads each append's
 birth: defined, since every append's slot is in the schedule and so is a re-key's origin slot, which `State.slotOk`
 finds an append holding (`Slots`). An append comes after every block a recorded pass reads (`InvOn.reads`).
+
+`OriginsOnRota` over the invariant `Rota`: `append` takes an append only past `State.slotOk`, which checks its slot's
+kind, and a re-key slot's origin is a fresh slot (`slotAt_rekey`), so its append is fresh (`onRota_new`); `receive` joins
+the appends not joined yet to window `filling` only past `joinsAnother`, so each joins its slot's window (`rota_join`);
+and the last window is drawn only once every append has joined (`close`'s `coin` refusal), after which `append` refuses,
+since a drawn window is final and the windows are then all released. An accepted session has drawn its last window
+(`InvOn.drawn`), and its slots increase (`InvOn.ordered`).
 -/
 
 @[expose] public section
