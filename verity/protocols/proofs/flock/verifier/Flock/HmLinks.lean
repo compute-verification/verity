@@ -23,16 +23,26 @@ open Lean (Json)
 
 /-! `HmOut` Linking: under a template query, with the verifier's own program, every cut wire between two units of
 the statement is a check on the program. A reader whose parameter leaves are another unit's outputs reads them in a link
-row (META `links`): an input row encoded as the one output row is, which the registered reads read by path in its writer's
-output field's tree (`Registered.checkLinked`, a wired port's positions `Registered.Port.readAt`'s closed form), so the
+row (META `links`): its writer's whole output row, holding the read from the offset the program gives, which the
+registered reads read by path in its writer template's tree (`Registered.checkLinked`, a wired port's positions `Registered.Port.readAt`'s closed form), so the
 reader's row is the writer's committed row as one commitment, not a second commitment compared with it. The wiring is
 read from the verifier's own program, so in this model the topology is public, a known leak that later work removes. -/
 namespace HmLinks
 
-/-- META `links`: each `{port, leaves: [lo, hi]}`, an input row by name that holds template parameter leaves `[lo, hi)` as
-the one output row holds outputs, a `hm96-sha512/row/v1` row of that row's words (neither a bit row nor segmented); a row
-once, the ranges disjoint, at least one. None without the key. -/
-def parse (c : Circuit) : V (Array (Nat × Nat × Nat)) := do
+/-- A link row: input row `port` holds template parameter leaves `[lo, hi)` at its words `[off, off + hi - lo)`, the words
+its writer's output row holds those outputs at. -/
+structure Link where
+  port : Nat
+  lo : Nat
+  hi : Nat
+  off : Nat
+  deriving Inhabited
+
+/-- META `links`: each `{port, leaves: [lo, hi], at}` (`at` 0 when absent), an input row by name that is its writer's whole
+output row, a `hm96-sha512/row/v1` row (neither a bit row nor segmented) holding parameter leaves `[lo, hi)` from its word
+`at`; a row once, the ranges disjoint, at least one, in a statement of one v1 output row. None without the key. The row's
+words are its tree port's registered row's (`Registered.checkPort`), and `at` is the program's (`checkUnit`). -/
+def parse (c : Circuit) : V (Array Link) := do
   let some lj := (c.metaJ.getObjVal? "links").toOption | return #[]
   let xs ← J.asArr lj "META links"
   let k := HmOut.nIn c
@@ -45,18 +55,20 @@ def parse (c : Circuit) : V (Array (Nat × Nat × Nat)) := do
     let keys := match x with
       | .obj kvs => (kvs.toArray.map (·.1)).qsort (· < ·)
       | _ => #[]
-    if keys != #["leaves", "port"] then throw "META links: a link is exactly {port, leaves}"
+    if keys != #["leaves", "port"] && keys != #["at", "leaves", "port"] then
+      throw "META links: a link is exactly {port, leaves} or {port, leaves, at}"
     let name ← J.str x "port" "META links"
     let lv ← (← J.arr x "leaves" "META links").mapM (J.asNat · "a link leaf")
     let some p := (List.range k).find? (fun q => (c.ports.getD q default).name == name)
       | throw s!"META links: {name} is not an input row"
+    let off ← if keys.contains "at" then J.nat x "at" "META links" else pure 0
     let pt := c.ports.getD p default
     if lv.size != 2 || lv[0]! ≥ lv[1]! then throw s!"META links: {name}'s leaves are not [lo, hi) with lo < hi"
-    if pt.v2 || pt.segs.isSome || pt.words != out.words || lv[1]! - lv[0]! > out.words then
-      throw s!"META links: {name} is not a hm96-sha512/row/v1 row of the output row's {out.words} words"
-    if r.any (fun (q, a, b) => q == p || (a < lv[1]! && lv[0]! < b)) then
+    if pt.v2 || pt.segs.isSome || off + (lv[1]! - lv[0]!) > pt.words then
+      throw s!"META links: {name} is not a hm96-sha512/row/v1 row holding its {lv[1]! - lv[0]!} leaves from word {off} in its {pt.words} words"
+    if r.any (fun l => l.port == p || (l.lo < lv[1]! && lv[0]! < l.hi)) then
       throw s!"META links: {name} is linked twice, or its leaves overlap another link's"
-    r := r.push (p, lv[0]!, lv[1]!)
+    r := r.push { port := p, lo := lv[0]!, hi := lv[1]!, off }
   return r
 
 /-- The template query's population over the program (`TemplateQuery.evaluate`'s order), by node: per root node that is not
@@ -93,20 +105,21 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
 
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
-lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or exactly
-one unit's outputs in order, which its link row reads by path in the writer's output field's tree (`Registered.checkLinked`),
-whether or not the writer is a unit of the file. The cut wires checked. -/
-def checkUnit (c : Circuit) (P : Program.Prog) (links : Array (Nat × Nat × Nat)) (popIdx : Array Nat)
+lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or one
+unit's outputs `[at, at + hi - lo)` in order, `at` the link's and so the program's, a read of two units refused: its link row
+is the writer's whole output row, read by path in the writer template's tree (`Registered.checkLinked`), whether or not the
+writer is a unit of the file. The cut wires checked. -/
+def checkUnit (c : Circuit) (P : Program.Prog) (links : Array Link) (popIdx : Array Nat)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
   let some u := popIdx[i]? | throw s!"links: unit {i} of the draw is outside the public file's {popIdx.size} units"
   let some (k, m) := unitOf u | throw s!"links: unit {u} is outside the program's {n} units"
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
   for t in [0:ops.size] do
     if let some v := ownerOf ops[t]! then
-      if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then
+      if !links.any (fun l => l.lo ≤ t && t < l.hi) then
         throw s!"links: cut wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no link row (META links) carries it"
   let mut wires := 0
-  for (p, lo, hi) in links do
+  for ⟨p, lo, hi, off⟩ in links do
     let name := (c.ports.getD p default).name
     if hi > ops.size then throw s!"links: {name}'s leaves [{lo}, {hi}) are past unit {u}'s {ops.size} parameter leaves"
     let rd := ops.extract lo hi
@@ -115,15 +128,17 @@ def checkUnit (c : Circuit) (P : Program.Prog) (links : Array (Nat × Nat × Nat
       if rd.any (ownerOf · |>.isSome) then
         throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read both circuit inputs and a unit's outputs"
     | some v =>
+      if rd.any (ownerOf · != some v) then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs and other leaves: a link row is one writer unit's, so the reader's port is cut at its writers' units"
       let (kv, mv) := (unitOf v).getD (0, 0)
       let og ← outGates P kv mv
-      if og != rd then
-        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
+      if off + rd.size > og.size || og.extract off (off + rd.size) != rd then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not unit {v}'s outputs [{off}, {off + rd.size}) of its {og.size}, in order"
       wires := wires + 1
   return wires
 
 /-- `checkUnit` for each reader of `readers` (places in the public file; every unit of it when none), summed. -/
-def checkAt (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Nat × Nat × Nat))
+def checkAt (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array Link)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n : Nat) (readers : Option (Array Nat)) : V Nat := do
   let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
   let mut wires := 0

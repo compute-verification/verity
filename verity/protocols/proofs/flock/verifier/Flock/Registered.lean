@@ -157,6 +157,8 @@ def portsOf (j : Json) : V (Array Port) := do
       let tj ← J.get e TREE_KEY ctx
       if !keysIn tj ["template", "field"] || !reads.isEmpty then
         throw s!"{ctx}: port {name}: a tree port's {TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
+      if words.isNone then
+        throw s!"{ctx}: port {name}: a tree port names its rows' words, which hold its link row's width (Port.fits)"
       pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom,
              tree }
@@ -309,13 +311,13 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
 /-- Every link row of the circuit (META `links`, `HmLinks.parse`) is a tree port of `own` (`Port.tree`): a reader's row of
 another unit's outputs is read by path in its writer template's output field's tree, never committed afresh. -/
 def checkLinked (c : Circuit) (own : Array Port) : V Unit := do
-  for (p, _, _) in ← HmLinks.parse c do
-    let name := (c.ports.getD p default).name
+  for l in ← HmLinks.parse c do
+    let name := (c.ports.getD l.port default).name
     if !own.any fun r => r.name == name && r.tree.isSome then
       throw s!"registered reads: link row {name} reads another unit's outputs, and no tree port ({TREE_KEY}) reads it by path in its writer template's output field's tree"
 
-/-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
-requires of every link, which the class circuits name `out`. -/
+/-- The output field a link row reads in its writer template's tree: the writer's whole output row, which every link row
+is (`HmLinks.parse`), and which the class circuits name `out`. -/
 def OUT_FIELD : String := "out"
 
 /-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
@@ -325,8 +327,8 @@ units, each found from the root body's nodes. -/
 def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
   let some (t, f) := reg.tree | return reg
   if f != OUT_FIELD then
-    throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
-  let some (_, lo, _) := (← HmLinks.parse c).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
+    throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.parse)"
+  let some ⟨_, lo, _, _⟩ := (← HmLinks.parse c).find? fun l => (c.ports.getD l.port default).name == reg.name
     | throw s!"registered reads: tree port {reg.name} is no link row of the circuit (META links)"
   let ns := HmLinks.nodes P
   let first := indices.foldl min (indices.getD 0 0)
@@ -686,8 +688,10 @@ def checkDescriptionPort (c : Circuit) (pub : Public) (t : Tables) (reg : Port) 
 the header's `registered` names exactly the verifier's own ports (`own`, `--registered`), each a table of a shared-row file
 that is the registration in order, every row of it opening the registered root at its index and read by an instance
 (`checkDescriptionPort`; `FlockProofs.Registered`: `checkDescription_ok`). No position depends on which unit an instance
-is, so unlike `check` the units need not be derived. -/
+is, so unlike `check` the units need not be derived. Its ports are its description and none is read by path, so a statement
+with links is refused (`checkLinked` with no tree port). -/
 def checkDescription (c : Circuit) (pub : Public) (own : Array Port) : V Unit := do
+  checkLinked c #[]
   let .ok (.obj kvs) := pub.header.getObjVal? "registered"
     | throw "registered reads: the inner statement names no registered rows: its description committed afresh opens no registered root"
   for (name, _) in kvs.toArray do
