@@ -499,8 +499,8 @@ function, the block or which C; a scheme passes no function and no row at run ti
 - `supplied` names a function of the registry (`supplied.FUNCTIONS`). A name is versioned (`_vN` of a Definition is
   `/vN` here): a function whose value changes takes a new name.
 - `args` are exactly the function's static arguments, each a natural or a nonempty string. A slot's index (round j of a
-  session, draw k of a sample, a unit's position) is one, so which slot a block is is fixed at registration and only the
-  slot's value is bound by the coin.
+  session, draw k of a sample) is one, so which slot a block is is fixed at registration and only the slot's value is
+  bound by the coin.
 - `layout` reads the function's value, a byte string, as the parameter's leaves of width w: `le`, the bytes as one
   little-endian bit string (bit t is bit t mod 8 of byte ⌊t/8⌋) and leaf i its bits `[i·w, (i+1)·w)` least significant
   first, a row's own order (u16 words as little-endian byte pairs, a byte string's bits in byte order); `halves`, each
@@ -517,19 +517,26 @@ the only place.
 | `pous.session.round_coin/v1` (u32be(j) ‖ u64be(i_j)) | coin, commitment | supplied | `round` | 96 |
 | `pous.session.header/v1` | commitment | supplied | | 6,048 |
 | `pous.session.context/v1` | commitment | supplied | | 848 |
-| `pous.setup.base/v1` | coin, sample, constant | supplied | `draw`, `L` | 8 L |
-| `pous.setup.slot/v1` | sample, constant | supplied | `draw`, `n` | 16 |
+| `pous.setup.salt/v1` | coin | supplied | | 192 |
 | `poub.read.pub/v1` | coin, commitment, constant | supplied | `draw`, `K`, `masked`, `N` | 4,320 + (2 + K + masked) N |
-| `poub.read.signs/v1` | coin, constant | supplied | `draw`, `rows`, `bytes` | 8 · rows · bytes |
+| `poub.read.signs/v1` | coin, constant | supplied | `draw`, `sketch_rows`, `bytes` | 8 · sketch_rows · bytes |
 | `window.salt/v1` | coin | coin | | 512 |
-| `commitment.root/v1` | commitment | supplied | `commitment` | 512 |
-| `unit.position/v1` | commitment | supplied | `unit` | 64 |
+| `pouw.pearlplus.salt/v1` | coin | coin | | 256 |
+| `registered.root/v1` (the verifier's pin, never a prover's row) | commitment | supplied | `value` | 512 |
+| `record.root/v1` (a port root the record names) | commitment | supplied | `port` | 512 |
+| `log.base/v1` (the first position after the log's records) | commitment | supplied | | 64 |
 | `const.u16/v1` | constant | supplied | `value` | 16 |
 
-So a storage round's index, its session's header and context, the setup's base and slot, the bandwidth audit's public row
-and signs, and a PoUW block's salt, position and operands' roots, which its seed Definition hashes inside the block, are
-one kind of input, with no case per scheme. A value that reads only constants (a slot fixed at registration, a constant word)
-is a supplied input too, not a constant of C: a Program holds no data (§5.3).
+**A supplied value is short.** No supplied input is as long as a population: where a unit's row is a function of its index
+and a short value, the verifier supplies the short value and each unit computes its row inside, from that value and its
+index, a constant of the unit in C. So the verifier computes one value per input, and the prover pays the expansion in
+gates. A storage setup unit builds its base `prefix ‖ u64be(s) ‖ u64be(v)` from `pous.setup.salt/v1` (the prefix is the
+salt framed between constants, zero-padded) and its block u = 2^16 s + v (constant bits): wiring and constants, no AND; its
+slot u mod n is a constant. A unit's position is `log.base/v1` plus its index, a 64-bit addition.
+
+So a storage round's index, its session's header and context, the setup's salt, the bandwidth audit's public row and signs,
+and a PoUW block's salt, its log's base and its operands' roots, which its seed Definition hashes inside the block, are one
+kind of input, with no case per scheme.
 
 **What the decoder refuses**, after §5.1's `E_INPUTS*`, in this order (`supplied.check_entry`, `check_held`):
 
