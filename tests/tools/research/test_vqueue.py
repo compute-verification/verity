@@ -515,10 +515,75 @@ def test_a_failure_whose_inputs_meet_several_members_suspects_only_them():
     assert decide(s)[1:] == [Build((2, 4), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
 
 
-def test_a_failure_whose_inputs_meet_no_member_suspects_every_member():
+def test_a_failure_whose_inputs_meet_no_member_is_rerun_afresh_then_suspects_every_member():
+    """No member's files meet the failure, so the keys are rerun once before every member is suspected; the rerun's failure
+    suspects every member, as one that was not rerun did."""
     t, six = task("t", "elsewhere/"), (1, 2, 3, 4, 5, 6)
     s = snap(cand("c1", MAIN, *six, state=FAIL, failed=(t,)), ready=prs(*six, 7))
+    assert decide(s) == [Rerun("c1", ("key:t",)), Build((7,), "c1", 1)]
+    s = snap(cand("c1", MAIN, *six, state=FAIL, failed=(t,), reruns=1), ready=prs(*six, 7))
     assert decide(s) == [Drop("c1", "failed: t", Outcome(six, heads(*six), FAIL, six, MAIN)), Build((1, 2, 3), MAIN, 2)]
+
+
+#: a test no member's change reaches, and the handle the registry gives its path
+UNREACHED = "tools/zz/tests/test_z.py::test_flake"
+OWNER = ((UNREACHED, "@zz"),)
+NOW = 1_700_000_000.0
+
+
+def _unreached(name: str = "pytest:z") -> Failed:
+    return Failed(name, f"key:{name}", frozenset({"tools/zz/tests/test_z.py"}), tests=frozenset({UNREACHED}))
+
+
+def test_a_candidate_of_several_failing_a_test_no_change_reaches_is_rerun_afresh():
+    """The chain above it stays: the drop waits for the rerun."""
+    t = _unreached()
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), cand("c2", "c1", 3), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s) == [Rerun("c1", ("key:pytest:z",)), Build((4,), "c2", 1)]
+
+
+def test_a_passing_rerun_of_an_unreached_test_rings_its_owner_and_the_candidate_lands():
+    """The pass is the record the loop writes, and the candidate is not dropped for the failure."""
+    t = _unreached()
+    c = replace(cand("c1", MAIN, 1, 2, state=PASS, reruns=1), reran=(t,))
+    why = (f"{UNREACHED} passed when rerun afresh, and no member's files meet its inputs: its owner cures or deletes it "
+           "within 24 hours")
+    acts = decide(snap(c, ready=prs(1, 2), now=NOW, owners=OWNER))
+    assert acts == [Ring("c1", why, to=("@zz",), test=UNREACHED, passed=True), Advance("c1"),
+                    Drop("c1", ON_MAIN, Outcome((1, 2), heads(1, 2), PASS))]
+
+
+def test_a_second_passing_rerun_of_the_same_test_within_24_hours_is_not_granted():
+    """The failure is red, every member a suspect, and the owner is told the test flakes and must be deleted.  One recorded
+    24 hours ago, or of another test, is granted."""
+    t = _unreached()
+    why = f"{UNREACHED} flakes and must be deleted by the rule: a passing rerun of it was recorded within 24 hours"
+    ring = Ring("c1", why, to=("@zz",), test=UNREACHED)
+    drop = Drop("c1", "failed: pytest:z", Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN))
+    fresh = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                 cured=((UNREACHED, NOW - 24 * 3600 + 1),), owners=OWNER)
+    assert decide(fresh) == [ring, drop, Build((1,), MAIN, 2)]
+    aged = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                cured=((UNREACHED, NOW - 24 * 3600),), owners=OWNER)
+    assert decide(aged) == [Rerun("c1", ("key:pytest:z",))]
+    other = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                 cured=(("tools/zz/tests/test_z.py::test_other", NOW - 60),), owners=OWNER)
+    assert decide(other) == [Rerun("c1", ("key:pytest:z",))]
+
+
+def test_a_test_a_member_reaches_is_blamed_as_before_the_unreached_rerun():
+    """A failure some member's files meet is that member's, rerun or not, and a recent passing rerun of its test changes nothing."""
+    test = "pkg2/tests/test_a.py::test_it"
+    t = Failed("suite:a", "key:suite:a", frozenset({"pkg2/"}), tests=frozenset({test}))
+    reached = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2, 3), now=NOW,
+                   cured=((test, NOW - 60),), owners=((test, "@aa"),))
+    acts = decide(reached)
+    assert acts == [Eject(2, "h2", "suite:a failed, and its changed files meet their inputs, no other member's", (t,)),
+                    Drop("c1", "failed: suite:a", Outcome((1, 2), heads(1, 2), FAIL, (2,), MAIN)),
+                    Build((1,), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
+    lone = _unreached()
+    assert decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(lone,)), ready=prs(5), now=NOW,
+                       cured=((UNREACHED, NOW - 60),), owners=OWNER)) == [Rerun("c1", ("key:pytest:z",))]
 
 
 def test_a_fail_is_acted_on_once_a_failure_of_its_own_is_known_while_the_rest_still_runs():
@@ -845,7 +910,9 @@ def test_a_mixed_failure_ejects_or_bisects_on_its_own_failures_alone_and_rings_r
                     Drop("c1", "failed: suite:a, suite:r", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (2,), MAIN, (red,))),
                     Build((1, 3), MAIN, 2, replaces="c1"), Build((9,), "c1", 1)]
     nobody = task("suite:x", "elsewhere/")
-    acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody)), ready=prs(1, 2, 4)))
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody)), ready=prs(1, 2, 4))
+    assert decide(s) == [Rerun("c1", ("key:suite:x",)), Build((4,), "c1", 1)]
+    acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody), reruns=1), ready=prs(1, 2, 4)))
     assert acts == [Red("c1", MAIN, acts[0].why, (red,)),
                     Drop("c1", "failed: suite:r, suite:x", Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN, (red,))),
                     Build((1,), MAIN, 2)]
@@ -1123,15 +1190,31 @@ def test_a_pr_set_aside_waits_behind_a_staged_batch_as_behind_any_pr_waiting():
     assert decide(replace(s, candidates=(), ready=(pr(5),))) == [Build((5,), MAIN, 2)]
 
 
-def test_a_staged_batch_whose_base_left_main_s_chain_stays_staged_and_a_candidate_on_it_is_dropped():
-    """Its records were regenerated on its tree, whatever becomes of its base: `main` moving elsewhere or its base failing
-    drops the chain and leaves it staged.  None is built on it, but should a log hold one, it is off main's chain."""
-    s = snap(cand("c0", MAIN, 3, state=FAIL, failed=(task("t", "pkg3/"),)), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)],
-             depth=3, records=True)
-    assert decide(s) == [Eject(3, "h3", "t failed, and its changed files meet their inputs, no other member's", (task("t", "pkg3/"),)),
-                         Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Build((2,), MAIN, 3)]
+def test_a_staged_batch_whose_base_is_dropped_is_dropped_and_staged_again_on_the_chain_whatever_its_records_run_s_state():
+    """Its base failing, going stale or leaving main's chain drops it with that base, never judged on a commit no longer in
+    the chain: in the same tick it is staged again on what is left of the chain, first, its records run first, unless another
+    batch stays staged, when its members wait.  Its base landing leaves it staged.  None is built on it, but should a log
+    hold one, it is off main's chain."""
+    failed = (task("t", "pkg3/"),)
+    eject = Eject(3, "h3", "t failed, and its changed files meet their inputs, no other member's", failed)
+    for records in (RecordsRun(), RecordsRun(PASS)):
+        s = snap(cand("c0", MAIN, 3, state=FAIL, failed=failed), waiting("c1", "c0", 1, records=records),
+                 ready=[lean(1), *prs(2, 3)], depth=3, records=True)
+        assert decide(s) == [eject, Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Drop("c1", BASE_DROPPED),
+                             Build((1,), MAIN, 3, records=True, replaces="c1"), Build((2,), MAIN, 3)]
     assert decide(replace(s, main="m1")) == [Drop("c0", "not on main's chain: its base m0 is neither main nor a chain member"),
+                                             Drop("c1", BASE_DROPPED), Build((1,), "m1", 3, records=True, replaces="c1"),
                                              Build((2, 3), "m1", 3)]
+    s = snap(cand("c0", MAIN, 3), cand("c2", "c0", 2), waiting("c1", "c0", 1, records=RecordsRun(PASS)), ready=[lean(1), pr(2)],
+             depth=3, records=True, left=((3, "h3", "held by review"),), pulled=frozenset({3}))
+    assert decide(s) == [Drop("c0", "#3 isn't taken now: held by review"), Drop("c2", BASE_DROPPED), Drop("c1", BASE_DROPPED),
+                         Build((1,), MAIN, 3, records=True, replaces="c1"), Build((2,), MAIN, 3, replaces="c2")]
+    s = snap(cand("c0", MAIN, 3, state=FAIL, failed=failed), waiting("c1", "c0", 1), waiting("c2", MAIN, 4),
+             ready=[lean(1), *prs(2, 3), lean(4)], depth=3, records=True, lean=2)
+    assert decide(s) == [eject, Drop("c0", "failed: t", Outcome((3,), heads(3), FAIL, (3,), MAIN)), Drop("c1", BASE_DROPPED),
+                         Build((2,), MAIN, 3)]
+    s = snap(cand("c0", MAIN, 3, state=PASS), waiting("c1", "c0", 1), ready=[lean(1), *prs(2, 3)], depth=3, records=True)
+    assert decide(s) == [Advance("c0"), Drop("c0", ON_MAIN, Outcome((3,), heads(3), PASS)), Build((2,), "c0", 3)]
     s = snap(waiting("c1", MAIN, 1), cand("c2", "c1", 2), ready=[lean(1), pr(2)], records=True)
     assert decide(s) == [Drop("c2", "not on main's chain: its base c1 is neither main nor a chain member"), Build((2,), MAIN, 2)]
 
@@ -1190,6 +1273,23 @@ def test_a_passed_staged_batch_goes_onto_the_chain_s_top_once_it_has_room_and_it
     failed = (task("t", "pkg2/"),)
     acts = decide(replace(s, candidates=(passed, cand("c2", MAIN, 2, state=FAIL, failed=failed))))
     assert kinds(acts) == [Eject, Drop, Commit, Build] and acts[2:] == [Commit("c1", MAIN, 3), Build((3,), MAIN, 2, after="c1")]
+
+
+def test_a_passed_staged_batch_goes_onto_the_chain_only_once_the_quick_tiers_under_it_passed_and_the_chain_drains_meanwhile():
+    """A candidate on the chain that lands on the quick tier (its members all `Snapshot.plain`) and hasn't passed it could fail
+    under the staged batch, costing its check: the batch waits, and nothing is built on the chain, which drains, a `Wait` and
+    each PR left waiting saying why; once that candidate has passed and landed, the batch goes onto the chain.  A candidate
+    taking the whole check holds nothing back, as before."""
+    passed = waiting("c1", MAIN, 1, records=RecordsRun(PASS))
+    s = snap(passed, cand("c2", MAIN, 2), ready=[lean(1), *prs(2, 3)], depth=3, records=True, plain=frozenset({2, 3}))
+    why = ("the staged batch c1 goes onto main's chain's top once the quick tier of every candidate on it has passed, so a red "
+           "under it can't cost its check (c2 pending): nothing is built on the chain meanwhile")
+    assert decide(s) == [Wait(why)]
+    assert [(x.number, x.cause, x.why) for x in left_out(s)] == [(3, "staged batch first", why)]
+    assert decide(replace(s, candidates=(passed, cand("c2", MAIN, 2, state=PASS)))) == [
+        Advance("c2"), Drop("c2", "on main", Outcome((2,), heads(2), PASS)), Commit("c1", "c2", 3),
+        Build((3,), "c2", 2, after="c1")]
+    assert decide(replace(s, plain=frozenset({3}))) == [Commit("c1", "c2", 2), Build((3,), "c2", 1, after="c1")]
 
 
 def test_a_tick_whose_staged_batch_is_dropped_rather_than_committed_builds_on_the_chain_s_top_as_it_is():
@@ -1871,7 +1971,7 @@ def test_an_env_bump_is_ejected_by_its_inputs_once_they_hold_the_envs_spec_and_a
     w = Play(ready, oracle).run()
     assert sorted(w.landed) == [1, 2, 3, 5, 6] and [e.number for e in w.ejected] == [4]
     assert ("meet their inputs" if env else "if a test flaked, delete it") in w.ejected[0].why
-    assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 1))
+    assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 3))
 
 
 # ---- the simulated world -------------------------------------------------------------------------------------------------------
@@ -2298,6 +2398,7 @@ class World:
             assert kept <= live, (f"seed {self.seed} tick {self.tick}: {a.sha}, dropped ({a.why}), takes "
                                   f"{sorted(kept - live)} out of the chain: {acts}")
             left = set(c.members) - kept - out
+            self.seen["a staged batch staged again for its dropped base"] += c.waits and a.why == BASE_DROPPED and bool(kept)
             self.seen["a red's others rebuilt in its tick" if a.outcome is not None else
                       "a leaver's others rebuilt in its tick" if left else "others rebuilt above a drop in its tick"] += bool(kept)
             self.seen["a leaver subtracted"] += bool(left & s.pulled)
@@ -2405,8 +2506,8 @@ class World:
             elif isinstance(a, Rerun):
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
-                assert len(c.members) == 1 and not c.reruns and own and a.keys == tuple(f.key for f in own), where
-                assert not any(meets(self.marks[c.members[0]].files, f.inputs) for f in own), where
+                assert not c.reruns and own and a.keys == tuple(dict.fromkeys(f.key for f in own if f.key)), where
+                assert not any(meets(built[m].files, f.inputs) for m in c.members for f in own), where
                 self.seen["rerun"] += 1
             elif isinstance(a, Ring):
                 assert a.pr is None or (not s.tree_ejects and by[a.sha].members == (a.pr,)), where
@@ -2661,9 +2762,15 @@ class World:
         takes = [r.number for r in waiting if not r.lean and not (beside and r.lean_input)]
         free = min(s.depth - places, max(s.fill, 1)) - bool(lean and not s.records)
         rest = [r.number for r in self.takeable(s, acts) if not r.lean and not (beside and r.lean_input)]
-        assert len(on) + len(away) - bool(lean and not s.records) >= free or not rest, (
+        drained = any(isinstance(a, Wait) and a.why.startswith("the staged batch ") for a in acts)
+        self.seen["a passed staged batch waited for the quick tiers on the chain, which drained"] += drained
+        assert drained or len(on) + len(away) - bool(lean and not s.records) >= free or not rest, (
             f"{where}: no batch of PRs with no Lean change built while #{rest[0]} waited and the chain had room")
-        if any(isinstance(a, Wait) for a in acts):
+        if drained:
+            assert not builds and staged and any(c.verdict.state != PASS and set(c.members) <= s.plain
+                                                 for c in s.candidates if not c.waits and not c.apart), (
+                f"{where}: the chain drained for a staged batch with no quick tier pending under it")
+        elif any(isinstance(a, Wait) for a in acts):
             assert not builds and room and not takes, f"{where}: a wait beside a build, or while a PR with no Lean change waited"
             assert [r for r in self.pool(s, acts, aside=True) if r.lean], f"{where}: a wait with no Lean PR waiting"
             assert wide or erred or top or (s.records and inputs), f"{where}: a Lean PR waited on a chain it could be built on"
@@ -2939,8 +3046,9 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     infra or listing error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; without
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
-    pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
-    before it is ejected; a batch holds Lean PRs only, at most `lean`, or none, in rank order, and a Lean one opens whenever
+    pending past the bound is retried once and rung past twice it; a failure no member's files meet is rerun once
+    before the candidate is dropped, a lone member's then ejected; a batch holds Lean PRs only, at most `lean`, or none, in rank
+    order, and a Lean one opens whenever
     its chain allows, whether or not a PR with no Lean change waits; a move of main by someone else drops the stale candidates
     and rebuilds on it; a red or a leave takes out only its suspects or that member, every other member of what it dropped
     built again in its tick, in order, and a fail above the lowest is decided before its base's word only on `main`'s, where
@@ -3089,7 +3197,7 @@ def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_sta
                  "a PR set aside waited behind a staged batch", "a pinned Lean batch built",
                  "an unpinned Lean PR built beside pins",
                  "a rebuild staged off the chain", "a staged batch rebuilt without a leaver",
-                 "a Lean rebuild waited for the batch staged"):
+                 "a Lean rebuild waited for the batch staged", "a staged batch staged again for its dropped base"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -3162,7 +3270,7 @@ PARTS: dict[str, tuple[Callable[[Snapshot], list], str]] = {
         _without(lambda a, acts: a.after is not None),
         "no batch of PRs with no Lean change built while|no Lean batch opened while"),
     "a Lean batch waits for the PRs with no Lean change": (
-        _without(lambda a, acts: a.records and any(isinstance(b, Build) and not b.records for b in acts)),
+        _without(lambda a, acts: a.records and a.replaces is None and any(isinstance(b, Build) and not b.records for b in acts)),
         "no Lean batch opened while"),
     "no Lean PR is admitted without a pin": (_without(lambda a, acts: False, lambda s: replace(s, lean=0)),
                                              "no Lean batch opened while"),

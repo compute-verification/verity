@@ -146,9 +146,9 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
 
 def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_labels_what_an_accept_holds(tmp_path, monkeypatch):
     """The circuit's second line binds a partition, and states a `program_sha512` that is no program file's digest.
-    A partition file that isn't the bound object, or that the circuit binds nothing for, ends the command before any
-    verifier process starts; under the provisional cover the verifier takes no partition object, so the bound cover is
-    checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
+    A partition file that isn't the bound object, isn't a `verity/partition/v1` object under that rule, or that the
+    circuit binds nothing for, ends the command before any verifier process starts; under the provisional cover the
+    verifier takes no partition object, so the bound cover is checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
     and only one that names another Definition than `stage.json`'s `word` is refused; but a held partition under
     `PARTITION_V1` names its Program, and the program is then held to that digest instead. An accept on the provisional
     cover is labelled as holding no Program to the circuit. The circuit is held to `stage.json`'s `circuit_sha512`."""
@@ -201,8 +201,10 @@ def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_label
     program.write_bytes(PROGRAM_FILE)
     assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
     assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
-    partition.write_text(json.dumps(PARTITION | {"program": "q"}))
+    partition.write_text(json.dumps(PARTITION | {"program": "ab" * 64}))
     refused(rf"partition\.json is not the partition the circuit binds: its digest under {L.PARTITION_V1} is .*: no verifier was started")
+    partition.write_text(json.dumps(PARTITION | {"program": "q"}))
+    refused(rf"partition\.json is no {L.PARTITION_V1} object \(.*program-digest.*\): no verifier was started")
 
     # the provisional cover: the bound object is checked and withheld, since the verifier takes none under that rule
     circuit.write_bytes(circuit_text(L.PARTITION_COVER))
