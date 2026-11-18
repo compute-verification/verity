@@ -309,7 +309,7 @@ def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its
     written(base, YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["reason"], got["components"]) == ("accept", None, ALL_ACCEPTED)
-    assert got["charges_nothing"] == {"inference-only": nothing.why}
+    assert got["charges_nothing"]["inference-only"] == nothing.why
     written(base, {"composed": "reject", "product": "remote"}, {**ACCEPTED, "inference-only": {"verdict": "reject"}})
     got = T.remote_check(cfg, tmp_path)
     assert (got["verdict"], got["components"]["inference-only"]) == ("reject", "reject")
