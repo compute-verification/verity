@@ -82,6 +82,8 @@ RUNNER = "benchmarks/one_stage/served_verdicts.sh"
 VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 ATTESTER_PIECE = "benchmarks/network_traces/attester_piece.py"
 ATTESTER_FRONT = "benchmarks/network_traces/attester_front.py"
+LEAK_GUARD = "benchmarks/network_traces/leak_guard.py"
+SERVED_SESSION = "benchmarks/network_traces/served_session.py"
 PEARLPLUS_SCRIPT = "benchmarks/one_stage/served_pearlplus.sh"
 PEARLPLUS_GATE = "benchmarks/one_stage/pearlplus_local_e2e.py"
 ONSITE = "verity/onsite/v1"
@@ -671,13 +673,16 @@ def _attester_piece(cfg, params, bound, pinned):
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     front = f'{py} {ATTESTER_FRONT} front "$1" "$2" "$3" {gate}'
+    guard = "--guard-cmd " + shlex.quote(f'{py} {LEAK_GUARD} "$@"')
+    chain = "--chain-cmd " + shlex.quote(f'{py} {SERVED_SESSION} chain --keep "$1" --run "$2" --endpoint "$3" '
+                                         '--eos-ids 128001 "${@:4}"')
     if "pearl-plus" in cfg["protocols"]:
         tokens = min(FRONT_TOKENS, cfg["workload"]["params"]["window-steps"])
         return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
-                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
+                "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece {guard} {chain} "$@"'}
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
-            "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
-            "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period "$@"',
+            "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain {guard} {chain} "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {ATTESTER_PIECE} period {guard} "$@"',
             "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 

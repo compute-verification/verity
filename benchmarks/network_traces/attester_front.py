@@ -9,6 +9,7 @@
     python attester_front.py front PORT SERVE_DIR OUT --peer NAME --session --client-port PORT --windows N
         --gate ... [--key KEY] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
     python attester_front.py close SERVE_DIR OUT
+    python attester_front.py close-open SERVE_DIR
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
@@ -48,7 +49,7 @@
     with ``--minutes`` 66 at the scan's 100 ms tick (59 min 40 s of them) and 126 at 200 ms (119 min 21 s). The
     gate refuses any other ``--height`` too low for the session. This tree's gate checks the request first. It
     returns once the gate's ``status`` shows the relay listening: exit 0, with
-    SERVE_DIR/`PRIVATE`/RUN/`RELAY` (0600) holding ``client``, 127.0.0.1:CLIENT_PORT on the peer, and
+    SERVE_DIR/`PRIVATE`/RUN/`attester_piece.RELAY` (0600) holding ``client``, 127.0.0.1:CLIENT_PORT on the peer, and
     ``deployment``, the relay's (its schedule, ``origin_unix`` and ``windows``), and one line on stdout naming the
     run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
     1 when the session ended before its relay listened, the reason in OUT/session.json. The session then runs to
@@ -58,8 +59,8 @@
     (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
     ``bundle.tgz`` and ``status.json``, through the leak guard), with the front's exits: 0 when the gate's check
     accepted the run.
-  - The piece's steps close a session that no ``close`` ended before they read the kept run (`attester_piece.close_open`): the same
-    wait and the same kept files, nothing published.
+  - ``close-open`` is the piece's ``--close-cmd``: its steps close a session that no ``close`` ended before they read
+    the kept run (`attester_piece.close_open`), with the same wait and the same kept files, nothing published.
   - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
     (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
     a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the
@@ -216,10 +217,7 @@ def relays(pairs: list[tuple[int, int]]) -> None:
 
 # -------------------------------------------------------------------------------------------------------------- session
 
-#: a relay session the front opened, under SERVE_DIR/`P.PRIVATE`/RUN (0600): the run, its gate and key, the front's
-#: arguments its request is made of (`SESSION_ARGS`) and, once the relay listens, where a client connects (``client``)
-#: and the relay's deployment; the session is open until ``fetch.tar.gz`` is beside it
-RELAY = "relay.json"
+#: the front's arguments a relay session's `attester_piece.RELAY` holds, its request's
 SESSION_ARGS = ("peer", "port", "client_port", "windows", "minutes", "height", "bucket_ms", "scan_class")
 #: how often the front asks the gate whether the relay listens yet: the run's first bucket starts a few seconds after
 READY_POLL_S = 1
@@ -230,14 +228,8 @@ class Unready(SS.Refused):
     code = 1
 
 
-def open_sessions(keep: Path) -> list[dict]:
-    """Each relay session under `keep` that no close has ended: its `RELAY`."""
-    return [json.loads(p.read_text()) for p in sorted(keep.glob(f"*/{RELAY}"))
-            if not (p.parent / "fetch.tar.gz").is_file()]
-
-
 def session_args(doc: dict, keep: Path, out: Path) -> argparse.Namespace:
-    """The front's arguments a kept `RELAY` holds, as `served_session` reads a session's."""
+    """The front's arguments a kept `attester_piece.RELAY` holds, as `served_session` reads a session's."""
     return argparse.Namespace(**doc["args"], gate=doc["gate"], key=Path(doc["key"]), unit=doc.get("unit"),
                               run=doc["run"], keep=keep, out=out, at=None)
 
@@ -245,7 +237,7 @@ def session_args(doc: dict, keep: Path, out: Path) -> argparse.Namespace:
 def write_relay(keep: Path, a: argparse.Namespace, run: str, relay_: dict | None = None) -> Path:
     doc = {"run": run, "gate": a.gate, "key": str(a.key), "args": {k: getattr(a, k) for k in SESSION_ARGS},
            **({} if getattr(a, "unit", None) is None else {"unit": a.unit}), **(relay_ or {})}
-    path = keep / run / RELAY
+    path = keep / run / P.RELAY
     path.parent.mkdir(mode=0o700, exist_ok=True)
     with open(path, "w", opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
         f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
@@ -285,8 +277,8 @@ def waited(a: argparse.Namespace, keep: Path, run: str, done: Callable[[dict], b
 
 
 def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callable[[float], object] = time.sleep) -> int:
-    """``front --session`` (the module docstring): the gate's relay session started, and its `RELAY` kept once the
-    relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
+    """``front --session`` (the module docstring): the gate's relay session started, and its `attester_piece.RELAY` kept
+    once the relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
     before its relay listened."""
     try:
         if a.gate is None:
@@ -310,7 +302,7 @@ def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callabl
                 SS.A.REHEARSALS[SS.words(a)[0]](SS.words(a)[1:], SS.scratch_host(Path(d), a.peer))
             except SS.A.Refused as e:
                 raise SS.Refused(f"the gate refuses it: {e}") from None
-        if opened := open_sessions(keep):
+        if opened := P.open_sessions(keep):
             raise SS.Refused(f"relay session {opened[0]['run']} is open under {keep}: close it first "
                              "(attester_front.py close)")
         if a.gate == "local":
@@ -371,7 +363,7 @@ def close(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
     out.mkdir(parents=True, exist_ok=True)
     keep = serve_dir / P.PRIVATE
     try:
-        opened = open_sessions(keep)
+        opened = P.open_sessions(keep)
         if len(opened) != 1:
             raise SS.Refused(f"{len(opened)} relay sessions open under {keep}, not one: the front (front --session) "
                              "opens it before the load")
@@ -385,6 +377,35 @@ def close(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+
+
+def close_open(serve_dir: Path, *, sleep: Callable[[float], object] = time.sleep) -> int:
+    """``close-open`` (the piece's ``--close-cmd``): the one relay session nobody closed (no `close` ran after the
+    load), its end awaited and its fetch and `attester_piece.SESSION` kept as `close` keeps them, with nothing
+    published. Exit 0 where none is open or it closed, 2 where it can't be closed, saying why."""
+    keep = serve_dir.resolve() / P.PRIVATE
+    opened = P.open_sessions(keep)
+    if not opened:
+        return 0
+    if len(opened) > 1:
+        print(f"refused: {len(opened)} relay sessions open under {keep}, not one: the run's load goes through one",
+              file=sys.stderr)
+        return 2
+    (keep / "held").mkdir(mode=0o700, exist_ok=True)
+    hold = Path(tempfile.mkdtemp(dir=keep / "held", prefix="close-"))
+    try:
+        b = session_args(opened[0], keep, hold)
+        b.close = lambda h: ended_fetch(b, keep, h, sleep)
+        doc, _ = SS._session(b, b"", [], keep, hold)
+        shutil.copyfile(hold / "session.json", keep / doc["run"] / P.SESSION)
+    except SS.Refused as e:
+        print(f"refused: relay session {opened[0]['run']}, which no close ended, couldn't be closed here: {e}",
+              file=sys.stderr)
+        return 2
+    finally:
+        P.rm(hold)
+    print(f"relay session {doc['run']} closed here: no close ran after the load (attester_front.py close)", flush=True)
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -421,6 +442,7 @@ def parser() -> argparse.ArgumentParser:
     c = sub.add_parser("close")
     c.add_argument("serve_dir", type=Path)
     c.add_argument("out", type=Path)
+    sub.add_parser("close-open").add_argument("serve_dir", type=Path)
     u = sub.add_parser("unit")
     u.add_argument("keep", type=Path)
     u.add_argument("run")
@@ -435,6 +457,8 @@ def main(argv: list[str] | None = None) -> int:
         return front(a)
     if a.cmd == "close":
         return close(a)
+    if a.cmd == "close-open":
+        return close_open(a.serve_dir)
     if a.cmd == "unit":
         return local_unit(a)
     if len(a.listen) != len(a.to):

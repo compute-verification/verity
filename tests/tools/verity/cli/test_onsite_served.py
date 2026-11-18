@@ -57,9 +57,13 @@ ATTESTERS = ("memory-challenger", "bandwidth-verifier")
 WRITTEN = {"network-attester.network-attester.gate", "network-attester.network-attester.peer"}
 UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p not in ATTESTERS for c, ks in cs.items()
                              if c != "pearl-plus" for k in ks) if k not in WRITTEN)
+#: the network attester's piece's leak guard and chain, as the launcher hands them
+GUARD_CMD = """--guard-cmd '.venv/bin/python benchmarks/network_traces/leak_guard.py "$@"'"""
+CHAIN_CMD = ("""--chain-cmd '.venv/bin/python benchmarks/network_traces/served_session.py chain --keep "$1" """
+             """--run "$2" --endpoint "$3" --eos-ids 128001 "${@:4}"'""")
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
-    "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
+    "CERTIFIER_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py piece {GUARD_CMD} {CHAIN_CMD} "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
     "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
@@ -401,8 +405,9 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
 SPLIT = {"SERVE_ARGS": T.ID_FORM,
          "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                             "--gate user@gate-1 --peer peer-1",
-         "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
-         "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
+         "CERTIFIER_CHAIN_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py chain {GUARD_CMD} '
+                                f'{CHAIN_CMD} "$@"',
+         "CERTIFIER_PERIOD_CMD": f'.venv/bin/python benchmarks/network_traces/attester_piece.py period {GUARD_CMD} "$@"',
          "V3C_CLASS": "8,32,4,4,16", "CLASSES": "4,32,4 8,32,4,4,16"}
 
 

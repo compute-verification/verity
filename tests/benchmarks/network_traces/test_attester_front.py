@@ -13,6 +13,7 @@ import http.server
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tarfile
@@ -30,10 +31,12 @@ import attester_front as F  # noqa: E402
 import attester_piece as CP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
-from test_attester_piece import GATE_HOST, K, LATE, OUTPUTS, PASSED, PRIVATE, _write, network_attester  # noqa: E402,F401
+from test_attester_piece import GATE_HOST, GUARD, K, LATE, OUTPUTS, PASSED, PRIVATE, _write, network_attester  # noqa: E402,F401
 
 
 PEER = "some-served-node"
+#: the piece's close of a relay session nobody closed, as `attester_piece.close_open` runs it
+CLOSE = f'{shlex.quote(sys.executable)} {shlex.quote(str(HERE / "attester_front.py"))} close-open "$1"'
 #: the front's --gate as the site names the gate, which `challenger_host` resolves
 GATE = ("--gate", F.SS.GATE)
 
@@ -378,7 +381,7 @@ def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_rel
                                 f"--minutes {minutes} --height 10 --scan-class w63k4", f"status {RUN}"]
     assert (tmp_path / "stdin").read_bytes() == b"" and list(out.iterdir()) == []
     keep = serve / CP.PRIVATE
-    kept = keep / RUN / F.RELAY
+    kept = keep / RUN / CP.RELAY
     assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"run": RUN, "client": "127.0.0.1:8012",
                                                                     "relay": str(kept)}
     doc = json.loads(kept.read_text())
@@ -386,10 +389,10 @@ def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_rel
                                                                            "127.0.0.1:8012", DEPLOYMENT)
     assert doc["args"] == {"peer": PEER, "port": 18190, "client_port": 8012, "windows": 20, "minutes": minutes,
                            "height": 10, "bucket_ms": None, "scan_class": "w63k4"}
-    assert sorted(p.name for p in (keep / RUN).iterdir()) == [F.RELAY, "start.json"]
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == [CP.RELAY, "start.json"]
     assert [p.stat().st_mode & 0o777 for p in (serve / "private", keep, keep / RUN, kept, keep / RUN / "start.json")] \
         == [0o700, 0o700, 0o700, 0o600, 0o600]
-    assert [d["run"] for d in F.open_sessions(keep)] == [RUN]
+    assert [d["run"] for d in CP.open_sessions(keep)] == [RUN]
     # a second session in the serve dir is refused while this one is open, before the gate is asked
     assert F.main(_front(tmp_path, "--client-port", "8013", "--windows", "20")) == 2
     assert f"relay session {RUN} is open" in json.loads((out / "session.json").read_text())["refused"]
@@ -427,8 +430,8 @@ def test_a_sessions_front_waits_on_the_gates_status_and_says_why_one_never_liste
     a = F.parser().parse_args(_front(tmp_path, *SESSION_FLAGS, "--minutes", "5"))
     assert F.front(a, sleep=slept.append) == rc
     assert slept == [F.READY_POLL_S] * naps
-    doc = json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / F.RELAY).read_text())
-    assert [d["run"] for d in F.open_sessions(tmp_path / "serve" / CP.PRIVATE)] == [RUN]
+    doc = json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())
+    assert [d["run"] for d in CP.open_sessions(tmp_path / "serve" / CP.PRIVATE)] == [RUN]
     if why is None:
         assert doc["client"] == "127.0.0.1:8012" and not (tmp_path / "out" / "session.json").exists()
     else:
@@ -469,7 +472,7 @@ def test_a_sessions_front_at_the_default_gate_reaches_the_address_the_environmen
     assert _asked(tmp_path) == [] and not (tmp_path / "serve" / CP.PRIVATE / RUN).exists()
     monkeypatch.setenv("VY_CHALLENGER_1_HOST", CHALLENGER_HOST)
     assert F.main(_front(tmp_path, *SESSION_FLAGS, gate=F.SS.GATE)) == 0
-    assert json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / F.RELAY).read_text())["gate"] == LIVE_GATE
+    assert json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())["gate"] == LIVE_GATE
     assert len(_asked(tmp_path)) == 2
 
 
@@ -479,7 +482,7 @@ def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):
     assert F.main(_front(tmp_path, *SESSION_FLAGS)) == 2
     refused = json.loads((tmp_path / "out" / "session.json").read_text())["refused"]
     assert refused.startswith("the gate didn't start the session (exit 3)") and "a rehearsal is running" in refused
-    assert len(_asked(tmp_path)) == 1 and F.open_sessions(tmp_path / "serve" / CP.PRIVATE) == []
+    assert len(_asked(tmp_path)) == 1 and CP.open_sessions(tmp_path / "serve" / CP.PRIVATE) == []
     assert F.main(["close", str(tmp_path / "serve"), str(tmp_path / "out-close")]) == 2
     assert json.loads((tmp_path / "out-close" / "session.json").read_text())["refused"].startswith(
         "0 relay sessions open")
@@ -511,7 +514,7 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert CP.placement(serve, RUN)["parties"] == {"network_certifier": CP.ATTESTER_MACHINE,
                                                    "prover": CP.PROVER_MACHINE, "verifier": CP.UNNAMED}
-    assert F.open_sessions(serve / CP.PRIVATE) == []
+    assert CP.open_sessions(serve / CP.PRIVATE) == []
     # with the session closed there is none to close, and the gate isn't asked
     asked = len(_asked(tmp_path))
     assert F.main(["close", str(serve), str(tmp_path / "out-again")]) == 2
@@ -544,16 +547,17 @@ def test_the_pieces_steps_close_a_relay_session_nobody_closed_before_they_read_t
     assert F.main(_front(tmp_path, *SESSION_FLAGS)) == 0
     _statuses(tmp_path, [LISTENING, ENDED])
     slept = []
-    CP.close_open(serve, sleep=slept.append)
-    assert slept == [F.SS.POLL_S] and CP.kept_run(serve) == RUN and F.open_sessions(keep) == []
-    assert sorted(p.name for p in (keep / RUN).iterdir()) == ["fetch.tar.gz", F.RELAY, CP.SESSION, "start.json"]
+    assert F.close_open(serve, sleep=slept.append) == 0
+    assert slept == [F.SS.POLL_S] and CP.kept_run(serve) == RUN and CP.open_sessions(keep) == []
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == ["fetch.tar.gz", CP.RELAY, CP.SESSION, "start.json"]
     assert (keep / RUN / "fetch.tar.gz").stat().st_mode & 0o777 == 0o600
     assert json.loads((keep / RUN / CP.SESSION).read_text())["gate"] == f"research@{GATE_HOST}"
     # nothing is published and no hold is left: the guard keeps, and a close is what publishes
     assert list((keep / "held").iterdir()) == [] and list((tmp_path / "out").iterdir()) == []
     assert f"relay session {RUN} closed here: no close ran" in capsys.readouterr().out
     asked = len(_asked(tmp_path))
-    CP.close_open(serve)
+    assert F.close_open(serve) == 0
+    CP.close_open(serve, None)
     assert len(_asked(tmp_path)) == asked
     # a step closes it first: by the time it reads the kept run, the session's fetch is the kept one
     again, seen = tmp_path / "serve-step", []
@@ -561,19 +565,23 @@ def test_the_pieces_steps_close_a_relay_session_nobody_closed_before_they_read_t
     _statuses(tmp_path, [ENDED])
 
     def step(hold: Path):
-        seen.append((CP.kept_run(again), F.open_sessions(again / CP.PRIVATE)))
+        seen.append((CP.kept_run(again), CP.open_sessions(again / CP.PRIVATE)))
         raise CP.NotRun("the step's own")
 
     with pytest.raises(CP.NotRun, match="the step's own"):
-        CP.settle(again, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+        CP.settle(again, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step, GUARD, CLOSE)
     assert seen == [(RUN, [])]
     # a session the gate's fetch fails for can't be closed: the step doesn't run, and the session stays open
     third = tmp_path / "serve-no-fetch"
     assert F.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-no-fetch")) == 0
     (tmp_path / "no-fetch").touch()
     with pytest.raises(CP.NotRun, match=f"relay session {RUN}, which no close ended, couldn't be closed here: .*fetch"):
-        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
-    assert len(seen) == 1 and [d["run"] for d in F.open_sessions(third / CP.PRIVATE)] == [RUN]
+        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step, GUARD, CLOSE)
+    assert len(seen) == 1 and [d["run"] for d in CP.open_sessions(third / CP.PRIVATE)] == [RUN]
+    # without a close command the step refuses on the open session, naming it
+    with pytest.raises(CP.NotRun, match=f"relay session {RUN} is open under .*: no close ran after the load"):
+        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step, GUARD)
+    assert len(seen) == 1
     assert list((third / CP.PRIVATE / "held").iterdir()) == []
 
 
@@ -607,7 +615,7 @@ def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_wa
     with monkeypatch.context() as m:
         m.setattr(CP.subprocess, "Popen", unit(os.getpid(), True))
         assert F.main(_front(tmp_path, *SESSION_FLAGS, gate="local")) == 0
-    (doc,) = F.open_sessions(keep)
+    (doc,) = CP.open_sessions(keep)
     run, host = doc["run"], F.SS.scratch_host(keep / "local-gate", PEER)
     assert started[-1] == [sys.executable, str(HERE / "attester_front.py"), "unit", str(keep), run, PEER, "18190"]
     assert (doc["gate"], doc["unit"], doc["client"], doc["deployment"]) == ("local", os.getpid(), "127.0.0.1:8012",
@@ -635,7 +643,7 @@ def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_wa
     (d / "out" / "deployment.json").write_text(json.dumps(DEPLOYMENT))
     (d / "end.json").write_text(json.dumps(PASSED | {"run": run}))
     assert F.main(["close", str(serve), str(tmp_path / "out-close")]) == 0
-    assert CP.kept_run(serve) == run and F.open_sessions(keep) == []
+    assert CP.kept_run(serve) == run and CP.open_sessions(keep) == []
     shown = json.loads((tmp_path / "out-close" / "session.json").read_text())
     assert (shown["gate"], shown["rc"], shown["verdict"]["accepted"]) == ("local", 0, True)
     assert set(json.loads((tmp_path / "out-close" / "status.json").read_text())) == {"run", "request", "end", "active"}

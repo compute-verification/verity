@@ -46,6 +46,7 @@ sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import attester_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+import served_session as SS  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS  # noqa: E402
@@ -188,6 +189,10 @@ def _stub_rows(tmp_path: Path, answer: dict | None = None) -> Path:
     return rows
 
 
+#: the piece's leak guard, the record's, as the launcher hands it
+GUARD = f'{shlex.quote(sys.executable)} {shlex.quote(str(HERE / "leak_guard.py"))} "$@"'
+
+
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None,
                rows: Path | None = None) -> str:
     """The piece's command, its `network-period` `_stub_lean`'s answering ``answer`` and its `network-rows`
@@ -196,7 +201,7 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
     rows = rows or _stub_rows(tmp_path)
     cmd = cmd or _copied(chain)
     piece = ROOT / "benchmarks/network_traces/attester_piece.py"
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
+    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" --guard-cmd {shlex.quote(GUARD)} "
             f"--lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} --chain-cmd {shlex.quote(cmd)}")
 
 
@@ -459,7 +464,7 @@ def _piece(tmp_path: Path, network_attester: dict, chain: Path) -> tuple[int, Pa
     lean.chmod(0o755)
     piece = tmp_path / "pieces" / "certifier"
     rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", _copied(chain)])
+                  "--guard-cmd", GUARD, "--chain-cmd", _copied(chain)])
     return rc, piece, d
 
 
@@ -471,14 +476,14 @@ def test_no_host_name_reaches_a_byte_of_dir_or_the_answer(tmp_path, network_atte
     monkeypatch.setattr(socket, "gethostname", lambda: here)
     d = _serve_dir(tmp_path / "serve", network_attester)
     (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": f"research@{gate}"}))
-    peer = CP.SS.served_peer(d / CP.PRIVATE / RUN / "fetch.tar.gz")
+    peer = SS.served_peer(d / CP.PRIVATE / RUN / "fetch.tar.gz")
     lean = tmp_path / "network-period"
     lean.write_text(f"#!/bin/sh\ncat <<'EOF'\n{json.dumps(period.reference(period.case('accept', 1)))}\nEOF\n")
     lean.chmod(0o755)
     piece = tmp_path / "pieces" / "certifier"
     chain = _chain_out(tmp_path / "chain", "accepted", network_attester["w"], network_attester["registrations"])
     rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
-                  "--chain-cmd", _copied(chain)])
+                  "--guard-cmd", GUARD, "--chain-cmd", _copied(chain)])
     assert rc == 0, sorted(p.name for p in piece.iterdir())
     names = [n.encode() for n in (here, gate, peer) if n]
     assert len(names) >= 2
@@ -494,7 +499,7 @@ def test_sigterm_while_the_guard_reads_releases_nothing_to_dir(tmp_path, network
     report and the attestations stay in the hold, out of the record, and the case the step had written is gone."""
     seen = []
 
-    def slow_guard(d, hold, unpacked, quarantine):
+    def slow_guard(cmd, d, hold, unpacked, quarantine):
         seen.append((_named(d.parent.parent, CP.CASE), _files(hold)))
         os.kill(os.getpid(), signal.SIGTERM)
         pytest.fail("SIGTERM didn't end the piece")
@@ -512,7 +517,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
                                                                                                      monkeypatch):
     """A case is its step's: the guard refusing the release (exit 2) leaves none, and a step with no kept run removes
     the one an earlier step on the serve dir left."""
-    monkeypatch.setattr(CP, "guard", lambda d, hold, unpacked, quarantine: 2)
+    monkeypatch.setattr(CP, "guard", lambda cmd, d, hold, unpacked, quarantine: 2)
     rc, piece, d = _piece(tmp_path, network_attester, _chain_out(tmp_path / "chain", "accepted", network_attester["w"]))
     assert rc == 3 and "the leak guard failed (exit 2)" in (piece / CP.REFUSED).read_text()
     assert not _named(tmp_path, CP.CASE) and (d / CP.CASES).stat().st_mode & 0o777 == 0o700
@@ -520,7 +525,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     (bare / CP.CASES).mkdir(parents=True)
     (bare / CP.CASES / CP.CASE).write_text("{}")
     out = tmp_path / "bare-pieces" / "certifier"
-    assert CP.main(["piece", str(bare), str(K), str(out), "--chain-cmd", "exit 7"]) == 3
+    assert CP.main(["piece", str(bare), str(K), str(out), "--guard-cmd", GUARD, "--chain-cmd", "exit 7"]) == 3
     assert "no network attester run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
@@ -611,7 +616,7 @@ def test_the_case_is_cut_from_the_hold_before_the_guard_and_only_its_attestation
         assert json.loads((hold / CP.CERTIFICATES).read_text()) == want
         d = tmp_path / name / "out"
         d.mkdir()
-        g = CP.guard(d, hold, unpacked, tmp_path / f"{name}-quarantine")
+        g = CP.guard(GUARD, d, hold, unpacked, tmp_path / f"{name}-quarantine")
         if name == "clean":
             assert g == 0 and _files(d) == {CP.CERTIFICATES} and json.loads((d / CP.CERTIFICATES).read_text()) == want
         else:
@@ -620,7 +625,7 @@ def test_the_case_is_cut_from_the_hold_before_the_guard_and_only_its_attestation
     hold, case = held("undeclared", b'{"windows":[]}')
     d = tmp_path / "undeclared" / "out"
     d.mkdir(parents=True)
-    assert CP.guard(d, hold, unpacked, tmp_path / "undeclared-quarantine") == 3 and _files(d) == set()
+    assert CP.guard(GUARD, d, hold, unpacked, tmp_path / "undeclared-quarantine") == 3 and _files(d) == set()
     assert _files(tmp_path / "undeclared-quarantine" / "files") == {"period/commitment.bin", "period/evidence.json",
                                                                     "period/params.json"}
     for name, evidence, files in (("no-windows", b'{"audits":[]}', ("params.json", "commitment.bin", "evidence.json")),
@@ -883,7 +888,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     (d / "chain").mkdir(parents=True)
     (d / "chain" / "certs.json").write_bytes((out / "certs.json").read_bytes())
     (d / "piece.log").write_text("leak guard\n")
-    assert CP.guard(d, hold, None, q) == 3
+    assert CP.guard(GUARD, d, hold, None, q) == 3
     assert _files(q / "files") == {"chain/endpoint/report.json", "chain/certs.json", "chain/scan/answers.json"}
     assert sorted(p.relative_to(d).as_posix() for p in d.rglob("*") if p.is_file()) == sorted(
         ["answer.json", "piece.log", *published])
@@ -910,7 +915,7 @@ def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
     """The split piece's ``step`` as `served_verdicts.sh`'s ``attester_step`` runs it: ``bash -c CMD _ D K DIR V3C`` in
     the tree, its output DIR/<step>.log."""
     cmd = f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'attester_piece.py'))} {step} \"$@\" " + \
-        " ".join(map(shlex.quote, args))
+        " ".join(map(shlex.quote, ("--guard-cmd", GUARD, *args)))
     dir_.mkdir(parents=True, exist_ok=True)
     with open(dir_ / f"{step}.log", "w") as log:
         return subprocess.run(["bash", "-c", cmd, "_", str(d), str(K), str(dir_), str(v3c)], cwd=ROOT, stdout=log,
