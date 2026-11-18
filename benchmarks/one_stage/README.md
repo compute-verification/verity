@@ -272,7 +272,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   same for each of its split proof blocks, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
   each proof block's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
-  a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
+  a Commit's Build: a TP row's ranks (`build/rank<r>/`), or a single-card row as rank 0 of a world of 1 (its
+  `build_request*/` at the top level, its Programs of record its Commit's `--program-digest` and `--required-manifest`),
+  one census a request, under `<request>/`, when the row's requests are of several shapes (`--request`). Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
   of its split at its coarsest fitting proof block, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting

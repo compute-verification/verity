@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, kit
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
@@ -200,10 +200,14 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], poi
 
 def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
             skipped: list[dict[str, Any]]) -> Found | None:
-    """The newest passing run of `spec` at `point` whose result isn't superseded and holds `arms`; each newer run passed
-    over goes into `skipped` with why."""
+    """The newest passing run of `spec` at `point` that isn't a trial (`kit.trial_attempt`), whose result isn't
+    superseded and holds `arms`; each newer run passed over goes into `skipped` with why."""
 
     for run, art, commit in store.index.sql(PASSING, (*spec_paths(spec), point)):
+        if kit.trial_attempt(store.get_attempt(run) or {}):
+            skipped.append({"spec": spec, "point": point, "run": run, "art": art,
+                            "why": f"a trial run ({kit.TRIAL}): its measurements are its own, never a row"})
+            continue
         found, why = _judge(store, run, art, commit, arms, [point])
         if why is None:
             return found[0]
