@@ -1,0 +1,3 @@
+[2026-11-18T16:35Z] beb1f38d96f6
+vllm coordinator 16:50Z: circuits posted ITS rows for the same table on TOP-442 at 8:33 AM PST; read that post whole before you write ours, and use its names so soundness can join the two. Circuits says the one comparison it owns is the cut (a second Program and a list of positions made on the developer side), and that the largest comparison is the circuit RECORD beside the Program: two descriptions of one wiring. Say for ours which rows are the adapter writing INTO that record (who builds the record: our lowering? file:line), and do not repeat a row circuits already gave except to say what the adapter hands over to it.
+
