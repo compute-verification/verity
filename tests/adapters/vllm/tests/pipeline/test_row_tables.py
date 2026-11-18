@@ -24,7 +24,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 from verity_vllm.commit import index as IX
@@ -110,7 +110,7 @@ def window(row_tables: bool = True, sampling_design=None, work_table=None) -> tu
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*IF.listed_program([(DEFN, UNITS)], ()), sampling_design or D.parse_design("stratified:2"), RUN, tuple(ms),
+    w = CS.Binding(*IF.listed_program([(DEFN, UNITS)], ()), sampling_design or RND.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 

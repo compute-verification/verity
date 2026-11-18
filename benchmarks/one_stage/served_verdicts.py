@@ -2024,6 +2024,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+    from verity.commitments import randomness as RND
     from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
@@ -2094,7 +2095,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
         return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
                       f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
     design, committed, n = summary.get("sampling_design"), reg.get(DESIGN), reg.get("population")
-    rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
+    rate, strata = RND.parse_rate(design), RND.parse_strata_rate(design)
     kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
     k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
          else D.rate_count(strata[1], strata[2], 1, n))

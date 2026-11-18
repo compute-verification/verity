@@ -63,7 +63,8 @@ EOF
 fi
 LIB=${BW_LIB:-unused}
 if [ "$DEVICE" != cpu ] && [ -z "${BW_LIB:-}" ]; then
-  bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib" > "$O/build.log" 2>&1 \
+  { CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) \
+      && CUDA_HOME=$CUDA_HOME bash verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/build.sh "$S/lib"; } > "$O/build.log" 2>&1 \
     && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256)
   step lib $?
   cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null

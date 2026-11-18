@@ -4,7 +4,7 @@ Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 ro
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks are the Commit's
 committer and taps, which the Commit installs exactly as before; this option adds none, and the Commit refuses an entry
-whose scheme is not its committer's (`protocol_options.commit_guard`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
+whose scheme is not its committer's (`protocols.commit_context`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
 32-byte roots) is registered only so a recorded run's target still parses and digests as it did; a Commit refuses it by
 name.  A row whose target declares no protocols never reaches this module: `protocol_options.commit_context` returns None
 first.

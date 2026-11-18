@@ -6,8 +6,8 @@ step.target) must all be that class: otherwise a Hopper-target Program (cc 9.0, 
 `__l40s__` workload has its Match compare an L40S capture against it.  The check is a PREFLIGHT: it runs before Build and
 before any engine, and fails by name `PRECHECK_FAIL_TARGET_FAMILY`.
 
-Family = compute capability (major, minor), the same reading the finalizer applies (l40s 8.9 / a100 8.0 / h100 9.0 /
-b200 10.0).  Three facts are compared with the workload's family:
+Family = compute capability (major, minor), the same reading the finalizer applies (h100 9.0 / b200 10.0 /
+rtxpro6000 12.0).  Three facts are compared with the workload's family:
   declared  -- the manifest's `target.compute_capability` when the workload declares one, else the id's device class when its SM
                count is fixed (`declared_profile`; Build gets it as --target, and a Build-only stage then needs no device)
   device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build
@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
+from verity_vllm.config import RowEngine, UsageError, option, target_cc, target_num_sms, target_tokens, workload_arg
 from verity_vllm.log import write
 from verity_vllm.records.schema_ids import TARGET_FAMILY_SCHEMA
 
@@ -42,9 +42,6 @@ __all__ = ["Options", "declared_profile", "device_token_of_row", "main"]
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = TARGET_FAMILY_SCHEMA
-
-# device token in a row id -> compute capability family: the target table of `config.py`
-DEVICE_FAMILY: dict[str, tuple[int, int]] = TARGETS
 
 _ROW_RE = re.compile(r"^[^_]+(?:_[^_]+)*__[^_]+__([a-z0-9]+)__tp\d+__")
 
@@ -60,7 +57,10 @@ def device_token_of_row(row_id: str) -> str | None:
 
 def row_family(row_id: str) -> tuple[str | None, tuple[int, int] | None]:
     tok = device_token_of_row(row_id)
-    return tok, DEVICE_FAMILY.get(tok) if tok else None
+    try:
+        return tok, target_cc(tok) if tok else None
+    except UsageError:
+        return tok, None
 
 
 def _cc(v: Any) -> tuple[int, int] | None:
@@ -80,13 +80,13 @@ def _cc(v: Any) -> tuple[int, int] | None:
 
 
 def declared_profile(row_id: str | None, workload: dict) -> dict:
-    """The Build's declared TargetProfile block: the workload's `engine.target`, laid over the row's device-class profile (capability +
-    `config.TARGET_NUM_SMS`) when the workload names no capability and the class's SM count is fixed; {} when neither declares one."""
+    """The Build's declared TargetProfile block: the workload's `engine.target`, laid over the row's card (`config.target_card`: its
+    capability and SM count) when the workload names no capability; {} when neither declares one."""
     t = dict(RowEngine.of(workload).target or {})
     tok, fam = row_family(row_id) if row_id else (None, None)
-    if _cc(t.get("compute_capability")) is None and fam and tok in TARGET_NUM_SMS:
+    if _cc(t.get("compute_capability")) is None and fam:
         t.pop("compute_capability", None)
-        t = {"compute_capability": list(fam), "num_sms": TARGET_NUM_SMS[tok], **t}
+        t = {"compute_capability": list(fam), "num_sms": target_num_sms(tok), **t}
     return t
 
 
@@ -145,7 +145,7 @@ def check(row_id: str, workload: dict | None, stages: list[str], *, want_device:
                            "stages": stages, "match_phase": match_phase, "declared": None, "device": None, "device_source": None,
                            "built": None, "mismatches": [], "ok": False, "fail_class": None, "waiver": waiver or None, "verdict": None}
     if fam is None:
-        rec["mismatches"].append({"fact": "row", "value": tok, "why": f"unknown device class {tok!r} in the row id (known: {sorted(DEVICE_FAMILY)})"})
+        rec["mismatches"].append({"fact": "row", "value": tok, "why": f"unknown device class {tok!r} in the row id (the targets, one a GPU card file: {target_tokens()})"})
     if workload is not None:
         d = declared_target(workload, row_id)
         rec["declared"] = list(d) if d else None
@@ -155,8 +155,8 @@ def check(row_id: str, workload: dict | None, stages: list[str], *, want_device:
     build_on_device = "build" in stages and (workload is None or declared_target(workload, row_id) is None)
     if want_device and build_on_device and devices == "":
         rec["mismatches"].append({"fact": "device", "value": None, "why": "the Build's target is this host's GPU, which CUDA_VISIBLE_DEVICES "
-                                  "hides from it (a leased row): declare engine.target's compute_capability and num_sms, or the device "
-                                  "class's SM count in config.TARGET_NUM_SMS"})
+                                  "hides from it (a leased row): declare engine.target's compute_capability and num_sms, or a row "
+                                  "target with a card file (config.target_card)"})
         build_on_device = False
     if want_device and (gpu_stage or build_on_device):
         dc, src = device_cc()

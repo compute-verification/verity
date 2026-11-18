@@ -11,6 +11,6 @@ endpoint runs. Nothing here serves or proves: the network attester's runner is
   content to that advice (`prove_path`, `held_to`). Its docstring has each step's contract.
 - `encodings/`: the advice's encodings, measured.
 - `traces/`: the vLLM scheduler traces they are measured on (`traces/README.md`).
-- `tests/`: the steps on fakes and on recorded endpoint runs (`tests/data`, `test_chain.py`), the prove path's adoption
+- `tests/`: the steps on fakes and on recorded endpoint runs (`tests/benchmarks/network_e2e/data`, `test_chain.py`), the prove path's adoption
   held by content (`test_e2e_serve_run_adoption.py`), and the stop rule's Definitions held to the derived rule
   (`test_stop_rule_definition.py`).
