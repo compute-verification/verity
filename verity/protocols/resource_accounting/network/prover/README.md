@@ -25,8 +25,8 @@ statics and tie are vLLM's compiler's (`adapters/vllm/verity_vllm/compiler`).
     `response_tie`, `window_charge` and `workload`. No module of that package imports this one.
 - **Commands**: no console script and no Lean. The drivers `n2_zk`, `n2_tie_zk`, `network_attester_zk`,
   `released_keys`, `scan_period` and `scan_zk` each have a `__main__`, which `benchmarks/network_traces`'s jobs run.
-- **The period check's evidence**: `period.verified_answer`, each answer the period check reads with its one-stage
-  inputs; an interface, its body not written.
+- **The period check's evidence**: the period check reads each answer as the evidence states it. That each is the
+  answer one-stage's verifier gives back is the open premise `Properties.NetworkPeriod.AnswersVerified`.
 - **Circuit-check**: each module holding Boolean Definitions (`egress`, `ingress_scan`, `io_ids`, `lengths_row`,
   `response_tie`, `window_charge`) has a sidecar, `<module>.circuit-check.py`, with its pins in
   `<module>.circuit-check.json`, which `circuit-check` (`tools/verity/circuit_check`) reads.

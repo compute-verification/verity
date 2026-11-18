@@ -3062,7 +3062,6 @@
     {"file": "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py", "count": 27},
     {"file": "verity/protocols/resource_accounting/network/prover/n2_zk.py", "count": 53},
     {"file": "verity/protocols/resource_accounting/network/prover/network_attester_zk.py", "count": 33},
-    {"file": "verity/protocols/resource_accounting/network/prover/period.py", "count": 2},
     {"file": "verity/protocols/resource_accounting/network/prover/scan_period.py", "count": 5},
     {"file": "verity/protocols/resource_accounting/network/prover/scan_zk.py", "count": 118},
     {"file": "verity/protocols/resource_accounting/network/prover/stop_verdicts.py", "count": 1},
