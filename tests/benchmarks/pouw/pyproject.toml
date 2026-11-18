@@ -169,8 +169,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/resource_accounting/compute/pouw/__init__.py", "benchmarks/datacenter/datacenter",
           "verity/protocols/registration/__init__.py", "verity/protocols/registration/verifier/__init__.py",
           "verity/protocols/registration/verifier/registration.py", "verity/protocols/registration/verifier/site_log.py",
-          "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py",
-          "verity/protocols/resource_accounting/memory/poub/verifier/codec.py", "verity/device.py",
+          "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/device.py",
           "verity/channel.py", "adapters/vllm/verity_vllm/definitions/__init__.py",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py",
@@ -178,7 +177,16 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits/ops/boolean/versions.py", "benchmarks/pouw", "calibration/pouw",
           "benchmarks/harness/verity_bench/schemes.py", "verity/protocols/compose/__init__.py",
           "verity/protocols/compose/schemes.py", "verity/protocols/resource_accounting/scheme.py",
-          "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/hooks.py", "verity/protocol.py"]
+          "verity/protocols/resource_accounting/compute/pouw/scheme.py", "verity/hooks.py", "verity/protocol.py",
+          # served_step.undeclared names every declared scheme with an option, so compose.schemes.load imports each
+          # declaration (test_pearl_c_vllm_run); Pearl+'s imports the adapters' pearl_plus_op and messages
+          "verity/config.py", "verity/party.py", "verity/protocols/experimental/dither",
+          "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/memory/poub/verifier",
+          "verity/protocols/resource_accounting/memory/pous",
+          "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
+          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py",
+          "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
+          "adapters/torch/verity_torch/pouw/pearl_plus_op.py", "adapters/vllm/verity_vllm/messages.py"]
 parallel = true
 worker_gb = 4
 workers = 4
