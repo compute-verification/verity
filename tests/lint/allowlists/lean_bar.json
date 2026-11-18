@@ -296,7 +296,6 @@
     {"file": "verity/protocols/proofs/flock/verifier/Flock/FoldGiven.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/FoldTwo.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean", "rule": "long-file", "count": 1},
-    {"file": "verity/protocols/proofs/flock/verifier/Flock/KnownTrees.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Public.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean", "rule": "long-file", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Test/Served.lean", "rule": "module-doc", "count": 1},
