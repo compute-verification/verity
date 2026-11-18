@@ -312,6 +312,9 @@ class _VllmEngine:
         if self.obj is None:
             run = _pearl_c_run(self.llm) if self.arm.protocols else None
             if run is not None:
+                if run.retain_dir is not None:
+                    raise SystemExit("the harness gate begins and ends passes of its own; it can't run on a run that "
+                                     "retains its passes")
                 return _pearl_c_gate(run, self.served)
             return _no_run(self.served) if self.served else {"passed": True, "provided": False}
         got = _callback(self.obj, "gate", self.target, None)

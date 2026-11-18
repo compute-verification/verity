@@ -196,7 +196,7 @@ from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import blocks as NB  # noqa: E402
+from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
@@ -212,7 +212,7 @@ REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
-PHASE_OWN = frozenset({NB.SCAN_STATE})
+PHASE_OWN = frozenset(p.value for p in schemes.get("network-attester").ports if p.name == "scan-state")
 
 
 def catalog_resolve(tid: str) -> Any:

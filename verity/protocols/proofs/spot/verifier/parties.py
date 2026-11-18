@@ -142,22 +142,22 @@ VERSION = 1
 SPOT_ID = "verity/sampled-proofs/spot/v1"
 CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
+COMPONENT = "sampled-proofs"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
 #: remote's PoUW is Pearl+'s run verdict, and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
-    ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "certifier": CERTIFIER_PROTOCOL,
+    ONSITE_PROTOCOL: {"bandwidth": POUB_P2, "network-attester": CERTIFIER_PROTOCOL,
                          "inference-only": "verity/inference-only/v0", "pous": POUS_P2_RUN,
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
+                         "pouw": "verity/pouw/period/v1", COMPONENT: COMPOSED,
                          "wipe": WIPE_PROTOCOL},
     "verity/remote/v1": {"inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-                         "sampled-proofs": COMPOSED},
+                         COMPONENT: COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
-IDS = {"bandwidth": POUB_PROTOCOL, "certifier": CERTIFIER_PROTOCOL,
+IDS = {"bandwidth": POUB_PROTOCOL, "network-attester": CERTIFIER_PROTOCOL,
        "inference-only": "verity/inference-only/v0", "pearl-plus": "verity/pouw/pearl-plus/v1",
-       "pous": POUS_P2_RUN, "pouw": POUW_PROTOCOL, "sampled-proofs": ID}
-COMPONENT = "sampled-proofs"
+       "pous": POUS_P2_RUN, "pouw": POUW_PROTOCOL, COMPONENT: ID}
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
 #: a listed subprotocol whose party gave no case: its own decoders refuse it

@@ -68,7 +68,7 @@ SUPPORTED: dict[str, Supported] = {
     "attention_config": Supported((dict, type(None)), None, "vLLM attention settings, such as {'flash_attn_version': 2}"),
     "moe_backend": Supported((str, type(None)), None, "vLLM's MoE backend, such as triton (default: vLLM's auto)"),
     "seed": Supported(int, 0, "the engine seed"),
-    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>,pous:<scheme>' "
+    "protocols": Supported((str, dict, list, tuple), None, "protocol options installed on the engine: 'pouw:<scheme>' "
                                                              "or {name: scheme} (verity_vllm.protocols); default none"),
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
@@ -136,6 +136,23 @@ def option_settings(entry: str, doc: Mapping[str, Any]) -> dict[str, Any]:
     if own.pop("device", "cuda") != "cuda":
         raise ValueError(f"{entry} runs on cuda")
     return own
+
+
+def listed_by_name(value: Any) -> tuple[list[str], list[str]]:
+    """``protocols``' entries that name a declared scheme (`messages.option`), in their order, and the rest, which the
+    selector's grammar reads (`config.parse_protocols`): a declared scheme attaches by name whether or not the selector
+    has its protocol.  ``ValueError`` where two entries name one protocol."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return [], []
+    items = ([f"{k}:{v}" for k, v in value.items()] if isinstance(value, Mapping)
+             else [x.strip() for x in value.split(",")] if isinstance(value, str) else [str(x).strip() for x in value])
+    named = [e for e in items if messages.option(e) is not None]
+    for e in named:
+        for other in items:
+            if other != e and other.partition(":")[0] == e.partition(":")[0]:
+                raise ValueError(f"protocol {e.partition(':')[0]!r} is enabled twice ({e!r} and {other!r}); a run enables "
+                                 "one scheme per protocol")
+    return named, [e for e in items if e not in named]
 
 
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
@@ -228,7 +245,7 @@ class LLM:
     * ``moe_backend`` (str): vLLM's MoE backend, such as ``"triton"``; default vLLM's ``"auto"``.
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
-      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
+      (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>"`` or ``{"pouw": "<scheme>"}``; default none.
       A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
       (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
@@ -257,8 +274,9 @@ class LLM:
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
-        enabled = config.parse_protocols(opts["protocols"])
-        named = {e: s for e in enabled if (s := messages.option(e)) is not None}
+        by_name, selected = listed_by_name(opts["protocols"])
+        enabled = config.parse_protocols(selected)
+        named = {e: messages.option(e) for e in by_name}
         doc = PO.load_settings(opts["protocols_config"])
         listed = [(s, option_settings(e, doc)) for e, s in named.items()]
         for s, own in listed:

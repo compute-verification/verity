@@ -75,8 +75,9 @@ from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
 TID = descriptor_id(COORD)
-#: `COORD` on bits, whose rows read a registered value's 16-bit leaves one bit each
-BITS = bind(BG.ScaledMmS8Coordinate, K=K, **BG.GEMM_SM120_S8)
+#: `COORD` on bits, whose rows read a registered value's 16-bit leaves one bit each, at twice its K: a unit the proving
+#: path takes has a row past 111 bytes (`window_builder.check_provable`)
+BITS = bind(BG.ScaledMmS8Coordinate, K=2 * K, **BG.GEMM_SM120_S8)
 SAMPLING_DESIGN = "stratified:2"
 RUN = "ab" * 64
 #: the value a period ties to its scan's state tree, which `period` takes from its caller (the network attester's scan state)
@@ -336,14 +337,14 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     ``records_audit.py count`` prints the same from the record's and the docket's files (core's, its window's
     ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
     refuses a pin with no root."""
-    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
+    doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(BITS).rows)
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
         "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
         "advice_bits": 1687, "bound": "within the charge"}
     unpinned = RA.declared_count(doc, 1687)
     assert (unpinned["registered"], unpinned["free"], unpinned["bound"]) == (0, inputs, "vacuous")
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots={"a": "cd" * 64}) == unpinned == RA.declared_count(doc, 1687, pins=PIN_A)
-    x = 16 * dict(IF.layout(COORD).rows)["x"]
+    x = 16 * dict(IF.layout(BITS).rows)["x"]
     loose = RA.declared_count(_registered_circuit(free="x").description(), 1687, pins=PIN_A, roots=PIN_A)
     assert (loose["free"], loose["other_inputs"], loose["bound"]) == (2 * x, 2 * x + 1687, "vacuous")
     with pytest.raises(ValueError, match=r"\{param: root\}"):
@@ -469,6 +470,23 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     refuse.append(True)
     assert PP.main([*base, "--out", str(tmp_path / "e.json")]) == RA.REFUSED
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
+
+
+def test_the_window_circuit_command_refuses_a_class_whose_units_no_proof_block_takes(tmp_path, monkeypatch, capsys):
+    """``prove_path.py window-circuit`` refuses, by the template's name, a lowered class whose unit Flock's composer
+    wouldn't prove (`window_builder.check_provable`): `COORD`'s rows are none past 111 bytes."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.program.predict import window_circuit as WC
+
+    s = _served(tmp_path, monkeypatch)
+    monkeypatch.setattr(WC, "window_circuit", lambda registered, compiled, cls, tables=None: IF.Circuit("test", ((COORD, 2),)))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    assert PP.main(["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                    str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "c.json")]) == RA.REFUSED
+    err = capsys.readouterr().err
+    assert "I2's window circuit refuses the advice: 1 templates Flock's composer wouldn't prove" in err and TID in err
+    assert not (tmp_path / "c.json").exists()
 
 
 def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_names_the_runs_compiler_before_it_serves(

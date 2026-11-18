@@ -151,8 +151,9 @@ def test_attach_computes_each_linear_block_with_its_run(monkeypatch) -> None:
     ex.emit(H.StepBegan(1, ("a",), 8))
     assert req.kernel(_due(), lambda given: "stock") == "y"
     assert run.calls == [(3, "x", "w", None)]
-    with pytest.raises(ValueError, match="e4m3"):
-        req.kernel(_due("e4m3"), lambda given: "stock")
+    for fmt in ("e4m3", "fp16", "fp32", "int8"):
+        with pytest.raises(ValueError, match=rf"block model.layers.0.qkv's weight is {fmt}, and its kernel reads \('bf16',\)"):
+            req.kernel(_due(fmt), lambda given: "stock")
 
 
 def test_a_pass_ends_at_each_steps_computed_and_a_step_over_one_is_refused(monkeypatch) -> None:
@@ -493,7 +494,8 @@ def test_its_settings_are_declared_and_checked() -> None:
                            ({"challenger": "127.0.0.1:1"}, "a challenger needs a session"),
                            ({**CTX["settings"], "lane": "compute"}, "lane and peer go together"),
                            ({"session": SESSION}, "session, lane and peer are a challenger's"),
-                           ({"challenger": "127.0.0.1:1", "session": {"id": 1}}, "session is the gate's reserve answer")):
+                           ({"challenger": "127.0.0.1:1", "session": {"id": 1}}, "session is the gate's reserve answer"),
+                           ({"users": "("}, r"users is a regular expression, and '\(' is not \(missing \)")):
         with pytest.raises(ValueError, match=f"pearl-plus: {refused}"):
             S.settings(PS.PEARL_PLUS, given)
 
@@ -615,3 +617,116 @@ def test_the_plugins_report_reads_as_the_served_verdicts_read_served_json(tmp_pa
     assert coins["salt_after"] == PSALT.epoch_open_root(w, 2).hex()
     assert coins["manifest_head"] == {"session": {k: session[k] for k in ("session", "seq", "root", "commitment")},
                                       "pass_index": 2}
+
+
+FIXED = r"fixed\.[0-9]+"
+
+
+def _users(monkeypatch, users: str = FIXED) -> tuple[_Exchange, list[_Run], PS.Attached]:
+    ex, runs = _Exchange(), []
+    monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: runs.append(_Run()) or runs[-1])
+    on = PS.PEARL_PLUS.attach(ex, {**CTX, "settings": {**CTX["settings"], "users": users}})
+    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    for input_, user in (("e-front", "user-1"), ("e-fixed", "fixed.00000"), ("e-fixed2", "fixed.00001")):
+        ex.emit(H.InputArrived(input_, 1, 0, user=user))
+    return ex, runs, on
+
+
+def test_with_users_the_front_s_phase_serves_no_epoch_and_the_tied_workload_s_phase_its_one(monkeypatch) -> None:
+    """The network attester's front (user-N), then the fixed load (fixed.NNNNN), under ``users`` the fixed load's: the
+    front's phase opens no epoch and takes no coins, so the one epoch (the period's one salt session) is the tied phase's,
+    and its root committed after the front's is taken without one."""
+    ex, runs, on = _users(monkeypatch)
+    [(_, req)] = ex.filed
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.StepBegan(0, ("e-front",), 8))
+    assert req.kernel(_due(), lambda given: "stock") == "stock" and runs == []
+    ex.emit(H.StepEnded(0))
+    ex.emit(H.PhaseClosed(0, 0, b"\x01" * 64))
+    ex.emit(H.PhaseOpened(1, 1))
+    ex.emit(H.PhaseCommitted(0, b"\x0a" * 64))
+    ex.emit(H.StepBegan(1, ("e-fixed", "e-fixed2"), 8))
+    assert req.kernel(_due(), lambda given: "stock") == "y" and len(runs) == 1
+    ex.emit(H.StepComputed(1))
+    ex.emit(H.StepEnded(1))
+    ex.emit(H.PhaseClosed(1, 1, b"\x02" * 64))
+    assert runs[0].finished and list(on.commitment()["phases"]) == ["1"]
+
+
+def test_a_held_phase_opens_at_its_first_step_serving_the_tied_workload_while_it_has_run_nothing(monkeypatch) -> None:
+    """A step that computes nothing decides nothing; the first step serving only the fixed load opens the epoch, once; a
+    phase whose first computing step serves another user's request stays without one, whatever its later steps serve."""
+    ex, runs, on = _users(monkeypatch)
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.StepBegan(0))
+    ex.emit(H.StepEnded(0))
+    assert runs == []
+    ex.emit(H.StepBegan(1, ("e-fixed",), 8))
+    ex.emit(H.StepComputed(1))
+    ex.emit(H.StepEnded(1))
+    ex.emit(H.StepBegan(2, ("e-fixed",), 8))
+    assert len(runs) == 1 and on.run is runs[0]
+    ex.emit(H.StepComputed(2))
+    ex.emit(H.StepEnded(2))
+    ex.emit(H.PhaseClosed(0, 2, b""))
+    ex.emit(H.PhaseOpened(1, 3))
+    ex.emit(H.StepBegan(3, ("e-front", "e-fixed"), 8))
+    ex.emit(H.StepEnded(3))
+    ex.emit(H.StepBegan(4, ("e-fixed",), 8))
+    assert len(runs) == 1 and on.run is None
+    ex.emit(H.StepEnded(4))
+    ex.emit(H.PhaseClosed(1, 4, b""))
+    ex.emit(H.PhaseCommitted(1, b""))
+    assert list(on.commitment()["phases"]) == ["0"]
+
+
+def test_without_users_every_phase_opens_its_epoch_whoever_its_users_are(monkeypatch) -> None:
+    ex, runs, on = _users(monkeypatch, users="")
+    ex.emit(H.PhaseOpened(0, 0))
+    assert len(runs) == 1
+    ex.emit(H.StepBegan(0, ("e-front", "e-unnamed"), 8))
+    assert on.run is runs[0]
+
+
+def test_with_users_an_input_that_named_no_user_is_refused_by_name(monkeypatch) -> None:
+    """Neither opened nor skipped: no answer about an unnamed user is the setting's (and an adapter that never fills
+    ``InputArrived.user`` is refused at once, not served without epochs)."""
+    ex, runs, on = _users(monkeypatch)
+    ex.emit(H.InputArrived("e-anon", 1, 0))
+    ex.emit(H.PhaseOpened(0, 0))
+    with pytest.raises(RuntimeError, match=r"pearl-plus: inputs \['e-anon'\] name no user, and its 'users' setting "
+                                           r"'fixed\\\\.\[0-9\]\+' opens an epoch only"):
+        ex.emit(H.StepBegan(0, ("e-fixed", "e-anon"), 8))
+    assert runs == []
+    ex, runs, on = _users(monkeypatch)
+    with pytest.raises(RuntimeError, match=r"inputs \['e-never'\] name no user"):
+        ex.emit(H.StepBegan(0, ("e-never",), 8))
+
+
+def test_a_user_is_matched_in_process_and_reaches_no_record(monkeypatch, tmp_path) -> None:
+    """vLLM's rule, binding here too: the pattern is a public setting, a user's name is not; what Pearl+ writes for an
+    epoch opened by a matching user (``served.json``, ``coins.json``, its commitment and summary) names no user."""
+    ex, runs = _Exchange(), []
+
+    def opened(self, weights, own):
+        run = _Run()
+        run.retain_dir, run.commits = tmp_path / f"w{self.phase}", {"coins": {"epoch": self.phase}, "pass_index": None}
+        run.retain_dir.mkdir()
+        run.details["passes"] = []
+        runs.append(run)
+        return run
+
+    monkeypatch.setattr(PS.Attached, "open", opened)
+    on = PS.PEARL_PLUS.attach(ex, {"settings": {**IN_PROCESS["settings"], "users": FIXED}})
+    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    ex.emit(H.InputArrived("e-fixed", 1, 0, user="fixed.00000"))
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.StepBegan(0, ("e-fixed",), 8))
+    ex.emit(H.StepComputed(0))
+    ex.emit(H.StepEnded(0))
+    ex.emit(H.OutputsComplete("e-fixed", 0))
+    ex.emit(H.PhaseClosed(0, 0, b""))
+    assert len(runs) == 1 and on.user_of == {}
+    written = [(tmp_path / "w0" / f).read_text() for f in ("served.json", "coins.json")]
+    written += [json.dumps(on.commitment()), json.dumps(on.summary()), json.dumps(on.record())]
+    assert not [w for w in written if "fixed.0" in w]

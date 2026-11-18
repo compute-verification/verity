@@ -42,7 +42,7 @@ from dataclasses import replace
 
 from verity import hooks as H
 from verity.commitments import domains
-from verity.protocol import Channel
+from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.poub.verifier import session_parties as RS
@@ -149,9 +149,9 @@ BANDWIDTH = S.register(S.Scheme(
     under="what the run paid for words: its tier reads, the state held at the pass boundaries and the bits rebuilt "
           "(`Remote.Run.paid`), in bits",
     attach=_bandwidth_attach,
-    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), S.VERIFIER),
+    parties=(*(replace(r, name=_named(r.name)) for r in P2.MANIFEST.parties), VERIFIER),
     channels=(*(replace(c, sender=_named(c.sender), receiver=_named(c.receiver)) for c in P2.MANIFEST.channels),
-              Channel(P2.CLOSER_PARTY, S.VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
+              Channel(P2.CLOSER_PARTY, VERIFIER.name, ("BandwidthAnswer",), after=("Openings",))),
     channel_schemas=P2.MANIFEST.messages,
     colocated=(),
     needs=frozenset({"receipts"}),
