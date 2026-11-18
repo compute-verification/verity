@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import shutil
 from pathlib import Path
 
 import priced as Q
@@ -93,6 +94,53 @@ def test_steps_count_decode_rows_past_k_and_their_longest(tmp_path):
     s, n = Q.steps(tmp_path / "out" / "prod-record.1" / "server" / "steps.1.jsonl.gz")
     assert n == 6
     assert [(x["rows"], x["keys"]) for x in s] == [(0, 0), (24, 131072), (6, 20000), (6, 5006)]
+
+
+def trace_steps(trace: Path) -> tuple[list[dict], int]:
+    """`priced.steps` as it read a step trace before the public steps: the reference a converted run is held to."""
+    out, n = [], None
+    with gzip.open(trace, "rt") as f:
+        for r in map(json.loads, f):
+            if r["kind"] == "header":
+                n = 1 + r["config"]["speculative"]["num_speculative_tokens"]
+            if r["kind"] != "step":
+                continue
+            rows = keys = pre = pre_keys = 0
+            for _, start, m in r["rows"]:
+                long_ = max(0, start + m - max(start, Q.K))
+                if m <= n:
+                    rows, keys = rows + long_, max(keys, start + m)
+                elif long_:
+                    pre, pre_keys = pre + long_, max(pre_keys, start + m)
+            out.append({"step": r["step"], "T": r["T"], "t": r["t"], "rows": rows, "keys": keys if rows else 0,
+                        "prefill_rows": pre, "prefill_keys": pre_keys})
+    return out, n
+
+
+def test_a_stored_runs_traces_converted_price_as_the_old_reader_read_them(tmp_path, capsys):
+    """A run stored before the public steps holds its step traces in its output; `steps-of-trace` writes their public
+    steps, which priced reads to the old reader's steps, kinds and price."""
+    counters = {"rows_long": 1, "rows_tied": 0, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1, "calls": 1}
+    out = job(tmp_path, counters)
+    args = [str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]
+    assert Q.main(args) == 0
+    was = json.loads((out / "priced.json").read_text())
+    for d in sorted(out.glob("prod-*")):
+        (d / "server" / "steps.1.jsonl.gz").unlink()
+        (tmp_path / "private" / d.name / "server" / "step_trace.1.jsonl.gz").rename(d / "server" / "step_trace.1.jsonl.gz")
+    with pytest.raises(SystemExit, match="no public steps"):
+        Q.main(args)
+    to = tmp_path / "derived"
+    assert Q.S.main(["steps-of-trace", str(out), "--to", str(to)]) == 0
+    assert sorted(str(p.relative_to(to)) for p in to.rglob("*") if p.is_file()) == [
+        f"prod-{a}.{k}/server/steps.1.jsonl.gz" for a in ("record", "trace") for k in (1, 2)]
+    for d in sorted(out.glob("prod-*")):
+        trace, steps = d / "server" / "step_trace.1.jsonl.gz", to / d.name / "server" / "steps.1.jsonl.gz"
+        assert Q.steps(steps) == trace_steps(trace)
+        assert all(len(row) == 2 for r in map(json.loads, gzip.open(steps, "rt")) for row in r.get("rows", ()))
+        shutil.copy(steps, d / "server")
+    assert Q.main(args) == 0
+    assert json.loads((out / "priced.json").read_text()) == was
 
 
 def test_without_failed_rows_only_the_base_is_priced_and_no_point_stands(tmp_path, capsys):

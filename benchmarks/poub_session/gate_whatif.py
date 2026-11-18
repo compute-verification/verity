@@ -56,10 +56,11 @@ sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import coins  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""
-FAMILIES = ("challenge", "openings")
+FAMILIES = (coins.CHALLENGE, coins.OPENINGS)
 
 
 class Refused(ValueError):
@@ -143,10 +144,10 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     at = {(label, i): j for j, (label, i, *_) in enumerate(log)}
     if any((f, g) not in at for f in FAMILIES for g in range(n)):
         raise Refused(f"its release log hasn't a challenge and an openings coin for each of its {n} groups")
-    if [x[:2] for x in log[:2]] != [("challenge", 0), ("challenge", 1)]:
+    if [x[:2] for x in log[:2]] != [(coins.CHALLENGE, 0), (coins.CHALLENGE, 1)]:
         raise Refused("its release log doesn't start with σ_0 and σ_1, each asked alone")
-    alone = [g for g in range(n - 2) if (j := at["openings", g]) + 1 >= len(log)
-             or log[j + 1][:3] != ("challenge", g + 2, log[j][2])]
+    alone = [g for g in range(n - 2) if (j := at[coins.OPENINGS, g]) + 1 >= len(log)
+             or log[j + 1][:3] != (coins.CHALLENGE, g + 2, log[j][2])]
     if alone:
         raise Refused(f"σ_(g+2) wasn't asked with openings coin g, after its root, in one round trip at g = {alone[:8]} "
                       "(coins.SessionCoins.ahead): the replay models a k = 1 loop whose every root asks its two coins at once")
@@ -164,9 +165,9 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
     C = [x - p for x, p in zip(S, ph)]
     pure = [S[0] - C[0]] + [S[g] - max(C[g], A[g - 1] - tau) for g in range(1, n)]
     Q = [max(A[0], b[0], C[1] - tau)] + [max(a, x) for a, x in zip(A[1:], b[1:])]
-    end = [log[at["challenge", g + 2]][4] if g + 2 < n else log[at["openings", g]][4] for g in range(n)]
-    P = [end[g] - log[at["openings", g]][3] for g in range(n)]
-    sigma0 = log[at["challenge", 0]]
+    end = [log[at[coins.CHALLENGE, g + 2]][4] if g + 2 < n else log[at[coins.OPENINGS, g]][4] for g in range(n)]
+    P = [end[g] - log[at[coins.OPENINGS, g]][3] for g in range(n)]
+    sigma0 = log[at[coins.CHALLENGE, 0]]
     return SessionTimes(n=n, tau=tau, window=s["window_ns"], R=R, A=A, D=D, Ra=Ra, Aa=Aa,
                         coin=[c - r for c, r in zip(C, R)], pure=pure, gp=gp,
                         X=[d - q for d, q in zip(D, Q)], P=P, step=step, to_aa=[a - q for a, q in zip(Aa, Q)],

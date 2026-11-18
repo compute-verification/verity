@@ -236,11 +236,10 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_its_epochs_root(tmp
     _untouched(model)
 
 
-def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one_weights_root_the_next_k(
-        tmp_path, monkeypatch):
-    """Each install's `commit_weights` samples its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
-    committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
-    is that W's next epoch: k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
+def test_each_install_is_an_epoch_of_its_own_with_no_salt_key_and_over_one_weights_root_the_next_k(tmp_path, monkeypatch):
+    """Each install's `commit_weights` takes its weights' roots with no salt key (B's salts are the registration's, data).
+    A reinstall committing a W this process already had an epoch over (the stand-in's fixed roots) is that W's next epoch:
+    k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
     keys: list[bytes] = []
 
     def weight_roots(kernel, weights, scheme, salt_key=None):
@@ -259,7 +258,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
     assert [c["pass_index"] for c in cs] == [0, 1] and {w.hex(): 2} == PHW.EPOCHS
     assert [h.window for h in hosts] == [{"root": PS.epoch_open_root(w, k).hex()} for k in range(2)]
     assert [c["session"]["root"] for c in cs] == [PS.epoch_open_root(w, k).hex() for k in range(2)]
-    assert len(keys) == 2 and keys[0] != keys[1] and all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
+    assert keys == [None, None] and ENTRY not in pouw._SALT_KEYS
     _untouched(model)
 
 

@@ -5,6 +5,7 @@ released at shutdown."""
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -72,42 +73,71 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
         SP.attach(messages.Exchange(), vllm_config(tp=2), *SP.config(ENV))
 
 
-def test_register_attaches_before_the_kv_cache_and_releases_at_shutdown(stand_in, monkeypatch):
+def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand_in, monkeypatch):
     got, held = stand_in
     seams: list = []
-    monkeypatch.setattr(kv_blocks, "attach", lambda: (lambda: None))
-    monkeypatch.setattr(admission, "register", lambda attach, refuse=None: seams.append(refuse))
     order: list[str] = []
 
-    class Core:
-        def _initialize_kv_caches(self, vllm_config):
-            order.append(f"kv after {len(got)} attach")
+    class Runner:
+        vllm_config = vllm_config()
 
+        def load_model(self):
+            order.append(f"load after {len(got)} attach")
+
+    def kv_attach():
+        orig = Runner.load_model
+
+        def load_model(runner):
+            orig(runner)
+            order.append("registered values")
+        Runner.load_model = load_model
+        return lambda: setattr(Runner, "load_model", orig)
+
+    class Core:
         def shutdown(self):
             order.append(f"shutdown after {held.released} release")
 
+    monkeypatch.setattr(kv_blocks, "attach", kv_attach)
+    monkeypatch.setattr(admission, "register", lambda attach, refuse=None: seams.append(refuse))
     monkeypatch.setattr(SP, "_PLUGIN", [])
-    SP.register(ENV, core=Core)
+    SP.register(ENV, core=Core, runners=(Runner,))
     try:
-        SP.register(ENV, core=Core)
+        SP.register(ENV, core=Core, runners=(Runner,))
         assert len(SP._PLUGIN) == 1 and seams == [SP.aborts]
-        core = Core()
-        core._initialize_kv_caches(vllm_config())
-        core.shutdown()
-        assert order == ["kv after 1 attach", "shutdown after 1 release"] and got[0][0] is messages.current()
+        Runner().load_model()
+        Core().shutdown()
+        assert order == ["load after 1 attach", "registered values", "shutdown after 1 release"]
+        assert got[0][0] is messages.current() and Runner.vllm_config.cache_config.num_gpu_blocks_override == 64
+        Runner().load_model()
+        held.release = lambda: (_ for _ in ()).throw(RuntimeError("its commitment did not close"))
+        with pytest.raises(RuntimeError, match="its commitment did not close"):
+            Core().shutdown()
+        assert order[-1] == "shutdown after 1 release"
     finally:
         SP._PLUGIN[0][0].uninstall()
+        SP._PLUGIN[0][1]()
 
 
-def test_a_refused_input_is_aborted_in_the_scheduler_and_its_reason_logged():
-    finished, logged = [], []
+def test_a_refused_input_is_aborted_and_its_client_told_why():
+    finished, logged, sent = [], [], []
+
+    def finish_requests(ids, status):
+        finished.append((ids, status))
+        return [SimpleNamespace(request_id=i, client_index=k) for k, i in enumerate(ids)]
     hook = SimpleNamespace(held={"cmpl-a-0-1": "a"}, live={"cmpl-b-0-1": "b", "cmpl-a-1-1": "a"},
-                           sched=SimpleNamespace(finish_requests=lambda ids, status: finished.append((ids, status))))
-    SP.aborts(hook, logged.append, status="ABORTED")("a", "its release was lost")
+                           sched=SimpleNamespace(finish_requests=finish_requests))
+    core = SimpleNamespace(output_queue=SimpleNamespace(put_nowait=sent.append))
+    vllm = SimpleNamespace(RequestStatus=SimpleNamespace(FINISHED_ABORTED="ABORTED"), FinishReason=SimpleNamespace(ABORT="abort"),
+                           EngineCoreOutput=lambda i, toks, **kw: (i, toks, kw), EngineCoreOutputs=dict)
+    SP.aborts(hook, core, logged.append, vllm)("a", "its release was lost")
     assert finished == [(["cmpl-a-0-1", "cmpl-a-1-1"], "ABORTED")]
+    why = {"finish_reason": "abort", "stop_reason": "its release was lost"}
+    assert sent == [(0, {"finished_requests": ["cmpl-a-0-1"], "outputs": [("cmpl-a-0-1", [], why)]}),
+                    (1, {"finished_requests": ["cmpl-a-1-1"], "outputs": [("cmpl-a-1-1", [], why)]})]
     assert logged == ["verity: input a refused (2 request(s) aborted): its release was lost"]
 
 
+GREEDY = {"type": "http.request", "body": b'{"temperature": 0}'}
 FRONT_ENV = {"VERITY_PROTOCOLS": "stand-in", "VERITY_PROTOCOLS_CONFIG": '{"feed": "%s"}' % FEED}
 
 
@@ -176,10 +206,28 @@ def test_the_front_answers_a_schemes_route_with_the_body_as_it_streams_in(front_
 
 def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_the_server(front_scheme):
     front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
-    sent = drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [])
+    sent = drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [GREEDY])
     assert answer(sent) == (400, "bad")
     arrived, done = front_scheme["events"]
-    assert (arrived.input, arrived.first_line, done) == ("r1", "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+    assert (arrived.input, arrived.length, arrived.first_line, done) == (
+        "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
+
+
+@pytest.mark.parametrize("path,body,why", [
+    ("/v1/responses", b"", "/v1/responses is not served under a scheme"),
+    ("/v1/completions", b'{"temperature": 0.7}', "needs an integer seed"),
+])
+def test_an_unserved_route_and_a_sampled_request_without_its_seed_are_refused_after_arriving(front_scheme, path, body, why):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
+    sent = drive(front, http(path, [("x-request-id", "r1")]), [{"type": "http.request", "body": body}])
+    assert answer(sent)[0] == 400 and why in answer(sent)[1]
+    assert [type(e) for e in front_scheme["events"]] == [H.InputArrived, H.OutputsComplete]
+
+
+def test_a_websocket_is_closed_under_a_scheme(front_scheme):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a websocket"), FRONT_ENV)
+    sent = drive(front, {"type": "websocket", "path": "/v1/realtime", "headers": []}, [{"type": "websocket.connect"}])
+    assert sent == [{"type": "websocket.close", "code": 1008}]
 
 
 def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_scheme):
@@ -188,6 +236,7 @@ def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_
     async def app(scope, receive, send):
         got["id"] = dict(scope["headers"])[b"x-request-id"].decode()
         got["started"].set()
+        got["body"] = await receive()
         got["heard"] = await receive()
 
     front = SP.Front(app, FRONT_ENV)
@@ -197,7 +246,7 @@ def test_an_input_refused_inside_the_server_gets_its_disconnect_and_a_400(front_
         front.refuse(got["id"], "its release was lost")
 
     sent = drive_with_event(front, got, during)
-    assert got["heard"] == {"type": "http.disconnect"} and got["id"].startswith("verity-")
+    assert got["body"] == GREEDY and got["heard"] == {"type": "http.disconnect"} and got["id"].startswith("verity-")
     assert answer(sent) == (400, "its release was lost")
     assert front_scheme["events"][-1] == H.OutputsComplete(got["id"], 0)
 
@@ -208,7 +257,11 @@ def drive_with_event(front, got, during):
     async def main():
         got["started"] = asyncio.Event()
 
+        bodies = [GREEDY]
+
         async def receive():
+            if bodies:
+                return bodies.pop()
             await asyncio.Future()
 
         async def send(m):
@@ -228,3 +281,103 @@ def test_without_the_setting_the_front_passes_everything():
     front = SP.Front(app, {})
     drive(front, http("/anything"), [])
     assert calls == ["/anything"] and front.ex is None
+
+
+HEAD = {"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"text/event-stream")]}
+SIZED = {"type": "http.response.start", "status": 200, "headers": [(b"Content-Length", b"4")]}
+NULL = {"type": "http.response.body", "body": b"null"}
+
+
+class Waiting:
+    """vLLM's server with a request it waits on. It reads the body and sends ``head`` at once, if it has one: a stream's
+    200 head, which vLLM sends before any token, or a whole answer's with its length. From there it waits on the
+    request's disconnect alone, as vLLM's listener beside each handler does, and once it has it sends ``late``."""
+
+    def __init__(self, head: dict | None, late: list[dict]) -> None:
+        self.head, self.late, self.waits, self.ended = head, late, 0, 0
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        more = True
+        while more:
+            more = (await receive()).get("more_body", False)
+        if self.head is not None:
+            await send(self.head)
+        self.waits += 1
+        while (await receive())["type"] != "http.disconnect":
+            pass
+        for m in self.late:
+            await send(m)
+        self.ended += 1
+
+
+async def turns(k: int = 16) -> None:
+    loop = asyncio.get_running_loop()
+    for _ in range(k):
+        turn = loop.create_future()
+        loop.call_soon(turn.set_result, None)
+        await turn
+
+
+@pytest.mark.parametrize("head", [None, HEAD, SIZED], ids=["no response begun", "a stream's head gone", "a whole answer's head gone"])
+def test_a_lost_releases_request_in_the_server_is_given_its_disconnect_and_answered(tmp_path, head):
+    """Release 0's request is in vLLM's server, its client's connection open, when a watermark line names it lost, and
+    the front ends it: the server gets the request's disconnect. Where the server had begun no response, what it sends
+    after goes nowhere and the client gets 400 and the network attester's sentence. Where a stream's 200 head had gone,
+    the client gets the stream's end, with no later chunk. Where a whole answer's head had gone with its length, which
+    takes an open gate, its body goes on, and the front adds nothing."""
+    from verity.protocols.resource_accounting.network.prover import admission as NA
+    from verity.protocols.resource_accounting.network.verifier import release as REL
+
+    name = NA.scheme_name()
+    late = ([SIZED, NULL] if head is None else [NULL] if head is SIZED else
+            [{"type": "http.response.body", "body": b"data: late\n\n", "more_body": True}])
+    app = Waiting(head, late)
+    front = SP.Front(app, {"VERITY_PROTOCOLS": name, "VERITY_PROTOCOLS_CONFIG": json.dumps(
+        {"feed": str(tmp_path), name: {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000}})})
+    numbered = http("/v1/completions", [(NA.RELEASE_HEADER, "0"), (NA.RUN_HEADER, "ab"), ("x-request-id", "c0")])
+    mark = http(NA.WATERMARK_PATH, [(NA.RUN_HEADER, "ab"), ("transfer-encoding", "chunked")])
+    sent: list[dict] = []
+    try:
+        async def run() -> tuple[bool, list[dict], bool]:
+            body, never = [GREEDY], asyncio.Event()
+
+            async def receive() -> dict:
+                if not body:
+                    await never.wait()
+                return body.pop(0)
+
+            async def send(m: dict) -> None:
+                sent.append(m)
+
+            call = asyncio.ensure_future(front(numbered, receive, send))
+            await turns()
+            held = app.waits == 1 and not app.ended and not call.done()
+            lines = [{"type": "http.request", "body": REL.watermark_chunk(0, 2, [0]).split(b"\r\n")[1], "more_body": True},
+                     {"type": "http.request", "body": b"", "more_body": False}]
+            answer: list[dict] = []
+
+            async def put(m: dict) -> None:
+                answer.append(m)
+
+            async def lines_in() -> dict:
+                return lines.pop(0)
+            await front(mark, lines_in, put)
+            await turns()
+            done = call.done()
+            call.cancel()
+            await asyncio.wait({call})
+            return held, answer, done
+
+        held, answer, done = asyncio.run(run())
+        assert held and answer[0]["status"] == 200 and done and app.ended == 1
+        if head is None:
+            assert [m.get("status") for m in sent] == [400, None]
+            assert sent[1]["body"] == NA.LOST.format(n=0, run="ab").encode()
+        else:
+            assert sent == [head, NULL if head is SIZED else {"type": "http.response.body", "body": b""}]
+        assert SP.FeedReader(NA.feed_file(str(tmp_path)))() == [
+            {"key": "c0", "run": "ab", "n": 0, "bucket": None}, {"run": "ab", "t": 0, "n": 2, "lost": [0]},
+            {"run": "ab", "end": True}, *([{"run": "ab", "n": 0, "passed": True}] if head is None else [])]
+        assert front.inside == {}
+    finally:
+        messages.close()
