@@ -5812,6 +5812,9 @@ _GRAPHS_LOCK = threading.Lock()
 _WALK_LOCK = threading.Lock()
 #: the share of the cores the graph walks take (`walk_graphs`): the sampled recompile runs beside the replay on the rest
 WALK_CORE_SHARE = 0.5
+#: `replay_keys`' parts, each timed into ``walked``: the parts' digests, which modules need a walk, the wait for
+#: `_WALK_LOCK`, and what is done holding it (the walks, if any)
+KEY_PARTS = ("hash", "jobs", "lock", "held")
 
 
 def walk_job(m: str, parts: list[Path], plain: str, mk) -> tuple[str, dict[str, Path]] | None:
@@ -5883,16 +5886,26 @@ def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = 
     graph, digest, mk = facts["graph"], digest or sha256, sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
+    at = [time.monotonic()]
+
+    def lap(part):
+        if walked is not None:
+            walked[part] = round(walked.get(part, 0) + time.monotonic() - at[0], 1)
+        at[0] = time.monotonic()
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
         plain = dict(zip(files, ex.map(lambda m: ",".join(digest(p) for p in files[m]), files)))
+        lap("hash")
         jobs = {(m, plain[m]): j for m, j in zip(files, ex.map(lambda m: walk_job(m, files[m], plain[m], mk), files)) if j}
+    lap("jobs")
     with _WALK_LOCK:
+        lap("lock")
         with _GRAPHS_LOCK:
             jobs = {k: j for k, j in jobs.items() if k not in _GRAPHS}
         found = walk_graphs(jobs, walked) if jobs else {}
         with _GRAPHS_LOCK:
             _GRAPHS.update(found)
             graphs = {m: _GRAPHS.get((m, plain[m])) for m in files}
+    lap("held")
     digests = {m: f"graph:{graphs[m]}" if graphs[m] else plain[m] for m in files}
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
@@ -6023,7 +6036,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     walked: dict = {}
     keys = replay_keys(facts, toolchain, digest, walked) if replay_cache is not None else {}
     lap("keys")
-    took["keys-walks"] = walked.get("seconds", 0)
+    took |= {"keys-walks": walked.get("seconds", 0)} | {f"keys-{k}": walked.get(k, 0) for k in KEY_PARTS}
     def passed(m):
         return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
@@ -6196,7 +6209,8 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
                       "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]})
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
-    took = stats.get("seconds", {}) | {"first-keys": first_keys, "first-keys-walks": walked.get("seconds", 0),
+    took = stats.get("seconds", {}) | {f"first-keys-{k}": walked.get(k, 0) for k in KEY_PARTS} | {
+        "first-keys": first_keys, "first-keys-walks": walked.get("seconds", 0),
                                        "first": round(sum(s["seconds"] for s in steps), 1)}
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
                            "seconds": took,

@@ -8972,7 +8972,7 @@ def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tm
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     monkeypatch.setattr(A, "run", run)
     fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
-    assert fails == [] and stats["seconds"] == {"keys": 3, "keys-walks": 0, "wait": 0, "plan": 0, "touch": 0, "lean": 7,
+    assert fails == [] and stats["seconds"] == {"keys": 3, "keys-walks": 0, "keys-hash": 0, "keys-jobs": 0, "keys-lock": 0, "keys-held": 0, "wait": 0, "plan": 0, "touch": 0, "lean": 7,
                                              "store": 0}
     monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "B", "threads": 1, "why": "w"}])
     fails, stats = A.replay_in_steps(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
