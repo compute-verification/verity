@@ -266,6 +266,22 @@ def test_a_stored_walk_gives_the_key_its_walk_gives_and_only_for_the_same_bytes_
     A._GRAPHS.clear()
 
 
+def test_a_stored_walk_is_found_only_under_everything_the_walk_reads(tmp_path, monkeypatch):
+    """An entry of `graphs/` is read only for the same module, parts' digests, set of parts, source path and walker: a
+    change of any one of them misses it, and the module is walked again."""
+    A, g, parts = check(), tmp_path / "graphs", module_data(tmp_path / "pm")
+    k, job = ("P.M", "d1,d2,d3"), ("P/M.lean", parts)
+    A.store_graphs(g, {k: "G"}, {k: job})
+    assert A.stored_graphs(g, {k: job}) == {k: "G"}
+    for why, jobs in {"another source path": {k: ("Q/M.lean", parts)},
+                      "another set of parts": {k: ("P/M.lean", {p: f for p, f in parts.items() if p != "olean.private"})},
+                      "other bytes": {("P.M", "d1,d2,d4"): job},
+                      "another module": {("P.N", "d1,d2,d3"): job}}.items():
+        assert A.stored_graphs(g, jobs) == {}, why
+    monkeypatch.setattr(A, "graph_tool", lambda: "another walker")
+    assert A.stored_graphs(g, {k: job}) == {}
+
+
 def test_a_failed_walk_fails_the_replay_keys_and_leaves_no_key(tmp_path, monkeypatch):
     """A process whose walk fails (a malformed part) or that answers for fewer modules than it was given fails the pass
     with what it said: no key is taken from anything but the walk."""

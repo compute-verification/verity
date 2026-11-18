@@ -5870,7 +5870,7 @@ def walk_graphs(jobs: dict[tuple[str, str], tuple[str, dict[str, Path]]], walked
     return {k: g for chunk, d in zip(chunks, done) for (k, _), g in zip(chunk, d["graphs"])}
 
 
-GRAPHS_SCHEMA = 1
+GRAPHS_SCHEMA = 2
 
 
 @functools.cache
@@ -5878,20 +5878,26 @@ def graph_tool() -> str:
     return sha256(HERE / "olean_graph.py")
 
 
-def graph_entry(cache: Path, k: tuple[str, str]) -> Path:
-    """Where ``cache`` (a replay cache's `graphs/`) keeps the walk of ``k`` ((module, its parts' digests)): named by both and
-    by `olean_graph.py`'s own digest, so a change of the walk reads none of the walks before it."""
-    name = hashlib.sha256(f"{GRAPHS_SCHEMA}\0{graph_tool()}\0{k[0]}\0{k[1]}".encode()).hexdigest()
-    return cache / f"{name}.json"
+def graph_id(k: tuple[str, str], job: tuple[str, dict[str, Path]]) -> dict:
+    """Everything the walk of ``k`` ((module, its parts' digests)) is a function of: the parts' bytes (their digests, by
+    part), the source path it leaves out (``job``: `walk_job`'s answer) and the walker (`olean_graph.py`, stdlib only, which
+    reads no file but those parts and no environment); and the module, so an entry is found for no other."""
+    return {"schema": GRAPHS_SCHEMA, "tool": graph_tool(), "module": k[0], "plain": k[1], "source": job[0],
+            "parts": sorted(job[1])}
 
 
-def stored_graphs(cache: Path, keys) -> dict[tuple[str, str], str | None]:
-    """The walks of ``keys`` that ``cache`` holds (`store_graphs`), each taken only where its entry names the same module,
-    parts' digests and `olean_graph.py` digest, and touched, so the cache's eviction (`lean_audit.prune_replays`) keeps
-    what every replay reads. An entry unreadable or naming anything else is walked again and rewritten."""
+def graph_entry(cache: Path, gid: dict) -> Path:
+    """Where ``cache`` (a replay cache's `graphs/`) keeps the walk ``gid`` (`graph_id`) names."""
+    return cache / f"{hashlib.sha256(json.dumps(gid, sort_keys=True).encode()).hexdigest()}.json"
+
+
+def stored_graphs(cache: Path, jobs: dict) -> dict[tuple[str, str], str | None]:
+    """The walks of ``jobs`` that ``cache`` holds (`store_graphs`), each taken only where its entry names the same
+    `graph_id`, and touched, so the cache's eviction (`lean_audit.prune_replays`) keeps what every replay reads. An entry
+    unreadable or naming anything else is walked again and rewritten."""
     found = {}
-    for k in keys:
-        f = graph_entry(cache, k)
+    for k, job in jobs.items():
+        f = graph_entry(cache, gid := graph_id(k, job))
         if not f.is_file():
             continue
         try:
@@ -5900,17 +5906,16 @@ def stored_graphs(cache: Path, keys) -> dict[tuple[str, str], str | None]:
         except (OSError, ValueError) as e:             # a concurrent prune dropped it, or a write was cut short
             print(f"replay keys: {f.name}: {e}; walked again", file=sys.stderr)
             continue
-        if doc == {"schema": GRAPHS_SCHEMA, "tool": graph_tool(), "module": k[0], "plain": k[1],
-                   "graph": doc.get("graph")} and isinstance(doc["graph"], str | None):
+        if doc == gid | {"graph": doc.get("graph")} and isinstance(doc["graph"], str | None):
             found[k] = doc["graph"]
     return found
 
 
-def store_graphs(cache: Path, found: dict[tuple[str, str], str | None]) -> None:
+def store_graphs(cache: Path, found: dict[tuple[str, str], str | None], jobs: dict) -> None:
     cache.mkdir(parents=True, exist_ok=True)
     for k, g in found.items():
-        write_atomic(graph_entry(cache, k), json.dumps({"schema": GRAPHS_SCHEMA, "tool": graph_tool(), "module": k[0],
-                                                        "plain": k[1], "graph": g}).encode())
+        gid = graph_id(k, jobs[k])
+        write_atomic(graph_entry(cache, gid), json.dumps(gid | {"graph": g}).encode())
 
 
 def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = None,
@@ -5925,8 +5930,8 @@ def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = 
     out (`olean_graph.canonical`, under `graph:`; `walk_graphs`, whose counts go to ``walked``), which the module compiled
     in another tree shares. With ``graphs`` (a replay cache's `graphs/`, given only by an audit that stores verdicts there)
     a walk is read from there (`stored_graphs`) and each new one stored: its parts are still hashed on every call, so an
-    entry maps only those exact bytes to a graph, and whoever could write a wrong one could write a wrong verdict beside
-    it."""
+    entry maps only those exact bytes and source path to a graph (`graph_id`), and whoever could write a wrong one could
+    write a wrong verdict beside it."""
     graph, digest, mk = facts["graph"], digest or sha256, sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
@@ -5939,7 +5944,7 @@ def replay_keys(facts: dict, toolchain: str, digest=None, walked: dict | None = 
         kept = stored_graphs(graphs, jobs) if graphs is not None and jobs else {}
         found = walk_graphs({k: j for k, j in jobs.items() if k not in kept}, walked) if len(kept) < len(jobs) else {}
         if graphs is not None and found:
-            store_graphs(graphs, found)
+            store_graphs(graphs, found, jobs)
         if walked is not None:
             walked["stored"] = walked.get("stored", 0) + len(kept)
         with _GRAPHS_LOCK:
