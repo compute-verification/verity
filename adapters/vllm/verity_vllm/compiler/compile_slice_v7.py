@@ -12,7 +12,7 @@
 ``a_P`` in ``cert`` (its prompt's token count), a u32 least significant bit first, zero-extended, and 0 at an empty slot
 (``a_valid`` 0). It is ``cert``'s value, no new input, and what the ingress tie reads (`tie_service.IngressInputs.compiled`);
 an input's place is its slot's, the certified arrival order. The outputs are 16 + 32·K bits, in the least public size
-class that holds them (`partition_v2.size_class`), and count in leakage at that width.
+class that holds them (`partition_v2.size_class`). The lengths are opened, and no charge counts them.
 
 Everything but the charge is CompileSlice_v1's (and CompileSliceRowGroups_v1's at G < P): the load, the steps, the
 cache, the served rows and the verdict's bits (load, steps, code, charge, rows, cache; `ACCEPT` = 0x3F), on the same

@@ -30,6 +30,7 @@ from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_flock.class_statement import UnitStager
+from tests.fixed_salts import fixed
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
@@ -237,7 +238,7 @@ def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     got = SRW.read_all(w.members, rows, x["store"], None)
     for m, (g, _e) in zip(w.members, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got], salts_of=fixed(w))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     k = next(k for k, m in enumerate(w.members) if m.wired)
@@ -246,7 +247,7 @@ def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     assert list(WI.check(other.members, publics)) == [w.members[k].key]
     bad = [dict(g, rows={**g["rows"], "in1": g["rows"]["in1"] ^ np.uint16(1)}) if j == k else g for j, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=f"{w.members[k].key}: a in1 row is not the o1 row"):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad, salts_of=fixed(w))
 
 
 def test_a_partition_without_the_quantisation_s_chunks_is_refused(served):
