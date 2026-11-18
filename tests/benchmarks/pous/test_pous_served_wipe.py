@@ -272,13 +272,14 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
 
 
 def test_a_case_that_cant_reach_the_private_dir_leaves_none_in_dir(node, tmp_path) -> None:
-    """The case holds the signed session: where the serve dir's private directory can't be made, DIR, the window's
-    output that leaves the node, keeps no copy of it."""
+    """The case holds the signed session: where the serve dir's private directory can't be made, the launcher refuses
+    by name, and DIR, the window's output that leaves the node, keeps no copy of it anywhere beneath it."""
     d = tmp_path / "pieces" / "wipe"
     (tmp_path / "pieces" / "serve-run").mkdir(parents=True)
     (tmp_path / "pieces" / "serve-run" / "private").write_text("not a directory\n")
     r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
-    assert not (d / "wipe.case.json").exists(), r.stdout + r.stderr
+    assert r.returncode != 0 and _refused(r, d).startswith("the serve dir's private directory"), r.stdout + r.stderr
+    assert not [f for f in d.rglob("*") if f.name.endswith("case.json")]
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
