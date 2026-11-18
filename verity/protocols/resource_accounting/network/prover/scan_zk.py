@@ -219,7 +219,7 @@ from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers, network_attester_zk as WZ
-from verity.circuits import boolean as BL
+from verity.circuits import boolean as BL, population as PN
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
@@ -1436,7 +1436,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
     counts = counts_of(members)
     nb, scan = T // cls.EVERY, templates == TEMPLATES
     prog = scan_program(cls, templates, T) if scan else \
-        M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+        PN.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
     if scan:
