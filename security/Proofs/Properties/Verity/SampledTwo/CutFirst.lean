@@ -245,7 +245,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
   rw [← hp, ← hc, ← he] at hacc
   obtain ⟨c₂, ξ₂, r, i, run, hi, hrun, -, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
-  rcases run_coins _ true run hrun with ⟨step, codes, rfl⟩ | ⟨read, hcc⟩
+  rcases run_coins _ run hrun with ⟨step, codes, rfl⟩ | ⟨read, hcc⟩
   · have hs := SpotFlock.str_of_jeq (SpotFlock.jeq_symm hsym)
     rw [refused_symbol] at hs
     cases hs
