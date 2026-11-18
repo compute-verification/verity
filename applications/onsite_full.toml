@@ -34,6 +34,14 @@ free_us = 0
 token_ns = 0
 log = ""
 
+[params."verity/wipe/v0"]
+store = "cuda"
+segments = 0
+reserve_bytes = 1073741824
+tier = ""
+limit_ns = 20000000
+reads = 0
+
 [[party]]
 name = "workers"
 machine = "prover-node"

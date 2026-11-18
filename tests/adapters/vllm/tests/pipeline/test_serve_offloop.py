@@ -840,7 +840,7 @@ def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
 def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_path):
     src, dst = tmp_path / "serve", tmp_path / "OUT"
     src.mkdir()
-    (src / "windows.jsonl").write_bytes(b'{"window": 0, "steps": 3}\n{"window": ')
+    (src / "windows.jsonl").write_bytes(b'{"window": 0, "steps": 3, "run_id": "r", "step_roots": ["a", "b", "c"]}\n{"window": ')
     (src / "serve.json").write_text('{"model": "m", "address": ["10.0.0.1", 8000]}')
     (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
     (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
