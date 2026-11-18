@@ -61,6 +61,13 @@ pass after it, so its coin was flipped after every pass of the windows before. `
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game flips every append's coin with the codec, so `joined` is the game's only record of when.
 
+**Refresh.** With refresh on, the cap holds for every block a plan holds, registered blocks included
+(`LifetimeCappedAll`), and a plan holds a block only once its payload is seasoned: committed at the registration or by
+an append that joined `L` or more windows before (`Seasoned`, at the origin `seen x t` each append declares). A re-key
+appends a block's payload again under a fresh coin. The cut, every payload of a pass committed before every key of it
+was drawn, follows when the appends join in order (`JoinsInOrder`), and each append's choices read only the coins
+before its origin (`ChoosesBefore`) at origins fixed before every coin (`OriginsFixed`).
+
 **A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
@@ -224,6 +231,48 @@ def LifetimeCapped {n P N m ρ h ks G d T M : ℕ} {Y : Type}
     ∀ i ∈ appendedTiles layout (SketchPrefix.of x.2 w j) x.1,
       joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 ≤ (w : ℕ) ∧
         (w : ℕ) < joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 + L
+
+/-- **Each append's choices read only the coins of the appends before `seen a`**: for every prefix `c` and codec `ω`,
+append `a`'s choices are the same at two coin assignments that agree before `seen a`. A fresh append has `seen a = a`,
+which the append-coin rule already gives; a re-key has the append that first committed its payloads, and `0`, the
+registration, for registered blocks. `seen` is one map for every coin; that the origins a session declares are it is
+`OriginsFixed`. -/
+def ChoosesBefore {Pfx Ω Ca Ch : Type} {T : ℕ}
+    (choose : Pfx → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch) (seen : Fin T → Fin T) : Prop :=
+  ∀ (c : Pfx) (ω : Ω) (a : Fin T) (κ κ' : {b : Fin T // b < a} → Ca),
+    (∀ b : {b : Fin T // b < a}, b.1 < seen a → κ b = κ' b) → choose c ω a κ = choose c ω a κ'
+
+/-- **Every block a pass reads is read within `L` windows of the one its append joined, the registration's
+included**: `LifetimeCapped` for every tile of the pass, not only its appended tiles. At the session's coins `x`, every
+pass whose layout puts a block of an append `t` in its store is in a window `w` with `joined x t ≤ w < joined x t + L`. -/
+def LifetimeCappedAll {n P N m ρ h ks G d T M : ℕ} {Y : Type}
+    (layout : SketchPrefix n P N m ρ h ks G d → Y → Fin N ↪ Fin T × Fin M)
+    (joined : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin T → ℕ) (L : ℕ) : Prop :=
+  ∀ (x : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d)) (w : Fin n) (j : Fin P) (i : Fin N),
+    joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 ≤ (w : ℕ) ∧
+      (w : ℕ) < joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 + L
+
+/-- **Every block a pass reads has a payload committed at the registration or `L` or more windows before the pass**:
+at the session's coins `x`, every tile of pass `j` of window `w`, at a position of append `t`, has `seen x t = 0` or
+`joined x (seen x t) + L ≤ w`. `seen x t` is the origin append `t` declares at the coins `x`: `t` for a fresh append,
+the append that first committed its payloads for a re-key, `0` for a re-key of registered blocks. A re-key's payload
+is born when the append that first committed it joined. -/
+def Seasoned {n P N m ρ h ks G d T M : ℕ} {Y : Type}
+    (layout : SketchPrefix n P N m ρ h ks G d → Y → Fin N ↪ Fin T × Fin M)
+    (joined : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin T → ℕ)
+    (seen : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin T → Fin T) (L : ℕ) : Prop :=
+  ∀ (x : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d)) (w : Fin n) (j : Fin P) (i : Fin N),
+    (seen x (layout (SketchPrefix.of x.2 w j) x.1 i).1 : ℕ) = 0 ∨
+      joined x (seen x (layout (SketchPrefix.of x.2 w j) x.1 i).1) + L ≤ (w : ℕ)
+
+/-- **The appends join windows in order**: at the session's coins `x`, a later append joins no earlier window. -/
+def JoinsInOrder {X : Type} {T : ℕ} (joined : X → Fin T → ℕ) : Prop :=
+  ∀ x, Monotone (joined x)
+
+/-- **The origins a session declares are fixed before every coin**: at every coin `x` they are the map `s`, as on a
+fixed public rota. -/
+def OriginsFixed {X : Type} {T : ℕ} (seen : X → Fin T → Fin T) (s : Fin T → Fin T) : Prop :=
+  ∀ x, seen x = s
 
 namespace Chip
 
