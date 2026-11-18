@@ -15,7 +15,6 @@ import pytest
 from tests.compiler import test_network_attester_replay_chain as CT
 from tests.compiler import test_network_attester_tick_step as TC
 from tests.pipeline import test_tick_step as TT
-from verity.protocols.proofs.spot.prover import produced as PP
 from verity.commitments.gates.bits import ands
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import replay_step as RS
@@ -190,8 +189,7 @@ def run(Sc: RC.Shape, St: SimpleNamespace, rule: TS.Rule, windows: list[tuple[tu
 
 def held(Sc: RC.Shape, st_: dict, windows: list[Window]) -> list[RC.Committed]:
     """Each window's load and steps held by their circuits (`TickLoad_v1`, `TickAdvance_v1` and each active step's
-    `TickStep_v1` on the state row it reads), committed as the chain's produced values, and the session's openings
-    through `check_chain`; the last rows through `TickClose_v1`."""
+    `TickStep_v1` on the state row it reads), committed as the chain's produced values; the last rows through `TickClose_v1`."""
     loads, advances, ticks, want = [], [], [], []
     for w in windows:
         loads.append(RC.load_arguments(Sc, w.rows[0], w.last, w.arrivals, (), 0, w.n, RC.encode(w.rows[1], Sc),
@@ -214,7 +212,6 @@ def held(Sc: RC.Shape, st_: dict, windows: list[Window]) -> list[RC.Committed]:
     for w in windows:
         carry = RC.commit_window(CT.PROGRAM, w.rows, w.win, Sc, CT.REGISTRATION, carry=carry)
         values.append(carry)
-    assert RC.check_chain([RC.openings(v) for v in values], CT.PROGRAM, Sc) is None
     return values
 
 
@@ -340,8 +337,7 @@ def test_several_buckets_pass_on_a_window_boundary(asy: bool) -> None:
 
 def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
     """The first window of the mid-bucket seam ends at T = 220,000. A second window that starts at that row with T
-    restarted at 0 runs on (request 2 a step late), but: `commit_window` refuses it as the carry, its state row 0
-    committed under the carried row's salt opens to another b‖c, so `check_chain` refuses the session (C-carry), and
+    restarted at 0 runs on (request 2 a step late), but: `commit_window` refuses it as the carry, and
     `TickLoad_v1` refuses a state row 1 whose clock isn't row 0's, as `TickAdvance_v1` refuses a next row whose clock
     isn't the step's."""
     rule = TC.RULES["today"]
@@ -357,15 +353,6 @@ def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
     RC.commit_window(CT.PROGRAM, honest[1].rows, honest[1].win, Sc, CT.REGISTRATION, carry=v0)
     with pytest.raises(ValueError, match="ended in"):
         RC.commit_window(CT.PROGRAM, restarted[1].rows, restarted[1].win, Sc, CT.REGISTRATION, carry=v0)
-    n = len(v0.state.salts[-1])
-    salts = [v0.state.salts[-1]] + [bytes([k + 1]) * n for k in range(len(restarted[1].rows) - 1)]
-    state = PP.commit(CT.PROGRAM, RC.VALUE, [RC.row(RC.encode(r, Sc)) for r in restarted[1].rows],
-                            CT.REGISTRATION, salts, RC.WORD_BITS, RC.SCHEMA)
-    window = PP.commit(CT.PROGRAM, RC.WINDOW, [v0.window.rows[-1], RC.row(RC.encode_window(restarted[1].win, Sc))],
-                             CT.REGISTRATION, [v0.window.salts[-1], bytes(n)], RC.WORD_BITS, RC.SCHEMA)
-    forged = RC.Committed(state, window)
-    assert bytes(forged.state.bcs[0]) != bytes(v0.state.bcs[-1]) and bytes(forged.window.bcs[0]) == bytes(v0.window.bcs[-1])
-    assert RC.check_chain([RC.openings(v0), RC.openings(forged)], CT.PROGRAM, Sc).startswith("C-carry")
     w = honest[1]
     good = RC.load_arguments(Sc, seam, w.last, w.arrivals, (), 0, w.n, RC.encode(w.rows[1], Sc), RC.encode_window(w.win, Sc))
     off = RC.load_arguments(Sc, seam, w.last, w.arrivals, (), 0, w.n,

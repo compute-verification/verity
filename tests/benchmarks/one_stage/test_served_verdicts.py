@@ -1062,6 +1062,9 @@ def test_a_one_stage_accept_that_is_not_complete_rows_not_complete_and_never_com
         in line["reason"]
     bare = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
     assert S.row_of(S.INTEGRITY_OWNER, bare, tmp_path / "none")["verdict"] == NOT_COMPLETE
+    (tmp_path / "window" / "audit.json").write_text("{not json")
+    row = S.row_of(S.INTEGRITY_OWNER, bare, tmp_path)
+    assert row["verdict"] == NOT_COMPLETE and "its audit record does not parse: " in row["reason"]
 
 
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
