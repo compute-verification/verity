@@ -576,6 +576,29 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
     assert "AGENT_INBOX_POLL_S is off" in tool("check", W, "--repo", str(worker), inbox=box, poll="off").stdout
 
 
+def test_check_says_whether_the_tool_call_hook_has_run_on_this_vm(tmp_path):
+    """The tool-call hook's evidence is its `preToolUse` line in the event log; the Task log stays empty for MCP calls."""
+    W = "bc-33333333-3333-4333-8333-333333333333"
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env={**os.environ, **GIT_ENV})
+    shutil.copytree(ROOT / ".cursor", repo / ".cursor")
+    env = {**os.environ, "AGENT_GUARD_EVENT_LOG": str(tmp_path / "events.jsonl"), "AGENT_INBOX": str(tmp_path / "inbox"),
+           "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+
+    def check() -> str:
+        return subprocess.run([sys.executable, INBOX_TOOL, "check", W, "--repo", str(repo)], env=env, capture_output=True,
+                              text=True).stdout
+
+    assert "no tool-call hook has run on this VM" in check()
+    mcp = {"hook_event_name": "preToolUse", "tool_name": "MCP:list_teams", "conversation_id": W,
+           "tool_input": {"limit": 1}}
+    out = subprocess.run([sys.executable, HOOK.parent / "task_hook.py"], input=json.dumps(mcp), env=env,
+                         capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == {"permission": "allow"} and not (tmp_path / "task.jsonl").exists()
+    assert "the tool-call hook has run on this VM: 1 `preToolUse` event(s)" in check()
+    assert "the last for MCP:list_teams" in check()
+
+
 def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deliver_and_names_a_hooks_file_cursor_misreads(tmp_path):
     """`selftest` is delivery end to end: it pushes a message to the agent's own inbox branch and clears its poll mark, so its
     next command's hook pulls it and the one after is refused with it. It also says, at once, when Cursor reads no shell hook

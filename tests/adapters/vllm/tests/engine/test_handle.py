@@ -113,7 +113,7 @@ def test_a_core_with_no_client_around_it_still_gives_its_parts():
 
 
 def _in_remote(llm):
-    """`CommitSession.check`'s own read (PoUB's session, `remote.py`), which takes the core from `core_or_none`: true where
+    """The read PoUB's session made of a built engine while it was the adapter's, the core from `core_or_none`: true where
     it refuses."""
     return getattr(handle.core_or_none(llm), "engine_core", None) is None
 
