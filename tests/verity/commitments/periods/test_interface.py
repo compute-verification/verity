@@ -902,8 +902,6 @@ WAITS_WIDTH = "waits on circuits: the wired builder's width folds (population.py
 #: the wired builder binds the SHA-512 of the record's WIRED_FIELDS (population.py:362-363), so a record field the Program
 #: doesn't read (boundary reads, named free rows) changes the Program's digest
 WAITS_RECORD_HASH = "waits on circuits: the record's hash in the wired Program's binding (population.py:362-363)"
-#: `rows.commit` into a directory holds a (template, output field) tree's rows whole, not a run at a time
-WAITS_TREE_STREAM = "waits on proofs: rows.commit into a directory streaming a template's output tree"
 
 def sliced(**edit) -> I.Circuit:
     """Three positions' rows, each two ``Gemm_v2{K=16, N=8}`` slices, and a ``Gemm_v2{K=16, N=16}`` a position reading its
@@ -2464,7 +2462,6 @@ def test_a_commit_into_a_directory_refuses_what_it_would_hold_whole(monkeypatch,
         CS.write(c, tmp_path / "into", {}, {}, registrar=reg)
 
 
-@pytest.mark.xfail(strict=True, reason=WAITS_TREE_STREAM)
 def test_a_commit_into_a_directory_holds_a_run_and_never_the_window(monkeypatch, tmp_path):
     """The peak, pinned: committing 2,048 coordinates' rows into a directory, a run of 64 units at a time from a producer
     that makes each run when it is asked, allocates at its peak under a quarter of the bytes the window commits (its
