@@ -119,11 +119,13 @@ with a run (one it has with none, which the sweep can't judge, is read as a work
 A worker's lane is its launcher's, by one rule for a worker and for a run's sender (`placed`), the first of these that gives
 a handle: the agent whose Task call the watch saw launch or resume it, whatever its registration says (only that agent can
 resume it); its registration (a workers.d entry's `launched_by`, else its lane; a note's lane, else the coordinator its
-origin names); the agent its brief names (`learn`, read at the end of a run it sent: a coordinator, else an agent the watch
-places); at such a run's end, its name (`place_by_name`, below). A launcher that is itself a worker is placed the same way,
-so a worker a worker launched is that worker's coordinator's: the chain is followed `LAUNCHERS_MAX` launchers up, and
-launchers that name each other place nobody. The watch follows only the runs of agents the list has, so a Task call a
-Task subagent makes is never seen: the workers it launches are placed by their registration or their brief.
+origin names); the agent its record or brief names (`learn`, read at the end of a run it sent: a coordinator, else an agent
+the watch places, else the coordinator of the lane its brief says it works for, "a worker of the lean lead", `brief_lane`);
+at such a run's end, its name (`place_by_name`, below). A launcher that is itself a worker is placed the same way, so a
+worker a worker launched is that worker's coordinator's at any depth, and launchers that name each other place nobody. The
+watch follows only the runs of agents the list has, and only those running at a sweep, so a Task call a Task subagent
+makes is never seen, nor one a lead makes in a turn that ends between sweeps (leads' turns often last a minute): those
+workers are placed by their registration or their brief.
 A worker none of these places has no handle and no lane, never one made up for it: it is recorded
 once as **unplaced**, with the agent whose Task call named it if the watch saw one (a run's sender no handle owns in
 that run's record instead, below), for the relay to ring infra, who finds its launcher, and from then on its alerts are
@@ -228,7 +230,10 @@ any other source overrides) and records the run for that handle as a worker's, w
 once and says how it was found. A name with no such key or handle, with keys of two teams, a team no lane has, a team
 several have whose issue's label names none of them or which no Linear credential lets the watch read, a
 handle that is no lane, and a name the API won't give place nobody: the runs of one read whose sender no handle owns are one
-`run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. Such a sender is a stray,
+`run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. A sender the watch read as one
+of the team's agents (`title`: the list's, a Verity agent's record or a Task call's name) has its runs' `title` in that
+record, and its runs are in such a record at most once per `UNOWNED_EVERY_S`, the rest only in the log; any other sender's
+are in every read's. Such a sender is a stray,
 watched as a worker is, under no lane, and infra is rung for it that once (`unplaced`): a read whose senders infra was all
 rung for is marked `quiet`. A run whose handle
 `quiet_handles` lists (ci: drive reads its own candidates' checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
@@ -464,8 +469,6 @@ STEP_RE = re.compile(r"(?:now |next,? |then |first,? |last,? |ok(?:ay)?,? )?(?:l
 WAIT_RE = re.compile(r"\b(?:wait(?:s|ing)?|wake[- ]?up|wakes?|timer|resumes?|ring(?:s|-run)?|until)\b", re.IGNORECASE)
 LEARN_PER_READ = 4              # unknown senders whose conversation one node read reads for the launcher their brief names
 LEARN_RETRY_S = 6 * 3600        # a sender whose brief named none is read again after this long
-LAUNCHERS_MAX = 8               # launchers `placed` follows up from an agent in one asking: a coordinator further up places it
-                                # only once the watch holds a handle for an agent between them
 WORKER_NOTES_S = 12 * 3600      # a note modified this recently names its author as a worker to watch
 WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only when a note of its changes
 #: how far before a worker's IDLE read its parent's Task call may complete and still be its report back
@@ -486,6 +489,7 @@ HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart f
 RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
 RUN_ENDS_SLACK_S = 10 * 60      # each node is read back this far past its last read: a run's status lands late, clocks differ
 RUN_ENDS_KEEP_S = 3 * 86400     # a run rung (or skipped) this long ago is forgotten
+UNOWNED_EVERY_S = 3600          # the runs of a team's agent no handle owns are posted at most this often per sender
 SAY_EVERY_S = 3600              # a failing ls-remote or node read is printed at most this often
 BRANCH_RE = re.compile(r"\b(?:cursor|lane)/[A-Za-z0-9._/-]*[A-Za-z0-9]")
 
@@ -643,6 +647,18 @@ def name_lane(name: str, registry: Path | None) -> tuple[str, dict] | None:
     teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
     keys = [m for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams]
     return of(keys[0]) if len({m[1] for m in keys}) == 1 else None
+
+
+def brief_lane(brief: str, handles: set[str]) -> str | None:
+    """The handle a brief names its launcher by in prose, the first time it does: a worker "of" or "for" a handle's lead,
+    lane or coordinator ("a worker of the benchmarks lead", "worker X of the `lean` lane", "a worker of Verity's lean
+    coordinator"), within a sentence; None when it names none."""
+    if not (names := [h for h in handles if h]):
+        return None
+    alt = "|".join(re.escape(h) for h in sorted(names, key=len, reverse=True))
+    m = re.search(rf"\bworker\b[^.\n]{{0,60}}?\b(?:of|for)\b[^.\n]{{0,40}}?(?<![\w-])`?({alt})`?\s+(?:lead|lane|coordinator)\b",
+                  brief, re.IGNORECASE)
+    return next((h for h in names if h.lower() == m[1].lower()), None) if m else None
 
 
 def reader(name: str, handle: str | None, registry: Path | None) -> bool:
@@ -1314,6 +1330,7 @@ class Watch:
         self.heads_read = self.ends_read = -float("inf")
         self.said: dict[str, float] = {}            # what failed -> when it was last printed
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
+        self.titles: dict[str, str] = {}            # a sender no route knows, read as a Verity agent -> its name
         self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
         self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
@@ -2540,12 +2557,12 @@ class Watch:
         registration names (`by`: a workers.d entry's `launched_by`). Else the handle the watch holds for it: its
         registration's or its note's lane, the lane a name placed it under, an API launch's owner (`owners`); a stray
         holds none. Else its brief's launcher's (`learn`), which only places one nothing else has. `chain` is the agents
-        asked on the way here: one met again is asked nothing more, so launchers that name each other place nobody, and
-        past `LAUNCHERS_MAX` of them the next is asked only whether it coordinates."""
+        asked on the way here: one met again is asked nothing more, so launchers that name each other place nobody, and a
+        chain that reaches a coordinator places its agent at any depth."""
         known = {} if known is None else known
         if agent not in known:
             known[agent] = lineage(self.registry, coords, agent)
-        if known[agent] or agent in chain or len(chain) >= LAUNCHERS_MAX:
+        if known[agent] or agent in chain:
             return known[agent]
         with self.kids_lock:
             kid = dict(self.children.get(agent) or {})
@@ -2559,29 +2576,39 @@ class Watch:
         return self.placed(brief, coords, known, chain) if brief else None
 
     def learn(self, agent: str, coords: dict[str, str], t: float) -> dict:
-        """A sender no route knows, learned from its brief (its conversation's first user message): a worker of the first
-        agent id there that is a coordinator (`lineage`: WIDTHS' "a cloud worker of the circuits coordinator (agent bc-...)"),
-        else of the first that is an agent the watch places (`placed`: a worker of a worker names the worker), else of the
-        current coordinator of the first registry handle it names ("a worker for the proofs lane"), kept in `children` as a
-        Task call's worker is; {} when it names none, read again `LEARN_RETRY_S` later."""
+        """A sender no route knows, learned from its agent record and its brief (its conversation's first user message): a
+        worker of the first agent id the record names but its own, then the brief, that is a coordinator (`lineage`:
+        WIDTHS' "a cloud worker of the circuits coordinator (agent bc-...)"), else of the first that is an agent the watch
+        places (`placed`: a worker of a worker names the worker), else of the current coordinator of the registry handle
+        the brief names its launcher by ("a worker of the `lean` lane", "worker X of Verity's benchmarks lead":
+        `brief_lane`), else of the first handle it names as `@handle`, kept in `children` as a Task call's worker is; {}
+        when it names none, or is no Verity agent, read again `LEARN_RETRY_S` later."""
         if t - self.learn_tried.get(agent, -LEARN_RETRY_S) < LEARN_RETRY_S:
             return {}
         self.learn_tried[agent], self.learn_left = t, self.learn_left - 1
+        try:
+            info = {"name": self.names[agent]} if agent in self.names else self.api.get(f"/v1/agents/{agent}") or {}
+        except (urllib.error.URLError, OSError, ValueError):
+            info = {}
+        if info.get("repos") and not verity(info):
+            return {}
+        name = str(info.get("name") or "")[:120]
+        if name:
+            self.titles[agent] = name
+        if info and agent not in self.names:        # a listed agent has its row in status.json already
+            self.worker_status[agent] = str(info.get("status") or "unknown")
         msgs = self.conversation(agent) or []
         brief = next((str(m.get("text") or "") for m in msgs if m.get("type") == "user_message"), "")
-        ids = [i for i in dict.fromkeys(AGENT_RE.findall(brief)) if i != agent]
+        ids = [i for i in dict.fromkeys(AGENT_RE.findall(json.dumps(info)) + AGENT_RE.findall(brief)) if i != agent]
         parent = next((i for i in ids if lineage(self.registry, coords, i)), None) or next(
             (i for i in ids if self.placed(i, coords, chain=(agent,))), None)
         if parent is None:
             names = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
-            handle = next((h for h in re.findall(r"@([a-z][a-z0-9-]*)", brief) if h in names), None)
+            handle = brief_lane(brief, names) or next(
+                (h for h in re.findall(r"@([a-z][a-z0-9-]*)", brief) if h in names), None)
             parent = next((a for a, h in sorted(coords.items()) if h == handle), None) if handle else None
         if parent is None:
             return {}
-        try:
-            name = str((self.api.get(f"/v1/agents/{agent}") or {}).get("name") or "")[:120]
-        except (urllib.error.URLError, OSError, ValueError):
-            name = ""
         self.learn_tried.pop(agent, None)
         with self.kids_lock:
             kid = self.children[agent] = {"parent": parent, "name": name, "t": t, "brief": True}
@@ -2603,7 +2630,7 @@ class Watch:
         with self.kids_lock:
             kid = dict(self.children.get(agent) or {})
         met = stray(kid)
-        name = self.names.get(agent) or str(w.get("name") or kid.get("name") or "")
+        name = self.names.get(agent) or self.titles.get(agent) or str(w.get("name") or kid.get("name") or "")
         if not name and "read" not in w and not met:
             try:
                 info = self.api.get(f"/v1/agents/{agent}") or {}
@@ -2614,6 +2641,8 @@ class Watch:
             if info.get("repos") and not verity(info):
                 return None
             name = str(info.get("name") or "")
+            if name:
+                self.titles[agent] = name[:120]
             if agent not in self.names:             # a listed agent has its row in status.json already
                 self.worker_status[agent] = str(info.get("status") or "unknown")
         name = name[:120]
@@ -2701,6 +2730,20 @@ class Watch:
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
                 if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet)):
                     unknown.append(u)
+        # a team's agent nobody owns is posted once an hour, its runs between left to the log; any other sender at each read
+        due: dict[str, bool] = {}
+        for u in unknown:
+            if u.get("title") and (m := AGENT_RE.search(u["sender"])) and m[0] not in due:
+                due[m[0]] = t - self.done.get(f"unowned:{m[0]}", -UNOWNED_EVERY_S) >= UNOWNED_EVERY_S
+                if due[m[0]]:
+                    self.done[f"unowned:{m[0]}"] = t
+        held = [u for u in unknown if (m := AGENT_RE.search(u["sender"])) and due.get(m[0]) is False]
+        for u in held:
+            print(f"{iso(t)} run ends: {u['node']} {u['run']} of {u['sender']} ({u['title']}), which no handle owns, is not "
+                  "posted: its sender was posted within the hour", file=sys.stderr, flush=True)
+        unknown = [u for u in unknown if u not in held]
+        if due:
+            self.save()
         if unknown:
             # infra is rung for a sender nothing places once: a read whose senders it was all rung for is posted and rings no one
             new = [not (m := AGENT_RE.search(u["sender"])) or self.unplaced(m[0], t) for u in unknown]
@@ -2718,6 +2761,17 @@ class Watch:
         if isinstance(got, list) and got:
             return str(got[0])
         return next((b for b, v in (self.heads.get("heads") or {}).items() if isinstance(v, list) and v[0] == sha), "")
+
+    def title(self, agent: str) -> str:
+        """The name of `agent` when the watch read it as one of the team's agents (the agent list, a Verity agent's record,
+        a Task call's description), else ""."""
+        if not agent:
+            return ""
+        w = self.workers.get(agent) or {}
+        with self.kids_lock:
+            kid = self.children.get(agent) or {}
+        return (self.names.get(agent) or self.titles.get(agent) or ("" if w.get("gone") else str(w.get("name") or ""))
+                or str(kid.get("name") or ""))
 
     def sender_status(self, agent: str) -> str:
         """The sender's status as the watch last read it (`ACTIVE` while it is in a turn, so it sees its run end itself), else
@@ -2784,7 +2838,8 @@ class Watch:
                 with self.kids_lock:                # a stray: watched as a worker under no lane until something places it
                     self.children.setdefault(agent, {"parent": "", "name": "", "t": self.clock()})
             return {"run": str(row.get("run")), "node": node, "sender": sent or str(row.get("by") or ""), "what": what[:80],
-                    "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended)}
+                    "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended),
+                    **({"title": title} if (title := self.title(agent)) else {})}
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
                     what=what[:80],
                     rc=row.get("rc"), state=row.get("state"), after=duration(row.get("wall_s")), at=iso(ended),
