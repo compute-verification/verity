@@ -161,7 +161,7 @@ theorem ligeritoConstraints_ok {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : Liger
   · simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, List.forIn_pure_yield_eq_foldl]
     exact ⟨_, rfl⟩
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **Level 0's lane phase gives its constraints** wherever the masked Ligerito returns on a decoded proof: the goal
 `LaneConstraints`. -/

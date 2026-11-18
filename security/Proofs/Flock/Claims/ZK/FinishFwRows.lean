@@ -104,7 +104,7 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
     (coin : ℕ → ℕ → Flock.F128) (n : ℕ) (st : Flock.Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array Flock.Claim) (pads : FlockComplete.PadsZk)
     (ic : FlockComplete.InnerCommit) (vals : Array Flock.F128) (extra lanePad : ℕ → ℕ → Flock.F128)
-    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) {t₀ : Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array _root_.Hash.Msg}
     (hm : 14 ≤ st.m) (hk6 : 6 ≤ st.kLog) (hSm : st.m = stm.m) (hSk : st.kLog = stm.c.kLog)
     (hkL : st.fold.kLog = st.kLog) (hlay : layOf Tz stm = Zk.PadLayout.new st.m st.kLog sch.k0)
     (hmk : ∀ k < (layOf Tz stm).zp 64, (msgAt v k).val = vals[k]! + pads.h[k]!)
@@ -143,7 +143,7 @@ theorem tauFw_vals {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (stm : Stmt) (c : CoinsZK
           (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt (fun _ _ => 0)).run t₃).go l₃ =
         (.ok ((lg, zl, rec), t₄), l₄) →
       fOf rec.target = openT Tz stm c r sh ∧ _root_.Claims.ZKMal.Masked.LaneCoins Tz stm c r rec)
-    {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Claims.Msg}
+    {p : Zk.ZkProof} {t : Flock.Transcript} {l' : Array _root_.Hash.Msg}
     (h : ((Flock.ZkServer.Finish.repFwC (FlockComplete.asksCut coin n) (Flock.Hashes.ofSha512 Flock.Sha512.hash) st sch
       tPad rep dom g cm0 extras pads ic vals extra lanePad salt).run t₀).go l = (.ok (p, t), l'))
     (hV : _root_.Claims.ZKMal.Masked.LaneVals Tz stm v p.proof.ligerito p.level0) (hTP : gOf p.level0.tPrime = T') :

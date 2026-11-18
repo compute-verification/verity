@@ -315,31 +315,24 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
          "steps bound); not retained 0, failed 0; forked evaluators 3")]
 
 
-def test_a_run_s_protocols_take_its_replay_and_a_premise_its_rows_leave_unshown_goes_on_the_record(
-        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """With protocols the replay runs under them (`pouw_circuit.replayed`), while a plan and the sample taken again for the reads
-    do not; what the Programs' rows leave unshown (`definitions.premises`, over every Program's rows) is put beside the verdict."""
+def test_a_premise_a_run_s_rows_leave_unshown_goes_on_the_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """What the Programs' rows leave unshown (`definitions.premises`, over every Program's rows) is put beside the verdict;
+    the replay runs once, and the sample is taken again for the reads."""
     from verity_vllm.check.replay import definitions as DF
-    from verity_vllm.protocols.pouw import pouw_circuit as PWC
 
-    steps, s, under, rows = Steps(monkeypatch), sources(tmp_path), list[tuple[Any, int]](), list[Record]()
+    steps, s, rows = Steps(monkeypatch), sources(tmp_path), list[Record]()
     s.protocols, s.reads = SimpleNamespace(entries=["pous:any"]), {}
-
-    def replayed(comp: Any, run: Callable[[], Record]) -> Record:
-        under.append((comp, len(steps.replays)))
-        return run() | {"pouw_ncp_v2": {"result": True}}
 
     def premises(read: Any) -> list[str]:
         rows.extend(read)
         return ["a premise"]
 
-    monkeypatch.setattr(PWC, "replayed", replayed)
     monkeypatch.setattr(DF, "premises", premises)
     sr, _lk = C2.evaluate(s, {})
-    assert under == [(s.protocols, 0)] and [c[5] for c in steps.calls if c[0] == "replay"] == [False, True]
-    assert (sr["pouw_ncp_v2"], sr["premises"]) == ({"result": True}, ["a premise"])
+    assert [c[5] for c in steps.calls if c[0] == "replay"] == [False, True]
+    assert sr["premises"] == ["a premise"] and "pouw_ncp_v2" not in sr
     assert rows == [{"spec": "NotReplayed_v1{request=0}"}, {"spec": "NotReplayed_v1{request=1}"}]
-    assert C2.evaluate(s, {}, plan=True) == ({"plan": True, "picks": 4}, LINKAGE) and len(under) == 1
+    assert C2.evaluate(s, {}, plan=True) == ({"plan": True, "picks": 4}, LINKAGE)
 
 
 def test_arrivals_the_engine_s_schedule_moved_are_the_replay_s_and_the_linkage_s(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

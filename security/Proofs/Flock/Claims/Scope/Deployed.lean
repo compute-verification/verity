@@ -55,7 +55,7 @@ namespace Flock.Readable
 /-- **The deployed relation at the deployed parser**: a statement it parses is the readable form of a statement the
 verifier parses, and when that statement is in scope, `RelS` is every table's `Layout.model` at `regionsOf` satisfied by
 its share of the hidden values. -/
-theorem relS_deployed {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem relS_deployed {zk : Bool} {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : FlockDeploy.parse zk relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
     ∃ p : Parsed, parseBytes (FlockDeploy.readOf zk) x = some p ∧ s = toReadable relation p ∧
       (Claims.Flock.RelS s w ↔ ∀ c (hc : c < p.sts.size), ∃ L : FlockSoundness.Layout p.sts[c],

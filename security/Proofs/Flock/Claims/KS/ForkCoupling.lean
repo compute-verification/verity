@@ -103,7 +103,7 @@ theorem live_fnAt_eq {K L M : ℕ} {A D : Type} (h : L = K) (n : Fin K → ℕ) 
 `LCoin 65536` read through a prefix key (`Claims.Bridge.Live.fnAt`), `ForkCoinCoupling` holds at the chances
 `FnFork.δN GF128 65536 n`, `δ_t = 2^{-128·min (n t) 65536}` (`FnFork.δAt_eq`). -/
 theorem forkCoinCoupling_plainK (keep : Bool → Bool) {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
+    (x : Hash.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
     {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
     (hk : Claims.Flock.FnFork.PrefixKey n key) :
     Claims.Flock.ForkCoinCoupling sha512 (VK keep) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)
@@ -115,7 +115,7 @@ theorem forkCoinCoupling_plainK (keep : Bool → Bool) {D : Type} [Fintype D] [D
 
 /-- `forkCoinCoupling_plainK` at the deployed plain verifier (`keep := id`). -/
 theorem forkCoinCoupling_plain {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
+    (x : Hash.Msg) (ω : Ω) {L : ℕ} (h : L = (V false).k x) (n : Fin ((V false).k x) → ℕ)
     {key : Fin ((V false).k x) → (Fin ((V false).k x) → Claims.Bridge.Live.LCoin 65536) → D}
     (hk : Claims.Flock.FnFork.PrefixKey n key) :
     Claims.Flock.ForkCoinCoupling sha512 (V false) P x (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 n)

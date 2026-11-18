@@ -35,7 +35,7 @@ def test_without_a_registered_session_the_remote_verifier_is_not_implemented(mon
 
 
 def parse(*more: str) -> so.Options:
-    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", *more], environ={})
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", "--out", "/tmp/serve", *more], environ={})
 
 
 def refusal(opts: so.Options) -> str | None:

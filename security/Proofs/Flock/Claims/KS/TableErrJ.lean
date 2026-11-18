@@ -22,14 +22,14 @@ variable [S : ZkSetup]
 
 /-- **A table's own error at a statement**: `tableErr` at the statement's table `j`, `0` past its tables. `ε_table`
 is these summed over the statement's tables. -/
-noncomputable def tableErrJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℝ :=
+noncomputable def tableErrJ (zk : Bool) (x : Hash.Msg) (j : ℕ) : ℝ :=
   ((tables zk x)[j]?).elim 0 fun p => tableErr zk p.1 p.2
 
 end Gen
 
 /-- **A table's own error at a statement**: `tableErr` at the statement's table `j`, `0` past its tables. `ε_table`
 is these summed over the statement's tables. -/
-noncomputable def tableErrJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℝ :=
+noncomputable def tableErrJ (zk : Bool) (x : Hash.Msg) (j : ℕ) : ℝ :=
   ((tables zk x)[j]?).elim 0 fun p => tableErr zk p.1 p.2
 
 end FlockDeploy.KS

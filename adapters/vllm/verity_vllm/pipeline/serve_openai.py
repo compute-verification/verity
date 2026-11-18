@@ -124,6 +124,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import shutil
 import signal
@@ -180,7 +181,7 @@ TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler r
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the records' directory (default $RESEARCH_RUN_DIR, else .)")
+    out: str | None = option("--out", default=None, help="the records' directory, outside the run's directory (refused inside it)")
     host: str = option("--host", default="127.0.0.1")
     port: int = option("--port", type=int, default=18082)
     model: str = option("--model", help="the pinned model (the int8 pin: manifests/checkpoints-int8.json)")
@@ -734,7 +735,7 @@ def no_slice_record(windows: CommitWindows | None) -> dict[str, str]:
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
-              usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
+              usage: Callable[[Any], Any] = shutil.disk_usage, environ: Mapping[str, str] = os.environ) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1:
         raise UsageError("--window-steps is at least 1")
@@ -754,8 +755,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
-        raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
     scheme = M.option(opts.protocols)
@@ -764,6 +763,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
+    if why := SG.out_refusal(opts.out, environ):
+        raise UsageError(why)
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+        raise UsageError(f"--seal: {why}")
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
