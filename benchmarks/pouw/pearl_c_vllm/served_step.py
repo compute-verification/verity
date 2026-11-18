@@ -12,9 +12,9 @@ run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and up
 `PearlCDeviceRun.end`, the transcript tree and its reads back) and a whole-step replay's slot upload and records (``wr``:
 `whole_replay`, ``wrd``: `whole_replayed`).  Each phase is also an NVTX range, and the timed reps sit between
 cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.  A protocol arm serving
-Pearl-C takes its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
-``PEARLC_CHALLENGER_PEER`` are set (`_live`), else from a challenger in this process; ``coins.json`` says which, and how
-the session closed (`pearl_c.window.coins_of`).
+Pearl-C attaches Pearl+ by name with its coins in-process (the engine passes no challenger gate, so
+``PEARLC_CHALLENGER_GATE`` is refused by name: `served_passes.py serve` serves a live session); ``coins.json`` holds its
+run's coins (`pearl_c.window.coins_of`).
 
 ``analyze`` reads nsys's SQLite export.  A decode step is an engine step whose every scheduled request takes one token; its
 window runs from its start to the next step's.  Per window: the GPU's busy time (the union of kernel intervals, every
@@ -40,6 +40,7 @@ import sys
 import time
 from collections import defaultdict
 from pathlib import Path
+from types import SimpleNamespace
 
 from verity_config.settings import of
 
@@ -140,25 +141,6 @@ def undeclared(entries) -> str | None:
     return None
 
 
-def _live(arm):
-    """`arm` with its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
-    ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option
-    (`bench_arm.live_coins`, which the option refuses when the reserve joined an H1 period). Returns the arm and the
-    reserve answer, None when the arm's coins stay in-process."""
-    import dataclasses
-
-    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
-    env = PearlCArm()
-    if not any(_pearl_c(e) for e in arm.protocols):
-        return arm, None
-    config = dict(arm.protocols_config or {})
-    try:
-        config["pouw"], reserved = live_coins(config.get("pouw", {}), env.gate_command, env.peer, env.epoch, env.lane)
-    except ValueError as e:
-        raise SystemExit(str(e)) from None
-    return (arm, None) if reserved is None else (dataclasses.replace(arm, protocols_config=config), reserved)
-
-
 def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
     from verity_bench.vllm.presets import load_spec, resolve_spec, served
@@ -171,23 +153,25 @@ def _engine(spec_name: str, arm_id: str):
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
         raise SystemExit(f"served_step.py: {why}")
-    arm, reserved = _live(arm)
+    if settings.PEARLC_CHALLENGER_GATE and any(_pearl_c(e) for e in arm.protocols):
+        raise SystemExit("served_step.py: PEARLC_CHALLENGER_GATE is set, but an engine attaches Pearl+ with its coins "
+                         "in-process and no challenger gate; unset it here, or serve a live session with served_passes.py serve")
     preset, eager = arm_execution(arm, preset, eager)
     if preset.engine_settings.get("serving_defaults") and not settings.get(INDUCTOR_DIR_MARK):
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
     _patch_pearl()
-    return spec, arm, _VllmEngine(arm, preset, False, eager), reserved
+    return spec, arm, _VllmEngine(arm, preset, False, eager)
 
 
 def run(a) -> int:
     from verity_bench.vllm.presets import expand_sweep
-    spec, arm, engine, reserved = _engine(a.spec, a.arm)
+    spec, arm, engine = _engine(a.spec, a.arm)
     import torch
     point = next(p for p in expand_sweep(spec.sweep) if p.id == a.point)
     _patch_engine(engine.llm.vllm)
-    option = engine.llm.protocols.get("pouw") if getattr(engine.llm, "protocols", None) is not None else None
+    held = getattr(engine.llm, "scheme", None)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     _PHASE.update(name="gate")
@@ -215,11 +199,12 @@ def run(a) -> int:
         (out / "steps.json").write_text(json.dumps(_STEPS))
         print(json.dumps({"arm": arm.id, "point": point.id, "gate": bool(gate.get("passed")),
                           **summarize_host(_STEPS, point.batch)}, default=str))
+    run = held.run if held is not None else None
     engine.close()
-    if option is not None:
+    if run is not None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.window import coins_of
 
-        coins = coins_of(option, reserved)
+        coins = coins_of(SimpleNamespace(commitment=lambda: run.commits, info=lambda: run.details), None)
         (out / "coins.json").write_text(json.dumps(coins, indent=1))
         print(json.dumps({"coins": coins}))
     return 0 if gate.get("passed") else 3
