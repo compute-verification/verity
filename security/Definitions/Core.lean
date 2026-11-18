@@ -12,6 +12,8 @@ public import Definitions.Core.Game
 public import Definitions.Core.Uniform
 public import Definitions.Core.Draw
 public import Definitions.Core.Scheme
+public import Definitions.Core.Layer.Argument
+public import Definitions.Core.Layer.Zk
 public import Definitions.Core.Challenger
 public import Definitions.Core.Decisive
 public import Definitions.Core.Scalar
@@ -38,6 +40,9 @@ and defines none of its own: a circuit and its trace, a partition into proof blo
 the ones here.
 
 * Schemes: `Scheme` (what a resource accounting protocol supplies, and `Scheme.GetsBack`, what it gets back).
+* Proof layers: `Layer.Argument` (the argument system, `ProofSystem`), `Layer.Zk` (zero knowledge and `ZkCompiler`); the
+  sampling layer is `Definitions.Spot.Sampling.Layer`, recursion `Definitions.Claims.Layer.Recursion`, compose
+  `Definitions.Compose.Layer`.
 * Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
   a Boolean one), `Digest`.
 * Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
