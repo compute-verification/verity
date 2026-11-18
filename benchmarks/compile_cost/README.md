@@ -20,3 +20,10 @@ line, `COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`, and writes `D
 The measurement of record is the whole model on `long-w0`, which needs about 64 GB, so it runs on a node.
 `run.py`'s docstring has that command, every option, and what each file holds; `--guard` fails unless each Program
 digest is the pinned one.
+
+## One credited tile
+
+`credited.py --size K,TM,TN,N --out DIR` builds one credited tile (`window_cut.credited`), restricts its one block and
+counts it, writing `DIR/block-K-TM-TN-N.json`: its ports, gates and ANDs, each word primitive's share, and each phase's
+wall seconds and peak memory. `--cls 4,27,2` writes the class's cut calls and their credited sizes on Llama 3.2 1B
+(`window_cut.credited_sizes`). A served size takes about 15 GiB and minutes, so it runs on a node.
