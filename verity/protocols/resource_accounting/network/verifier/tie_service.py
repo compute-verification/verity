@@ -7,7 +7,7 @@ tie").
 bucket t's S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under
 the network attester's fresh salt in its `frame-v3-sha512` tree under the network attester's domain
 (`network_attester_rows.domain`: the session, the link, ingress and the window), whose root the network attester's signed head
-names (`network_attester_rows.CellsHead`). The tie registers that root with the challenger (`IngressTie.registration`, on the head
+names (`network_attester_rows.CellsHead`). The prover registers that root with the challenger (`n2_tie_zk.registration`, on the head
 `network_attester_rows.check_registration` reads off the network attester's signed registration); the rows and their salts are
 the prover's, which the network attester hands it privately, and the challenger and the verifier see the root. A
 registration is one execution phase, its `window` provenance `{"kind": "served", "window": w}` held to the
@@ -84,7 +84,6 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
@@ -413,15 +412,6 @@ class IngressTie:
             raise ValueError("the head isn't the network attester's of this link's ingress rows under this schedule and session")
 
     # the challenger
-
-    def registration(self, head: WR.CellsHead, previous: str | None = None) -> dict[str, Any]:
-        """One-stage's record of the execution phase: the network attester's root of its rows, from its head
-        (`network_attester_rows.check_registration`'s, the network attester's signed registration as the challenger reads it),
-        and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
-        self._held(head)
-        roots = [{"port": VALUE, "root": head.root.hex(), **self.ports(head.window)[VALUE]}]
-        return R.record(self._program, self.query, {"law": "subset", "k": self.T}, S.SCHEME, roots,
-                        self.provenance(head.window), previous=previous)
 
     def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.WindowCommitmentRecord:
         """`stream.register` with the window's own ports, after holding its `window` provenance to exactly

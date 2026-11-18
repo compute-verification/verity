@@ -70,10 +70,10 @@ its members each, side by side and with `Gemm`'s node between, each taken with t
 numbered across the two; and the record stating one unit fewer than their sum, refused with its templates.
 Then the edges (`EDGED`): toys whose root's units read earlier units' outputs, the record stating no wire, each
 under no pin, the largest limits and a log of no registered value. Taken: an edge member to member at one and at
-two slots, across slots, into a call, and from a writer's second output in one strided part and in two parts.
+two slots, across slots, into a call, from a writer's second output in one strided part and in two parts, and one
+template in two root nodes with an edge each way, its order stated or not, a chain of units in the root's node order.
 Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
-port the record cuts, a partial row, and one template in two root nodes with an edge each way, its order stated or
-not (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
+port the record cuts and a partial row (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
 into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
 mismatches a wire's leaves were refused for (`program`: no Program states them), ingress or a registered read onto an edge's row (`inputs`), and
 a reference to a later node (`not-topological`).
@@ -2122,9 +2122,10 @@ EDGED = {
     "an edge from a writer's second output, in two parts": (lambda: _ab(_second, writer=EA2), None, None, None),
     "an edge into a port the record cuts": (lambda: _ab(_mapped), None,
                                             lambda d: d.update(cuts={"EdgeB_v1": {"y": 2}}), "wires"),
+    #: the edge each way is between templates, not units: in the root's node order the units form a chain, no cycle
     "one template in two root nodes, an edge each way, the record's order unread": (_two_nodes, None, lambda d: d.update(
-        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), "wires"),
-    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, "wires"),
+        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), None),
+    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, None),
     "a partial row": (lambda: _ab(_first_two, n=3, m=2), _repoint(["n", 2, 2, 8], 3), None, "wires"),
     "a row of another width": (_narrow, _repoint(["n", 3, 4, 4], 4), None, "program"),
     "an edge from an output of two widths into one 32-bit leaf": (

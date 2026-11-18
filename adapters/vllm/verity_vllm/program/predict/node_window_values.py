@@ -35,7 +35,6 @@ from verity.commitments import randomness as RND
 from verity.commitments.periods import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
-from .node_window_join import Joined
 
 PROMPT = "prompt"
 SAMPLE = 1024
@@ -718,37 +717,6 @@ def joint(values: Sequence[Values]) -> list[Values]:
     return list(values)
 
 
-def check_join(joined: Joined, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
-    """Each peer input `node_window_join.join` wired (``joined.wired``), up to ``most`` of its units sampled under ``seed``: each
-    of its rows as the joined circuit's wire reads it, the writer rank's row (its Check's `Check.row`, the rank's own
-    units), against the reader rank's Program's words there (its stood peer rows, `joint`'s). ``checks[r]`` is rank r's
-    Check, its frame built with ``stand_ins``. Counts by template and port, and the first mismatch."""
-    c, first = joined.circuit, joined.first
-    by: dict[tuple[str, str], list[IF.Wire]] = {}
-    for x in c.wires:
-        by.setdefault((x.reader, x.port), []).append(x)
-    key = sample_key(seed)
-    out: dict[str, Any] = {}
-    for r, tid, port, at, count, (i, n, k) in dict.fromkeys((r, f.tid, f.port, f.at, f.count, f.rows) for r, f in joined.wired):
-        ck = checks[r]
-        rw = dict(ck.lay[tid].rows)[port] // k
-        (grid,) = [s[5] for s in ck.stood.get((tid, port), ()) if s[2:5] == (at, count, (i, n, k))]
-        rec = out.setdefault(f"{tid.split('{')[0]} {port}", {"checked": 0, "mismatches": 0, "first": None})
-        for u in (at + s for s in sample(count, key, f"{r}/{tid}/{port}/{at}/{i}", most)):
-            have = np.concatenate([ck._stand(x) for x in grid[u - at]])
-            U = first[r][tid] + u
-            for row in range(i, i + n):
-                (x,) = [x for x in by[(tid, port)] if x.at <= U < x.at + x.reader_units and x.cut[0] <= row < x.cut[0] + x.cut[1]]
-                s = int(x.source(np.asarray([(U - x.at) * x.cut[1] + row - x.cut[0]]))[0])
-                jr = max(q for q in first if first[q][x.writer] <= s)
-                got = checks[jr].row(x.writer, x.out, s - first[jr][x.writer])
-                rec["checked"] += 1
-                if not np.array_equal(got, have[(row - i) * rw:(row - i + 1) * rw]):
-                    rec["mismatches"] += 1
-                    rec["first"] = rec["first"] or {"rank": r, "unit": u, "row": row, "writer": [jr, x.writer, x.out, s]}
-    return out
-
-
 # ---- planted errors
 
 def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int, keep: bool = False) -> tuple[IF.Circuit, str, dict[str, Any]]:
@@ -783,5 +751,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "check_join", "joint", "made_up", "native_selftest",
+__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "joint", "made_up", "native_selftest",
            "plant_read_shift", "plant_wire_row", "run", "sample", "sample_key"]

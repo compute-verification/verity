@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -189,7 +190,8 @@ def test_util_json_and_util_txt_hold_the_serves_aggregates_alone(tmp_path, monke
 def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(tmp_path):
     """served_util.sh's leased part, under stand-ins for nsys, nvidia-smi, the venv's python and sleep, whose serve writes
     the step trace, summary, pauses, serve options and the loads' timings into the serve dir and scratch: none of those
-    files is in $OUT, and none of their contents is in $OUT or the run's stdout and stderr."""
+    files, the GPU's identity, nsys's output or the profile is in $OUT, and none of their contents is in $OUT or the run's
+    stdout and stderr; $OUT holds steps.txt alone, its lines with no clock."""
     bin_, venv, cuda, root, out = (tmp_path / x for x in ("bin", "venv/bin", "cuda", "root", "out"))
     for d in (bin_, venv, cuda / "bin", root / "scratch" / "local" / "serve"):
         d.mkdir(parents=True)
@@ -197,7 +199,9 @@ def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(
         bin_ / "nsys": ('case $1 in launch) while [ $# -gt 0 ]; do [ "$1" = --out ] && d=$2; shift; done; mkdir -p "$d"\n'
                         f'  for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do echo {SECRET} > "$d/$f"; done\n'
                         '  echo "SERVE-OPENAI listening" ;;\nesac'),
-        bin_ / "nvidia-smi": "echo name, uuid", bin_ / "sleep": "exit 0",
+        bin_ / "nvidia-smi": f"echo name, {SECRET}-uuid",
+        # the serve opens its log only once it runs: each wait is for its listening line, not a clock
+        bin_ / "sleep": f'until grep -q "SERVE-OPENAI listening" "{root}/scratch/local/serve.log" 2>/dev/null; do :; done',
         venv / "python": ('case "$*" in *serve_load.py*) while [ $# -gt 0 ]; do [ "$1" = --out ] && o=$2; shift; done\n'
                           f'  echo {SECRET} > "$o"; echo {SECRET} > "${{o%.jsonl}}.timings.json" ;;\nesac'),
     }
@@ -215,3 +219,5 @@ def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(
     assert not held & {"serve.json", "summary.json", "advice_trace.jsonl", "pauses.jsonl", "warm.timings.json",
                        "main.timings.json"}, held
     assert SECRET not in log and not [p for p in out.rglob("*") if p.is_file() and SECRET in p.read_text(errors="replace")]
+    assert held == {"steps.txt"}, held
+    assert not [x for x in (out / "steps.txt").read_text().splitlines() if re.match(r"\d\d:\d\d:\d\dZ ", x)]
