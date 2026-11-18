@@ -29,8 +29,9 @@
 # Kept in $OUT/sczk: the driver's summary (each answer's verdict and public part) and each round's Program
 # (verifier/program.json). What the verifier received stays in $W: the registrations (the network attester's with
 # their wiring), the openings, the registered reads and the sessions, as do answers.json and every prover's file.
-# What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`); its records, heads and salts (the
-# prover's) and its request values (traffic.json's requests, client.json's responses) nowhere.
+# What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`, the job failing when it does); its
+# records, heads and salts (the prover's) and its request values (traffic.json's requests, client.json's responses)
+# nowhere.
 # With SC_KEEP=DIR (outside the run dir; scan_period.sh's), what scan_period.py reads goes to DIR, 0700 with 0600
 # files: the network attester run's certified.jsonl and deployment.json (DIR/warden) and the driver's answers.json,
 # summary.json, joint/program.json and each round's registration.json (DIR/sczk). Its owner removes it.
@@ -93,7 +94,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/warden" "$OUT/warden" > "$OUT/warden/outcome.json"
+  "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/warden" "$OUT/warden" > "$OUT/warden/outcome.json" || { log "sczk: the publisher (auditor.py publish) exited $? on the rehearsal"; exit 6; }
   SC_WARDEN_RUN=$W/warden
 fi
 CH=()
