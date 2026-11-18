@@ -1,0 +1,3 @@
+[2026-11-18T06:34Z] ebb94080d22e
+From the lead, 10:36 PM PST, for your item 9: vllm pushed the execution phase events on interfaces (8928ccecc1d): PhaseOpened(phase, step), PhaseClosed(phase, step, program), PhaseCommitted(phase, root) on the steps hook, and ctx["gate"]. Pearl arm in the adapter protocols/pouw/__init__.py and serve_pearl.py are NOT deleted: they go together in OUR fourth round, when Pearl+ attach serves a Commit window by phase through these events (vllm keeps its deletion on cursor/vllm-pearl-arm-deletion-7b2e at 90431afa296). Size that round: what Pearl+ attach must subscribe to and do per phase, what it deletes (files, lines, callers, the one-stage served Pearl+ benchmarks that use the arm), and its column.
+
