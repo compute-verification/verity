@@ -49,9 +49,8 @@ def test_an_honest_pair_passes_and_each_edit_fails_one_code():
         ["ranks-members", *built]
     assert codes(record={**RECORD, "templates": [["T", 4]]}) == ["ranks-units", *built]
     assert codes(record={**RECORD, "ranks": {**RANKS, "prefix": "r/"}}) == ["ranks-shape"]
-    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == \
-        ["two-stage-form"]
-    assert [c for c, _ in W.failures(False, W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
+    assert [c for c, _ in W.failures(W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [], [])] == []
+    assert [c for c, _ in W.failures(W.Given(dockets=()), RECORD, [{}, {}], SERVED, REGS, "root", lambda c: True, [("T", 5)], [])] == \
         ["ranks-members"]
 
 

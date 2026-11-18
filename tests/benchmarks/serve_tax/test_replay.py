@@ -17,17 +17,25 @@ def rid(tag: str, i: int) -> str:
     return f"cmpl-{tag}-{i:05d}-0-0123abcd"
 
 
+def priv(d: Path) -> Path:
+    """The private directory a synthetic arm's meta.json names, outside its directory."""
+    return d.parent / f"{d.name}.private"
+
+
 def arm(tmp_path: Path, foreign: bool = False) -> Path:
     """Load ``warm`` (one request, step 0), then ``sat1`` (two requests, steps 1 and 2) in one engine's trace."""
     d = tmp_path / "record"
-    (d / "server").mkdir(parents=True)
+    (priv(d) / "server").mkdir(parents=True)
     (d / "sat" / "rep-1").mkdir(parents=True)
     plan = tmp_path / "plan.jsonl"
     plan.write_text("".join(json.dumps({"i": i, "prompt_ids": [i, i + 1]}) + "\n" for i in range(3)))
-    (d / "meta.json").write_text(json.dumps({"plan": str(plan), "checkpoint": "ck"}))
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(plan), "checkpoint": "ck"}))
     (d / "sat" / "rep-1" / "meta.json").write_text(json.dumps({"tag": "sat1"}))
-    (d / "sat" / "rep-1" / "client.jsonl").write_text("".join(
+    kept = priv(d) / "client" / "sat" / "rep-1"
+    kept.mkdir(parents=True)
+    (kept / "client.jsonl").write_text("".join(
         json.dumps({"id": f"sat1-{i:05d}", "i": i, "output_ids": [7, i]}) + "\n" for i in range(2)))
+    R.S.kept_client(kept / "client.jsonl", d / "sat" / "rep-1")
     w, a, b = rid("warm", 2), rid("sat1", 0), rid("sat1", 1)
     recs = [{"kind": "header", "config": {}},
             {"kind": "arrive", "request": w, "before_step": 0, "sampling": {"max_tokens": 2}, "t": 0.0},
@@ -36,7 +44,7 @@ def arm(tmp_path: Path, foreign: bool = False) -> Path:
             {"kind": "arrive", "request": b, "before_step": 1, "sampling": {"max_tokens": 2}, "t": 1.0},
             {"kind": "step", "step": 1, "rows": [[a, 0, 2], [b, 0, 2]] + ([[w, 2, 1]] if foreign else []), "t": 1.1},
             {"kind": "step", "step": 2, "rows": [[a, 2, 1], [b, 2, 1]], "t": 1.2}]
-    with gzip.open(d / "server" / "step_trace.9.jsonl.gz", "wt") as f:
+    with gzip.open(priv(d) / "server" / "step_trace.9.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in recs))
     return d
 
@@ -49,18 +57,13 @@ def test_window_is_the_loads_steps_from_its_first_arrival(tmp_path: Path):
     assert w["served_s"] == pytest.approx(0.2)
 
 
-def test_window_reads_the_plan_beside_the_arm_when_the_named_one_isnt_on_this_node(tmp_path: Path):
+def test_window_reads_the_plan_in_the_private_directory_when_meta_names_none_and_the_ids_from_there_only(tmp_path: Path):
     d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"plan": "/elsewhere/out/plan.jsonl", "checkpoint": "ck"}))
+    assert all("output_ids" not in json.loads(x) for x in (d / "sat" / "rep-1" / "client.jsonl").read_text().splitlines())
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": None, "checkpoint": "ck"}))   # serve_tax.py run without --plan
+    (tmp_path / "plan.jsonl").rename(priv(d) / "plan.jsonl")
     assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
-
-
-def test_window_reads_the_plan_in_the_arm_when_meta_names_none(tmp_path: Path):
-    d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"plan": None, "checkpoint": "ck"}))   # serve_tax.py run without --plan
-    (tmp_path / "plan.jsonl").rename(d / "plan.jsonl")
-    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
-    (d / "plan.jsonl").unlink()
+    (priv(d) / "plan.jsonl").unlink()
     with pytest.raises(SystemExit, match="no plan at"):
         R.window(d, "sat", 1)
 
@@ -75,10 +78,10 @@ def bench_arm(tmp_path: Path, finished: tuple[int, ...] = (0, 1)) -> Path:
     are the ones the arm's server kept (`servetax_plugin.ServedIds`), a line a request of ``finished``."""
     d = tmp_path / "prod-record"
     (d / "agentic@2" / "rep-1").mkdir(parents=True)
-    (d / "meta.json").write_text(json.dumps({"plan": None, "checkpoint": "ck"}))
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": None, "checkpoint": "ck"}))
     (d / "agentic@2" / "rep-1" / "meta.json").write_text(json.dumps({"tag": "agentic@2-r1"}))
     w, a, b = "cmpl-warm-u0-0-0-0123abcd", "cmpl-agentic@2-r1-u0-0-0-0123abcd", "cmpl-agentic@2-r1-u1-0-0-0123abcd"
-    ids = P.ServedIds(P._lines(d / "server" / "ids.9.jsonl"))
+    ids = P.ServedIds(P._lines(priv(d) / "server" / "ids.9.jsonl"))
     for k, rid in enumerate((w, a, b)):
         ids.prompt(NS(request_id=rid, prompt_token_ids=[k, k + 1]))
     ids.sampled({0: NS(outputs=[NS(request_id=w, new_token_ids=[5, 5], finish_reason=1)])})
@@ -93,7 +96,7 @@ def bench_arm(tmp_path: Path, finished: tuple[int, ...] = (0, 1)) -> Path:
             {"kind": "step", "step": 1, "rows": [[a, 0, 2]], "t": 1.1},
             {"kind": "arrive", "request": b, "before_step": 2, "after_empty": 1, "sampling": {"max_tokens": 2}, "t": 1.2},
             {"kind": "step", "step": 2, "rows": [[a, 2, 1], [b, 0, 2]], "t": 1.3}]
-    (d / "server" / "step_trace.9.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+    (priv(d) / "server" / "step_trace.9.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
     return d
 
 
@@ -105,7 +108,7 @@ def test_window_of_a_pass_sent_by_vllms_client_reads_the_ids_the_arms_server_kep
         (a, 0, 0, [1, 2], [7, 0]), (b, 1, 1, [2, 3], [7, 1])]
     assert [s["step"] for s in w["steps"]] == [0, 1]
     # the lines are read gzipped too, as run.sh leaves them, and only the pass's own are parsed
-    kept = d / "server" / "ids.9.jsonl"
+    kept = priv(d) / "server" / "ids.9.jsonl"
     with gzip.open(kept.with_name("ids.9.jsonl.gz"), "wt") as f:
         f.write(kept.read_text() + "not a line of this pass\n")
     kept.unlink()
@@ -134,7 +137,8 @@ def test_window_refuses_a_request_served_with_a_sampling_field_the_replay_does_n
     assert R.unapplied({**own, "ignore_eos": False, "stop_token_ids": [9, 11]}) == {}
 
     def served(d: Path, sampling: dict) -> Path:
-        trace = arm(d) / "server" / "step_trace.9.jsonl.gz"
+        a = arm(d)
+        trace = priv(a) / "server" / "step_trace.9.jsonl.gz"
         with gzip.open(trace, "rt") as f:
             recs = [json.loads(line) for line in f]
         for r in recs:
@@ -142,7 +146,7 @@ def test_window_refuses_a_request_served_with_a_sampling_field_the_replay_does_n
                 r["sampling"] = sampling
         with gzip.open(trace, "wt") as f:
             f.write("".join(json.dumps(r) + "\n" for r in recs))
-        return trace.parent.parent
+        return a
 
     assert len(R.window(served(tmp_path / "own", own), "sat", 1)["requests"]) == 2
     with pytest.raises(SystemExit, match=r"cmpl-sat1-00001-0-0123abcd was served with \{'repetition_penalty': 1.05\}, which the "
@@ -155,7 +159,7 @@ def test_window_refuses_a_pass_whose_ids_nothing_kept(tmp_path: Path):
     with pytest.raises(SystemExit, match="cmpl-agentic@2-r1-u1-0-0-0123abcd arrived in the window and the server kept no ids"):
         R.window(d, "agentic@2", 1)
     d = bench_arm(tmp_path / "stock")
-    (d / "server" / "ids.9.jsonl").unlink()
+    (priv(d) / "server" / "ids.9.jsonl").unlink()
     with pytest.raises(SystemExit, match=r"no client.jsonl and .*server kept no ids of load agentic@2 rep 1 \(agentic@2-r1\)"):
         R.window(d, "agentic@2", 1)
 
@@ -258,7 +262,7 @@ def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_re
     """The served arm's meta.json has its server's (`serve_tax.value_settings`); with the replay's, a reader sees in which
     variables the two engines' environments differ. The replay's is taken once its own two variables are set."""
     d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
     given: dict[str, str] = {}
 
     def replayed(w: dict, *args: object) -> dict:
@@ -273,9 +277,12 @@ def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_re
     monkeypatch.setenv("VLLM_API_KEY", "a credential's value")
     for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
         monkeypatch.setenv(name, "the job's")                      # `main` sets both in this process: put back after the test
-    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out")]) == 0
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(tmp_path / "out")]) == 0
     out = json.loads((tmp_path / "out" / "replay.json").read_text())
     assert out["bit_exact"] and out["settings"] == R.S.value_settings(given)
+    # the replayed tokens stay on the node, in --private, which replay.json names for a later --against
+    assert out["private"] == str(tmp_path / "rp") and R.S.private_of(tmp_path / "out") == tmp_path / "rp"
+    assert (tmp_path / "rp" / "replay_tokens.jsonl.gz").is_file() and not (tmp_path / "out" / "replay_tokens.jsonl.gz").exists()
     assert {k: out["settings"]["values"][k] for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION",
                                                       "NCCL_P2P_DISABLE", "VLLM_API_KEY")} == {
         "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1", "NCCL_P2P_DISABLE": "1",
@@ -288,15 +295,35 @@ def test_replay_json_holds_the_cards_the_replays_engine_held(tmp_path: Path, mon
     """``gpus`` is the replay's tensor-parallel width, beside its wall time and its engine's load: what a reader that
     prices the replay multiplies its seconds by."""
     d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
     monkeypatch.setattr(R, "replay", lambda w, *args: {"wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
                                                        "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}})
     monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
     for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
         monkeypatch.setenv(name, "the job's")                      # `main` sets both in this process: put back after the test
-    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out"), "--tp", str(tp)]) == 0
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(tmp_path / "out"), "--tp", str(tp)]) == 0
     out = json.loads((tmp_path / "out" / "replay.json").read_text())
     assert (out["gpus"], out["replay_wall_s"], out["engine_ready_s"]) == (tp, 1.0, 0.5)
+
+
+def test_a_later_replay_compares_its_tokens_with_the_ones_the_earlier_kept_on_the_node(tmp_path: Path,
+                                                                                      monkeypatch: pytest.MonkeyPatch):
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(tmp_path / "plan.jsonl"),
+                                             "checkpoint": "ck", "server_argv": []}))
+    more: list[int] = []
+    monkeypatch.setattr(R, "replay", lambda w, *args: {"wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
+                                                       "tokens": {r["engine_id"]: list(r["served"]) + more for r in w["requests"]}})
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
+    for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(name, "the job's")
+    base = ["--arm-dir", str(d), "--load", "sat"]
+    assert R.main([*base, "--private", str(tmp_path / "rp-1"), "--out", str(tmp_path / "replay-1")]) == 0
+    more.append(9)
+    assert R.main([*base, "--private", str(tmp_path / "rp-2"), "--out", str(tmp_path / "replay-2"),
+                   "--against", str(tmp_path / "replay-1")]) == 0
+    out = json.loads((tmp_path / "replay-2" / "replay.json").read_text())
+    assert out["against"]["requests_tokens_differing"] == 2 and not list((tmp_path / "replay-1").glob("replay_tokens*"))
 
 
 def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -446,8 +473,8 @@ def test_a_stand_ins_replay_loads_the_random_weights_its_served_line_named(tmp_p
         monkeypatch.setenv(name, "the job's")
     d = arm(tmp_path)
     for line in (["--model", "ck", "--load-format", "dummy"], ["--model", "ck"]):
-        (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": line}))
-        assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out")]) == 0
+        (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": line}))
+        assert R.main(["--arm-dir", str(d), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(tmp_path / "out")]) == 0
     assert seen == ["dummy", None]
 
 
@@ -538,6 +565,29 @@ def test_replay_tokens_round_trip(tmp_path: Path):
     assert R.read_tokens(tmp_path) == tokens
 
 
+def test_long_rows_reads_the_replays_tokens_and_steps_from_the_private_directory_its_replay_json_names(tmp_path: Path, capsys):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("spot_long_rows", R.S.ROOT / "benchmarks" / "spot_proved" / "long_rows.py")
+    lr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(lr)
+    d, w = arm(tmp_path), R.window(arm(tmp_path / "w"), "sat", 1)
+    rp, out = tmp_path / "replay.private", tmp_path / "out" / "replay-compiled"
+    out.mkdir(parents=True)
+    rp.mkdir()
+    (out / "replay.json").write_text(json.dumps({"private": str(rp)}))
+    (rp / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in w["steps"]))
+    R.write_tokens(rp, {r["engine_id"]: r["served"][:1] + [9] for r in w["requests"]})
+    argv = ["--tree", str(R.S.ROOT), "--arm-dir", str(d), "--load", "sat", "--replay", str(out), "--keys", "1"]
+    assert lr.main(argv) == 0
+    res = json.loads(capsys.readouterr().out)
+    assert res["long"]["tokens_differing"] == 2 and res["long"]["steps_differing"] == 0
+    assert not list(out.glob("*tokens*")) and not list(out.glob("*steps*"))
+    (out / "replay.json").write_text(json.dumps({}))
+    with pytest.raises(SystemExit, match="names no private directory"):
+        lr.main(argv)
+
+
 def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp_path):
     """The two-stage serve's launch settings for GLM-5.3, the boundary object as ``BOUNDARY_ROWS`` (the greedy select in
     units as its check, ``ids``, the logits they were selected from, the arm's tables) and the capture's template as
@@ -565,7 +615,7 @@ def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp
 def test_result_is_the_replays_verdict_passed_only_where_it_is_bit_exact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                                                           same: bool):
     d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": [],
+    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": [],
                                              "run_id": "r-served"}))
     monkeypatch.setattr(R, "replay", lambda w, *args: {
         "wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
@@ -574,7 +624,7 @@ def test_result_is_the_replays_verdict_passed_only_where_it_is_bit_exact(tmp_pat
     for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
         monkeypatch.setenv(name, "the job's")
     run = tmp_path / "run"
-    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(run / "out"), "--result", str(run)]) == 0
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(run / "out"), "--result", str(run)]) == 0
     doc = json.loads((run / "result.json").read_text())
     assert doc["kind"] == R.KIND and doc["measurement_files"] == ["out/replay.json"]
     assert doc["validation"]["status"] == ("passed" if same else "failed")
@@ -588,11 +638,11 @@ def test_result_refuses_a_replay_whose_served_run_is_unnamed_or_another(tmp_path
     (tmp_path / "meta.json").write_text(json.dumps({"run_id": run_id}))
     monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
     with pytest.raises(SystemExit, match=refusal):
-        R.main(["--arm-dir", str(tmp_path), "--load", "sat", "--out", str(tmp_path / "run" / "out"), "--result",
+        R.main(["--arm-dir", str(tmp_path), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(tmp_path / "run" / "out"), "--result",
                 str(tmp_path / "run"), *(["--minify", given] if given else [])])
 
 
 def test_result_refuses_an_out_outside_it(tmp_path: Path):
     with pytest.raises(SystemExit, match="outside --result"):
-        R.main(["--arm-dir", str(tmp_path), "--load", "sat", "--out", str(tmp_path / "out"), "--result",
+        R.main(["--arm-dir", str(tmp_path), "--load", "sat", "--private", str(tmp_path / "rp"), "--out", str(tmp_path / "out"), "--result",
                 str(tmp_path / "run")])

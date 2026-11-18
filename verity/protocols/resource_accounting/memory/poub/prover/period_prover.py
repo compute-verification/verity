@@ -22,6 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
+from verity.protocols.resource_accounting.memory.poub.scheme import BANDWIDTH
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts, wire
 from verity.protocols.resource_accounting.memory.pous.prover.period_prover import records
@@ -138,7 +139,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
-    party = side_of(doc, node, "bandwidth", verifier_party.command())
+    party = side_of(doc, node, BANDWIDTH.name, verifier_party.command())
     store = records(period_dir)
     t = time.monotonic()
     period, side = period_with(party, verifier_party.request_of(node), store)

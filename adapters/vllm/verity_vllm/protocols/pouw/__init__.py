@@ -25,7 +25,7 @@ the transcript root with its unit and tile counts.  Pearl-C's also says what it 
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.resource_accounting.compute.pouw.verifier.audit`'s, after the run.  Beside SPOT the composition asks
-`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
+`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (registered as ``pouw``, `scheme.register_circuits`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
 runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
@@ -294,20 +294,6 @@ def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
                               "graph-capturable"),
             H.RequireProperty("world", 1, "PoUW's units and transcript are per rank, which is not wired"),
             *((BUILD_BOUND,) if scheme in NCP_CIRCUIT_SCHEMES else ()))
-
-
-def cuts(scheme: str) -> bool:
-    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call commits in place
-    of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    return scheme in PEARL_C_SCHEMES
-
-
-def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
-    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
-    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
-    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
-    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
-    return scheme in PEARL_C_SCHEMES or scheme in NCP_CIRCUIT_SCHEMES or scheme == LEAD_SCHEME
 
 
 def linear_types() -> tuple[type, ...]:

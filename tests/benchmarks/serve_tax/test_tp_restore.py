@@ -26,10 +26,17 @@ def test_client_ids_come_out_of_engine_ids_with_or_without_a_random_suffix():
         T.client_id("cmpl-other-3-0")
 
 
-def test_the_served_trace_is_the_one_under_serves_server_directory(tmp_path):
-    (tmp_path / "server").mkdir()
-    (tmp_path / "server" / "step_trace.7.jsonl").write_text('{"kind": "header"}\n{"kind": "step", "i": 0}\n')
-    assert T.served_trace(tmp_path) == [{"kind": "header"}, {"kind": "step", "i": 0}]
+def test_the_served_trace_and_outputs_are_the_ones_under_the_serves_private_server_directory(tmp_path):
+    serve, private = tmp_path / "serve", tmp_path / "private"
+    serve.mkdir()
+    (private / "server").mkdir(parents=True)
+    (serve / "meta.json").write_text(json.dumps({"private": str(private)}))
+    (private / "server" / "step_trace.7.jsonl").write_text('{"kind": "header"}\n{"kind": "step", "i": 0}\n')
+    assert T.served_trace(serve) == [{"kind": "header"}, {"kind": "step", "i": 0}]
+    assert T.served_outputs(serve) == private / "server" / "edges" / "outputs.jsonl"
+    (serve / "meta.json").write_text("{}")
+    with pytest.raises(SystemExit, match="names no private directory"):
+        T.served_outputs(serve)
 
 
 def test_the_arrivals_between_two_edges_carry_their_prompts_and_sampling():
@@ -154,7 +161,7 @@ def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
                    "[vllm.general_plugins]\nverity_tp_edge = tp_edge:register\n"]
 
 
-def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
+def test_each_edges_record_is_copied_out_of_the_scratch_directory_into_the_private_one(tmp_path):
     for e in (4, 9):
         d = tmp_path / "scratch" / f"edge-{e:06d}"
         d.mkdir(parents=True)
@@ -163,13 +170,14 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
                                                  "ranks": [{"layer_digests": ["a", f"b{e}"]}]}))
         (d / "digests.rank0.bin").write_bytes(b"x")
     (tmp_path / "scratch" / "outputs.jsonl").write_text('{"step":3,"out":{}}\n')
-    got = T.copy_edges(tmp_path / "scratch", tmp_path / "out")
+    kept = tmp_path / "private" / "server" / "edges"
+    got = T.copy_edges(tmp_path / "scratch", kept)
     assert [g["edge"] for g in got] == [4, 9] and got[0]["trace_step"] == 3 and got[0]["blocks"] == 3
     assert got[1]["dir"] == str(tmp_path / "scratch" / "edge-000009")
     assert got[0]["files"]["digests.rank0.bin"] == 1 and len(got[0]["kv_root"]) == 128
     assert got[0]["kv_root"] != got[1]["kv_root"]
-    assert sorted(p.name for p in (tmp_path / "out").rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json",
-                                                                    "outputs.jsonl"]
+    assert sorted(p.name for p in kept.rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json", "outputs.jsonl"]
+    assert (kept / "outputs.jsonl").read_text() == '{"step":3,"out":{}}\n'
 
 
 def test_a_serving_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded(monkeypatch):

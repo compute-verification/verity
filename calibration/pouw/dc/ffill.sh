@@ -10,7 +10,7 @@
 # (gate-build.txt). A refusal stops the run. Under the lease: ffill fma and ffill chain (conformance/), then probe.py run
 # (probes/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv). After it, on the CPU:
 # ffill_ref.py check (conformance/check.json). Exit: 0 conformant, 1 build, SASS check or gate refused, 3 not conformant,
-# 2 wrong device or no nvcc. DC_BUILD_ONLY=1 stops after the checks (any machine with CUDA 13.0).
+# 2 wrong device or no nvcc. DC_BUILD_ONLY=1 stops after the checks (a machine with CUDA 13.0 and the H200).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -31,9 +31,10 @@ if [ "${DC_LEASED:-}" != 1 ]; then
     have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
     [ "${have%%.*}" = 9 ] || { echo "ffill.sh: needs compute capability 9.x, the device reports '$have'" >&2; exit 2; }
   fi
-  "$NVCC" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a "$HERE/ffill.cu" -o "$WORK/ffill" >"$OUT/build.log" 2>&1 \
+  GENCODE=$(python3 "$PROBE" gencode) || exit 1
+  "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" "$HERE/ffill.cu" -o "$WORK/ffill" >"$OUT/build.log" 2>&1 \
     || { cat "$OUT/build.log" >&2; exit 1; }
-  python3 "$PROBE" build --arch sm_90a --out "$WORK" "$HERE/probes/sm90_wgmma.cu" \
+  python3 "$PROBE" build --out "$WORK" "$HERE/probes/sm90_wgmma.cu" \
     >"$WORK/built" 2>>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
 
   sass="$OUT/sass/ffill.sass"

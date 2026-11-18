@@ -2,7 +2,7 @@
 rank 0, beside the frame's and the dense families, at a 32-id prompt, 2 outputs and one decoder layer: per column block of 192
 words one `EmbeddingRead_v2{V=154880, H=192}` unit a member over that block's padded table, the all-reduce's own partial
 read from the blocks' ``o0`` by wire. The tables are one width, declared and never committed by the window, and kept apart
-from the plain weights, whose nonces they don't move.
+from the plain weights.
 """
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 )
 
 from tests.program.predict.test_node_window import LP, glm_request
-from verity_vllm.pipeline import expert_tables as XT
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
@@ -115,8 +114,7 @@ def test_tables_declared(window):
 
 def test_split_keeps_the_tables_apart_from_the_weights(window, without):
     """The tables are kept apart from the plain weights: the plain weights are the same with and without the shard's tables
-    present, `window_weights` refuses a table's name, and the tables' own nonces are the tables' registration's, from
-    `TABLES_NONCE`."""
+    present, `window_weights` refuses a table's name, and the tables are the tables' registration's, one a block."""
     params, before = window[0].registered.params, without[0].registered.params
     plain, tables = NE.split(params)
     assert NE.split(before) == (plain, []) == (WW.weight_params(before), [])
@@ -125,9 +123,7 @@ def test_split_keeps_the_tables_apart_from_the_weights(window, without):
         WW._param(tables[0])
     by = NE.tables_of(params)
     assert list(by) == [LABEL] and [b for b, *_ in by[LABEL]] == list(range(BLOCKS))
-    nonces = XT.nonces(by, [label for label, _f, _n in window[1].b.weights], 0)
-    assert sorted(nonces) == sorted(tables) and len(set(nonces.values())) == BLOCKS
-    assert min(nonces.values()) >= XT.TABLES_NONCE
+    assert sorted(p for _b, p, _w, _n in by[LABEL]) == sorted(tables)
 
 
 @pytest.mark.slow
@@ -268,10 +264,10 @@ def test_values_boolean(window, tables):
     fn = read_of(V, NE.WIDTH)
     (u, b), = _units(window)[:1]
     args = [arguments(V, *_inputs(held, _declared(circuit, read, u), tok)) for tok in (7, 100000)]
-    got = np.asarray(evaluate_batch(fn, *(np.asarray([a[k] for a in args], np.uint8) for k in range(6)))).reshape(2, -1)
+    toks = np.asarray([[7], [100000]], dtype=object)
+    got = np.asarray(evaluate_batch(fn, toks, *(np.asarray([a[k] for a in args], np.uint8) for k in range(1, 6)))).reshape(2, -1)
     for i, tok in enumerate((7, 100000)):
-        words = [int(sum(int(got[i, 16 * k + j]) << j for j in range(16))) for k in range(NE.WIDTH)]
-        assert (words, int(got[i, -1])) == (_expected(cols, b, tok), 1)
+        assert ([int(w) for w in got[i, :NE.WIDTH]], int(got[i, -1])) == (_expected(cols, b, tok), 1)
 
 
 class _Weights:

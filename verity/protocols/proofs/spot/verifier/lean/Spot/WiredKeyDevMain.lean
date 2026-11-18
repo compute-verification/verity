@@ -20,8 +20,8 @@ open Lean (Json)
 
 /-- `Pieces.secondStatements` with the wired key's switch on. -/
 def secondStatements (j : Json) : Except String Json := do
-  let (allow, own, stmts) ← Pieces.secondOwn j
-  return (SecondStage.checkAny allow { own with wiredKey := true } stmts).toJson
+  let (own, stmts) ← Pieces.secondOwn j
+  return (SecondStage.checkAny { own with wiredKey := true } stmts).toJson
 
 end Spot.WiredKeyDevMain
 

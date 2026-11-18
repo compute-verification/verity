@@ -1,20 +1,17 @@
-"""`verity-vllm ids-front`: the network attester's id relay (`id_relay`) in front of vLLM's own OpenAI server.
+"""`verity-vllm ids-front`: the launcher of the processes schemes start beside vLLM's own OpenAI server.
 
-    verity-vllm ids-front --upstream HOST:PORT [--listen 127.0.0.1:18746] [--id-payload 503] [--log FILE]
+    verity-vllm ids-front --upstream HOST:PORT --protocols NAME[,NAME] [--listen 127.0.0.1:18746] [--id-payload 503]
+        [--log FILE]
 
-The network attester's id egress form takes from the server only the scan's id events: no HTTP head, one
-`workload.id_event` of P bytes an output id, then `workload.TRAILER`. `serve-openai --protocol ids` writes them itself
-(`ids_protocol.IdsProtocol`). vLLM's own server, which serves the tensor-parallel workloads under the certified tick
-(`tick_plugin`), answers in HTTP, and a middleware can't take a response's head off; `id_relay.Front` does it for that
-server, and this module hands it what it needs of vLLM's: an id request's copy for the server (`server_request`, a
-``POST /v1/completions`` of the same fields with ``return_token_ids``, which the tick's feed reads by its release
-headers) and the reader of the server's streamed chunks (`token_ids`, through ``data: [DONE]``). vLLM's server aborts a
-request on its connection's close, which the relay makes when the network attester's side ends; one the tick gate
-dropped (`serve_admit`: a lost release's) gets no chunk: the tick's middleware ends it when its watermark line comes
-(`tick_plugin.TickFeed`), and the relay's close ends it where that line never does.
+Each scheme ``--protocols`` names (`verity.protocols.compose.schemes.get`) is attached to this process's
+exchange, where it files the processes it starts beside the workload (`verity.hooks.StartBeside`), each bound to the
+readers it names by what they do (`READERS`): ``server-request``, an input's copy for the server (`server_request`, a
+``POST /v1/completions`` of its fields with ``return_token_ids``, under the release headers it came with), and
+``stream-token-ids``, the reader of the server's streamed chunks (`token_ids`, through ``data: [DONE]``, `Broken` where
+the stream breaks). Each process is called with ``--upstream``, ``--listen``, ``--id-payload`` and ``--log``.
 
-Once it listens it writes one line, ``{"listening": [HOST, PORT]}``, on stdout, and serves until SIGTERM or SIGINT.
-``--log`` appends `id_relay`'s record of each id request, one JSON line, when its connection ends.
+Once a process listens it writes one line, ``{"listening": [HOST, PORT]}``, on stdout; all serve until SIGTERM or
+SIGINT. ``--log`` appends each process's records, one JSON line each.
 """
 from __future__ import annotations
 
@@ -28,19 +25,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.resource_accounting.network.prover.id_relay import (
-    BLANK,
-    COMPLETIONS,
-    READ_BYTES,
-    Broken,
-    Front,
-    serve,
-)
-from verity.protocols.resource_accounting.network.prover.ids_protocol import ID_PAYLOAD
+from verity import hooks as H
+from verity.hooks import Broken
+from verity.protocols.compose import schemes
 
+from verity_vllm import messages
 from verity_vllm.config import UsageError, option
 
-__all__ = ["Options", "address", "chunk_ids", "main", "server_request", "token_ids"]
+__all__ = ["READERS", "Options", "address", "chunk_ids", "launch", "main", "server_request", "token_ids"]
+
+COMPLETIONS = b"POST /v1/completions HTTP/1.1"
+BLANK = b"\r\n\r\n"
+READ_BYTES = 1 << 16
 
 
 def address(text: str) -> tuple[str, int]:
@@ -113,29 +109,48 @@ async def token_ids(reader: asyncio.StreamReader) -> AsyncGenerator[list[int], N
     raise Broken("the server's stream ended before [DONE]")
 
 
+#: the workload's readers a scheme's process names by what they do (`verity.hooks.StartBeside`)
+READERS = {"server-request": server_request, "stream-token-ids": token_ids}
+
+
 @dataclass(frozen=True, kw_only=True)
 class Options:
     upstream: str = option("--upstream", help="the server's HOST:PORT: vLLM's own OpenAI server")
-    listen: str = option("--listen", default="127.0.0.1:18746", help="the HOST:PORT the network attester connects to")
-    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+    protocols: str = option("--protocols", default="",
+                            help="the application's protocols line, comma-separated: the schemes whose processes start")
+    listen: str = option("--listen", default="127.0.0.1:18746", help="the HOST:PORT the processes listen on")
+    id_payload: int = option("--id-payload", type=int, default=503,
                              help="each id event's bytes, the network attester's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
-    log: str | None = option("--log", default=None, help="append each id request's record to this file (JSON lines)")
+    log: str | None = option("--log", default=None, help="append each process's records to this file (JSON lines)")
+
+
+def launch(exchange: messages.Exchange, names: list[str]) -> list[tuple[str, Any]]:
+    """Attach the schemes ``names`` to ``exchange`` with this server's `READERS`, and return the processes they start
+    beside it, each by its name, bound to its readers; `UsageError` where none is registered or none starts one."""
+    exchange.readers = READERS
+    for name in names:
+        try:
+            scheme = schemes.get(name)
+        except KeyError as e:
+            raise UsageError(f"--protocols: {e.args[0]}") from None
+        exchange.attach(scheme)
+    started = exchange.beside()
+    if not started:
+        raise UsageError(f"--protocols {','.join(names) or '(none)'}: no scheme starts a process beside the server "
+                         f"({H.StartBeside.__name__})")
+    return started
 
 
 def main(opts: Options) -> int:
     upstream, listen = address(opts.upstream), address(opts.listen)
+    started = launch(messages.current(), [n for n in opts.protocols.split(",") if n])
     with contextlib.ExitStack() as stack:
         out = stack.enter_context(Path(opts.log).open("a", buffering=1, encoding="utf-8")) if opts.log else None
 
         def log(rec: dict[str, Any]) -> None:
             assert out is not None
             out.write(json.dumps(rec, separators=(",", ":")) + "\n")
-        try:
-            front = Front(upstream, opts.id_payload, request_of=server_request, stream_ids=token_ids,
-                          log=log if out is not None else None)
-        except ValueError as e:
-            raise UsageError(f"--id-payload: {e}") from e
 
         async def run() -> None:
             stop = asyncio.Event()
@@ -145,7 +160,11 @@ def main(opts: Options) -> int:
             def announce(at: tuple[str, int]) -> None:
                 sys.stdout.write(json.dumps({"listening": list(at)}) + "\n")
                 sys.stdout.flush()
-            await serve(front, listen, announce=announce, stop=stop)
+            try:
+                await asyncio.gather(*(start()(upstream, listen, opts.id_payload, log=log if out is not None else None,
+                                               stop=stop, announce=announce) for _, start in started))
+            except ValueError as e:
+                raise UsageError(f"--id-payload: {e}") from e
 
         asyncio.run(run())
     return 0

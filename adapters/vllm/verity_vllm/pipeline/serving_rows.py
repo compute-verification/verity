@@ -60,7 +60,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
                                    the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (`gemm_rows`); the tables
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
-  ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v1`` rows of that K, A6's bit rows per instance:
+  ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v3`` rows of that K, A6's bit rows per instance:
                                    ``x`` (the token's s8 codes then its f32 scale, row-seg), ``w`` (``W[c, :]`` then ``sw[c]``,
                                    v2) -> ``o0`` (the bf16 output, a v2 row of its one word); with ``row_tables``, shared
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
@@ -353,7 +353,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
+    ``ScaledMmS8_v3`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
     then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
     ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
     table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
@@ -422,6 +422,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
+    ms = [replace(m, tables=tuple((p, m.n) for p, _ in m.rows)) if not m.tables and n_of[m.template] != m.n else m for m in ms]
     program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
@@ -711,7 +712,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
         read |= zip([m.key for m in apart], read_all(apart, [by_t[t] for t in dict.fromkeys(m.template for m in apart)], store,
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
-    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.ranges_of(IF.templates_of(window), None))
+    data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values, IF.member_ranges(window.members))
     data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:

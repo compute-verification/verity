@@ -2,10 +2,14 @@
 request's replay block, replay to a far edge, and say how close the replay came.
 
     rebuild.py --arm-dir OUT/restore [--from-edge 1] [--to-edge 2] --kv-dir DIR [--checkpoint DIR] [--tail copy] --out DIR
-    rebuild.py ... --tail nan --at-step S --mirror-out MDIR --out DIR    # then
-    rebuild.py ... --tail nan --from-mirror MDIR --out DIR
+               --private DIR
+    rebuild.py ... --tail nan --at-step S --mirror-out MDIR --out DIR --private DIR    # then
+    rebuild.py ... --tail nan --from-mirror MDIR --out DIR --private DIR
     rebuild.py --served OUT/ARM/serve --scratch DIR [--from-edge 1] [--to-edge 2] --tail copy
-               [--shape-only RID [--capture TEMPLATE]] --out DIR
+               [--shape-only RID [--capture TEMPLATE]] --out DIR --private DIR
+
+The replay's outputs and step records (rebuild_outputs.jsonl, rebuild_steps.jsonl) and a capture hold request values
+and are kept in ``--private``, on the node; OUT holds the comparison.
 
 A restore (`restore.py`) puts the served engine's whole state back: the block pool, the scheduler and the model runner's
 rows. Lifetime replay has less: a host copy of each K/V page, written when the page was, and the step record. So here a
@@ -67,7 +71,7 @@ the roots cover each request's full pages. A forced hit's page comes from the fi
 replay's start, from the far edge's. A pool vLLM zeroes as it hands out blocks (mamba or mixed-precision K/V) keeps
 the pages `readd` loaded, as a KV connector's. There is no mirror here. With ``--shape-only``, ``--capture TEMPLATE`` takes
 the target's logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`, each rank's rows under the
-scratch) and writes rank 0's to OUT/capture as a span of TEMPLATE's units; shape.json says whether its ids are the tokens
+scratch) and writes rank 0's to ``--private``/capture as a span of TEMPLATE's units; shape.json says whether its ids are the tokens
 serving emitted for the target.
 
 Zero is the replay. NaN probes for reads at weight zero, which no finite dummy can show: FA3's causal varlen prefill
@@ -1363,10 +1367,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                         and out["far_edge"]["roots_equal"])
     out["hits"] = hits.report() if hits else {"mode": "engine"}
     hooks.uninstall()
-    with open(a.out / "rebuild_outputs.jsonl", "w") as f:
+    with open(RP._kept(a.private, "rebuild_outputs.jsonl"), "w") as f:
         for s in sorted(outs):
             f.write(json.dumps({"step": s, "out": outs[s]}, separators=(",", ":")) + "\n")
-    with open(a.out / "rebuild_steps.jsonl", "w") as f:
+    with open(RP._kept(a.private, "rebuild_steps.jsonl"), "w") as f:
         for s in sorted(steps):
             f.write(json.dumps(steps[s], separators=(",", ":")) + "\n")
     return out | {"replay_block": block}
@@ -1391,9 +1395,9 @@ def served_tp(served: Path, a: int, b: int) -> dict[str, Any]:
             raise SystemExit(f"{d}: no state.pkl: serve with SAVER=boundary:save_edge")
     if not recs[a]["dump"]:
         raise SystemExit(f"edge {a} kept no blocks: serve with --dump {b}")
-    outputs = TR.read_outputs(served / "edges" / "outputs.jsonl", 0, recs[b]["trace_step"])
+    outputs = TR.read_outputs(TR.served_outputs(served), 0, recs[b]["trace_step"])
     if not outputs:
-        raise SystemExit(f"{served}: no step outputs recorded under edges/: nothing to compare the replay to")
+        raise SystemExit(f"{served}: no step outputs recorded: nothing to compare the replay to")
     st = {k: pickle.loads((d / "state.pkl").read_bytes()) for k, d in dirs.items()}
     lo, hi = recs[a]["trace_step"], recs[b]["trace_step"]
     tr = TR.served_trace(served)
@@ -1443,14 +1447,14 @@ def tp_engine(meta: dict[str, Any], header: dict[str, Any], scratch: Path) -> tu
 def capture(a: argparse.Namespace, takes: list[dict], steps: dict[int, dict], outputs: dict[int, dict], first: int,
             r_end: int) -> dict[str, Any]:
     """``--capture``: the target's rows from every rank's `take`, held to rank 0's (`sampler_capture.spans`), written to
-    OUT/capture, and whether its ids are the tokens serving emitted for it from ``first`` to ``r_end``."""
+    ``--private``/capture, and whether its ids are the tokens serving emitted for it from ``first`` to ``r_end``."""
     from verity_vllm.engine import sampler_capture as SC
 
     t = time.monotonic()
     span = SC.spans(takes, [steps[s] for s in sorted(steps)]).get(a.shape_only)
     if span is None:
         raise SystemExit(f"--capture: no rank's sampler took a row of {a.shape_only}")
-    SC.write(a.out / "capture", a.capture, {a.shape_only: span})
+    SC.write(a.private / "capture", a.capture, {a.shape_only: span})
     served = [x for s in sorted(outputs) if first <= s <= r_end for x in (outputs[s].get(a.shape_only) or [[]])[0]]
     return {"template": a.capture, "tokens": len(span["tokens"]), "as_served": span["tokens"] == served,
             "program": span["program"], "write_s": time.monotonic() - t}
@@ -1596,10 +1600,10 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
                         and out["schedule"]["steps_differing"] == 0 and out["outputs"]["first"] is None
                         and (want1 is None or out["far_edge"]["roots_equal"]) and not kv.ranks_disagree)
     out["hits"] = hits.report() if hits else {"mode": "engine"}
-    with open(a.out / "rebuild_outputs.jsonl", "w") as f:
+    with open(RP._kept(a.private, "rebuild_outputs.jsonl"), "w") as f:
         for s in sorted(outs):
             f.write(json.dumps({"step": s, "out": outs[s]}, separators=(",", ":")) + "\n")
-    with open(a.out / "rebuild_steps.jsonl", "w") as f:
+    with open(RP._kept(a.private, "rebuild_steps.jsonl"), "w") as f:
         for s in sorted(steps):
             f.write(json.dumps(steps[s], separators=(",", ":")) + "\n")
     return out | {"replay_block": block}
@@ -1639,10 +1643,14 @@ def main(argv: list[str] | None = None) -> int:
                          "never ran")
     ap.add_argument("--capture", nargs="?", const="", metavar="TEMPLATE",
                     help="with --served and --shape-only: take the target's logits rows and ids at every rank's sampler "
-                         "into OUT/capture, a span of TEMPLATE's units (default: the check the serve committed under, "
+                         "into --private/capture, a span of TEMPLATE's units (default: the check the serve committed under, "
                          "`replay.capture_template`; a token select's, e.g. GreedySelect_v1{V=154880,N=7744})")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--private", type=Path, required=True,
+                    help="where the replay's outputs, step records and capture are kept, on the node and outside every "
+                         "run's directory")
     a = ap.parse_args(argv)
+    a.private = S.outside(a.private.resolve(), a.out)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):
         raise SystemExit("either --arm-dir with --kv-dir (one GPU), or --served with --scratch (tp_restore.py serve's)")
     if a.served and (a.mirror_out or a.from_mirror):
@@ -1663,11 +1671,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.served:
         served_pins(a.served)
     a.out.mkdir(parents=True, exist_ok=True)
+    a.private.mkdir(mode=0o700, parents=True, exist_ok=True)
     if a.mirror_out:
         a.mirror_out.mkdir(parents=True, exist_ok=True)
     got = run_tp(a) if a.served else run(a)
     rec = {"schema": "verity-bench/serve-tax/rebuild/v0", "arm_dir": str(a.served or a.arm_dir), "run_id": SHARED.RESEARCH_RUN_ID,
-           **got}
+           "private": str(a.private), **got}
     name = "mirror.json" if a.mirror_out else "shape.json" if a.shape_only else "rebuild.json"
     (a.out / name).write_text(json.dumps(rec, indent=1, default=str))
     if a.shape_only:

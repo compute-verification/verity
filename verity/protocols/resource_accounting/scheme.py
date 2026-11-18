@@ -19,17 +19,35 @@ Scheme.lean`); `Scheme`, `Block`, `Order`, `Charge` and `Bound` mirror the field
 spelt ``delta``), and a change to either names the other's line in its message. `hooks`, `settings`, `option`,
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
-**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
-`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
+**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))`, and each name it registers
+is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every reader gets it (`get`, `load`). Its fields, with the Lean they mirror
 (`Verity.Scheme`):
 
 - ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
 - ``charges``: `Charge(name, bound)`, summed in `charges`; a known channel with no bound yet is ``bounded=False``.
 - ``log``: `Order`s, `logOK`; a deadline (``within_ns``) names one of ``assumptions``, the names `breaks` ranges over.
-- ``delta_scheme``: `δscheme`, said by name, zero included; unsaid, `bound` refuses.
+- ``over``, ``under``: `over` and `under`, each side said in words with its natural unit; a scheme whose term is said
+  says both. A scheme bounding what it credits by what was spent or held puts the credit ``over``; a factor in its
+  guarantee is cleared into the two sides, never carried beside them.
+- ``delta_scheme``: `δscheme`, said by name: a number, zero included, or a `Term`, the Lean constant of a family of
+  schemes (one for each value of its parameters) and its code, which `bound` evaluates at parameters its caller gives;
+  unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
-  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
-  ``option``, ``requires``.
+  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`, which is the one place
+  they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run), ``hooks``, ``ports``,
+  ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
+  `verity.hooks.Releases`, a `verity.hooks.Commits`), and
+  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
+  ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
+  codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
+  adapter's own framing (``framing(base=..., **settings)``).
+  ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
+  the key of the build it attaches to (one per exchange); and what the launcher passes: ``process``, ``feed``
+  (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
+  ``log``, ``clock`` and ``schedule``. The adapter's exchange attaches it (``Exchange.attach``), files those of
+  ``requests(ctx)`` that ``attach`` did not, and declares it with its settings under its name (`verity.hooks.Declared`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -54,7 +72,21 @@ from typing import Any, Literal
 
 from verity.hooks import HOOKS
 
-#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
+
+def _no_requests(ctx: Any) -> tuple[Any, ...]:
+    return ()
+
+
+def _attaches_nothing(exchange: Any, ctx: Any) -> None:
+    return None
+
+
+def _no_settings_check(values: Mapping[str, Any]) -> str | None:
+    return None
+
+
+#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
+#: another measure (`Account.Measure`: PoUB P2's ``q_bytes`` in bytes, 8 bits each), which the row converts to this one
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
                                                  "egress": "bits"})
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
@@ -82,12 +114,13 @@ class Order:
     """A condition on the verifier's log (`Verity.Scheme.logOK`): ``committed`` is logged ``direction`` (``before`` or
     ``after``) ``coin``, a coin drawn or another logged event, and, where ``within_ns`` is set, within that many
     nanoseconds of it: a deadline, which no guarantee of the proof layer reads, so it names the scheme's ``assumption``
-    that does (a bound on the prover's speed, say)."""
+    that does (a bound on the prover's speed, say). A deadline set per session is the name of the public parameter,
+    logged before the coin, that carries it in nanoseconds (PoUB's ``deadline_ns``); no value of it is declared."""
 
     committed: str
     coin: str
     direction: Literal["before", "after"] = "before"
-    within_ns: int | None = None
+    within_ns: int | str | None = None
     assumption: str | None = None
 
     def __post_init__(self) -> None:
@@ -96,7 +129,10 @@ class Order:
         if (self.within_ns is None) != (self.assumption is None):
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a time is read only by an assumption, "
                              "and names it")
-        if self.within_ns is not None and self.within_ns <= 0:
+        if isinstance(self.within_ns, str) and not _NAME.fullmatch(self.within_ns.replace("_", "-")):
+            raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline set per session names its "
+                             f"logged parameter, not {self.within_ns!r}")
+        if isinstance(self.within_ns, int) and self.within_ns <= 0:
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline is a positive time")
 
 
@@ -125,14 +161,34 @@ class Port:
 
 
 @dataclass(frozen=True)
+class Term:
+    """A scheme's own term that depends on public parameters: in the Lean a family of schemes, one for each value, whose
+    `δscheme` is the constant ``lean`` at them. ``parameters`` are its parameters' names (``q``, ``N``), and ``value``
+    evaluates it at them by name; no parameter's value is written into a declaration (`bound` takes them)."""
+
+    lean: str
+    parameters: tuple[str, ...]
+    value: Callable[..., Fraction]
+
+    def __post_init__(self) -> None:
+        if not self.lean or not self.parameters or len(set(self.parameters)) != len(self.parameters):
+            raise ValueError(f"a term names its Lean constant and its parameters once each, not {self.lean!r} "
+                             f"{self.parameters}")
+
+
+@dataclass(frozen=True)
 class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
-    ``[params."<protocol>"]`` overrides (`settings`); ``option`` is the adapter's entry that attaches it to a served run
+    ``[params."<protocol>"]`` overrides (`settings`), and ``check_settings`` what it refuses of their values beyond their
+    types (a count below 1), as a sentence, None where it accepts them; ``option`` is the adapter's entry that attaches it to a served run
     (``NAME:scheme``, an adapter's ``protocols`` spelling), empty when it attaches through none; ``hooks`` the served
     run's hooks it attaches through (`HOOKS`); ``ports`` the external ports it reads or writes; ``requires`` maps each
     requirement it has of the proof layer to today's stand-in. ``delta_scheme`` is `Verity.Scheme.δscheme`, the bound on
     the probability that one of its ``assumptions`` fails (a key guessed, a collision), said by name in every
-    declaration, zero where none can; None, not said, lets a scheme be registered and read but not bounded (`bound`)."""
+    declaration: a number, zero where none can fail, or a `Term` where it depends on public parameters; None, not said,
+    lets a scheme be registered and read but not bounded (`bound`). ``over`` and ``under`` are `Verity.Scheme.over` and
+    `under` in words, each with its natural unit: the bound is that ``over`` exceeds ``under`` by at most the incorrect
+    blocks' cost and the charges; a scheme whose term is said says both."""
 
     name: str
     protocol: str
@@ -142,11 +198,19 @@ class Scheme:
     log: tuple[Order, ...]
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
+    check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
     ports: tuple[Port, ...] = ()
-    delta_scheme: Fraction | None = None
+    delta_scheme: Fraction | Term | None = None
+    over: str = ""
+    under: str = ""
+    requests: Callable[[Any], Sequence[Any]] = _no_requests
+    attach: Callable[[Any, Any], Any] = _attaches_nothing
+    processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
+    messages: tuple[Any, ...] = ()
+    framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -164,8 +228,11 @@ class Scheme:
             raise ValueError(f"{self.name}: its deadlines name {unknown}, which are not among its assumptions")
         if unknown := sorted({p.definition for p in self.ports} - {b.definition for b in self.blocks}):
             raise ValueError(f"{self.name}: its ports lie in {unknown}, which are not its blocks' Definitions")
-        if self.delta_scheme is not None and not 0 <= self.delta_scheme < 1:
+        if self.delta_scheme is not None and not isinstance(self.delta_scheme, Term) and not 0 <= self.delta_scheme < 1:
             raise ValueError(f"{self.name}: its own term δscheme lies in [0, 1), not {self.delta_scheme}")
+        if self.delta_scheme is not None and not (self.over and self.under):
+            raise ValueError(f"{self.name}: a scheme whose term is said says its two sides (Verity.Scheme.over and under) "
+                             "in words, each with its unit")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
@@ -175,42 +242,57 @@ class Scheme:
 
 
 def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
-    """``scheme``'s settings with ``given`` over its defaults; refuses a key it doesn't have and a value of another type
-    than its default's."""
+    """``scheme``'s settings with ``given`` over its defaults, the one place a setting is checked: refuses a key it
+    doesn't have, a value of another type than its default's, and what its ``check_settings`` refuses. Every setting is
+    returned, its default included: what a run used is what an application's hash covers (`verity.config.check` fills
+    the defaults), so stating a default moves no hash and changing a default in code does."""
     if unknown := sorted(set(given) - set(scheme.settings)):
         raise ValueError(f"{scheme.name} has no setting {unknown}: its settings are {sorted(scheme.settings)}")
     for k, v in given.items():
         if type(v) is not type(scheme.settings[k]):
             raise ValueError(f"{scheme.name}.{k} is a {type(scheme.settings[k]).__name__}, not {v!r}")
-    return {**scheme.settings, **given}
+    out = {**scheme.settings, **given}
+    if refused := scheme.check_settings(out):
+        raise ValueError(f"{scheme.name}: {refused}")
+    return out
 
 
 @dataclass(frozen=True)
 class Bound:
-    """What the audit's guarantee gives a scheme (`Verity.Scheme.GetsBack`): at cutoff ``delta``, the resource it
-    leaves uncredited is more than ``missable``, the largest cost of a set of its blocks that the sample misses with
-    probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus
-    ``delta_scheme``, the scheme's own term."""
+    """What the audit's guarantee gives a scheme (`Verity.Scheme.GetsBack`): at cutoff ``delta``, its ``over`` exceeds
+    its ``under`` by more than ``missable``, the largest cost of a set of its blocks that the sample misses with
+    probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus ``epsilon``,
+    the audit's own error (its knowledge and binding errors, the audit's to give), plus ``delta_scheme``, the scheme's own
+    term: where that is a `Term`, ``term`` names its Lean constant and
+    ``parameters`` the values it was evaluated at."""
 
     scheme: str
     delta: Fraction
     missable: int
     charges: Mapping[str, int]
     delta_scheme: Fraction
+    epsilon: Fraction = Fraction(0)
+    term: str = ""
+    parameters: Mapping[str, Any] = field(default_factory=dict)
 
     @property
-    def uncredited(self) -> int:
+    def excess(self) -> int:
+        """The most ``over`` exceeds ``under`` by, but with `probability`."""
         return self.missable + sum(self.charges.values())
 
     @property
     def probability(self) -> Fraction:
-        """The probability that more than `uncredited` is left uncredited: ``delta + delta_scheme``."""
-        return self.delta + self.delta_scheme
+        """The probability that ``over`` exceeds ``under`` by more than `excess`: ``delta + epsilon + delta_scheme``
+        (`GetsBack`'s ``δ + ε + δscheme``)."""
+        return self.delta + self.epsilon + self.delta_scheme
 
 
-def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int]) -> Bound:
-    """``scheme``'s `Bound`, carrying its own term; refuses charges other than exactly the ones it states, and a scheme
-    with a known charge nothing bounds yet or whose own term is not said."""
+def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int],
+          parameters: Mapping[str, Any] | None = None, *, epsilon: Fraction | None = None) -> Bound:
+    """``scheme``'s `Bound`, carrying its own term, evaluated at ``parameters`` where it is a `Term` (``N`` read from
+    the registered circuit, ``q`` and the rest the caller's); refuses charges other than exactly the ones it states, a
+    scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
+    term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
     if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
@@ -221,10 +303,30 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
                          "own term by name, zero where none of its assumptions can fail")
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
-    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), scheme.delta_scheme)
+    if epsilon is None or not 0 <= epsilon < 1:
+        raise ValueError(f"{scheme.name}: the audit's error ε (Verity.Scheme.GetsBack's δ + ε + δscheme) is given by the "
+                         f"audit, in [0, 1), not {epsilon}")
+    given = dict(parameters or {})
+    term = scheme.delta_scheme
+    if not isinstance(term, Term):
+        if given:
+            raise ValueError(f"{scheme.name}: its own term is the number {term}, which takes no parameters {sorted(given)}")
+        return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), Fraction(term),
+                     Fraction(epsilon))
+    if missing := [p for p in term.parameters if p not in given]:
+        raise ValueError(f"{scheme.name}: its own term {term.lean} is evaluated at {list(term.parameters)}, and "
+                         f"{missing} were not given")
+    if extra := sorted(set(given) - set(term.parameters)):
+        raise ValueError(f"{scheme.name}: its own term {term.lean} has no parameters {extra}")
+    value = Fraction(term.value(**given))
+    if not 0 <= value < 1:
+        raise ValueError(f"{scheme.name}: its own term {term.lean} at {given} is {value}, outside [0, 1): no bound")
+    return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), value, Fraction(epsilon),
+                 term.lean, MappingProxyType(given))
 
 
-#: the registered schemes, by name: a scheme's package registers it when imported
+#: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through
+#: `verity.protocols.compose.schemes.get`
 SCHEMES: dict[str, Scheme] = {}
 
 
@@ -232,6 +334,8 @@ def register(scheme: Scheme) -> Scheme:
     if scheme.name in SCHEMES:
         raise KeyError(f"a scheme named {scheme.name!r} is registered already")
     SCHEMES[scheme.name] = scheme
+    for name, start in scheme.processes.items():
+        register_process(name, start)
     return scheme
 
 
@@ -247,12 +351,24 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
-def get(name: str) -> Scheme:
-    """The scheme registered under ``name``; `KeyError` names the registered ones."""
-    try:
-        return SCHEMES[name]
-    except KeyError:
-        raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
+@dataclass(frozen=True)
+class Circuits:
+    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
+    m, k, n)``, one executed call's circuit (None without one)."""
+
+    schemes: Mapping[str, Any]
+    traced_as: Callable[[str, int, int, int], Any]
+
+
+#: the circuits of each scheme's executed computation, by the name a configuration lists it under
+CIRCUITS: dict[str, Circuits] = {}
+
+
+def register_circuits(name: str, circuits: Circuits) -> Circuits:
+    if name in CIRCUITS:
+        raise KeyError(f"circuits named {name!r} are registered already")
+    CIRCUITS[name] = circuits
+    return circuits
 
 
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
@@ -280,5 +396,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme",
-           "bound", "credited", "get", "register", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+           "Port", "Scheme", "Term", "bound", "credited", "register", "register_circuits", "register_process", "settings"]

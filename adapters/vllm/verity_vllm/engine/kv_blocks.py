@@ -1,11 +1,17 @@
 """The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
-emitting to the process's exchange (`messages.current`) its ``memory`` and ``steps`` events (`verity.hooks`) in the
-order vLLM acts, and taking its schemes' `HoldResident` and `ReuseOldestFreed`: a model parameter is a registered
-value, a KV block a range, a request an input, a scheduler step a step.  It names no scheme, and builds no event no
-scheme reads.
+emitting to the process's exchange (`messages.current`) its ``memory`` events and `StepComputed` (`verity.hooks`) in the order vLLM acts,
+and taking its schemes' `HoldResident`, `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
+the last detach): a model parameter is a registered value, a KV block a
+range, a request an input.  Each event is at the exchange's step, whose `StepBegan` and `StepEnded` are the admission
+hook's (`engine.admission`): inside ``schedule``, the step being scheduled (`Exchange.next_step`), else the last one
+begun.  It names no scheme, and builds no event no scheme reads.
 
 ~~~text
-GPUModelRunner.load_model       after: RegisteredValues, each parameter of the loaded model once (tied ones once)
+GPUModelRunner.load_model       after: the linear site attached (`vllm_site`) where a scheme computes blocks; then
+                                RegisteredValues, each parameter of the loaded model once (tied ones once), each
+                                linear layer's weight an operand with its block key
+GPUModelRunner.execute_model    after: StepComputed, for a step that computes; the forward has run, and its outputs
+                                are not yet sampled or read
 GPUModelRunner.initialize_kv_cache
                                 after, unless profiling: RangesDeclared, the pool's blocks as ranges of the manager's
                                 block size in slots, each layer's KV cache a store (refused where a kernel block size
@@ -18,16 +24,15 @@ BlockPool.free_blocks           around: a block a scheme holds resident at this 
                                 frees it at the first step it no longer is; then RangeFreed, the blocks left with no
                                 reader, under ReuseOldestFreed first moved to the back of the free queue (vLLM puts a
                                 freed block with no hash at its front)
-Scheduler.schedule              around: the step's index taken, and the held blocks no longer resident freed, before
+Scheduler.schedule              around: the held blocks no longer resident at the step being scheduled freed, before
                                 vLLM's own (its allocations are at that step); then a RangeWritten for each run of slots
-                                a scheduled request writes in the step, and StepBegan
-Scheduler.update_from_output    before: StepEnded, the step's KV written by now; the blocks vLLM frees inside it are
-                                freed at this step
+                                a scheduled request writes in the step
 ~~~
 
-A step's RangeWritten come before its StepBegan, so a subscriber has the step's writes when it begins.  The patches are
-on the classes: they go on with the first `attach`, before the engine is built, and come off with the last detach; the
-step index starts at 0 when they go on.
+The admission hook is on the scheduler instance, around these class patches, so a step's RangeWritten come before its
+StepBegan and a subscriber has the step's writes when it begins; the blocks vLLM frees in ``update_from_output`` are
+freed at the step begun last.  The patches are on the classes: they go on with the first `attach`, before the engine is
+built, and come off with the last detach.
 """
 from __future__ import annotations
 
@@ -46,6 +51,8 @@ RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
 #: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
 KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
+#: the scheduler outputs whose step `StepComputed` names, the latest kept: more than the steps vLLM has in flight
+SCHEDULED = 4
 
 
 def attach() -> Callable[[], None]:
@@ -53,17 +60,26 @@ def attach() -> Callable[[], None]:
     return _HOOK.attach()
 
 
-def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
-    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it."""
-    model, seen, out = runner.model, set(), []
+def model_of(runner: Any) -> Any:
+    model = runner.model
     while not hasattr(model, "named_parameters") and hasattr(model, "runnable"):
         model = model.runnable
+    return model
+
+
+def registered_values(runner: Any, step: int = 0, sites: Sequence[tuple[Any, Any]] = ()) -> H.RegisteredValues:
+    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the weight of
+    each of ``sites`` (`vllm_site.discover`'s) an operand, under the name its storage is registered by, with its site's
+    block key."""
+    model, kept, out = model_of(runner), {}, []
     for name, p in model.named_parameters():
-        if p.numel() == 0 or p.data_ptr() in seen:
+        if p.numel() == 0 or p.data_ptr() in kept:
             continue
-        seen.add(p.data_ptr())
+        kept[p.data_ptr()] = name
         out.append((name, p.data))
-    return H.RegisteredValues(tuple(out), step)
+    operands = {kept[layer.weight.data_ptr()]: site.weight_id for site, layer in sites
+                if layer.weight.data_ptr() in kept}
+    return H.RegisteredValues(tuple(out), step, operands)
 
 
 def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.RangesDeclared:
@@ -103,9 +119,11 @@ class _Hook:
     def __init__(self) -> None:
         self.attached = 0
         self.hooks: Hooks | None = None
-        self.step = self.next = 0
+        self.scheduling = False
         self.request: str | None = None
         self.held: list[tuple[Any, Any, Callable[..., Any]]] = []
+        self.released: list[tuple[list[Any], H.ReleaseValue]] = []
+        self.scheduled: list[tuple[Any, int]] = []
 
     def attach(self) -> Callable[[], None]:
         if self.hooks is None:
@@ -122,7 +140,31 @@ class _Hook:
             if not self.attached and self.hooks is not None:
                 hooks, self.hooks = self.hooks, None
                 hooks.uninstall()
+                self.restore_values()
         return detach
+
+    def release_values(self, model: Any, ex: messages.Exchange) -> None:
+        """Release each `ReleaseValue`'s parameter: every parameter of ``model`` on its storage holds an empty tensor."""
+        asks = [r for _, r in ex.requests if isinstance(r, H.ReleaseValue)]
+        params = dict(model.named_parameters(remove_duplicate=False)) if asks else {}
+        for r in asks:
+            if r.value not in params:
+                raise RuntimeError(f"a scheme asks registered value {r.value} released, and the model has no such parameter")
+            ptr = params[r.value].data_ptr()
+            held = [p for p in {id(p): p for p in params.values()}.values() if p.data_ptr() == ptr]
+            for p in held:
+                p.data = p.data.new_empty(0)
+            self.released.append((held, r))
+
+    def restore_values(self) -> None:
+        released, self.released = self.released, []
+        for held, r in released:
+            t = r.restore()
+            for p in held:
+                p.data = t
+
+    def at(self, ex: messages.Exchange) -> int:
+        return ex.next_step if self.scheduling else ex.step
 
     def freed(self, pool: Any, blocks: Sequence[Any], ex: messages.Exchange) -> None:
         freed = [b for b in blocks if b.ref_cnt == 0 and not b.is_null]
@@ -133,11 +175,11 @@ class _Hook:
                 pool.free_block_queue.remove(b)
             pool.free_block_queue.append_n(freed)
         if ex.wants("memory"):
-            ex.emit(H.RangeFreed(tuple(b.block_id for b in freed), step=self.step))
+            ex.emit(H.RangeFreed(tuple(b.block_id for b in freed), step=self.at(ex)))
 
     def release(self, ex: messages.Exchange) -> None:
         """Free the held blocks no scheme holds resident at this step any more."""
-        due = [x for x in self.held if not ex.resident(x[1].block_id, self.step)]
+        due = [x for x in self.held if not ex.resident(x[1].block_id, self.at(ex))]
         self.held = [x for x in self.held if not any(x is d for d in due)]
         for pool, b, free in due:
             free(pool, [b])
@@ -152,7 +194,7 @@ class _Hook:
         import importlib.util
 
         h, hook = Hooks(tag=TAG), self
-        self.hooks, self.step, self.next, self.request, self.held = h, 0, 0, None, []
+        self.hooks, self.scheduling, self.request, self.held, self.released, self.scheduled = h, False, None, [], [], []
 
         def allocate(orig):
             def allocate_slots(manager, request, *a, **kw):
@@ -167,7 +209,7 @@ class _Hook:
             def get_new_blocks(pool, n):
                 blocks = orig(pool, n)
                 if blocks and (ex := messages.current()).wants("memory"):
-                    ex.emit(H.RangeAllocated(tuple(b.block_id for b in blocks), hook.request, step=hook.step))
+                    ex.emit(H.RangeAllocated(tuple(b.block_id for b in blocks), hook.request, step=hook.at(ex)))
                 return blocks
             return get_new_blocks
 
@@ -175,14 +217,14 @@ class _Hook:
             def touched(pool, blocks):
                 back = tuple(b.block_id for b in blocks if b.ref_cnt == 0 and not b.is_null)
                 if back and (ex := messages.current()).wants("memory"):
-                    ex.emit(H.RangeAllocated(back, hook.request, reused=True, step=hook.step))
+                    ex.emit(H.RangeAllocated(back, hook.request, reused=True, step=hook.at(ex)))
                 return orig(pool, blocks)
             return touched
 
         def free(orig):
             def free_blocks(pool, ordered):
                 blocks, ex = list(ordered), messages.current()
-                keep = [b for b in blocks if not b.is_null and ex.resident(b.block_id, hook.step)]
+                keep = [b for b in blocks if not b.is_null and ex.resident(b.block_id, hook.at(ex))]
                 if keep:
                     hook.held += [(pool, b, orig) for b in keep]
                     blocks = [b for b in blocks if not any(b is k for k in keep)]
@@ -192,41 +234,50 @@ class _Hook:
 
         def schedule(orig):
             def scheduled(sched, *a, **kw):
-                hook.step, hook.next = hook.next, hook.next + 1
                 ex = messages.current()
-                hook.release(ex)
-                so = orig(sched, *a, **kw)
-                if ex.wants("memory"):
-                    for w in writes(sched, so, hook.step):
-                        ex.emit(w)
-                if ex.wants("steps"):
-                    ex.emit(H.StepBegan(hook.step, tuple(so.num_scheduled_tokens),
-                                        sum(int(x) for x in so.num_scheduled_tokens.values())))
-                else:
-                    ex.step = hook.step
+                hook.scheduling = True
+                try:
+                    hook.release(ex)
+                    so = orig(sched, *a, **kw)
+                    hook.scheduled = [*hook.scheduled[-(SCHEDULED - 1):], (so, ex.next_step)]
+                    if ex.wants("memory"):
+                        for w in writes(sched, so, ex.next_step):
+                            ex.emit(w)
+                finally:
+                    hook.scheduling = False
                 return so
             return scheduled
 
-        def update(orig):
-            def update_from_output(sched, so, out):
-                if (ex := messages.current()).wants("steps"):
-                    ex.emit(H.StepEnded(hook.step))
-                return orig(sched, so, out)
-            return update_from_output
-
         def load(orig):
             def load_model(runner, *a, **kw):
+                from verity_vllm.protocols.linear import vllm_site
+
                 r = orig(runner, *a, **kw)
-                if (ex := messages.current()).wants("memory"):
-                    ex.emit(registered_values(runner, hook.step))
+                ex = messages.current()
+                computes = ex.computes() or ex.wants("blocks")
+                sites = vllm_site.discover(model_of(runner)) if computes or ex.wants("memory") else []
+                if computes:
+                    vllm_site.attach(sites, h)
+                if ex.wants("memory"):
+                    ex.emit(registered_values(runner, ex.step, sites))
+                hook.release_values(model_of(runner), ex)
                 return r
             return load_model
+
+        def execute(orig):
+            def execute_model(runner, so, *a, **kw):
+                r = orig(runner, so, *a, **kw)
+                step = next((s for o, s in reversed(hook.scheduled) if o is so), None)
+                if step is not None and so.total_num_scheduled_tokens and (ex := messages.current()).wants("steps"):
+                    ex.emit(H.StepComputed(step))
+                return r
+            return execute_model
 
         def init_kv(orig):
             def initialize_kv_cache(runner, kv_cache_config, *a, **kw):
                 r = orig(runner, kv_cache_config, *a, **kw)
                 if not kw.get("is_profiling", a[0] if a else False) and (ex := messages.current()).wants("memory"):
-                    ex.emit(ranges_declared(runner, kv_cache_config, hook.step))
+                    ex.emit(ranges_declared(runner, kv_cache_config, ex.step))
                 return r
             return initialize_kv_cache
 
@@ -235,12 +286,12 @@ class _Hook:
                 cls = importlib.import_module(mod).GPUModelRunner
                 h.wrap(cls, "load_model", load)
                 h.wrap(cls, "initialize_kv_cache", init_kv)
+                h.wrap(cls, "execute_model", execute)
         h.wrap(KVCacheManager, "allocate_slots", allocate)
         h.wrap(BlockPool, "get_new_blocks", get_new)
         h.wrap(BlockPool, "touch", touch)
         h.wrap(BlockPool, "free_blocks", free)
         h.wrap(Scheduler, "schedule", schedule)
-        h.wrap(Scheduler, "update_from_output", update)
 
 
 _HOOK = _Hook()

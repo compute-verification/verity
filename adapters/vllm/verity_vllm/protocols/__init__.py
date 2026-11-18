@@ -5,7 +5,7 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
-serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
+serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`).  The
 protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
@@ -24,8 +24,8 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
-scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
-below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
+scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
+below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (`keeps_weight_copy`); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
@@ -39,11 +39,11 @@ record's digest (`Composition.verdict`); it is of record like any other, because
 Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until its
 protocol package has a circuit for its scheme (``traced_as``).
 
-**Circuits.**  What SPOT traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.protocols.resource_accounting.compute.pouw.prover.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
-executed call).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
+**Circuits.**  What SPOT traces an executor's computation as is what its protocol package registers under the
+protocol's name (`scheme.register_circuits`: ``schemes``, those with a circuit, and ``traced_as(scheme, m, k, n)``, the
+circuit of one executed call; PoUW registers ``pouw``).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
-can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
+can be cut at (`cuts`: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
 SPOT setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
 window-commit cuts each window's circuit at its linears and reads Pearl+'s tables there (`window_class.PearlTables`).  A
 row's Commit (`at_row`, `commit_context`) replays the row's request Programs, which are never cut, and refuses ``cut``.
@@ -60,6 +60,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 from verity import hooks as H
+from verity.protocols.resource_accounting import scheme as schemes
 from verity_vllm import config
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
@@ -68,27 +69,21 @@ from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 if TYPE_CHECKING:
     from verity_vllm.errors import Refused
 
-__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
-           "adapter", "driver",
+__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
+           "adapter",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
-           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view", "CIRCUITS",
-           "CUT", "circuit_registry", "traced_as"]
+           "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
+           "CUT", "circuit_registry", "cuts", "keeps_weight_copy", "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
-#: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
-#: (``--remote-verifier``)
-DRIVERS = {"poub": "poub"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
-#: protocol -> the module of its protocol package that says what SPOT traces its executed computation as:
-#: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.protocols.resource_accounting.compute.pouw.prover.circuit"}
 #: the SPOT setting naming the executor whose sites the window's circuit is cut at (`refusals`)
 CUT = "cut"
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
@@ -131,14 +126,6 @@ def adapter(name: str) -> ModuleType:
     return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
 
 
-def driver(name: str, part: str) -> ModuleType:
-    """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
-    be imported on this tree."""
-    if name not in DRIVERS:
-        raise refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
-    return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
-
-
 def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:
     """The protocols config, ``{name: {...}}``: a mapping as given, or read from a JSON file; empty for None."""
     if value is None:
@@ -150,15 +137,10 @@ def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dic
     return {str(k): dict(v) for k, v in doc.items()}
 
 
-def circuit_registry(name: str) -> ModuleType | None:
-    """Protocol ``name``'s circuit registry (`CIRCUITS`), None when it declares none; `Refused` when it is not installed."""
-    module = CIRCUITS.get(name)
-    if module is None:
-        return None
-    try:
-        return importlib.import_module(module)
-    except ModuleNotFoundError as e:
-        raise refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
+def circuit_registry(name: str) -> schemes.Circuits | None:
+    """The circuits protocol ``name``'s package registered by that name (`scheme.register_circuits`), None when it
+    registered none: its adapter's import registers them."""
+    return schemes.CIRCUITS.get(name)
 
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
@@ -227,13 +209,9 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
-def _has_circuit(name: str, scheme: str, out: list[str]) -> bool:
-    try:
-        reg = circuit_registry(name)
-    except _refused() as r:
-        out.extend(r.reasons)
-        return False
-    return reg is not None and scheme in reg.SCHEMES
+def _has_circuit(name: str, scheme: str) -> bool:
+    reg = circuit_registry(name)
+    return reg is not None and scheme in reg.schemes
 
 
 def refusals(ctx: Context) -> tuple[str, ...]:
@@ -269,8 +247,8 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and sampled and not _has_circuit(name, scheme, out):
-            if not getattr(mod, "cuts", lambda s: False)(scheme):
+        if sites and sampled and not _has_circuit(name, scheme):
+            if not cuts(name, scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "
                            f"traced_as)")
@@ -281,13 +259,30 @@ def refusals(ctx: Context) -> tuple[str, ...]:
                            f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
                            f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
                            f"{{\"{CUT}\": \"{entry}\"}}}})")
-        if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
+        if ctx.scheme("pous") is not None and keeps_weight_copy(name, scheme):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
     if cut is not None and cut != cut_at:
         out.append(f"the sampled-proofs setting '{CUT}' names {cut!r}, and a window's circuit is cut only at the sites of an "
-                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (an adapter's cuts)")
+                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (cuts)")
     return tuple(out)
+
+
+def cuts(protocol: str, scheme: str) -> bool:
+    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
+    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES
+    return protocol == "pouw" and scheme in PEARL_C_SCHEMES
+
+
+def keeps_weight_copy(protocol: str, scheme: str) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
+    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (LEAD_SCHEME, NCP_CIRCUIT_SCHEMES,
+                                                                                    PEARL_C_SCHEMES)
+    return protocol == "pouw" and scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
 
 
 def _uncut(ctx: Context) -> list[str]:
@@ -441,13 +436,13 @@ def weights_view(comp: Composition | None, model: Any) -> Any:
     return WeightsView(model, plain) if plain else model
 
 
-def register_weights(comp: Composition | None, com: Any) -> Any:
-    """``com.register_weights()`` over the weights of record: through `weights_view` while an option holds them released."""
+def register_weights(comp: Composition | None, com: Any, replay: bool = False) -> Any:
+    """``com.register_weights(replay)`` over the weights of record: through `weights_view` while an option holds them released."""
     view = weights_view(comp, com.model)
     if view is com.model:
-        return com.register_weights()
+        return com.register_weights(replay=replay)
     with hooks.patched(com, "model", view):
-        return com.register_weights()
+        return com.register_weights(replay=replay)
 
 
 def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:

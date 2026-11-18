@@ -91,6 +91,15 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
+def run_bound(run: str, began: bool) -> None:
+    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+
+
 def _rid_of(order: dict, rid) -> str:
     """The engine's per-step row id -> the workload's `r<i>`: vLLM may suffix the id we passed to add_request with `-<8 hex>`
     (verity_vllm.engine.engine_driver.external_id strips it); an id the workload does not name is returned raw (named downstream)."""
@@ -1292,7 +1301,10 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
+            run = None if arm == "control" else f"pair{pair}.{arm}"
+            run is not None and run_bound(run, began=True)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
+            run is not None and run_bound(run, began=False)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
@@ -1353,7 +1365,7 @@ def main(args: Options) -> None:
                 if getattr(args, "match_dir", None):
                     oracle_producers = match_record_compare(row, com, rc, components, oracle_producers, args=args, reqs=reqs, sampling=sampling,
                                                             required_manifest=required_manifest, vc_result=vc_result, pair=pair)
-                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
+                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com, replay=True), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
                 _c2_deferred = bool(args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started))
                 if _c2_deferred and args.serving_rows:
                     C2.serving_rows(_c2)

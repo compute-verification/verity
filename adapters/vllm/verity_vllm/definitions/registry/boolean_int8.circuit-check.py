@@ -21,7 +21,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Int8RowQuant_v4/r2", lambda: bind(X.Int8RowQuantV4, K=4, R=2)),
         # and with its row as one leaf, codes then scale (`U8x4ToU32_v2`)
         ("Int8RowQuant_v6/r2", lambda: bind(X.Int8RowQuantV6, K=4, R=2, ROUND=0)),
-        ("Int8Linear_v2", lambda: bind(X.Int8LinearV2, K=32, N=2)),
+        ("Int8Linear_v4", lambda: bind(X.Int8LinearV4, K=32, N=2)),
         ("Int8AttnScale_v2", lambda: bind(X.Int8AttnScaleV2, SCALE=scale)),
         ("Int8LutSoftmax_v3", lambda: bind(X.Int8LutSoftmaxV3, S=3)),
         ("Int8ColumnQuant_v2", lambda: bind(X.Int8ColumnQuantV2, S=3, D=2)),

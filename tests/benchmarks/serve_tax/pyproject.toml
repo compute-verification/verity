@@ -96,6 +96,11 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # every write the serve tax, prod_repro and the replay ladder make is under the private directory or in the
+    # registry of writers (tests/test_private_writes.py), which reads their every file
+    "benchmarks/prod_repro",
+    "benchmarks/replay_ladder",
+    "benchmarks/spot_proved/long_rows.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
     "calibration/hardware/cards",

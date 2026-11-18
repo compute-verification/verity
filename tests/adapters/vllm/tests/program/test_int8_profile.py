@@ -70,8 +70,8 @@ def test_weights_record_carries_s8_weights_and_row_scales_and_the_map_names_them
     layer = dict(analytic.weights_type(p.config).fields)["layers"].elem
     assert [n for n, _ in layer.fields] == ["ln1", "qkv_w", "qkv_ws", "o_w", "o_ws", "ln2", "gate_up_w", "gate_up_ws", "down_w", "down_ws"]
     f = dict(layer.fields)
-    assert str(f["qkv_w"]) == "Array<6144,Array<4096,Value<8>>>" and str(f["qkv_ws"]) == "Array<6144,Array<1,Value<32>>>"
-    assert str(f["down_w"]) == "Array<4096,Array<14336,Value<8>>>" and str(f["ln1"]) == "Array<4096,Value<16>>"
+    assert str(f["qkv_w"]) == "Array<6144,Array<2048,Value<16>>>" and str(f["qkv_ws"]) == "Array<6144,Array<2,Value<16>>>"
+    assert str(f["down_w"]) == "Array<4096,Array<7168,Value<16>>>" and str(f["ln1"]) == "Array<4096,Value<16>>"
     wf = p.weight_field
     assert wf("model.layers.5.self_attn.qkv_proj.weight_scale") == ("layers", 5, "qkv_ws")
     assert wf("model.layers.5.mlp.down_proj.weight_scale") == ("layers", 5, "down_ws")
@@ -91,7 +91,7 @@ def test_the_v2_role_carries_an_s8_lm_head_and_its_row_scales():
     names = [n for n, _ in fields]
     assert names[names.index("lm_head") + 1] == "lm_head_ws"
     f = dict(fields)
-    assert str(f["lm_head"]) == "Array<128256,Array<4096,Value<8>>>" and str(f["lm_head_ws"]) == "Array<128256,Array<1,Value<32>>>"
+    assert str(f["lm_head"]) == "Array<128256,Array<2048,Value<16>>>" and str(f["lm_head_ws"]) == "Array<128256,Array<2,Value<16>>>"
     assert str(f["embed"]) == str(dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["embed"])
     assert dict(fields)["layers"].elem == dict(analytic.weights_type(profile_for_case(ROLE).config).fields)["layers"].elem
     wf = p.weight_field
@@ -233,15 +233,16 @@ def test_int8_linear_resolves_to_the_quantizer_then_the_product_with_both_weight
     assert isinstance(q, Compute) and isinstance(mm, Compute), (q, mm)
     assert spec_label(q.spec) == f"Int8RowQuant_v1{{K={K}}}" and q.rows == M and q.consumed and q.hint == f"{QKV}/quant"
     assert [type(o) for o in q.operands] == [PerRow] and [type(o) for o in q.outputs] == [PerRow, PerRow]
-    assert spec_label(mm.spec) == f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed
+    assert spec_label(mm.spec) == f"ScaledMmS8_v3{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed
     assert mm.operands[:2] == q.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
+    assert [(o.view.dtype, o.view.shape) for o in mm.operands[2:]] == [("uint16", (N, K // 2)), ("uint16", (N, 2))]
     assert mm.roots == (None, None, f"{QKV}.weight", f"{QKV}.weight_scale")
 
 
 def test_int8_linear_refuses_other_dtypes_and_non_parameter_weights():
     ctx = _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots())
     assert "Int8RowQuant_v1 is" in Int8RowQuant().match(_quant("float16"), ctx).reason
-    assert "ScaledMmS8_v1 is" in Int8ScaledMm().match(_mm(w_dtype="uint8"), ctx).reason
+    assert "ScaledMmS8_v3 is" in Int8ScaledMm().match(_mm(w_dtype="uint8"), ctx).reason
     r = Int8ScaledMm().match(_mm(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}))
     assert isinstance(r, Unsupported) and "weight Roots" in r.reason
     other = _tree([DispatchEnter(1, None, 0, "forward", "aten.linear.default", "aten::linear(Tensor input, Tensor weight, "

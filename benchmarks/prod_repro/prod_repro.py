@@ -31,7 +31,7 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
 - ``tokens``: the served window the replay re-ran (`replay.window`), how many of its requests and served tokens the
   replay's kept tokens were compared with (`replay.token_diff`) and how many differ, with the steps that differ and
   the requests of the window that began from a prefix-cache hit. Where they differ: the first token that does (its
-  request, position, served and replayed ids and the step that emitted it) and the first step whose rows do. The
+  request, position and the step that emitted it, never the ids) and the first step whose rows do. The
   window is reproduced where every served token equals its replayed one and every served step is in the replay with
   equal rows, but for the steps after a request's end (`after_end`), which are counted and printed and are no
   difference; a replayed step serving did not run, a missing step that emitted a token or holds a request that had
@@ -562,8 +562,9 @@ def value_settings(dirs: dict[str, list[Path]], stock: str | None, ours: str, re
 # --------------------------------------------------------------------------------------------------------- the tokens
 
 def replayed_steps(replay_dir: Path) -> dict[int, list] | None:
-    """The rows of each step the replay ran, from the steps it kept; None where it kept none."""
-    f = next((p for p in (replay_dir / "replay_steps.jsonl", replay_dir / "replay_steps.jsonl.gz") if p.is_file()), None)
+    """The rows of each step the replay ran, from the steps it kept in its private directory; None where it kept none."""
+    kept = S.private_of(replay_dir) if (replay_dir / "replay.json").is_file() else None
+    f = next((p for p in (kept / "replay_steps.jsonl", kept / "replay_steps.jsonl.gz") if p.is_file()), None) if kept else None
     if f is None:
         return None
     with (gzip.open if f.suffix == ".gz" else open)(f, "rt", encoding="utf-8") as lines:
@@ -645,9 +646,11 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
     if arm_dir is None or of[1:] != (load, rep, run):
         return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
                             f"run {of[3]}), not of {ours}'s {load} rep {rep} of run {run}")
+    if not rec.get("private"):
+        return not_measured(f"the replay in {replay_dir} names no private directory, where it keeps its tokens")
     try:
         w = R.window(arm_dir, load, rep)
-        got = R.read_tokens(replay_dir)
+        got = R.read_tokens(Path(rec["private"]))
     except (SystemExit, OSError, KeyError, ValueError) as e:
         return not_measured(f"the served window or the replay's tokens can't be read back: {type(e).__name__}: {e}")
     served = {r["engine_id"]: r["served"] for r in w["requests"]}
@@ -655,7 +658,7 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
     for d in diff:
         a, b, p = served[d["request"]], got.get(d["request"], []), d["first_position"]
         steps = at.get(d["request"], [])
-        d |= {"served_id": a[p] if p < len(a) else None, "replayed_id": b[p] if p < len(b) else None,
+        d |= {"ended": "serving" if p >= len(a) else "the replay" if p >= len(b) else None,
               "step": steps[p] if p < len(steps) else None}
     diff.sort(key=lambda d: (d["step"] is None, d["step"] or 0))
     hits = {rid: int(k) for s in w["steps"] for rid, k in (s.get("cache_hit") or {}).items()}
@@ -1155,9 +1158,8 @@ def where(t: dict) -> list[str]:
     out = []
     if t["differing"]:
         d = t["differing"][0]
-        ids = (f"served id {d['served_id']}" if d["served_id"] is not None else "serving ended before it") + ", " + (
-            f"replayed id {d['replayed_id']}" if d["replayed_id"] is not None else "the replay ended before it")
-        out.append(f"the first token that differs: request {d['request']} position {d['first_position']}: {ids}"
+        ended = f": {d['ended']} ended before it" if d["ended"] else ""
+        out.append(f"the first token that differs: request {d['request']} position {d['first_position']}{ended}"
                    + ("" if d["step"] is None else f"; serving emitted it in step {d['step']} of the window"))
     s = t.get("first_step")
     if s:

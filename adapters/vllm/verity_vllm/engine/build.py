@@ -13,7 +13,8 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import torch
 
@@ -23,10 +24,11 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import handle, served
 from verity_vllm.log import init_logger
 
-__all__ = ["Engine", "build_engine", "flash_attn_versions", "register_int8_parts", "resolved_async_scheduling",
+__all__ = ["Engine", "build_engine", "hooked", "refuse_async", "flash_attn_versions", "register_int8_parts", "resolved_async_scheduling",
            "target_mismatches"]
 
 logger = init_logger(__name__)
+T = TypeVar("T")
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
@@ -51,6 +53,8 @@ class Engine:
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
     rope_cache: dict | None = None  # the fused rope and KV-cache write installed at the build (`rope_cache`), None when none
     fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
+    admission: Any = None  # the admission hook on the in-process scheduler (`hooked`), its steps' one emitter; None when the core is elsewhere
+    exchange: Any = None  # the exchange this build answered (`messages.build`), which its callers put in scope (`messages.using`)
 
     @property
     def vllm_config(self) -> Any:
@@ -215,10 +219,31 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     return kw, env_flags, cp
 
 
+def hooked(make: Callable[[], T]) -> tuple[T, Any, Callable[[], None]]:
+    """``make()``, a vLLM engine, built with the memory hook on (`kv_blocks.attach`) and, where its engine core is in this
+    process, the admission hook (`admission.install`) on its scheduler: the one emitter of its steps, which the memory
+    hook's events are stamped by.  Returns the engine, the admission hook (None for a core in another process, whose
+    process's plugin puts it on) and the removal of both."""
+    from verity_vllm.engine import admission, kv_blocks
+    detach = kv_blocks.attach()
+    try:
+        llm = make()
+        hook = admission.install(handle.scheduler(llm)) if handle.core_in_process(llm) else None
+    except BaseException:
+        detach()
+        raise
+
+    def off() -> None:
+        if hook is not None:
+            hook.uninstall()
+        detach()
+    return llm, hook, off
+
+
 def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_num_seqs: int = 8,
                  verify_weights: bool = False, case: str = CASE, engine_args: dict[str, Any] | None = None, target: Any = None,
                  execution: str | None = None, env: dict[str, str] | None = None, card: str = "") -> Engine:
-    """The engine, built once the process's exchange answered its schemes' requests on what it declares (`Declared`:
+    """The engine, built once its build's exchange (`messages.build`) answered its schemes' requests on what it declares (`Declared`:
     ``card`` the card's file id, empty when the caller declares none); the in-process runner emits each step."""
     from verity_vllm.engine import engine_profile as prof
 
@@ -247,18 +272,28 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                            "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
-    messages.current().answer(H.Declared(card, {
+    ex = messages.build()
+    if fixed := sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)}):
+        if len(fixed) > 1 or kw.get("num_gpu_blocks_override") not in (None, fixed[0]):
+            raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
+                               f"{kw.get('num_gpu_blocks_override')}: one size")
+        kw["num_gpu_blocks_override"] = fixed[0]
+    if kw.get("async_scheduling") is None and (want := {r.value for _, r in ex.requests if isinstance(r, H.RequireProperty)
+                                                          and r.property == "async_steps"}):
+        kw["async_scheduling"] = want.pop() if len(want) == 1 else None
+    ex.answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
-        "kernels": served.kernels(engine_args)}))
-    from verity_vllm.engine import kv_blocks
-    kv_blocks.attach()
+        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling")},
+        tuple(ex.attached), dict(ex.attached)))
     t0 = time.perf_counter()
-    llm = LLM(**kw)
+    llm, admitted, _ = hooked(lambda: LLM(**kw))
     build_s = time.perf_counter() - t0
     runner = handle.model_runner(llm) if world == 1 else None
     model = runner.get_model() if runner is not None else None
-    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution)
+    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, admission=admitted,
+                 exchange=ex)
+    refuse_async(llm, kw.get("async_scheduling"), ex)
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
         raise RuntimeError(f"execution mismatch after build: the row declares {execution!r} but vllm_config.model_config.enforce_eager="
@@ -367,6 +402,16 @@ def target_mismatches(engine: Engine) -> list[str]:
         if got != tp.moe_experts_class():
             bad.append(f"moe_backend declared {tp.moe_backend!r} ({tp.moe_experts_class()}), layers report {got!r}")
     return bad
+
+
+def refuse_async(llm: Any, declared: bool | None, ex: messages.Exchange) -> None:
+    """Refuse, naming the schemes that required ``async_steps``, an engine whose resolved async scheduling is not the
+    declared ``declared``; one whose resolution vLLM does not expose only where a scheme required it."""
+    got = resolved_async_scheduling(llm)
+    names = sorted({n for n, r in ex.requests if isinstance(r, H.RequireProperty) and r.property == "async_steps"})
+    if declared is not None and got != declared and (got is not None or names):
+        raise RuntimeError(f"the engine was declared with async_steps {declared}" + (f", as {', '.join(names)} require,"
+                           if names else "") + f" and vLLM resolved async scheduling {got}")
 
 
 def resolved_async_scheduling(llm: Any) -> bool | None:

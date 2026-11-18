@@ -41,10 +41,9 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       add in the coordinate's epilogue, `Bf16AddF2fp_v1(r, ScaledMmS8CoordinateRows_v1{K, R,
                                       DOT})`: the coordinate rounded to bf16, then added to the residual stream's word r
                                       as `Bf16AddRow_v1` adds it, so the projection's own word is never committed
-    ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
-                                      `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` proof block)
-    ScaledMmS8_v3{K, N, DOT}          (x: s8[K], sx: f32, w: u16[N][K/2], sw: u16[N][2]) -> bf16[N]: `ScaledMmS8_v1` on W's
-                                      rows and scales as registered u16 words, each code's byte and each scale's word low first,
+    ScaledMmS8_v3{K, N, DOT}          (x: s8[K], sx: f32, w: u16[N][K/2], sw: u16[N][2]) -> bf16[N]: the linear on one token
+                                      row, `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` proof block), W's
+                                      rows and scales the registered u16 words, each code's byte and each scale's word low first,
                                       taken apart into s8 codes and f32 scales by `WordBits`/`BitsWord` batches (wiring only)
 
 census/v1 counts `GemmAccumulatorS8_v1`'s products as served by none (`census.serves_none`): it has no committed words of its
@@ -76,7 +75,7 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
            "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
-           "GemmCoordinateNvf4", "GemmCoordinatePad", "KEY_COUNT", "PvRow", "PvRowPad", "S8_K_LIMIT", "ScaledMmS8",
+           "GemmCoordinateNvf4", "GemmCoordinatePad", "KEY_COUNT", "PvRow", "PvRowPad", "S8_K_LIMIT",
            "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "ScaledMmS8ResidualCoordinateRows", "ScaledMmS8V3", "s8_gemm"]
 
 _SCALE = Value(8)
@@ -328,16 +327,6 @@ def ScaledMmS8ResidualCoordinateRows(B, S, *ports):
     input, with y never a committed value of its own."""
     y = B.call(bind(ScaledMmS8CoordinateRows, K=S.K, R=S.R, DOT=S.DOT), *ports[:-1])
     return B.call(F.Bf16AddF2fp, ports[-1], y)
-
-
-@composite("ScaledMmS8", 1, ["K", "N", "DOT"],
-           lambda S: ((("x", Array(S.K, S8)), ("sx", F32), ("w", Array(S.N, Array(S.K, S8))), ("sw", Array(S.N, F32))),
-                      Array(S.N, BF16)),
-           conformance=ScaledMmS8Coordinate.conformance, refuse=_S8)
-def ScaledMmS8(B, S, x, sx, w, sw):
-    """A W8A8 linear on one token row: the N output coordinates (`ScaledMmS8Coordinate_v1`) over the s8 row `x` with its scale
-    `sx`, the s8 weight rows and their per-channel scales."""
-    return B.batch(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, w, sw, axes=(None, None, 0, 0))
 
 
 def _from_words(B, c: Coll, t, w: int) -> Coll:

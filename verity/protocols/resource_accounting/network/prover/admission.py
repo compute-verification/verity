@@ -3,7 +3,7 @@
 frontends that feed them: serve-openai's (`TickAdmit`) and an OpenAI-style server's middleware (`ReleaseFeed`). The
 adapter hands in what is its own: the engine loop's submit and abort, its server's routes and body check, the
 configuration it read, and the exchange of `verity.hooks` events and requests the gate and serve-openai's frontend
-attach to. Nothing here imports the adapter or vLLM.
+attach to, both built and attached by one entry (`Admitter`). Nothing here imports the adapter or vLLM.
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
@@ -84,6 +84,9 @@ class ReleaseOrder:
     `key` reads a request's headers as the frontend receives it; `submit` and `abort` stand in for the engine loop's;
     `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the HTTP
     server's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
+
+    #: the release headers `key` reads, the release's number and its run
+    headers = (RELEASE_HEADER, RUN_HEADER)
 
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None], *, hold_s: float,
                  schedule: Callable[[float, Callable[[], None]], Any] | None = None) -> None:
@@ -358,12 +361,13 @@ class TickGate:
             for rec in self.pull():
                 self.take(rec)
 
-    def attach(self, exchange: Any, name: str | None = None) -> None:
+    def attach(self, exchange: Any, name: str | None = None) -> Callable[[], None]:
         """File this gate on ``exchange`` (the adapter's exchange of `verity.hooks` events and requests) under scheme
-        ``name`` (the network attester's declaration's by default), and subscribe it to the ``steps`` hook."""
+        ``name`` (the network attester's declaration's by default), and subscribe it to the ``steps`` hook; returns
+        the subscription's removal."""
         name = name or scheme_name()
         exchange.request(name, H.StartOnBoundary(self))
-        exchange.subscribe(name, "steps", self.on)
+        return exchange.subscribe(name, "steps", self.on)
 
     def add(self, key: str, start: Callable[[], None]) -> None:
         """A request came: ``start`` it now where the gate doesn't order it, else at its step, and never where its
@@ -399,10 +403,10 @@ class TickGate:
         start()
 
     def on(self, event: Any) -> None:
-        """A ``steps`` event: a step that began advances T; a held request completed from outside is dropped, as its N
+        """A ``steps`` event: a step that computes advances T; a held request completed from outside is dropped, as its N
         won't come."""
         if isinstance(event, H.StepBegan):
-            if self.run is not None and self.opened is None:
+            if self.run is not None and self.opened is None and event.slots > 0:
                 self.T += self.tick.step(event.queued > 0)
                 self.steps += 1
         elif isinstance(event, H.OutputsComplete):
@@ -501,6 +505,9 @@ class TickGate:
         """The gate holds a request, or waits on the watermark or a release: the engine has work though its scheduler may
         have none."""
         return bool(self.held) or self.wait_start is not None
+
+    def record(self) -> dict[str, int]:
+        return self.tick.record()
 
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "tick": self.tick.record(), "hold_s": self.hold_s, "runs": len(self.runs), "steps": self.steps,
@@ -690,16 +697,18 @@ class TickAdmit:
         return {**self.counts, "runs": len(self.seen)}
 
 
-def tick_config(cfg: Any, source: str) -> dict[str, Any] | None:
+def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] | None:
     """The certified tick's configuration from ``cfg``, the JSON object the adapter read under ``source``, None for None:
     ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``feed`` (the file
-    `ReleaseFeed` appends to and the gate reads), ``log`` (a directory for each gate's ``tick.PID.jsonl``,
-    optional), and a rule other than the registered one, ``token_ns`` and ``catch_up`` (`RuleGate`; 0 and ``quiet``,
-    the registered rule, by default), with ``arm``, the benchmark arm measuring it, where ``catch_up`` is ``open``."""
+    `ReleaseFeed` appends to and the gate reads; optional, None without it, where ``feed`` is False), ``log`` (a
+    directory for each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
+    ``catch_up`` (`RuleGate`; 0 and ``quiet``, the registered rule, by default), with ``arm``, the benchmark arm
+    measuring it, where ``catch_up`` is ``open``."""
     if cfg is None:
         return None
-    if not isinstance(cfg, dict) or not cfg.get("feed"):
-        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us and feed, not {json.dumps(cfg)[:80]!r}")
+    if not isinstance(cfg, dict) or (feed and not cfg.get("feed")):
+        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us{' and feed' if feed else ''}, "
+                         f"not {json.dumps(cfg)[:80]!r}")
     rule = {"token_ns": cfg.get("token_ns", 0), "catch_up": cfg.get("catch_up", "quiet")}
     if type(rule["token_ns"]) is not int or rule["token_ns"] < 0 or rule["catch_up"] not in CATCH_UPS:
         raise ValueError(f"{source}: token_ns a non-negative integer and catch_up one of {sorted(CATCH_UPS)}, not {rule}")
@@ -707,7 +716,8 @@ def tick_config(cfg: Any, source: str) -> dict[str, Any] | None:
         raise ValueError(f"{source}: catch_up 'open' opens the gate, which then orders nothing, so nothing serves under "
                          "it; only a benchmark arm that names it measures it, its name the object's \"arm\"")
     return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
-            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]), "log": cfg.get("log"), **rule}
+            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]) if cfg.get("feed") else None,
+            "log": cfg.get("log"), **rule}
 
 
 class RuleGate(TickGate):
@@ -753,6 +763,69 @@ class RuleGate(TickGate):
 
     def summary(self) -> dict[str, Any]:
         return {**super().summary(), "rule": {"token_ns": self.token_ns, "catch_up": self.catch_up, "tokens": dict(self.tokens)}}
+
+
+#: what `Admitter` adds requests in: the network attester's release order, or that order at the certified tick's steps
+ORDERS = ("release-order", "tick")
+
+
+class Admitter:
+    """The network attester's admission on one served node, the one entry an adapter attaches it by: built from its
+    configuration and installed on the adapter's exchange before the engine is built, as memory's `Binder` is.
+
+    ``cfg`` is a JSON object: ``order``, one of `ORDERS` (``tick`` by default), ``hold_ms``, and under ``tick`` the rest of
+    `tick_config`'s (its ``feed`` and ``log`` are the adapter's to read and write: the gate reads ``pull`` and writes
+    ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
+    `verity.hooks.Gate`): `RuleGate` under a rule other than the registered one, else `TickGate`; and, given ``submit``,
+    the frontend `TickAdmit`, which hands the gate its records through ``take`` (the gate's own `TickGate.take` by
+    default; where the gate runs on another thread, a call that queues them to it). `ValueError` names what ``cfg``
+    lacks. `install` files and subscribes both under `scheme_name`."""
+
+    def __init__(self, cfg: Mapping[str, Any], *, source: str = "the network attester's admission",
+                 submit: Callable[[Any], None] | None = None, abort: Callable[[str], None] | None = None,
+                 take: Callable[[dict[str, Any]], None] | None = None,
+                 pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
+                 log: Callable[[dict[str, Any]], Any] | None = None, clock: Callable[[], float] = time.monotonic,
+                 schedule: Callable[[float, Callable[[], None]], Any] | None = None) -> None:
+        order = cfg.get("order", "tick") if isinstance(cfg, Mapping) else None
+        if order not in ORDERS:
+            raise ValueError(f"{source}: order one of {list(ORDERS)}, not {order!r}")
+        if (order == "release-order" or submit is not None) and (submit is None or abort is None):
+            raise ValueError(f"{source}: the {order} frontend forwards each request through submit and abort")
+        self.gate: TickGate | None = None
+        self.front: ReleaseOrder | TickAdmit | None = None
+        self.installed = False
+        self._off: list[Callable[[], None]] = []
+        if order == "release-order":
+            self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000, schedule=schedule)
+            return
+        tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source, feed=False)
+        kw = {"hold_s": tc["hold_s"], "clock": clock, "pull": pull, "log": log}
+        rule = {k: tc[k] for k in ("token_ns", "catch_up") if tc.get(k) not in (None, 0, "quiet")}
+        self.gate = RuleGate(tc["tick"], **rule, **kw) if rule else TickGate(tc["tick"], **kw)
+        if submit is not None:
+            self.front = TickAdmit(submit, abort, take or self.gate.take)
+
+    def install(self, exchange: Any, name: str | None = None) -> Admitter:
+        """File and subscribe on ``exchange`` (the adapter's: ``request(name, request)``, and ``subscribe(name, hook,
+        fn)`` returning the removal) under ``name`` (`scheme_name` by default), before the engine is built: the gate
+        (`TickGate.attach`: `hooks.StartOnBoundary` and the ``steps`` hook) and the frontend's watermark route and
+        refusals (`TickAdmit.attach`: `hooks.ServeRoute`, `hooks.RefuseInput`). ``release-order`` files nothing."""
+        if self.installed:
+            raise RuntimeError("the network attester's admission is installed")
+        self.installed = True
+        name = name or scheme_name()
+        if self.gate is not None:
+            self._off.append(self.gate.attach(exchange, name))
+        if isinstance(self.front, TickAdmit):
+            self.front.attach(exchange, name)
+        return self
+
+    def uninstall(self) -> None:
+        """Remove the gate's subscription; what `install` filed stays filed, as the exchange takes no request back."""
+        offs, self._off = self._off, []
+        for off in offs:
+            off()
 
 
 async def _buffered(receive: Callable[[], Any]) -> tuple[bytes, Callable[[], Any]]:

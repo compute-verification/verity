@@ -1,7 +1,7 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
-              [--capture ID,... [--capture-template T]] [--private DIR] --out DIR [--result RUN_DIR [--minify RUN]]
+              [--capture ID,... [--capture-template T]] --private DIR --out DIR [--result RUN_DIR [--minify RUN]]
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). A request's prompt ids are the plan's and
@@ -19,15 +19,15 @@ field (min-p, a penalty, a stop, a logit bias: from the request or from the chec
 (`unapplied`), since its replay would sample without it. Where the arm served with other vLLM general
 plugins (the canonical DSA top-k: ``canonical-topk``, ``two-stage``, ``prod-record``), the replay's processes load them
 too, under the arm's environment (`served_under`), and ``--private`` is where they keep what the arm keeps on the node
-(the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
+(the top-k's counters). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
 (first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
 settings in force in its engine's environment (``settings``, as the served
-arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
-later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
-named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
+arm's meta.json has its server's: `serve_tax.value_settings`) and its ``--private`` (``private``); there
+replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a later replay's with, to tell a replay that differs from serving from one that differs from itself, and replay_steps.jsonl its step records. ``--capture`` takes the
+named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into ``--private``/capture, a
 token-select span each, and replay.json says whether each one's ids are the ones served.
 ``--result RUN_DIR`` writes the run's result.json (`KIND`), passed only where the replay is bit-exact, its fingerprint
 naming under ``minify`` the minify run whose copy served the arm (the arm's meta.json's ``run_id``, else ``--minify``;
@@ -54,9 +54,10 @@ import serve_tax as S  # noqa: E402 (beside this file)
 
 def served_ids(arm_dir: Path, tag: str) -> dict[str, dict]:
     """The lines an arm's server kept (`servetax_plugin.ServedIds`: a request's engine id, prompt ids and served ids) for
-    the requests whose ids hold ``tag``, by engine id; its files plain or gzipped, as its step traces are."""
-    kept = {}
-    for path in sorted((arm_dir / "server").glob("ids.*.jsonl*")):
+    the requests whose ids hold ``tag``, by engine id, under its private directory (`serve_tax.private_of`); its files
+    plain or gzipped, as its step traces are."""
+    kept, private = {}, S.private_of(arm_dir)
+    for path in sorted((private / "server").glob("ids.*.jsonl*")) if private else ():
         with (gzip.open if path.suffix == ".gz" else open)(path, "rt", encoding="utf-8") as f:
             for line in f:
                 if f"-{tag}-" in line.partition(",")[0]:      # a line opens with its request's id: no other pass's is parsed
@@ -85,7 +86,8 @@ def unapplied(sampling: dict) -> dict:
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
-    step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
+    step indices from the window's first. The ids are the plan's and the corpus client's (its records kept whole on the
+    node, `serve_tax.client_kept`), or, for a
     pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
     the replay does not apply is refused (`unapplied`)."""
     rep_dir = arm_dir / load / f"rep-{rep}"
@@ -93,14 +95,14 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     kept = None if (rep_dir / "client.jsonl").is_file() else served_ids(arm_dir, tag)
     if kept is None:
         named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
-        tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
-        plan_file = next((p for p in tried if p.is_file()), None)
-        if plan_file is None:
-            raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
+        plan_file = Path(named) if named else S.private_of(arm_dir) / "plan.jsonl"
+        if not plan_file.is_file():
+            raise SystemExit(f"no plan at {plan_file}, on the node that served {arm_dir}")
         plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
-        client = {r["id"]: r for r in (json.loads(x) for x in (rep_dir / "client.jsonl").read_text().splitlines() if x.strip())}
+        client = {r["id"]: r for r in (json.loads(x) for x in S.client_kept(arm_dir, rep_dir).read_text().splitlines()
+                                       if x.strip())}
     elif not kept:
-        raise SystemExit(f"{rep_dir} has no client.jsonl and {arm_dir / 'server'} kept no ids of load {load} rep {rep} "
+        raise SystemExit(f"{rep_dir} has no client.jsonl and {arm_dir}'s server kept no ids of load {load} rep {rep} "
                          f"({tag}): a pass sent by vLLM's client is replayed from an arm whose server keeps each request's "
                          "ids (prod-record)")
     (trace,) = S.step_traces(arm_dir)
@@ -294,13 +296,18 @@ def logprob_diff(want: dict[str, list[float]], got: dict[str, list[float]], step
             "requests_differing": out[:DIFFERING_MAX]}
 
 
-def read_logprobs(replay_dir: Path) -> dict[str, list[float]]:
-    with gzip.open(replay_dir / "replay_logprobs.jsonl.gz", "rt") as f:
+def _kept(private: Path, name: str) -> Path:
+    """Where the replay keeps its file ``name``, which holds request values: in its ``--private``, on the node."""
+    return private / name
+
+
+def read_logprobs(private: Path) -> dict[str, list[float]]:
+    with gzip.open(_kept(private, "replay_logprobs.jsonl.gz"), "rt") as f:
         return {r["request"]: r["logprobs"] for r in map(json.loads, f) if r}
 
 
-def write_logprobs(replay_dir: Path, lps: dict[str, list[float]]) -> None:
-    with gzip.open(replay_dir / "replay_logprobs.jsonl.gz", "wt") as f:
+def write_logprobs(private: Path, lps: dict[str, list[float]]) -> None:
+    with gzip.open(_kept(private, "replay_logprobs.jsonl.gz"), "wt") as f:
         for rid in sorted(lps):
             f.write(json.dumps({"request": rid, "logprobs": lps[rid]}, separators=(",", ":")) + "\n")
 
@@ -337,13 +344,13 @@ def compare(w: dict, got: dict) -> dict:
             "requests_differing": tok_differ[:DIFFERING_MAX]}
 
 
-def read_tokens(replay_dir: Path) -> dict[str, list[int]]:
-    with gzip.open(replay_dir / "replay_tokens.jsonl.gz", "rt") as f:
+def read_tokens(private: Path) -> dict[str, list[int]]:
+    with gzip.open(_kept(private, "replay_tokens.jsonl.gz"), "rt") as f:
         return {r["request"]: r["tokens"] for r in map(json.loads, f) if r}
 
 
-def write_tokens(replay_dir: Path, tokens: dict[str, list[int]]) -> None:
-    with gzip.open(replay_dir / "replay_tokens.jsonl.gz", "wt") as f:
+def write_tokens(private: Path, tokens: dict[str, list[int]]) -> None:
+    with gzip.open(_kept(private, "replay_tokens.jsonl.gz"), "wt") as f:
         for rid in sorted(tokens):
             f.write(json.dumps({"request": rid, "tokens": tokens[rid]}, separators=(",", ":")) + "\n")
 
@@ -389,11 +396,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="record each sampled token's logprob too, and compare them with --against's, step by step")
     ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
-                                      "OUT/capture, each a span of --capture-template's units")
+                                      "--private/capture, each a span of --capture-template's units")
     ap.add_argument("--capture-template", help="the token select the captured rows are units of (default: the check the "
                                                "served arm committed under, `capture_template`)")
-    ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
-                                                 "plugins keep on the node (the canonical top-k's counters)")
+    ap.add_argument("--private", type=Path, required=True,
+                    help="a directory outside every run's, for what the replay and the served arm's other plugins keep "
+                         "on the node: the replay's tokens and logprobs, the canonical top-k's counters")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--result", type=Path, help=f"a directory holding --out: write its result.json, of kind {KIND}, "
                     "passed only where the replay was bit-exact")
@@ -403,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.result and not a.out.resolve().is_relative_to(a.result.resolve()):
         raise SystemExit(f"--out {a.out} is outside --result {a.result}: the result names replay.json by a path inside it")
     for public in (a.out, *([Path(SHARED.RESEARCH_RUN_DIR)] if SHARED.RESEARCH_RUN_DIR else [])):
-        if a.private and a.private.resolve().is_relative_to(public.resolve()):
+        if a.private.resolve().is_relative_to(public.resolve()):
             raise SystemExit(f"the private directory {a.private} is inside {public}, which leaves the node: --private DIR, "
                              "outside every run's directory")
     if sys.flags.hash_randomization:
@@ -426,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = S.value_settings()       # the environment the engine and every process it starts are given
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
-    capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
+    capture = (a.capture.split(","), a.private / "capture" / "ranks") if a.capture else None
     template = capture_template(meta, a.capture_template) if capture else None
     line = meta["server_argv"]
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture,
@@ -438,26 +446,30 @@ def main(argv: list[str] | None = None) -> int:
            "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
-           "engine_ready_s": got["ready_s"], "gpus": a.tp, **compare(w, got)}
+           "engine_ready_s": got["ready_s"], "gpus": a.tp, "private": str(a.private.resolve()), **compare(w, got)}
     if a.against:
-        d = token_diff(read_tokens(a.against), got["tokens"])
+        earlier = S.private_of(a.against)
+        if earlier is None:
+            raise SystemExit(f"{a.against / 'replay.json'} names no private directory, where its tokens are kept")
+        d = token_diff(read_tokens(earlier), got["tokens"])
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
-        if a.logprobs and (a.against / "replay_logprobs.jsonl.gz").is_file():
-            out["against"]["logprobs"] = logprob_diff(read_logprobs(a.against), got["logprobs"], got["steps"])
+        if a.logprobs and _kept(earlier, "replay_logprobs.jsonl.gz").is_file():
+            out["against"]["logprobs"] = logprob_diff(read_logprobs(earlier), got["logprobs"], got["steps"])
     if capture:
         from verity_vllm.engine import sampler_capture as SC
         spans = SC.spans(got["takes"], got["steps"])
-        SC.write(a.out / "capture", template, spans)
+        SC.write(a.private / "capture", template, spans)
         served = {r["engine_id"]: r["served"] for r in w["requests"]}
         out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
                           for rid, s in spans.items()}
         out["capture_missing"] = sorted(set(capture[0]) - set(spans))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
-    write_tokens(a.out, got["tokens"])
+    a.private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    write_tokens(a.private, got["tokens"])
     if a.logprobs:
-        write_logprobs(a.out, got["logprobs"])
-    with open(a.out / "replay_steps.jsonl", "w") as f:
+        write_logprobs(a.private, got["logprobs"])
+    with open(_kept(a.private, "replay_steps.jsonl"), "w") as f:
         for s in got["steps"]:
             f.write(json.dumps(s, separators=(",", ":")) + "\n")
     if a.result:

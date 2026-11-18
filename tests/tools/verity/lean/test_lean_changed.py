@@ -858,6 +858,21 @@ def test_a_lock_that_cant_be_read_names_no_prover_and_says_so(capsys):
     assert LC.provers("s", {}.get) == [] and capsys.readouterr().err == ""
 
 
+def test_a_bare_tree_name_is_a_tree_this_node_keeps_and_a_missing_one_runs_nothing(tmp_path, monkeypatch, capsys):
+    """`--try FILE --tree NAME` (`verity lean try --tree NAME`, a branch's kept tree) is `lean-records/NAME` in the check
+    cache; where the node keeps no such tree it exits 2 with no build, since a tree made empty there would build cold."""
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: cache)
+    tried = []
+    monkeypatch.setattr(LC, "try_file", lambda f, deps, tree, **kw: tried.append(tree) or 0)
+    assert LC.main(["--try", "A.lean", "--tree", "interfaces"]) == 2
+    assert "this node keeps no tree interfaces" in capsys.readouterr().out and not tried
+    (cache / LC.RECORDS / "interfaces").mkdir(parents=True)
+    assert LC.main(["--try", "A.lean", "--tree", "interfaces"]) == 0
+    assert tried == [cache / LC.RECORDS / "interfaces"]
+    assert LC.named_tree(tmp_path / "t") == tmp_path / "t" and LC.named_tree(None) is None
+
+
 def test_without_a_mode_it_runs_nothing_prints_its_usage_and_exits_2(capsys):
     for argv in ([], ["--deps", "d"], ["--tree", "t"]):
         with pytest.raises(SystemExit) as e:

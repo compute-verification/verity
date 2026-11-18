@@ -248,9 +248,10 @@ def test_the_store_layout_is_interface_2s_at_h200():
 def test_the_command_signs_a_load_head_a_value(tmp_path):
     src = tmp_path / "stream.bin"
     src.write_bytes(stream())
-    out = tmp_path / "out"
+    out, key_dir, witness = tmp_path / "out", tmp_path / "key", tmp_path / "load-witness.bin"
     assert LR.main(["relay", "--program", PROGRAM, "--out", str(out), "--shape", "tiny", "--source", str(src),
-                    "--sink", str(tmp_path / "sink.bin"), "--height", "5", "--workers", "2"]) == 0
+                    "--sink", str(tmp_path / "sink.bin"), "--key", str(key_dir), "--witness", str(witness),
+                    "--height", "5", "--workers", "2"]) == 0
     doc = json.loads((out / "load.json").read_text())
     assert (tmp_path / "sink.bin").read_bytes() == src.read_bytes() and len(doc["values"]) == len(TINY)
     from verity.protocols.resource_accounting.network.verifier import record_files as RF
@@ -261,7 +262,7 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
                                           program=PROGRAM, words=v.reg_words, rows=v.leaves, word_bits=v.word_bits,
                                           schema=v.schema)
         assert dom.domain_id == TR.domain(PROGRAM, v.name, v.reg_words, v.leaves, v.word_bits).domain_id
-    salts = (out / "load-witness.bin").read_bytes()
+    salts = witness.read_bytes()
     for i in (0, 3, 4):
         v, at = TINY[i], TR.SALT_BYTES * sum(x.leaves for x in TINY[:i])
         mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
@@ -270,8 +271,22 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
         assert t.root.hex() == doc["values"][i]["root"], v.name
     src.write_bytes(src.read_bytes()[:-1])
     assert LR.main(["relay", "--program", PROGRAM, "--out", str(tmp_path / "short"), "--shape", "tiny", "--source",
-                    str(src), "--key", str(out / "certifier"), "--workers", "1"]) == 1
+                    str(src), "--key", str(key_dir), "--witness", str(tmp_path / "short-witness.bin"), "--workers", "1"]) == 1
     assert not (tmp_path / "short" / "load.json").exists()
+
+
+def test_the_command_without_a_key_or_witness_is_refused_by_name_before_any_key_is_made(tmp_path, capsys):
+    """The key and the salts are private and a run's output is uploaded, so neither has a default under ``--out``."""
+    src = tmp_path / "stream.bin"
+    src.write_bytes(stream())
+    args = ["relay", "--program", PROGRAM, "--out", str(tmp_path / "out"), "--shape", "tiny", "--source", str(src)]
+    for flags, said in (((), "--key"), (("--key", str(tmp_path / "key")), "--witness"),
+                        (("--witness", str(tmp_path / "w.bin")), "--key")):
+        with pytest.raises(SystemExit) as e:
+            LR.main([*args, *flags])
+        assert e.value.code == 2
+        assert f"relay needs {said}: give {said} a" in capsys.readouterr().err
+        assert not (tmp_path / "key").exists() and not (tmp_path / "out" / "certifier").exists()
 
 
 # --- the gate's load: the store, the streams to the H200's sink, the heads and their registrations -----------------------

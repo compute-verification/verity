@@ -408,19 +408,19 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
 
 def test_the_int8_linears_follow_the_build_of_records_rule():
     """An exact-int8 checkpoint on a target serving its linears int8: each decoder linear is its quantizer `Int8RowQuant_v1{K}`
-    then its product `ScaledMmS8_v1{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
-    row scales [N, 1], which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
+    then its product `ScaledMmS8_v3{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
+    row scales [N, 1] as their u16 words, which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
     stays the bf16 GEMM."""
     r = build_program(_phi(INT8, target=INT8_LINEARS), "step")
     layer = ["Int8RowQuant", "ScaledMmS8", "RoPE", "RoPE", "Attention", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda",
              "Int8RowQuant", "ScaledMmS8", "SiluMul", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda"]
     nodes = r.program.fn.body.nodes
     assert [n.fn.name for n in nodes] == ["Embedding", "RMSNormTriton", *layer, *layer, "Gemm", "TokenSelect"]
-    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v1{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
+    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v3{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
     leaves = weight_leaves(model_shape(INT8))
     assert [(n.split("layers.0.")[-1], t.leaves, sorted(t.width_set())) for n, t in leaves[1:5]] == [
-        ("self_attn.qkv_proj.weight", 128 * 64, [8]), ("self_attn.qkv_proj.weight_scale", 128, [32]),
-        ("self_attn.o_proj.weight", 64 * 64, [8]), ("self_attn.o_proj.weight_scale", 64, [32])]
+        ("self_attn.qkv_proj.weight", 128 * 32, [16]), ("self_attn.qkv_proj.weight_scale", 128 * 2, [16]),
+        ("self_attn.o_proj.weight", 64 * 32, [16]), ("self_attn.o_proj.weight_scale", 64 * 2, [16])]
     assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
 
 

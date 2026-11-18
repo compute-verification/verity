@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
-CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
+CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v3")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
 #: word with the row's quantisation of its own, where its ``PARTS`` quantise the row once; the block-scaled FP8 GEMM,
@@ -539,8 +539,8 @@ def block_rows(N: int, G: int) -> list[int]:
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
 
 
-#: the most u16 words of a row of an embedding shard's tables (`shard_block`).  A key's tables are at the widths this gives,
-#: so another value is another nonce scheme: `expert_tables.NONCES` changes with it, and a key minted for this one is refused
+#: the most u16 words of a row of an embedding shard's tables (`shard_block`): a registration's tables are at the widths this
+#: gives, so another value is another registration
 SHARD_ROW = 256
 
 
@@ -548,8 +548,7 @@ def shard_block(H: int) -> int:
     """The one width, in u16 words, an ``EmbeddingShard_v1`` row of H columns is read at and its tables are registered at: the
     widest H / 2^k of at most `SHARD_ROW` words, a column block of the row a ``READ`` keyed by the token over a table of the
     whole vocabulary (`expert_rows.shard_param`).  It is a function of H alone, so a field has one width and nothing asks for a
-    second: a table's nonce is its field's place and its block (`expert_tables.nonces`), and a second width of the field would
-    sample the first's salts."""
+    second."""
     w = int(H)
     while w > SHARD_ROW and w % 2 == 0:
         w //= 2

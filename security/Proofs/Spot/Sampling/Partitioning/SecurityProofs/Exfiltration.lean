@@ -26,8 +26,6 @@ and `Exfil.witness_refinement`.
 
 namespace Spot.Sampling.Partitioning.SecurityProofs
 
-open FlockSoundness
-
 open Finset
 
 theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by

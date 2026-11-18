@@ -124,8 +124,9 @@ structure Params where
   /-- the window values the record's checks hold the verifiers' reads of to their entries in the record's
   `window.activations.values` (`Record.windowReads`), as the caller names them; none by default -/
   windowValues : Array String := #[]
-  /-- the blocks a scheme credits, by their number among the first level's members (`Core.Integrity.credited`); the
-  check refuses them unless each is a block of the first level and of every later one -/
+  /-- the blocks a scheme credits, by their number among the first level's members (`Core.Integrity.credited`), as
+  `verity.protocols.resource_accounting.scheme.credited` returns them; the check refuses them unless each is a block of the first level and of
+  every later one -/
   credited : Array Nat := #[]
 
 structure Commitment where
@@ -612,6 +613,12 @@ def coinsReason (v : Docket.Verifier) (samplingDesign rec_ draw : Json) (src : B
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
+/-- `o`, unless the profile's credited blocks are refused (`Core.Integrity.creditedProblem`): then that refusal. -/
+def creditedGate {α : Type} (prof : Core.Integrity) (o : Core.Outcome α Core.Integrity) : Core.Outcome α Core.Integrity :=
+  match prof.creditedProblem with
+  | some why => .reject why
+  | none => o
+
 /-- R1–R8, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
 check `checkAt` runs once the coins drew the sample. R1–R8 is SPOT's check alone (`Docket.check`): this audit
 refuses no record for the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the
@@ -644,10 +651,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)], credited := p.credited }
-    match profile.creditedProblem with
-    | some why => .reject why
-    | none =>
-    .accept
+    creditedGate profile <| .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
         bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       profile

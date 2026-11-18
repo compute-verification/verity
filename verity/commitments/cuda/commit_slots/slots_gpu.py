@@ -5,15 +5,21 @@ levels; this module lays them out as one subtree per slot.
 ``Plan(context, layout, device, build=DIR)`` holds what a run fixes (the engine, the unit and slot domains, each group's leaf table) on a device.
 A step is committed as its groups' outputs arrive::
 
-    sc = StepCommitter(plan, step, slots, salt_key)     # salt_key: slots.fresh_salt_key(), the prover's
+    sc = StepCommitter(plan, step, slots)
     for tensors in each group's outputs:                 # e.g. a layer's ops, (slots, ...) CUDA tensors
-        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; overwrite
-                                                         # the tensors in place only after the event `done`
+        done = sc.add(tensors, salts)                    # on the plan's side stream behind the current stream; overwrite
+                                                         # the tensors in place only after the event `done`. salts: the
+                                                         # group's rows' fresh salts, (slots, rows, 192) bytes there
     pending = sc.finish()                                # no host sync
     pending.result()                                     # slots.StepCommit(root, slot_roots), the reference's
 
-or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
-of the context and layout. ``Plan(..., "host", build=DIR)`` runs the same calls on the engine's host twin (g++), with numpy arrays
+or at once, ``commit(plan, step, salts, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
+of the context and layout.
+
+A leaf's salt is data: the caller draws every row's 192 bytes from the operating system (``slots.fresh_salts``,
+``hm96.SHA512.fresh_salt()``), puts them on the plan's device and hands each group's to its ``add``; nothing here or on
+the device derives a salt, and no key for one exists. The salts are the prover's alone, as secret as the rows: it keeps
+them with the step's record to open a unit, never under a run's output directory. ``Plan(..., "host", build=DIR)`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference. On a CUDA device the plan's engine (``Plan.ENGINE``) needs a tensor
 runtime (torch) that verity doesn't import: a subclass of ``Plan`` supplies one whose ``runtime()`` returns it (the
 benchmarks' ``benchmarks/torch_gpu/commit_slots/torch_plan.py``), and the plan's partition and graphs take torch from it.
@@ -24,11 +30,11 @@ has added them: their memory goes back to its stream at the read, not at the sid
 next allocations find it there without the allocator's retry (which frees the cache and waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
-first add and replayed with the tensors' addresses and the salt key as data, so the same kernels give the same roots while
+first add and replayed with the tensors' addresses and the salts' address as data, so the same kernels give the same roots while
 the host enqueues a handful of calls an add, not the thousands a step that otherwise wait on a full launch queue.
 
 A group is one launch of the engine's row kernel a pass, so groups of several layers (``regroup``) fill the GPU better at
-small slot counts. Grouping is the prover's plumbing: the layout's digest, the salts and every root stay the same.
+small slot counts. Grouping is the prover's plumbing: the layout's digest, each row's salt and every root stay the same.
 
 A step holds no slot's leaves: each slot's tree is its frontier, the left sibling a level still waiting for its right one
 ((slots, depth + 1, 8) words, 1.5 KB a slot at six million units). ``add`` folds a group's unit leaves into the frontiers
@@ -36,8 +42,8 @@ a level at a time, and ``finish`` closes them with the subtrees of pads alone, w
 through in passes of as many slots as keep its temporaries (row digests, the run of slot-tree leaves, the leaves of the
 units of several rows) within the Plan's ``temp_bytes``.
 
-A row-slot of a one-row proof block costs the engine nine compressions (one of them over a constant schedule), three
-ChaCha20 chunks and the hm96 mask: its row digest (one), hm96's c (two) and h (two), its frame leaf in the proof block's domain (one), the
+A row-slot of a one-row proof block costs the engine nine compressions (one of them over a constant schedule), the read of
+its 192-byte salt and the hm96 mask: its row digest (one), hm96's c (two) and h (two), its frame leaf in the proof block's domain (one), the
 unit's slot-tree leaf (one, from the unit's midstate, ``frame_table``, set up once an add), all in the leaf kernel's thread,
 and about one slot-tree node (two).
 """
@@ -122,12 +128,13 @@ class _Group:
 @dataclass(frozen=True)
 class _Graph:
     """A group's add captured as one CUDA graph: it reads its tensors' addresses and slot strides from ``addr`` ((2,
-    tensors) int64 on the device, filled before each replay), and salts under the key ``rekey`` sets in its ``n`` leaf
-    launches ``nodes``."""
+    tensors) int64 on the device, filled before each replay), and its ``n`` leaf launches ``nodes`` read their salts from
+    the buffer ``resalt`` points them at, each where it was captured reading the buffer at ``salts`` (an address)."""
     graph: Any
     addr: Any
     nodes: Any
     n: int
+    salts: int
 
 
 def driver_bindings(torch: Any) -> tuple[Any, Any]:
@@ -376,8 +383,7 @@ class Plan:
 
     def _group(self, i: int, u0: int, shape: _Shape) -> _Group:
         dids = self.unit_dids[u0:u0 + shape.units]
-        salt_row = self.layout.group_row_base[i] + np.arange(shape.rows, dtype=np.int64)
-        lt = self.engine.leaf_table(dids, shape.unit_of_row, shape.rank, None, salt_row)
+        lt = self.engine.leaf_table(dids, shape.unit_of_row, shape.rank)
         return _Group(shape, lt, self.put(dids), u0)
 
     def addresses(self, shape: _Shape, tensors: Sequence[Any]) -> tuple[list[int], list[int]]:
@@ -447,12 +453,13 @@ class Plan:
             roots = self.engine.root(x.reshape(-1, m, 8), dids)
             self.engine.frame_units(frames, units, roots.reshape(n, S_, 8), run)
 
-    def graph(self, sc: StepCommitter, grp: _Group, tensors: Sequence[Any]) -> _Graph:
+    def graph(self, sc: StepCommitter, grp: _Group, tensors: Sequence[Any], salts: Any) -> _Graph:
         """Group ``sc.k``'s add at ``sc``'s slots and this plan's pass size, leaf kernel and SMs, as a CUDA graph: captured
         (not run) on its first call, on the side stream, into the one memory pool the plan's graphs share (they run one
-        after another on that stream), reading its tensors' addresses from its ``addr``. A graph keeps the leaf grid it
-        was captured with, so ``sms`` is in its key."""
-        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms)
+        after another on that stream), reading its tensors' addresses from its ``addr`` and its salts from ``salts`` ((G,
+        slots, 192), ``StepCommitter._by_row``) until ``resalt`` points it at the next add's. A graph keeps the leaf grid
+        it was captured with and the strides it read its salts at, so ``sms`` and those strides are in its key."""
+        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
         if key not in self._graphs:
             torch = self.torch
             if self._pool is None:
@@ -462,13 +469,13 @@ class Plan:
             g.capture_begin(pool=self._pool, capture_error_mode="thread_local")
             sc.capturing = True
             try:
-                sc._passes(grp, self.rows(grp.shape, tensors, addr), False)
+                sc._passes(grp, self.rows(grp.shape, tensors, addr), salts, False)
             finally:
                 sc.capturing = False
                 g.capture_end()
             g.instantiate()
             n = -(-sc.slots // self.per_pass(grp.shape, sc.slots))
-            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n)
+            self._graphs[key] = _Graph(g, addr, self.engine.graph_leaf_nodes(g.raw_cuda_graph(), n), n, salts.data_ptr())
         return self._graphs[key]
 
     def empty(self, *shape: int) -> Any:
@@ -573,10 +580,10 @@ class Plan:
 
 class Pending:
     """A finished step's commitment in flight: ``result()`` waits for it (``ready()`` doesn't), and then drops the tensors
-    its plan holds that are read."""
+    its plan holds that are read, and the salts of the step's last adds (``held``), which its leaves have read by then."""
 
-    def __init__(self, event: Any, root: Any, slot_roots: Any, plan: Plan | None = None) -> None:
-        self.event, self._root, self._slot_roots, self._plan = event, root, slot_roots, plan
+    def __init__(self, event: Any, root: Any, slot_roots: Any, plan: Plan | None = None, held: Sequence[Any] = ()) -> None:
+        self.event, self._root, self._slot_roots, self._plan, self._held = event, root, slot_roots, plan, tuple(held)
 
     def ready(self) -> bool:
         return self.event is None or self.event.query()
@@ -586,12 +593,13 @@ class Pending:
             self.event.synchronize()
             if self._plan is not None:
                 self._plan.release()
+        self._held = ()
         return S.StepCommit(E.digests(self._root)[0], tuple(E.digests(self._slot_roots)))
 
 
 class StepCommitter:
-    """Step ``step`` of ``slots`` slots under ``plan``, its salts under ``salt_key`` (32 bytes, the prover's): ``add`` each
-    group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
+    """Step ``step`` of ``slots`` slots under ``plan``: ``add`` each group's outputs in the layout's order, each with its
+    rows' salts (the caller's fresh bytes, read as data; the step derives none), then ``finish``. On a CUDA plan every call goes on the plan's side stream after
     what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
     those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
     own) waits for their read instead, as a serving loop that commits each layer waits a fixed number of groups back. A
@@ -601,16 +609,14 @@ class StepCommitter:
     (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
     With ``graphs`` (a CUDA plan), each add is one CUDA graph launch: the group's passes, captured on the first add of that
-    group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the salt
-    key as data. The kernels and their arguments are the same, so the roots are; the host enqueues a handful of calls an add
+    group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the
+    salts' address as data. The kernels and their arguments are the same, so the roots are; the host enqueues a handful of calls an add
     instead of a pass's dozens, so it no longer waits on the launch queue. The frontier is then the plan's, so a plan has
     one such step open at a time, its adds and finish in order. Its ``marks`` are one ``("add", event)`` an add, and
     ``finish``'s."""
 
-    def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None,
+    def __init__(self, plan: Plan, step: int, slots: int, marks: list[tuple[str, Any]] | None = None,
                  graphs: bool = False, lag: int = LAG) -> None:
-        if len(salt_key) != 32:
-            raise ValueError("a salt key is 32 bytes")
         if graphs and plan.host:
             raise ValueError("a step on graphs is on a CUDA plan")
         if lag < 0:
@@ -619,7 +625,7 @@ class StepCommitter:
         self.plan, self.slots, self.k, self.marks, self.graphs, self.lag = plan, slots, 0, marks, graphs, lag
         self.producer = None if plan.host else plan.torch.cuda.current_stream(plan.device)
         self.capturing = False
-        self.salts = E.SaltKey(salt_key)
+        self._salted: collections.deque[tuple[Any, Any]] = collections.deque()
         if graphs:
             if plan._open is not None and plan._open.k:
                 raise ValueError("the plan's step on graphs is open: finish it first")
@@ -638,10 +644,14 @@ class StepCommitter:
             ev.record(self.plan.stream)
             self.marks.append((name, ev))
 
-    def add(self, tensors: Sequence[Any]) -> Any:
-        """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them.
-        Returns an event on the side stream after which the tensors may be overwritten (a producer that reuses its buffers
-        waits on it; one that frees them needn't), or None on the host."""
+    def add(self, tensors: Sequence[Any], salts: Any) -> Any:
+        """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them;
+        and its rows' salts, ``salts`` (slots, the group's rows, 192) uint8 on the plan's device, slot s's row g's (in the
+        layout's order within the group) at ``[s, g]``: the caller's fresh bytes from the operating system, one draw a leaf
+        (the group's part of ``slots.fresh_salts``' step, ``[:, layout.group_row_base[k]:][:, :rows]``), read in place (a
+        slice of the step's buffer does). Returns an event on the side stream after which the tensors may be overwritten (a
+        producer that reuses its buffers waits on it; one that frees them needn't), or None on the host. The step holds the
+        salts itself until its leaves have read them; they are not to be overwritten before ``finish``'s result."""
         plan, layout = self.plan, self.plan.layout
         if self.k >= len(layout.groups):
             raise ValueError("every group is in")
@@ -650,53 +660,81 @@ class StepCommitter:
             raise ValueError(f"group {self.k} takes {len(g.sources)} tensors, not {len(tensors)}")
         for t, n in zip(tensors, g.sources, strict=True):
             self._check(t, n)
+        by_row = self._by_row(salts, grp.shape.rows)
+        self._drop_read_salts()
         if not plan.host:
             plan.stream.wait_stream(plan.torch.cuda.current_stream(plan.device))
         if self.graphs:
-            done = self._replay(grp, tensors)
+            done = self._replay(grp, tensors, by_row)
         else:
             with plan.side():
-                done = self._passes(grp, plan.rows(grp.shape, tensors), True)
+                done = self._passes(grp, plan.rows(grp.shape, tensors), by_row, True)
+                self._hold_salts(salts)
         self.k += 1
         if done is not None:
             plan.hold(done, self.producer, tensors)
             plan.release(self.lag)
         return done
 
-    def _passes(self, grp: _Group, table: Any, signal: bool) -> Any:
-        """The group's passes over ``table``, each folded into the frontier; with ``signal``, the event after which its
-        tensors are read (``_leaves``)."""
+    def _by_row(self, salts: Any, rows: int) -> Any:
+        """An add's ``salts`` (slots, rows, 192) as the engine reads them, (rows, slots, 192): the same bytes in place."""
+        shape = (self.slots, rows, E.SALT_BYTES)
+        if salts is None or not hasattr(salts, "shape") or tuple(int(d) for d in salts.shape) != shape:
+            raise ValueError(f"group {self.k}'s salts are {shape} uint8 on the plan's device, slot s's row g's fresh "
+                             f"{E.SALT_BYTES} bytes at [s, g] (slots.fresh_salts), not "
+                             f"{tuple(salts.shape) if hasattr(salts, 'shape') else type(salts).__name__}: a step derives "
+                             "no salt")
+        return salts.transpose(1, 0, 2) if self.plan.host else salts.permute(1, 0, 2)
+
+    def _hold_salts(self, salts: Any) -> None:
+        """Keeps an add's ``salts`` until the side stream has run what is enqueued on it now (its leaves): nothing on the
+        host, where they are read already."""
+        if self.plan.host or self.capturing:
+            return
+        read = self.plan.torch.cuda.Event()
+        read.record(self.plan.stream)
+        self._salted.append((read, salts))
+
+    def _drop_read_salts(self) -> None:
+        while self._salted and self._salted[0][0].query():
+            self._salted.popleft()
+
+    def _passes(self, grp: _Group, table: Any, salts: Any, signal: bool) -> Any:
+        """The group's passes over ``table`` under ``salts`` ((rows, slots, 192), ``_by_row``), each folded into the
+        frontier; with ``signal``, the event after which its tensors are read (``_leaves``)."""
         plan, done = self.plan, None
         frames = plan.engine.frame_table(plan.slot_dw, grp.first_unit, grp.shape.units)
         per = plan.per_pass(grp.shape, self.slots)
         for s0 in range(0, self.slots, per):
             s1 = min(self.slots, s0 + per)
-            run, done = self._leaves(grp, frames, plan.slots_of(table, s0, s1), s0, signal and s1 == self.slots)
+            run, done = self._leaves(grp, frames, plan.slots_of(table, s0, s1), salts[:, s0:s1], signal and s1 == self.slots)
             plan.fold(self.frontier[s0:s1], grp.first_unit, run)
             del run
             self._mark("fold")
         return done
 
-    def _replay(self, grp: _Group, tensors: Sequence[Any]) -> Any:
+    def _replay(self, grp: _Group, tensors: Sequence[Any], salts: Any) -> Any:
         """The group's add as its graph's launch (captured first if this is its first): the tensors' addresses into the
-        graph's ``addr``, the step's salt key into its leaf launches, then the launch; the event after it."""
+        graph's ``addr``, this add's salts' address (``salts``, (rows, slots, 192)) into its leaf launches, then the launch;
+        the event after it."""
         plan, torch = self.plan, self.plan.torch
         base, stride = plan.addresses(grp.shape, tensors)
         with plan.side():
-            gr = plan.graph(self, grp, tensors)
+            gr = plan.graph(self, grp, tensors, salts)
             gr.addr.copy_(torch.tensor([base, stride], dtype=torch.int64).pin_memory(), non_blocking=True)
             with plan.partition.current() if plan.partition else contextlib.nullcontext():
-                plan.engine.rekey(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, self.salts.key)
+                plan.engine.resalt(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, gr.salts, salts.data_ptr())
             gr.graph.replay()
             done = torch.cuda.Event(blocking=True)
             done.record(plan.stream)
+            self._salted.append((done, salts))
         self._mark("add")
         return done
 
-    def _leaves(self, grp: _Group, frames: Any, table: Any, s0: int, last: bool) -> tuple[Any, Any]:
-        """(slots in the pass, units, 8): the group's units' slot-tree leaves in slots s0 .. of ``table``, those of one-row
-        units from the leaf kernel itself; and on the pass over the last slots, the event after which the group's tensors
-        are read."""
+    def _leaves(self, grp: _Group, frames: Any, table: Any, salts: Any, last: bool) -> tuple[Any, Any]:
+        """(slots in the pass, units, 8): the group's units' slot-tree leaves in the pass's slots of ``table``, under those
+        slots' ``salts`` ((rows, slots in the pass, 192)), those of one-row units from the leaf kernel itself; and on the
+        pass over the last slots, the event after which the group's tensors are read."""
         plan, eng, shape, done = self.plan, self.plan.engine, grp.shape, None
         x = eng.row_digests(table)
         self._mark("rows")
@@ -705,8 +743,7 @@ class StepCommitter:
             done.record(plan.stream)
         S_ = table.slots
         run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)
-        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, plan.leaf_minb, frames=frames,
-                   dest=shape.dest, run=run, sms=plan.sms)
+        eng.leaves(grp.leaf_table, x, salts, rest, plan.leaf_minb, frames=frames, dest=shape.dest, run=run, sms=plan.sms)
         del x
         self._mark("leaves")
         if shape.multi:
@@ -746,15 +783,25 @@ class StepCommitter:
             sr.copy_(slot_roots, non_blocking=True)
             ev = torch.cuda.Event()
             ev.record(plan.stream)
-        return Pending(ev, r, sr, plan)
+        held = [salts for _read, salts in self._salted]
+        self._salted.clear()
+        return Pending(ev, r, sr, plan, held)
 
 
-def commit(plan: Plan, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int,
+def commit(plan: Plan, step: int, salts: Any, outputs: Sequence[Sequence[Any]], slots: int,
            graphs: bool = False) -> S.StepCommit:
-    """``slots.commit`` on ``plan``'s device: every group's outputs at once, waiting for the result."""
-    sc = StepCommitter(plan, step, slots, salt_key, graphs=graphs)
-    for tensors in outputs:
-        sc.add(tensors)
+    """``slots.commit`` on ``plan``'s device: every group's outputs at once under the step's ``salts`` ((slots, rows, 192)
+    uint8 on the plan's device, ``slots.fresh_salts``' bytes there), waiting for the result."""
+    layout = plan.layout
+    if salts is None or not hasattr(salts, "shape") or tuple(int(d) for d in salts.shape) != (slots, layout.row_count, E.SALT_BYTES):
+        raise ValueError(f"a step's salts are {(slots, layout.row_count, E.SALT_BYTES)} uint8 on the plan's device, one fresh "
+                         f"{E.SALT_BYTES}-byte salt a row (slots.fresh_salts): a step derives none")
+    sc = StepCommitter(plan, step, slots, graphs=graphs)
+    for k, tensors in enumerate(outputs):
+        if k >= len(layout.groups):
+            raise ValueError("every group is in")
+        g0 = layout.group_row_base[k]
+        sc.add(tensors, salts[:, g0:g0 + layout.group_rows[k]])
     return sc.finish().result()
 
 

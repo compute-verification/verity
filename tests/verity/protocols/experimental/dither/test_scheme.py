@@ -11,7 +11,7 @@ from verity.protocols.resource_accounting import scheme as S
 
 
 def test_found_by_name() -> None:
-    assert S.get("dither") is DS.DITHER
+    assert S.SCHEMES["dither"] is DS.DITHER
     assert {b.definition for b in DS.DITHER.blocks} == {D.PouwDitherBlock.id, D.PouwDitherLast.id}
 
 

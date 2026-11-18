@@ -403,7 +403,8 @@ def test_recompute_hits_keeps_a_dummy_s_slots_on_the_target_s_pages_and_counts_o
 
 def test_recompute_hits_needs_the_shape_only_target_to_arrive_inside_the_block(tmp_path) -> None:
     with pytest.raises(SystemExit, match="goes with --shape-only"):
-        RB.main(["--arm-dir", "arm", "--kv-dir", "kv", "--recompute-hits", "--out", str(tmp_path)])
+        RB.main(["--arm-dir", "arm", "--kv-dir", "kv", "--recompute-hits", "--out", str(tmp_path / "out"),
+                 "--private", str(tmp_path / "private")])
     a = NS(shape_only="t", hits="forced", recompute_hits=True, dummy="zero")
     begin = {"processed_through": 0, "requests": {"t": {"prompt": [1], "outputs": []}}, "finished_before": []}
     with pytest.raises(SystemExit, match="t is held at step 1"):
@@ -526,7 +527,7 @@ def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None
                                   ["--arm-dir", "A", "--kv-dir", "K", "--shape-only", "r0"]])
 def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -> None:
     with pytest.raises(SystemExit, match="--capture takes the sampler rows of --served's --shape-only target"):
-        RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O"])
+        RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O", "--private", "P"])
 
 
 @pytest.mark.parametrize("given", [None, "TokenSelect_v4{V=8}"])
@@ -539,4 +540,4 @@ def test_capture_without_a_template_takes_the_check_the_serve_committed_under(tm
     monkeypatch.setattr(RB.RP, "capture_template", template)
     with pytest.raises(SystemExit, match=re.escape(f"capture of glm53 under {given}")):
         RB.main(["--served", str(tmp_path), "--scratch", "D", "--shape-only", "r0", "--capture",
-                 *([given] if given else []), "--out", "O"])
+                 *([given] if given else []), "--out", "O", "--private", "P"])

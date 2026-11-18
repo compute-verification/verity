@@ -83,15 +83,19 @@
 # is served whole, under the same lease.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
-# <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
-# A serve's later stages read it, so without it such an arm is refused; in the serving cost's form alone, where nothing
-# reads it afterwards, each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
+# <arm>/server/boundary.PID.jsonl), the history tables, the top-k's counters, and an arm's step traces, served ids and
+# edges' outputs and dumps (PRIVATE/<arm>/server/, each gzipped at the job's end), the corpus client's whole records
+# (PRIVATE/<arm>/client/; OUT keeps each less its served ids), the plan (PRIVATE/plan.jsonl), and each replay's tokens,
+# step records and capture (PRIVATE/replay-<mode>, a restore's in PRIVATE/<arm>-replay).
+# It is a directory outside every run's. A serve's later stages read it, so without it an arm that records, a replay,
+# or any arm under the corpus client is refused; in the serving cost's form alone, where nothing reads it
+# afterwards, an arm that records nothing gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
 # arm's boundary commitment (a model with no check template of its own needs it).
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
 # as it is (the replay ladder's serving plan: each request's own sampling, stopping at its end of text), copied to
-# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
+# PRIVATE/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
 # that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
 # of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, where unset torch's own toolkit, else
@@ -111,7 +115,7 @@
 # DRAIN_S is how long the trace corpus's client waits, after a load's last arrival, for the answers still out (600 s):
 # a request unanswered by then is cut and counted unserved, so a load whose last request is very long (a prompt at
 # the model's context limit) names more. It is that client's alone: a pass of vLLM's own client reads none.
-# One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
+# One plan (PRIVATE/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
@@ -243,7 +247,7 @@ else
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
-WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-$OUT/plan.jsonl}
+WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
 PLAN_FILE=${PLAN_FILE:-$(ls "$D"/inputs/plan.jsonl 2>/dev/null)}
 [ -z "$PLAN_FILE" ] || [ -f "$PLAN_FILE" ] || { echo "serve-tax: no plan at PLAN_FILE=$PLAN_FILE"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
@@ -313,7 +317,7 @@ if [ "${1:-}" = leased ]; then
   fi
   if [ "${CAPACITY:-0}" = 1 ]; then
     "$PY" "$here/serve_tax.py" run --arm compiled "${common[@]}" --rates burst=1000 --requests "${REQUESTS:-800}" --reps 1 \
-      --warm-s 10 --out "$OUT/capacity"
+      --warm-s 10 --private "$PRIVATE/capacity" --out "$OUT/capacity"
     exit $?
   fi
   rc=0
@@ -373,6 +377,7 @@ if [ "${1:-}" = leased ]; then
     echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
     "$PY" "$here/restore.py" --arm-dir "${RESTORE_FROM:-$OUT}/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
       --kv-dir "$KV_DIR/$ra" --checkpoint "$CK" --warm "${RESTORE_WARM:-0}" --out "$OUT/$ra-replay" \
+      --private "$PRIVATE/$ra-replay" \
       > "$OUT/$ra-replay.log" 2>&1 || { tail -n 60 "$OUT/$ra-replay.log"; rc=1; }
     tail -n 1 "$OUT/$ra-replay.log"
   done
@@ -394,6 +399,13 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
+if [ -z "${PRIVATE:-}" ]; then
+  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
+print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here" ${ARMS:-}) || exit 2
+  [ -z "$recording" ] || { echo "serve-tax: arms $recording record their step traces, served ids or edges' outputs, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
+  [ -z "${REPLAY:-}" ] || { echo "serve-tax: REPLAY keeps each replay's tokens on the node: PRIVATE, a directory outside every run's"; exit 2; }
+  [ "$CLIENT" = vllm-bench ] || { echo "serve-tax: the corpus client keeps each request's served ids, and the plan its prompts, on the node: PRIVATE, a directory outside every run's (or CLIENT=vllm-bench)"; exit 2; }
+fi
 if [ "${CAPACITY:-0}" != 1 ] && [ -z "${ARMS:-}" ]; then
   [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM, or RESTORE with RESTORE_FROM)"; exit 2; }
   [ -z "${RESTORE_FROM:-}" ] || [ -n "${KV_DIR:-}" ] || { echo "serve-tax: RESTORE_FROM reads the edges' KV bytes in KV_DIR/<arm>: set KV_DIR"; exit 2; }
@@ -442,7 +454,9 @@ else
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+[ -z "${PRIVATE:-}" ] || gzip -f "$PRIVATE"/*-replay/*.jsonl "$PRIVATE"/replay-*/replay_steps.jsonl \
+  "$PRIVATE"/*/server/step_trace.*.jsonl "$PRIVATE"/*/server/ids.*.jsonl \
+  "$PRIVATE"/*/server/edges/outputs.*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"

@@ -10,7 +10,7 @@
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
-  `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
+  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds, and
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -240,9 +240,28 @@ def _card_named(name: str, directory: Path) -> dict:
     return found[0]
 
 
+def card_sku(name: str, *, directory: Path | None = None) -> str:
+    """The ``sku`` of the card record `card_short` finds for ``name``: its file's name in ``directory``."""
+    return _card_named(name, directory or cards_directory())["sku"]
+
+
 def card_arch(name: str, *, directory: Path | None = None) -> str:
     """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
     return _card_named(name, directory or cards_directory())["arch"]
+
+
+def card_gencode(name: str, *, directory: Path | None = None) -> str:
+    """nvcc's ``-gencode`` value for the card `card_arch` finds for ``name``: ``arch=<virtual>,code=<name>`` of its
+    ``arch``'s architecture file (`verity.device.load_architecture`, in the architectures beside the cards); refused by
+    name where no architecture file states it."""
+    from verity.device import load_architecture
+
+    try:
+        arch = load_architecture(card_arch(name, directory=directory),
+                                 directory=cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise SystemExit(f"the card nvidia-smi names {name!r}: {e.args[0]}") from None
+    return f"arch={arch['virtual']},code={arch['name']}"
 
 
 def machine_arch(*, directory: Path | None = None) -> str:
@@ -357,20 +376,20 @@ def toolkit(version: str) -> str:
 
 
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import compute_capability, load_card, number
-    from verity.errors import InvalidArtifact
+    from verity.device import load_architecture, load_card, number
 
     directory = directory or cards_directory()
     card = load_card(sku, directory=directory)
     names = [d["value"] for d in card.get("driver", ())]
+    if card["kind"] != "gpu" or len(names) != 1:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\" and one `driver` "
+                         f"name, and has kind {card['kind']!r}, driver {names}")
     try:
-        cc = compute_capability(card)
-    except InvalidArtifact:
-        cc = None
-    if len(names) != 1 or cc is None:
-        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
-                         f"and an `arch` sm_<major><minor>[a|f], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
-    return {"device_name": names[0], "compute_capability": list(cc), "num_sms": int(number(card["sm"]["count"]))}
+        arch = load_architecture(str(card.get("arch")), directory=cards_directory().parent / "architectures")
+    except KeyError as e:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: its {e.args[0]}") from None
+    return {"device_name": names[0], "compute_capability": [int(x) for x in arch["capability"].split(".")],
+            "num_sms": int(number(card["sm"]["count"]))}
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
@@ -384,7 +403,7 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
         return None
     want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
-            f"{want}, or use the spec for this card")
+            f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

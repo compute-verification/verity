@@ -11,15 +11,19 @@ router's slots, the reads of the scale rows and the fused blocks:
   committed root at the pair's expert, and the block GEMMs' and fused blocks' outputs are the pairs' served words;
 * the roots, domain ids and verdicts are committed by reference to the tables' supplied values, and a listed record of the window
   counts the tables' reads registered exactly where their roots are pinned;
-* the committer takes its tables' program and nonces from the rank's registration, read through its record
+* the committer takes its tables' program from the rank's registration, read through its record, and their salts from the salt
+  file beside it
   (`records.expert_tables`), each of two ranks' windows its own, and a fused block refuses another rank's tables.
 """
 from __future__ import annotations
 
 import json
+import random
 import subprocess
 import sys
+import tempfile
 from functools import cache
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -30,6 +34,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.commitments import salt_file as SF
 from verity.commitments.gates import embedding as EMB
 from verity_vllm.definitions.numerics import fp8_moe_rows as FR
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
@@ -75,7 +80,7 @@ PROJ = {proj: ids(proj) for proj in ("w13", "w2")}
 GEMM, BLOCK, W, WS = PROJ["w13"].row, PROJ["w13"].block, PROJ["w13"].w, PROJ["w13"].ws
 TMPLS = [SLOTS, READ_W, READ_WS, BLOCK]
 CAPS = {SLOTS: 4, READ_W: 4, READ_WS: 4, BLOCK: 3}
-COMMITTER = {"key": bytes(range(32)), "program": "ab" * 64}
+COMMITTER = {"program": "ab" * 64}
 
 
 def fused(proj: str, n: int = N, nr: int = NR) -> tuple[list[str], dict[str, int]]:
@@ -188,9 +193,22 @@ def cut(rows, tmpls=TMPLS, caps=CAPS):
     return plan, EX.wire(EX.cut(SRW.members(tmpls, rows, None, caps), plan), plan)
 
 
-def committer(plan, rank=0):
-    params = [param for t in plan.what if plan.what[t][0] != "gemm" for _at, _n, _b, param, _l in plan.tables(t)]
-    return {**COMMITTER, "nonces": {p: (3 << 61) + (rank << 20) + i for i, p in enumerate(sorted(params))}}
+@pytest.fixture(autouse=True)
+def unregistered(monkeypatch):
+    """`committer`'s tables name no registered root (None), which `expert_rows._registered` then does not hold them to; a
+    committer of a registration's roots is held to them."""
+    held = EX._registered
+    monkeypatch.setattr(EX, "_registered", lambda got, c: got if all(c["roots"][p] is None for p in got) else held(got, c))
+
+
+def committer(plan, rank=0, at=None):
+    """`expert_rows.committer`'s dict for the plan's tables, their salts in a salt file at ``at`` (a fresh directory when None),
+    each table's its own and the rank's: a salt for each of a table's rows, one an expert; no root registered (`unregistered`)."""
+    leaves = {param: int(plan.of[t][0][3]["statics"]["E"]) for t in plan.what if plan.what[t][0] != "gemm"
+              for _at, _n, _b, param, _l in plan.tables(t)}
+    at = Path(tempfile.mkdtemp()) / "tables.salts" if at is None else Path(at)
+    SF.write(at, {p: random.Random(f"{rank}/{p}").randbytes(n * SF.SALT_BYTES) for p, n in leaves.items()})
+    return {**COMMITTER, "salts": at, "roots": dict.fromkeys(leaves)}
 
 
 def stager(t: str) -> UnitStager:
@@ -301,7 +319,8 @@ def test_the_reads_roots_domains_and_verdicts_are_committed_by_reference_and_cou
         for p, of in (("in1", "root"), ("in2", "domain"))}
     values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
     got = SRW.read_all(ms, layer.rows, layer.store, None, tables=tables)
-    data, entries, roots, salts_of = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values)
+    data, entries, roots, salts_of = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
+                                                     IF.member_ranges(ms))
     assert roots == {p: v.root.hex() for p, v in tables.items()}
     for m, d in zip(ms, data):
         if m.template not in (READ_W, READ_WS):
@@ -327,36 +346,32 @@ def test_a_read_of_a_table_the_committer_did_not_commit_and_a_pair_routed_outsid
     gone = EX.table_param(WS, 2 * K // G, 0)
     with pytest.raises(ValueError, match="not among the committer's tables"):
         SRW.read_all(ms, layer.rows, layer.store, None, tables={p: v for p, v in tables.items() if p != gone})
-    with pytest.raises(ValueError, match="names no nonce"):
-        EX.commit_tables(plan, layer.store, None, None, SRW._slices, {**COMMITTER, "nonces": {}})
+    with pytest.raises(ValueError, match="holds no salts for the table"):
+        EX.commit_tables(plan, layer.store, None, None, SRW._slices, {**committer(plan), "roots": {}})
     rows = [rs[1:] if t == SLOTS else rs for t, rs in zip(TMPLS, layer.rows)]
     with pytest.raises(ValueError, match="routed by a row outside"):
         cut(rows)
 
 
 def test_the_committer_reads_its_tables_registration_through_its_record(layer, tmp_path):
-    """A window's committer takes its key, program and each table's nonce from the rank's registration as the record reads it,
-    which refuses another schema, an unknown field, a table without its own nonce, another rank's registration and a missing key."""
+    """A window's committer takes its program from the rank's registration as the record reads it, and its salts from the salt
+    file beside it; the record refuses another schema, an unknown field and another rank's registration."""
     plan, _ms = cut(layer.rows)
-    want = committer(plan)
+    want = committer(plan, at=tmp_path / "tables-rank0.salts")
     tables = EX.commit_tables(plan, layer.store, None, None, SRW._slices, want)
     doc = XT.ExpertTables(program=COMMITTER["program"], repo="test/moe", revision="0" * 40, world=1, rank=0, prefix="",
-                          blocks={"w13": NR}, values={p: v.entry() for p, v in tables.items()}, nonces=want["nonces"]).dump()
-    (tmp_path / "key").write_bytes(COMMITTER["key"])
+                          blocks={"w13": NR}, values={p: v.entry() for p, v in tables.items()}).dump()
     (tmp_path / "tables-rank0.json").write_text(json.dumps(doc))
-    spec = {"key": str(tmp_path / "key"), "registration": str(tmp_path / "tables-rank{rank}.json")}
+    spec = {"registration": str(tmp_path / "tables-rank{rank}.json")}
+    want = {**want, "roots": {p: v.root.hex() for p, v in tables.items()}}
     assert EX.of_request(spec) == want and EX.of_request(None) is None
     assert XT.ExpertTables.of(json.loads(json.dumps(doc)), "t").dump() == doc
-    first = sorted(doc["nonces"])[0]
     for bad, why in [({**doc, "schema": "verity-vllm/weights-registration/v1"}, "schema"), ({**doc, "format": 1}, "format"),
-                     ({**doc, "nonces": {p: n for p, n in doc["nonces"].items() if p != first}}, "nonces"),
-                     ({**doc, "nonces": dict.fromkeys(doc["nonces"], 7)}, "nonces")]:
+                     ({**doc, "nonces": {}}, "nonces")]:
         with pytest.raises(RecordError, match=why):
             XT.ExpertTables.of(bad, "t")
     with pytest.raises(ValueError, match="not of rank 1"):
         EX.of_request({**spec, "registration": str(tmp_path / "tables-rank0.json")}, 1)
-    with pytest.raises(ValueError, match="--tables-key"):
-        EX.of_request({**spec, "key": None})
 
 
 @pytest.mark.parametrize("proj", PROJ)
@@ -465,7 +480,8 @@ def test_a_fused_blocks_tables_are_declared_on_it_committed_by_reference_and_cou
         (t, "in0", ("in3", "in4", "in5"), "o1", at, n) for t in (READ_WS, FU) for at, n, _b, _param, _l in plan.tables(t)}
     values = {**tables, **IF.supplied(reg, {p: v.entry() for p, v in tables.items()}, "cd" * 64, module=G1)}
     got = SRW.read_all(ms, rows, ns.store, None, tables=tables)
-    data, entries, roots, _salts = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values)
+    data, entries, roots, _salts = WT.by_reference(SimpleNamespace(members=ms, row_tables=()), reg, [g for g, _e in got], values,
+                                                     IF.member_ranges(ms))
     assert roots == {p: v.root.hex() for p, v in tables.items()}
     for m, d in zip(ms, data):
         assert (m.key in entries) == (m.template != SLOTS)
@@ -521,19 +537,18 @@ def test_two_ranks_windows_each_commit_and_open_their_own_registration_and_a_fus
     reads it, each window's members are their references on its own tables, and a fused block given the other rank's tables is
     refused, since their rows at its expert are not its pair row's."""
     tmpls, caps = fused("w2")
-    (tmp_path / "key").write_bytes(COMMITTER["key"])
-    spec = {"key": str(tmp_path / "key"), "registration": str(tmp_path / "tables-rank{rank}.json")}
+    spec = {"registration": str(tmp_path / "tables-rank{rank}.json")}
     ranks = []
     for rank in range(2):
         ns = build(monkeypatch, "w2", rank)
         rows = rows_of(tmpls, ns)
         plan, ms = cut(rows, tmpls, caps)
-        want = {**committer(plan, rank), "program": f"{rank + 1:02x}" * 64}
+        want = {**committer(plan, rank, tmp_path / f"tables-rank{rank}.salts"), "program": f"{rank + 1:02x}" * 64}
         tables = EX.commit_tables(plan, ns.store, None, None, ns.slices, want)
         doc = XT.ExpertTables(program=want["program"], repo="test/moe", revision="0" * 40, world=2, rank=rank, prefix="",
-                              blocks={"w2": NR}, values={p: v.entry() for p, v in tables.items()}, nonces=want["nonces"]).dump()
+                              blocks={"w2": NR}, values={p: v.entry() for p, v in tables.items()}).dump()
         (tmp_path / f"tables-rank{rank}.json").write_text(json.dumps(doc))
-        assert EX.of_request(spec, rank) == want
+        assert EX.of_request(spec, rank) == {**want, "roots": {p: v.root.hex() for p, v in tables.items()}}
         ranks.append((ns, rows, plan, ms, tables))
     assert sorted(ranks[0][4]) == sorted(ranks[1][4]) and all(ranks[0][4][p].root != ranks[1][4][p].root for p in ranks[0][4])
     for ns, rows, plan, ms, tables in ranks:
