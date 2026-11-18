@@ -186,16 +186,35 @@ class _Device:
 IN_PROCESS = {"settings": {"coins": "in-process", "kernel": "k.so"}}
 
 
-def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch) -> None:
+class _Weight:
+    def __init__(self, name: str, shape=(256, 512)) -> None:
+        self.name, self.shape = name, shape
+
+    def __repr__(self) -> str:
+        return self.name
+
+
+W0, W1 = _Weight("w0"), _Weight("w1")
+
+
+@pytest.fixture(autouse=True)
+def _in_domain(monkeypatch) -> list:
+    seen: list = []
+    monkeypatch.setattr(SV, "pearl_c_refusals", lambda name, shapes: seen.append((name, shapes)) or [], raising=False)
+    return seen
+
+
+def test_open_runs_the_handed_in_device_run_on_the_salt_coin(monkeypatch, _in_domain) -> None:
     coins = _Coins()
     monkeypatch.setattr(SV, "PearlCKernel", _Kernel, raising=False)
     monkeypatch.setattr(SV, "in_process_coins", lambda window: window == 0 and coins)
     monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
     on = PS.Attached(IN_PROCESS)
-    run = on.open({0: "w0", 1: "w1"}, on.own)
+    run = on.open({0: W0, 1: W1}, on.own)
     roots = {0: bytes([0]) * 64, 1: bytes([1]) * 64}
+    assert _in_domain == [("pearl-c-h100-v1-h3", {0: (256, 512), 1: (256, 512)})]
     assert coins.opened == [("salt", SV.weights_root(roots))]
-    assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: "w0", 1: "w1"}, roots,
+    assert run.made == ("pearl-c-h100-v1-h3", PS.OPTION, ("kernel", "k.so", None), {0: W0, 1: W1}, roots,
                         "commitment", "opening", {"pass_index": None, "schedule": "serial"})
     assert run.commits["registration"] == PS.registration(SV.pearl_c_scheme("pearl-c-h100-v1-h3"), SV.DomainError)
     assert run.commits["registration"]["claims"] == PS.UNREGISTERED
@@ -215,7 +234,16 @@ def test_open_refuses_without_the_hand_in(monkeypatch) -> None:
     monkeypatch.setattr(T, "_pearl_c", None)
     on = PS.Attached(IN_PROCESS)
     with pytest.raises(NotImplementedError, match="use_pearl_c"):
-        on.open({0: "w0"}, on.own)
+        on.open({0: W0}, on.own)
+
+
+def test_weights_outside_the_kernels_domain_are_refused_before_any_commitment(monkeypatch) -> None:
+    monkeypatch.setattr(SV, "pearl_c_refusals", lambda name, shapes: [f"linear {w}: (n, k) = {s}" for w, s in shapes.items()],
+                        raising=False)
+    monkeypatch.setattr(T, "_pearl_c", lambda: _Device)
+    on = PS.Attached(IN_PROCESS)
+    with pytest.raises(ValueError, match=r"refused before any commitment: linear 0: \(n, k\) = \(3, 5\)"):
+        on.open({0: _Weight("w0", (3, 5))}, on.own)
 
 
 def test_its_settings_are_declared_and_checked() -> None:
@@ -260,7 +288,7 @@ def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch) -> Non
         or ("session", "c", "o", b"salt", {"gate": 1}, 0)), raising=False)
     monkeypatch.setattr(SV, "finish_window", lambda run, session: finished.append(session), raising=False)
     on = PS.Attached(CTX)
-    on.run = on.open({0: "w0"}, on.own)
+    on.run = on.open({0: W0}, on.own)
     assert opened == [(PS.OPTION, "127.0.0.1:1", SESSION, _gate, SV.weights_root({0: bytes([0]) * 64}), True)]
     assert on.run.made[2] == ("kernel", "k.so", None)
     assert on.run.made[5:] == ("c", "o", {"pass_index": 0, "schedule": "serial"})

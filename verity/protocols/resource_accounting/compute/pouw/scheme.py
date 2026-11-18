@@ -187,6 +187,8 @@ class Attached:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
 
         device, name, weights = pearl_c_device(), OPTION.partition(":")[2], dict(weights)
+        if bad := SV.pearl_c_refusals(name, {w: tuple(t.shape) for w, t in weights.items()}):
+            raise ValueError(f"pearl-plus: its weights are refused before any commitment: {'; '.join(bad)}")
         kernel = SV.PearlCKernel.load(own["kernel"], own["cubin"] or None)
         roots = device.weight_roots(kernel, weights, name)
         k, carried = None, None
