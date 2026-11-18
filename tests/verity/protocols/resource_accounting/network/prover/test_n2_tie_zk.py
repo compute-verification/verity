@@ -184,7 +184,8 @@ def test_a_dry_prove_reads_every_member_at_its_verdicts_on_the_pinned_link_and_s
     assert [p.name for p in out.iterdir()] == ["summary.json"]
     s = json.loads((out / "summary.json").read_text())
     tie = _tie()
-    assert set(s["members"]) == set(s["changed"]) == set(s["inputs"]) == set(tz.EXPECT)
+    assert set(s["members"]) == set(s["changed"]) == set(tz.EXPECT)
+    assert not {"inputs", "prompt_lens", "releases"} & set(s), "the inputs' digest, lengths and releases are witness"
     for name, m in s["members"].items():
         assert tuple(bool(x["expect"]) for x in m["reference"]) == tz.EXPECT[name], name
         assert [x["window"] for x in m["reference"]] == list(range(len(tz.EXPECT[name]))), name
