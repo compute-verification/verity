@@ -57,7 +57,7 @@ def test_admission_cost_deadline_and_duration_do_not_change_identity():
 def test_gpu_registry_keeps_namespaces_distinct():
     gpu = gpus()["rtx-pro-6000"]
     assert gpu.id != gpu.census_id
-    assert gpus()["h200"].nebius_platform == "gpu-h200-sxm"
+    assert gpus()["h200"].nebius_platforms == ("gpu-h200-sxm",)
 
 
 def test_package_imports_the_standard_library_and_the_settings_machinery_alone():

@@ -102,7 +102,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == last.ports[
             f"prog{j}"]["root"]
         assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
-        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
+        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.RV.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -264,7 +264,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     first = sz.empty_start(digest, cls)
     assert rounds[0]["start"].ports["sin"] == {
         "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
-        "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": first.domain.domain_id.hex(), sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
     assert first.salts == tuple(RV.supplied_salts(digest, sz.CARRY, 1))
     last, start = rounds[0]["last"], rounds[1]["start"]
@@ -272,7 +272,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
     assert start.ports["sin"] == {
         "value": sz.CARRY, "root": last.ports["o1"]["root"], "leaves": 1, "words": words, "word_bits": 16,
-        "domain": last.ports["o1"]["domain"], sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": last.ports["o1"]["domain"], sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
     assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
     assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
@@ -307,7 +307,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
     T, v2 = s.params.window, sz.BitRowLeaf.hiding_schema
     root, query, defs = _scan_program(cls, T)
     h = sz.host(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
-    alone = sz.PA.mixed_population_program([(defs["start"], 1)])
+    alone = sz.PN.mixed_population_program([(defs["start"], 1)])
     programs = {sz.TEMPLATES: (root, query, RND.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
                 sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), RND.parse_design("stratified:1"),
                            None)}
@@ -399,7 +399,7 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
             own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
             for p in own[name, m.name]:
                 port = m.ports[p]
-                schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
+                schema = port.get(sz.RV.SCHEMA_KEY, sz.RV.SCHEMA)
                 dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
                 assert (port["domain"], port["leaves"], port["reads"], port.get(RV.READS_FROM, 0)) == (
                     dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
@@ -531,7 +531,7 @@ def test_the_members_are_the_programs_ranges():
     for templates in {t for t, _o in sz.ROUNDS.values()}:
         members = sz.members_of(templates, T, entries=E, lanes=L)
         counts = sz.counts_of(members)
-        program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
+        program = sz.PN.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
         assert [(lo, n) for _t, lo, n in ranges] == [
             (next(m.base for m in members if m.template == t), counts[t]) for t in templates]
@@ -815,7 +815,7 @@ def _program(T: int) -> tuple:
     buckets, with stand-in templates."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     defs = {"start": START, "ingress": ING, "egress": EG}
-    return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
+    return (sz.PN.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
             sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
@@ -993,7 +993,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    block = sz.PA.mixed_population_program([(defs["block"], E)])
+    block = sz.PN.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), RND.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
@@ -1440,7 +1440,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     T, k, root = 32, 16, "dd" * 64
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
-    program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
+    program = sz.PN.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
                          stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())

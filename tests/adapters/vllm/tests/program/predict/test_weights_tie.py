@@ -103,9 +103,9 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     head reads it @1024 and ``x0`` @64: @1024 is the shard's, sorted first), from the IV over the tensor's bytes to their
     SHA-512, and one for its table @64, from the IV over the tag and the tensor's bytes; each rooted parameter's every row
     read once, the rotary table none: the record gives it a shape, but it is an analytic table, no checkpoint bytes, so the
-    tie names it unrooted, as the registration does. Its templates: the shard's rows of each width (1024, 64 and 512 words,
-    in first use) at its one phase (each row whole blocks) and its last row, the field's rows and last row, and the table's
-    rows (one byte pending) and last row, whose ``data`` alone are row-seg ports. The verifier makes the tie, its circuit's
+    tie names it unrooted, as the registration does. Its templates, in the order its first batches them: the field's rows
+    and last row, the table's rows (one byte pending) and last row, whose ``data`` alone are row-seg ports, then the shard's
+    rows of each width (1024, 64 and 512 words, in first use) at its one phase (each row whole blocks) and its last row. The verifier makes the tie, its circuit's
     digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its shape
     entries are the weights record's but the rotary table's, which names no root."""
     reg, (d, man) = S._registered(), x
@@ -136,9 +136,9 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     h = base % 128
     tag = len(WT.TABLE_TAG)
     assert [(descriptor_id(fn), n) for fn, n in t.circuit().templates] == [
-        (descriptor_id(fn), n) for fn, n in ((SS.row(h, 1024), 80), (SS.row(h, 64), 4), (SS.row(h, 512), 16),
-                                             (SS.last(h, 64, len(shard)), 1), (SS.row(0, 64), 255), (SS.last(0, 64, len(embed)), 1),
-                                             (SS.row(tag, 64), 255), (SS.last(tag, 64, len(tagged)), 1))]
+        (descriptor_id(fn), n) for fn, n in ((SS.row(0, 64), 255), (SS.last(0, 64, len(embed)), 1), (SS.row(tag, 64), 255),
+                                             (SS.last(tag, 64, len(tagged)), 1), (SS.row(h, 1024), 80), (SS.row(h, 64), 4),
+                                             (SS.row(h, 512), 16), (SS.last(h, 64, len(shard)), 1))]
     assert IF.seg_ports(t.circuit().registered) == {
         descriptor_id(fn): {"data"} for fn in (SS.row(tag, 64), SS.last(tag, 64, len(tagged)))}
     got = WT.audit_inputs(registration, record, t, DESIGN, CAP)
@@ -202,13 +202,14 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     c = win.close()
     win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=DK)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
-    _r, _t, forged = WT.commit(reg, tmp_path / "forged.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN, served=served,
-                               forge_digest=True)
+    forged_registration, _t, forged = WT.commit(reg, tmp_path / "forged.salts", d, man, design=DESIGN, cap=CAP, grain=GRAIN,
+                                                served=served, forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
     forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=DK)
-    assert _unopened(forged, fc, tmp_path / "f", pins) == set()
+    # each commit draws fresh salts, so the forged arm's reads are of its own registration's roots
+    assert _unopened(forged, fc, tmp_path / "f", _pins(WT.audit_inputs(forged_registration, record, t, DESIGN, CAP))) == set()
     roots = WW.WeightsRegistration.of(registration, "r").roots
     refused: list[tuple[dict[str, object], str]] = [
         ({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
@@ -238,6 +239,8 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
     rope = sorted(set(rooted["values"]) - set(registration["values"]))
     assert rope == sorted(t.unrooted) and {p: v for p, v in _shapes(rooted)["values"].items() if p in registration["values"]} \
         == _shapes(registration)["values"]
+    # each registration draws fresh salts: the rooted one takes the tie committer's entries for every weight it shares
+    rooted = {**rooted, "values": {**rooted["values"], **registration["values"]}}
     win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=DK)
     roots = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]["registered_roots"]
     with pytest.raises(ValueError, match=re.escape(f"the records audit's roots for {rope} aren't the registration's roots")):
