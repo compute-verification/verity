@@ -6,7 +6,7 @@
 # refused. Run from the verity tree (research run --cwd source); CPU only. Scratch is a `mktemp -d` under FLOCK_WORK's
 # scratch/, deleted at exit. Outputs under out/: host.txt, stage-8.json and stage-64.json (each statement's public file
 # size and the shared rows' strings it holds), the public files and own files at n = 8, and per statement serve.log,
-# prove.txt, prove.err, challenger/ and lean.log (its VERDICT line); verdicts.txt sums them.
+# prove.txt, prove.err, challenger-NAME/ and lean.log (its VERDICT line); verdicts.txt sums them.
 # env: CPUS=16  N=8 (the proved size)  SIZES="8 64" (the staged sizes)  CASES="m1 m2 r ra rb mc rd"
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -84,7 +84,7 @@ for c in ${CASES:-m1 m2 r ra rb mc rd}; do
   C=$O/$c; mkdir -p $C
   K=$(python3 -c 'import json, sys; u = json.load(open(sys.argv[1]))["statements"][sys.argv[2]]["units"]; print(u[1] - u[0])' $O/stage-$N.json $c)
   $B statement --zk --circuit $D/circuit.txt --instances $D/$c.pub --tables $D/tables > $C/statement.txt 2>&1
-  challenger_start $C/challenger || { echo "$c challenger refused" >> $O/verdicts.txt; continue; }
+  challenger_start $C/challenger-$c || { echo "$c challenger refused" >> $O/verdicts.txt; continue; }
   PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   $B serve --zk --listen 127.0.0.1:$PORT --out $S/sessions-$c --instances $D/$c.pub --circuit $D/circuit.txt --tables $D/tables \
     --pin $PIN --operator shared-tree --draw subset:$K --sessions 1 "${TREE_FROM[@]}" > $C/serve.log 2>&1 &
@@ -95,10 +95,10 @@ for c in ${CASES:-m1 m2 r ra rb mc rd}; do
   echo "$c prove rc $?" >> $O/verdicts.txt
   for i in $(seq 600); do kill -0 $SP 2>/dev/null || break; sleep 1; done
   kill $SP 2>/dev/null; wait $SP
-  challenger_end $C/challenger
+  challenger_end $C/challenger-$c
   SESS=$(dirname "$(ls -1 $S/sessions-$c/*/session.json 2>/dev/null | LC_ALL=C sort | tail -1)")
   [ -f "$SESS/session.json" ] || { echo "$c no session" >> $O/verdicts.txt; continue; }
-  challenger_audit $C/challenger $SESS > $C/audit.txt 2>&1; echo "$c audit rc $?" >> $O/verdicts.txt
+  challenger_audit $C/challenger-$c $SESS > $C/audit.txt 2>&1; echo "$c audit rc $?" >> $O/verdicts.txt
   $(verifier_env) $LEAN_BIN verify --zk --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/$c.pub \
     --partition $D/partition.json --program $D/program.json --registered $D/$c.reads.json --session $SESS > $C/lean.log 2>&1
   echo "$c lean rc $?" >> $O/verdicts.txt
