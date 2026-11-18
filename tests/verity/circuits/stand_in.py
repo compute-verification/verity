@@ -1,7 +1,7 @@
 """The stand-in Boolean bodies the suite's test primitives get (`stand_in_body`), registered with `verity.circuits.program` as
 this module loads: the catalog's body where it has one, a stand-in for a primitive a test defines, and a refusal for a
-primitive of `verity` or an adapter with none, or one a test defines under such a primitive's id. Another suite loads it by
-file from its conftest, the file among its inputs."""
+primitive of `verity` or an adapter with none, or one a test defines under such a primitive's id. Another suite's conftest,
+or a script that writes difftest vectors, loads it by file, the file among the inputs of every suite that runs it."""
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
