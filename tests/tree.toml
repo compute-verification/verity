@@ -267,6 +267,10 @@ means = "network attestation: the network attester and its guarantee"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/resource_accounting/network/scheme.py"
+means = "the network attester as a resource scheme, registered as network-attester"
+
+[[tree]]
 path = "verity/protocols/workload_classification/training_detection/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
