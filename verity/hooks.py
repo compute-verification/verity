@@ -7,7 +7,7 @@ the channel a scheme subscribes to it through (`verity.protocols.resource_accoun
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Protocol
 
@@ -180,6 +180,14 @@ class RefuseProperty:
     why: str
 
 
+def unmet[T](requests: Iterable[tuple[T, Any]], properties: Mapping[str, Any]) -> list[tuple[T, Any]]:
+    """The `RequireProperty` and `RefuseProperty` of ``requests`` (each with who filed it) that ``properties`` doesn't
+    meet: a required property it lacks is unmet."""
+    return [(who, r) for who, r in requests
+            if (isinstance(r, RequireProperty) and properties.get(r.property) != r.value)
+            or (isinstance(r, RefuseProperty) and r.property in properties and properties[r.property] == r.value)]
+
+
 class Kernel(Protocol):
     """A scheme's computation of a due block: its output, computed itself or through ``original``, the workload's own,
     given inputs in place of the block's or None for the block's."""
@@ -249,4 +257,4 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
-           "StartBeside", "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced"]
+           "StartBeside", "StartOnBoundary", "StepBegan", "StepEnded", "ValueProduced", "unmet"]

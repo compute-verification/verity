@@ -24,7 +24,7 @@ untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "te
             "test_steady_runs.py", "test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
-# `build_bound` reads the protocol options' `requires_build` to refuse CUDA
+# `build_bound` reads the protocol options' `requests` to refuse CUDA
 # graphs for arms whose served kernels are bound to a row Build. Dispatch names
 # a queue kind from benchmarks' kinds file, which a test checks every spec has. The README is the
 # harness's contract, and a test pins it to the code. The bandwidth spec's setup must export every library variable

@@ -79,12 +79,11 @@ class Exchange:
         """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
         its reasons; else True when a scheme's required property fixes the build.  Emits ``declared``."""
         why: dict[str, list[str]] = {}
+        for name, r in H.unmet(self.requests, declared.properties):
+            verb = "requires" if isinstance(r, H.RequireProperty) else "refuses"
+            why.setdefault(name, []).append(f"{verb} {r.property} = {r.value!r}: {r.why}")
         for name, r in self.requests:
-            if isinstance(r, H.RequireProperty) and declared.properties.get(r.property) != r.value:
-                why.setdefault(name, []).append(f"requires {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.RefuseProperty) and declared.properties.get(r.property) == r.value:
-                why.setdefault(name, []).append(f"refuses {r.property} = {r.value!r}: {r.why}")
-            elif isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
+            if isinstance(r, H.StartBeside) and (r.process not in schemes.PROCESSES or set(r.readers) - set(self.readers)):
                 missing = sorted(set(r.readers) - set(self.readers))
                 why.setdefault(name, []).append(
                     f"starts {r.process} beside the workload, which no scheme registered" if r.process not in schemes.PROCESSES
