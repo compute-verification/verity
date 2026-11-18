@@ -216,15 +216,12 @@ One execution phase's attestations are registered through the proof system
   (`NetworkHeadFields`), on an end with an occupancy profile its T counts are the profile's row for the execution phase
   (`NetworkHeadCounts`; an execution phase past the profile has no row and is a reject), and the head's record digest R
   (`NetworkRecordDigest`) under the witness `salt_c` is the signed digest (`NetworkSignedDigest`), so the attestation
-  signs the head the check opened. In the proof block's Program each head check is one gate that names the Definition
-  and its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment
-  gadgets' Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest
-  is core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names
-  a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
-  (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
-  through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
-  class no sidecar pins has a gate naming no digest (`@unpinned`), and no proof of its proof block is accepted until a
-  root of that class is pinned.
+  signs the head the check opened. The proof block calls each head check, its Boolean
+  body (the commitment gadgets' included) in the Program, so the Program's digest, which the spec, the stream and each
+  registration bind, binds the circuits: a proof of another circuit with the same interface names another Program.
+  Each head check's circuit digest (core's `program_digest` of its Program, `head_check.circuit_digest`) is pinned in
+  `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition; a size class no sidecar
+  pins (`head_check.pin_id`, `@unpinned`) has no accepted proof until a root of that class is pinned.
 - **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
   T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
   of it the head row's hm96 digest; the signed digest is 290,246 at T = 4 and 1,333,292 at T = 600, the record digest's

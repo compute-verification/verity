@@ -56,17 +56,13 @@ digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<n
 `OUTPUTS`: ``verdict``, the AND of the head checks, and ``deadline``, the AND of the two heads' deadline bits. The attestations are not in the proof block: the
 verifier checks them on their public fields (`TransferBlocks.certified`).
 
-In the proof block's Program each head check is one gate that names the Definition and its circuit digest
-(`head_check.gate`, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2`), because the commitment gadgets' Boolean bodies
-encode to about 140 MB and the proof system encodes the Program on every registration. The digest is core's
-`program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names a template
-by, pinned in `head_check.circuit-check.json` and held to the Definition by circuit-check. So the Program's digest binds
-the head check's circuit, and the spec, the stream and each registration bind to it: a proof of another circuit with the
-same interface names another Program, which the verifier refuses (`TransferBlocks.proved`), and a proof's circuit
-puts the Definition where its gate stands only once the digest is the gate's (`head_check.expand`). The digest is read
-from the pin, never computed, since tracing the gadgets takes minutes: a size class no sidecar pins has a gate that
-names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is
-unchanged.
+The proof block calls each head check, `head_check.NetworkHeadCheck_v2{L,T,COUNTS}`, itself, so its Program holds the
+head check and its Boolean body, the commitment gadgets' included, and the Program's digest binds the head check's
+circuit; the spec, the stream and each registration bind to it: a proof of another circuit with the same interface
+names another Program, which the verifier refuses (`TransferBlocks.proved`). Each head check's circuit digest (core's
+`program_digest` of its Program, `head_check.circuit_digest`) is pinned in `head_check.circuit-check.json` and held to
+the Definition by circuit-check; a size class no sidecar pins (`head_check.pin_id`, `@unpinned`) has no accepted
+proof, while its verdict of record in the clear is unchanged.
 
 N3, the content check, a prototype evaluated in the clear and in no proof-system Spec, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/resource_accounting/network/prover/scan_zk.py`
 proves in zero knowledge, outside this protocol.
@@ -75,15 +71,14 @@ proves in zero knowledge, outside this protocol.
 block's public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the attester's salt),
 each the little-endian concatenation of its parameters' bits in whole u16 words (`TransferBlocks.layout`,
 `TransferBlocks.row`), and the output row ``o0``, one u16 word holding the two output bits (`OUT_BITS`); each row committed
-under a hiding salt. Its circuit is `TransferBlocks.proof_block`, the registered proof block with each gate the Definition
-its pinned digest names, bound to the registered partition and Program (`verity/protocols/resource_accounting/network/prover/n2_zk.py` proves it
+under a hiding salt. Its circuit is `TransferBlocks.proof_block`, the registered proof block itself, bound to the registered partition and Program (`verity/protocols/resource_accounting/network/prover/n2_zk.py` proves it
 behind the ZK server).
 
 Its verifier is `TransferBlocks.verify`, which decides on the delivered proof (`Delivered`) and public inputs
 alone. It accepts when
 - the verifier's own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`) accepts every session on the circuit
-  file the auditor committed, the sessions prove this link's registered proof block (`TransferBlocks.proved`: every gate
-  names a pinned circuit digest and every session names the registered Program) and the sampled proof block;
+  file the auditor committed, the sessions prove this link's registered proof block (`TransferBlocks.proved`: each head
+  check's size class is pinned and every session names the registered Program) and the sampled proof block;
 - the proof's ``pub`` row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the registered
   root, the execution phase's public fields and both attestations' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
@@ -129,7 +124,7 @@ Lean takes as an input rather than checks:
   as its schedule's, `network_attester.NetworkAttesterParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
-  Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
+  Program's and partition's digests and the head checks' pin ids (`P.partition`, `head_check.pin_id`), which the Lean holds the
   findings and pins to but doesn't derive.
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
 ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
@@ -153,7 +148,7 @@ import struct
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from functools import cached_property, lru_cache
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -161,7 +156,7 @@ from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
@@ -225,22 +220,17 @@ def _heads(S_) -> tuple[tuple[str, Any], ...]:
     """Each end's head check's parameters but its signed digest, which is the proof block's `egress` or `ingress`, and
     its direction, which the proof block fixes."""
     return tuple((f"{end}_{name}", t) for end, key in zip(_ENDS, (S_.EGRESS, S_.INGRESS))
-                 for name, t in HC.gate(*key).params if name not in _FIXED)
+                 for name, t in HC.unit(*key).signature()[0] if name not in _FIXED)
 
 
-@lru_cache(maxsize=None)
-def _head_expanded(L: int, T: int, counts: bool):
-    return HC.expand(HC.gate(L, T, counts), HC.unit(L, T, counts))
-
-
-def _checks(B, S_, args, check=HC.gate) -> tuple[list[Coll], list[Coll], list[Any]]:
-    """Each end's head check (`check`'s for its size class) over its end's signed digest (the proof block's `egress` or
+def _checks(B, S_, args) -> tuple[list[Coll], list[Coll], list[Any]]:
+    """Each end's head check (`head_check.unit` for its size class) over its end's signed digest (the proof block's `egress` or
     `ingress`) and its own direction, a constant; each end's head counts and its deadline byte's low bit, as the head
     check reads the head."""
     K = GB._Consts(B)
     oks, counts, deadline, rest = [], [], [], list(args[2:])
     for d, key in enumerate((S_.EGRESS, S_.INGRESS)):
-        g = check(*key)
+        g = HC.unit(*key)
         names = [name for name, _ in g.signature()[0]]
         ends, rest = rest[:len(names) - len(_FIXED)], rest[len(names) - len(_FIXED):]
         ends.insert(names.index("direction"), GB._coll(Array(1, BL.BIT), K.bits(d, 1)))
@@ -267,11 +257,11 @@ def _outputs(B, oks: list[Coll], deadline: list[Any]) -> Coll:
 _OUT = Array(len(OUTPUTS), BL.BIT)
 
 
-def _unit(check) -> CompositeDefinition:
-    """N2's unit, each head check called as `check` for its size class."""
+def _unit() -> CompositeDefinition:
+    """N2's unit, each end's head check called for its size class."""
 
     def body(B, S_, *args):
-        oks, _, deadline = _checks(B, S_, args, check)
+        oks, _, deadline = _checks(B, S_, args)
         return _outputs(B, oks, deadline)
 
     return CompositeDefinition(
@@ -281,17 +271,12 @@ def _unit(check) -> CompositeDefinition:
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False)
 
 
-_UNIT = _unit(HC.gate)
-#: the same unit with each gate replaced by the Definition it names, as a proof's circuit lowers it
-_PROOF_BLOCK = _unit(_head_expanded)
+_UNIT = _unit()
 
 
-def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], *, proof: bool = False):
-    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`).
-    With `proof`, the unit a proof's circuit lowers: the same id and signature, so the template the registered query
-    names, with each gate the Definition it names once that Definition's circuit digest is the gate's pin
-    (`head_check.expand`, which traces it: minutes a head check, and a `ValueError` for an unpinned size class)."""
-    return bind(_PROOF_BLOCK if proof else _UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int]):
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`)."""
+    return bind(_UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
 
 
 PUBLIC = (
@@ -516,12 +501,10 @@ class TransferBlocks:
         """N2's proof block for this link (`unit`): its heads' size classes are the link's."""
         return unit(self.head_key(0), self.head_key(1))
 
-    @cached_property
+    @property
     def proof_block(self):
-        """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`),
-        the template of the registered query under the same id. The prover's and the auditor's lowering, never the
-        registered Program, which holds the gates."""
-        return unit(self.head_key(0), self.head_key(1), proof=True)
+        """The proof block a proof's circuit lowers: `unit` itself, the template of the registered query."""
+        return self.unit
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -708,7 +691,7 @@ class TransferBlocks:
         return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
 
     def outputs(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = ()) -> int:
-        """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`), which
+        """The unit's output word on the opening under `root` by each head check's reference (`head_check.reference`), which
         the tests hold to the circuits: bit 0 the verdict, bit 1 the deadline. What the prover claims, and the debug
         comparison's. `syncs` is unread: the link declares none."""
         verdict = all(i is not None and HC.reference(i) for i in self.head_checks(opening, root))
@@ -720,18 +703,18 @@ class TransferBlocks:
             raise ValueError("the opening is not the registered execution phase's")
         return reg["roots"][0]["root"]
 
-    def gates(self) -> list[PrimitiveDefinition]:
-        """The unit's gates: each end's head check (`head_check.gate`)."""
-        return [HC.gate(*self.head_key(d)) for d in (0, 1)]
+    def pins(self) -> list[str]:
+        """Each end's head check's pin id (`head_check.pin_id`), which the Lean verdict reads as ``gates``."""
+        return [HC.pin_id(HC.unit(*self.head_key(d))) for d in (0, 1)]
 
     def proved(self, findings: Sequence[Finding]) -> bool:
         """Whether `findings`, the verifier's run over a delivered proof of the proof block (`proofs.verify`),
-        prove this link's proof block: every gate of it names its Definition's pinned circuit digest
-        (`head_check.pinned`), and one or more sessions each accepted and named the link's registered Program (the
-        partition object's `program`), which binds those digests. A proof of another circuit with the same interface
+        prove this link's proof block: each end's head check's size class is pinned (`head_check.pinned`), and one
+        or more sessions each accepted and named the link's registered Program (the partition object's `program`),
+        which holds both head checks' bodies. A proof of another circuit with the same interface
         names another Program, and a proof block with a size class no sidecar pins has no proof."""
         want = self._partition["program"]
-        return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
+        return all(HC.pinned(p) for p in self.pins()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)
 
     @cached_property
@@ -775,7 +758,7 @@ class TransferBlocks:
                   delivered: Delivered, findings: Sequence[Finding] | None,
                   sessions: Sequence[str]) -> dict[str, Any] | None:
         """`verify`'s inputs as `NetworkCheck.TransferBlocks.caseOf` reads them: the verifier's own structure (the Program's
-        and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
+        and partition's digests, the head checks' pin ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the attestations (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync, the key and session, each end's grid with no
@@ -808,7 +791,7 @@ class TransferBlocks:
         case: dict[str, Any] = {
             "kind": "warden", "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
             "registration": sample.docket.digest, "units": list(sample.units), "program": self._partition["program"],
-            "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
+            "partition": P.digest(self._partition), "gates": self.pins(),
             "findings": None if findings is None else [
                 {"accepted": f.accepted, "program": f.program, "units": list(f.units)} for f in findings],
             "public": public, "salts": {k: hexed(delivered.salts.get(k)) for k in ("pub", "o0")},

@@ -426,10 +426,10 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
-A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
-(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the
-pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof that names any
-other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
+A proof of the proof block is held to its circuit. The proof block calls each head check with its Boolean body, so
+its Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof
+that names any other Program, or a proof block of a size class `head_check.circuit-check.json` doesn't pin
+(`TransferBlocks.proved`, `head_check.pin_id`).
 
 The attestation signs no hash of witness. The network attester signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the network attester samples fresh for each record

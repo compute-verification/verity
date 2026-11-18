@@ -1,7 +1,7 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on an active network attester's
 run: each execution phase committed, registered on the link's own stream (`service.TransferBlocks.stream`, the proof
 system's `Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkTransferBlocks_v5`,
-both ends' head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
+both ends' head checks at pinned size classes) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and
 decided by `TransferBlocks.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear`, a run by hand's,
 adds the in-the-clear comparison to each verdict, which decides nothing and goes to ``--witness`` alone (it needs one),
@@ -24,7 +24,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the attestations
   still the network attester's, its head failing its signed digest alone. The prover's references
-  (`head_check.reference_parts`, and the proof block's output word by the gates' references, `TransferBlocks.outputs`) say
+  (`head_check.reference_parts`, and the proof block's output word by the head checks' references, `TransferBlocks.outputs`) say
   beforehand which windows each member's proofs refuse (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
   committed, then K of them sampled on the verifier's own coins (`TransferBlocks.period_draw`), and only those
@@ -32,8 +32,8 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   stream's δ, on the Lean verifier's sample. ``tampered`` then changes every window (`every_count`), which any
   sample refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
-* **The statement** (`stager`, `stage`). One circuit, `TransferBlocks.proof_block` lowered once (the registered unit with each
-  gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
+* **The statement** (`stager`, `stage`). One circuit, `TransferBlocks.proof_block` lowered once (the registered unit
+  itself, each head check called with its body), bound to the registered partition and Program. Each execution phase is a
   statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`TransferBlocks.layout`,
   `TransferBlocks.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
   once, held to the prover's reference and to the IR reference; every row's salt is fresh from the operating system, and
@@ -200,7 +200,7 @@ def phases(run: Path, edit=None) -> SimpleNamespace:
     """Every execution phase of the active network attester's run (`network_attester_link`) with both attested records, as the
     prover holds it before it registers: its opening (fresh salts), the root it commits (`TransferBlocks.root`), the proof
     block's arguments under that root (None where the proof block takes no instance), each end's head check's failed
-    parts (`head_check.reference_parts`) and the proof block's output word by the gates' references
+    parts (`head_check.reference_parts`) and the proof block's output word by the head checks' references
     (`TransferBlocks.outputs`); and the network attester's attestations, which the verifier receives from it, no sync
     declared. ``edit(lw, w, pair)``: the records the prover commits in place of the attested ones. ``expect``: the
     verdict the verifier should reach on an honest proof of the opening."""
@@ -612,7 +612,7 @@ def prove(a) -> int:
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
                        "program": lw0.partition["program"], "partition": P.digest(lw0.partition),
-                       "gates": [g.id for g in lw0.gates()], "pinned": all(HC.pinned(g) for g in lw0.gates()),
+                       "pins": lw0.pins(), "pinned": all(HC.pinned(x) for x in lw0.pins()),
                        "windows": {k: len(v.windows) for k, v in members.items()},
                        "planned_windows": {k: v.plan["windows"] for k, v in members.items()}}
     summary["instances_s"] = round(time.time() - t, 1)
@@ -629,7 +629,7 @@ def prove(a) -> int:
         if not expected(name, rd):
             raise SystemExit(f"{name}: the references are not the {name} round's")
     if not summary["link"]["pinned"]:
-        raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
+        raise SystemExit(f"a head check's size class has no pinned circuit digest: {summary['link']['pins']}")
     if a.dry:
         write(summary)
         log("dry: done")

@@ -34,7 +34,7 @@ def _tie():
 
 def test_each_members_references_give_its_verdicts():
     tie = _tie()
-    assert tz.HC.pinned(tie.gates()[0]) and list(tz.EXPECT) == list(tz.MEMBERS)
+    assert tz.HC.pinned(tie.pins()[0]) and list(tz.EXPECT) == list(tz.MEMBERS)
     for name, (link, adv, edit, _) in tz.members().items():
         rd = tz.phases(tie, link, adv, edit)
         assert len(rd.windows) == 2 and all(len(x.words) == tz.T for x in rd.windows), name
@@ -71,7 +71,7 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
     sv = _fresh()
     sv.use("served")
     tie = sv.TS.IngressTie(sv.LINK, sv.PARAMS, sv.SESSION)
-    assert tie.key == (4096, 1, 1) and sv.T == 60 and sv.HC.pinned(tie.gates()[0])
+    assert tie.key == (4096, 1, 1) and sv.T == 60 and sv.HC.pinned(tie.pins()[0])
     assert list(sv.members()) == list(sv.EXPECT) == ["honest", "forged"] and f"pub-{sv.T}.bin" in sv.RECEIVED
     for name, (link, adv, edit, _) in sv.members().items():
         rd = sv.phases(tie, link, adv, edit)

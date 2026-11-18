@@ -318,7 +318,7 @@ def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.IngressInputs, edi
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
     tuple, the lanes of those prompt lengths), the prover's rows (the network attester's, or a `Forge`'s), each proof
     block's arguments on the prover's lanes and rows and the verifier's public arguments on its own, each output word by
-    the gate's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
+    IoTieRequest's reference, whether each proof block's public row is the verifier's (``opens``) and the host's read of the
     registered rows (``held``, `network_attester_rows.refusal`: None where every row opens the network attester's root)."""
     out = []
     for w, rec in enumerate(link.records):
@@ -606,7 +606,7 @@ def prove(a) -> int:
                      **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS} if REAL else {}),
                      "link": {"name": LINK, "shape": list(tie.key), "T": T, "unit": tie.unit.id,
                               "program": tie.partition["program"], "partition": P.digest(tie.partition),
-                              "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
+                              "pins": tie.pins(), "pinned": all(HC.pinned(x) for x in tie.pins()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: sorted(what) for name, (_, _, _, what) in plan.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
@@ -620,7 +620,7 @@ def prove(a) -> int:
         if tuple(bool(x.expect) for x in rd.windows) != EXPECT[name]:
             raise SystemExit(f"{name}: the references' verdicts aren't the member's {EXPECT[name]}")
     if not summary["link"]["pinned"]:
-        raise SystemExit(f"the gate names no pinned circuit digest: {summary['link']['gates']}")
+        raise SystemExit(f"IoTieRequest's size class has no pinned circuit digest: {summary['link']['pins']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
         log("dry: done")

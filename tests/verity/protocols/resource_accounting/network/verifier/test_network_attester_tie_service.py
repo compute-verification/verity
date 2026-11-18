@@ -21,8 +21,9 @@ import pytest
 
 import verity
 from verity.commitments import docket_digest as DD
-from verity.circuits import boolean as BL
+from verity.circuits import boolean as BL, codec
 from verity.circuits.defs import bind
+from verity.circuits.program import Program
 from verity.protocols.resource_accounting.network.prover import n2_tie_zk as N2T
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_request as Q, service as SVC, \
     tie_service as TS, network_attester as W, network_attester_rows as WR
@@ -368,30 +369,43 @@ def _accepts_any_cells(B, S_, *args):
     return B.call(BL.constant(1))
 
 
-def test_the_tie_gate_names_its_pinned_circuit_digest():
-    """The tie's gate names IoTieRequest's circuit digest as `io_request.circuit-check.json` pins it (circuit-check
-    holds the pin to the Definition), and the registered unit is one call of IoTieRequest itself, its proof block, so
-    an IoTieRequest with the same id and signature that accepts any cells is another registered Program."""
-    d, gate = bind(Q.IoTieRequest, B=B, L=2, R=2), TS.gate(B, 2, 2)
+def test_the_tie_unit_calls_io_tie_request_and_another_circuit_is_another_program():
+    """The registered unit is one call of IoTieRequest itself, its body in the Program and no gate, its pin id naming
+    IoTieRequest's circuit digest as `io_request.circuit-check.json` pins it; an IoTieRequest with the same id and
+    signature that accepts any cells makes another registered Program."""
+    d = bind(Q.IoTieRequest, B=B, L=2, R=2)
     pinned = json.loads(Q.PINS.read_text())["digests"][d.id]["sha512"]
-    assert gate.id == f"Gate[{d.id}@{pinned}]_v2" and HC.pinned(gate)
+    assert HC.pin_id(d, Q.PINS) == f"Gate[{d.id}@{pinned}]_v2" and HC.pinned(HC.pin_id(d, Q.PINS))
+    unit = bind(TS._UNIT, B=B, L=2, R=2)
+    defs = set(codec.encode_program(Program(unit))["definitions"])
+    assert codec.descriptor_id(d) in defs and not any(f.startswith("Gate[") for f in defs)
     forged = replace(Q.IoTieRequest, body=_accepts_any_cells, register=False)
     assert bind(forged, B=B, L=2, R=2).id == d.id and bind(forged, B=B, L=2, R=2).signature() == d.signature()
-    with pytest.raises(ValueError, match="another circuit"):
-        HC.expand(gate, bind(forged, B=B, L=2, R=2))
-    unit = bind(TS._UNIT, B=B, L=2, R=2)
     other = bind(replace(TS._UNIT, body=lambda B_, S_, *a: B_.call(bind(forged, B=S_.B, L=S_.L, R=S_.R), *a),
                          register=False), B=B, L=2, R=2)
     assert unit.id == other.id and HC.circuit_digest(unit) != HC.circuit_digest(other)
 
 
+#: this link's registered Program (the partition object's ``program``) when its unit held IoTieRequest as a gate,
+#: `Gate[IoTieRequest_v1{B=512,L=2,R=2}@<pin>]_v2`, under verity-ir/descriptor/v1
+GATED_PROGRAM = "9bd28cbe95c78a4b088d9473c2f706d698545591248470d0c2f26d207fe9cc019ccbe9ec66941728c4b25b781f5b40c2fdaca2618ea011fa4760ef67557ee587"
+
+
+def test_a_proof_naming_the_gated_units_program_is_refused(tmp_path):
+    """A window proved under the Program the gated unit registered is refused (`IngressTie.proved`), the next window
+    under the registered Program accepted."""
+    run, inputs = Run(tmp_path), _inputs(SPAN)
+    assert run.tie.partition["program"] != GATED_PROGRAM
+    assert [run.round(0, inputs, program=GATED_PROGRAM).accepted, run.round(1, inputs).accepted] == [False, True]
+
+
 def test_an_unpinned_size_class_is_refused(tmp_path):
-    """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its proof block is
+    """IoTieRequest at L = 3 has no pinned circuit digest, so its pin id names none and no proof of its proof block is
     accepted, even one Lean accepts."""
     params = W.NetworkAttesterParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, inputs = Run(tmp_path, params=params, served=served), _inputs(SPAN)
-    assert not HC.pinned(run.tie.gates()[0])
+    assert not HC.pinned(run.tie.pins()[0])
     sample, delivered = run.prove(0, inputs)
     assert delivered.outputs == {u: 1 for u in range(4)}
     assert run.stream.deliver(sample, delivered.sessions()) is None

@@ -16,10 +16,10 @@ registration's order (`IngressTie.register`), and T proof blocks, proof block t 
 **The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one call of
 `io_request.IoTieRequest_v1{B, L, R}`, with one output bit, IoTieRequest's. The registered Program holds the
 Definition and its Boolean body itself, so its digest binds the circuit; its circuit digest is pinned in
-`io_request.circuit-check.json`, which circuit-check holds to the Definition, and `gate` names that pin.
+`io_request.circuit-check.json`, which circuit-check holds to the Definition (`IngressTie.pins`).
 Its witness row is the bucket row itself, which the proof system's registered read holds to the network attester's root
 (`network_attester_rows.bucket_port`: proof block t reads row t, the verifier's own `--registered` port, `IngressTie.registered`),
-so no gate hashes it. A size class no sidecar pins has a gate that names no digest, and no proof of its proof block is
+so no gate hashes it. A size class no sidecar pins names no digest (`head_check.pin_id`), and no proof of its proof block is
 accepted (`proved`).
 
 **The statement is the verifier's own** (`io_request.lanes`): proof block t's public row is bucket t's lanes, from
@@ -36,7 +36,7 @@ bucket t and the one word 1, each under a public salt, which hides nothing since
 **The verifier** is `IngressTie.verify(…, inputs=A, releases=…, head=…)`, which decides on the delivered
 proof and public inputs alone. It accepts the window when the verifier's own run of Flock's Lean verifier, with its
 own registered reads (`registered`: the network attester's root, its own lanes and the output words 1), accepts every session,
-they prove this tie's registered unit (`proved`: its gate names the pinned digest, every session the registered
+they prove this tie's registered unit (`proved`: its size class is pinned, every session the registered
 Program) and every sampled proof block, and each unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes
 and its ``o0`` row to 1. Its public outputs are `verdict` and `inputs`, A's `digest`. A proof on other
 inputs' lanes or another release, or of an output word 0, fails the registered read of ``pub`` or ``o0``, and a row
@@ -68,14 +68,14 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from functools import cached_property, lru_cache
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
@@ -125,14 +125,6 @@ PUBLIC = (
              "attester's release give each bucket's lanes (`io_request.lanes`), a unit's public row in the named gap; "
              "`IngressTie.tie` holds every window to one set of inputs"),
 )
-
-
-@lru_cache(maxsize=None)
-def gate(B: int, L: int, R: int) -> PrimitiveDefinition:
-    """`IoTieRequest_v1{B, L, R}`'s pin as a gate's id, `Gate[IoTieRequest_v1{…}@<digest>]_v2` (`io_request.PINS`), which
-    `IngressTie.proved` reads: never in the unit, which calls the Definition."""
-    d = bind(Q.IoTieRequest, B=B, L=L, R=R)
-    return HC.gate_of(d, HC.pinned_digest(d, Q.PINS), "the ingress tie")
 
 
 def _unit() -> CompositeDefinition:
@@ -350,7 +342,7 @@ class IngressTie:
 
     @property
     def proof_block(self):
-        """The proof block a proof's circuit lowers: `unit`, which holds no gate."""
+        """The proof block a proof's circuit lowers: `unit` itself."""
         return self.unit
 
     @cached_property
@@ -486,7 +478,7 @@ class IngressTie:
         return None if args is None else {n: args[n] for n in self.layout["pub"]}
 
     def outputs(self, row: bytes, lanes: Sequence[Q.Lane]) -> int:
-        """A proof block's output bit on its row by its gate's reference (`io_request.reference`), which the tests hold
+        """A proof block's output bit on its row by IoTieRequest's reference (`io_request.reference`), which the tests hold
         to the circuit: what the prover claims."""
         sh = self.shape
         if len(row) != sh.N * sh.B:
@@ -518,14 +510,16 @@ class IngressTie:
 
     # the verifier
 
-    def gates(self) -> list[PrimitiveDefinition]:
-        return [gate(*self.key)]
+    def pins(self) -> list[str]:
+        """IoTieRequest's pin id at this tie's size class (`head_check.pin_id` over `io_request.PINS`)."""
+        B, L, R = self.key
+        return [HC.pin_id(bind(Q.IoTieRequest, B=B, L=L, R=R), Q.PINS)]
 
     def proved(self, findings: Sequence[Finding]) -> bool:
-        """Whether `findings` prove this tie's proof block: its gate names IoTieRequest's pinned circuit digest, and one
+        """Whether `findings` prove this tie's proof block: IoTieRequest's size class is pinned (`pins`), and one
         or more sessions each accepted and named the registered Program."""
         want = self._partition["program"]
-        return all(HC.pinned(g) for g in self.gates()) and bool(findings) \
+        return all(HC.pinned(p) for p in self.pins()) and bool(findings) \
             and all(f.accepted and f.program == want for f in findings)
 
     def clear(self, cells: WR.Cells, sample: S.Draw, inputs: Any, releases: Sequence[Q.Release]) -> dict[str, Any]:
@@ -660,5 +654,5 @@ class Ties:
 
 
 __all__ = ["AdvisedProfile", "Delivered", "IngressInputs", "IngressTie", "IoTieVerdict", "KNOWN", "KNOWN_KEY", "OUTPUTS",
-           "PORTS", "PUBLIC", "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER", "WITNESS", "digest", "framing", "gate",
+           "PORTS", "PUBLIC", "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER", "WITNESS", "digest", "framing",
            "request_cells", "window_cells"]
