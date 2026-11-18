@@ -84,6 +84,12 @@ readings(card)                     # {'tensor': Fraction(989429760000000), 'sm':
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 
+`card_for_driver` is the GPU card whose `driver` holds the name a driver reports for a device. **The architecture
+files**: one TOML file per target a GPU card's `arch` names (`<name>.toml` in a directory of them), holding only what
+selects machine code: the compute capability, the virtual architecture, and the toolkit gates, each a toolkit that
+builds for the target and the oldest driver it requires. `load_architecture` reads one. Each value is a string beside
+its `source`, since a version is no figure, and nothing of a card is there.
+
 **The node files**: one TOML file per kind of node (`<kind>.toml` in a directory of them), holding what a node's registration
 states that no card does. A node is a host and the GPUs it carries. Its file names the GPU card and how many of it the
 node carries (`device.sku`, `device.count`), the host card (`host.sku`), the host's own memory, one table a leaf
@@ -1584,6 +1590,53 @@ def load_card(sku: str, *, directory: Path) -> dict:
         raise InvalidArtifact(f"{path.name}: clock.default = {card.get('clock', {}).get('default')!r}; set it to the "
                               f"reading its figures are stated at, one of {READINGS}")
     return card
+
+
+def card_for_driver(name: str, *, directory: Path) -> dict:
+    """The GPU card in ``directory`` whose ``driver`` holds ``name``, the product string a driver reports for the device
+    (``nvidia-smi --query-gpu=name``), exactly; refused unless exactly one card holds it."""
+    found = [card for card in (load_card(sku, directory=directory) for sku in skus("gpu", directory=directory))
+             if name and name in {d["value"] for d in card.get("driver", ())}]
+    if len(found) != 1:
+        quoted = '"' + name.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        raise KeyError(f"{len(found)} card records under {directory} have {name!r}, the name a driver reports, in "
+                       f"`driver`: add {{ value = {quoted}, source = ... }} to its one record's `driver`, adding its "
+                       "<sku>.toml there if it has none")
+    return found[0]
+
+
+ARCHITECTURE = frozenset({"name", "capability", "virtual", "source", "toolkit"})
+TOOLKIT_GATE = frozenset({"version", "ptx_isa", "driver_min", "source"})
+
+
+def load_architecture(name: str, *, directory: Path) -> dict:
+    """The architecture file of ``name`` in ``directory`` as parsed TOML: the target machine code is built for (a GPU
+    card's ``arch``), its compute capability, its virtual architecture and its toolkit gates, each the toolkit
+    ``version`` and ``ptx_isa`` that build for it and the oldest driver (``driver_min``) that toolkit requires. Refused
+    unless it has exactly those keys, each a sourced string, and ``name`` is ``sm_`` and its capability's digits."""
+    path = directory / f"{name}.toml"
+    if not path.is_file():
+        named = sorted(p.stem for p in directory.glob("*.toml"))
+        raise KeyError(f"no architecture {name!r}: the architectures are {named} ({directory}/<name>.toml)")
+    arch = tomllib.loads(path.read_text(encoding="utf-8"))
+    if arch.get("name") != name:
+        raise InvalidArtifact(f"{path.name}: name = {arch.get('name')!r}; set it to the file's name, {name!r}")
+    if set(arch) != ARCHITECTURE:
+        raise InvalidArtifact(f"{path.name} has keys {sorted(arch)}; an architecture has exactly {sorted(ARCHITECTURE)}")
+    gates = arch["toolkit"]
+    if not isinstance(gates, list) or not gates or not all(isinstance(g, dict) and set(g) == TOOLKIT_GATE for g in gates):
+        held = [sorted(g) if isinstance(g, dict) else g for g in gates] if isinstance(gates, list) else gates
+        raise InvalidArtifact(f"{path.name}: toolkit holds {held!r}; give it [[toolkit]] tables, each with exactly "
+                              f"{sorted(TOOLKIT_GATE)}")
+    values = [(key, arch[key]) for key in sorted(ARCHITECTURE - {"toolkit"})]
+    values += [(f"toolkit[{i}].{key}", gate[key]) for i, gate in enumerate(gates) for key in sorted(TOOLKIT_GATE)]
+    bad = [key for key, v in values if not isinstance(v, str) or not v.strip()]
+    if bad:
+        raise InvalidArtifact(f"{path.name}: {bad}; write each as a string, a version as its document prints it")
+    if not re.fullmatch(r"\d+\.\d", arch["capability"]) or name != f"sm_{arch['capability'].replace('.', '')}a":
+        raise InvalidArtifact(f"{path.name}: capability = {arch['capability']!r}; give the major.minor whose digits "
+                              f"{name!r} names")
+    return arch
 
 
 def number(entry: dict) -> Fraction:

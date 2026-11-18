@@ -203,16 +203,15 @@ def card_short(name: str, *, directory: Path) -> str:
     """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
     name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
     holds it and has a ``short``, the card's name in a measurement's member."""
-    from verity.device import load_card, skus
+    from verity.device import card_for_driver
 
-    cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
-    found = [c for c in cards if name and name in {d["value"] for d in c.get("driver", ())}]
-    if len(found) != 1 or not found[0].get("short"):
-        raise SystemExit(
-            f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
-            f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
-            "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]["short"]
+    try:
+        card = card_for_driver(name, directory=directory)
+    except KeyError as e:
+        raise SystemExit(e.args[0]) from None
+    if not card.get("short"):
+        raise SystemExit(f"{card['sku']} under {directory} has no `short`: give it the card's name in a measurement's member")
+    return card["short"]
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
