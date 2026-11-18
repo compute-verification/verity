@@ -471,14 +471,17 @@ def test_a_period_s_blocks_are_core_s_block_count() -> None:
 
 def test_the_subprotocols_are_the_onsite_applications_components_through_their_rows_and_the_stored_words() -> None:
     """`SUBPROTOCOLS` and `RUNNER_KEYS` are the onsite application's components through each declaration's ``record``
-    and the format's `STORED`; the schema, data on disk, requires exactly them."""
+    and the format's `STORED`, in the application's order; the schema, data on disk, requires exactly them, as a set (a
+    stored record's legs are a mapping, written with sorted keys)."""
     import tomllib
 
     from verity.protocols.compose import schemes
     legs = SCHEMA["properties"]["legs"]
-    assert tuple(legs["required"]) == R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]
-    assert set(legs["properties"]) == set(R.SUBPROTOCOLS)
+    assert set(legs["required"]) == set(legs["properties"]) == set(R.SUBPROTOCOLS)
+    assert R.SUBPROTOCOLS == tuple(R.RUNNER_KEYS) == R.PRODUCTS["onsite"]
     listed = tomllib.loads(R.ONSITE_APPLICATION.read_text())["protocols"]
+    rows = [schemes.get(n).record if n in schemes.DECLARATIONS else R.RUNNER_KEYS.get(n) for n in listed]
+    assert [r for r in rows if r in R.RUNNER_KEYS.values()] == list(R.RUNNER_KEYS.values())
     io, spot = schemes.get("inference-only"), schemes.get("sampled-proofs")
     assert "inference-only" in listed and isinstance(io.resource, R.S.Lacks) and io.record not in R.STORED
     assert io.record not in R.RUNNER_KEYS.values(), "inference-only charges nothing and the format keeps no row of it"
