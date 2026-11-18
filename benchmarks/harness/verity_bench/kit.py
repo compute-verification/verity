@@ -361,16 +361,20 @@ def toolkit(version: str) -> str:
 
 
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
-    from verity.device import load_card, number
+    from verity.device import compute_capability, load_card, number
+    from verity.errors import InvalidArtifact
 
     directory = directory or cards_directory()
     card = load_card(sku, directory=directory)
     names = [d["value"] for d in card.get("driver", ())]
-    arch = re.fullmatch(r"sm_(\d+)(\d)a?", str(card.get("arch", "")))
-    if card["kind"] != "gpu" or len(names) != 1 or not arch:
+    try:
+        cc = compute_capability(card)
+    except InvalidArtifact:
+        cc = None
+    if len(names) != 1 or cc is None:
         raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
-                         f"and an `arch` sm_<major><minor>[a], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
-    return {"device_name": names[0], "compute_capability": [int(arch[1]), int(arch[2])], "num_sms": int(number(card["sm"]["count"]))}
+                         f"and an `arch` sm_<major><minor>[a|f], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
+    return {"device_name": names[0], "compute_capability": list(cc), "num_sms": int(number(card["sm"]["count"]))}
 
 
 def is_card(card: str, short: str, *, directory: Path | None = None) -> bool:
