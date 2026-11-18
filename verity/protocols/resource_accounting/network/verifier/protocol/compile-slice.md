@@ -5,22 +5,8 @@ Part of network attestation's [PROTOCOL.md](../PROTOCOL.md).
 `CompileSlice_v1` (`verity_vllm.compiler.compile_slice`) is one execution phase of the compile slice's proof block in one Boolean
 Definition. Its circuit, rows, verdict flags, reference and stand-ins are `verity_vllm.compiler.compile_slice`'s
 docstring. This file covers how the slice charges an execution phase, what binds the charge's inputs, and a served execution phase
-at its engine's class. `CompileSlice_v4` (`verity_vllm.compiler.compile_slice_v4`) is the slice computing its schedule rather
-than checking it, with vLLM's block pool in place of the evictable and returned counts' stand-in, its pool calls
-answered by `CacheStep_v3`'s memory-checked stream. It has no ChargeLink: the served rows and last rows are registered
-reads it holds to the computed ones, and its advice input is exactly ℓ_w gates wide. Until a Lean lemma shows its
-checked witness unique, that witness counts as free input at its width, so its charge is ℓ_w plus the witness's width
-(`free_width`). `CompileSlice_v5` (`verity_vllm.compiler.compile_slice_v5`) is v4 at its execution phase's activity: the keys are
-one a block the execution phase keys, from a ragged token row registered with each slot's keyed block count, RB's touched list
-is the addresses the stream touches, and each running slot's request number is carried in the slot row ``cout``
-registers. Its charge is v4's, at its own checked witness's width. `CompileSlice_v6` and `PoolWindow_v1`
-(`verity_vllm.compiler.compile_slice_v6`) are v5 cut in two proof blocks with the block pool carried between execution phases: `PoolWindow_v1`
-opens the pool row under the previous execution phase's output root, registered before its coins, and commits the
-row its stream leaves as the next. Both are proved every execution phase, and a chain restarts from the empty pool's root after a
-failed one. A request open at the execution phase's edge is cut, having emitted its ``a_O``, and continues in the next one
-as an ordinary arrival; each keyed block's page is copied into the execution phase's carried port from its source, its
-write or the previous carried port (`PageCopy_v1`). The charge is ℓ_w plus `PoolWindow_v1`'s checked rows (the left row,
-the blocks' sources and the stream's witness) at their widths.
+at its engine's class. A session past the pool bound is outside the slice's class and refused
+([charge-chain.md](charge-chain.md), "The slice").
 
 **The charge** is `charge_chain.ChargeLink_v1{D}` (`build_link`; [charge-chain.md](charge-chain.md)):
 - Its inputs:

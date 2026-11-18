@@ -291,7 +291,7 @@ PUBLIC = {
                                  "build under",
     "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
                              "their selector, context, install and refusals (parse, adapter, Context, install, refused, "
-                             "requests, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
+                             "requests, commit_context), which the harness's arms and the served benchmarks of PoUW, PoUS and "
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
                                        "Context, Target)",
