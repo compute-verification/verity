@@ -174,11 +174,14 @@ def spec_added(root: Path, spec: str) -> int:
     the card it names set aside): none of its runs can start before."""
 
     paths = [path.replace(f"@{card}.toml", ".toml") if (card := split_card(spec)[1]) else path for path in spec_paths(spec)]
-    process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(paths)],
-                             cwd=root, capture_output=True, text=True)
+    try:
+        process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(paths)],
+                                 cwd=root, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise jobs.NoCatalog(f"no git here, so {spec_path(spec)}'s runs can't be looked up on the store's remote") from None
     times = [int(line) for line in process.stdout.split()]
     if process.returncode != 0 or not times:
-        raise ValueError(f"git has no commit adding {spec_path(spec)} here, so its runs can't be looked up on the store's "
+        raise jobs.NoCatalog(f"git has no commit adding {spec_path(spec)} here, so its runs can't be looked up on the store's "
                          "remote: fetch the history (unshallow), or pass --local-only to read this machine's catalog alone")
     return min(times)
 

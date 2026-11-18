@@ -447,7 +447,7 @@ def at_record(store: Any) -> dict:
 def serving(root: Path, workload: Workload) -> P.Serving:
     """The stated serving rate: the fleet's assumed serving MFU of the card's data-sheet peak."""
 
-    gpu = O.CARDS[workload.card]
+    gpu = O.card(workload.card)
     peak = overhead_records.census(root)["flop_per_s"][gpu.gpu]
     mfu = tomllib.loads((root / FLEETS).read_text())["fleet"][workload.fleet]["mfu_serve"]
     return P.Serving(mfu["value"], peak,
