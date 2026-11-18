@@ -99,7 +99,8 @@
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts), a circuit (its pin is), a request value (the stand-in's workload.json, its prompts)
 # nor a serve's own records (serve.json, windows.jsonl: only vLLM's mirror publishes them, through serve_mirror.PUBLIC).
-# The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir; without it, scratch removed at exit): a window's
+# The rest goes to PP_KEEP=DIR (0700, refused under $OUT or the run dir and named in its private-paths.json; without it,
+# scratch removed at exit): a window's
 # registration, commit.json, partition and the files beside them, an audit's own records whole (its summaries with the
 # advice's length and what is counted from it, its copy of the registration, its sessions), the tools' logs and error output,
 # the machine's shape, and the commit's and audits' logs whole: $OUT and stdout get their lines as public_log.py lets
@@ -142,6 +143,14 @@ for p in "$O" "${RESEARCH_RUN_DIR:-}"; do
     echo "PP_KEEP=$K is under $p, which custody publishes: give a directory outside it"; exit 2;; esac
 done
 (umask 077 && mkdir -p "$K") && chmod 700 "$K" || exit 2
+if [ -n "${PP_KEEP:-}" ] && [ -d "${RESEARCH_RUN_DIR:-}" ]; then   # the keep named for a reader on this node (`prove layers`)
+  python3 - "$RESEARCH_RUN_DIR/private-paths.json" "$(realpath -m "$K")" <<'EOF' || exit 2
+import json, pathlib, sys
+f, k = pathlib.Path(sys.argv[1]), sys.argv[2]
+doc = json.loads(f.read_text()) if f.is_file() else {}
+f.write_text(json.dumps({**doc, "schema": "private-paths/v1", "private": sorted({*doc.get("private", []), k})}, indent=1) + "\n")
+EOF
+fi
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; } > $K/machine.txt
@@ -254,8 +263,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
     local rc=$?
-    keep $name   # whole: served_verdicts.sh takes the served arm's records audit from $OUT/served
-
+    keep $name public   # served_verdicts.sh reads the served arm's records audit in the keep
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \

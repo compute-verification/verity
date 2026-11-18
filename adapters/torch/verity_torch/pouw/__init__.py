@@ -1,6 +1,6 @@
 """PoUW's serving code over PyTorch: what `verity.protocols.resource_accounting.compute.pouw.prover.serving` leaves to the workload.
 
-Importing this package hands its implementations in (`serving.tensors.use`, `use_h1`, `use_pearl_c`):
+`hand_in` hands its implementations in (`serving.tensors.use`, `use_h1`, `use_pearl_c`), and importing it does too:
 `tensors_device.TENSORS`, the tensors on the device (pinned host copies, streams, raw pointers), `h1.h1_device.H1`, H1's
 call tables, registered rows, trace and records on the device, and Pearl-C's run with its weight roots and step limit
 and Pearl+'s capture op (`pearl_plus_op`).
@@ -26,8 +26,8 @@ from typing import Any
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import tensors as _tensors
 
-__all__ = ["PearlCDeviceRun", "Receipts", "RowTableLibrary", "h1_tables_available", "hook_steps", "pearl_c_weight_roots",
-           "row_table_side_stream"]
+__all__ = ["PearlCDeviceRun", "Receipts", "RowTableLibrary", "h1_tables_available", "hand_in", "hook_steps",
+           "pearl_c_weight_roots", "row_table_side_stream"]
 
 _LAZY = {
     "PearlCDeviceRun": ("verity_torch.pouw.pearl_c.run_device", "PearlCDeviceRun"),
@@ -57,9 +57,17 @@ def _pearl_c_impl() -> Any:
                            step_tokens=passes.step_tokens, linear_op=pearl_plus_op.linear_op, runs=pearl_plus_op.RUNS)
 
 
-_tensors.use(_tensors_impl)
-_tensors.use_h1(_h1_impl)
-_tensors.use_pearl_c(_pearl_c_impl)
+def hand_in() -> None:
+    """Hands `serving.tensors` this package's implementations (`use`, `use_h1`, `use_pearl_c`); again, the same ones.
+    The adapter calls it where it attaches a scheme that runs kernels on the card (`Scheme.kernels`)."""
+    _tensors.use(_tensors_impl)
+    _tensors.use_h1(_h1_impl)
+    _tensors.use_pearl_c(_pearl_c_impl)
+
+
+# importers of this package's device modules (benchmarks' runners, H1's tests) read the implementations without calling
+# `hand_in`
+hand_in()
 
 
 def __getattr__(name: str) -> Any:

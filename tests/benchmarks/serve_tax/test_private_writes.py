@@ -36,6 +36,7 @@ WRITES = {
         ("topk_kept", "f"): "public",
         ("topk_by_dir", "f"): "public",
         ("declare", "tmp"): "public",
+        ("carry", "dst / name"): "public",
         ("main", "a.out / 'prod_repro.json'"): "public",
         ("main", "a.out / 'prod_repro.txt'"): "public",
     },
