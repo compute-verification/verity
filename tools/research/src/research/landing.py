@@ -246,6 +246,19 @@ def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[s
     return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
 
 
+def place_quick(repo: Path, machines: str) -> tuple[str | None, str]:
+    """Of ``machines`` (`M1,M2`), the one a quick tier takes now, as `research queue ready --on M1,M2` places one (`queue.place`:
+    the first with a free check slot, else the shortest line, read from each machine's slots), and why; (None, why) when no
+    machine's slots could be read."""
+    from .queue import place
+
+    try:
+        got, why, _, _ = place(machines, repo)
+    except Exception as e:  # noqa: BLE001  (check.py unreadable in the clone, or a read that broke: the caller picks by sha)
+        return None, f"its slots couldn't be read: {type(e).__name__}: {e}"[:300]
+    return (got, why) if got in machines.split(",") else (None, why)
+
+
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
     if ts is None or ts == "":
@@ -1061,6 +1074,10 @@ class Landing:
         #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
         self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
             lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
+        #: of machines `M1,M2`, the one a candidate's quick tier takes (`vqueue_slim.start_quick`): `place_quick`'s, with a free
+        #: check slot now where one has, and why; (None, why) when none could be read, and no reading where launches are injected
+        self.place_quick: Callable[[str], tuple[str | None, str]] = (
+            (lambda machines: place_quick(q.workdir, machines)) if launch is train_launch else (lambda machines: (None, "")))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:
