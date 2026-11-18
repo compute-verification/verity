@@ -44,6 +44,8 @@ class Exchange:
         self._step: int | None = None
         #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
         self.readers: Mapping[str, Callable[..., Any]] = {}
+        #: the adapter's answer to a refused input (`RefuseInput`), called as it is filed with the input and the reason
+        self.refuse: Callable[[str, str], None] | None = None
 
     @property
     def step(self) -> int:
@@ -68,6 +70,8 @@ class Exchange:
         kind = type(request).__name__
         if isinstance(request, H.RefuseInput):
             self.requests.append((name, request))
+            if self.refuse is not None:
+                self.refuse(request.input, request.why)
             return
         if isinstance(request, H.ServeRoute) and (other := self.route(request.path)) is not None:
             raise Refused(name, f"serves route {request.path}, which {other[0]} serves")

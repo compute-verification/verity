@@ -1124,10 +1124,10 @@ def Member.slice (m : Member) (rec : Json) (roots : Std.HashMap String (Array Js
     ("scheme", getD rec "scheme")]
 
 /-- The refusal of a member's public file naming its port `p` at a root, where the member's slice holds no root of
-`p`: no tree under the member and no writer's the wiring names (`unwired`). -/
+`p`: no tree under the member and no writer's output field's tree the record names (`unwired`). -/
 def UNWIRED_WHY (p : String) : String :=
-  s!"public file: port {p} has no tree under the member, and the wiring names no writer of it in one member: a " ++
-    "wired port is its writer's output root"
+  s!"public file: port {p} has no tree under the member, and the record names no tree of its writer's output " ++
+    "field: a wired port reads its writer's output field's tree"
 
 /-- The first port, in key order, of a public file's `frame_v3` roots `roots` that the slice `rec` names no root of
 (`Record.byPort`), or none. -/
@@ -1138,7 +1138,7 @@ def unwired (rec roots : Json) : Option String :=
 (`Record.matchesPublic`): its scheme, its `frame_v3` roots and their `domain_ids`, and its `instances` against the
 record's scheme, roots, domains and population, a refusal naming the codes that fail. A port of its roots `rec` holds
 no root of is refused first, by name (`unwired`, `UNWIRED_WHY`): at a member's slice, a port with no tree under the
-member whose writer the wiring does not name (`wiredRoots`). -/
+member whose writer's output field the record names no tree of (`fieldRoots`). -/
 def headerHeld (rec h : Json) : V Unit :=
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
