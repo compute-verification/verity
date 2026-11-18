@@ -753,7 +753,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     nothing holds its requests to one."""
     import leak_bounds as LB
     from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
-    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS, scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import scan_zk as SZ
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
     from verity.protocols.resource_accounting.network.verifier import network_attester as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
