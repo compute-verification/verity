@@ -106,7 +106,7 @@ def designOk (samplingDesign : Option Draw.SamplingDesign) (l : Spot.Slots.SlotO
 template `t`. -/
 def memberOf (p : SampledTwo.Params) (t : Nat) : Option Spot.OneStageZk.Member :=
   (p.circuits[t]?).bind fun c => p.members.find? fun m =>
-    (m.own.circuitFile.toOption.map fun f => Flock.hexOf (Sha512.hash f)) == some c.2.1
+    (m.own.circuitFile.toOption.map fun f => Flock.hexOf (Flock.Sha512.hash f)) == some c.2.1
 
 /-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=

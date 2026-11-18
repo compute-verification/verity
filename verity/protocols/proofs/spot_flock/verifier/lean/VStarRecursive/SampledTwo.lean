@@ -234,7 +234,7 @@ def paramsParsed (j : Json) : V Params := do
   let some members := audit.members | throw "the interior audit names no members"
   for m in members do
     let file ← m.own.circuitFile
-    if !circuits.any (·.2.1 == Flock.hexOf (Sha512.hash file)) then throw (MEMBER_CIRCUIT m.name)
+    if !circuits.any (·.2.1 == Flock.hexOf (Flock.Sha512.hash file)) then throw (MEMBER_CIRCUIT m.name)
   pure { boundary := bp, rule, values := ← valuesOf (getD j "values") "values", declared, challenger,
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
@@ -435,7 +435,7 @@ def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option J
   let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
   let file ← m.own.circuitFile.toOption
   let pub ← (bs.get m.own.pub "public file").toOption
-  if Flock.hexOf (Sha512.hash file) == c.2.1 then
+  if Flock.hexOf (Flock.Sha512.hash file) == c.2.1 then
     stmtOf c.1 pub ((Flock.Witness.recordDraw record).map fun j => (Flock.RecordText.printT j).toUTF8)
       (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)
   else none
@@ -809,8 +809,8 @@ def bytesFit (limit : Nat) (session : String) : Option Nat → V Unit
 #guard (bytesFit 300 "s" (some 299)).toOption.isSome
 #guard (bytesFit 300 "s" (some 300)).toOption.isNone
 #guard (bytesFit 300 "s" none).toOption.isSome
-#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", none⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
-#guard stmtSize ⟨.null, .empty, .null, "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
+#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", none, 0⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
+#guard stmtSize ⟨.null, .empty, .null, "", some (.str "ab"), 0⟩ .empty .empty 0 (some .null) ==
   STMT_HEAD + 4 + 4 + 4
 #guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
 
