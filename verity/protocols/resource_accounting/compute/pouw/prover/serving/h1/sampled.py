@@ -147,7 +147,7 @@ class Stager(Protocol):
     pin: str
     outs: dict[str, np.ndarray] | None
 
-    def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
+    def stage(self, rows: dict, out_dir: Path, salts: dict, indices: Sequence[int], set_name: str,
               tables: dict, refs: dict, registered: dict) -> dict: ...
 
 
@@ -542,7 +542,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
             stager, circuit, desc = stagers[kind]
             tag = f"u{u}-{kind}" + ("" if ln is None else str(ln))
             d = work / tag
-            got = stager.stage(rows, d, _random(32), salts=salts, indices=[0], set_name=f"pouw-h1-w{a.window}-{tag}",
+            got = stager.stage(rows, d, salts=salts, indices=[0], set_name=f"pouw-h1-w{a.window}-{tag}",
                                tables=rows, refs={p: [0] for p in rows}, registered=registered)
             (d / "pin.txt").write_text(stager.pin)
             (d / "circuit.txt").unlink(missing_ok=True)
@@ -662,7 +662,7 @@ def stage(a: Any) -> int:
                 st.outs = unit_outputs(z, win, k, roots)
                 outputs_held(z, st.outs)
             d = work / f"c{c}"
-            got = st.stage({p: z[f"w_{p}"] for p in st.row_ports}, d, _random(32), salts=tabs["salts"],
+            got = st.stage({p: z[f"w_{p}"] for p in st.row_ports}, d, salts=tabs["salts"],
                            indices=units, set_name=f"pouw-h1-w{a.window}-c{c}", tables=tabs["tables"], refs=tabs["refs"],
                            registered=tabs["registered"])
             (d / "pin.txt").write_text(st.pin)

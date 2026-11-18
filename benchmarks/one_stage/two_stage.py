@@ -194,8 +194,9 @@ INPUTS_REFUSED = "second-inputs"
 ORDER_REFUSED = "cross-stream-order"
 #: a stop class whose stop blocks registered or sampled nothing
 STOP_REFUSED = "stop-stage"
-#: the salts' key of a reference statement (`references`): its rows are stand-ins, so its salts hide nothing
-REFERENCE_KEY = hashlib.sha512(b"verity-vllm/two-stage/reference/v0").digest()
+#: the public tag of a reference statement's salts (`references`, `toy.reference_salts`): its rows are stand-ins, so its
+#: salts hide nothing
+REFERENCE_SALTS = b"verity-vllm/two-stage/reference-salts/v1\0"
 #: a design's counts as a record (`benchmarks/spot_figures`' ``total_cost.py counts``): its ``k`` is the rule's
 COUNTS = "spot-two-stage-counts/v1"
 #: seconds on the challenger's clock from the sample to the proofs: the replay, the interior docket and the second
@@ -914,12 +915,13 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
-    sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
+    sessions' circuits are, on zero rows, under the public `toy.reference_salts`: its public file is ``out``/m<k>/pub.bin, its
     ``circuit.txt`` beside it, and its prover file is deleted. Its registered reads name none of the run's fields: each
     port the value it reads (`verifier_reads`: a link's value, a return's or a parameter's that round 1 commits, a
     read's verdict's of registered tables, else the port holding it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
     first-stage sampling design can sample; this command builds them after the sample, which is why its run is a development run."""
+    from toy import reference_salts
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -929,9 +931,10 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     named = []
     for k, m in enumerate(window.members):
         at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(template_fn(m.template), m, bind).stage(
-            rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
+        st, tables = member_stager(template_fn(m.template), m, bind), {r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16)
+                                                                     for r, w in m.rows}
+        st.stage(
+            rows, at, reference_salts(REFERENCE_SALTS, k, st, m, tables), indices=range(m.base, m.base + m.n), tables=tables,
             refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
