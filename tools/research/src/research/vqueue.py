@@ -1396,7 +1396,9 @@ def _goes_first(pool: list[Ready], newest: dict[int, Outcome], room: bool, leans
     PRs with no Lean change could take it now, main's chain having ``room`` under `depth`; or while the chain holds a Lean
     change (``leans``, `_leans`), as with a records run only a batch once staged puts one there: a Lean batch staged on a
     full chain while it waited, which kept it out of every build for its run, is followed by no other while that batch is
-    on the chain.  On a full chain holding no Lean change it waits beside the batch staged, as no batch could take it."""
+    on the chain.  On a full chain holding no Lean change it waits beside the batch staged, as no batch could take it.  A
+    batch already ahead of it when it began to wait, on main's chain or staged, that a red or infra outcome below drops and
+    `_restack` stages again with the same or fewer members is no new batch for it, so it is staged again without this."""
     waiting = [r for r in pool if r.lean_input and not r.lean and _takes(r, newest)]
     return waiting[0] if waiting and (room or leans) else None
 

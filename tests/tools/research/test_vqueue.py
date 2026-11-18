@@ -2205,6 +2205,7 @@ class World:
         self.put: dict[str, str] = {}            # this tick's Commits: the staged batch -> what it put on main's chain
         self.opened: dict[str, str] = {}         # a staged batch -> the batch it was first staged as, itself or one it repairs
         self.behind: dict[int, set[str]] = {}    # a PR changing a Lean input, waiting -> the staged batches it waited behind
+        self.ahead: dict[int, set[str]] = {}     # a PR changing a Lean input, waiting -> the batches on main's chain as it began
         self.unheld: set[str] = set()            # staged batches first staged on a full chain holding no Lean change
         self.unheld_now: set[tuple[int, ...]] = set()   # the members of the Lean batch this tick stages so, if it does
         self.lockers = frozenset(m for m in numbers if self.marks[m].lean and rng.random() < 0.7) if records else frozenset()
@@ -2876,15 +2877,19 @@ class World:
         """Within one staging: a ready PR with no Lean change that changes a Lean input, which a batch may take, is kept out
         of the builds beside a staged batch, and it waits so behind one staged batch at most, the one staged before it was
         ready (the same batch staged again is that one still).  None is staged while it waits, so it is in a build before
-        the next one is, but for one staged on a full chain holding no Lean change, where no batch could take it (`unheld`);
-        ``s``: the snapshot once the tick's actions are applied."""
+        the next one is, but for one staged on a full chain holding no Lean change, where no batch could take it (`unheld`).
+        A batch already on main's chain when it started waiting (`ahead`), staged again with the same or fewer members once
+        an outcome below it drops it, is no new batch for it: it was ahead of it already; ``s``: the snapshot once the
+        tick's actions are applied."""
         self.unheld_now = set()
         replaced = {c.repairs for c in s.candidates}
         staged = {self.opened[c.sha] for c in s.candidates if c.waits and c.sha not in replaced} - self.unheld
+        chain = {self.opened[c.sha] for c in s.candidates if not c.waits and c.sha in self.opened}
         waiting = {r.number for r in self.pool(s, []) if r.lean_input and not r.lean}
+        self.ahead = {m: self.ahead.get(m, chain) for m in waiting}
         self.behind = {m: self.behind.get(m, set()) | staged for m in waiting}
         for m, batches in self.behind.items():
-            assert len(batches) <= 1, (f"seed {self.seed} tick {self.tick}: #{m}, which changes a Lean input, waits behind a "
+            assert len(batches - self.ahead[m]) <= 1, (f"seed {self.seed} tick {self.tick}: #{m}, which changes a Lean input, waits behind a "
                                        f"second staged batch, {sorted(batches)}: it was in no build within one staging")
 
     def erred(self, s: Snapshot, acts: list) -> list[int]:
