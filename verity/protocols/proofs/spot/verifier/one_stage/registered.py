@@ -446,19 +446,41 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
             for row in rows]
 
 
-def marks(desc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+def _nat(x: Any) -> int | None:
+    return x if type(x) is int and x >= 0 else None
+
+
+def marks(desc: Any) -> dict[str, dict[str, Any]]:
     """The marks of a program descriptor's top-level `inputs` by input, each marked input's root nodes all
-    `SuppliedInput<w>_v1` and no other input's one (`Supplied.marks`); ValueError otherwise, and on a function the registry
-    lacks or a value that is not short."""
-    xs = desc.get("inputs")
-    if xs is None:
+    `SuppliedInput<w>_v1` and no other input's one (`Supplied.marks`); none where it has no `inputs` list; ValueError
+    otherwise, and on a function the registry lacks or a value that is not short."""
+    get = (lambda j, k: j.get(k) if isinstance(j, Mapping) else None)
+    xs = get(desc, "inputs")
+    if not isinstance(xs, list):
         return {}
-    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    callees = desc["callees"]
-    out, k = {}, 0
+    root = get(desc, "root")
+    if not isinstance(root, str):
+        raise ValueError("the program names no root")
+    nodes = get(get(get(get(desc, "definitions"), root), "body"), "nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("the program's root has no nodes")
+    callees = get(desc, "callees")
+    if not isinstance(callees, list):
+        raise ValueError("the program has no callees")
+
+    def callee(nd: Any) -> str:
+        i = _nat(get(nd, "fn"))
+        return callees[i] if i is not None and i < len(callees) and isinstance(callees[i], str) else ""
+    out: dict[str, dict[str, Any]] = {}
+    k = 0
     for e in xs:
-        name, n = e[0], e[1]
-        ids = [callees[nd["fn"]] for nd in nodes[k:k + n]]
+        if not (isinstance(e, list) and e and isinstance(e[0], str)):
+            raise ValueError("an input is not [name, nodes] or [name, nodes, mark]")
+        name = e[0]
+        n = _nat(e[1]) if len(e) > 1 else None
+        if n is None:
+            raise ValueError(f"input {name}: its nodes are not a natural number")
+        ids = [callee(nd) for nd in nodes[k:k + n]]
         if len(ids) != n:
             raise ValueError(f"input {name}: the root has no nodes {k}..{k + n - 1}")
         supplied = [i.startswith("SuppliedInput") for i in ids]
@@ -480,11 +502,15 @@ def mark_of(name: str, m: Any) -> dict[str, Any]:
     registry's, its value short."""
     if not (isinstance(m, Mapping) and set(m) == {"supplied", "args", "layout", "bits"}):
         raise ValueError(f"supplied input {name}: its mark is {{supplied, args, layout, bits}}, not {m!r}")
+    if not (isinstance(m["supplied"], str) and isinstance(m["args"], Mapping) and isinstance(m["layout"], str)
+            and _nat(m["bits"]) is not None):
+        raise ValueError(f"supplied input {name}: a mark's function and layout are strings, its args an object and its "
+                         "bits a natural number")
     if m["supplied"] not in SU.FUNCTIONS:
         raise ValueError(f"supplied input {name}: {m['supplied']} is no supplied function")
     if m["layout"] not in SU.LAYOUTS:
         raise ValueError(f"supplied input {name}: {m['layout']} is no layout")
-    if not (type(m["bits"]) is int and 0 < m["bits"] <= SHORT_BITS):
+    if not 0 < m["bits"] <= SHORT_BITS:
         raise ValueError(f"supplied input {name}: {m['bits']} bits is no short value (at most {SHORT_BITS}): a value that "
                          "grows with the population is computed in C")
     return dict(m)

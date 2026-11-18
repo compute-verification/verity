@@ -315,4 +315,24 @@ def ofMark (coins : Array (String × ByteArray)) (v : String) (m : Mark) : V Row
     throw s!"supplied input {v}: {m.fn}'s value is {8 * data.size} bits, and the mark says {m.bits}"
   return #[#[(if m.layout == "le" then LE else "bytes", Flock.hexOf data)]]
 
+/-- The difftest's `supplied_marks`: on `{program, coins, widths}` (`coins`: `{function: hex}`; `widths`: `{input: w}`),
+each supplied input's rows as leaves of its width (`marks`, `ofMark`, then `rows`' reading), or the refusal. -/
+def piece (j : Json) : Except String Json := do
+  let ms ← marks (getD j "program")
+  let coins ← match getD j "coins" with
+    | .obj kvs => kvs.toArray.mapM fun (f, h) => match h with
+      | .str s => do pure (f, ← Flock.unhex s)
+      | _ => throw "coins: a coin is not hex"
+    | _ => throw "coins is not an object"
+  let widths := getD j "widths"
+  let .obj _ := widths | throw "widths is not an object"
+  let out ← ms.mapM fun (v, m) => do
+    let some w := nat? (getD widths v) | throw s!"widths: no width of {v}"
+    let rs ← ofMark coins v m
+    let ls ← rs.mapM fun r => do
+      let data ← r.foldlM (fun acc s => return acc ++ (← Flock.unhex s.2)) ByteArray.empty
+      if r.all (·.1 == LE) then leLeaves data w else if m.layout == "digest" then digestLeaves data else leavesOf data w
+    pure (v, Json.arr (ls.map fun l => Json.arr (l.map fun x => Json.num (x : Int))))
+  return Json.mkObj out.toList
+
 end Spot.Supplied

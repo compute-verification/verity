@@ -770,6 +770,36 @@ def test_a_record_that_lists_its_members_declares_its_period_ingress_and_is_coun
         I.window_of_record({**json.loads(I.circuit_bytes(win.circuit_record())), W: [first.doc()]}, SAMPLING_DESIGN, by_id)
 
 
+def test_a_supplied_value_is_one_short_value_committed_under_public_salts_at_its_programs_digest():
+    """A supplied parameter carries its mark (§5.4); `Window.give` reads its function's value by the mark's layout into
+    rows of its reading port's words and commits them under the public salts at the Program's digest, which the verifier
+    recomputes; a mark whose value is not the parameter's whole leaves, of a function the registry lacks or at args it
+    doesn't take is refused, and so is a value of another length or a parameter no mark names."""
+    mark = {"supplied": "poub.read.signs/v1", "args": {"draw": 0, "sketch_rows": 1, "bytes": 512}, "layout": "le",
+            "bits": 4096}
+    read = I.Read(GID, "w", "s", 0, (STEPS, LAYERS, REQUESTS), 0, (0, 0, 0))
+    reg = I.Registered({"s": 256}, reads=(read,), supplied={"s": mark})
+    assert I.Registered.of(reg.doc()) == reg and reg.doc()["supplied"] == {"s": mark}
+    win = I.Window(replace(chain(), registered=reg), RUN, SAMPLING_DESIGN, 2)
+    value = bytes(range(256)) * 2
+    win.give("s", value)
+    got, prog = win.registered["s"], codec.program_digest(win.window.program)
+    assert got.rows == (tuple(int.from_bytes(value[2 * i:2 * i + 2], "little") for i in range(256)),)
+    assert got.salts == tuple(RV.supplied_salts(prog, "s", 1))
+    assert got.root == RV.Registered.commit(prog, "s", got.rows, RV.supplied_salts(prog, "s", 1), 16, V2).root
+    for bad, why in [({"s": {**mark, "bits": 2048}}, "is not 2048 bits"),
+                     ({"s": {**mark, "supplied": "no.such/v1"}}, "a function of the registry"),
+                     ({"s": {**mark, "args": {"draw": 0}}}, "takes the args"),
+                     ({"t": mark}, "a registered parameter"),
+                     (("s",), "an object of a mark by parameter")]:
+        with pytest.raises(ValueError, match=why):
+            I.Registered({"s": 256}, reads=(read,), supplied=bad)
+    with pytest.raises(ValueError, match="value is 4096 bits, not 4080"):
+        win.give("s", value[:-2])
+    with pytest.raises(ValueError, match="none of the circuit's supplied parameters"):
+        win.give("t", value)
+
+
 def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_registered_at_a_held_root():
     """A listed record carries its registered reads beside its members and its period ingress, as a served period reads its
     model's weights: each layer's units read that layer's weight row into ``w``, their own rows (slice 2's form) or a

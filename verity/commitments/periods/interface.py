@@ -817,6 +817,10 @@ class Registered:
             if v not in self.params or v in tables or v in self.values or "of" in m or m["supplied"] not in SU.FUNCTIONS:
                 raise ValueError(f"supplied {v!r}: a registered parameter, no table's or program value's, marked with a "
                                  f"function of the registry (`verity.circuits.supplied.FUNCTIONS`), not {m}")
+            f = SU.FUNCTIONS[m["supplied"]]
+            if set(m["args"]) != set(f.args) or f.nbytes(m["args"]) is None or 8 * f.nbytes(m["args"]) != m["bits"]:
+                raise ValueError(f"supplied {v!r}: {f.name} takes the args {sorted(f.args)} and its value at {m['args']} "
+                                 f"is not {m['bits']} bits")
             if int(self.params[v]) * 16 != m["bits"]:
                 raise ValueError(f"supplied {v!r}: its {self.params[v]} 16-bit leaves are not its value's {m['bits']} bits: a "
                                  "supplied value is short and whole, what grows with the population is computed in C")
