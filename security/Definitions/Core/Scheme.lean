@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Draw
+public import Definitions.Core.LevelsCredited
 
 /-!
 # A scheme: what a resource accounting protocol supplies, and what it gets back
@@ -14,9 +14,19 @@ Every resource accounting protocol states its guarantee through these, and defin
   bound; and its charge inequality: in an accepted run whose log meets its conditions and that breaks nothing, the
   uncredited resource is at most the cost of the incorrect blocks plus its charges.
 * `Scheme.missable`: the largest cost of a block set a sample misses with probability above a cutoff.
+* `AuditBound`: what the audit gives every scheme, in the form a scheme reads. At every cutoff `δ`, a run is accepted
+  while the sample misses its incorrect blocks with probability at most `δ`, with probability at most `δ + ε`, `ε`
+  the audit's own error. The incorrect blocks are those of the run's committed values, so an accepted run's committed
+  values are correct outside a set the sample would likely have hit. A scheme that bounds something other than a
+  cost (the bits an accepted record can carry) reads this directly.
 * `Scheme.GetsBack`: what a scheme gets back from the audit, a named `Prop`. At cutoff `δ`, an accepted run whose
   log meets the scheme's conditions leaves more than the missable cost plus the charges uncredited with probability at
-  most `δ` plus the scheme's own term.
+  most `δ` plus the audit's error plus the scheme's own term.
+* `Scheme.AccountingLayer`: the accounting layer's theorem, stated. For every scheme, `AuditBound` at its accepted
+  runs and incorrect blocks, with its break event bounded by its own term, gives `GetsBack` at every cutoff.
+* `Scheme.Placed`: a scheme's blocks placed in a circuit, each block its gate set. `Placed.credited` is the credited
+  set the levels setting and the integrity profile take, and `Placed.Unsplit` says it is credited unsplit
+  (`Levels.CreditedUnsplit`): each block is a block of the first level and of every later one.
 
 A scheme names no level, no commitment and no duration: the audit decides which values its blocks open, and the
 probability `pr` is the audit game's, over any prover. The code's interface is
@@ -28,6 +38,13 @@ probability `pr` is the audit game's, over any prover. The code's interface is
 namespace Verity
 
 open scoped ENNReal
+
+/-- **What the audit gives every scheme**: under the sampling design `L` over the blocks `U` and the audit game's
+probability `pr` on runs, at every cutoff `δ` a run is accepted while the sample misses its incorrect blocks with
+probability at most `δ`, with probability at most `δ + ε`. -/
+def AuditBound {U Run : Type} (L : SamplingDesign U) (pr : (Run → Prop) → ℝ≥0∞) (accepts : Run → Prop)
+    (incorrect : Run → Finset U) (ε : ℝ≥0∞) : Prop :=
+  ∀ δ : ℝ≥0∞, pr (fun r => accepts r ∧ L.missProb (incorrect r) ≤ δ) ≤ δ + ε
 
 /-- **A scheme**: what a resource accounting protocol supplies to the proof layers. -/
 structure Scheme where
@@ -46,7 +63,8 @@ structure Scheme where
   used : Run → ℕ
   /-- The resource the run was credited. -/
   credited : Run → ℕ
-  /-- The run's log meets the scheme's conditions: each commitment it names is logged before the coin it names. -/
+  /-- The run's log meets the scheme's conditions: each entry it names is logged before, or after, the coin or other
+  logged event it names. -/
   logOK : Run → Prop
   /-- The run's incorrect blocks. -/
   incorrect : Run → Finset Block
@@ -69,9 +87,37 @@ noncomputable def missable (S : Scheme) (L : SamplingDesign S.Block) (δ : ℝ�
 
 /-- **What a scheme gets back**: under the sampling design `L` and the audit game's probability `pr`, at cutoff `δ`
 an accepted run whose log meets the conditions leaves more than the missable cost plus the charges uncredited with
-probability at most `δ + δscheme`. -/
-def GetsBack (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ : ℝ≥0∞) : Prop :=
-  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.credited r + S.missable L δ + S.charges < S.used r) ≤ δ + S.δscheme
+probability at most `δ + ε + δscheme`, `ε` the audit's error. -/
+def GetsBack (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (δ ε : ℝ≥0∞) : Prop :=
+  pr (fun r => S.accepts r ∧ S.logOK r ∧ S.credited r + S.missable L δ + S.charges < S.used r) ≤ δ + ε + S.δscheme
+
+/-- **The accounting layer's theorem** (stated). For every scheme, sampling design and probability on its runs that is
+monotone and subadditive: the audit's bound at the scheme's accepted runs and incorrect blocks, and the scheme's break
+event bounded by its own term, give what the scheme gets back at every cutoff. -/
+def AccountingLayer : Prop :=
+  ∀ (S : Scheme) (L : SamplingDesign S.Block) (pr : (S.Run → Prop) → ℝ≥0∞) (ε : ℝ≥0∞),
+    (∀ p q : S.Run → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
+    (∀ p q : S.Run → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
+    AuditBound L pr S.accepts S.incorrect ε → pr S.breaks ≤ S.δscheme → ∀ δ, S.GetsBack L pr δ ε
+
+/-- **A scheme placed in a circuit** with gates `G`: each block's gate set, two blocks never the same set. -/
+structure Placed (S : Scheme) (G : Type) where
+  /-- A block's gates. -/
+  gates : S.Block → Finset G
+  /-- Two blocks are never the same gate set. -/
+  inj : Function.Injective gates
+
+variable {S : Scheme} {G : Type}
+
+/-- The credited blocks of a placed scheme: its blocks' gate sets, the credited set the levels setting and the
+integrity profile take. -/
+def Placed.credited [DecidableEq G] (P : S.Placed G) : Finset (Finset G) :=
+  Finset.univ.image P.gates
+
+/-- **A placed scheme's blocks are credited unsplit** under the levels `L`: each is a block of the first level and of
+every later one, so its values are committed before the sample. -/
+def Placed.Unsplit [Fintype G] [DecidableEq G] (P : S.Placed G) (L : Levels G) : Prop :=
+  L.CreditedUnsplit P.credited
 
 end Scheme
 
