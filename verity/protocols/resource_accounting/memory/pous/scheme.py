@@ -36,7 +36,7 @@ from typing import Any
 from verity.commitments import domains
 from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, workload
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_served, workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
 from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
@@ -134,12 +134,10 @@ POUS = register(Scheme(
 
 
 def _wipe_check_settings(values: Any) -> str | None:
-    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
     return wipe_served.check_settings(values)
 
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
-    from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
     return wipe_served.attach(exchange, ctx)
 
 
@@ -152,8 +150,8 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
-    settings={"store": "cuda", "segments": 0, "reserve_bytes": wipe_run.CONFIG["reserve_bytes"], "tier": "",
-              "limit_ns": wipe_period.LIMIT_NS, "reads": 0},
+    settings={"store": "cuda", "reserve_bytes": wipe_run.CONFIG["reserve_bytes"], "limit_ns": wipe_period.LIMIT_NS}
+    | {k: wipe_served.UNSET[k] for k in ("segments", "tier", "reads")},
     check_settings=_wipe_check_settings,
     attach=_wipe_attach,
     over="the prior content's bits kept through an accepted wipe, in bits",

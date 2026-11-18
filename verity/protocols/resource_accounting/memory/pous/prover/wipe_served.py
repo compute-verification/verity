@@ -54,16 +54,17 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_store
-from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties import CHALLENGER
 
 NAME = "wipe"
 SMI = "nvidia-smi"
+#: the value of each setting or fact that stands for CONFIG's None, which the declaration's and FACTS' defaults read
+UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
 #: the launcher's facts, at the values its launcher hands by default: never in an application
-FACTS = {"device": wipe_run.CONFIG["device"], "streamer": "native", "threads": 0, "links": wipe_run.CONFIG["links"],
-         "disk": {}, "dram": {}, "egress_bits": -1, "idle_mib": 1024, "host": "", "address": "", "command": [],
-         "run_keys": False, "simulated": False, "foreign_bytes": wipe_run.CONFIG["foreign_bytes"],
-         "foreign_past_bound": False}
+FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | {
+    k: UNSET[k] for k in ("threads", "egress_bits", "disk", "dram")} | {
+    "streamer": "native", "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False,
+    "simulated": False, "foreign_past_bound": False}
 #: the facts that make a run a development run, named in its record's ``served.development``
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
@@ -73,7 +74,7 @@ LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "rea
 
 def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
     """`period.json`'s ``wipe`` for ``settings`` (the declaration's), its key pinned by none (the attach adds the pin's)."""
-    out = {k: None if wipe_run.CONFIG[k] is None and v == (WIPE.settings | FACTS)[k] else v for k, v in settings.items()
+    out = {k: None if k in UNSET and v == UNSET[k] else v for k, v in settings.items()
            if k in wipe_run.CONFIG}
     if settings["foreign_past_bound"]:
         out["foreign_bytes"] = "fM"
@@ -247,5 +248,5 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     return Wiped(answer, record)
 
 
-__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
+__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
            "period_wipe", "pin_of", "refusals"]
