@@ -1,7 +1,8 @@
 """Schemes turned on by name inside vLLM's own OpenAI server (``vllm serve``), each the scheme its name registers in the
 one table (`verity.protocols.compose.schemes.get`), as ``VERITY_PROTOCOLS`` lists them, with ``VERITY_PROTOCOLS_CONFIG``.
 
-`register`, a vLLM general plugin, is the engine's side, in the engine core's process: the adapter's memory hook
+`Front`, the server's ``--middleware``, is the front's side, in the API server's process. `register`, a vLLM general
+plugin, is the engine's side, in the engine core's process: the adapter's memory hook
 (`engine.kv_blocks`) on, and each engine core's schemes attached on the process's exchange (``process`` `hooks.ENGINE`)
 once its model is loaded and before its scheduler builds the KV pool, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
@@ -13,14 +14,17 @@ set, and the engine's side acts only in a process that builds an engine core.
 """
 from __future__ import annotations
 
+import asyncio
+import queue
 import sys
+import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
 
 from verity import hooks as H
 from verity_vllm import messages, settings
 
-__all__ = ["GOAL", "attach", "config", "declared", "register"]
+__all__ = ["GOAL", "Front", "attach", "config", "declared", "register", "route_of"]
 
 #: the goal whose unbuilt parts raise `NotImplementedError` here
 GOAL = "vllm/scheme-on-in-vllm-server"
@@ -126,3 +130,121 @@ def register(environ: Mapping[str, str] | None = None, core: type | None = None)
     detach = kv_blocks.attach()
     admission.register(lambda exchange: None, refuse=aborts)
     _PLUGIN.append((hooks, detach))
+
+
+def route_of(scope: Mapping[str, Any]) -> str:
+    """An ASGI request's route: its ``path`` less the server's ``root_path`` where the path starts with it."""
+    path, root = scope.get("path") or "", (scope.get("root_path") or "").rstrip("/")
+    if root and (path == root or path.startswith(root + "/")):
+        return path[len(root):] or "/"
+    return path
+
+
+async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str) -> None:
+    body = text.encode()
+    await send({"type": "http.response.start", "status": status,
+                "headers": [(b"content-type", b"text/plain"), (b"content-length", b"%d" % len(body))]})
+    await send({"type": "http.response.body", "body": body})
+
+
+class Front:
+    """vLLM's OpenAI server's ``--middleware`` with ``VERITY_PROTOCOLS`` set, the front's side: each scheme attached on
+    this process's exchange (``process`` `hooks.FRONT`), a `hooks.ServeRoute` answered by its scheme's route (on a thread
+    of its own, given the body as it streams in), and every other request handed to the schemes as an `hooks.InputArrived`
+    (its X-Request-Id, set where the client sent none, its first line and headers) before the server sees it. A scheme's
+    `hooks.RefuseInput` then answers it 400 with the reason; filed while the server has it, the server is given its
+    disconnect, and the request is answered 400 where no response began, its stream ended where one did. An input the
+    server answered with no 200 never reached the engine, and is complete at the front (`hooks.OutputsComplete`).
+    Without the variable it passes everything."""
+
+    def __init__(self, app: Any, environ: Mapping[str, str] | None = None) -> None:
+        from verity.protocols.compose import schemes
+
+        self.app, self.ex = app, None
+        names, cfg = config(environ)
+        if names:
+            self.ex = messages.current()
+            self.ex.refuse = self.refuse
+            for n in names:
+                self.ex.attach(schemes.get(n), cfg.get(n) or {}, process=H.FRONT, feed=cfg["feed"])
+        self.inside: dict[str, Any] = {}           # input -> done once a scheme refuses it, while the server has it
+
+    def refuse(self, input: str, why: str) -> None:
+        gone = self.inside.get(input)
+        if gone is not None and not gone.done():
+            gone.get_loop().call_soon_threadsafe(lambda: gone.done() or gone.set_result(why))
+
+    async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
+        if self.ex is None or scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
+        path = route_of(scope)
+        first_line = f"{scope.get('method', 'GET')} {path} HTTP/{scope.get('http_version', '1.1')}"
+        if (served := self.ex.route(path)) is not None:
+            return await self._route(served[1], first_line, headers, receive, send)
+        input = headers.get("x-request-id") or f"verity-{uuid.uuid4().hex}"
+        if "x-request-id" not in headers:
+            scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", input.encode())]}
+            headers["x-request-id"] = input
+        self.ex.emit(H.InputArrived(input, 0, 0, headers, first_line))
+        if why := self.ex.refused(input):
+            self.ex.emit(H.OutputsComplete(input, 0))
+            return await _answer(send, 400, "; ".join(w for _, w in why))
+        gone = self.inside[input] = asyncio.get_running_loop().create_future()
+        began = started = sized = ended = False
+
+        async def heard() -> Any:
+            if gone.done():
+                return {"type": "http.disconnect"}
+            message = asyncio.ensure_future(receive())
+            try:
+                await asyncio.wait({message, gone}, return_when=asyncio.FIRST_COMPLETED)
+                if message.done():
+                    return message.result()
+            finally:
+                message.cancel()
+            return {"type": "http.disconnect"}
+
+        async def watched(message: dict[str, Any]) -> None:
+            nonlocal began, started, sized, ended
+            if gone.done() and not sized:
+                return
+            kind = message.get("type")
+            if kind == "http.response.start":
+                started, began = True, began or message.get("status") == 200
+                sized = any(k.lower() == b"content-length" for k, _ in message.get("headers") or ())
+            elif kind == "http.response.body" and not message.get("more_body", False):
+                ended = True
+            await send(message)
+
+        try:
+            await self.app(scope, heard, watched)
+        finally:
+            del self.inside[input]
+            if not began:
+                self.ex.emit(H.OutputsComplete(input, 0))
+        if gone.done() and not started:
+            await _answer(send, 400, gone.result())
+        elif gone.done() and not sized and not ended:
+            await send({"type": "http.response.body", "body": b""})
+
+    async def _route(self, serve: H.Route, first_line: str, headers: Mapping[str, str], receive: Callable[[], Any],
+                     send: Callable[[dict[str, Any]], Any]) -> None:
+        pieces: queue.Queue[bytes | None] = queue.Queue()
+        answer = asyncio.get_running_loop().run_in_executor(None, lambda: serve(first_line, headers, iter(pieces.get, None)))
+        while not answer.done():
+            message = asyncio.ensure_future(receive())
+            await asyncio.wait({message, answer}, return_when=asyncio.FIRST_COMPLETED)
+            if not message.done():
+                message.cancel()
+                break
+            got = message.result()
+            if got.get("type") == "http.disconnect":
+                break
+            if body := got.get("body", b""):
+                pieces.put(body)
+            if not got.get("more_body", False):
+                break
+        pieces.put(None)
+        status, text = await answer
+        await _answer(send, status, text)

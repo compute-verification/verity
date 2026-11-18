@@ -1852,6 +1852,20 @@ def ranges_of(templates: Sequence[tuple[str, int]], order: Sequence[tuple[str, i
     return tuple(order) if order is not None else tuple((t, 0, int(n)) for t, n in templates)
 
 
+def member_ranges(members: Sequence[CS.Member]) -> tuple[tuple[str, int, int], ...]:
+    """The ranges ``members`` (in root order) tile, each run of one template's consecutive members one (`ranges_of`'s form):
+    a template's own units counted over its members before."""
+    out, seen = [], {}
+    for m in members:
+        lo = seen.get(m.template, 0)
+        if out and out[-1][0] == m.template:
+            out[-1][2] += m.n
+        else:
+            out.append([m.template, lo, m.n])
+        seen[m.template] = lo + m.n
+    return tuple(map(tuple, out))
+
+
 def own_units(members: Sequence[CS.Member], ranges: Sequence[tuple[str, int, int]]) -> list[int]:
     """Each of ``members``' (in the partition's order) first own unit: members tile ``ranges`` (`ranges_of`) in turn."""
     out, it = [], iter(ranges)
@@ -2089,8 +2103,8 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     link checks bind it to its writers' outputs (SPOT's wiring, ε_bind), so it is not the run's ingress (`Ingress`
     in a stated record, the ingress gates Lean's ``freeInputs`` reads) and leaves the run's count free (`input_count`).
     Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
-    isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s
-    ``wired`` and ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
+    isn't an input row of every member holding those units, or is one a wire, a registered value or a table of other
+    rows than its units' own fills (`CS.Member`'s ``wired``, ``values`` and ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
     `window_of_record` and `input_count` each refuse a listed record whose period ingress this refuses."""
     base, at = {}, 0
     for t, n in templates:
@@ -2115,7 +2129,7 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
             if m is None or not m.base <= reach < m.base + m.n:
                 raise ValueError(f"period ingress {g.doc()}: unit {reach - lo0} of {g.reader} is in no member")
             rows, wired = dict(m.rows), {w.port for w in m.wired}
-            if g.port not in rows or g.port in dict(m.tables) or g.port in wired:
+            if g.port not in rows or dict(m.tables).get(g.port, m.n) != m.n or g.port in wired or g.port in m.values:
                 raise ValueError(f"period ingress {g.doc()}: {m.key}'s {g.port} is not an input row of its own units; a wire or a "
                                  "shared-row table fills it")
             end = min(hi, m.base + m.n)
@@ -2792,14 +2806,24 @@ class Window:
                         raise ValueError(f"{m.key} {p}: a unit's recorded row is not the row of {param!r} it reads")
                     d["rows"][p] = CS.ValueRows(values[param], tuple(int(x) for x in positions), sampled.salts(param, positions))
                     self._entries.setdefault(m.key, {})[p] = sampled.entry(param, positions)
-            wired = {x.port for x in m.wired}
+            wired = {x.port: x for x in m.wired}
             for r, x in d["rows"].items():
                 if x is None and r not in wired:
                     raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
                 if r in wired:
+                    if x is not None and not np.array_equal(x, self._output(wired[r], cat)[self.window.reads(m, r)]):
+                        raise ValueError(f"{m.key}: a {r} row is not the {wired[r].out} row of the {wired[r].writer} unit "
+                                         "that wrote it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
         return CS.commit(self.window, data, workers=workers, salts_of={**given, **salts_of}, strings_of=strings_of)
+
+    def _output(self, w: WI.Wired, cat: dict[str, Any]) -> np.ndarray:
+        """Writer template ``w.writer``'s recorded ``w.out`` rows, its units in root order: the leaves of its tree."""
+        if w.writer not in cat:
+            cat[w.writer] = self._words(w.writer)
+        lay = self.circuit._by_id[w.writer][1]
+        return cat[w.writer][len(lay.rows) + [p for p, _ in lay.outs].index(w.out)]
 
     def _written(self, values: Mapping[str, Any]) -> dict[str, dict[str, tuple[list[Any], np.ndarray]]]:
         """Each history writer's output (by template, then port): for each of its template's units, the committed table
