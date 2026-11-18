@@ -480,6 +480,27 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
+def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
+    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    its entry's differing field, and the one file on disk; two passes the same are ok."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
+             for i in range(3)]
+    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+        (d / "calls").mkdir(parents=True)
+        (d / "calls" / "1.tree").write_bytes(tree)
+    want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
+    assert E2E.retained_differences(want, got, dirs) == {
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
+                       "fields": ["tree.sha256"]}}
+    assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
+
+
 # ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
 
 class _Linear:
