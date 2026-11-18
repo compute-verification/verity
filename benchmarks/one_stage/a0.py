@@ -550,7 +550,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`: a5's,
-    bound to the docket's roots and domains after the checks before the draw, `REG.bind_ports`; prove_subprotocol's
+    bound to the docket's roots and domains after the checks before the sample, `REG.bind_ports`; prove_subprotocol's
     stand-in's) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
     a `--zk` session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more
