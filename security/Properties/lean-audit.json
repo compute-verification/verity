@@ -16851,12 +16851,13 @@
    }
   },
   "Definitions.Core.Boolean": {
-   "digest": "6b3d2befc1da46cd8fc9e15efca1b8513c2488ad83cf618fe0f2a92e9f870bf1",
+   "digest": "1b8e1a39b9bf78beabc2e623c1884841829e14c7a0633716010ae51e6da7129d",
    "definitions": {
     "Verity.Boolean.Circuit": "9f8ccc8f063a992696a2ccf2663c0192168355b0b53ff205eb9d0d1a5af194df",
     "Verity.Boolean.Circuit.N": "1e578fc34c125e09e49420a6e0ee8b4f836be4408682eb39493dfaadd8cccf37",
     "Verity.Boolean.Circuit.op": "74a848cee1b249f66d51ac084864844eb68dd59e37ab53e35045d54bb596f204",
     "Verity.Boolean.Circuit.outputs": "786a94146d7632b9de8f674a2af32515e92fdfe8966d7ebb8e11103102612c43",
+    "Verity.Boolean.Circuit.toCircuit": "525c8bbbdfa9fb45a490f668cf46945ba53786ec3a9212ca9781ebd85dc1ea82",
     "Verity.Boolean.Op": "367fae8892e5c17e881694f875f2bb393990d32c55c759a5b082c2f0dc172ab6",
     "Verity.Boolean.Op.and": "d10f1bd3bce3e92b027397c8cafc63b9e1eeb2c4f2059d6bbff435d873659203",
     "Verity.Boolean.Op.apply": "94281bee517dc1a51e9881a40cc4be54d1b251fd3e48c8559f6c35f85612c98d",
@@ -17520,14 +17521,14 @@
    }
   },
   "Definitions.Flock.Circuit": {
-   "digest": "f09f20a45a214b04c137f99b4d18a338e62974c4c2e4c9fe5bd5669d3ea38f25",
+   "digest": "6152d941fa7a654f0135263835faf50f364bbf7a177412318906483935b38a91",
    "definitions": {
-    "FlockSoundness.Audit.Partition": "dddc3cda3982d9db00ac37fcb437831b994d192c71d88484025bb5fe85dede0b",
-    "FlockSoundness.Audit.Partition.unit": "b8b47956b22525f8a660936a4e15b0e7f9699c088c2b6c1bd30d1833bce34b8a"
+    "FlockSoundness.Audit.Partition": "71408a846c00789d506515be26eb4867548632bb88726e4d91fa09ab9286acd0",
+    "FlockSoundness.Audit.Partition.unit": "ec8d5039560cb96ee5a4c221d30bb739b8663469056ace9f2422c51d97220286"
    }
   },
   "Definitions.Flock.Lowering": {
-   "digest": "44f3181d5fdbe55955db16c434302c98beaea765be8b992abb3d92f1a89afece",
+   "digest": "2bd4ffd3d0c65b682ab6eff70bf4175aa78b5e47eb04d93021b4c0f3b9c312f8",
    "definitions": {
     "FlockSoundness.Prog": "802da4afc4af4a75ed5d2db20fb003a7af1259d87e5edb1db2d80afecb37b7d1",
     "FlockSoundness.Prog.RowsWire": "31b15927e1f6c110a131cf1232bb666ea7afc4173fd4d54dd9b95a79d9d06ac2",
@@ -17540,7 +17541,7 @@
     "FlockSoundness.Prog.colWire": "2f7c13bb006bf55689a49d81bfdd10269df33f67c6bd5cebc4742d40746a8629",
     "FlockSoundness.Prog.inputs": "0e1d0f90035642ee5d3b9f197bc4e5f5971b6aa79fdd2a00c4bd890b89f04e59",
     "FlockSoundness.Prog.op": "d6421d586891afde8fb17d216900584bbb23d7b4b4b19fdb29a14320f2d7b4fc",
-    "FlockSoundness.Prog.partition": "e2701061aefaa8d7b0f43c1d03c6c5d1c3862c37baf81b6a3e98b878e1ed1cd3",
+    "FlockSoundness.Prog.partition": "68647e8d1f2d5c6cbb5074d35f42733107211280e0b647599e9c98cc97a443a7",
     "FlockSoundness.Prog.rec": "2c31920e8fe9b2676de5ddd63a4f0619c6e9b5229c40999dbee56ff25d9eaf17",
     "FlockSoundness.Prog.rows": "cedae1145d40ab6df58bc15694e74fc530d6b56818c80e6d980b9ef58bac2123",
     "FlockSoundness.Prog.rowsWire_last": "708c963ca3d5223969d4ac2d381ab84e9a02c8bd7affa06dfb5839246201ff97",
