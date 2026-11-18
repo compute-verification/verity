@@ -158,6 +158,7 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program
@@ -1054,7 +1055,7 @@ class TransferBlocks:
             reg = stream.log[i] if i < len(stream.log) else None
             w = expected[i] if i < len(expected) else n + i - len(expected)
             in_order = reg is not None and reg.get("window") == self.provenance(w)
-            body = outcomes.get(R.digest(reg)) if in_order else None
+            body = outcomes.get(DD.digest(reg)) if in_order else None
             record = None if body is None else _sha512(body)
             if w < n:
                 records[w] = record

@@ -46,13 +46,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import names as NM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
@@ -350,7 +350,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
         return f"the named record has no canonical JSON: {e}"
     if why is not None:
         return f"the named record is not a Commit record credit reads: {why[1]}"
-    previous = REG.digest(window)
+    previous = DD.digest(window)
     if record.get("previous") != previous:
         return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
                 "right after the registration whose tables it reuses")
@@ -453,8 +453,8 @@ def named(run: Any) -> tuple[str | None, dict[str, Any]]:
         raise
     if why is not None:
         return None, _unnamed(why)
-    return canonical_json(dict(record)).hex(), {"named": True, "registration": REG.digest(window),
-                                                "record": REG.digest(record)}
+    return canonical_json(dict(record)).hex(), {"named": True, "registration": DD.digest(window),
+                                                "record": DD.digest(record)}
 
 
 def _unnamed(why: str) -> dict[str, Any]:
