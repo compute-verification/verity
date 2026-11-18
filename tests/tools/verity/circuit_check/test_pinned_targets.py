@@ -19,7 +19,6 @@ from circuit_check import checks as CK
 from circuit_check import targets as TG
 from circuit_check import units as UN
 
-REPO = Path(__file__).resolve().parents[4]
 SIZES = (2, 8, 14)
 
 Leaf = CompositeDefinition("PinnedLeaf", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))), Array(S.N, BIT)),
@@ -73,7 +72,10 @@ def test_the_pinned_ids_are_every_pin_held_for_a_definition(monkeypatch):
 def test_network_accountings_pinned_n14_bindings_are_their_sidecars_targets(sidecar, family):
     """``{N=14}`` of network accounting's charge units is over `MAX_GATES` beside ``{N=2}`` under it; both are pinned, so both are
     their sidecar's targets, which ``--all`` keeps the same way (`select`)."""
-    path = str(REPO / f"verity/protocols/resource_accounting/network/verifier/{sidecar}.circuit-check.py")
+    from verity.protocols.interface.charge import arith_encode, charge_chain
+
+    module = {"arith_encode": arith_encode, "charge_chain": charge_chain}[sidecar]
+    path = str(Path(module.__file__).with_suffix(".circuit-check.py"))
     n2, n14 = f"{family}{{N=2}}", f"{family}{{N=14}}"
     assert {n2, n14} <= TG.pinned()
     found, _ = TG.sidecar_targets(path)

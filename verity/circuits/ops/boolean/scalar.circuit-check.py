@@ -12,3 +12,12 @@ def _boolean_constant_roots() -> list[Any]:
     from verity.circuits.ops.boolean import scalar as BS
 
     return [bind(BS.const_word(32, 1)), bind(BS.const_word(32, 0x11F))]
+
+
+def _boolean_wiring_roots() -> list[Any]:
+    """The wiring `WordBits{16}` and `BitsWord{32}` Call, on bits (`bit_of_bits`, `word_of_bits`: made on demand, as the word
+    primitives are, so no module binds one ahead): the 16-bit word's first and last wires, and the 32 bits as a word."""
+    from verity.circuits.defs import bind
+    from verity.circuits.ops.boolean import scalar as BS
+
+    return [bind(BS.bit_of_bits(16, 0)), bind(BS.bit_of_bits(16, 15)), bind(BS.word_of_bits(32))]
