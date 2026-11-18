@@ -80,8 +80,6 @@ from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
-from verity.channel import Schema
-from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -112,10 +110,6 @@ class Kernels(Protocol):
     ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
 
     def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
-
-
-#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
-VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -272,8 +266,9 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
-    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    `verity.protocol.VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of
+    each message its channels carry that has one, by its type, which this module types by name only, so it loads
+    neither module; ``colocated``, the pairs of its parties on one machine; ``needs``, what
     the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
     ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
@@ -325,14 +320,14 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
-    parties: tuple[Role, ...] | Lacks = UNDECLARED
-    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    parties: tuple[Any, ...] | Lacks = UNDECLARED
+    channels: tuple[Any, ...] | Lacks = UNDECLARED
     colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
     needs: frozenset[str] | Lacks = UNDECLARED
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    channel_schemas: tuple[Any, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
@@ -599,7 +594,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
            "Charge", "Circuits", "Kernels", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
