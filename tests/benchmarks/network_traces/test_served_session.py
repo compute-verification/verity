@@ -10,7 +10,8 @@ the run dir first), publishes only its report, windows.jsonl and serve.json, and
 didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
 seed or trace record); chain runs chain_record.sh's network attester path on the kept fetch with the endpoint's art or a dry
 rehearsal's records, and is refused without the leak guard; its sample on the gate's coins names the auditor's node as
-the coin link's peer, and the served node is refused. The gate's host is the challenger host's address, which the
+the coin link's peer by default, takes the served node and records it as the served node, and refuses it by
+VERITY_HOLD_PLACEMENT's name when that is 1. The gate's host is the challenger host's address, which the
 environment holds and site.json only names the variable of: a session, or a chain on the gate's coins, without it is
 refused by that name before anything is sent."""
 from __future__ import annotations
@@ -533,7 +534,8 @@ def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_atte
 def _gate_chain(tmp_path, monkeypatch, peer):
     here = tmp_path / "here"
     here.mkdir(exist_ok=True)
-    (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\n')
+    (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\nprintf %s "$CR_COIN_PEER" > "$SEEN.peer"\n')
+    monkeypatch.delenv(SS.settings.HOLD_PLACEMENT, raising=False)
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     (tmp_path / "challenger-key.json").write_text("{}")
@@ -554,22 +556,44 @@ def _gate_chain(tmp_path, monkeypatch, peer):
             "--main", str(tmp_path / "main.txt")]
 
 
-def test_a_gate_coin_sample_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
+def _seen(tmp_path):
+    scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
+    return scan, json.loads((tmp_path / "seen.peer").read_text())
+
+
+def test_a_gate_coin_sample_runs_on_the_auditors_side_by_default(tmp_path, monkeypatch, capsys):
     argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
-    scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
-    assert scan == ["--draw", "8", "--challenger", f"gate:{LIVE_GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
-                    SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
-                    "--gate-key", str(tmp_path / "gate-key")]
-    for peer in (SS.PEER, SOME_PEER):
-        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
-        assert SS.main([*argv, "--coin-peer", peer]) == 2
-        assert "is the served node, the prover's" in capsys.readouterr().err
+    assert _seen(tmp_path) == (["--draw", "8", "--challenger", f"gate:{LIVE_GATE}", "--main", str(tmp_path / "main.txt"),
+                                "--peer", SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
+                                "--gate-key", str(tmp_path / "gate-key")],
+                               {"name": SS.AUDITOR, "served_node": False})
     assert SS.main([*argv, f"CR_SCAN_ARGS=--peer {SOME_PEER}"]) == 2
     assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
     assert "no gate key" in capsys.readouterr().err
     assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
     assert "give K" in capsys.readouterr().err
+
+
+def test_a_gate_coin_sample_on_the_served_node_is_taken_and_recorded_as_the_served_nodes(tmp_path, monkeypatch):
+    for peer in (SS.PEER, SOME_PEER):
+        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
+        assert SS.main([*argv, "--coin-peer", peer]) == 0
+        scan, coin_peer = _seen(tmp_path)
+        assert scan[scan.index("--peer") + 1] == peer
+        assert coin_peer == {"name": peer, "served_node": True}
+
+
+def test_hold_placement_refuses_a_gate_coin_sample_on_the_served_node_by_its_name(tmp_path, monkeypatch, capsys):
+    for peer in (SS.PEER, SOME_PEER):
+        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
+        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
+        (tmp_path / "seen").unlink(missing_ok=True)
+        assert SS.main([*argv, "--coin-peer", peer]) == 2
+        assert "is the served node, the prover's, and VERITY_HOLD_PLACEMENT=1 holds" in capsys.readouterr().err
+        assert not (tmp_path / "seen").exists()
+    assert SS.main(argv) == 0
+    assert _seen(tmp_path)[1] == {"name": SS.AUDITOR, "served_node": False}
 
 
 def test_a_relay_sessions_request_is_the_gates_and_a_run_opened_earlier_is_ended_by_its_close(tmp_path, monkeypatch):

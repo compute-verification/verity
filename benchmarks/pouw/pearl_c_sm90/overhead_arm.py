@@ -92,7 +92,7 @@ def verifier() -> dict:
     beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record into the
     shape's ``{verdicts}`` (the run's ``verdicts/``; the pass stays in the private passes directory); its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
-    unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
+    unaccepted. Then the Lean step (`served_passes.py lean`, PouwVerifier.PearlPlus's ``pouw-pearlplus`` built in the tree)
     judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
     ``REJECT`` and names the manifest's sha256, and where the Lean refuses or disagrees it names none. The no-write
     control's at the same path under ``negative/``, which the Lean must reject."""
