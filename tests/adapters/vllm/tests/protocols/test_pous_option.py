@@ -37,6 +37,7 @@ from verity.protocols.resource_accounting.memory.pous.verifier import period, se
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import (
     P2Params,
 )
+from verity import hooks as hooks_mod
 from verity.runtime.stream import Side
 
 from verity_vllm import config
@@ -353,7 +354,8 @@ def test_a_dropped_block_rejects(toy, tmp_path):
 
 def _fake_pouw(monkeypatch, install, scheme="ncp-v1"):
     mod = types.ModuleType("verity_vllm.protocols.fake_pouw")
-    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install)
+    vars(mod).update(NAME="pouw", schemes=lambda: (scheme,), refusals=lambda s, c: (), install=install,
+                     keeps_weight_copy=lambda s: s == "ncp-v2")
     monkeypatch.setitem(sys.modules, mod.__name__, mod)
     monkeypatch.setitem(config.PROTOCOLS, "pouw", "fake_pouw")
     return mod
@@ -402,3 +404,32 @@ def test_a_model_without_linears_is_refused_at_install_and_leaves_nothing(toy, m
     with pytest.raises(ValueError, match="no Int8Apply layer"):
         PO.install(types.SimpleNamespace(named_modules=lambda: iter([("", object())])), _ctx(ENTRY))
     assert hooks.live() == before
+
+
+def test_pous_attaches_by_its_schemes_name_on_the_adapters_exchange_and_serves_the_weight_it_decodes(monkeypatch):
+    """The served path without the adapter's option: `pous` attached on the build's exchange by its scheme's name, the
+    build answered, the weights registered and released, a linear block computed through the exchange with the weight
+    decoded from C*, and the weight restored from C*."""
+    from verity.protocols.compose import schemes
+    from verity_vllm import messages
+
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
+    w = torch.randint(-128, 128, (5, 48), dtype=torch.int8, generator=torch.Generator().manual_seed(3))
+    plain, ex = w.clone(), messages.Exchange()
+    got = ex.attach(schemes.get("pous"), {}, salt_source=SOURCE, experimental=True)
+    compiled = messages.Exchange()
+    compiled.attach(schemes.get("pous"), {}, salt_source=SOURCE, experimental=True)
+    with pytest.raises(Exception, match="requires eager = True: compiled execution"):
+        compiled.answer(dataclasses.replace(_declared(compiled), properties={"eager": False}))
+    ex.answer(_declared(ex))
+    ex.emit(hooks_mod.RegisteredValues((("l.weight", w),), operands={"l.weight": 0}))
+    [release] = [r for _, r in ex.requests if isinstance(r, hooks_mod.ReleaseValue)]
+    assert release.value == "l.weight" and torch.equal(release.restore(), plain)
+    due = hooks_mod.BlockDue("l", 0, {"n": 5, "k": 48}, "s8", {"x": None, "weight": torch.empty(0)},
+                             weights={"weight": "l.weight"})
+    assert torch.equal(ex.compute(due, lambda given: given["weight"]), plain)
+    assert ex.reports["pous"] is got and got.commitment()["commitment"] == ws.commit(P2, {"l.weight": plain})[1].hex()
+
+
+def _declared(ex):
+    return hooks_mod.Declared("card", {"eager": True}, tuple(ex.attached), {n: dict(v) for n, v in ex.attached.items()})
