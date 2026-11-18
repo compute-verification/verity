@@ -29,6 +29,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from test_run import LEAN, M, _decode_session, _decode_setup, _point_of
 from verity_difftest import protocol as P
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period
@@ -140,7 +141,7 @@ def signed_run(signer, coins: bytes = COINS, prover=period_prover.honest, setup_
     sid = challenger_session.coin_session_id(coins, period.SESSION_DOMAIN, "n0", pub.root)
     challenger = mc.MemoryAttester(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
                                      limit_ns=h.point.limit_ns, block_bytes=q.block_bytes, binding=pub.root,
-                                     clock=M.Clock(10 ** 9))
+                                     device=Device(signer.public_key.hex(), M.Clock(10 ** 9), 1, 0))
     signed = challenger.run(prover(h.blocks))
     session = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings())
     if setup_signer is None:

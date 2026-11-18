@@ -168,7 +168,7 @@ def _in_process_party(signer, log, keep=None, record=lambda request: request):
         def challenger():
             with b, b.makefile("rwb") as f:
                 return CP.serve(f, request, signer=signer, log=log, coins=COINS, domain=period.SESSION_DOMAIN,
-                                clock=fakes.Clock(step=1_000))
+                                clock=fakes.Clock(step=1_000), resolution_ns=1)
         with futures.ThreadPoolExecutor(1) as pool:
             served_side = pool.submit(challenger)
             try:

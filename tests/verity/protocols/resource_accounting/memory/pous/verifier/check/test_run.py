@@ -25,6 +25,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import period, run
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
@@ -124,7 +125,7 @@ def runs(sample, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | Non
     tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
     clock = M.Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=session_limit, block_bytes=q.block_bytes,
-                            binding=root, clock=clock)
+                            binding=root, device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -343,7 +344,7 @@ def _named(signer: M.AtLeaf) -> Run:
     tree = mc.CoinTree.draw(b"named source", bytes(32), q.blocks, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
     c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=1_000, block_bytes=q.block_bytes, binding=root,
-                            clock=clock)
+                            device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         i = c.challenge()
         clock.now += 10
@@ -369,7 +370,7 @@ def _deployed_run(tmp: Path, tampered: int | None = None
     root = VerifierKey.from_row_digests(q, salt, rows).root
     signer, clock = M.deployed_signer(), M.Clock(10 ** 9)
     c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes,
-                            binding=root, clock=clock)
+                            binding=root, device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()

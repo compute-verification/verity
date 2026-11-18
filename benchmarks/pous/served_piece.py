@@ -335,7 +335,7 @@ def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str 
 
 
 def _latencies(session: R.ChallengePhaseRecord, limit_ns: int) -> dict[str, Any]:
-    ns = [r.receipt_ns - r.send_ns for r in session.signed.rounds]
+    ns = [r.elapsed_ns for r in session.signed.rounds]
     if not ns:
         return {"rounds": 0}
     return {"rounds": len(ns), "median_us": round(statistics.median(ns) / 1e3, 1), "max_us": round(max(ns) / 1e3, 1),

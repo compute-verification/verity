@@ -10,6 +10,7 @@ import random
 import numpy as np
 import pytest
 
+from verity.clock import Reading
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import resolve
@@ -52,7 +53,7 @@ def test_the_rows_at_the_deployed_scheme() -> None:
     params, ret = resolve(bind(S.PousRound, N=2056, SLOT=1)).signature()
     assert [(n, t.leaves) for n, t in params] == [("row", 16448), ("records", 1472), ("j", 32), ("i", 64)]
     assert ret.leaves == 1
-    assert len(Round(0, 0, 0, 0, bytes(64)).value()) == S.RECORD_BYTES
+    assert len(Round(0, 0, Reading("device", 0), Reading("device", 0), bytes(64)).value()) == S.RECORD_BYTES
 
 
 @pytest.mark.slow
@@ -89,8 +90,8 @@ def test_the_round_unit_agrees_with_its_reference(slot) -> None:
     N = 136
     row, other = _rand(N), _rand(N)
     j, i = 2 * 5 + slot, 0x0123_4567_89AB
-    mine = Round(j, i, 10, 20, sha512_row_v2_digest(row, 8 * N)).value()
-    pair = Round(j ^ 1, 77, 11, 21, sha512_row_v2_digest(other, 8 * N)).value()
+    mine = Round(j, i, Reading("device", 10), Reading("device", 20), sha512_row_v2_digest(row, 8 * N)).value()
+    pair = Round(j ^ 1, 77, Reading("device", 11), Reading("device", 21), sha512_row_v2_digest(other, 8 * N)).value()
     recs = mine + pair if slot == 0 else pair + mine
     swapped = recs[S.RECORD_BYTES:] + recs[:S.RECORD_BYTES]
     cases = [(row, recs, j, i), (other, recs, j, i), (row, swapped, j, i),
@@ -111,9 +112,9 @@ def _session(K: int, late: int | None = None):
     rows and the digest the signature signs (`lms.memory_attester_message` of `mc.message`), round
     ``late``, if any, signed past the limit."""
     c = mc.SessionCommitment(_rand(32), _rand(64), _rand(32), 1 << 20, K, 854_000, 2056, _rand(64))
-    rounds = [Round(j, RNG.randrange(1 << 20), 1000 * j, 1000 * j + 500, _rand(64)) for j in range(K)]
+    rounds = [Round(j, RNG.randrange(1 << 20), Reading("device", 1000 * j), Reading("device", 1000 * j + 500), _rand(64)) for j in range(K)]
     if late is not None:
-        rounds[late] = Round(late, rounds[late].index, 0, c.limit_ns + 1, rounds[late].digest)
+        rounds[late] = Round(late, rounds[late].index, Reading("device", 0), Reading("device", c.limit_ns + 1), rounds[late].digest)
     ident = _rand(16)
     m = R.memory_attester_message(ident, c.session, mc.message(c, mc.COMPLETE, rounds))
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": K}, sort_keys=True, separators=(",", ":")).encode()

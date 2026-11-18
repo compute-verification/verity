@@ -11,6 +11,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
+from verity.clock import Device, Reading
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -43,7 +44,7 @@ def _round(j: int, LIMIT: int, kind: str) -> tuple[bytes, bytes]:
     receipt = min(max(receipt, 0), (1 << 64) - 1)
     h = bytes([e[0] ^ 1 << RNG.randrange(8)]) + e[1:] if kind == "wrong" else e
     rj = j ^ 1 << RNG.randrange(32) if kind == "round" else j
-    return mc.Round(rj, RNG.randrange(1 << 64), send, receipt, h).value(), e
+    return mc.Round(rj, RNG.randrange(1 << 64), Reading("device", send), Reading("device", receipt), h).value(), e
 
 
 def _session(K: int, LIMIT: int, kinds) -> tuple[list[bytes], list[bytes]]:
@@ -121,7 +122,7 @@ def test_m0_is_the_memory_attesters_verdict(wrong):
     coins = mc.CoinTree.draw(b"secret", session, BLOCKS, ROUNDS, key=mc.HM96.key_from_label(b"coin key"),
                              salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(ROUNDS)])
     c = mc.MemoryAttester(coins, signer, log=ts.session_log(), limit_ns=LIMIT_NS, block_bytes=BLOCK_BYTES,
-                            binding=hashlib.sha512(b"root").digest(), clock=clock)
+                            binding=hashlib.sha512(b"root").digest(), device=Device(signer.public_key.hex(), clock, 1, 0))
     j = 0
 
     def answer(i: int) -> bytes:

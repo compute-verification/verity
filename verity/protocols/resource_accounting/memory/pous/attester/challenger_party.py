@@ -57,11 +57,11 @@ import os
 import secrets
 import socket
 import sys
-import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.clock import Device
 from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
@@ -163,11 +163,11 @@ class Challenger:
     its audit's id (`designate`, from `capabilities["salts"]`, its salt log) when the request names one, else the id
     designated from its coins under `domain` (`period.SESSION_DOMAIN`). Its machine gives it `signing-key`
     (`capabilities["signer"]`, a `memory_attester.Signer`, with `capabilities["log"]`, its session log);
-    `resolution_ns` is how finely its clock ticks (`memory_attester.resolution_of`). It finishes with the session and
-    its id (private: what it signs is witness), or refused: with `designate`'s reason before any frame, or by name when
+    `resolution_ns` is how finely its clock ticks, its `verity.clock.Device` registered under the signing key. It
+    finishes with the session and its id (private: what it signs is witness), or refused: with `designate`'s reason before any frame, or by name when
     the prover leaves (`closed`), sends a frame the wire refuses, or one out of phase."""
 
-    def __init__(self, domain: str, warmups: int = WARMUPS, resolution_ns: float = 1) -> None:
+    def __init__(self, domain: str, warmups: int = WARMUPS, resolution_ns: int = 1) -> None:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
         self.c: mc.MemoryAttester | None = None
         self.sid: bytes | None = None
@@ -229,9 +229,9 @@ class Challenger:
         if self.sid is None:
             self.sid = coin_session_id(coins, self.domain, q["node"], binding)
         tree = mc.CoinTree.draw(coins, self.sid, q["blocks"], q["k"], key=mc.coin_key(key), salts=salts)
+        device = Device(self.signer.public_key.hex(), self._clock, self.resolution_ns, 0)
         self.c = mc.MemoryAttester(tree, self.signer, log=self.log, limit_ns=q["limit_ns"],
-                                     block_bytes=q["block_bytes"], binding=binding, clock=self._clock,
-                                     resolution_ns=self.resolution_ns)
+                                     block_bytes=q["block_bytes"], binding=binding, device=device)
         return self._warmup()
 
     def _warmup(self) -> list[Any]:
@@ -276,13 +276,14 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger}, {CHALLENGER: start})
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
-          domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
+          domain: str, clock: Callable[[], int], resolution_ns: int, salts: mc.SaltLog | None = None,
           warmups: int = WARMUPS, entropy: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
-    """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
+    """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, which ticks
+    every `resolution_ns` (`verity.clock.raw_ns` and `raw_resolution_ns()` on a device), under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `entropy`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
     (`memory_attester.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
-    party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
+    party, given = Challenger(domain, warmups, resolution_ns), [coins]
     with mc.collector_paused():
         done, _ = run(party, request,
                       Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,

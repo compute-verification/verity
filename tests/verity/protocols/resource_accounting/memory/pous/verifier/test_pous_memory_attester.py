@@ -14,6 +14,7 @@ import pous_test_signer as ts
 import pytest
 from pous_fakes import Clock
 
+from verity.clock import Device
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
@@ -44,7 +45,7 @@ def session(respond=None, *, signer=None, clock=None, spend=lambda j: 20_000):
     clock = clock or Clock(1_000_000)
     signer = signer or ts.TestSigner(b"challenger key", height=2)
     c = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
-                            clock=clock)
+                            device=Device(signer.public_key.hex(), clock, 1, 0))
     j = 0
 
     def answer(i: int) -> bytes:
@@ -66,8 +67,9 @@ def test_coin_tree_is_released_after_the_last_answer():
     tree = coins()
     want = derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
-    c = mc.MemoryAttester(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
+    signer = ts.TestSigner(b"k", height=1)
+    c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                            device=Device(signer.public_key.hex(), Clock(), 1, 0))
     for j in range(K):
         with pytest.raises(RuntimeError, match="released after the session"):
             _ = c.commitment
@@ -126,7 +128,8 @@ def test_bad_signature_and_edited_records_are_rejected():
     flipped[100] ^= 1
     assert judge(c, dataclasses.replace(signed, signature=bytes(flipped)), signer).reasons == ("the signature does not verify",)
     r = signed.rounds[5]
-    edited = signed.rounds[:5] + (dataclasses.replace(r, receipt_ns=r.receipt_ns - 1),) + signed.rounds[6:]
+    receipt = dataclasses.replace(r.receipt, ns=r.receipt.ns - 1)
+    edited = signed.rounds[:5] + (dataclasses.replace(r, receipt=receipt),) + signed.rounds[6:]
     assert judge(c, dataclasses.replace(signed, rounds=edited), signer).reasons == ("the signature does not verify",)
     stranger = ts.TestSigner(b"someone else", height=2)
     forged = dataclasses.replace(signed, public_key=stranger.public_key,
@@ -162,8 +165,9 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
         events.append("hash")
         return real(data)
 
-    c = mc.MemoryAttester(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen(1_000_000))
+    signer = ts.TestSigner(b"k", height=1)
+    c = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                            device=Device(signer.public_key.hex(), Seen(1_000_000), 1, 0))
     i = c.challenge()
     monkeypatch.setattr(mc, "block_digest", digest)
     events.clear()
@@ -185,7 +189,7 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     with pytest.raises(ValueError, match="digest is 64 bytes"):
         dataclasses.replace(signed.rounds[0], digest=signed.rounds[0].digest + b"\0").value()
     plain = mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                binding=ROOT, clock=Clock(1_000_000))
+                                binding=ROOT, device=Device(signer.public_key.hex(), Clock(1_000_000), 1, 0))
     while not plain.done:
         i = plain.challenge()
         plain.receive(block(i))
@@ -219,11 +223,9 @@ def test_no_collection_runs_inside_the_rounds() -> None:
         gc.enable()
 
 
-def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges_it():
-    c, signed, signer = session(spend=lambda j: -1 if j == 2 else 20_000)
-    assert signed.ended == mc.LATE and len(signed.rounds) == 3 and signed.rounds[-1].elapsed_ns == -1
-    v = judge(c, signed, signer)
-    assert not v.accepted and v.late == 1
+def test_a_clock_that_runs_backwards_is_refused_at_its_reading_and_signs_nothing():
+    with pytest.raises(ValueError, match="never run backwards"):
+        session(spend=lambda j: -1 if j == 2 else 20_000)
 
 
 def test_openings_must_match_the_revealed_indices():
@@ -234,12 +236,16 @@ def test_openings_must_match_the_revealed_indices():
 
 
 def test_refusals():
-    def open_(**kw):
-        return mc.MemoryAttester(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                                   block_bytes=BLOCK_BYTES, clock=Clock(1_000_000), **kw)
+    def open_(resolution_ns=1, key=None, **kw):
+        signer = ts.TestSigner(b"k", height=1)
+        device = Device(signer.public_key.hex() if key is None else key, Clock(1_000_000), resolution_ns, 0)
+        return mc.MemoryAttester(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
+                                 device=device, **kw)
 
     with pytest.raises(ValueError, match="coarser than 1000 ns"):
         open_(binding=ROOT, resolution_ns=10_000)
+    with pytest.raises(ValueError, match="the device 'another' is not the one registered under the signing key"):
+        open_(binding=ROOT, key="another")
     with pytest.raises(TypeError, match="binding"):
         open_()
     for binding in (b"", b"vk root", ROOT + b"\0"):
@@ -256,7 +262,8 @@ def test_refusals():
     with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
         signer.sign(SESSION, b"c")
     with pytest.raises(TypeError, match="log"):
-        mc.MemoryAttester(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
+        mc.MemoryAttester(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                          device=Device(signer.public_key.hex(), Clock(1_000_000), 1, 0))
 
 
 def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_path, monkeypatch):
@@ -278,7 +285,7 @@ def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_pa
 
     def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryAttester:
         return mc.MemoryAttester(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                   binding=ROOT, clock=Seen(1_000_000))
+                                   binding=ROOT, device=Device(signer.public_key.hex(), Seen(1_000_000), 1, 0))
 
     events.clear()
     c = open_(log)

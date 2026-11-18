@@ -46,6 +46,7 @@ from test_setup_difftest import _evidence as _setup_evidence
 from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_protocol
 from verity_difftest import protocol as P
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.verifier import period
@@ -228,8 +229,11 @@ def periods(signer, store: bytes = STORE) -> dict[str, period.Run]:
     kw = dict(signer=signer, schemes=mc.SCHEMES if signer.scheme == mc.LMS else M.ts.SCHEMES,
               protocol=period.PROTOCOL if signer.scheme == mc.LMS else TEST_ID,
               point=period.point_for(len(store), period.W, period.C0))
-    return {"honest": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9), **kw),
-            "zeros": period_prover.run("n0", store, COINS, log=M.ts.session_log(), clock=M.Clock(10 ** 9),
+    def device():
+        return Device(signer.public_key.hex(), M.Clock(10 ** 9), 1, 0)
+
+    return {"honest": period_prover.run("n0", store, COINS, log=M.ts.session_log(), device=device(), **kw),
+            "zeros": period_prover.run("n0", store, COINS, log=M.ts.session_log(), device=device(),
                                 prover=_zeros_on_odd_rounds, **kw)}
 
 
@@ -281,7 +285,9 @@ def test_a_certified_periods_answers_agree(deployed_server, certified_store) -> 
     zeros. The one test of an accepted, certified run through the tie: the quick tier's certified-point checks hold the
     run's check and `certify` there on a `C*` no setup accepts."""
     held = certified_store
-    kw = dict(signer=M.deployed_signer(), schemes=mc.SCHEMES, protocol=period.PROTOCOL, clock=M.Clock(10 ** 9))
+    signer = M.deployed_signer()
+    kw = dict(signer=signer, schemes=mc.SCHEMES, protocol=period.PROTOCOL,
+              device=Device(signer.public_key.hex(), M.Clock(10 ** 9), 1, 0))
     got = {}
     for name, prover in (("honest", period_prover.honest), ("zeros", _zeros_on_odd_rounds)):
         p = period_prover.audit("n0", held, COINS, log=M.ts.session_log(), prover=prover, **kw)

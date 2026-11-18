@@ -22,6 +22,7 @@ import pous_fakes
 import pous_test_signer as ts
 import pytest
 
+from verity.clock import Device
 from verity.runtime import sources as S
 from verity.party import Send
 from verity.protocol import ProtocolDef
@@ -47,8 +48,9 @@ def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]
     """`period_prover.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
-    p = period_prover.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(),
-                   point=point, schemes=ts.SCHEMES, protocol=TEST_ID)
+    signer = ts.TestSigner(b"in process", 2)
+    p = period_prover.run("n0", STORE, COINS, signer=signer, log=ts.session_log(),
+                   device=Device(signer.public_key.hex(), Clock(), 1, 0), point=point, schemes=ts.SCHEMES, protocol=TEST_ID)
     published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
     _, _, encoded = period.setup_inputs(p.setup_case)
     blocks = [b for seg in encoded for b in seg]
@@ -65,7 +67,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
         with a:
             got["session"] = CP.serve(CS.Polled(a), CS.request_of("n0", point, root), signer=signer,
                                       log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
-                                      warmups=warmups, entropy=entropy)
+                                      resolution_ns=1, warmups=warmups, entropy=entropy)
 
     t = threading.Thread(target=side)
     t.start()
@@ -246,7 +248,7 @@ def _audit_session(point: run.Point, published: run.Setup, respond, signer: mc.S
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["session"] = CP.serve(f, request, signer=signer, log=log, salts=salts, coins=COINS,
-                                      domain=period.SESSION_DOMAIN, clock=Clock())
+                                      domain=period.SESSION_DOMAIN, clock=Clock(), resolution_ns=1)
 
     t = threading.Thread(target=side)
     t.start()
@@ -263,7 +265,7 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
     a, b = socket.socketpair()
     with a, b, a.makefile("rwb") as f, pytest.raises(CP.Refusal) as served:
         CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
-                 domain=period.SESSION_DOMAIN, clock=Clock())
+                 domain=period.SESSION_DOMAIN, clock=Clock(), resolution_ns=1)
     assert str(served.value) == str(e.value)
     return str(e.value)
 

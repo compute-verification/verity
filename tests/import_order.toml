@@ -299,6 +299,9 @@ paths = [
     "tests/verity/tests/test_clock.py",
 ]
 trusted = true
+loaded_by = [
+    "verity/protocols/resource_accounting/memory/pous/prover/period_prover.py",
+]
 
 [[place]]
 paths = [
@@ -718,6 +721,7 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -763,6 +767,7 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -804,6 +809,7 @@ paths = [
 loads = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/periods",
@@ -821,6 +827,7 @@ paths = [
 ]
 loads = [
     "verity/channel.py",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
@@ -829,6 +836,7 @@ loads = [
 reaches = [
     "verity/channel.py",
     "verity/circuits",
+    "verity/clock.py",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",

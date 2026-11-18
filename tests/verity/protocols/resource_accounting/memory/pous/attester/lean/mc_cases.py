@@ -24,6 +24,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 from verity_difftest import protocol as P
 
+from verity.clock import Device, Reading
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
@@ -109,8 +110,10 @@ def commitment_of(j: Any) -> mc.SessionCommitment:
                                 nat(j, "limit_ns"), nat(j, "block_bytes"), hex_(j, "binding"))
 
 
-def round_of(j: Any) -> mc.Round:
-    return mc.Round(nat(j, "j"), nat(j, "index"), nat(j, "send_ns"), nat(j, "receipt_ns"), hex_(j, "digest"))
+def round_of(j: Any, key: str) -> mc.Round:
+    """A round record of the device registered under `key`."""
+    return mc.Round(nat(j, "j"), nat(j, "index"), Reading(key, nat(j, "send_ns")), Reading(key, nat(j, "receipt_ns")),
+                    hex_(j, "digest"))
 
 
 def opening_of(j: Any) -> mc.CoinOpening:
@@ -118,7 +121,8 @@ def opening_of(j: Any) -> mc.CoinOpening:
 
 
 def signed_of(j: Any) -> mc.SignedSession:
-    return mc.SignedSession(commitment_of(_get(j, "commitment")), _str(j, "ended"), tuple(round_of(r) for r in list_(j, "rounds")),
+    rounds = tuple(round_of(r, hex_(j, "public_key").hex()) for r in list_(j, "rounds"))
+    return mc.SignedSession(commitment_of(_get(j, "commitment")), _str(j, "ended"), rounds,
                             _str(j, "scheme"), hex_(j, "public_key"), hex_(j, "signature"))
 
 
@@ -295,7 +299,8 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
     clock = Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryAttester(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
-                            binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock)
+                            binding=sample(st.sampled_from(SETUP_ROOTS)),
+                            device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
@@ -305,6 +310,10 @@ def sessions(sample, signer: AtLeaf | None = None) -> Session:
     signed = c.close()
     expected = tuple(mc.block_digest(block(i, block_bytes)) for i in range(blocks))
     return Session(signed, c.commitment, c.openings(), expected, (signer.public_key,), signer)
+
+
+def _at(t: Reading, ns: int) -> Reading:
+    return dataclasses.replace(t, ns=ns)
 
 
 def _round(s: Session, x: int, **edits) -> Session:
@@ -375,7 +384,7 @@ MUTATIONS = [
     lambda s, x: s.resign(commitment=dataclasses.replace(s.commitment, binding=s.commitment.binding + b"x")),
     lambda s, x: dataclasses.replace(s, commitment=dataclasses.replace(s.commitment, k=s.commitment.k + 1)),
     lambda s, x: dataclasses.replace(s, commitment=dataclasses.replace(s.commitment, coin_root=_flip(s.commitment.coin_root, x))),
-    lambda s, x: _unsigned(s, rounds=_round(s, x, receipt_ns=lambda r: r.receipt_ns + 1).signed.rounds),
+    lambda s, x: _unsigned(s, rounds=_round(s, x, receipt=lambda r: _at(r.receipt, r.receipt.ns + 1)).signed.rounds),
     lambda s, x: _openings(s, lambda o: o[::-1]),
     lambda s, x: _openings(s, lambda o: o[:-1]),
     lambda s, x: _openings(s, lambda o: o + [dataclasses.replace(o[x % len(o)], index=o[x % len(o)].index + 1)]),
@@ -394,10 +403,10 @@ MUTATIONS = [
     lambda s, x: _round(s, x, j=lambda r: 2 ** 32 + r.j),
     lambda s, x: _round(s, x, digest=lambda r: _flip(r.digest, x)),
     lambda s, x: _round(s, x, digest=lambda r: r.digest[:-1]),
-    lambda s, x: _round(s, x, receipt_ns=lambda r: r.send_ns + s.commitment.limit_ns + 1 + x),
-    lambda s, x: _round(s, x, receipt_ns=lambda r: r.send_ns - 1 if r.send_ns else 0),
-    lambda s, x: _round(s, x, send_ns=lambda r: r.receipt_ns + 1),
-    lambda s, x: _round(s, x, send_ns=lambda r: 2 ** 64),
+    lambda s, x: _round(s, x, receipt=lambda r: _at(r.receipt, r.send.ns + s.commitment.limit_ns + 1 + x)),
+    lambda s, x: _round(s, x, receipt=lambda r: _at(r.receipt, r.send.ns - 1 if r.send.ns else 0)),
+    lambda s, x: _round(s, x, send=lambda r: _at(r.send, r.receipt.ns + 1)),
+    lambda s, x: _round(s, x, send=lambda r: _at(r.send, 2 ** 64)),
     lambda s, x: s.resign(rounds=s.signed.rounds + s.signed.rounds[-1:]),
     lambda s, x: s.resign(rounds=s.signed.rounds[:-1]),
     lambda s, x: s.resign(rounds=()),

@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 import torch
 from verity import hooks as H
+from verity.clock import Device
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -102,7 +103,7 @@ def _in_process_party(signer, log):
         def challenger():
             with b, b.makefile("rwb") as f:
                 return CP.serve(f, request, signer=signer, log=log, coins=coins, domain=period.SESSION_DOMAIN,
-                                clock=_ticks())
+                                clock=_ticks(), resolution_ns=1)
         with futures.ThreadPoolExecutor(1) as pool:
             served = pool.submit(challenger)
             try:
@@ -328,7 +329,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
     refused by the verifier's tie: both answers are rejects with the reason, never an exception or a retry."""
     signer = ts.TestSigner(b"pous-vllm", directory=tmp_path)
     run = dict(signer=signer, trusted=(signer.public_key,), schemes=ts.SCHEMES, protocol=TEST_PROTOCOL,
-               clock=iter(range(0, 10**12, 1_000)).__next__)
+               device=Device(signer.public_key.hex(), iter(range(0, 10**12, 1_000)).__next__, 1, 0))
     opt, _ = _held(toy)
     q, dropped = opt.store.params, opt.store.layout.placement("k.weight").offset // opt.store.params.payload_bytes
     honest = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), **run)

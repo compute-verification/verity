@@ -140,7 +140,7 @@ ROUNDS = st.lists(mostly(NARROW_ROUND, st.one_of(ROUND, malformed(NARROW_ROUND))
 
 
 def records_digest(v) -> str:
-    return mc.records_digest([M.round_of(r) for r in M.list_(v, "rounds")]).hex()
+    return mc.records_digest([M.round_of(r, "device") for r in M.list_(v, "rounds")]).hex()
 
 
 def test_records_digest(server):
@@ -172,7 +172,7 @@ def test_header(server):
 
 def message(v) -> str:
     return mc.message(M.commitment_of(M._get(v, "commitment")), M._str(v, "ended"),
-                      [M.round_of(r) for r in M.list_(v, "rounds")]).hex()
+                      [M.round_of(r, "device") for r in M.list_(v, "rounds")]).hex()
 
 
 def test_message(server):

@@ -71,6 +71,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from verity.clock import Device, Reading, raw_ns, raw_resolution_ns
 from verity.protocols.resource_accounting.memory.pous.attester.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
@@ -284,7 +285,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
         sig[len(sig) // 2] ^= 1
         r = signed.rounds[len(signed.rounds) // 2]
         rounds = list(signed.rounds)
-        rounds[r.j] = mc.Round(r.j, r.index, r.send_ns, r.receipt_ns - 1, r.digest)
+        rounds[r.j] = mc.Round(r.j, r.index, r.send, Reading(r.receipt.key, r.receipt.ns - 1), r.digest)
         bad = "the signature does not verify"
         out["sessions"] += 1
         out["unedited_accepted"] += reasons(signed) == ()
@@ -298,7 +299,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
 
 def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, audits: int, pings: int, k: int | None = None,
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
-          clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
+          clock: Callable[[], int] = raw_ns, strict: bool = True, signer: str = "test",
           lms_key: str | os.PathLike | None = None, keygen_workers: int = 1,
           sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None,
           seed: bytes | None = None) -> dict[str, Any]:
@@ -355,7 +356,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
                                              directory=scratch))
         key_load_s = (time.perf_counter_ns() - t0) / 1e9
         log = session_log(session_log_path or Path(scratch) / "sessions", new_key or session_log_path is None)
-        resolution = None if clock is time.perf_counter_ns else 1
+        device = Device(sig.public_key.hex(), clock, raw_resolution_ns() if clock is raw_ns else 1, 0)
         if cpu is not None:
             os.sched_setaffinity(0, {cpu})
         gc.collect()
@@ -366,7 +367,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         sessions = []
         drawn = [(os.urandom(32), os.urandom(32)) if seed is None else seeded_session(seed, j) for j in range(audits)]
         challengers = [mc.MemoryAttester(mc.CoinTree.draw(source, session, blocks, k), sig, log=log, limit_ns=limit,
-                                           block_bytes=nb, binding=binding, clock=clock, resolution_ns=resolution)
+                                           block_bytes=nb, binding=binding, device=device)
                        for source, session in drawn]
         try:
             before = calibrate(r, pings)
@@ -456,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(SEEDED_ONLY)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
-    clock = LogicalClock() if a.clock == "logical" else time.perf_counter_ns
+    clock = LogicalClock() if a.clock == "logical" else raw_ns
     deadline = a.deadline_ns or pous_audit.DEADLINE_NS
     if a.calibrate_only:
         doc = calibrate_only("127.0.0.1", ready["port"], params.block_bytes, pings=a.pings, cpu=a.verifier_cpu,

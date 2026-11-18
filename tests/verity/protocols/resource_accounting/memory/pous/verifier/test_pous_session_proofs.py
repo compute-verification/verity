@@ -12,6 +12,7 @@ import random
 
 import pytest
 
+from verity.clock import Reading
 from verity.commitments.crypto import lms as R
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import session as P
@@ -40,7 +41,7 @@ def _staged(k: int = K):
                             salts=[_rand(mc.HM96.salt_bytes) for _ in range(k)])
     c = mc.SessionCommitment(session, tree.root, tree.key, BLOCKS, k, 854_000, BLOCK, _rand(64))
     blocks = {i: _rand(BLOCK) for i in range(BLOCKS)}
-    rounds = [mc.Round(j, tree.indices[j], 10 * j, 10 * j + 5, mc.block_digest(blocks[tree.indices[j]])) for j in range(k)]
+    rounds = [mc.Round(j, tree.indices[j], Reading("device", 10 * j), Reading("device", 10 * j + 5), mc.block_digest(blocks[tree.indices[j]])) for j in range(k)]
     key = _rand(16 + 64)
     head = json.dumps({**c.header(), "ended": mc.COMPLETE, "rounds": k}, sort_keys=True, separators=(",", ":")).encode()
     m = R.memory_attester_message(key[:16], session, mc.message(c, mc.COMPLETE, rounds))

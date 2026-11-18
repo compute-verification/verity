@@ -68,8 +68,9 @@ runs no check at setup), as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.val
 session's record or the wipe's.  `setup_record_ok` checks one against a session's scheme, key and id.  The Lean
 `MemoryChallenger.SetupRecord` is the definition, held to these by difftest.
 
-Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
-refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
+Times are readings of the memory attester's device (`verity.clock.Device`), registered under its signing key in hex:
+each is stamped into the device's clock log (`verity.clock.stamp`), and a device whose clock ticks coarser than a
+microsecond is refused (`CLOCK_RESOLUTION_NS`).
 """
 
 from __future__ import annotations
@@ -81,7 +82,6 @@ import json
 import logging
 import os
 import re
-import time
 import tomllib
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -90,6 +90,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from verity.clock import Device, Log, Reading, elapsed, stamp
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.commitments.indexed import RangeIndexedDomain
@@ -259,33 +260,35 @@ class SessionCommitment:
 
 @dataclass(frozen=True, slots=True)
 class Round:
-    """One round's record: its index, the challenge's send time, the answer's receipt time and `block_digest` of the
-    whole answer as received."""
+    """One round's record: its index, the device's readings at the challenge's send and the answer's receipt, and
+    `block_digest` of the whole answer as received."""
 
     j: int
     index: int
-    send_ns: int
-    receipt_ns: int
+    send: Reading
+    receipt: Reading
     digest: bytes
 
     @property
     def elapsed_ns(self) -> int:
-        return self.receipt_ns - self.send_ns
+        return elapsed(self.send, self.receipt)
 
     def value(self) -> bytes:
         """The record's `RECORD_BYTES` bytes; a digest of another length is refused, so the stream splits one way."""
         if len(self.digest) != DIGEST_BYTES:
             raise ValueError(f"a round's digest is {DIGEST_BYTES} bytes")
-        return (self.j.to_bytes(4, "big") + self.index.to_bytes(8, "big") + self.send_ns.to_bytes(8, "big")
-                + self.receipt_ns.to_bytes(8, "big") + self.digest)
+        return (self.j.to_bytes(4, "big") + self.index.to_bytes(8, "big") + self.send.ns.to_bytes(8, "big")
+                + self.receipt.ns.to_bytes(8, "big") + self.digest)
 
     def to_json(self) -> dict[str, Any]:
-        return {"j": self.j, "index": self.index, "send_ns": self.send_ns, "receipt_ns": self.receipt_ns,
+        return {"j": self.j, "index": self.index, "send_ns": self.send.ns, "receipt_ns": self.receipt.ns,
                 "digest": self.digest.hex()}
 
     @classmethod
-    def from_json(cls, doc: Mapping[str, Any]) -> Round:
-        return cls(int(doc["j"]), int(doc["index"]), int(doc["send_ns"]), int(doc["receipt_ns"]), bytes.fromhex(doc["digest"]))
+    def from_json(cls, doc: Mapping[str, Any], key: str) -> Round:
+        """The record read back as readings of the device registered under `key`."""
+        return cls(int(doc["j"]), int(doc["index"]), Reading(key, int(doc["send_ns"])), Reading(key, int(doc["receipt_ns"])),
+                   bytes.fromhex(doc["digest"]))
 
 
 def records_digest(rounds: Sequence[Round]) -> bytes:
@@ -491,8 +494,8 @@ class SignedSession:
 
     @classmethod
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
-        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
-                   doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
+        rounds = tuple(Round.from_json(r, doc["public_key"]) for r in doc["rounds"])
+        return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], rounds, doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
 def _field(b: bytes) -> bytes:
@@ -751,37 +754,31 @@ def coin_key(raw: bytes) -> bytes:
     return HM96.check_key(bytes(out))
 
 
-def resolution_of(clock: Callable[[], int]) -> float:
-    """How finely `clock` ticks, in ns: the monotonic clock's resolution for `time.perf_counter_ns`, else 1 (an injected
-    clock's readings are taken as given)."""
-    return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
-
-
 class MemoryAttester:
     """One session of the memory attester over `coins`, judged against `limit_ns`, signed by `signer`, bound to
-    `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
+    `binding`, the setup's root of the `C*` it audits, on `device`, registered under `signer`'s key (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
     index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
     ends the session; `close()` signs it once, and only then are `commitment` and `openings()` released."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
-                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
+                 binding: bytes, device: Device) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
         if len(binding) != DIGEST_BYTES:
             raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
-        if resolution_ns is None:
-            resolution_ns = resolution_of(clock)
-        if resolution_ns > CLOCK_RESOLUTION_NS:
-            raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
+        if device.key != signer.public_key.hex():
+            raise ValueError(f"the device {device.key!r} is not the one registered under the signing key {signer.public_key.hex()!r}")
+        if device.resolution_ns > CLOCK_RESOLUTION_NS:
+            raise ValueError(f"the clock ticks every {device.resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         log.claim(coins.session)
-        self.coins, self.signer, self.clock = coins, signer, clock
+        self.coins, self.signer, self.device, self.clock_log = coins, signer, device, Log(device.key)
         self._commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
                                              block_bytes, binding)
         self.rounds: list[Round] = []
         self.ended: str | None = None
         self.signed: SignedSession | None = None
-        self._open: tuple[int, int, int] | None = None
+        self._open: tuple[int, int, Reading] | None = None
 
     @property
     def done(self) -> bool:
@@ -803,12 +800,12 @@ class MemoryAttester:
             raise RuntimeError("the previous round is unanswered")
         j = len(self.rounds)
         i = self.coins.indices[j]
-        self._open = (j, i, self.clock())
+        self._open = (j, i, stamp(self.device, self.clock_log, ("send", j)))
         return i
 
     def receive(self, block: bytes) -> Round:
         """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`."""
-        receipt = self.clock()
+        receipt = stamp(self.device, self.clock_log, ("receipt", len(self.rounds)))
         if self._open is None:
             raise RuntimeError("no round is open")
         if len(block) != self._commitment.block_bytes:
@@ -926,5 +923,5 @@ __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMP
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryAttester", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
-           "covering_certificate", "lms_verify", "message", "records_digest", "register", "resolution_of",
+           "covering_certificate", "lms_verify", "message", "records_digest", "register",
            "setup_record_message", "setup_record_ok", "sign_setup_record", "verdict", "verify_coin"]

@@ -30,6 +30,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 from verity_difftest import protocol as P
 
+from verity.clock import Reading
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
@@ -135,7 +136,7 @@ def _round(rng: random.Random, j: int, LIMIT: int, kind: str) -> tuple[bytes, by
     if kind in flip:
         h[flip[kind][0]] ^= 1 << flip[kind][1]
     rj = {"round": j ^ 1 << rng.randrange(32), "round-next": (j + 1) % (1 << 32)}.get(kind, j)
-    return mc.Round(rj, rng.randrange(1 << 64), send, receipt, bytes(h)).value(), e
+    return mc.Round(rj, rng.randrange(1 << 64), Reading("device", send), Reading("device", receipt), bytes(h)).value(), e
 
 
 def _instance(K: int, M: int, LIMIT: int, kinds, seed: int) -> dict:

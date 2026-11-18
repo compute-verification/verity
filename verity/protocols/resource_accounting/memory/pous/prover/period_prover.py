@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
@@ -148,14 +149,15 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
-          protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
+          protocol: str = PROTOCOL, prover: Prover = honest, device: Device | None = None,
           party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory attester's
     session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
     tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory attester is a party of
     its own (`challenger_party`): its side runs where `party` (a `challenger_session.Side`) starts it, with its own
     coins, key and session log, and the prover answers it over a socket in `session` (`challenger_prover.session`, which
-    the caller hands in); `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the side
+    the caller hands in); `signer`, `log` and `device` (the memory attester's `verity.clock.Device`, registered under
+    `signer`'s key) are unused, and the verifier's list is by default the key the side
     reports."""
     point, published = held.point, held.published
     q = point.params
@@ -163,7 +165,7 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
         session_id = challenger_session.coin_session_id(coins, SESSION_DOMAIN, node, published.root)
         tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
         challenger = mc.MemoryAttester(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
-                                         binding=published.root, clock=clock)
+                                         binding=published.root, device=device)
         signed = challenger.run(prover(held.blocks))
         session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
@@ -181,16 +183,16 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
 def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
-        clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
+        device: Device | None = None, workers: int = 1,
         party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory attester's live secret for the period, `signer` the memory attester's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
     signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
-    `pous_test_signer.SCHEMES`); `party` and `session` as for `audit`. A setup the verifier refuses raises `ValueError`,
+    `pous_test_signer.SCHEMES`); `device`, `party` and `session` as for `audit`. A setup the verifier refuses raises `ValueError`,
     since no run of it exists."""
     return audit(node, setup_store(store, coins, point, workers=workers), coins, signer=signer, log=log, trusted=trusted,
-                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party, session=session)
+                 schemes=schemes, protocol=protocol, prover=prover, device=device, party=party, session=session)
 
 
 LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")

@@ -14,6 +14,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.clock import Device
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -81,7 +82,7 @@ def _honest(spends=(1, 1, 1)) -> M.Session:
     tree = mc.CoinTree.draw(b"source", bytes(32), 8, 3, key=M.COIN_KEYS[0], salts=[bytes([j]) * 192 for j in range(3)])
     clock = M.Clock(1_000)
     c = mc.MemoryAttester(tree, signer, log=M.ts.session_log(), limit_ns=10, block_bytes=16, binding=M.SETUP_ROOTS[0],
-                            clock=clock)
+                            device=Device(signer.public_key.hex(), clock, 1, 0))
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
