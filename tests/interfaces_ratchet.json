@@ -35,7 +35,6 @@
   "calibration/pouw/sass_census/lowering.sh": 30,
   "calibration/pouw/theory/fold_min.py": 3,
   "calibration/pouw/theory/fold_routes.py": 5,
-  "calibration/sampling_plan/inputs.py": 3,
   "calibration/tc_probe_fp4/f8_sm100.sh": 1,
   "infra/control/top_watch.py": 1,
   "tools/research/src/research/pods/nebius/common.sh": 1,
