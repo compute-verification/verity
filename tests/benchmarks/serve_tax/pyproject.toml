@@ -134,6 +134,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # check (serve_tax.components): the served table and what it imports; the scheme plugin's table of schemes
     "tools/verity/cli/verity_cli/__init__.py",
     "tools/verity/cli/verity_cli/served_table.py",
+    # which takes `run`'s Start and the CLI's machine settings
+    "tools/verity/cli/verity_cli/run.py", "tools/verity/cli/verity_cli/settings.py",
     "verity/config.py",
     "verity/party.py",
     "verity/runtime",
