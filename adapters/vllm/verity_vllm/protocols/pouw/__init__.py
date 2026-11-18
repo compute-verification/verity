@@ -320,9 +320,9 @@ def linear_types() -> tuple[type, ...]:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[NcpCircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
-# without it fail its root check). Pearl-C's is sampled afresh by each `commit_weights` (so each install's W, and its salt
-# session, is its own); the others' once a process, one execution phase (`commit_weights`).
+# The prover's hm96 salt key per entry outside Pearl-C, whose install takes none: its weight trees' salts, read by `install`,
+# never in the record (published commitments without it fail its root check), once a process, one execution phase
+# (`commit_weights`).
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -427,9 +427,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PEARL_C_SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        key = _SALT_KEYS[entry] = pearl_c_salt_key(scheme)
         device_roots = pearl_c_weight_roots(PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -490,7 +489,7 @@ def install(scheme: str, target: Target) -> Option:
         if device:
             run = PearlCDeviceRun(s, entry, PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
+                                      schedule=settings.schedule, pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
         else:
             run = (NcpCircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
