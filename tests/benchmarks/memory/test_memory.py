@@ -1295,8 +1295,8 @@ def test_a_card_no_record_names_writes_the_share_and_no_pass_time_or_bare_read(s
     assert bench(store, "--local", run=Machine(card="NVIDIA H100 PCIe, 9.0", record=record)) == 0
     got = written(held)
     assert got[M.LOCAL_METRIC]["value"] == 0.199 and M.PASS_METRIC not in got and M.READ_METRIC not in got
-    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 card records under {M.CARD_FILES} have "
-            "'NVIDIA H100 PCIe', the card nvidia-smi names here, in `driver`") in printed(capsys)[2]
+    assert (f"memory: no {M.PASS_METRIC} or {M.READ_METRIC} point: 0 GPU card files under {M.CARD_FILES} have "
+            "'NVIDIA H100 PCIe', the name the device reports, in `driver`") in printed(capsys)[2]
 
 
 def test_a_local_record_with_no_calibration_writes_the_share_alone(store, work, monkeypatch, tmp_path):

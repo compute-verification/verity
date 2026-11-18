@@ -17,6 +17,10 @@ from verity_bench import overhead_node
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
 
+#: a launch's GPU node and card, which the door takes as given and never defaults
+NODE = "gpu-node-1"
+ON = ["--on", NODE, "--card", "h200"]
+
 SMALL, MEMBER = "llama3.2-1b", "llama-3.2-1b-h200"
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------
@@ -48,28 +52,28 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
         return 0
 
     monkeypatch.setattr(R, "_execute", execute)
-    assert main(["overhead", "points", "--card", "h200"]) == 0
-    assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only"]) == 0
-    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only"]) == 0
+    assert main(["overhead", "points", *ON]) == 0
+    assert main(["overhead", "run", "--scheme", "stock", "--point", "L", "--local-only", *ON]) == 0
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--local-only", *ON]) == 0
     (points, _), (run, sent), (armed, armed_sent) = launched
     assert job(armed, "60") == ["run", "--card", "h200", "--scheme", "pearl-plus", "--points", "points.json",
                                              "--points-art", art, "--point", "all", "--cubin", "arm.cubin",
                                              "--cubin-art", s.cubin]
     assert armed_sent == [Path(s.store.fetch(art)).read_bytes(), CUBIN]
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only"])
+        main(["overhead", "run", "--scheme", "stock", "--cubin", s.cubin, "--local-only", *ON])
     assert "stock has no arm to load it" in capsys.readouterr().err
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only"])
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", "art:" + "f" * 64, "--local-only", *ON])
     assert "isn't in the store" in capsys.readouterr().err
     (tmp_path / "cubins").mkdir()
     (tmp_path / "cubins" / "a.cubin").write_bytes(CUBIN)
     tree = s.store.put_artifact("cubin/v1", {}, tree=tmp_path / "cubins")
     with pytest.raises(SystemExit):
-        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only"])
+        main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", tree, "--local-only", *ON])
     assert "isn't one file" in capsys.readouterr().err
     for argv in (points, run):
-        assert argv[:4] == ["research", "run", "--on", "vy-spot-glm53"] and "--require-result" in argv
+        assert argv[:4] == ["research", "run", "--on", NODE] and "--require-result" in argv
         assert argv[argv.index("--cwd") + 1] == "source" and "--gpus" not in argv
     assert job(points, "150") == ["points", "--card", "h200", "--model", O.KERNEL_MODEL, "--precision", "fp8"]
     assert job(run, "60") == ["run", "--card", "h200", "--scheme", "stock", "--points", "points.json",
@@ -77,7 +81,10 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
     assert sent == [Path(s.store.fetch(art)).read_bytes()] and run[run.index("--timeout") + 1] == "60m"
     with pytest.raises(SystemExit):
         main(["overhead", "points", "--card", "rtx-pro-6000"])
-    assert "has no default node" in capsys.readouterr().err
+    assert "--on NODE --card CARD: a launch names its GPU node" in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        main(["overhead", "points", "--on", NODE])
+    assert "--on NODE --card CARD" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         main(["overhead", "run", "--card", "h200", "--local-only"])
     assert "--scheme S, or --record RUN" in capsys.readouterr().err
@@ -183,7 +190,7 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     launched = []
     monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    on = ["--on", "vy-spot-glm53", "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
+    on = [*ON, "--gpu", "6", "--cores", "72-95", "--model", SMALL, "--local-only"]
     assert main(["overhead", "points", *on]) == 0
     assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, *on]) == 0
     with pytest.raises(SystemExit):
@@ -220,7 +227,7 @@ def test_a_run_that_keeps_its_reports_goes_through_the_door_and_is_never_of_reco
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     launched = []
     monkeypatch.setattr(R, "_execute", lambda argv, root: launched.append(list(argv)) or 0)
-    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--keep-reports", "--local-only"]) == 0
+    assert main(["overhead", "run", "--scheme", "pearl-plus", "--cubin", s.cubin, "--keep-reports", "--local-only", *ON]) == 0
     (run,) = launched
     assert job(run, "60")[-1] == "--keep-reports"
     assert R.door_why({"argv": run[run.index("--") + 1:]}, "r", "run") is None

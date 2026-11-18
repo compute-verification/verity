@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
@@ -130,7 +131,8 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.ids and idp.ID_PAYLOAD == 512 - HEADER.size
+    declared = {n: f for s in declarations.load().values() for n, f in s.framings.items()}
+    assert declared["ids"] is idp.IdsProtocol and "ids" in proto.framings() and idp.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         idp.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
@@ -980,7 +982,7 @@ def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick", "--tick-sat-ms", "30", "--tick-free-ms", "40"))
+    why = so.no_slice(opts("--admit", "tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
     assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
     statics = served_statics()

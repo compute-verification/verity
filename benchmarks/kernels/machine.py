@@ -1,10 +1,11 @@
-"""machine.py toolkit VERSION | arch [NAME] | sku NAME | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
+"""machine.py toolkit [VERSION] | arch [NAME] | sku NAME | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
 printed for a shell script, or refused by name before the script takes a card.
 
     toolkit VERSION  `kit.toolkit`: $CUDA_HOME where it is set and not another version, else the directory the run's
                      machine's `[properties]` list at that version (the copy `research run --on` puts in
                      $RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml).
                      Exit 3 where the properties are read and list no toolkit at that version.
+    toolkit          `kit.machine_toolkit`: the toolkit the run's machine's `[properties]` list first.
     arch NAME        `kit.card_arch`: the `arch` of the card record whose `driver` holds NAME, the name nvidia-smi reports.
     arch             `kit.machine_arch`: the `arch` of the run's machine's card, with no card needed.
     sku NAME         `kit.card_sku`: the `sku` of the card record whose `driver` holds NAME.
@@ -29,6 +30,8 @@ def main(argv: list[str]) -> int:
             except kit.NotListed as e:
                 print(f"machine.py: {e}", file=sys.stderr)
                 return NOT_LISTED
+        case ["toolkit"]:
+            print(kit.machine_toolkit())
         case ["arch", name]:
             print(kit.card_arch(name))
         case ["arch"]:

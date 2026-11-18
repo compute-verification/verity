@@ -2,9 +2,11 @@
 replay block's steps to its far edge, and say how close the replay came.
 
     restore.py --arm-dir OUT/restore [--from-edge 0] [--to-edge 1] [--kv-dir DIR] [--checkpoint DIR] [--eager] --out DIR
+        --private DIR
 
 The served arm took the boundary state at each edge (`servetax_plugin.edges_of`, module `boundary`): the KV pool's bytes
-(``--kv-dir``/edge-K.kv) and root, and the scheduler's, block pool's and model runner's state (edges/edge-K.state.pkl).
+(``--kv-dir``/edge-K.kv) and root, and the scheduler's, block pool's and model runner's state (edge-K.state.pkl, under
+its private directory's server/edges/ unless ``--kv-dir`` names another).
 This builds the served engine again in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the step trace's header
 (the scheduler's settings, and the KV cache's format and the speculative decoding where it holds them:
 `replay.HEADER_ARGS`), with the served server's stats setting, loads the KV bytes into the same block ids, puts the state back
@@ -16,7 +18,8 @@ state again once it has scheduled as many steps as the served engine had at the 
 restore.json compares, from edge to edge: the schedule step by step (the step trace's records), every sampled token and
 its logprob's bits step by step, and at the far edge the KV root, each block's fingerprint, the block pool and every
 dumped leaf; and times the engine's build, the KV load, the state's restore and the replay, with the GPU's busy seconds
-of the replay beside serving's over the same steps.
+of the replay beside serving's over the same steps. The replay's step records, its outputs and its far edge's dump, which
+hold request values, are kept in ``--private``, on the node.
 """
 from __future__ import annotations
 
@@ -54,7 +57,7 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
     if a not in edges or b not in edges:
         raise SystemExit(f"{srv}: edges {sorted(edges)}, not {a} and {b}")
     st = {k: pickle.loads((kv_dir / f"edge-{k}.state.pkl").read_bytes()) for k in (a, b)}
-    dumps = {k: json.loads((srv / "edges" / f"edge-{k}.dump.json").read_text()) for k in (a, b)}
+    dumps = {k: json.loads((edges_of(arm_dir) / f"edge-{k}.dump.json").read_text()) for k in (a, b)}
     lo, hi = edges[a]["next_step"], edges[b]["next_step"]
     (trace,) = S.step_traces(arm_dir)
     tr = S.trace_records(trace)
@@ -81,6 +84,15 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
         outs |= {o["step"]: o["out"] for o in S.trace_records(f) if lo <= o["step"] < hi}
     return {"edges": edges, "files": files, "state": st, "dumps": dumps, "lo": lo, "hi": hi, "header": tr[0],
             "arrive": arrive, "steps": steps, "outputs": outs}
+
+
+def edges_of(arm_dir: Path) -> Path:
+    """Where the served arm kept its edges' dumps, fingerprints and, by default, states: its private directory's
+    server/edges/ (`serve_tax.private_of`)."""
+    kept = S.private_of(arm_dir)
+    if kept is None:
+        raise SystemExit(f"{arm_dir} names no private directory, where its edges' dumps and states are kept")
+    return kept / "server" / "edges"
 
 
 def engine(checkpoint: Path, header: dict, eager: bool, log_stats: bool) -> Any:
@@ -175,7 +187,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.engine.step_trace import StepTrace
 
     meta = json.loads((a.arm_dir / "meta.json").read_text())
-    kv_dir = Path(a.kv_dir or (meta.get("edges") or {}).get("kv_dir") or a.arm_dir / "server" / "edges")
+    kv_dir = Path(a.kv_dir or (meta.get("edges") or {}).get("kv_dir") or edges_of(a.arm_dir))
     w = served(a.arm_dir, kv_dir, a.from_edge, a.to_edge)
     st0 = w["state"][a.from_edge]
     kv_file = kv_dir / f"edge-{a.from_edge}.kv"
@@ -271,7 +283,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     served_steps_s = srv_edge["since_last"].get("busy_steps_s")
     out["busy_by_step"] = B.busy_compare(served_steps_s, busy.steps(w["lo"], w["hi"])) if served_steps_s else None
     steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and w["lo"] <= r["step"] < w["hi"]}
-    fp_served = np.load(a.arm_dir / "server" / "edges" / f"edge-{a.to_edge}.fp.npy")
+    fp_served = np.load(edges_of(a.arm_dir) / f"edge-{a.to_edge}.fp.npy")
     out |= {"schedule": step_diff(w["steps"], steps), "outputs": B.outputs_diff(w["outputs"], outs),
             "far_edge": {"kv_root_equal": taken["kv"]["root"] == w["state"][a.to_edge]["kv"]["root"],
                          "kv_fingerprints": fingerprint_diff(fp_served, taken["kv"]["fingerprint"]),
@@ -283,11 +295,12 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                         and out["schedule"]["steps_differing"] == 0 and out["outputs"]["first"] is None
                         and far["kv_root_equal"] and not far["pool"] and far["dump"]["clean"])
     hooks.uninstall()
-    (a.out / f"replay-edge-{a.to_edge}.dump.json").write_text(json.dumps(taken["dump"]))
-    with open(a.out / "replay_outputs.jsonl", "w") as f:
+    a.private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    replay._kept(a.private, f"replay-edge-{a.to_edge}.dump.json").write_text(json.dumps(taken["dump"]))
+    with open(replay._kept(a.private, "replay_outputs.jsonl"), "w") as f:
         for s in sorted(outs):
             f.write(json.dumps({"step": s, "out": outs[s]}, separators=(",", ":")) + "\n")
-    with open(a.out / "replay_steps.jsonl", "w") as f:
+    with open(replay._kept(a.private, "replay_steps.jsonl"), "w") as f:
         for s in sorted(steps):
             f.write(json.dumps(steps[s], separators=(",", ":")) + "\n")
     return out | {"replay_block": {"from_edge": a.from_edge, "to_edge": a.to_edge, "from_step": w["lo"], "to_step": w["hi"],
@@ -299,20 +312,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--arm-dir", type=Path, required=True)
     ap.add_argument("--from-edge", type=int, default=0)
     ap.add_argument("--to-edge", type=int, default=1)
-    ap.add_argument("--kv-dir", type=Path, help="where the served arm wrote the KV pool's bytes (default: its edges/)")
+    ap.add_argument("--kv-dir", type=Path, help="where the served arm wrote the KV pool's bytes (default: its private "
+                    "directory's server/edges/)")
     ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--eager", action="store_true")
     ap.add_argument("--warm", type=int, default=0, metavar="N",
                     help="serve the replay block's first N arrivals, under other ids, before the restore (`warm`)")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--private", type=Path, required=True,
+                    help="where the replay's step records, outputs and far edge's dump are kept, on the node and outside "
+                         "every run's directory")
     a = ap.parse_args(argv)
+    a.private = S.outside(a.private.resolve(), a.out)
+    if a.kv_dir:
+        S.outside(a.kv_dir, a.out, "--kv-dir")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
     a.out.mkdir(parents=True, exist_ok=True)
     got = run(a)
     rec = {"schema": "verity-bench/serve-tax/restore/v0", "arm_dir": str(a.arm_dir), "run_id": SHARED.RESEARCH_RUN_ID,
-           "mode": "eager" if a.eager else "compiled", **got}
+           "mode": "eager" if a.eager else "compiled", "private": str(a.private), **got}
     (a.out / "restore.json").write_text(json.dumps(rec, indent=1, default=str))
     print(json.dumps({k: rec.get(k) for k in ("bit_exact", "restore_s", "kv_load_s", "state_restore_s", "replay_wall_s",
                                                "replay_busy_s", "served_busy_s")} |

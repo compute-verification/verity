@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from tests import fake_vllm
+from verity_vllm import messages
 from verity_vllm.engine import build
 from verity_vllm.engine import engine_profile as prof
 
@@ -328,8 +329,13 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
     fake = fake_vllm.install(monkeypatch)
     fake.set("vllm:LLM", _LLM)
     fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
+    messages.close()
+    messages.build().attach(NS(name="pearl", settings={"coins": ""}, check_settings=lambda s: None, attach=lambda ex, ctx: None, requests=lambda ctx: ()),
+                            {"coins": "live"})
     with caplog.at_level(logging.INFO, logger="verity_vllm"):
         eng = build.build_engine(checkpoints, case="M", execution="eager")
+    messages.close()
+    assert (eng.exchange.declared.schemes, eng.exchange.declared.settings) == (("pearl",), {"pearl": {"coins": "live"}})
     assert eng.model is model and given == [("rope_cache", model), ("int8_producers", model)]
     assert (eng.rope_cache, eng.fused_producers) == (rope, producers)
     want = [(logging.INFO, f"{name}: {json.dumps(record)}") for name, record in (("VERITY_ROPE_CACHE_FUSED", rope),

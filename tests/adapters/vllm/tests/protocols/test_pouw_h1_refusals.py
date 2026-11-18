@@ -308,7 +308,7 @@ def test_an_admission_off_the_list_a_slot_leaf_of_another_width_and_a_round_past
 def test_a_table_of_no_rows_is_cores_empty_tree():
     """`hiding_rows` of no values is `audit.commit_rows` of none: the domain's empty root over a count of 0."""
     got = RQ.hiding_rows(SALT, 5, [], KEY, 9)
-    assert got.commitment == commit_rows(SALT, 5, [], hash=HM96, salt_key=KEY, nonce=9).commitment
+    assert got.commitment == commit_rows(SALT, 5, [], hash=HM96, salts=[]).commitment
     assert got.commitment.count == 0
 
 

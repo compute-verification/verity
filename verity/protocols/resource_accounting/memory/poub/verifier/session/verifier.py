@@ -47,8 +47,7 @@ registration after its last session, counting each session (a failed one by its 
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
 
-The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
-payload tree's leaves under it (`store.store_salt`). The verifier holds no checkpoint: what the store holds is the
+The payload's salts are the prover's, and an opening carries the opened block's. The verifier holds no checkpoint: what the store holds is the
 developer's choice, and a hello's layout is the regions it declares (`regions_of`).
 
 The verdicts are the Lean verifier's, the process `poub-verifier` (`lean_verifier.py`): it holds
@@ -123,7 +122,6 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
 from verity.protocols.resource_accounting.memory.poub.verifier.session.checks import Checks
@@ -987,7 +985,7 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
-                 appends: int | None = None, payload_key: bytes | None = None, groups_per_coin: int = 1,
+                 appends: int | None = None, groups_per_coin: int = 1,
                  node: ledger.Node | None = None) -> None:
         coins.openings_coins(1, groups_per_coin)
         if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
@@ -998,7 +996,6 @@ class Verifier:
         self.node = node
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
-        self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.figures = figures
@@ -1072,14 +1069,13 @@ class Verifier:
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
-        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, sampled through
+        """The hello's registration, sampled through
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
         covers none of: ValueError), all before the registry samples anything. Both registries sample it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
-        self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
         hello, _, _ = self.expect("hello")
         try:
             self.regions = regions_of(hello.get("layout"), hello["blocks"])

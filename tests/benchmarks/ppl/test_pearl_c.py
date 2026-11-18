@@ -153,5 +153,5 @@ def test_a_card_no_card_record_holds_is_no_point(tmp_path, capsys, stamped):
     p = tmp_path / "results.json"
     p.write_text(json.dumps(r))
     assert run.main(["metrics", str(p), "--out", str(tmp_path / "out")]) == 1
-    assert "'NVIDIA H200 NVL', the card nvidia-smi names here" in capsys.readouterr().err
+    assert "'NVIDIA H200 NVL', the name the device reports" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()

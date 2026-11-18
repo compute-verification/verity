@@ -8,6 +8,7 @@ beside it, and the two must agree at every event, window verdict and record fiel
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import os
 import random
@@ -882,12 +883,12 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     n, last = r["windows"], [roots[k * g + k - 1] for g in range(r["windows"])]
     window = asked[0][0][2]
     if k == 1:
-        assert asked == ([[("challenge", 0, window)], [("challenge", 1, window)]]
-                         + [[("openings", g, last[g]), ("challenge", g + 2, last[g])] for g in range(n - 2)]
-                         + [[("openings", g, last[g])] for g in (n - 2, n - 1)])
+        assert asked == ([[("poub/challenge", 0, window)], [("poub/challenge", 1, window)]]
+                         + [[("poub/openings", g, last[g]), ("poub/challenge", g + 2, last[g])] for g in range(n - 2)]
+                         + [[("poub/openings", g, last[g])] for g in (n - 2, n - 1)])
     else:
         assert all(len(b) == 1 for b in asked) and len(asked) == 2 * n
-        assert [b[0][2] for b in asked if b[0][0] == "openings"] == last
+        assert [b[0][2] for b in asked if b[0][0] == "poub/openings"] == last
     with replay.server() as s:
         row = replay.replay(case, s)
     assert row["agree"] and row["lean"]["outcome"] == "accepted" and row["lean"]["refused"] == 0, row
@@ -911,8 +912,8 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     def log(late: int, named: bool) -> list[str]:
         lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
         for g in range(n):
-            for label, after, at in (("challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
-                                     ("openings", f"{g:0128x}", A[g] + late)):
+            for label, after, at in (("poub/challenge", f"{g - 2:0128x}" if named and g >= 2 else "f" * 128, R[g] - 1),
+                                     ("poub/openings", f"{g:0128x}", A[g] + late)):
                 lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after,
                                          "received_at": at + 100}))
                 lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
@@ -926,14 +927,14 @@ def test_the_auditor_line_reads_each_groups_coin_and_last_root_off_the_challenge
     shifted, how = al.auditor_seen(log(0, False), seen)
     assert [w["released_ns"] for w in shifted] == [x + 100 for x in R]
     assert [w["arrivals_ns"] for w in shifted] == [[x + 100] for x in A]
-    assert how == {"last_root_first_named_by": {"openings": n}}
+    assert how == {"last_root_first_named_by": {"poub/openings": n}}
     assert al.group_l(shifted) == al.group_l(seen) and lmax({**r, "windows_seen": shifted}) == lmax(r)
     late, _ = al.auditor_seen(log(3, False), seen)
     assert al.group_l(late) == [max(A[g] + 103, R[g + 1] + 100) - R[g] - 100 for g in range(n - 1)]
     named, how = al.auditor_seen(log(3, True), seen)
     assert [w["arrivals_ns"] for w in named] == ([[R[g + 2] + 99] for g in range(n - 2)]
                                                  + [[A[g] + 103] for g in (n - 2, n - 1)])
-    assert how == {"last_root_first_named_by": {"challenge": n - 2, "openings": 2}}
+    assert how == {"last_root_first_named_by": {"poub/challenge": n - 2, "poub/openings": 2}}
     with pytest.raises(ValueError, match="not one of each for each of"):
         al.auditor_seen(log(0, False)[:-4], seen)
 
@@ -1022,14 +1023,14 @@ def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     seen = [{"released_ns": 1000 * g + 1000, "arrivals_ns": [1000 * g + 2500]} for g in range(n)]
     lines = [json.dumps({"event": "commitment", "root": "0" * 128})]
     for g in range(n):
-        for label, after, at in (("challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
-                                 ("openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
+        for label, after, at in (("poub/challenge", X if g == 3 else f"{2 * g:0128x}", 1000 * g + 999),
+                                 ("poub/openings", {2: X, 4: Y, 1: Y}.get(g, f"{2 * g + 1:0128x}"), 1000 * g + 2500)):
             lines.append(json.dumps({"event": "root", "label": label, "index": g, "root": after, "received_at": at}))
             lines.append(json.dumps({"event": "release", "label": label, "index": g, "after": after,
                                      "released_at": at + 1}))
     got, how = al.auditor_seen(lines, seen)
     assert [w["arrivals_ns"] for w in got] == [[1000 * g + 2500] for g in range(n)]
-    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"openings": n}}
+    assert al.group_l(got) == [1500] * (n - 1) and how == {"last_root_first_named_by": {"poub/openings": n}}
 
 
 def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
@@ -1758,3 +1759,14 @@ def test_a_session_started_naming_no_node_is_refused_before_it_connects(module, 
     with pytest.raises(SystemExit) as e:
         __import__(module).main()
     assert e.value.code == 2 and "--node" in capsys.readouterr().err.splitlines()[-1]
+
+
+def test_a_seeds_served_load_does_not_move_with_the_salts():
+    """The first served writes under the prover's default seed (20261013) are `main`'s at 98e9c1de7be byte for byte:
+    the salts left the seeded stream, the load stays on it."""
+    reg = audit.register(os.urandom(32), b"test-node", 16, bytes(64), P512)
+    trace = prover.ServingTrace(prover.CpuBackend(16, random.Random(7)), reg, 2, 8, random.Random(20261013), 2)
+    got = [hashlib.sha512(m).hexdigest()[:32] for s in range(3) for _, m in trace.serve(s)[1]]
+    assert got == ["4d1ac9aebff5010963103b41d86c15ba", "947b98c093a5f0fded379c3490c7e71a",
+                   "d67ab9e9a09082206df3f643f074208a", "d55e50e17f3d523f7b365d05b2b2ff16",
+                   "a5f0cf00de38823f0172319e380a331a", "b989405d492a73fa4a1d3ecd27862df2"]

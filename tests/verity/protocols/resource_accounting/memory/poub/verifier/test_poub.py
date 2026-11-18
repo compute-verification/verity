@@ -734,7 +734,7 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     assert coins.coin_reason(c.commitment, first, coins.CHALLENGE, 0) is None
     assert coins.coin(first) == s.windows[0].challenge
     assert (coins.coin_reason(c.commitment, first, coins.CHALLENGE, 1)
-            == "coin is the epoch's challenge coin 0, not its challenge coin 1")
+            == "coin is the epoch's poub/challenge coin 0, not its poub/challenge coin 1")
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
     assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
             == "coin does not open against the epoch's coin commitment")
