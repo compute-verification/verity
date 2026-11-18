@@ -2,8 +2,8 @@
 
 The data sheets of the hardware Verity accounts for, and nothing else: TOML, no code. Each GPU, host, server model
 and time base has one card in `cards/`, the one source of that card's numbers. Each kind of node, a host and the GPUs
-it carries, has one file in `nodes/`: what a node's registration states that no card does. The Site's module,
-`verity.device`, reads both.
+it carries, has one file in `nodes/`: what a node's registration states that no card does. Each target a GPU card's
+`arch` names has one file in `architectures/`. The Site's module, `verity.device`, reads all three.
 
 ## Try it
 
@@ -32,6 +32,7 @@ In `uv run python` from a clone, each line gives what its comment shows. A numbe
 | SKU | kind | file |
 |---|---|---|
 | RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `calibration/hardware/cards/rtx-pro-6000-server.toml` |
+| H100 SXM 80 GB (no board read) | gpu | `calibration/hardware/cards/h100-sxm-80gb.toml` |
 | H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `calibration/hardware/cards/h200-sxm-141gb.toml` |
 | B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `calibration/hardware/cards/b200-sxm-180gb.toml` |
 | Two Xeon 6776P, the RTX node's host | host | `calibration/hardware/cards/xeon-6776p-2s.toml` |
@@ -49,6 +50,20 @@ kind too: what the shipped firmware gives a program, under the board's `store.dr
 while it is the declared board and vBIOS, which the named assumptions `accounting-declared-device` and
 `accounting-sheet-clock` state and no mark does. A host card's `store.l2`, `l1d` and `l1i` are
 likewise its guest's CPUID.
+
+A GPU card's `driver` lists the product strings a driver reports for it, so the harness kit (`verity_bench.kit`'s
+`card_sku`, `card_short`, `card_arch`) finds the one card a device's reported name is; it refuses a name no card or two
+cards hold.
+
+## The architecture files
+
+`architectures/<name>.toml` is the machine code's side of a GPU, shared by every card whose `arch` is `name`: its
+compute capability, its virtual architecture, and its toolkit gates (`[[toolkit]]`), each a CUDA toolkit that builds
+for the target, its PTX ISA, and `driver_min`, the oldest driver that toolkit's release notes require. A build target,
+a machine-code gate's table and a check of a device's capability or driver read it with
+`load_architecture(name, directory=...)`; a card's figures stay in the card, even where two cards of one architecture
+state the same number. Its values are versions, strings beside one `source`, so they carry no `mark`. Every GPU card's
+`arch` names a file here, and each file is named by a card.
 
 ## The node files
 

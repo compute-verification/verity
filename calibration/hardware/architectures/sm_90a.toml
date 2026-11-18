@@ -1,0 +1,14 @@
+# sm_90a, the architecture-specific target of compute capability 9.0 (Hopper): what selects machine code for the cards
+# whose `arch` names it, and nothing of any card (calibration/hardware/README.md). Each toolkit gate is a CUDA toolkit
+# that builds for the target and the oldest driver its release notes require.
+
+name = "sm_90a"
+capability = "9.0"
+virtual = "compute_90a"
+source = "NVCC documentation (CUDA 13.5), section 5.2 'GPU Feature List': 'GPUs are named sm_xy, where x denotes the major compute capability, and y the minor compute capability', 'sm_90, sm_90a: Hopper support'; section 4.2.7.1 --gpu-architecture: '-arch=sm_90a' is '--gpu-architecture=compute_90a --gpu-code=sm_90a,compute_90,compute_90a'"
+
+[[toolkit]]
+version = "12.0"
+ptx_isa = "8.0"
+driver_min = "525.60.13"
+source = "PTX ISA 9.5, Table 73 'PTX Release History': PTX ISA 8.0, 'CUDA 12.0, driver r525', the first row whose targets list sm_90a (PTX ISA 7.8, CUDA 11.8, lists sm_90 alone); CUDA Toolkit 13.5 Release Notes, Table 4 'Corresponding Driver Versions (CUDA 12.9 and earlier)': 'CUDA 12.0 GA', Linux x86_64 '>=525.60.13'"
