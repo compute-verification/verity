@@ -60,11 +60,12 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     got, held = stand_in
     ex, cfg = messages.Exchange(), vllm_config()
     assert SP.attach(ex, cfg, *SP.config(ENV)) == [held]
-    assert got == [(ex, {"process": H.ENGINE, "feed": FEED, "config": {"k": 1}})]
+    assert got == [(ex, {"process": H.ENGINE, "feed": FEED, "settings": {"k": 1}})]
     assert cfg.cache_config.num_gpu_blocks_override == 64
     assert ex.declared.properties == {"model": "m", "execution": None, "eager": True, "world": 1, "dtype": "bfloat16",
                                       "quantization": None, "prefix_cache": False, "kernels": "profile",
                                       "async_steps": False}
+    assert (ex.declared.schemes, ex.declared.settings) == (("stand-in",), {"stand-in": {"k": 1}})
     with pytest.raises(NotImplementedError, match="vllm/scheme-on-in-vllm-server: schemes inside vLLM's server on one GPU"):
         SP.attach(messages.Exchange(), vllm_config(tp=2), *SP.config(ENV))
 

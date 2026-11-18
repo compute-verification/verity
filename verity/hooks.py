@@ -17,8 +17,8 @@ HOOKS = ("declared", "steps", "values", "blocks", "memory")
 #: ``ctx["process"]`` of a scheme's ``attach(exchange, ctx)`` where the workload's front and its engine run in two
 #: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, `RefuseInput`),
 #: ENGINE steps it (the gates and every other hook). Without the key one process does both. ``ctx["feed"]`` is then
-#: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["config"]`` is the
-#: scheme's configuration.
+#: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["settings"]`` are the
+#: scheme's settings (`Declared.settings`).
 FRONT, ENGINE = "front", "engine"
 
 type Handle = object

@@ -14,7 +14,7 @@ set, and the engine's side acts only in a process that builds an engine core.
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity import hooks as H
@@ -29,7 +29,8 @@ _PLUGIN: list[Any] = []
 
 
 def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[str, Any]]:
-    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name); no names,
+    """``VERITY_PROTOCOLS``'s names and ``VERITY_PROTOCOLS_CONFIG``'s object (``feed`` required with a name, and each
+    scheme's settings under its name); no names,
     nothing."""
     names = [n for n in settings.get("VERITY_PROTOCOLS", environ) if n]
     if not names:
@@ -43,13 +44,15 @@ def config(environ: Mapping[str, str] | None = None) -> tuple[list[str], dict[st
 
 def context(process: str, name: str, cfg: Mapping[str, Any]) -> dict[str, Any]:
     """Scheme ``name``'s ``ctx`` in ``process`` (`hooks.FRONT`)."""
-    return {"process": process, "feed": cfg["feed"], "config": dict(cfg.get(name) or {})}
+    return {"process": process, "feed": cfg["feed"], "settings": dict(cfg.get(name) or {})}
 
 
-def declared(vllm_config: Any) -> H.Declared:
-    """What vLLM's configuration declares, the properties `engine.build.build_engine` declares of its own engine."""
+def declared(vllm_config: Any, names: Sequence[str] = (), cfg: Mapping[str, Any] | None = None) -> H.Declared:
+    """What vLLM's configuration declares, the properties `engine.build.build_engine` declares of its own engine, with
+    the schemes ``names`` and their settings in ``cfg``."""
     from verity_vllm.engine import served
 
+    cfg = cfg or {}
     mc, pc = vllm_config.model_config, vllm_config.parallel_config
     return H.Declared("", {
         "model": mc.model, "execution": None, "eager": bool(mc.enforce_eager),
@@ -57,7 +60,8 @@ def declared(vllm_config: Any) -> H.Declared:
         "dtype": str(mc.dtype).removeprefix("torch."), "quantization": mc.quantization,
         "prefix_cache": bool(vllm_config.cache_config.enable_prefix_caching),
         "kernels": served.kernels({"quantization": mc.quantization}),
-        "async_steps": bool(getattr(vllm_config.scheduler_config, "async_scheduling", False))})
+        "async_steps": bool(getattr(vllm_config.scheduler_config, "async_scheduling", False))},
+        tuple(names), {n: dict(cfg.get(n) or {}) for n in names})
 
 
 def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg: Mapping[str, Any]) -> list[Any]:
@@ -74,7 +78,7 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
         if len(fixed) > 1:
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks: one size")
         vllm_config.cache_config.num_gpu_blocks_override = fixed[0]
-    exchange.answer(declared(vllm_config))
+    exchange.answer(declared(vllm_config, names, cfg))
     return got
 
 
