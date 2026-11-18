@@ -45,7 +45,7 @@ namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
 open FlockSoundness.Discharge.Recursion FlockSoundness.Discharge.PlaysCoin FlockSoundness.Refine
-open FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 
 local notation "𝔽" => FlockLevel3.GF128

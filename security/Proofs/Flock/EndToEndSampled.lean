@@ -30,7 +30,7 @@ last term in closed form:
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **Flock's one-stage audit, end to end, at the sampled proof blocks.** -/
 theorem EndToEndSampled : Flock.Guarantees.EndToEndSampled := by

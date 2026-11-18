@@ -31,13 +31,13 @@ its interior values.
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit Claims.Sampling
+open Spot.Sampling Claims.Sampling
 
 /-! ## The openings at a unit's values -/
 
 section Reveal
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n)
   (κ : Fin C.N → Option Bool) (roots : List Claims.Msg) (u : Fin n) (Xu : Fin C.N → Bool)
   (dat : Fin C.N → Claims.Msg)
 

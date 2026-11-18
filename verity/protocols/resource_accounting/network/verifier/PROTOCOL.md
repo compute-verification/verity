@@ -1064,7 +1064,7 @@ The notation is for one audit of W execution phases:
 
 and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
 of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + ε_bind + δ_in is the error of
-`audit_influence` (`security/Proofs/Flock/Soundness/Audit/Influence.lean`).
+`audit_influence` (`security/Proofs/Spot/Sampling/Influence.lean`).
 
 **Why it holds.**
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of

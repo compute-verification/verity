@@ -46,7 +46,7 @@ and the unit a rep reads at (`hun`).
 namespace FlockC3.Reps.RoundReads
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockVBridge.Compiled FlockC3.PubRows
 open FlockC3.Compose
 open FlockC3.Reps (OwnHas MsgNamesAt AcceptedAt roundRead_opening wRoundRead_inner msgNamesAt_of_accepted)

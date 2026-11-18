@@ -170,7 +170,7 @@ port, are what makes a verifier proven. All protocols share one Lake package for
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
   `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. SPOT's `audit_profile`
-  (`Proofs/Flock/Soundness/Audit/OneStage.lean`) is one such result.
+  (`Proofs/Spot/Sampling/OneStage.lean`) is one such result.
 - Each protocol adds its root and its `[[require]]` to that one lakefile.
 
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'

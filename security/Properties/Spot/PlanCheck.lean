@@ -1,14 +1,14 @@
 module
 
 public import Spot.PlanCheck
-public import Definitions.Flock.Audit.Partitioning
+public import Definitions.Spot.Sampling.Partitioning
 
 /-!
 # The planner's checker: what its acceptance means (`Spot.PlanCheck`)
 
 The planner (`optimize.py`) picks a one-stage design in floating point; `Spot.PlanCheck` checks it in exact
 arithmetic. These properties say what a check that passes establishes, against the partitioning targets
-(`Definitions.Flock.Audit.Partitioning`) that `audit_exfiltration` and the free-compute guarantees read:
+(`Definitions.Spot.Sampling.Partitioning`) that `audit_exfiltration` and the free-compute guarantees read:
 
 * `LeakCheckSound`: when `leakBound d` returns `v`, sampling the design's `units` units independently with probability
   `num / den` (`SamplingDesign.bernoulli`) certifies at most `v` bits at `delta`, every unit exporting at most `width` bits
@@ -29,7 +29,7 @@ window's rule; the count a served window's rule names over its population is `Ru
 
 namespace Properties.Spot
 
-open FlockSoundness.Audit FlockSoundness.Audit.Partitioning
+open Spot.Sampling Spot.Sampling.Partitioning
 open _root_.Spot.PlanCheck (Leak Rate Work leakBound checkWork)
 
 /-- **The leak check is sound**: a design `leakBound` certifies at `v` bits has `den = k + 1` for some `k`, and its

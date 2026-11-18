@@ -92,7 +92,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "resource_accounting.network.verifier.arith_encode", "resource_accounting.network.verifier.charge_chain",
         ),
         "verity_vllm/compiler/compile_slice_v7.py": ("resource_accounting.network.verifier.charge_chain",),
-        "verity_vllm/protocols/poub/binder.py": ("resource_accounting.memory.poub.verifier.audit.Tiles",),
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),

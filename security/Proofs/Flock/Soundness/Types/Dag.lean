@@ -2,7 +2,7 @@ module
 
 public import Flock.DeriveCheck
 public import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Spot.Sampling.Circuit
 import Std.Data.HashSet.Lemmas
 
 /-!
@@ -35,7 +35,7 @@ spell.
 
 namespace FlockSoundness.Types.Dag
 
-open Flock Flock.DeriveAll Audit
+open Flock Flock.DeriveAll Spot.Sampling
 
 /-- Rows given as a function of the column, satisfied by column values `z`. -/
 def SatAt (R : ℕ → Option (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=

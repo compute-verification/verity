@@ -189,46 +189,6 @@
    "digest": "78c6fa47f0dc063e9c9ab51977f4550acf9a218d2181c903eeaf26274823277a",
    "why": "A masked session in scope (`Complete_meets_zk`)."
   },
-  "FlockSoundness.Audit.Adaptive.Play.Drawn": {
-   "owner": "@proofs",
-   "digest": "ef816d57f09f96e5d85fa30756f436a6d89a4e07a85a32199d367a146c74c52d",
-   "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
-  },
-  "FlockSoundness.Audit.Adaptive.Play.SamplingDesigns": {
-   "owner": "@proofs",
-   "digest": "d442a98000fa03cede434ca998ac30723ee7f4d8c5e2e475199fec2c651db86e",
-   "why": "Each round's sampling design meets the design `S`."
-  },
-  "FlockSoundness.Audit.Analysis.BindSound": {
-   "owner": "@proofs",
-   "digest": "c269a653ad6ea5812fad6ed356e4c0166f66b287c808ba6db3f68c414f6b526a",
-   "why": "ε_bind of the layer below, as `KnowledgeSound`."
-  },
-  "FlockSoundness.Audit.Analysis.KnowledgeSound": {
-   "owner": "@proofs",
-   "digest": "ffd6d9c69fa5b115d0ebe345985f2901be0129e84c7648e233667c7985bc6ff3",
-   "why": "ε_ks of the layer below: the audit's lemmas are proved over it, as the modular rule says."
-  },
-  "FlockSoundness.Audit.IsHarmBound": {
-   "owner": "@proofs",
-   "digest": "df09065bded6ca9f1d9100877f05ec8dde44c6624d076a4167921c6607d1809b",
-   "why": "`harm_bound`'s specification, which the lemma is about."
-  },
-  "FlockSoundness.Audit.Partition.AnchorsSound": {
-   "owner": "@proofs",
-   "digest": "52187a14e095d75188d633870e8f0cb668586d677dbacaad258d87c0d3ae445b",
-   "why": "δ_in, the input proof block's term."
-  },
-  "FlockSoundness.Audit.Partition.Separates": {
-   "owner": "@proofs",
-   "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
-   "why": "A separator, the subject of the influence lemma."
-  },
-  "FlockSoundness.Audit.SamplingDesign.Design": {
-   "owner": "@proofs",
-   "digest": "bfd5ed4389cc2ed89d432ed544fc77fa31bb4e35fc51ed32eea0ad1dce687584",
-   "why": "A sampling design's design condition, which the lemma is about."
-  },
   "Hash.EmbeddingRead.ok": {
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
@@ -428,6 +388,46 @@
    "owner": "@training",
    "digest": "67876f46d527e13a979ab8be69884864f9d34b6ffcf6e96875eb89fdff2b9f95",
    "why": "What `val` is: it names the value each word carries, one-to-one on each matmul's w-words and on its x-words."
+  },
+  "Spot.Sampling.Adaptive.Play.Drawn": {
+   "owner": "@proofs",
+   "digest": "ef816d57f09f96e5d85fa30756f436a6d89a4e07a85a32199d367a146c74c52d",
+   "why": "The adaptive audit's lemmas take each round's sampled-block bound, the layer below's guarantee."
+  },
+  "Spot.Sampling.Adaptive.Play.SamplingDesigns": {
+   "owner": "@proofs",
+   "digest": "d442a98000fa03cede434ca998ac30723ee7f4d8c5e2e475199fec2c651db86e",
+   "why": "Each round's sampling design meets the design `S`."
+  },
+  "Spot.Sampling.Analysis.BindSound": {
+   "owner": "@proofs",
+   "digest": "c269a653ad6ea5812fad6ed356e4c0166f66b287c808ba6db3f68c414f6b526a",
+   "why": "ε_bind of the layer below, as `KnowledgeSound`."
+  },
+  "Spot.Sampling.Analysis.KnowledgeSound": {
+   "owner": "@proofs",
+   "digest": "ffd6d9c69fa5b115d0ebe345985f2901be0129e84c7648e233667c7985bc6ff3",
+   "why": "ε_ks of the layer below: the audit's lemmas are proved over it, as the modular rule says."
+  },
+  "Spot.Sampling.IsHarmBound": {
+   "owner": "@proofs",
+   "digest": "df09065bded6ca9f1d9100877f05ec8dde44c6624d076a4167921c6607d1809b",
+   "why": "`harm_bound`'s specification, which the lemma is about."
+  },
+  "Spot.Sampling.Partition.AnchorsSound": {
+   "owner": "@proofs",
+   "digest": "52187a14e095d75188d633870e8f0cb668586d677dbacaad258d87c0d3ae445b",
+   "why": "δ_in, the input proof block's term."
+  },
+  "Spot.Sampling.Partition.Separates": {
+   "owner": "@proofs",
+   "digest": "393604a253c16a5bf33cba09422d67348f39084ac2e3d341b18e4d07faf93f7c",
+   "why": "A separator, the subject of the influence lemma."
+  },
+  "Spot.Sampling.SamplingDesign.Design": {
+   "owner": "@proofs",
+   "digest": "bfd5ed4389cc2ed89d432ed544fc77fa31bb4e35fc51ed32eea0ad1dce687584",
+   "why": "A sampling design's design condition, which the lemma is about."
   },
   "SpotFlock.BuiltWired": {
    "owner": "@proofs",
@@ -27214,10 +27214,10 @@
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge (OuterViewZK) as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (no-function): As a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512, and every table's setup avoids the mask slot (FailClosed.SampleSetupZHJ.avoidsMask).",
-   "FlockSoundness.Audit.Partition.audit_exfiltration": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
-   "FlockSoundness.Audit.audit_profile": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
-   "FlockSoundness.Audit.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
-   "FlockSoundness.Audit.audit_work_whole_stratum": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.Partition.audit_exfiltration": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.audit_profile": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.audit_work_whole_stratum": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes the table finders' bounds as hypotheses, listed (TableCRZAt under --zk; TableCRAt, and LinkCRAt for the link, without it), and bounds the --zk link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
@@ -27418,7 +27418,7 @@
    "ResourceAccounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (security/Definitions/ResourceAccounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "ResourceAccounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (security/Definitions/ResourceAccounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
    "ResourceAccounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (ResourceAccounting.Remote.Held.Trace), not the verifier's code (Poub); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (ResourceAccounting.Remote.Sketch) by ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise ResourceAccounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first blocks of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by ResourceAccounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
-   "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.CarrierBits": "frozen (no-function): A counting bound over abstract provenances of a circuit's values (security/Definitions/Poub/Carrier.lean: the store reached only through the circuit's inputs and its own encodes), about no function of the code.",
    "ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed on a store per pass made by the append-coin rule (ResourceAccounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), each pass reading the blocks its layout names at the coins drawn before it (RateSketch.coinStore), for devices whose rebuilds beyond X are their carriers' sectors (ResourceAccounting.RateSketch.Carrier), at rebuilt bits X + C with C the carriers' input and encoded bits under the property's budgets, with delta once a pass and no advice, under the named assumptions ResourceAccounting.Assumptions.SquaringFloor, ResourceAccounting.Assumptions.ChainSum and ResourceAccounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
@@ -27432,10 +27432,10 @@
    "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list.",
    "Flock.SecurityProofs.MaskedKS": "frozen (no-function): Claims.Flock.KS at the deployed masked record (deployZk at the deployed relation, SHA-512): a knowledge-soundness bound for every prover against the record's interaction, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Flock.SecurityProofs.MaskedZK": "frozen (no-function): Claims.Flock.ZK at the deployed masked record (zkDeployed at the deployed plan, SHA-512): as a simulation statement against every malicious verifier it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise beyond 0 < t.",
-   "FlockSoundness.Audit.Adaptive.harm_budget": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
-   "FlockSoundness.Audit.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
-   "FlockSoundness.Audit.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Flock/Soundness/Audit/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
-   "FlockSoundness.Audit.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
+   "Spot.Sampling.Adaptive.harm_budget": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Spot/Sampling/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "Spot.Sampling.Adaptive.harm_count": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Spot/Sampling/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "Spot.Sampling.Adaptive.harm_count_kstar": "frozen (obligation,no-function): It states the cumulative harm budget over an abstract adaptive play (`Adaptive.Play.prEv`, security/Proofs/Spot/Sampling/HarmBudget.lean) under per-round design and drawn-unit hypotheses (`Play.Laws`, `Play.Drawn`), rather than the acceptance of a Lean function.",
+   "Spot.Sampling.Adaptive.life_harm_budget": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract lifetime of one-stage audits rather than a Lean function.",
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "ResourceAccounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (ResourceAccounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, security/Definitions/Slowdown/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
@@ -27695,7 +27695,7 @@
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
-   "FlockSoundness.Audit.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Spot.Sampling.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Spot/Sampling/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "Flock.SecurityProofs.EndToEndSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHiddenSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -28081,33 +28081,6 @@
    },
    "Flock.SecurityProofs.recursiveZK_os_gap": {
     "∀ (a : Ωa) (p : Ωp) (y : Fin nh → FlockSoundness.Discharge.ZkView.Salt) (E : V → Prop), ENNReal.instLE.le (Verity.Game.prCoin fun r => E (view a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) p y r)) (instHAdd.hAdd (Verity.Game.prCoin fun s => E (sim a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) s)) εo)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.Adaptive.harm_budget": {
-    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.Adaptive.harm_count_kstar": {
-    "Real.instLE.le (FlockSoundness.Audit.Adaptive.kStar num den p) H": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.Adaptive.life_harm_budget": {
-    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.Partition.audit_exfiltration": {
-    "Finset.instPartialOrder.le D P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instPartialOrder.lt (Verity.SamplingDesign.miss L (instHAdd.hAdd k 1)) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.audit_executionPhase_split_of_record": {
-    "instLTNat.lt 0 (FlockSoundness.Audit.SamplingDesign.totalWork σ w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin m), instLTNat.lt 0 (w s) → Eq (FlockSoundness.Audit.SamplingDesign.callWork σ call w (call s)) (instHMul.hMul (w s) (FlockSoundness.Audit.SamplingDesign.stratum σ s).card)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 (FlockSoundness.Audit.SamplingDesign.totalWork σ v)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin m), instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.SamplingDesign.stratum σ s).card) (instHMul.hMul (f s) (FlockSoundness.Audit.SamplingDesign.totalWork σ v))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.audit_work_floor": {
-    "(FlockSoundness.Audit.SamplingDesign.stratum σ s).Nonempty": "FlockSoundness.Audit.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "FlockSoundness.Audit.audit_work_whole_stratum": {
-    "(FlockSoundness.Audit.SamplingDesign.stratum σ s).Nonempty": "FlockSoundness.Audit.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "InferenceOnly.SecurityProofs.ExpandComplies": {
     "∀ (g : Fin d.D.N), Eq (d.D.isInput g) Bool.false → instLENat.le 1 (d.D.w g)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -29179,6 +29152,33 @@
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), SetLike.instMembership.mem bad b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.harm_budget": {
+    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.harm_count_kstar": {
+    "Real.instLE.le (Spot.Sampling.Adaptive.kStar num den p) H": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Adaptive.life_harm_budget": {
+    "∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.Partition.audit_exfiltration": {
+    "Finset.instPartialOrder.le D P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instPartialOrder.lt (Verity.SamplingDesign.miss L (instHAdd.hAdd k 1)) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_executionPhase_split_of_record": {
+    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin m), instLTNat.lt 0 (w s) → Eq (Spot.Sampling.SamplingDesign.callWork σ call w (call s)) (instHMul.hMul (w s) (Spot.Sampling.SamplingDesign.stratum σ s).card)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLTNat.lt 0 (Spot.Sampling.SamplingDesign.totalWork σ v)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin m), instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (Spot.Sampling.SamplingDesign.stratum σ s).card) (instHMul.hMul (f s) (Spot.Sampling.SamplingDesign.totalWork σ v))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_work_floor": {
+    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Spot.Sampling.audit_work_whole_stratum": {
+    "(Spot.Sampling.SamplingDesign.stratum σ s).Nonempty": "Spot.Sampling.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.AmpereUnitBf16": {
     "∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)), List.instMembership.mem steps s → And (Eq s.fst.length 16) (And (Eq s.snd.fst.length 16) (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16)) (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
