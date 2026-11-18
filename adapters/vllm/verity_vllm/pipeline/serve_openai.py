@@ -140,6 +140,7 @@ from verity_vllm import messages as M
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
+from verity_vllm.llm import option_settings
 from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_h1 as SH,
                                    serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
                                    serve_row as RW, serve_seal as SS)
@@ -597,9 +598,10 @@ def scheme_settings(opts: Any, out: Path) -> dict[str, Any]:
     session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the challenger at this node's
     127.0.0.1, at the port the gate's open answers), else in-process; which of these go together is the scheme's
     ``check_settings``."""
-    own = dict(protocols_doc(opts).get(opts.protocols.partition(":")[0], {}))
-    if own.pop("device", "cuda") != "cuda":
-        raise UsageError(f"--protocols-config: {opts.protocols} runs on cuda")
+    try:
+        own = option_settings(opts.protocols, protocols_doc(opts))
+    except ValueError as e:
+        raise UsageError(f"--protocols-config: {e}") from None
     g = opts.gate
     coins = {"challenger": "127.0.0.1:0" if g.challenger_gate else "", "coins": "" if g.challenger_gate else "in-process",
              "lane": g.challenger_lane or "", "peer": g.challenger_peer or ""}
