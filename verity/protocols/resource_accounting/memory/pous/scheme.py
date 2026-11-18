@@ -36,6 +36,7 @@ from typing import Any
 from verity.commitments import domains
 from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as MA
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
@@ -132,6 +133,7 @@ POUS = register(Scheme(
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
     answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
+    unchecked=MA.UNCHECKED,
     record="space",
     symbol="S0",
     published=("bits", Fraction(1)),
@@ -189,6 +191,7 @@ WIPE = register(Scheme(
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
     answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
+    unchecked=MA.UNCHECKED,
     record="wipe",
     # the wipe holds labels from a key fresh for the wipe, and closes its store and the card's memory before the attach
     # returns: it touches no weight and keeps nothing resident

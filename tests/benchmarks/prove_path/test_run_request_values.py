@@ -166,21 +166,25 @@ def test_no_kept_file_is_written_under_out():
 #: registration and commit.json bind the advice at its length ``$BITS``, and an audit whose error output holds a planted
 #: value; commit.log and the PROVE-PATH line are what $OUT keeps
 STUB_RUN = r"""#!/bin/bash
-cmd=$1; shift; out=
+cmd=$1; shift; out= binding="{\"binding\": {\"advice\": {\"root\": \"ab\", \"bits\": $BITS}}}"
 while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
 case $cmd in
   commit) mkdir -p $out/rank0 && for f in window partition index; do echo "{\"planted\": \"planted-$f\"}" > $out/rank0/$f.json; done
-          binding="{\"binding\": {\"advice\": {\"root\": \"ab\", \"bits\": $BITS}}}"
           echo "$binding" > $out/rank0/registration.json; echo planted-bin > $out/rank0/m0-public.bin
           echo "$binding" > $out/commit.json; echo '[prove-path commit] rank 0: {"bits": 4242423}';;
-  audit) mkdir -p $out && echo '{"ok": true}' > $out/summary.json
+  audit) mkdir -p $out/rank0 && echo "$binding" > $out/rank0/registration.json
+         echo "{\"ok\": true, \"coins\": {\"challenger\": \"local\"}, \"advice\": {\"root\": \"ab\", \"bits\": $BITS},
+               \"requests\": [\"planted-request\"], \"ranks\": {\"0\": {\"charge\": {\"c\": $BITS}}}}" > $out/summary.json
+         echo "{\"source\": \"workload\", \"draw_counts\": {\"t\": 2}, \"charge\": $BITS, \"binding\": {\"advice\": {\"root\": \"ab\", \"bits\": $BITS}},
+               \"timing\": {\"t\": {\"timing\": {\"proof_bytes\": [3, 3], \"prove_total_s\": 1.5}, \"lean_verify_s\": 0.5,
+                                    \"gpus\": 0, \"device\": \"cpu\", \"seed\": $BITS}}}" > $out/rank0/summary.json
          echo 'PROVE-PATH {"advice_bits": 4242421, "forged": false, "ok": true, "ranks": {"0": {"accepted": true, "charge": {"c": 4242422}}}}'
          echo 'a5 progress planted-progress'; echo planted-auditerr >&2;;
   compiler) echo '{"name": "c", "digest": "d"}';;
 esac
 """
 PLANTED_RUN = (b"planted-partition", b"planted-window", b"planted-index", b"planted-bin", b"planted-auditerr",
-               b"4242421", b"4242422", b"4242423", b"planted-progress")
+               b"4242421", b"4242422", b"4242423", b"planted-progress", b"planted-request")
 
 
 def _run_arm(tmp_path: Path, arm: str, bits: int = 5) -> tuple[Path, Path, str]:
@@ -261,12 +265,25 @@ def test_public_log_lets_only_what_its_reader_reads_go():
     assert "9" not in m.public_line("PROVE-PATH not json 9") and m.public_line("[prove-path commit] rank 0: {}") is None
 
 
-@pytest.mark.parametrize("bits", [37291, 3729100])
-def test_the_windows_binding_of_the_advices_length_stays_in_the_keep(tmp_path, bits):
-    """A window's registration and commit.json bind the advice at its true length: at two lengths a hundred times apart,
-    neither reaches $OUT or stdout, and the keep holds both files."""
-    out, keep, stdout = _run_arm(tmp_path, "run glm '--tp-commit T --build-root B' A part.json ''", bits)
-    hit = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file() and str(bits).encode() in p.read_bytes())
-    assert not hit and str(bits) not in stdout, f"the advice's length reached $OUT in {hit} or stdout"
-    for f in ("windows/rank0/registration.json", "windows/commit.json"):
-        assert json.loads((keep / "glm" / f).read_text())["binding"]["advice"]["bits"] == bits
+def test_the_advices_length_leaves_no_trace_under_out_or_on_stdout(tmp_path):
+    """The window's registration and commit.json and the audit's summaries and its copy of the registration hold the
+    advice's true length, or what is counted from it: at two lengths a hundred times apart, $OUT and stdout are the same
+    byte for byte and name neither, $OUT's summaries are the fields `proof_layers.read_prove_path` reads, and the keep
+    holds the files whole."""
+    arm = "run glm '--tp-commit T --build-root B' A part.json ''"
+    runs = {}
+    for bits in (37291, 3729100):
+        (tmp_path / str(bits)).mkdir()
+        out, keep, stdout = _run_arm(tmp_path / str(bits), arm, bits)
+        files = {p.relative_to(out).as_posix(): p.read_bytes() for p in sorted(out.rglob("*")) if p.is_file()}
+        hit = sorted(f for f, b in files.items() if str(bits).encode() in b)
+        assert not hit and str(bits) not in stdout, f"the advice's length reached $OUT in {hit} or stdout"
+        for f in ("windows/rank0/registration.json", "windows/commit.json", "rank0/registration.json"):
+            assert json.loads((keep / "glm" / f).read_text())["binding"]["advice"]["bits"] == bits
+        assert json.loads((keep / "glm" / "summary.json").read_text())["advice"]["bits"] == bits
+        runs[bits] = files, stdout
+    (a, sa), (b, sb) = runs.values()
+    assert a == b and sa == sb, sorted(f for f in a.keys() | b.keys() if a.get(f) != b.get(f))
+    assert json.loads(a["glm/summary.json"]) == {"coins": {"challenger": "local"}}
+    assert json.loads(a["glm/rank0/summary.json"]) == {"source": "workload", "draw_counts": {"t": 2}, "timing": {"t": {
+        "timing": {"proof_bytes": [3, 3], "prove_total_s": 1.5}, "lean_verify_s": 0.5, "gpus": 0, "device": "cpu"}}}

@@ -296,10 +296,10 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
 def test_with_no_gate_bound_spots_coins_are_simulated_and_only_the_placement_hold_makes_the_run_a_development_run(
         monkeypatch):
     monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1"}
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1"}
     monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
-    assert T._spot_challenger({}, {}, {"peer": "peer-1"}) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
-    assert T._spot_challenger({}, {}, {"gate": "u@g"}) == {"PP_CHALLENGER": "gate:u@g"}
+    assert T._spot_challenger({}, {}, {"peer": "peer-1"}, []) == {"PP_PEER": "peer-1", "DEVELOPMENT": "1"}
+    assert T._spot_challenger({}, {}, {"gate": "u@g"}, []) == {"PP_CHALLENGER": "gate:u@g"}
 
 
 def test_a_dry_run_prints_each_runtime_party_with_its_protocol_role_machine_clock_and_channels(tmp_path, capsys,
@@ -442,14 +442,14 @@ def test_two_pieces_setting_different_classes_are_refused_by_name(tmp_path, monk
     cfg = tied(tmp_path)
     side = T.PIECES["network-attester"][T.WORKERS]
     monkeypatch.setitem(T.PIECES["network-attester"], T.WORKERS, dataclasses.replace(
-        side, hooks=lambda cfg, params, bound: {"V3C_CLASS": T.SCAN_CLASS}))
+        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": T.SCAN_CLASS}))
     with pytest.raises(Refused) as e:
         T.variables(cfg, BINDINGS)
     assert e.value.name == "params" and e.value.detail == (
         "V3C_CLASS is 4,27,2 in pearl-plus's piece and 8,32,4,4,16 in network-attester's: the runner commits one class, so "
         "give one of them the class or list one of them alone")
     monkeypatch.setitem(T.PIECES["network-attester"], T.WORKERS, dataclasses.replace(
-        side, hooks=lambda cfg, params, bound: {"V3C_CLASS": "4,27,2"}))
+        side, hooks=lambda cfg, params, bound, pinned: {"V3C_CLASS": "4,27,2"}))
     assert T.variables(cfg, BINDINGS)["V3C_CLASS"] == "4,27,2"
 
 
@@ -497,15 +497,35 @@ def test_a_network_attester_without_its_peer_is_refused_by_name_with_the_fix(tmp
     assert e.value.name == "bindings" and 'keyed {"network-attester": ["gate", "peer"]}' in e.value.detail
 
 
+#: the network attester piece's placement where the gate ran on its own machine, as network-accounting gave it
+#: (`benchmarks/network_traces/attester_piece.py`'s `placement`, 18 Nov): kept here, not computed, so this suite reads
+#: no file of that benchmark
+ATTESTER_PLACEMENT = {
+    "kind": "not-placed",
+    "parties": {"network_certifier": "the network attester's machine", "prover": "the prover's machine",
+                "verifier": "a machine the piece does not name"},
+    "steps": {"chain": "a machine the piece does not name", "period": "a machine the piece does not name"},
+    mc.PREMISE: "unmet: this piece establishes no trusted-device and gives no bound on that ground; the network "
+                "attester ran on the network attester's machine, not on the prover's machine; the chain's checks and "
+                "samples ran on a machine the piece does not name, and the period check and its proofs' challenges "
+                "on a machine the piece does not name",
+    "links": [{"name": "certified", "from": "the network attester's machine", "to": "the prover's machine",
+               "counted": True, "via": "the network attester's tunnel to the endpoint's port"},
+              {"name": "gate", "from": "the prover's machine", "to": "the network attester's machine", "counted": False,
+               "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
+    "uncounted": "every link of the prover's machine but the certified one",
+}
+
+
 def test_the_onsite_lines_trusted_device_takes_the_network_attesters_placement(tmp_path, monkeypatch):
     """The verifier's line carries the network attester's `trusted-device` premise as its piece's answer places it,
     beside the memory attesters'; a piece that answered with no placement adds none."""
     cfg = R.load(CONFIG, REG)
-    premise = "unmet: the network attester ran on the workload's machine prover-node under a key made for the run"
+    premise = ATTESTER_PLACEMENT[mc.PREMISE]
     answer = tmp_path / "out" / "pieces" / "certifier" / "answer.json"
     answer.parent.mkdir(parents=True)
-    answer.write_text(json.dumps({"protocol": T.MANIFESTS["network-attester"].id, "profile": {"placement": {
-        "kind": "prover-node", mc.PREMISE: premise, "key_pin": "run", "coins_on": T.PROVER_NODE}}}))
+    answer.write_text(json.dumps({"protocol": T.MANIFESTS["network-attester"].id,
+                                  "profile": {"placement": ATTESTER_PLACEMENT}}))
     monkeypatch.setattr(T, "onsite_check", lambda cfg, state: {"verdict": "undecided"})
     (tmp_path / T.BINDINGS).write_text(json.dumps(BINDINGS))
     line, = T.live(cfg, tmp_path, [T.VERIFIER]).outcomes[T.VERIFIER]["outcome"]["verdicts"]
@@ -852,6 +872,12 @@ def written(*components: str, composed: bool = False) -> str:
         f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
 
 
+#: what Pearl+'s row says on every line until its coin sessions' signature pin is in Lean
+COINS_UNCHECKED = "coins' signatures checked on the served node only; not checked by the auditor"
+#: what storage's, the wipe's and the bandwidth audit's rows say on every line: the memory attester's one table
+ATTESTER_UNCHECKED = "; ".join(mc.UNCHECKED.values())
+#: each row's end on every line, by component
+UNCHECKED_ENDS = {"pearl-plus": COINS_UNCHECKED, **dict.fromkeys(("pous", "wipe", "bandwidth"), ATTESTER_UNCHECKED)}
 #: the components of the rows `published` writes by default
 BASE = ("network-attester", "pearl-plus", "pous", "sampled-proofs", "wipe")
 #: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
@@ -896,8 +922,29 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")},
                                 "sampled-proofs": T.GATE_HOST}
-    assert line["answer_from"] == {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
-                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)})
+    assert {c: s for c, s in line["answer_from"].items() if c in UNCHECKED_ENDS} == {
+        c: f"{T.AS_WRITTEN} (its piece files in {k}/); {UNCHECKED_ENDS[c]}"
+        for k, c in NAMES.items() if c in UNCHECKED_ENDS and k in ("work", "space", "wipe", *rows)}
+
+
+def test_an_empty_declared_mapping_says_nothing_and_an_entry_not_a_sentence_is_refused_by_name(monkeypatch) -> None:
+    pearl, get = T.schemes.get("pearl-plus"), T.schemes.get
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(T.schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert T.unchecked(["pearl-plus"], {"pearl-plus": T.AS_WRITTEN}) == {"pearl-plus": T.AS_WRITTEN}
+    assert T.unchecked(["pearl-plus"], {}) == {}
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": 3})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        T.unchecked(["pearl-plus"], {})
+
+
+def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -> None:
+    said = {"pearl-plus": f"{T.AS_WRITTEN} (its piece files in work/); {COINS_UNCHECKED}",
+            "pous": f"{T.AS_WRITTEN} (its piece files in space/); {ATTESTER_UNCHECKED}"}
+    assert {c: T.unchecked(PROTOCOLS, said)[c] for c in said} == said
 
 
 @pytest.mark.parametrize("source", NOT_WRITTEN)
@@ -910,7 +957,9 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
     assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
-    assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+    assert set(line["components"].values()) == {"undecided"}
+    assert line["answer_from"] == {c: f"{source}; {UNCHECKED_ENDS[c]}" if c in UNCHECKED_ENDS else source
+                                   for c in line["answer_from"]}
 
 
 @pytest.mark.parametrize("rows, composed, lean, verdict, rc, reason", [
@@ -936,8 +985,8 @@ def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloa
                                   **{NAMES[k]: v for k, v in rows.items()}}
     assert line["coins"] == "simulated" and line["coins_on"] == {
         **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")}, "sampled-proofs": T.GATE_HOST}
-    assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
-                                                 ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
+                                                          ("integrity", "work", "space", "communication", "wipe", *rows)})
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])

@@ -527,14 +527,6 @@ class Rows:
         return Head(self.link, self.window, self.params.digest, tuple(t.entry for t in self.tables))
 
 
-def attest(issuer: Issuer, link: str, window: int, strides: Sequence[Sequence[Released]], params: NetworkAttesterParams,
-           salts: Mapping[str, Sequence[bytes]] | None = None) -> tuple[Rows, Certificate | None]:
-    """An execution phase's connection rows committed and their one head signed by `issuer` (None when its signer
-    refuses)."""
-    rows = Rows.commit(link, window, tables(params, strides), params, issuer.session, salts)
-    return rows, issuer.sign(link, Direction.EGRESS, window, rows.head.digest())
-
-
 def _layout(params: NetworkAttesterParams, window: int, table: str) -> dict[str, int]:
     first = window * params.window
     if table not in SLOT:

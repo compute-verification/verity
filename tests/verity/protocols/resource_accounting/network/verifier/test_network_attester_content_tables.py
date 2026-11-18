@@ -93,7 +93,7 @@ def leaves(device, params: NetworkAttesterParams, directory) -> str:
         h.update(held.head.digest() + cert.signature)
     for phase, strides in device.lengths:
         salts = {name: [salt(name, phase, k) for k in range(count)] for name, count, _ in CR.tables_of(params)}
-        rows, cert = CR.attest(issuer, LINK, phase, strides, params, salts)
+        rows, cert = signers.attest_connection_rows(issuer, LINK, phase, strides, params, salts)
         h.update(rows.head.encode() + cert.digest + cert.signature)
         h.update(repr([[tuple(r)[:4] for r in stride] for stride in strides]).encode())
     return h.hexdigest()
@@ -108,7 +108,7 @@ def registered(device, params: NetworkAttesterParams, directory) -> str:
     h = hashlib.sha512()
     for phase, strides in device.lengths:
         salts = {name: [salt(name, phase, k) for k in range(count)] for name, count, _ in CR.tables_of(params)}
-        rows, cert = CR.attest(issuer, LINK, phase, strides, params, salts)
+        rows, cert = signers.attest_connection_rows(issuer, LINK, phase, strides, params, salts)
         h.update(canonical_json_bytes(CR.registration(rows.head, cert, params)))
     return h.hexdigest()
 
@@ -257,7 +257,7 @@ def signed(ran, tmp_path_factory):
 def read(issuer: Issuer, phase: int, strides, params: NetworkAttesterParams) -> tuple:
     """An execution phase's tables committed and their head signed, and the registration read as the verifier reads
     it: the opening, the registration, and the head and domains the verifier derived."""
-    opened, cert = CR.attest(issuer, LINK, phase, strides, params)
+    opened, cert = signers.attest_connection_rows(issuer, LINK, phase, strides, params)
     doc = json.loads(json.dumps(CR.registration(opened.head, cert, params)))
     head, domains = CR.check_registration(doc, issuer.signer.public_key(), signers.SESSION, params, LINK, phase)
     assert head == opened.head and cert.digest == head.digest()
@@ -666,7 +666,7 @@ def test_one_head_lists_every_table_and_says_nothing_of_the_load(ran, signed, tm
     for name, strides in loads.items():
         (tmp_path / name).mkdir()
         other = Issuer(signers.signer(tmp_path / name), signers.SESSION)
-        opened, cert = CR.attest(other, LINK, 0, strides, CON)
+        opened, cert = signers.attest_connection_rows(other, LINK, 0, strides, CON)
         assert signers.used(other.signer) == [0]
         docs[name] = (CR.registration(opened.head, cert, CON), len(opened.head.encode()))
 
