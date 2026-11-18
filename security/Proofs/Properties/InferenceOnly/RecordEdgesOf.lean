@@ -66,12 +66,17 @@ private theorem appended {a : List Spot.Wires.Wire} {wire : Spot.Wires.Wire} {ra
   · exact ha w hw
   · rw [List.mem_singleton] at hw
     subst hw
-    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, List.any_eq_true, beq_iff_eq, not_or, not_not,
-      not_exists, not_and] at hg
-    refine ⟨by rw [hs, hr, List.length_map, hg.1], fun r hm => ?_⟩
+    have h1 : radix.length = steps.length := by
+      by_contra hne
+      apply hg
+      simp only [Bool.or_eq_true]
+      exact Or.inl (bne_iff_ne.2 hne)
+    refine ⟨by rw [hs, hr, List.length_map, h1], fun r hm => ?_⟩
     rw [hr] at hm
-    have := hg.2 r hm
-    omega
+    by_contra h0
+    apply hg
+    simp only [Bool.or_eq_true, List.any_eq_true]
+    exact Or.inr ⟨r, hm, beq_iff_eq.2 (by omega)⟩
 
 /-- **A part's wires have a step for each digit and no digit of radix zero.** -/
 theorem partWires_wire {P : Prog} {fu W k i q s0 out} (h : partWires P fu W k i q s0 = .ok out) :
