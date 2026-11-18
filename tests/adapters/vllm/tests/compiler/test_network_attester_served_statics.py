@@ -25,7 +25,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 
 def _book() -> dict:
     """The registered book the compile slice's charge reads (as `test_network_attester_compile_slice.book`)."""
-    streams = json.loads((FIXTURE.parent / "arith_encode_vectors.json").read_text())["streams"]
+    streams = json.loads((Path(__file__).parents[4] / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures" / "arith_encode_vectors.json").read_text())["streams"]
     return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 

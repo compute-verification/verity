@@ -108,7 +108,7 @@ from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import window_charge as WC  # noqa: E402
 
-FIXTURES = REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures"
+FIXTURES = REPO / "tests/adapters/vllm/tests/compiler/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "tests/benchmarks/network_e2e/encodings/fixtures/vllm-8eb1/advice_trace.jsonl.gz"
@@ -136,7 +136,7 @@ OPENED = ("o0", "pub")
 
 def book() -> dict:
     """The registered book: the arith fixture's async-light stream's (`arith_vectors.decisions`)."""
-    streams = json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
+    streams = json.loads((REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json").read_text())["streams"]
     return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 

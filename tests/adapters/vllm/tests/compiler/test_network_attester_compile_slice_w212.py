@@ -21,7 +21,7 @@ from tests.compiler.test_network_attester_compile_slice import BOOK
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SR
 
-FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "fixtures"
+FIXTURES = Path(__file__).parent / "fixtures"
 OWN, CLASS = "compile_slice_w212.json", "compile_slice_w212_class.json"
 ANDS = {OWN: 117164, CLASS: 857866}
 #: the session's carry into window 212 (the module's docstring)
