@@ -28,14 +28,14 @@ def held_out(o: Any) -> Any:
 
 
 def public_line(line: str) -> str | None:
-    """``line`` as it may leave, or None. A tagged line whose body isn't JSON is held."""
+    """``line`` as it may leave, or None. A tagged line whose body isn't JSON leaves as its tag and why it is held."""
     for tag in TAGS:
         if line.startswith(tag):
             try:
-                body = json.loads(line[len(tag):])
-            except ValueError:
-                return None
-            return tag + json.dumps(held_out(body), sort_keys=True, default=str)
+                body = held_out(json.loads(line[len(tag):]))
+            except ValueError as e:
+                body = {"held": f"not JSON ({type(e).__name__}): the line stays in the kept log"}
+            return tag + json.dumps(body, sort_keys=True, default=str)
     return line if ERROR.match(line) else None
 
 

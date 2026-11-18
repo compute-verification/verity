@@ -239,4 +239,4 @@ def test_public_log_lets_no_advice_length_or_charge_go():
     assert m.public_line('PROVE-PATH {"advice_bits": 9, "proof": "zk", "ranks": {"0": {"charge": {"c": 9}, "ok": true}}}') \
         == 'PROVE-PATH {"proof": "zk", "ranks": {"0": {"ok": true}}}'
     assert m.public_line("ValueError: boom") == "ValueError: boom"
-    assert m.public_line("PROVE-PATH not json 9") is None and m.public_line("[prove-path commit] rank 0: {}") is None
+    assert "9" not in m.public_line("PROVE-PATH not json 9") and m.public_line("[prove-path commit] rank 0: {}") is None
