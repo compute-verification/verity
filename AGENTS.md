@@ -124,7 +124,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   committed, each under a hiding leaf; the values inside a proof block never are.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. The
-  partition is public (Daniel, 17 Nov): the statement holds the program and the query that cuts it into proof blocks,
+  partition is public for now (Daniel, 17 Nov): the statement holds the program and the query that cuts it into proof blocks,
   the verifier runs the query on its own copy, and with two levels both partitions and which inner block lies in which
   outer one are public; what stays hidden is the values. A proof block's outputs fit its Definition's public size
   class, a power of two from 16 to 262,144 bits, and its output bits count in leakage (provisional; `SIZE_CLASS_MAX` =

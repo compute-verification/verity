@@ -167,7 +167,7 @@ The numbers come from the slowdown calculator (`benchmarks/slowdown`), not from 
     input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
 
-  As intended, a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. Today E_j and 𝒫_j are public in
+  As intended, a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. For now E_j and 𝒫_j are public in
   the sampled proofs (Daniel, 17 Nov): the statement holds E_j's program and the query that cuts it into proof blocks.
   The registered circuit is D = E_1 ‖ … ‖ E_n.
   Since E_j's structure is a function of a_j, the advice is fresh information: an inference block whose structure
