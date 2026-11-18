@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
@@ -53,9 +52,6 @@ from verity.protocols.resource_accounting.network.verifier.schedule import SyncS
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a network attester rehearsal's run (its records through the older network attester's proxy in front of the endpoint): "
          "the network certifier path reads an active network attester's own run (network_attester_serve.py's, or the gate's warden-rehearse)")
