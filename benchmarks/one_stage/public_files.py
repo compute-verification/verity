@@ -21,6 +21,40 @@ PRIVATE_DIRS = {"private": "a private directory (prover or device state)"}
 #: a file or directory name (`fnmatch`) the three witness tables do not name
 PRIVATE_NAMES = {"*-private.bin": "a private file (prover only)", "index-salt.bin": "the index's salt",
                  "salts.bin": "a commitment's salts", "saved-*.tar": "a staged units' value archive", "keys.bin": "a key file"}
+#: the files a served run may leave under its output directory (`fnmatch`, relative to $OUT), each with what of it is
+#: public; every other file stays in the serve dir's private directory. Read by nothing yet.
+PUBLIC = {
+    "verdicts.txt": "its say lines, each a tool's verdict or its failure's class and exit, no tool-log line",
+    "machine.txt": "the tree's commit alone",
+    "weights_registration.txt": "the deployment record's digest line alone",
+    "registration.json": "the window's registration record",
+    "compiler.txt": "the registered compiler's digest",
+    "serve/phase.json": "the execution phase's public layout",
+    "serve/h1/window-program.json.gz": "H1's window Program",
+    "serve/h1/window-program.meta.json": "its digest and size",
+    "window-circuit-*.json": "a class's window-circuit count and record digest",
+    "block-counts-*.json": "the inference-only block counts",
+    "inference-only-policy.json": "the inference-only policy's verdict",
+    "inference-only-limits.json": "its limits",
+    "record/inference-only.json": "the inference-only verdict of record",
+    "served-compare/*.json": "the served comparison's verdict and circuit facts",
+    "v3c-audit/registration.json": "V3c's registration record",
+    "v3c-audit/summary.json": "V3c's audit summary",
+    "v3c-audit/window/audit.json": "its window's audit",
+    "pieces/*/answer.json": "a piece's answer",
+    "pieces/*/development.json": "a development piece's marker",
+    "pieces/*/piece.json": "a piece's statement",
+    "pieces/*/served.json": "a piece's served counts by kind",
+    "pieces/*/runs.json": "a piece's run ids",
+    "pieces/*/coin.json": "a piece's coins",
+    "pieces/*/ledger.jsonl": "a piece's ledger of sessions",
+    "pieces/*/refused.txt": "a piece's refusal",
+    "pieces/*/session/*/out/key.json": "a session's public key",
+    "record/*": "the final record, without its node",
+    "composite/**": "the composite",
+    "compose/**": "the compose gate's answer",
+    "sampled-proofs/**": "the sampled proofs' records, sessions and ran_with.txt",
+}
 
 
 def private_why(path: str) -> str | None:
