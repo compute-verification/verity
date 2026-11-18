@@ -61,7 +61,9 @@ B=${BUILD_DIR:-}
   "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v cuobjdump nvdisasm
 } > "$O/machine.txt" 2>&1
 
-FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+GENCODE=$(python3 "$TREE/benchmarks/kernels/machine.py" gencode "sm_$ARCH" 2>&1) ||
+  { say "PREFLIGHT: no build target for ARCH=$ARCH: $GENCODE"; exit 3; }
+FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
 # The base's session.cu sits where BASE_REV has it, the prover's directory or (before the provers' move) $RS, and its
 # includes resolve to this tree's codec_tensor, circuits and commitments from either place.

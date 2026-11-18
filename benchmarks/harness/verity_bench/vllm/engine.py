@@ -74,10 +74,10 @@ def _pearl_c_run(llm: Any) -> Any | None:
 
 
 def _served_scheme(arm: Arm) -> str | None:
-    """The declared useful-work scheme the arm serves (its entry's `messages.option`), None for any other arm."""
-    from verity_vllm import messages
+    """The declared useful-work scheme the arm serves (its entry, a declared scheme's name), None for any other arm."""
+    from verity_bench.vllm.presets import declared_schemes
 
-    return next((s.name for e in arm.protocols if (s := messages.option(e)) is not None), None)
+    return next((e for e in arm.protocols if e in declared_schemes()), None)
 
 
 def _no_run(scheme: str) -> dict[str, Any]:

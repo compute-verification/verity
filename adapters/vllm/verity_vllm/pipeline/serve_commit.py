@@ -93,15 +93,14 @@ def user_of(body: Any) -> str | None:
     return None if u is None else str(u)
 
 
-#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
-#: request value (the network attester's users are request indexes, ``user-<i>``), so it can leave the node with
-#: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  ``user`` is
+#: the body's as the client sent it, a request value, so the file is private and stays in the serve dir with requests.jsonl.
 REQUEST_USERS = "request_users.jsonl"
 
-#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
-#: traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the serve dir with
-#: the served rows' salts, and what reads them runs there
-MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
+#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl, REQUEST_USERS
+#: and the step traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the
+#: serve dir with the served rows' salts, and what reads them runs there
+MIRRORED = ("serve.json", "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
 
 
 class Mirror:

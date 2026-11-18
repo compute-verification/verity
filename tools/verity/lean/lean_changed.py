@@ -2213,6 +2213,7 @@ def check_argv(ats: list[Path], out: Path, update: bool, moved: Path | None, own
             "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--facts-cache", str(facts_cache)] if facts_cache else []), *(["--tree", str(tree)] if tree else []),
             *(["--update"] if update else []),
+            *([] if artifacts or dev else ["--no-artifacts"]),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), *map(str, ats)]
 
 
