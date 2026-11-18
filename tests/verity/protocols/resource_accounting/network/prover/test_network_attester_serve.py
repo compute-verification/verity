@@ -27,7 +27,7 @@ import pytest
 
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
 from verity.protocols.resource_accounting.network.verifier.grid import Reason
-from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.resource_accounting.network.verifier.network_attester import (END, audit, cells, reason_frame)
 from verity.protocols.resource_accounting.network.verifier import load_check as LK, relay_check as RC, record_files as RF
 from verity.protocols.resource_accounting.network.attester import runner_parts as rp, network_attester_serve as ws

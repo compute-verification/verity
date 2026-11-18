@@ -2,8 +2,8 @@
 ``verity/block-record/v2``).
 
 * `block_leg`: a period's accepted answer as the block record's attester entry: K
-  in bits, its error the answer's exact ``eps``, and the attestation at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
-  δ (`BLOCK_DELTAS`).
+  in bits, its error the answer's exact ``eps``, and at δ = 1/100 and 10⁻⁶ (`BLOCK_DELTAS`) no attestation while the
+  scheme's bound is refused, with the refusal's sentence as why.
 """
 from __future__ import annotations
 
@@ -15,8 +15,7 @@ from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
 
 PROTOCOL = "verity/certifier/v0"
-#: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's attestation holds at δ where its error is at
-#: most δ. A period's answer at δ has error δ when each of its terms was decided at its share of δ.
+#: the block record's δs (``verity/block-record/v2``'s ``at``)
 BLOCK_DELTAS = DELTAS
 #: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
 BLOCK_ERROR_FROM = "quantity.eps"
@@ -27,8 +26,8 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
     """The block record's attester leg (``legs.attester`` of ``verity/block-record/v2``) of one period's
     ``network-period check`` answer: the answer's verdict, reason, commitment and
     public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``
-    execution phases; the error the answer's exact ``eps``; and the attestation at each δ of
-    `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
+    execution phases; the error the answer's exact ``eps``; and at each δ of `BLOCK_DELTAS` not established, its
+    why the sentence by which `S.bound` refuses the scheme (`_declared`). ``runs``: the run ids it comes from; ``source``:
     ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
     quantity has no shape for a period that certifies nothing."""
     if answer.get("protocol") != PROTOCOL:
@@ -41,12 +40,12 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
         raise ValueError("a leg comes from at least one run")
     pub = answer["public"]
     K, eps = int(pub["K"]), Fraction(pub["eps"])
-    at = {str(d): {"holds": True, "value": K, "epsilon": None, "by": "run"} if eps <= d else
-          {"holds": False, "why": f"the run established it except with {eps}, more than {d}"} for d in BLOCK_DELTAS}
+    declared = _declared()
+    at = {str(d): {"holds": False, "why": declared["unbounded"]["why"]} for d in BLOCK_DELTAS}
     return {"protocol": PROTOCOL, "owner": owner, "server": server, "source": source,
             "answer": {k: answer.get(k) for k in ("verdict", "reason", "commitment", "public")},
             "quantity": {"symbol": "K", "value": K, "unit": "bits", "windows": int(pub["windows"])},
-            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)} | _declared()
+            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)} | declared
 
 
 def _declared() -> dict[str, Any]:
