@@ -684,7 +684,7 @@ def test_a_control_row_the_pods_list_lacks_runs_nowhere_and_rings_its_owner_and_
     state = None
     for n in range(3):
         state, _ = run(cfg, pod, state, now=NOW + n * 900)
-    line = (f"it says runs = 'control', but the control pod's list {cfg.control_rows} doesn't hold it (ci/plain's id is "
+    line = (f"it says runs = 'control', but the control pod's list {cfg.control_rows.name} doesn't hold it (ci/plain's id is "
             f'missing), so it runs nowhere until infra adds there, on the pod, a [[row]] with id = "ci/plain", command = "{LANDING}"')
     assert pod.launched == [] and state["launches"] == []
     assert state["numbers"]["ci/plain"] == {"reason": "control-unlisted", "why": f"ci/plain has no reading; but {line}"}

@@ -397,14 +397,15 @@ def control_list(path: Path | None, say: Callable[[str], None]) -> dict[str, str
 
 def off_list(job: Job, listed: dict[str, str], path: Path | None) -> str:
     """Why CONTROL `job` runs nowhere, with the fix: each row the pod's list doesn't hold with the job's command, character
-    for character, and the entry infra writes for it there. '' when the list holds every row."""
+    for character, and the entry infra writes for it there, the list named by its file's name so the line's length does not
+    turn on where the file sits. '' when the list holds every row."""
     off = [i for i in job.ids if listed.get(i) != job.command]
     if not off:
         return ""
     whose = "; ".join(f"{i}'s {'id is missing' if i not in listed else 'command differs from its entry'}" for i in off)
     ids = ", ".join(f"id = {json.dumps(i)}" for i in off)
     entries = (f"a [[row]] with {ids}" if len(off) == 1 else f"a [[row]] for each of {ids}") + f", command = {json.dumps(job.command)}"
-    return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {path or '(no --control-rows)'} doesn't hold it ({whose}), "
+    return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {path.name if path else '(no --control-rows)'} doesn't hold it ({whose}), "
             f"so it runs nowhere until infra adds there, on the pod, {entries}")
 
 
