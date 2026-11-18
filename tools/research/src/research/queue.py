@@ -753,8 +753,8 @@ LANDINGS = ("review",)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 #: the steps of a check (`tools/check/check.py`), of which `DriveFlags.warn_steps` names some
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
-               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
-               "ratchet-gate")
+               "lean-unit-cut", "lean-agreement", "lean-audit", "landing-gates", "lean-suites", "pytest", "circuit-check",
+               "flock-rust-tests", "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
 #: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
@@ -1039,8 +1039,6 @@ def listed(path: Path, flag: str = "--priority-file", comments: bool = False, ev
 GATE_TIMEOUT_S = 120
 #: the fix items of a gate's failure a refusal quotes
 GATE_FIX_LINES = 15
-#: the most gate verdicts the queue's state keeps for one `main` and one kind of gate (`Queue._gated`), the newest
-GATE_VERDICTS = 1000
 #: what the ready mark's preflight says after a warn gate's failure (`Preflight._gates`)
 WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes it in their next PR"
 #: what the ready mark's preflight says of a landing gate that couldn't judge the head (`Preflight._gates`)
@@ -1055,12 +1053,6 @@ COLLIDE_SAYS = ("Nothing is refused for it: the verified queue refuses whichever
 #: sync merges a few hundred times
 MERGES = 2000
 
-
-def kept_verdicts(state: dict, key: str, main: str, gates: tuple[str, ...]) -> dict[str, list[str]]:
-    """The gate verdicts the queue's state keeps under ``key`` (`Queue._gated`), while `main` and ``gates`` are those they were
-    reached under; else none."""
-    cache = state.get(key) or {}
-    return (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
 
 
 def flags_at(repo: Path, ref: str) -> DriveFlags:
@@ -2780,23 +2772,6 @@ class Queue:
     def _contains(self, ancestor: str, commit: str) -> bool:
         return not _git(self.workdir, "merge-base", "--is-ancestor", ancestor, commit, check=False).returncode
 
-    def _gated(self, main: str, gates: tuple[str, ...], tip: str, commit: str, pr: PR, before: dict[str, list[str]],
-               verdicts: dict[str, list[str]], kind: str = "landing gate") -> tuple[list[str], list[str]]:
-        """`gate_refusal` of ``commit``, ``pr``'s merge onto ``tip``, by ``gates`` (each a ``kind``), or the refusals ``before``
-        (the last syncs' verdicts under this `main` and these gates) holds for a merge with the same message, tree and parent
-        tree: a lift or a moved member merges every member above it again, and those whose members below are the same set have
-        the same trees, each ~15 s of gates.  The gates read only `main`, the merge's trees and message, and the members below,
-        each judged at its own merge.  What the gates say goes into ``verdicts``; a gate that couldn't judge is never kept."""
-        trees = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
-        key = hashlib.sha256("\0".join([*trees, _message(pr)]).encode()).hexdigest()
-        if key in before:
-            verdicts[key] = before[key]
-            return list(before[key]), []
-        refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch, kind=kind)
-        if not unjudged:
-            verdicts[key] = refused
-        return refused, unjudged
-
     def _read_priority(self, state: dict) -> tuple[int, ...]:
         """Drive's priority list from `priority_file` (`priority_list`), in its order, logged when it changes (the state's
         `priority`); one it can't read is empty, its error logged once while it stays the same (`priority_error`)."""
@@ -2918,8 +2893,6 @@ class Queue:
         waits: dict[str, dict] = {}
         gates = gates_at(self.workdir, main) if order[k:] else ()
         warns = gates_at(self.workdir, main, "warn_gates") if order[k:] else ()
-        before, verdicts = kept_verdicts(state, "gate_verdicts", main, gates), {}
-        warn_before, warn_verdicts = kept_verdicts(state, "warn_verdicts", main, warns), {}
         open_heads = {p.number: p.head for p in open_prs}
         warned = {n: w for n, w in (state.get("warned") or {}).items() if open_heads.get(int(n)) == w["head"]}
         merged = False
@@ -2965,7 +2938,7 @@ class Queue:
             if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
                 commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
-                refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
+                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch, kind="landing gate")
                 if unjudged and not refused:
                     wait(n, f"a landing gate can't judge it yet: {' | '.join(unjudged)}; retried next sync")
                     continue
@@ -2975,7 +2948,7 @@ class Queue:
                 refuse(n, why)
                 continue
             if warns:
-                said, unjudged = self._gated(main, warns, tip, commit, e.pr, warn_before, warn_verdicts, kind="warn gate")
+                said, unjudged = gate_refusal(self.workdir, main, commit, warns, onto=self.branch, kind="warn gate")
                 if said:
                     warned[str(n)] = {"head": e.pr.head, "why": " | ".join(said), "handle": self.handle(e.pr)}
                 if unjudged:
@@ -2995,8 +2968,6 @@ class Queue:
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
                  + (f", merges reused for {self._merges_reused}" if self._merges_reused else "")
-                 + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())
-                                                                  + len(warn_verdicts.keys() & warn_before.keys())) else "")
                  + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
             state["conflicts"], state["waiting"] = conflicts, waits
@@ -3004,11 +2975,6 @@ class Queue:
             moves = {mv.commit for mv in self._moves}
             state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
             state["restacking"] = self._restacking
-            for key, gs, kept, new in (("gate_verdicts", gates, before, verdicts), ("warn_verdicts", warns, warn_before,
-                                                                                   warn_verdicts)):
-                if gs:
-                    newest = {**{h: v for h, v in kept.items() if h not in new}, **new}
-                    state[key] = {"main": main, "gates": list(gs), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
             state["warned"] = warned
             self._keep_merges(state)
             self.save_state(state)
@@ -5175,8 +5141,12 @@ def worktrees_locked(repo: Path):
 
 @contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
-    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (else `MERGED_ROOT`, else the
-    temporary directory; `MERGED_PREFIX`), removed with it whatever happens; one a dead process left is swept first."""
+    """A detached checkout of ``repo`` at ``commit`` in a temporary directory under ``root`` (else `MERGED_ROOT`, else the
+    temporary directory; `MERGED_PREFIX`), removed with it whatever happens; one a dead process left is swept first.  Its git
+    directory is its own, beside it (``git``: HEAD, its index, and a `commondir` naming ``repo``'s), registered nowhere in
+    ``repo``: the clone's other worktree commands (a detached quick tier's or auto plan's `git worktree prune`, which takes no
+    lock) never see it, so none removes it while a build uses it, as one racing a registered worktree's add could (part of its
+    registration deleted, the rest pruned later: `gitfile does not point to a valid repository`)."""
     root = Path(root or MERGED_ROOT or tempfile.gettempdir())
     root.mkdir(parents=True, exist_ok=True)
     for d in root.glob(f"{MERGED_PREFIX}*"):
@@ -5184,17 +5154,18 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
         if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
             shutil.rmtree(d, ignore_errors=True)
     tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
-    wt = tmp / "tree"
+    wt, gd = tmp / "tree", tmp / "git"
     try:
-        with worktrees_locked(repo):
-            _git(repo, "worktree", "prune", check=False)
-            _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        sha = _out(repo, "rev-parse", "--verify", f"{commit}^{{commit}}")
+        gd.mkdir()
+        (gd / "commondir").write_text(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") + "\n")
+        (gd / "HEAD").write_text(sha + "\n")
+        wt.mkdir()
+        (wt / ".git").write_text(f"gitdir: {gd}\n")
+        _git(wt, "reset", "-q", "--hard", sha)
         yield wt
     finally:
-        with worktrees_locked(repo):
-            _git(repo, "worktree", "remove", "--force", str(wt), check=False)
-            shutil.rmtree(tmp, ignore_errors=True)
-            _git(repo, "worktree", "prune", check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 #: the repository's root suite as the quick tier runs it (`suites.py --quick`): `tests/` without the tests marked slow, here
@@ -5883,9 +5854,10 @@ class Preflight:
         it is logged as a warning and kept in `unjudged`, which the mark records on the head (`vocab.GATES_UNJUDGED`).  Under
         `land_into = "main"`, the verified queue's, no sync merges the head onto `next`: its loop runs the landing gates on that
         head alone before it builds it into a candidate, once, and leaves it out, with the gate's reason, if they refuse it
-        (`vqueue_loop.World.gate`).  Under drive's `next`, the sync that would merge the head onto `next` runs the gates again,
-        leaves out a head they refuse, and holds one they can't judge waiting, its mark kept, until a sync's gates can.  What
-        its `warn_gates` say is logged as a warning and refuses nothing: the head is admitted, and its owner told."""
+        (`vqueue_loop.World.gate`), and the check of the candidate holding the head runs them again on its whole change
+        (`landing-gates`), where either is a red.  Under drive's `next`, the sync that would merge the head onto `next` runs the
+        gates again, leaves out a head they refuse, and holds one they can't judge waiting, its mark kept, until a sync's gates
+        can.  What its `warn_gates` say is logged as a warning and refuses nothing: the head is admitted, and its owner told."""
         main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
         try:
             gates, warns = gates_at(self.repo, main), gates_at(self.repo, main, "warn_gates")
