@@ -80,8 +80,8 @@ class H1Device(Protocol):
         """Whether `device_hash` can run in this process (`h1.registered.path`'s ``"auto"``)."""
         ...
 
-    def device_hash(self, words: Any, key: bytes, nonce: int, row_salts: bytes | None, domain_id: bytes,
-                    public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, int] | None = None) -> Any:
+    def device_hash(self, words: Any, row_salts: bytes | None, domain_id: bytes,
+                    public: tuple[bytes, int, bool] | None = None, also: tuple[bytes, bytes] | None = None) -> Any:
         """`h1.registered.commit`'s ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16, hashed on the current
         device: an object whose ``result()`` gives them."""
         ...
