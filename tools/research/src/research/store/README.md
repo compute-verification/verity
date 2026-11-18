@@ -548,6 +548,21 @@ now in the run dir is in the record by content. From the record on, the runner's
 not launcher.log, so nothing it prints makes the run dir differ from its record. An expired key is named in the marker's
 `error`. `--no-custody-r2` leaves attempts with no `run_record`.
 
+- **Private files are never stored.** By name, the tree's one list, `adapters/vllm/verity_vllm/pipeline/private_names.json`
+  (`verity/private-names/v1`: `kept_apart` prefixes of a path's components, `private` globs on a file's name, owner and
+  reason in `why`; no name a public file has), with the meaning its own matcher `private_names.py` gives it; by place and
+  text, `private.py`'s `PLACES`. The floor is that list in the tree `research` runs from: a checkout, a deployed copy laid
+  out as one, or a tool snapshot, which carries it beside its package; without it nothing is stored or copied.
+  Custody adds a run's statement, `private-paths.json` at its run dir's root (`private-paths/v1`: `private` directories outside the run, `names` none of its paths may have, a trailing `/` a directory's), and its shipped tree's
+  list (job.json's `run.remote.source_dir`); an unreadable one stores and copies nothing of the run, and a shipped tree
+  that is missing or holds no list is named in the record's `meta.tree_names`. Custody stores the rest, loudly: `custody REFUSED N private file(s)` on launcher.log
+  and custody's output, each path with its rule in `custody-refused.json`, the record's `meta.refused` and `.custody`'s
+  `refused`; `research status` and `data preserved` say `N private file(s) refused`. A refused file stays,
+  never evicted. No glob or typed output brings one in; a symlink is never followed or uploaded, and
+  one whose name or target is private is listed. `research data put` and `research run-preserve` refuse a
+  payload holding one (exit 1), but a path `artifacts.json` registers and marks in `toys`
+  (`{path: reason}`); `research data export` refuses an unmarked registered fixture holding one. `research fetch --all`
+  judges the run dir on the machine and copies none (`refused` in `remote.json` and `preserved.json`).
 - The workload's `research run-preserve PATH` has the runner put one file of `$OUT` before the run ends: a `run-file/v1`
   artifact with the run id, verified the same way, whose art id it prints, or why not (`run_preserve.py`). The key stays the
   runner's.

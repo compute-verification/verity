@@ -76,8 +76,9 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps of a candidate's check run unsharded, alone (`vqueue_slim.start`): lean-agreement on the merge gate unless that run
-#: skips it by name, not ratchet-gate (policy.toml's `off_gate`)
-SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
+#: skips it by name, and landing-gates (drive.toml's `landing_gates` on the candidate's change from its base, after the audits
+#: whose facts they read, which the run holds for it: `check.gate_audits`), not ratchet-gate (policy.toml's `off_gate`)
+SLIM_STEPS = ("lean-agreement", "landing-gates", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`vqueue_slim.judge`): those steps and the preflights
 SLIM_JUDGED = (*SLIM_STEPS, *(s for s in CHECK_STEPS if s.startswith("preflight-")))
 #: how long a run may show no readable state (`unknown`) before it is taken as lost (`Landing._lost`)

@@ -4,15 +4,16 @@
     prod_repro.py limit --model ID
     prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] [--beside ARM ...] --load NAME
                          [--replayed PASS] [--rep 1] [--replay DIR] [--expect-replay] [--private DIR]
-                         [--target PERCENT] [--json]
+                         [--target PERCENT] [--served-at DIR] [--json]
+    prod_repro.py carry SRC DST
 
 ``report`` reads a finished job's out/ as the serving cost benchmark leaves it (`benchmarks/serve_tax`: a directory an
 arm, and its replay's), prints the report and writes it to OUT/prod_repro.json and OUT/prod_repro.txt:
 
 - first, the context limit the arms' launch lines name, and for a model `LIMITS` says so of, that vLLM does not
   start with the limit left to it;
-- how far each arm's serve and the replay got, from their own records: an arm that failed with its error, one that
-  stopped early, a replay that did not end with the last line of its log; and what the replay's engine ran under, as
+- how far each arm's serve and the replay got, from their own records: an arm that failed with its error's class,
+  one that stopped early, a replay that did not end with the class of the last exception its log names; and what the replay's engine ran under, as
   the replay's own record says (the served arm's other vLLM general plugins and its environment: the canonical DSA
   top-k's), with the top-k's counters of the replay's processes and of serving's where the job kept them
   (``--private``, the benchmark's PRIVATE; `topk_kept`);
@@ -70,6 +71,12 @@ request's first difference (`MATCH`) and the advice in bits a request (`ADVICE`)
 named; with ``--among``, the arms a job lists (the runner's ``--arms``), the set whose arm of ours is among them.
 
 ``limit`` prints the context limit a job serves the model at where it names none (`LIMITS`), or nothing.
+
+The report writes, of what the job's records hold, only fields `NAMED` lists and what it derives from them: a failure
+by its exception's class, a server's settings by the variables' names and digest, the replay's environment by the
+canonical top-k's switch and whether its counters had a directory. ``carry`` copies an earlier job's arm directory
+SRC into a replayed job's DST (run.sh --replay-of) as `NAMED` projects its records; ``report --served-at`` reads
+the arms where that earlier job left them.
 """
 from __future__ import annotations
 
@@ -91,6 +98,10 @@ sys.path.insert(0, str(ROOT / "benchmarks/serve_tax"))
 import replay as R  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
 import serve_tax as S  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402 (the tree's tools/config, which serve_tax put on sys.path)
+
+if str(ROOT / "adapters/vllm") not in sys.path:
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
+from verity_vllm.pipeline.serve_mirror import check_kinds, project  # noqa: E402
 
 SCHEMA = "verity-bench/prod-repro/v0"
 #: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings
@@ -148,6 +159,31 @@ INDEX_TOPK = "index_topk"
 #: the canonical DSA top-k's two variables (`benchmarks/dsa_topk`): its switch, and the directory each process keeps
 #: its counters in
 TOPK, TOPK_LOG = "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG"
+#: the canonical top-k's variables as a record's environment may leave it: the switch's value, and whether a directory
+#: was named for the counters (`topk_flagged`), never the directory
+TOPK_ENV = {TOPK: "structure", TOPK_LOG: "structure"}
+#: Every field of a job's records the report writes (a server's settings record and the replay's ``served_under``) and
+#: a replayed job copies of the earlier job's arm (`carry`, run.sh --replay-of), by record, each with its kind:
+#: `verity.channel`'s, in the table vLLM's mirror states its own in (`serve_mirror.PUBLIC`, through its `check_kinds`
+#: and `project`). A field not named stays where the job wrote it: the requests, their prompts, ids and seeds, the
+#: servers' logs, launch lines and environments (paths, hosts and ports among them), the checkpoint's path, the private
+#: directory and error text. A pass's seconds, start, requests and unfinished ones are the benchmark's own load's,
+#: which no user sent: the benchmark's output. A settings record's ``names`` are the variables it holds, and its digest
+#: is of the engine's settings, the protocol's structure.
+NAMED: dict[str, dict] = {
+    "settings": {"names": "structure", "values": TOPK_ENV, "digest": "structure"},
+    "served_under": {"plugins": "structure", "env": TOPK_ENV, "by": "structure"},
+    "meta.json": {"arm": "structure", "model": "structure", "model_id": "structure", "commit": "structure",
+                  "run_id": "structure", "client": "structure", "lifetime": "structure", "seeded": "structure",
+                  "parts": "structure", "left_out": "structure", "end_of_text_ids": "structure", "startup_s": "output",
+                  "loads": {"load": "structure", "rep": "structure", "rate": "structure", "requests": "output",
+                            "unfinished": "output", "wall_s": "output", "t0_unix": "output"},
+                  "settings": {"names": "structure", "values": TOPK_ENV, "digest": "structure"}, "env": TOPK_ENV},
+    "rep-*/meta.json": {"load": "structure", "rep": "structure", "rate": "structure", "concurrency": "structure",
+                        "requests": "output", "unfinished": "output", "wall_s": "output", "t0_unix": "output"},
+    f"rep-*/{S.RESULT}": {"duration": "output", "completed": "output", "total_output_tokens": "output"},
+}
+check_kinds(NAMED)
 #: what the report keeps in OUT of the canonical top-k's counters, which its processes keep outside it (`topk_kept`)
 TOPK_KEPT = "topk_counters.json"
 #: where in OUT each process's own counters file is kept whole, under its directory's name: its rows by device
@@ -227,7 +263,7 @@ def read(what: str, f: Callable[[], dict]) -> dict:
     try:
         return f()
     except (SystemExit, Exception) as e:  # noqa: BLE001 -- the report says why the part can't be read
-        return not_measured(f"{what} can't be read from the job's files: {type(e).__name__}: {e}", unread=True)
+        return not_measured(f"{what} can't be read from the job's files: {type(e).__name__}", unread=True)
 
 
 def of_load(name: str, load: str) -> bool:
@@ -246,40 +282,68 @@ def arm_state(arm_dir: Path, load: str) -> dict:
         return {"started": False, "ok": False}
     meta = json.loads(f.read_text())
     passes = [x for x in meta.get("loads") or [] if of_load(x["load"], load)]
-    return {"started": True, "error": meta.get("error"), "stopped": meta.get("stopped"), "startup_s": meta.get("startup_s"),
+    return {"started": True, "error": error_class(meta.get("error")), "stopped": meta.get("stopped"),
+            "startup_s": meta.get("startup_s"),
             "log_error": first_error(arm_dir / "server" / "server.log") if meta.get("error") else None,
             "passes": len(passes), "requests": sum(x.get("requests") or 0 for x in passes),
             "unfinished": sum(x.get("unfinished") or 0 for x in passes),
             "ok": bool(passes) and not meta.get("error") and not meta.get("stopped")}
 
 
+#: an exception's class as a log line names it (``SomeError: what``), the class alone kept
+EXCEPTION = re.compile(r"\b([\w.]*(?:Error|Exception|Exit|Interrupt))\b: ")
+#: what a failure is called where its record's error names no class
+UNNAMED = "an error its record names no class of"
+
+
+def error_class(error: str | None) -> str | None:
+    """A record's error (serve_tax's ``Class: what``) as its exception's class alone: what it says is free text and
+    stays in the record. None where there is no error."""
+    if not error:
+        return None
+    name = error.split(":", 1)[0].strip()
+    return name.rpartition(".")[2] if name.replace(".", "_").isidentifier() else UNNAMED
+
+
 def first_error(log: Path) -> str | None:
-    """The first line of a log that is an exception's own (``SomeError: what``), from the exception's name on and cut
-    to `LINE_MAX` characters: under a server that failed, the first cause its log names, where the record's error is
-    the last thing that failed for it. None without the log, "" where it names none."""
+    """The class of the first exception a log's lines name (`EXCEPTION`): under a server that failed, the first cause
+    its log names, where the record's error is the last thing that failed for it. None without the log, "" where it
+    names none."""
     if not log.is_file():
         return None
     for x in log.read_text(errors="replace").splitlines():
-        m = re.search(r"\b[\w.]+(?:Error|Exception)\b: .*", x)
-        if m:
-            return m.group(0).strip()[:LINE_MAX]
+        if m := EXCEPTION.search(x):
+            return m.group(1).rpartition(".")[2]
     return ""
 
 
-def last_line(log: Path) -> str | None:
-    """The last line of a log that says anything, cut to `LINE_MAX` characters; None without the log."""
+def last_error(log: Path) -> str | None:
+    """The class of the last exception a log's lines name (`EXCEPTION`); None without the log, "" where it names none."""
     if not log.is_file():
         return None
-    lines = [x.strip() for x in log.read_text(errors="replace").splitlines() if x.strip()]
-    return lines[-1][:LINE_MAX] if lines else ""
+    names = [m.group(1).rpartition(".")[2] for x in log.read_text(errors="replace").splitlines() if (m := EXCEPTION.search(x))]
+    return names[-1] if names else ""
 
 
 def replay_state(replay_dir: Path, expected: bool) -> dict:
-    """Whether the replay ended (it wrote replay.json), and where it did not, the last line of its log, which the
-    benchmark's runner keeps beside its directory."""
+    """Whether the replay ended (it wrote replay.json), and where it did not, the last exception its log names, which
+    the benchmark's runner keeps beside its directory."""
     log = replay_dir.with_name(replay_dir.name + ".log")
-    return {"expected": expected, "ended": (replay_dir / "replay.json").is_file(), "log": str(log) if log.is_file() else None,
-            "last_line": last_line(log)}
+    return {"expected": expected, "ended": (replay_dir / "replay.json").is_file(), "last_error": last_error(log)}
+
+
+def topk_flagged(env: dict | None) -> dict | None:
+    """An environment with the canonical top-k's counters directory (`TOPK_LOG`) as whether one was named, so that
+    `TOPK_ENV` lets the flag leave and the path stays."""
+    return None if env is None else {**env, **({TOPK_LOG: bool(env[TOPK_LOG])} if TOPK_LOG in env else {})}
+
+
+def named_settings(rec: dict | None) -> dict | None:
+    """The adapter's record of the value settings (`serve_tax.value_settings`) as `NAMED` lets it leave: the variables'
+    names, the canonical top-k's two as `topk_flagged`, and the digest. None for none."""
+    if rec is None:
+        return None
+    return project({**rec, "names": sorted(rec["values"]), "values": topk_flagged(rec["values"])}, NAMED["settings"])
 
 
 # ------------------------------------------------------------------------------------------- the replay's engine
@@ -343,7 +407,7 @@ def replay_engine(out: Path, ours: str, replay_dir: Path, private: Path | None) 
     if "served_under" not in rec:
         return None
     under = rec["served_under"]
-    return {"arm": ours, "under": under,
+    return {"arm": ours, "under": under and project({**under, "env": topk_flagged(under["env"])}, NAMED["served_under"]),
             "topk": topk_kept(out, private, ours, replay_dir.name) if under and under["env"].get(TOPK) else None}
 
 
@@ -541,7 +605,8 @@ def value_settings(dirs: dict[str, list[Path]], stock: str | None, ours: str, re
     served before the benchmark kept it), the arms whose lifetimes do not hold one record (``lifetimes_differ``),
     and the variables, by name, that one side alone sets or sets to another value (``differ``: ours's first
     lifetime against stock's, the replay against it; None where a side has no record). It is beside the settings
-    and in no verdict: ours's server is given variables stock's is not."""
+    and in no verdict: ours's server is given variables stock's is not. A record is written as `named_settings` keeps
+    it; the comparisons read it whole."""
     def kept(f: Path) -> dict | None:
         return json.loads(f.read_text()).get("settings") if f.is_file() else None
 
@@ -553,7 +618,8 @@ def value_settings(dirs: dict[str, list[Path]], stock: str | None, ours: str, re
     arms = {a: {d.name: kept(d / "meta.json") for d in dirs.get(a, [])} for a in (stock, ours) if a}
     first = {a: next(iter(recs.values()), None) for a, recs in arms.items()}
     replay = kept(replay_dir / "replay.json")
-    return {"arms": arms, "replay": replay,
+    return {"arms": {a: {d: named_settings(r) for d, r in recs.items()} for a, recs in arms.items()},
+            "replay": named_settings(replay),
             "lifetimes_differ": sorted(a for a, recs in arms.items() if len({r and r["digest"] for r in recs.values()}) > 1),
             "differ": {"ours_from_stock": differ(first.get(stock), first.get(ours)),
                        "replay_from_ours": differ(first.get(ours), replay)}}
@@ -634,22 +700,23 @@ def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, s
     meta = json.loads((dirs[0] / "meta.json").read_text())
     if not state["ended"]:
         if state["expected"]:
-            return not_measured(f"the replay did not end (no replay.json in {replay_dir})" + (
-                f"; its log ends: {state['last_line']} ({state['log']})" if state["log"] else "; it left no log"))
+            return not_measured(f"the replay did not end (no replay.json in {replay_dir.name})" + (
+                f"; the last exception its log names: {state['last_error']}" if state["last_error"] else
+                "; its log names no exception" if state["last_error"] == "" else "; it left no log"))
         return not_measured("no replay ran" + (": none was asked for (--replay PASS names the pass of vLLM's client to "
                                                "re-run, from an arm that keeps each request's ids)"
-                                               if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir})"))
+                                               if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir.name})"))
     rec, run = json.loads((replay_dir / "replay.json").read_text()), meta.get("run_id")
     of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("served_run_id"))
     arm_dir = replayed_dir(dirs, replay_dir)
     if arm_dir is None or of[1:] != (load, rep, run):
-        return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
+        return not_measured(f"the replay in {replay_dir.name} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
                             f"run {of[3]}), not of {ours}'s {load} rep {rep} of run {run}")
     try:
         w = R.window(arm_dir, load, rep)
         got = R.read_tokens(replay_dir)
     except (SystemExit, OSError, KeyError, ValueError) as e:
-        return not_measured(f"the served window or the replay's tokens can't be read back: {type(e).__name__}: {e}")
+        return not_measured(f"the served window or the replay's tokens can't be read back: {type(e).__name__}")
     served = {r["engine_id"]: r["served"] for r in w["requests"]}
     diff, at = R.token_diff(served, got), R.emitted_at(w["steps"])
     for d in diff:
@@ -922,7 +989,7 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
                             "pass's schedule's (--replay PASS names it)")
     meta, record = json.loads((arm_dir / "meta.json").read_text()), replay_dir / "replay.json"
     if record.is_file() and (of := json.loads(record.read_text())) and (of["load"], of["rep"]) != (load, rep):
-        return not_measured(f"the replay in {replay_dir} is of another pass ({of['load']} rep {of['rep']}), not of "
+        return not_measured(f"the replay in {replay_dir.name} is of another pass ({of['load']} rep {of['rep']}), not of "
                             f"{ours}'s {load} rep {rep}")
     traces = S.step_traces(arm_dir)
     if len(traces) != 1:
@@ -930,7 +997,7 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
     try:
         w, trace = R.window(arm_dir, load, rep), traces[0]
     except (SystemExit, OSError, KeyError, ValueError) as e:
-        return not_measured(f"the pass can't be read back from {ours}'s step trace and ids: {type(e).__name__}: {e}")
+        return not_measured(f"the pass can't be read back from {ours}'s step trace and ids: {type(e).__name__}")
     E = encodings()
     try:
         recs = E.span(S.trace_records(trace), lambda rid: f"-{w['tag']}-" in rid)
@@ -950,11 +1017,13 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
 
 def report(out: Path, stock: str | None, ours: str, again: str | None, load: str, rep: int = 1, replay_dir: Path | None = None,
            target: float = TARGET, replayed: str | None = None, expect_replay: bool = False,
-           private: Path | None = None, beside: Sequence[str] = ()) -> dict:
+           private: Path | None = None, beside: Sequence[str] = (), served_at: Path | None = None) -> dict:
+    """The report of a job's out/ (the module's docstring); with ``served_at``, the out/ of the earlier job whose arm
+    this one replayed, the arms are read there (`carry`)."""
     replay_dir = replay_dir or out / "replay-compiled"
     names = [a for a in (stock, again, ours) if a]
     names += [a for a in beside if a not in names]
-    held = {a: arm_dirs(out, a) for a in names}
+    held = {a: arm_dirs(served_at or out, a) for a in names}
     states = {d.name: read(f"how far {d.name} got", lambda d=d: arm_state(d, load)) for a in names for d in held[a]}
     dirs = {a: ds for a in names if (ds := [d for d in held[a] if (d / "meta.json").is_file()])}
     per, by, sets, unread = {}, {}, {}, {}
@@ -998,7 +1067,7 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
     for figure, ids in ((toks, MATCH), (plan, ADVICE)):
         if figure["measured"]:
             figure["metric"] = ids.get(meta.get("model_id")) if ours == default_arms(meta.get("model_id"))[2] else None
-    return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
+    return {"schema": SCHEMA, "model": meta.get("model"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
             "parts": meta.get("parts"),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by),
@@ -1009,6 +1078,34 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
             "tokens": toks, "cost": line, "layers": read("the cost by layer", lambda: layers(by, load, target)),
             "advice": plan}
+
+
+def carried(src: Path) -> dict[str, dict]:
+    """The records of an arm's directory ``src`` that `carry` copies, by their path in it, each as `NAMED` projects it:
+    its meta.json (its settings record as `named_settings` keeps it, its environment as `topk_flagged`), and each pass's
+    meta.json and result."""
+    meta = json.loads((src / "meta.json").read_text())
+    meta = {**meta, "env": topk_flagged(meta.get("env")), "settings": named_settings(meta.get("settings"))}
+    recs = {"meta.json": project(meta, NAMED["meta.json"])}
+    for key in ("rep-*/meta.json", f"rep-*/{S.RESULT}"):
+        for f in sorted(src.glob(f"*/{key}")):
+            recs[str(f.relative_to(src))] = project(json.loads(f.read_text()), NAMED[key])
+    return recs
+
+
+def carry(src: Path, dst: Path) -> list[str]:
+    """An earlier job's arm directory ``src`` copied into a replayed job's ``dst`` (run.sh --replay-of) as `carried`:
+    every other file, and every field `NAMED` does not list, stays where the earlier job wrote it, where the replay and
+    the report read it (`report`'s ``served_at``). Refused where ``dst`` holds another arm's copy. The paths written,
+    from ``dst``."""
+    recs = carried(src)
+    if (dst / "meta.json").is_file() and json.loads((dst / "meta.json").read_text()) != recs["meta.json"]:
+        raise ValueError(f"prod_repro: {dst.name} is there already and is not {src.name}'s carried copy: --replay-of is "
+                         "a job of its own")
+    for name, rec in recs.items():
+        (dst / name).parent.mkdir(parents=True, exist_ok=True)
+        (dst / name).write_text(json.dumps(rec, indent=1))
+    return list(recs)
 
 
 #: the schema of a run's result.json, whose ``artifacts`` and ``measurement_files`` the store keeps as the run's files
@@ -1256,10 +1353,9 @@ def _arm(name: str, s: dict) -> str:
         + ("every one finished" if not s["unfinished"] else f"{s['unfinished']:,} UNFINISHED"))
     if s["error"]:
         first = s.get("log_error")
-        log = (f"its server's log: {name}/server/server.log" if first is None else
-               f"its server's log names no exception: {name}/server/server.log" if not first else
-               f"the first exception its server's log names: {first} ({name}/server/server.log)")
-        return f"  {name}: FAILED: {s['error']} (its record's error; {log}); {up}{served}"
+        log = ("its server left no log" if first is None else "its server's log names no exception" if not first else
+               f"the first exception its server's log names: {first}")
+        return f"  {name}: FAILED: {s['error']} (the class of its record's error; {log}); {up}{served}"
     if s["stopped"]:
         st = s["stopped"]
         return (f"  {name}: STOPPED before {st.get('before')} rep {st.get('rep')} (--stop-at {st.get('stop_at')}: the pass "
@@ -1326,7 +1422,8 @@ def _engine(e: dict) -> list[str]:
         return none if c is None else _topk(c)
 
     names = ", ".join(x.split("=")[0].strip() for x in under["plugins"])
-    env = ", ".join(f"{k}={v}" for k, v in under["env"].items())
+    env = ", ".join(f"{k}={v}" if not isinstance(v, bool) else f"{k} {'set' if v else 'empty'} (its path stays in the record)"
+                    for k, v in under["env"].items())
     by = f" (set by {under['by']})" if under.get("by") else ""
     lines = [f"  the replay's engine: under what {e['arm']} served with beside its record{by}: the vLLM plugin"
              f"{'' if len(under['plugins']) == 1 else 's'} {names}; {env}"]
@@ -1427,7 +1524,7 @@ def _values(v: dict, stock: str | None, ours: str) -> list[str]:
             return f"{name} not recorded"
         against = ("" if differ is None else f", the same as {other}" if not differ else
                    f", differing from {other} in {', '.join(differ)}")
-        return f"{name} {len(rec['values']):,} set, SHA-512 {rec['digest'][:DIGEST_SHOWN]}{against}"
+        return f"{name} {len(rec['names']):,} set, SHA-512 {rec['digest'][:DIGEST_SHOWN]}{against}"
 
     d = v["differ"]
     sides = [*([one(stock, first.get(stock), None, "")] if stock else []),
@@ -1519,7 +1616,7 @@ def text(r: dict) -> str:
     lines = [_first(r),
              f"prod_repro: load {r['load']}; stock {stock or 'not served'}, stock again {a['again'] or 'not served'}, ours {ours}; "
              f"run {r['run']}, commit {r['commit']}",
-             f"model: {r['model'] or 'not read'}, as the benchmark names it; the checkpoint served: {r['checkpoint'] or 'not read'}",
+             f"model: {r['model'] or 'not read'}, as the benchmark names it",
              "what ran:", *(_arm(name, s) for name, s in ran["arms"].items()),
              *(f"  {why}" for why in ran["unread"].values())]
     rp = ran["replay"]
@@ -1530,8 +1627,9 @@ def text(r: dict) -> str:
                                               f" in {t['replay_wall_s']:.0f} s, its engine ready in {t['engine_ready_s']:.0f} s; "
                                               f"the served window took {t['served_window_s']:.0f} s"))
     elif rp["expected"]:
-        lines.append("  the replay: DID NOT END" + (f"; its log ends: {rp['last_line']} ({rp['log']})" if rp["log"] else
-                                                    ": it left no log, so it did not start"))
+        lines.append("  the replay: DID NOT END" + (
+            f"; the last exception its log names: {rp['last_error']}" if rp["last_error"] else
+            "; its log names no exception" if rp["last_error"] == "" else ": it left no log, so it did not start"))
     else:
         lines.append("  the replay: none was asked for")
     lines += _engine(ran["replay_engine"])
@@ -1638,8 +1736,20 @@ def main(argv: list[str] | None = None) -> int:
                    help="the job's private directory on the node (the benchmark's PRIVATE), where the canonical top-k's "
                         "processes kept their counters: read there and kept in OUT")
     p.add_argument("--target", type=float, default=TARGET, metavar="PERCENT")
+    p.add_argument("--served-at", type=Path, metavar="DIR",
+                   help="the out/ of the earlier job whose arm OUT's job replayed (run.sh --replay-of): its arms are read there")
     p.add_argument("--json", action="store_true", help="print the JSON object alone")
+    q = sub.add_parser("carry", help="an earlier job's arm directory, as NAMED projects its records, into a replayed job's")
+    q.add_argument("src", type=Path)
+    q.add_argument("dst", type=Path)
     a = ap.parse_args(argv)
+    if a.cmd == "carry":
+        try:
+            carry(a.src, a.dst)
+        except ValueError as e:
+            print(e)
+            return 2
+        return 0
     if a.cmd == "arms":
         print(" ".join(default_arms(a.model, a.out, a.among)))
         return 0
@@ -1649,7 +1759,7 @@ def main(argv: list[str] | None = None) -> int:
     stock, again, ours = default_arms(out=a.out)
     r = report(a.out, (stock if a.stock is None else a.stock) or None, a.ours or ours,
                (again if a.again is None else a.again) or None, a.load, a.rep,
-               a.replay, a.target, a.replayed, a.expect_replay, a.private, a.beside)
+               a.replay, a.target, a.replayed, a.expect_replay, a.private, a.beside, a.served_at)
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))
     (a.out / "prod_repro.txt").write_text(text(r))

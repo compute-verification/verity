@@ -12,6 +12,8 @@ from typing import Any
 
 from verity.channel import PUBLIC as KINDS
 
+__all__ = ["check_kinds", "project"]
+
 #: The two lists below are written out, not read from their sources, so that a field added at a source stays in the serve
 #: dir until it is listed here; a test holds each name to its source, and `LEFT_OUT` states what each source has that its
 #: list leaves out.

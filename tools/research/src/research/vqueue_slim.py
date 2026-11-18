@@ -1,7 +1,8 @@
 """The run beside each candidate of the verified queue (`research.vqueue`), and the check that gates it.  The run beside is
 `train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement
 left out when a run of every step would skip it (`Landing.beside_args`), whose check runs the preflights before any step.  It
-is judged on the merge gate: the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.
+is judged on the merge gate: the preflights, lean-agreement and landing-gates count, policy.toml's `off_gate` (ratchet-gate)
+doesn't.
 
 What the loop does.  It starts the run with each candidate's build, beside each candidate's check, so up to its `--depth`
 of them at once take the queue's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until
@@ -23,8 +24,9 @@ every pass they left (`start`'s ``after``).
 A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-512 over the step's name and the files it
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
 tree, with no run.  An equal key means the base fails the step too, so `vqueue.decide` takes the failure as inherited.  A step whose reads can't be bounded is keyed on the whole tree, so its
-failure is never inherited by its key: preflight-lints (its lints read every file, `check.lints_key`) and ratchet-gate (it
-judges the merges above the base, not a tree).  Each failed step's one test (`Failed.tests`) is the step's (`step_test`), so
+failure is never inherited by its key: preflight-lints (its lints read every file, `check.lints_key`), ratchet-gate (it
+judges the merges above the base, not a tree) and landing-gates (the change from the base).  Each failed step's one test
+(`Failed.tests`) is the step's (`step_test`), so
 the run beside the base's own check, which the loop keeps beside `main` (started on `main` against itself, so lean-agreement
 never runs), says what the base fails (`based`): failed there too, a step's failure is inherited by `vqueue.decide`'s rule
 of failing tests.
@@ -1288,7 +1290,8 @@ def _text(path: Path) -> str:
 
 #: the steps whose reads can't be bounded, each keyed on the whole tree, and why
 WHOLE = {"preflight-lints": "its lints read every file (`check.lints_key`)",
-         "ratchet-gate": "it judges the merges above the base, not a tree"}
+         "ratchet-gate": "it judges the merges above the base, not a tree",
+         "landing-gates": "it judges the change from the base, not a tree"}
 
 
 def reads(repo: Path, commit: str, step: str) -> frozenset[str] | str:

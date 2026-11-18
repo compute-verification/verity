@@ -1729,21 +1729,18 @@ def test_a_note_in_a_lanes_subdirectory_is_its_agents_activity_and_its_lanes(tmp
     assert heard[W1_] == T0 - 60 and lanes == {"ci": T0 - 60}
 
 
-def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
-    """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
-    FINISHED, its conversation ending on the message. Its lane's handle is rung, once per `updatedAt`."""
+def test_a_worker_first_read_idle_soon_after_it_stopped_is_rung_for_its_lane(tmp_path):
+    """A pool reviewer is a worker the list doesn't show: read by id for the first time IDLE, 15 min after it stopped, with no
+    report back to a parent. It is one stop, rung to its lane's handle once, whatever its conversation ends on."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits reviewer ({W1_})")
     idle = {**worker("IDLE", "2026-10-18T19:45:00Z", name="Reviewer review-2"), "latestRunId": "run-w"}
     api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:32:53Z"}},
                                  workers={W1_: idle}, notes=notes)
     api.convs[W1_] = [*ASKED, ("user_message", "Review the second change.")]
-    w.sweep(lambda r: None)
-    clock.t += 60
-    w.sweep(lambda r: None)
-    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
-            if r["kind"] == "dropped"] == [
-        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
+    sweeps(w, clock, 10, step=1)
+    assert [(r["at"], r["lane"]) for r in idles(tmp_path, W1_)] == [("2026-10-18T19:45:00Z", "circuits")]
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
 def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(tmp_path):
@@ -1762,9 +1759,9 @@ def test_a_task_worker_whose_latest_run_id_never_moves_is_never_called_dropped(t
     assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
-def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_later_message_is_dropped(tmp_path):
-    """A pool reviewer's runs are the API's: its IDLE right after an ACTIVE read is the run it was doing ending; a message
-    that moves it later, with no run, is dropped."""
+def test_a_worker_seen_active_then_idle_and_moved_again_is_one_stop_each(tmp_path):
+    """A pool reviewer's IDLE right after an ACTIVE read is one stop; a later message that moves it and leaves it idle is
+    another, rung at its own `updatedAt`."""
     notes = tmp_path / "notes"
     note(notes, "ci", "a.md", f"ci reviewer ({W1_})")
     st = {**worker("ACTIVE", "2026-10-18T19:40:00Z", name="review-1"), "latestRunId": "run-w"}
@@ -1772,15 +1769,14 @@ def test_a_worker_with_api_runs_seen_active_then_idle_is_a_run_that_ended_and_a_
     api, clock, w = coordinators(tmp_path, [], runs, workers={W1_: st}, notes=notes)
     w.sweep(lambda r: None)
     runs["run-w"].update(status="FINISHED", updatedAt="2026-10-18T19:44:00Z")
-    st.update(status="IDLE", updatedAt="2026-10-18T19:50:00Z")
-    clock.t += 60
-    w.sweep(lambda r: None)
-    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == [], "it ran and stopped: nothing was dropped"
+    st.update(status="IDLE", updatedAt="2026-10-18T19:59:00Z")
+    sweeps(w, clock, 5, step=1)
     st.update(updatedAt="2026-10-18T20:05:00Z")
     api.convs[W1_] = [*ASKED, ("user_message", "Review the second change.")]
-    clock.t = W.epoch("2026-10-18T20:11:00Z")
-    w.sweep(lambda r: None)
-    assert [r["since"] for r in records(tmp_path) if r["kind"] == "dropped"] == ["2026-10-18T20:05:00Z"]
+    clock.t = W.epoch("2026-10-18T20:06:00Z")
+    sweeps(w, clock, 10, step=1)
+    assert [r["at"] for r in idles(tmp_path, W1_)] == ["2026-10-18T19:59:00Z", "2026-10-18T20:05:00Z"]
+    assert [r for r in records(tmp_path) if r["kind"] == "dropped"] == []
 
 
 def drops(tmp_path):
@@ -1811,12 +1807,11 @@ def seat(tmp_path, launched_by=CO, listed=False):
 @pytest.mark.parametrize(("resumed", "turn"), [(242, 136), (1461, 447)], ids=["a-short-turn", "a-long-turn"])
 @pytest.mark.parametrize("seen", [True, False], ids=["its-coordinators-call-seen", "a-workers-call-never-seen"])
 @pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
-def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, resumed, turn, seen, listed):
-    """A seat resumed with Task ran a turn the API lists no run for: it ended more than `DROPPED_S` after the seat's one
-    listed run, moved its `updatedAt`, and no read of the seat fell inside it, so the seat, IDLE and with its report back,
-    was rung as a message that never became a run. Its conversation ends with its own text. That holds whoever resumed
-    it (its coordinator, whose Task call the watch saw, or a worker, whose Task calls the watch never sees) and however
-    the watch reads it (by id, or on the agent list, where no read of it ACTIVE would have told either)."""
+def test_a_turn_a_task_resume_ran_is_rung_unless_its_parent_got_the_result(tmp_path, resumed, turn, seen, listed):
+    """A seat resumed with Task ran a turn the API lists no run for and moved its `updatedAt`, read IDLE before and after.
+    Read by id it is a worker: its coordinator's Task call completing as it stopped is the report back, and nothing is
+    rung; a worker's Task calls the watch never sees, so that stop is rung, once. On the agent list with a run it is the
+    sweep's, whose conversation shows a turn ran: nothing is dropped."""
     api, clock, w, st = seat(tmp_path, launched_by=CO if seen else W2_, listed=listed)
     clock.t = T0 + resumed
     if seen:
@@ -1828,62 +1823,22 @@ def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, res
     if seen:
         w.child(CO, {"args": {"agentId": W1_, "description": "SEAT-A"}, "status": "completed"}, clock.t)
     sweeps(w, clock, 20, step=1)
-    if not listed:
-        assert w.workers[W1_]["updated"] == T0 + resumed + turn and not w.workers[W1_].get("no_runs"), "read IDLE, never ACTIVE"
+    assert [r["at"] for r in idles(tmp_path, W1_)] == ([] if seen or listed else [W.iso(T0 + resumed + turn)])
     assert drops(tmp_path) == []
-    assert conv_reads(api, W1_) == 1, "asked once for the change, and not again"
 
 
 @pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
-def test_a_message_nothing_answered_is_still_dropped_once_for_its_owner(tmp_path, listed):
-    """The fault the ring is for: a message reached an idle seat and became no run and no turn. Its `updatedAt` moved past
-    its one run's end and nothing of its own follows the message in its conversation."""
+def test_a_message_nothing_answered_is_one_stop_rung_once_for_its_owner(tmp_path, listed):
+    """A message reached an idle seat and became no run and no turn: its `updatedAt` moved and it is idle with no report
+    back. Read by id it is a worker's stop like any other; on the agent list with a run, the sweep's `dropped`."""
     api, clock, w, st = seat(tmp_path, listed=listed)
     clock.t = T0 + 600
     api.convs[W1_] += [("user_message", "Check the second table against the first.")]
     st["updatedAt"] = W.iso(clock.t)
     sweeps(w, clock, 20, step=1)
-    assert [(r["agent"], r["run"], r["since"], r["ended"], r["owner"], r["status"]) for r in drops(tmp_path)] == [
-        (W1_, "run-w", W.iso(T0 + 600), W.iso(T0), "circuits", "IDLE")]
-
-
-def test_a_dropped_message_is_judged_once_it_has_sat_and_by_one_read_of_the_conversation(tmp_path):
-    """The conversation is the sign, so it is read only for an agent about to be recorded, once per change: not while the
-    change is younger than `DROPPED_S` (a turn just starting has written nothing yet), and not again once judged. The
-    record says what the read showed."""
-    api, clock, w, st = seat(tmp_path)
-    assert conv_reads(api, W1_) == 0, "idle since its run ended: never asked"
-    clock.t = T0 + 600
-    api.convs[W1_] += [("user_message", "Check the second table against the first.")]
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 - 1, step=1)
-    assert drops(tmp_path) == [] and conv_reads(api, W1_) == 0, "four minutes on: not yet a message nothing answered"
-    sweeps(w, clock, 1, step=1)
-    assert [(r["status"], r.get("unanswered"), r.get("unread_minutes")) for r in drops(tmp_path)] == [("IDLE", True, None)]
-    sweeps(w, clock, 30, step=1)
-    assert len(drops(tmp_path)) == 1 and conv_reads(api, W1_) == 1
-
-
-def test_a_conversation_the_api_wont_read_neither_drops_by_itself_nor_hides_a_dropped_message(tmp_path):
-    """With the conversation unread the times alone are no dropped message: nothing is recorded, and it is read again
-    every `DROPPED_RETRY_S`. One unread at every try for `DROPPED_UNREAD_S` is recorded all the same, saying for how long
-    it went unread in place of what it showed, so a conversation the API never gives hides no one; one that reads in
-    time is judged by what it shows."""
-    api, clock, w, st = seat(tmp_path)
-    clock.t = T0 + 600
-    del api.convs[W1_]
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 + W.DROPPED_UNREAD_S // 60 - 1, step=1)
-    assert drops(tmp_path) == [] and conv_reads(api, W1_) == W.DROPPED_UNREAD_S // W.DROPPED_RETRY_S
-    sweeps(w, clock, 30, step=1)
-    assert [(r["since"], r.get("unanswered"), r["unread_minutes"]) for r in drops(tmp_path)] == [
-        (W.iso(T0 + 600), None, W.DROPPED_UNREAD_S // 60)]
-    assert conv_reads(api, W1_) == W.DROPPED_UNREAD_S // W.DROPPED_RETRY_S + 1
-    st["updatedAt"] = W.iso(clock.t)
-    sweeps(w, clock, W.DROPPED_S // 60 + 2 * W.DROPPED_RETRY_S // 60, step=1)
-    api.convs[W1_] = [("user_message", "Check the second table."), ("assistant_message", "Checked: they agree.")]
-    sweeps(w, clock, 2 * W.DROPPED_UNREAD_S // 60, step=1)
-    assert len(drops(tmp_path)) == 1, "read at a later try, it ends with the seat's own text: a turn ran"
+    stops = drops(tmp_path) if listed else idles(tmp_path, W1_)
+    assert [(r["agent"], r["since"], r.get("owner") or r["lane"]) for r in stops] == [(W1_, W.iso(T0 + 600), "circuits")]
+    assert len(drops(tmp_path) + idles(tmp_path, W1_)) == 1
 
 
 def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_last_message():
@@ -1895,9 +1850,9 @@ def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_las
         "an assistant message with no text is nothing of its own"
 
 
-def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp_path):
-    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no message that never became
-    a turn, whatever its conversation ends on. Its own status ERROR, should v1 give one, needs no further read."""
+def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_idle(tmp_path):
+    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no idle stop too. Its own
+    status ERROR, should v1 give one, needs no further read."""
     api, clock, w, st = seat(tmp_path)
     api.workers[W2_] = {**worker("IDLE", W.iso(T0), name="SEAT-B"), "latestRunId": "run-w"}
     w.workers[W2_] = {"heard": T0, "lane": "circuits", "handle": "circuits"}
@@ -1908,18 +1863,51 @@ def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp
     st["status"] = "ERROR"
     before = len(api.gets)
     sweeps(w, clock, 15, step=1)
-    assert {r["agent"]: (r["kind"], r["status"]) for r in records(tmp_path)} == {W1_: ("crashed", "ERROR"), W2_: ("dropped", "IDLE")}
-    assert f"/v0/agents/{W1_}" not in api.gets[before:] and conv_reads(api, W1_) == 0
+    assert {r["agent"]: r["kind"] for r in records(tmp_path)} == {W1_: "crashed", W2_: "worker_idle"}
+    assert f"/v0/agents/{W1_}" not in api.gets[before:]
 
 
-def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
-    """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
-    monkeypatch.setattr(W, "WORKERS_NEW", 1)
-    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z"),
-                                                           W2_: worker("IDLE", "2026-10-18T19:00:00Z")})
-    w.workers = {W1_: {"heard": T0 - 5 * 86400 + 60, "lane": "x"}, W2_: {"heard": T0 - 60, "lane": "x"}}
+def test_a_worker_never_read_and_first_heard_of_recently_is_read_before_an_old_idle_one(tmp_path, monkeypatch):
+    """336 known workers had never been read: a sweep's reads ran out on workers read many times before. A worker never
+    read and first heard of within `WORKER_NEW_S` is read ahead of an idle one the watch has read, however recently a
+    note of that one's changed."""
+    monkeypatch.setattr(W, "WORKER_READS", W.FOLLOW_UP + 1)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", W.iso(T0 - 7200)),
+                                                           W2_: worker("IDLE", W.iso(T0 - 7200))})
+    w.workers = {W1_: {"heard": T0 - 60, "lane": "x", "read": T0 - 1800, "status": "IDLE", "updated": T0 - 7200},
+                 W2_: {"heard": T0 - W.WORKER_NEW_S + 60, "lane": "x"}}
     w.sweep(lambda r: None)
     assert f"/v1/agents/{W2_}" in api.gets and f"/v1/agents/{W1_}" not in api.gets
+
+
+@pytest.mark.parametrize("budget", [12, 9])
+def test_a_sweep_short_of_reads_reads_every_worker_that_can_have_just_stopped_first(tmp_path, monkeypatch, budget):
+    """A sweep's reads ran out before it reached every worker, and the ones it left were those that had just stopped.
+    With fewer reads than known workers, every worker last read ACTIVE and every one a Task call just launched is read
+    before any idle one, the idle ones are those left, and a stop among the first is rung at that sweep's flush."""
+    monkeypatch.setattr(W, "WORKER_READS", budget)
+    active, kids, idle = ([f"bc-{c}{i}{c * 6}-0000-0000-0000-{i:012x}" for i in range(n)]
+                          for c, n in (("a", 3), ("b", 2), ("d", 10)))
+    api, clock, w = coordinators(tmp_path, [], {})
+    for a in active:
+        api.workers[a] = worker("ACTIVE", W.iso(T0 - 3600), name="A")
+        w.workers[a] = {"heard": T0 - 86400, "lane": "circuits", "handle": "circuits", "parent": CO, "read": T0 - 300,
+                        "status": "ACTIVE", "updated": T0 - 3600, "since": T0 - 3600, "long": False}
+    stop = T0 - W.BURST_QUIET_S - 60
+    api.workers[active[2]] = worker("IDLE", W.iso(stop), name="A")
+    for a in kids:
+        api.workers[a] = worker("ACTIVE", W.iso(T0 - 60), name="K")
+        w.child(CO, {"args": {"agentId": a, "description": "K"}}, T0 - 60)
+    for a in idle:
+        api.workers[a] = worker("IDLE", W.iso(T0 - 7200), name="D")
+        w.workers[a] = {"heard": T0 - 86400, "lane": "circuits", "handle": "circuits", "read": T0 - 600, "status": "IDLE",
+                        "updated": T0 - 7200}
+    w.sweep(lambda r: None)
+    read = [g.rsplit("/", 1)[1] for g in api.gets if g.startswith("/v1/agents/") and g.count("/") == 3]
+    assert set(active + kids) <= set(read) and read[:len(active + kids)] == sorted(read[:len(active + kids)])
+    assert set(read[len(active + kids):]) < set(idle), "only idle ones after them, and not all of them"
+    assert [r["at"] for r in idles(tmp_path, active[2])] == [W.iso(stop)], "its stop rung in the same sweep"
+    assert len([g for g in api.gets if "/agents/bc-" in g]) <= budget
 
 
 def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
@@ -1956,6 +1944,51 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
     again.sweep(lambda r: None)
     assert [r["at"] for r in records(tmp_path)] == ["2026-10-18T20:06:00Z", "2026-10-18T20:30:00Z"], \
         "the ACTIVE read before a restart of the watch counts (state.json)"
+
+
+def test_a_runless_agent_on_the_listing_is_judged_as_a_worker_with_no_read_by_id(tmp_path):
+    """The listing doesn't show a lead's Task workers, but an agent it does show with no run, which the sweep can't
+    judge, is judged as a worker from that listing: its stop is recorded with no read of it by id."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    st = {"id": W1_, "name": "ZKS10", "status": "ACTIVE", "createdAt": "2026-10-18T12:00:00Z", "updatedAt": "2026-10-18T19:31:00Z"}
+    api, clock, w = coordinators(tmp_path, [st], {}, notes=notes)
+    w.sweep(lambda r: None)
+    st.update(status="IDLE", updatedAt=W.iso(clock.t + 30))
+    sweeps(w, clock, 10, step=1)
+    assert [r["at"] for r in idles(tmp_path, W1_)] == [W.iso(T0 + 30)]
+    assert f"/v1/agents/{W1_}" not in api.gets
+
+
+def test_a_stop_between_two_idle_reads_is_rung_once_and_one_long_past_never(tmp_path):
+    """A worker resumed and stopped again between two sweeps is never read ACTIVE, and was never rung. Its `updatedAt`
+    moving while it reads IDLE is a stop, recorded once, however often it is read after; one the first read finds stopped
+    `STALE_STOP_S` ago or more is no stop anyone can still act on, and rings no one."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", W.iso(T0 - W.STALE_STOP_S))}, notes=notes)
+    sweeps(w, clock, 10, step=1)
+    assert idles(tmp_path, W1_) == [], "first read long after it stopped"
+    stop = clock.t - 30
+    api.workers[W1_] = worker("IDLE", W.iso(stop))
+    sweeps(w, clock, 30, step=1)
+    assert [r["at"] for r in idles(tmp_path, W1_)] == [W.iso(stop)], "once, though read IDLE at that updatedAt thirty times"
+
+
+@pytest.mark.parametrize("stop_s", [0, 59, 61, 299])
+def test_a_lone_stop_reaches_its_lead_within_a_sweep_and_the_quiet_hold(tmp_path, stop_s):
+    """A lone worker's stop is posted within one sweep interval plus `BURST_QUIET_S` of its `updatedAt`, wherever in the
+    interval it falls (sweeps here every 5 min)."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 600))}, notes=notes)
+    w.sweep(lambda r: None)
+    stop = clock.t + stop_s
+    api.workers[W1_] = worker("IDLE", W.iso(stop))
+    clock.t = stop
+    sweeps(w, clock, 30, step=5)
+    (rec,) = idles(tmp_path, W1_)
+    assert W.epoch(rec["t"]) - stop <= 300 + W.BURST_QUIET_S
 
 
 def test_a_worker_whose_parent_got_its_task_result_is_not_recorded_idle_and_one_resumed_later_is(tmp_path):
@@ -2055,8 +2088,10 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
         reads.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v1/")])
         stops.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v0/")])
         clock.t += 60
-    assert [len(r) for r in reads] == [W.WORKERS_NEW, W.WORKERS_NEW, 9, 0], \
-        "20 first reads a sweep; a listed agent is no worker; one IDLE for 12 h isn't read again"
+    n = (W.WORKER_READS - W.FOLLOW_UP) // 2
+    assert [len(r) for r in reads] == [n, 49 - n, 0, 0], \
+        "two reads a worker (by id, then v0) out of a sweep's WORKER_READS; a listed agent is no worker; one IDLE for 12 h " \
+        "isn't read again"
     assert all(len(set(r)) == len(r) for r in reads), "at most one read per worker a sweep"
     assert [[g[4:] for g in r] for r in stops] == [[g[4:] for g in r] for r in reads], \
         "and one read of how it stopped (its v0 status), with its first read: FINISHED, so never again"
@@ -4392,7 +4427,7 @@ def test_a_coordinator_is_relaunched_only_on_its_runs_read_then_and_showing_none
     def began():
         api._agents[0]["latestRunId"], api.older[co] = "run-own", ["run-e9"]
         api._runs["run-own"] = {"status": "RUNNING"}
-    after(api, 1, began if by_then == "began" else spent)
+    after(api, 2, began if by_then == "began" else spent)     # its latest run, then its runs: the sweep finds it still down
     w.sweep(lambda r: None)
     assert [r["kind"] for r in records(tmp_path)] == ["crashed"] * 3 + ["erroring", "relaunch"] and launched == []
     rec = records(tmp_path)[-1]
@@ -4720,6 +4755,39 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
 
 
+@pytest.mark.parametrize("replaced", [True, False], ids=["a-newer-run-replaced-it", "its-only-run"])
+@pytest.mark.parametrize("status", ["ACTIVE", "IDLE"])
+def test_a_coordinator_is_down_by_its_newest_run_only(tmp_path, replaced, status):
+    """Coordinators were called down, and a person rung for an outage, by an older run in error that a newer run had
+    replaced. An agent is down only while its newest started run is in error: one whose errored run a newer one replaced
+    records nothing and rings no one, a person included; one whose only run errored is down, and an outage when five are."""
+    ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(1, 6)]
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    routes.mkdir()
+    reg.write_text(json.dumps({"handles": [{"handle": f"h{i}", "holder": f"the h{i} coordinator ({a})"} for i, a in enumerate(ids)]}))
+    old = {"status": "ERROR", "createdAt": "2026-10-18T19:00:00Z", "updatedAt": "2026-10-18T19:05:00Z"}
+    new = {"status": "RUNNING", "createdAt": "2026-10-18T19:30:00Z", "updatedAt": "2026-10-18T19:30:00Z"}
+    runs = {**{f"err-{i}": dict(old) for i in range(5)}, **{f"new-{i}": dict(new) for i in range(5)}}
+    api = FakeApi([{"id": a, "name": f"verity: h{i}", "status": status, "latestRunId": f"err-{i}"}
+                   for i, a in enumerate(ids)], runs, older={a: [f"new-{i}"] for i, a in enumerate(ids)} if replaced else {})
+    clock = Clock(T0)
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
+
+    def refused(path, body=None):
+        raise W.urllib.error.HTTPError(path, 503, "Service Unavailable", {}, None)
+    api.post = refused
+    for _ in range(0, 2 * 3600, 300):
+        for a in api._agents:
+            a["updatedAt"] = W.iso(clock.t - 60)
+        w.sweep(lambda r: None)
+        clock.t += 300
+    kinds = {r["kind"] for r in records(tmp_path)}
+    if replaced:
+        assert not w.down and "outage" not in kinds and "erroring" not in kinds and "relaunch" not in kinds
+    else:
+        assert set(w.down) == set(ids) and "outage" in kinds
+
+
 def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_limit_once_coordinators_are_back(tmp_path):
     """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
     minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
@@ -4817,11 +4885,12 @@ def registered(tmp_path, clock, agent=W1_, lane="circuits", by=CO, **more):
     return p
 
 
-def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, **kw):
+def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, updated=T0, **kw):
     """A swarm's integrator (W1_), a Task subagent the circuits coordinator launched and registered, named after its issue:
-    no run the API lists, IDLE on v1 since T0 however its turn ended, and `v0` what the legacy status says of it. The
-    watch, before its first sweep."""
-    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(T0), name=name)}, **kw)
+    no run the API lists, IDLE on v1 since `updated` however its turn ended, and `v0` what the legacy status says of it.
+    The watch, before its first sweep."""
+    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(updated), name=name)},
+                                 **kw)
     linear_teams(tmp_path)
     registered(tmp_path, clock)
     api.v0[W1_] = v0
@@ -4844,7 +4913,7 @@ def test_a_worker_stopped_with_an_error_is_recorded_once_for_its_lane_naming_it_
     (rec,) = records(tmp_path)
     assert {k: v for k, v in rec.items() if k not in ("t", "since")} == {
         "kind": "crashed", "agent": W1_, "name": "CIR-7 INTEGRATOR", "run": "", "role": "worker", "status": "ERROR",
-        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT}
+        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT, "at": W.iso(T0)}
     assert W.epoch(rec["since"]) == T0 + W.DROPPED_S, "once its last change is `DROPPED_S` old: a turn would have begun by then"
     assert status(tmp_path)[W1_]["watch_state"] == "crashed"
     assert stops(api) == 2 and api.posts == [], "read at its first read and once past `DROPPED_S`; nothing is started on it"
@@ -4909,7 +4978,8 @@ def test_workers_of_one_coordinator_stopped_in_error_together_are_one_record_nam
 
 
 def test_a_v0_status_the_api_wont_give_records_nothing_and_is_read_again(tmp_path, capsys):
-    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None))
+    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None),
+                               updated=T0 - W.STALE_STOP_S)
     sweeps(w, clock, 30, step=1)
     assert records(tmp_path) == [] and stops(api) == 30 * 60 // W.STOP_S, "every `STOP_S`, not every sweep"
     assert capsys.readouterr().err.count("v0 status went unread") == 1, "said once an hour"
@@ -5017,10 +5087,12 @@ class FakeLinear:
 
 
 def swarm(tmp_path, name="CIR-7 INTEGRATOR", linear=..., **entry):
-    """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well) registered
-    by its lead as taking hand-ins on the issue it is named after, and Linear holding that issue with no comment yet."""
+    """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well before the
+    watch's first read) registered by its lead as taking hand-ins on the issue it is named after, and Linear holding that
+    issue with no comment yet."""
     lin = FakeLinear(CIR_7={})
-    api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear)
+    api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear,
+                               updated=T0 - W.STALE_STOP_S)
     lin.clock = clock
     registered(tmp_path, clock).unlink()
     registered(tmp_path, clock, integrates="CIR-7", **entry)
@@ -5141,7 +5213,7 @@ def test_a_linear_read_that_fails_records_nothing_and_is_made_again_at_the_next_
     issue) is asked again far less often."""
     api, clock, w, lin = swarm(tmp_path)
     registered(tmp_path, clock, W7_, integrates="CIR-8")
-    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+    api.workers[W7_] = worker("IDLE", W.iso(T0 - W.STALE_STOP_S), name="CIR-8 MERGER")
     lin.issues["CIR-8"] = {"comments": []}
     lin.said("CIR-7", T0 - 3 * 3600, "circuits/SEAT-A")
     lin.said("CIR-8", T0 - 3 * 3600, "circuits/SEAT-B")
@@ -5171,7 +5243,7 @@ def test_with_no_linear_credential_no_hand_in_is_recorded_and_the_log_says_so_on
     lin = W.Linear(env, tmp_path / "linear-token.json", http=lambda *a: asked.append(a))
     api, clock, w, _ = swarm(tmp_path, linear=lin)
     registered(tmp_path, clock, W7_, integrates="CIR-8")
-    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+    api.workers[W7_] = worker("IDLE", W.iso(T0 - W.STALE_STOP_S), name="CIR-8 MERGER")
 
     def three_hours(watch):
         for _ in range(3 * 60):
