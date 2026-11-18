@@ -20,7 +20,8 @@ A piece is what one party does in the run (`Piece`), in one of four ways (``runs
   this machine hands it its party key (`held`). What doesn't reach the table yet (the served store, the card, setup's
   request, the party key) raises `NotImplementedError` (`NOT_YET`) before anything starts;
 - ``check``: the verifier's onsite check, `served_verdicts.py record` over the served window's public record, whose
-  composed verdict is the period's; under remote, the record the compose answer holds (`remote_check`). PoUW's row
+  composed verdict is the period's; under remote, the record the compose answer holds, else the
+  served node's own over its composite (`remote_check`). PoUW's row
   there is Pearl+'s verdict under ``pearl-plus`` (the runner's ``POUW=pearlplus``), H1's under ``pouw``.
 
 A piece names the scripts it runs (``scripts``), which must be in the tree, and the deploy bindings it reads: those of
@@ -94,6 +95,16 @@ CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
+#: remote's line read from a record the prover composed, not a compose gate's answer: the serving node's own
+#: (``out``) or a deferral's follow-on's on a prover node (its ``OUT`` copied to ``out/follow-on``), each its ``source``
+#: and the sentence that leads its reason; each accept in it, a row's or the composed verdict, reads `DEVELOPMENT_VERDICT`,
+#: so nothing that counts accepts counts the prover's word that it passed
+SERVING_NODE, FOLLOW_ON = "serving-node", "follow-on"
+FROM_SERVING_NODE = ("read from the serving node's own record: a development verdict; the auditor's device did not "
+                     "compose it")
+FROM_FOLLOW_ON = ("read from a deferral's follow-on record, composed on a prover node: a development verdict; the "
+                  "auditor's device did not compose it")
+DEVELOPMENT_VERDICT = "development"
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -1027,37 +1038,68 @@ def _record_line(said: Path) -> dict[str, Any] | None:
     return next((json.loads(x.split(" ", 1)[1]) for x in reversed(lines) if x.startswith("RECORD ")), None)
 
 
+def _composed(d: Path) -> bool:
+    return (d / "record" / "verdicts.json").is_file()
+
+
 def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
+    """Remote's verifier line over its final record: the compose gate's answer (``out/compose``, `served_verdicts.sh
+    gate-compose`'s) where one was written; else a deferral's follow-on's record (its ``OUT`` copied to
+    ``out/follow-on``), composed on a prover node over its composite; else the served node's own record (``out``),
+    composed over its composite (``out/composite``, served_composite.sh's, under ``COMPOSE_OFF_NODE=0`` with
+    ``COMPOSITE`` not set empty). A record the prover composed says so: its ``source`` (`SERVING_NODE`, `FOLLOW_ON`),
+    its reason led by `FROM_SERVING_NODE` or `FROM_FOLLOW_ON`, and each of its accepts, a row's or the composed
+    verdict, reads `DEVELOPMENT_VERDICT`, or under ``VERITY_HOLD_PLACEMENT=1`` undecided, `AS_WRITTEN` in the reason, as
+    onsite's. Refused by name: ``record`` where the record can't be read or is another product's, ``deferred`` where
+    the served node deferred its composite to a follow-on whose record isn't here, ``composite`` where the record it
+    reads has no composite beside it."""
     out = state / "out"
-    answer = out / "compose"
-    composed = (answer / "record" / "verdicts.json").is_file()
-    base = answer if composed else out
+    answer, follow = out / "compose", out / "follow-on"
+    source = None if _composed(answer) else FOLLOW_ON if _composed(follow) else SERVING_NODE
+    base = {None: answer, FOLLOW_ON: follow, SERVING_NODE: out}[source]
     line, f = _record_line(base / "verdicts.txt"), base / "record" / "verdicts.json"
     if line is None or not f.is_file():
         raise Refused("record", f"remote's verifier reads the record in {base}, which has "
                                 + ("no RECORD line in verdicts.txt" if line is None else "no record/verdicts.json"))
     if line.get("product") != "remote":
         raise Refused("record", f"the record in {base} is composed for {line.get('product')!r}, not remote")
+    if source and not any((base / "composite").glob("*/composite.json")):
+        if source == SERVING_NODE and line.get("deferred"):
+            raise Refused("deferred", f"the served node deferred its composite to a follow-on on a prover node "
+                                      f"({line['deferred']}), and no follow-on record is here: the line reads the "
+                                      f"follow-on's OUT copied to {follow}, or the compose gate's answer in {answer}")
+        raise Refused("composite", f"remote's record is composed over a composite, and there is none: no compose answer "
+                                   f"in {answer} and no composite in {base / 'composite'} (the record there says "
+                                   f"{line.get('composed')!r}: {line.get('lean')}): compose on the served node "
+                                   "(COMPOSE_OFF_NODE=0, COMPOSITE not set empty) or answer through the compose gate")
     report = json.loads(f.read_text())
-    rows = report.get("protocols", {}) if composed else {}
+    rows = report.get("protocols", {})
     free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
-    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
+    held = {f"{c} {v}" for c, v in components.items() if v != "accept"}
     if components.get("inference-only") == "accept" \
             and str(rows[ROWS["inference-only"]].get("answer_from", AS_WRITTEN)).startswith(AS_WRITTEN):
-        held.append(f"inference-only {AS_WRITTEN}")
-    verdict = VERDICTS.get(line.get("composed"), "undecided") if composed else "undecided"
-    reason = (None if composed else f"no compose answer in {answer}: remote's final record is composed off the "
-                                    "served node, from its compose hand-off (the served node's own record says "
-                                    f"{line.get('composed')!r})") \
-        or line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
-        or (f"not accepted: {', '.join(held)}" if held else None)
+        held.add(f"inference-only {AS_WRITTEN}")
+    verdict = VERDICTS.get(line.get("composed"), "undecided")
+    reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
+        or (line.get("lean") if source and verdict != "accept" else None)
+    if source:
+        word = "undecided" if machine_settings.hold_placement() else DEVELOPMENT_VERDICT
+        if word == "undecided":
+            held |= {f"{c} {AS_WRITTEN}" for c, v in components.items() if v == "accept"}
+            held |= {f"the composed verdict {AS_WRITTEN}"} if verdict == "accept" else set()
+        components = {c: word if v == "accept" else v for c, v in components.items()}
+        verdict = word if verdict == "accept" else verdict
+    reason = reason or (f"not accepted: {', '.join(sorted(held))}" if held else None)
+    if source:
+        reason = "; ".join(x for x in ({SERVING_NODE: FROM_SERVING_NODE, FOLLOW_ON: FROM_FOLLOW_ON}[source], reason) if x)
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
             "verdict": "undecided" if verdict == "accept" and held else verdict,
             **({"charges_nothing": free} if free else {}),
-            **({"answer_from": said} if (said := unchecked(cfg["protocols"], {})) else {})}
+            **({"answer_from": said} if (said := unchecked(cfg["protocols"], {})) else {}),
+            **({"source": source} if source else {})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
