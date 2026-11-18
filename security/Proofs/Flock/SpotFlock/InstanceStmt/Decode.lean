@@ -411,6 +411,7 @@ theorem dup_empty {α β : Type} [BEq α] [Hashable α] (f : Std.HashSet α → 
     ((Array.foldl f (∅ : Std.HashSet α) (#[] : Array β)).size != (#[] : Array β).size) = false := by
   simp
 
+set_option maxHeartbeats 1600000 in
 fwd_def progX decode_prog : Program.decode progBytes by [fromUTF8?_toUTF8, parse_prog, domainError_fuel 12,
     hm_get_insert, hm_get_empty, hs_contains_insert, hs_contains_erase, hs_contains_empty, hm_get_foldl,
     hm_contains_foldl, mapM_nil, mapM_one, mapM_pair, ofJson_V, ofJson_A, beq_of_A, beq_of_V, leaves_of_A,
