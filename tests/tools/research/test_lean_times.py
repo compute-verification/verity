@@ -80,6 +80,63 @@ def test_a_records_run_without_its_result_is_unfinished_under_its_argv_package()
     assert L.records_task("r20261028-100000-aaaa", _doc(argv=["bash"]), {"kind": "other"}, [], unread)["packages"] == [L.NONE]
 
 
+def _report(pkg, seconds, keyed, restored) -> dict:
+    return {"package": pkg, "seconds": seconds, "staged": {"modules": restored, "keyed": keyed, "took": {}, "left": 0, "missed": {}},
+            "failures": []}
+
+
+PROOFS = _report("/c/lean-records/build-1/security/Proofs", {"setup": 20.6, "stage": 96.3, "build-plugins": 2.2, "build": 998.9,
+                 "build-roots": 32.2, "facts": 38.8, "audit": 38.8, "dependencies": 147.7, "sampled": 87.7, "total": 1670.8},
+                 5538, 4940)
+SECURITY = _report("/c/lean-records/build-1/security", {"setup": 6.8, "stage": 2.1, "build": 5.8, "build-roots": 6.1, "facts": 11.6,
+                   "proved-in": 435.0, "proved-in-wait": 1324.5, "unread": 30.9, "sampled": 6.6, "total": 1876.6}, 719, 719)
+AUDITS = {"lean-audit/audit.json": json.dumps({"kind": L.FAST_KIND, "packages": [SECURITY, PROOFS]}),
+          "lean-audit/requirer-security_Properties/audit.json": json.dumps({"packages": [PROOFS]}),
+          "lean-audit/record/security/lean-audit.json": json.dumps({"packages": [PROOFS | {"seconds": {"build": 9e9}}]})}
+
+
+def test_a_records_runs_parts_are_each_its_longest_packages_from_its_reports_each_once():
+    files = {**FILES, **AUDITS}
+    t = L.records_task("r20261028-100000-aaaa", _doc(), _meta(), list(files), _read(files))
+    p = t["parts"]
+    assert p["build"] == pytest.approx((20.6 + 96.3 + 2.2 + 998.9 + 32.2) / 60), "Proofs' setup, stage and Lake, not a lock's"
+    assert p["sampled"] == pytest.approx(87.7 / 60) and p["replay"] == 0.0, "a records run replays nothing"
+    assert p["facts"] == pytest.approx((11.6 + 30.9) / 60), "security's facts and unread facts, the longest"
+    assert p["wait"] == t["wait_min"], "a records run's wait, the wall outside its check.py runs"
+    assert (t["compiled"], t["compiled_chain"], t["group"]) == (598, 598, "chain")
+    assert L.reports(list(files), _read(files)) == [SECURITY, PROOFS], "the requirer's repeat of Proofs' report once"
+
+
+def test_a_lean_audit_steps_parts_are_its_audited_packages_and_its_wait_the_rest_of_its_seconds():
+    restored = _report("security/Proofs", {"setup": 91.2, "stage": 33.4, "build": 13.8, "build-roots": 13.0, "facts": 33.4,
+                                           "replay": 345.7, "sampled": 584.1, "unread": 90.1, "total": 809.5}, 5539, 5539)
+    reused = _report("tools/pous_grader", {"replay": 9000.0, "total": 9000.0}, 2, 0)
+    meta = {"kind": "check/v1", "steps": [_step("lean-audit", seconds=1185.1), _step("lean-audit:verity/x", seconds=30.0)],
+            "reuse": {"steps": {"lean-audit": {"reran": ["security/Proofs"]}}}}
+    got, other = L.check_tasks("r20261028-100000-cccc", _doc(CHECK_ARGV), meta, [restored, reused])
+    assert got["parts"] == pytest.approx({"build": 151.4 / 60, "replay": 345.7 / 60, "sampled": 584.1 / 60, "facts": 123.5 / 60,
+                                          "wait": (1185.1 - 809.5) / 60}), "a reused package's old report counts for nothing"
+    assert (got["compiled"], got["group"]) == (0, "none") and "parts" not in other, "a part with no report of its package"
+
+
+def test_the_tasks_over_the_limit_are_summarized_by_part_and_group():
+    def task(kind, minutes, group=None, **parts):
+        return {"kind": kind, "packages": ["security"], "run": "r", "node": "n", "minutes": minutes, "outcome": "passed",
+                **({"group": group, "parts": parts} if group else {})}
+
+    tasks = [task("lean-audit", 30.0, "none", replay=6.0, sampled=10.0, wait=2.0), task("lean-audit", 40.0, "none", replay=8.0,
+             sampled=12.0, wait=4.0), task("lean-audit", 50.0, "chain", build=40.0), task("lean-audit", 10.0, "none", replay=1.0),
+             task("records", 20.0), task("lean-suites", 90.0)]
+    s = L.by_part(tasks)
+    assert s == {"records": {"no report": {"n": 1}},
+                 "lean-audit": {"chain": {"n": 1, "build_p50_min": 40.0, "build_p95_min": 40.0},
+                                "none": {"n": 2, "replay_p50_min": 6.0, "replay_p95_min": 8.0, "sampled_p50_min": 10.0,
+                                         "sampled_p95_min": 12.0, "wait_p50_min": 2.0, "wait_p95_min": 4.0}}}
+    audits = [t for t in tasks if t["kind"] == "lean-audit"]
+    out = L.render(L.summary(audits), audits, T.replace(hour=0), T)
+    assert "lean-audit steps over 15 min by part" in out and "lean-audit   none           2 " in out and "6.0/8.0" in out
+
+
 def _step(step, status="passed", seconds=60.0, ended="2026-10-28T11:00:00Z", **k) -> dict:
     return {"step": step, "status": status, "seconds": seconds, "ended_utc": ended, **k}
 
@@ -195,7 +252,8 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     _publish(node, tmp, "r20261028-100500-bbbb", ARGV, meta=None, files={"stdout.log": ""}, end="2026-10-28T10:30:00Z")
     _publish(node, tmp, "r20261028-101000-cccc", CHECK_ARGV, kind="check/v1", end="2026-10-28T11:30:00Z",
              meta={"kind": "check/v1", "steps": [_step("lean-audit", seconds=1500.0, ended="2026-10-28T11:20:00Z")],
-                   "reuse": {"steps": {"lean-audit": {"reran": ["security"]}}}})
+                   "reuse": {"steps": {"lean-audit": {"reran": ["security"]}}}},
+             files={"lean-audit/audit.json": json.dumps({"packages": [SECURITY | {"package": "security"}]}), "check.log": ""})
     _publish(node, tmp, "r20261027-080000-dddd", ARGV, meta=_meta(), files=FILES, end="2026-10-27T08:40:00Z")
     _publish(node, tmp, "r20261028-101500-eeee", ["python3", "-m", "pytest"], meta=None, end="2026-10-28T10:20:00Z")
     _publish(node, tmp, "r20261028-115500-ffff", ARGV, meta=_meta(), files=FILES, end="2026-10-28T12:30:00Z")
@@ -212,6 +270,10 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     recs = out["summary"]["records"]
     assert recs["security"] == recs[L.ALL] and (recs[L.ALL]["n"], recs[L.ALL]["unfinished"]) == (1, 1)
     assert out["summary"]["lean-audit"]["security"]["p95_min"] == 25.0
+    assert out["tasks"][0]["parts"]["wait"] == 0.0, "never below 0, where the step is shorter than its package's total"
+    assert out["tasks"][0]["parts"]["facts"] == pytest.approx(42.5 / 60) and out["by_part"]["lean-audit"] == {
+        "none": {"n": 1, **{f"{p}_{q}_min": v for p, v in (("build", 0.3), ("replay", 0.0), ("sampled", 0.1), ("facts", 0.7),
+                                                            ("wait", 0.0)) for q in ("p50", "p95")}}}
     assert not [p for p in (tmp / "reader" / "objects").rglob("*") if p.is_file()], "the run records' blobs are read, not kept"
 
 
