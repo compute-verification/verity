@@ -95,12 +95,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
 ## Assumptions and guarantees
 
 - **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
-  (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
-  code, which the spec can't import), or in a module under it that reads less than the root module (`Assumptions/Flock.lean`,
-  since the root module reads InferenceOnly); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
-  `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id,
-  which its lock entry carries as `id` (`tools/verity/lean/claim_ids.py` writes the table from id to Lean name), and gives
-  its rationale; a ledger points to it.
+  (a module or a list of them), or in a module under it that reads less than the root module; an area's other premises
+  live in its `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` for now), each owner
+  in the lock. Its docstring opens with its claim id, which its lock entry carries as `id`, and gives its rationale; a
+  ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
@@ -148,9 +146,9 @@ Their history is in the decisions log.
   `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
   entry's `why` (the README's lock sections). A `Prop` no guarantee takes, which a listed guarantee's stronger conclusion
   waits on, is `open` by hand with `waits` naming that guarantee beside its owner, issue, due date and `why`; `--update`
-  keeps it and adds none, and the check refuses it once a guarantee takes it. A named `Prop` counted only as an antecedent inside a premise an honest
-  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
-  asked to conclude it.
+  keeps it and adds none, and the check refuses it once a guarantee takes it. A named `Prop` counted only as an
+  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
+  restricts there, and no witness is asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
