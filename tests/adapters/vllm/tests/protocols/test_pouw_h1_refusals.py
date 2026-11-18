@@ -2123,7 +2123,8 @@ def test_a_rank_call_with_no_rows_or_off_the_programs_order_refuses_the_windows_
 
     def row(index, step, layer, **shipped):
         n, k = TS.SHAPES[layer]
-        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), **shipped}
+        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), "salts": {},
+                **shipped}
     past = TS.STEPS * linears
     for shipped, said in ((row(0, 0, 0), "call 0: its rank shipped no rows for the window's registered tables"),
                           (row(1, 0, 0, served={}), "call 1 (step 0, linear 0) is off the declared Program's order"),

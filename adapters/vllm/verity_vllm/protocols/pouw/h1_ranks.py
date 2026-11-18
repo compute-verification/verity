@@ -356,7 +356,7 @@ def ingest(run: H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
         for into, key in ((run.tables, "tables"), (run.verdicts, "verdict"), (run.bound, "bound")):
             if r.get(key):
                 into[c.index] = dict(r[key])
-        run._salts.adopt(r.get("salts") or {})
+        run._salts.adopt(r["salts"])
         if run.served is not None and run.commit:
             got = r.get("served")
             if got is None:
