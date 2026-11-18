@@ -7556,7 +7556,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
-    python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
+    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;; esac; printf '%s\\n' \"$*\" >> {tmp_path}/calls; case \"$*\" in *prove_path.py\\ class-circuit*) "
               f"while [ $# -gt 0 ]; do [ \"$1\" = --out ] && printf '{{}}\\n' > \"$2\"; shift; done; exit 0;; "
               f"*prove_path.py\\ serve-phi*|*served_verdicts.py\\ pearlplus-period*) exit 0;; esac; "
               "case \"$*\" in *serve-openai*) [ -z \"$SERVE_SAYS\" ] || printf '%s\\n' \"$SERVE_SAYS\";; esac; "
@@ -7668,7 +7668,7 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
         d.mkdir(parents=True)
     for fifo in ("ready", "hold"):
         os.mkfifo(tmp_path / fifo)
-    python = (f"case \"$*\" in *NETWORK_ATTESTER*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
+    python = (f"case \"$*\" in *compose.schemes*|*\"import json, sys; v, n =\"*) exec {sys.executable} \"$@\" ;;\nesac\nprintf '%s\\n' \"$*\" >> {tmp_path}/calls\n"
               "case \"$*\" in\n"
               f"  '-c '*) echo {RELEASE_RUN}; exit 0 ;;\n"
               "  *'verity_vllm.pipeline.cli serve-openai'*)\n"
@@ -7710,13 +7710,12 @@ RELEASE_RUN = "5e" * 16
 RELEASE_ORDER = json.dumps({NETWORK_ATTESTER.name: {"order": "release-order"}})
 SERVE_OPENAI = (
     "-m verity_vllm.pipeline.cli serve-openai --model verity-int8/Llama-3.2-1B-INT8 --revision "
-    "15b0976d400d796ee589e7737d03a919526bf800 --out TMP/serve --port 18190 --precision verity_int8 --run-id local "
-    f"--scheme rows-sha512 --seal --max-num-batched-tokens 512 --window-steps 256 --protocols-config {RELEASE_ORDER} --required-manifest "
+    "15b0976d400d796ee589e7737d03a919526bf800 --out TMP/serve --port 18190 --precision verity_int8 "
+    f"--seal --max-num-batched-tokens 512 --window-steps 256 --protocols-config {RELEASE_ORDER} --required-manifest "
     "TMP/serve/predicted/manifest.json --hidden-so "
     "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/verity_fa3_matReqG.so --norm-tap-so "
     "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so --tap-cap-mb 2048 "
-    "--window-requests 4 --max-model-len 512 --window-gb 32 --disk-floor-gb 100 --seal-hold-gb 32 "
-    "--seal-warm-gb 0")
+    "--window-requests 4 --max-model-len 512 --disk-floor-gb 100 --seal-hold-gb 32")
 WEIGHTS_REGISTRATION = (
     "benchmarks/prove_path/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
     "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
