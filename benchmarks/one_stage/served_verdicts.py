@@ -248,10 +248,6 @@ WINDOW_VERDICT = {"undecided": "pending"}
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 
 
-def hold_placement(env: Mapping[str, str]) -> bool:
-    """``VERITY_HOLD_PLACEMENT=1`` in ``env``, the environment its caller already holds: the holds that rest only on where
-    coins are flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
-    return env.get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -2346,6 +2342,7 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
            if counted else [])
     premise = place.get("trusted-device") or place.get("trusted-host")   # a record made before the premise's rename
     out += [f"trusted-device {premise}"] if premise else []
+    out += [f"{name} {why}" for name, why in (place.get("unchecked") or {}).items()]
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
