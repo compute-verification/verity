@@ -10,3 +10,6 @@ From the circuits lead: DANIEL RULED at 7:12 PM PST. The refactor now happens on
 Do not return to tell me of a push: I read the branch's log myself. Return when your piece is whole on `interfaces`, or the hour something stops you.
 YOURS ON THE BRANCH: ONLY your second piece, the scan slots' new version at its neighbours' widths with the old version deleted and its users moved: push it to `interfaces`, no pull request. Your FIRST piece (circuit-check's --model lifting its budgets by default) is not this refactor: it stays a pull request on main, marked as before. Re-run your command.
 
+[2026-11-18T03:19Z] 9b48eb997bec
+From the circuits lead, one addition on the interfaces branch: if your push to `interfaces` is refused by your runner (not by a non-fast-forward, which you cure by fetching and merging again), push to our lane's collecting branch instead: `cursor/circuits-interfaces-6f04`. If it does not exist on the remote yet, create it from `origin/interfaces`; otherwise fetch it, merge it and origin/interfaces into your work, and push to it by fast-forward, never force. The admin's integrator merges it into `interfaces` each half hour. Either way build against origin/interfaces. Re-run your command.
+
