@@ -180,5 +180,11 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
     assert w._extras_of(com, SimpleNamespace(weight_registration={"root": "ab"})) == ("tree", ["bytes"]) and len(calls) == 1
 
 
-def test_the_sessions_record_is_mirrored_and_its_memory_map_is_not():
-    assert "remote_session.json" in sc.MIRRORED and "memory_map.jsonl" not in sc.MIRRORED
+def test_the_sessions_record_is_mirrored_and_its_memory_map_stays_in_the_serve_dir(tmp_path):
+    out = tmp_path / "serve"
+    out.mkdir()
+    (out / "remote_session.json").write_text("{}")
+    (out / "memory_map.jsonl").write_text('{"step": 0, "freed": [], "written": [[0, 0, "00"]], "withdrawn": []}\n')
+    sc.Mirror(out, tmp_path / "OUT")()
+    assert sorted(p.name for p in (tmp_path / "OUT").iterdir()) == ["remote_session.json"]
+    assert (out / "memory_map.jsonl").is_file()

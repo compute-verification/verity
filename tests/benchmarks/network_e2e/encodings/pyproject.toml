@@ -36,11 +36,12 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/pipeline/serve_admit.py", "adapters/vllm/verity_vllm/engine/__init__.py",
           "adapters/vllm/verity_vllm/engine/hooks.py",
           # the gate is the engine's admission (`verity_vllm.engine.admission`), with the engine driver, the runner's and
-          # the scheduler's steps it imports and the messages it speaks, on network attestation's admission and its
+          # the scheduler's steps it imports and the messages it speaks (with the integration's declared settings, which
+          # the exchange reads its attach context from), on network attestation's admission and its
           # scheme, which reads the scheme interface, the registry of schemes, SPOT's workload and the hook types
           "adapters/vllm/verity_vllm/engine/admission.py", "adapters/vllm/verity_vllm/engine/engine_driver.py",
           "adapters/vllm/verity_vllm/engine/runner_step.py", "adapters/vllm/verity_vllm/engine/scheduler_step.py",
-          "adapters/vllm/verity_vllm/messages.py", "verity/channel.py", "verity/hooks.py", "verity/protocol.py",
+          "adapters/vllm/verity_vllm/messages.py", "adapters/vllm/verity_vllm/settings.py", "verity/channel.py", "verity/hooks.py", "verity/protocol.py",
           "verity/protocols/resource_accounting/scheme.py", "verity/protocols/compose/__init__.py",
           "verity/protocols/compose/schemes.py", "verity/protocols/proofs/spot/prover/__init__.py",
           "verity/protocols/proofs/spot/prover/workload.py",

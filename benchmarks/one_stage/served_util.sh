@@ -88,7 +88,7 @@ if [ "${1:-}" != leased ]; then
       "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") > "$SCR/predict_row.json" 2> "$SCR/predict_row.err"
     prc=$?
     [ "$prc" = 0 ] && [ -f "$PRED/predicted.json" ] \
-      || { say "PREDICT-ROW $ROW_ID refused (exit $prc): $(grep -v '^\[predict\]' "$SCR/predict_row.err" | tail -2 | cut -c1-600)"; exit 3; }
+      || { say "PREDICT-ROW $ROW_ID refused $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" failed "$prc" "$SCR/predict_row.err")"; exit 3; }
     say "PREDICT-ROW $ROW_ID into $PRED: $(cut -c1-300 "$SCR/predict_row.json")"
   fi
   if [ "$ARM" = h1 ]; then
@@ -96,7 +96,7 @@ if [ "${1:-}" != leased ]; then
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
       | sh -s -- -y --default-toolchain none > "$SCR/lean.txt" 2>&1
     (cd "$TREE/verity/protocols/resource_accounting/compute/pouw/verifier/lean/check" && lake build pouw-verifier-difftest) >> "$SCR/lean.txt" 2>&1
-    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $(tail -1 "$SCR/lean.txt" | cut -c1-200)"
+    lrc=$?; say "LEAN pouw-verifier-difftest built (exit $lrc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" said "$lrc" "$SCR/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
   if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then
@@ -254,7 +254,7 @@ load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"
   --gpu-metrics-devices=cuda-visible --gpu-metrics-frequency="${GPU_HZ:-10000}" --gpu-metrics-set=gh100 > "$SCR/nsys_start.txt" 2>&1
 say "CAPTURE start (exit $?)"
 load "$N" 1 main; lrc=$?
-say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
+say "MAIN $N requests (exit $lrc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" said "$lrc" "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$SCR/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
 # the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
