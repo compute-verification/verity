@@ -12,7 +12,6 @@ what `tests/test_registered.py` can't: the executable verifier's own checks of e
 value a unit."""
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import subprocess
@@ -246,7 +245,7 @@ def _pearl_plus(s, value: str, call: int, flip: bool = False):
     opening it with PoUW's own salts and paths (`flip`: the first table row with one word flipped)."""
     reg = s.regs[value]
     data = [b"".join(w.to_bytes(2, "little") for w in r) for r in reg.rows]
-    salts = [hashlib.shake_256(f"salt {call} {i}".encode()).digest(PA.HM96_SALT) for i in range(len(data))]
+    salts = PA.fresh_salts(len(data))
     tree = PA.commit_rows(PA.activation_binding(bytes(range(64)), call), call, data, PA.HM96, salts=salts)
 
     def statement(positions):

@@ -413,10 +413,11 @@ def main(a: Options) -> int:
             tm = _load(Path(a.tp2_match))
             prov = (tm or {}).get("provenance")
             prov = prov if isinstance(prov, dict) else None       # the check reads a provenance record's fields by name: no mapping, no record
+            if prov is not None:
+                prov = {**prov, "recorder_sha256": _load(Path(a.tp2_match).with_name(RM.RECORDER_DIGESTS))}
             # the consumed record, by digest: tp2_fold_match.json names WHICH tp2_match.json its provenance check read
             try:
-                res["tp2_match"] = {"path": str(a.tp2_match), "sha256": hashlib.sha256(Path(a.tp2_match).read_bytes()).hexdigest(),
-                                    "recorder_sha256": (prov or {}).get("recorder_sha256")}
+                res["tp2_match"] = {"path": str(a.tp2_match), "sha256": hashlib.sha256(Path(a.tp2_match).read_bytes()).hexdigest()}
             except OSError as e:
                 res["problems"].append(f"{a.tp2_match}: unreadable ({e})")
             if prov is None:

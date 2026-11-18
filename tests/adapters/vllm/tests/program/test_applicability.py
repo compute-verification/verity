@@ -61,7 +61,7 @@ _HOSTILE_EXPORT = textwrap.dedent("""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     _orig = vm.export_module
     def _hostile(*a, **k):
-        k["profile"] = TargetProfile(compute_capability=(9, 0))
+        k["profile"] = TargetProfile.default().with_overrides(compute_capability=(9, 0))
         return _orig(*a, **k)
     vm.export_module = _hostile
     from verity_vllm.pipeline.build import run

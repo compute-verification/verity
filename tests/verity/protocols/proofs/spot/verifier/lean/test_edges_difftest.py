@@ -18,7 +18,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.commitments.periods.edges import edges
+from verity.commitments.periods.edges import _lane_wire, _parts, edges
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -87,8 +87,11 @@ CASES = [
     ("B's argument offset by half a row", _of(ARR, b_refs=lambda a, a2: _affine((a, 1, 3), (a, 0, 1))),
      {"refusal": "edge-rows"}),
     ("a two-part argument", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 2))),
-     {"wires": [{**_wire(TB, TA, "o0", 0, 0), "radix": [1]}, {**_wire(TB, TA, "o0", 1, 1), "radix": [1]},
-                _wire(TA, TB, "o0", 2, 0)]}),
+     {"wires": [{**_wire(TB, TA, "o0", 0, 0), "radix": [1], "step": [0]},
+                {**_wire(TB, TA, "o0", 1, 1), "radix": [1], "step": [0]}, _wire(TA, TB, "o0", 2, 0)]}),
+    ("a strided part whose members step inside its run",
+     _of(ARR, b_refs=lambda a, a2: {"strided": ["n", a, 0, 4, 0, 1, 4]}),
+     {"wires": [_wire(TB, TA, "o0", 0, 0), _wire(TA, TB, "o0", 2, 0)]}),
     ("an argument over the parts bound", _of(ARR, b_refs=lambda a, a2: _affine((a, 0, 2), (a, 2, 1), (a, 3, 1))),
      {"refusal": "edge-parts"}),
     ("an explicit read of a node that is no input node",
@@ -100,6 +103,28 @@ CASES = [
     ("an uncut port over two fields", _of(TUP), {"refusal": "edge-rows"}),
     ("a template the wiring doesn't list", {**_of(ARR), "wiring": {**_of(ARR)["wiring"], "templates": {}}},
      {"refusal": "edge-template"}),
+]
+
+
+def _grid(*lanes, run=1):
+    return lambda a, a2: {"grid": [run, [[s, a if i is None else i, b, e, lv] for s, i, b, e, lv in lanes]]}
+
+
+_CUT = {UA: {"x": 2}, UB: {"x": 2}}
+
+#: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Spot.Edges.partLanes`)
+GRID_CASES = [
+    ("two lanes over a cut port", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
+     {"wires": [_wire(UB, UA, "o0", 0, 0, 0), {**_wire(UB, UA, "o1", 0, 1, 1), "step": [-1]},
+                _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
+    ("a lane that does not fill a row", _of(TUP, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
+     {"refusal": "edge-rows"}),
+    ("a grid over an input node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", 0, 0, 0, [[2, 2]]), ("n", 0, 3, 0, [[2, -2]]))),
+     {"wires": [_wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
+    ("lanes of two period counts", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 0, 0, [[4, 1]]))),
+     {"refusal": "edge-parts"}),
+    ("a lane past its writer node", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 4]]), ("n", None, 3, 0, [[2, -2]]))),
+     {"refusal": "edge-rows"}),
 ]
 
 
@@ -131,6 +156,25 @@ def test_the_named_cases(pieces, name, j, want):
     """Each named case gives the rule's wires or refusal, in Lean and in the twin."""
     assert reference(j) == want
     assert pieces.call("edges", j) == ("output", D.canonical(want))
+
+
+@pytest.mark.parametrize("name, j, want", GRID_CASES, ids=[c[0] for c in GRID_CASES])
+def test_the_grid_cases(name, j, want):
+    """Each grid case gives the rule's wires or refusal in the twin."""
+    assert reference(j) == want
+
+
+def test_a_part_form_it_does_not_know_is_refused_by_name():
+    with pytest.raises(ValueError, match="^edge-parts: "):
+        _parts({"rows": ["n", 1, 0, 4]}, [])
+
+
+def test_two_levels_are_the_wires_radix():
+    """A batch of 128 reading 64 leaves a member as four members a row, then the next row: levels `[[4, 0], [32, 64]]`
+    are the wire's radix `[32, 4]` and steps `[64, 0]`, outermost first."""
+    q = ("g", 64, ((False, 7, 0, 1, ((4, 0), (32, 64))),), 8192, True)
+    assert _lane_wire(q, 0, 64, 64, 128) == (7, 0, [32, 4], [64, 0])
+    assert _lane_wire(q, 4 * 64, 64, 64, 8) == (7, 64, [2, 4], [64, 0])
 
 
 def test_the_twin_agrees_on_rewritten_arguments(pieces):
