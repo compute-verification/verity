@@ -45,11 +45,11 @@ def test_render_tabulates_the_whole_directory(name):
 
 
 def test_render_prints_the_sections_named(capsys):
-    assert main(["render", "vectors", "floors"]) == 0
+    assert main(["--device", "sm_120", "render", "vectors", "floors"]) == 0
     out = capsys.readouterr().out
     assert re.findall(r"^## (.*)", out, re.M) == [SECTIONS["vectors"][0], SECTIONS["floors"][0]]
     assert main(["--device", "sm_90", "render", "designs"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("# `machine-model render`: data/devices/sm_90/") and "| `dither-c-l32` |" in out
     with pytest.raises(SystemExit, match="no section nope"):
-        main(["render", "nope"])
+        main(["--device", "sm_120", "render", "nope"])
