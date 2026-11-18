@@ -6,7 +6,7 @@
   "benchmarks/compute/serve.sh": 4,
   "benchmarks/harness/setup/vllm_encoded.sh": 1,
   "benchmarks/kernels/ship_probe.sh": 1,
-  "benchmarks/kernels/smoke_h100.sh": 4,
+  "benchmarks/kernels/smoke_h100.sh": 3,
   "benchmarks/memory/vcf_job.sh": 5,
   "benchmarks/one_stage/a5_llama1b_h200.sh": 1,
   "benchmarks/one_stage/proof_layers.sh": 1,
