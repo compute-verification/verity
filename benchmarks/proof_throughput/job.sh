@@ -42,10 +42,13 @@ unset CARGO_TARGET_DIR
 S=$(mktemp -d "$FLOCK_WORK/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 ph() { printf '%s\t%s\t%s\n' "$1" "$2" "$(date +%s.%N)" >> "$O/phases.tsv"; }
-for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
-  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
-done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node (71-gemm-slowdown.sh unpacks it)"; exit 1; }
+# CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
+# verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK
+[ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$O/cuda.log") \
+  || { CUDA_TK=; ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$O/cuda.log" 2>&1 \
+       && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; }
+[ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node ($O/cuda.log)"; exit 1; }
+export CUDA_TK
 export PT_CUDA=13.3
 SWEEP=verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh
 # this run's records the bundle carries for verify.sh, beside the circuit, the public file and the sessions

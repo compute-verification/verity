@@ -3,7 +3,7 @@ r"""Serve-time hashing of DSA long rows' table reads: what serving's row-table c
 ``hm96-sha512/row-seg/v1`` rows a step commits on a side stream) costs for one decode step's reads at batch ``--batch``, on one
 GPU, and its CPU twin's rate on one thread.
 
-    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
+    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=$(python3 ../../benchmarks/kernels/machine.py toolkit)/bin:$PATH \
         PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
         ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
