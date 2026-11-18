@@ -127,7 +127,10 @@ def _body(fn: Any) -> _Body:
 
     wrap = bind(CompositeDefinition("RestrictBody", 1, (), lambda S: ((), ret), body, register=False))
     n = sum(t.leaves for _, t in params)
-    enc = (lambda o: o - n if o >= n else -1 - o)
+
+    def enc(o: int) -> int:
+        return o - n if o >= n else -1 - o
+
     C = Circuit(wrap)
     gates = tuple((_kind(g.prim), tuple(enc(o) for o in g.operands)) for g in C.gates(n, C.size))
     return _Body(n, gates, tuple(enc(o) for o in C.root_outputs()),
