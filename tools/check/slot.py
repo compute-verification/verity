@@ -1394,8 +1394,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not SLOTS.exists() and named:
         pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
         print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
-              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
-              f"NAME`): {pools}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --on MACHINE "
+              f"--project verity --source . --pool NAME --as LANE -- CMD`): {pools}; exit {NOT_STARTED}", file=sys.stderr,
+              flush=True)
         return NOT_STARTED
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
@@ -1404,8 +1405,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not listed:
         pools = ", ".join(p.parent.name for p in lane_pools(SLOTS)) or "none"
         print(f"slot: not started: {SLOTS} lists no check slots, so nothing ran. A run here takes one of this machine's pools by "
-              f"name (`research run --on MACHINE --pool NAME --as LANE`): {pools}; `research queue ready N --on auto` places a "
-              f"quick tier itself; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+              f"name (`research run --on MACHINE --project verity --source . --pool NAME --as LANE -- CMD`): {pools}; `research "
+              f"queue ready N --on auto` places a quick tier itself; exit {NOT_STARTED}", file=sys.stderr, flush=True)
         return NOT_STARTED
     # already inside a slot this machine's lock still holds (a `research run --pool` job that wraps its own command in slot.py,
     # whose inner waiter would queue behind its own outer lock and stop the machine's research pool): run CMD in that slot
@@ -1422,8 +1423,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         pools = lane_pools(SLOTS)
         where = ("a lane check takes a lane pool here: " + ", or ".join(
             f"`CHECK_SLOTS={p} python3 tools/check/slot.py --by LANE -- CMD...`" for p in pools)
-            + " (`research run --pool NAME` sends one by its directory's name, and `check.py --record --on MACHINE --pool NAME` a "
-              "recorded check, for the pools `research run --help` names)"
+            + " (`research run --on MACHINE --project verity --source . --pool NAME --as LANE -- CMD` sends one by its directory's "
+              "name, and `check.py --record --on MACHINE --pool NAME` a recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on review, and drive's full check decides what reaches `main`, so no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
