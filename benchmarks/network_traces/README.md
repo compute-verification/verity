@@ -42,7 +42,6 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with
   the vLLM adapter's `verity_vllm.pipeline.window_chain` (a served endpoint's Commit periods as one I1 v0 advice),
   `leak_guard.py` (the record's leak guard, below) and `prover/released_keys.py` (the keys a record releases, each declared public by name, below).
-  `prover/block_attester.py` writes a period's accepted answer into the block record.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** the network attester's `attester/load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
