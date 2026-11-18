@@ -55,6 +55,7 @@ import bisect
 import contextlib
 import ctypes
 import gc
+import hashlib
 import queue
 import resource
 import secrets
@@ -64,6 +65,7 @@ import tempfile
 import threading
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,6 +78,7 @@ sys.path.insert(0, str(HERE.parent / "word_codec"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 import cuda_lib  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, receipts as rb  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
@@ -97,6 +100,7 @@ def pack_words(rows: int) -> int:
 
 TOP_SEGS = 32  # session.cu's: rs_top's segments, real and padding
 SLOTS = 8
+PIECES = 8  # a refresh plan's pieces a pass at most, which rs_top's TOP_SEGS holds beside the padding
 """A GPU's root ring: the root of the k-th pass launched goes to slot k mod SLOTS, the window's previous root from the
 host to slot SLOTS. A slot is read at most three launches after its write."""
 OPEN_BATCH = 128
@@ -225,6 +229,9 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_payload_leaves": [_v, _u64, _u64, _v, _v],
     "rs_gather64": [_v, _u64, _v, _v],
     "rs_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
+    "rs_pass_at": [_v, _u64, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
+    "rs_subtrees_at": [_v, _u64, _u64, _v, _v, _u64, _i, _v, _v, _v],
+    "rs_chain_head": [_b, _i, _b, _v, _v, _v],
     "rs_leaf_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
     "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
     "rs_enable_peers": [],
@@ -241,7 +248,8 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_mapped_pass": [_v, _v, _u64, _v, _v, _u64, _v, _v, _i, _i, _v, _v],
     "rs_mapped_read": [_v, _u64, _v, _i, _v],
 }
-KV = {"kv_set_key": [_v, _i, _v], "kv_set_mask": [_v], "kv_encode": [_v, _v, _u64, _u64, _i, _i, _v]}   # kv.cu's
+KV = {"kv_set_key": [_v, _i, _v], "kv_set_mask": [_v], "kv_encode": [_v, _v, _u64, _u64, _i, _i, _v],   # kv.cu's
+      "kv_encode_bound": [_v, _v, _u64, _u64, _i, _v, _i, _v], "kv_decode": [_v, _v, _u64, _u64, _i, _i, _v, _v]}
 
 
 class Lib:
@@ -306,6 +314,88 @@ class Kv:
         self.call("kv_encode", data.data_ptr(), data.data_ptr(), n * self.words, j0 * self.words, self.rounds, 0,
                   self.torch.cuda.current_stream().cuda_stream)
 
+    def decode(self, src, dst, j0: int, n: int) -> None:
+        """Blocks j0 … j0 + n − 1 at `src`, encoded under the seed's key, decoded into `dst`."""
+        self.call("kv_decode", src.data_ptr(), dst.data_ptr(), n * self.words, j0 * self.words, self.rounds, 0, None,
+                  self.torch.cuda.current_stream().cuda_stream)
+
+    def encode_bound(self, src, dst, j0: int, n: int, offsets) -> None:
+        """Payload blocks at `src` encoded into `dst` as blocks j0 … j0 + n − 1 under their bound keys, block u's
+        offset b_u row u of `offsets` (`bound_offsets`). A block is one of kv.cu's token-layers."""
+        if self.so.kv_tlw() != self.words:
+            raise ValueError(f"kv.so's token-layer is {self.so.kv_tlw()} words, a block {self.words}")
+        if offsets.numel() * offsets.element_size() != n * (self.bits // 8):
+            raise ValueError(f"{n} blocks take {n} offsets of {self.bits // 8} bytes")
+        self.call("kv_encode_bound", src.data_ptr(), dst.data_ptr(), n * self.words, j0 * self.words, self.rounds,
+                  offsets.data_ptr(), 0, self.torch.cuda.current_stream().cuda_stream)
+
+
+@dataclass(frozen=True, slots=True)
+class Piece:
+    """A run of a refresh plan as the card reads it: `n` blocks at positions `at` … and store indices `j` …, from
+    block `off` of the registered store or, with `spare`, of the spare area, which holds index N + u at its block u."""
+
+    spare: bool
+    off: int
+    n: int
+    at: int
+    j: int
+
+
+@dataclass(frozen=True, slots=True)
+class Shard:
+    """Where openings recompute their subtrees: GPU `gpu`'s `n` blocks at positions `at` … and store indices
+    `at + shift` …, from block `off` of `data`, its levels the `q`-th kept of a pass's handle, at rows `kept_at`, and
+    its dropped blocks (None: none)."""
+
+    gpu: int
+    data: object
+    off: int
+    n: int
+    at: int
+    shift: int
+    q: int
+    kept_at: dict
+    drops: tuple | None
+
+
+def pieces(plan: rb.Plan, registered: int, chunk: int, spare_blocks: int) -> tuple[Piece, ...]:
+    """`plan`'s runs in read order, each split where it crosses from the registered store into the spare area, each
+    piece whole chunks at a position of whole chunks (`rs_pass_at`'s shard)."""
+    out, at = [], 0
+    for first, count in plan.runs:
+        for a, b in ((first, min(first + count, registered)), (max(first, registered), first + count)):
+            if a < b:
+                out.append(Piece(a >= registered, a - registered if a >= registered else a, b - a, at + a - first, a))
+        at += count
+    for q in out:
+        if q.n % chunk or q.at % chunk:
+            raise ValueError(f"a refresh plan's pieces are whole chunks of {chunk} blocks at whole-chunk positions, not "
+                             f"{q.n} blocks at position {q.at}: N / L is a multiple of --chunk-blocks")
+        if q.spare and q.off + q.n > spare_blocks:
+            raise ValueError(f"block {q.j + q.n - 1} is past the spare area's {spare_blocks} blocks (--refresh-gib)")
+    return tuple(out)
+
+
+def bound_offsets(key: rcodec.Key, first: int, digests, coin: bytes) -> bytes:
+    """Blocks first …'s bound-key offsets b_j under their append's coin (`codec.binding`), one little-endian field
+    word a block, as `kv_encode_bound` reads them. Where p is wider than a digest the binding is its one SHA-512
+    output as it is, taken here from a copy of the hash's state over its fixed prefix."""
+    f = key.codec.field
+    s = f.word_bytes
+    if f.p.bit_length() <= 8 * rcodec.DIGEST_BYTES or first + len(digests) > key.codec.max_blocks:
+        return b"".join(rcodec.binding(d, first + u, key, coin).to_bytes(s, "little") for u, d in enumerate(digests))
+    if type(coin) is not bytes or len(coin) != rcodec.COIN_BYTES or any(len(d) != rcodec.DIGEST_BYTES for d in digests):
+        raise ValueError(f"an append's coin is {rcodec.COIN_BYTES} bytes and a digest {rcodec.DIGEST_BYTES}")
+    h0 = hashlib.sha512(rcodec._message(f, key.seed, rcodec.COIN_INDEX))
+    tail, pad = coin + bytes(4), bytes(s - rcodec.DIGEST_BYTES)
+    out = []
+    for u, d in enumerate(digests):
+        h = h0.copy()
+        h.update((first + u).to_bytes(8, "big") + d + tail)
+        out.append(h.digest() + pad)
+    return b"".join(out)
+
 
 def climb(lib: Lib, level, first: int, nodes: int, up, h: int = 0) -> list:
     """Every level from `nodes` digests at level h (`level`, a power of two of them, the first at index `first` of its
@@ -332,6 +422,7 @@ class Gpu:
             self.side = torch.cuda.Stream(priority=-1)
             self.offload = torch.cuda.Stream()
             self.copy = torch.cuda.Stream()
+            self.rekey = torch.cuda.Stream()
             self.host_main = torch.cuda.Stream()
             self.host_side = torch.cuda.Stream(priority=-1)
         props = torch.cuda.get_device_properties(index)
@@ -388,12 +479,13 @@ def release(torch, t) -> None:
 
 class OffloadedHandle:
     """A pass's handle, (seed, packed signs, each segment's levels h0 … hc, the levels above hc) in host memory, once the
-    store's offloader has copied it out of the pinned ring (`DeviceStore.ready`)."""
+    store's offloader has copied it out of the pinned ring (`DeviceStore.ready`). A refresh plan's pass keeps its
+    plan and pieces (`layout`), whose kept levels its handle holds in their order."""
 
-    __slots__ = ("value", "done")
+    __slots__ = ("value", "done", "layout")
 
-    def __init__(self) -> None:
-        self.value, self.done = None, threading.Event()
+    def __init__(self, layout: tuple | None = None) -> None:
+        self.value, self.done, self.layout = None, threading.Event(), layout
 
 
 @dataclass(slots=True)
@@ -519,6 +611,9 @@ class DeviceStore:
         for f in self.free:
             f.set()
         self.poison = False
+        self.spare, self.spare_blocks, self.ledger, self.chain_plan = None, 0, None, self.plan
+        self.piece_ring: list = []
+        self.rekeys: dict = {}
         self.trace: list | None = None
         self._launch_trace: dict = {}
         self.offload_ns: list[int] = []
@@ -583,13 +678,16 @@ class DeviceStore:
         self.ring = self.seg_ring = None
         ring, seg_ring = [], []
         for g, gpu in enumerate(self.gpus):
-            dev, pad_n = torch.device("cuda", gpu.index), self.pads[g][1] * lc
+            # A refresh plan, shorter than the store, pads more of the same tree.
+            pad_chunks = (self.tree_leaves >> hc) if self.spare is not None else self.pads[g][1]
+            dev, pad_n = torch.device("cuda", gpu.index), pad_chunks * lc
             with self.on(gpu):
                 r = {"pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
-                     "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
+                     "pad_out": torch.empty((max(pad_chunks, 1), 8), dtype=torch.int64, device=dev),
                      "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
                      "pk": torch.empty(pack_words(self.rows), dtype=torch.int32, device=dev),
-                     "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev)}
+                     "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev),
+                     "chained": torch.empty(8, dtype=torch.int64, device=dev)}
                 parts = []
                 if g == 0:
                     r["seeds"] = torch.empty((SLOTS, rb.DIGEST_BYTES), dtype=torch.uint8, device=dev)
@@ -608,8 +706,88 @@ class DeviceStore:
                      "kept": torch.empty((SLOTS, self.kept_at[s][hc + 1], 8), dtype=torch.int64, device=dev)}
                 x["host"] = torch.empty(x["kept"].shape, dtype=torch.int64, pin_memory=True)
                 seg_ring.append(x)
+        self.piece_ring = []
+        if self.spare is not None:
+            rows = self.kept_levels(self.blocks)[hc + 1]
+            with self.on(self.gpus[0]):
+                for _ in range(PIECES):
+                    kept = torch.empty((SLOTS, rows, 8), dtype=torch.int64, device=self.data_g[0].device)
+                    self.piece_ring.append({"kept": kept, "host": torch.empty(kept.shape, dtype=torch.int64,
+                                                                              pin_memory=True)})
         self.ring, self.seg_ring = ring, seg_ring
         self.sync()
+
+    def kept_levels(self, n: int) -> dict[int, int]:
+        """Where a shard of n blocks keeps each level h0 … hc in its ring's row, and the rows they take (at hc + 1)."""
+        at = {self.h0: 0}
+        for h in range(self.h0, self.hc + 1):
+            at[h + 1] = at[h] + ((n // PER_LEAF) >> h)
+        return at
+
+    def refresh_area(self, blocks: int) -> None:
+        """Room for `blocks` re-keyed blocks past the registered store, index N + u at block u of `spare`, and the
+        rings a refresh plan's pieces and padding take: a store on one GPU, its HBM alone, by `rs_pass`."""
+        if len(self.gpus) != 1 or len(self.n) != 1 or self.leaf_ctas or blocks < self.chunk or blocks % self.chunk:
+            raise ValueError(f"a refresh's spare area is whole chunks of {self.chunk} blocks beside a store on one "
+                             f"GPU's HBM, read by rs_pass (no host tier, no leaf pass), not {blocks} blocks beside "
+                             f"{len(self.n)} segments on {len(self.gpus)} GPUs")
+        with self.on(self.gpus[0]):
+            self.spare = self.torch.empty(blocks * BLOCK, dtype=self.torch.uint8, device=self.data_g[0].device)
+        self.spare_blocks = blocks
+        self.shape(self.chunk, self.h0, self.sketch_ctas)
+
+    def rekey(self, origin: int, first: int, count: int, offsets) -> None:
+        """Registered blocks origin … re-keyed out of place into the spare area as blocks first …: decoded there
+        under the seed's key, then encoded there under their bound keys (`Kv.encode_bound`, `offsets` as
+        `bound_offsets` lays them out), on the GPU's re-key stream; `landed(first)` once its encode has."""
+        u = first - self.blocks
+        if self.spare is None or u < 0 or u + count > self.spare_blocks or origin < 0 or origin + count > self.blocks:
+            raise ValueError(f"no re-key of {count} blocks from {origin} into index {first}: the spare area holds "
+                             f"indices {self.blocks} … {self.blocks + self.spare_blocks - 1}")
+        gpu = self.gpus[0]
+        with self.on(gpu, gpu.rekey) as s:
+            src = self.data_g[0][origin * BLOCK:(origin + count) * BLOCK]
+            dst = self.spare[u * BLOCK:(u + count) * BLOCK]
+            if isinstance(offsets, bytes | bytearray):
+                offsets = self.torch.from_numpy(np.frombuffer(offsets, dtype=np.uint8).copy()).to(dst.device)
+            if self.poison:
+                poison(self.torch, dst)
+            self.kv.decode(src, dst, origin, count)
+            self.kv.encode_bound(dst, dst, first, count, offsets)
+            done = self.torch.cuda.Event()
+            done.record(s)
+        self.rekeys[first] = (done, offsets)
+
+    def landed(self, first: int) -> bool:
+        """Whether the re-key into index `first` has its encode done on the device."""
+        x = self.rekeys.get(first)
+        if x is None or isinstance(x, bool):
+            return bool(x)
+        if not x[0].query():
+            return False
+        self.rekeys[first] = True
+        return True
+
+    def layout(self, plan: rb.Plan | None) -> tuple | None:
+        """None for the store's own plan (its segments), or a refresh plan and its pieces (`pieces`)."""
+        if plan is None or plan == self.plan:
+            return None
+        if self.spare is None:
+            raise ValueError("a pass over another plan than the store's reads a refresh's spare area (refresh_area)")
+        if rb.leaves(plan.length) > self.tree_leaves or 2 * rb.leaves(plan.length) <= self.tree_leaves:
+            raise ValueError(f"a refresh plan of {plan.length} blocks is not of the store's tree height {self.H}")
+        got = pieces(plan, self.blocks, self.chunk, self.spare_blocks)
+        if len(got) > PIECES:
+            raise ValueError(f"a refresh plan of {len(got)} pieces, more than the store's {PIECES}")
+        return plan, got
+
+    def piece_data(self, q: Piece):
+        return self.spare if q.spare else self.data_g[0]
+
+    def padding(self, plan: rb.Plan) -> tuple[int, int]:
+        """A refresh plan's padding at level hc: its first chunk, and how many to the tree's width."""
+        real = plan.length // self.chunk
+        return real, (self.tree_leaves >> self.hc) - real
 
     def leaf_rows(self, s: int) -> int:
         """The digests segment s's `dig` holds: `rs_pass`'s scratch, and in the leaf pass the shard's leaves."""
@@ -747,11 +925,12 @@ class DeviceStore:
         fn = self.lib.so.rs_signs64 if self.rows == skr.ROWS64 else self.lib.so.rs_signs16
         return fn(head, len(head), pk.data_ptr(), s.cuda_stream)
 
-    def set_pass(self, lib: Lib, seed: bytes) -> None:
-        """A pass's constants from the host on the current GPU."""
-        dom = rb.domain(seed, self.plan)
+    def set_pass(self, lib: Lib, seed: bytes, plan: rb.Plan | None = None) -> None:
+        """A pass's constants from the host on the current GPU, over `plan` (the store's if None)."""
+        plan = plan or self.plan
+        dom = rb.domain(seed, plan)
         lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * PER_LEAF, dom.domain_id,
-                     SALT_DOMAIN + self.key + seed, self.blocks)
+                     SALT_DOMAIN + self.key + seed, plan.length)
         lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
     def host_pass(self, q: int, pk, slot: int) -> int:
@@ -764,26 +943,33 @@ class DeviceStore:
                                    x["kept"][slot].data_ptr(), self.h0, self.chunk, self.host_ctas, 0, 0, None, None,
                                    gpu.host_main.cuda_stream, gpu.host_side.cuda_stream, self.host_consumers)
 
-    def _poison(self, g: int, slot: int) -> None:
+    def _poison(self, g: int, slot: int, layout: tuple | None = None) -> None:
         """POISON in every buffer the pass about to take `slot` writes on GPU g, on the current stream: its seed and
         packed signs, its root, its padding's scratch and nodes, each of its segments' counters, receipts, tree
         scratch and kept levels, and on the leader its top levels. The host's copies of them are made after the pass
         whatever it wrote (`launch`), so they hold what the pass wrote or this."""
         ring = self.ring[g]
-        mine = [ring["seed"], ring["pk"], ring["pad"], ring["pad_out"], ring["roots"][slot]]
+        mine = [ring["seed"], ring["pk"], ring["pad"], ring["pad_out"], ring["roots"][slot], ring["chained"]]
         mine += [ring[k][slot] for k in ring["host"]]
         for q in self.gpu_segs[g]:
             x = self.seg_ring[q]
             mine += [x["ctr"], x["ys"], x["dig"], x["up"], x["kept"][slot]]
+        if layout is not None:
+            mine += [self.piece_ring[k]["kept"][slot] for k in range(len(layout[1]))]
         poison(self.torch, *mine)
 
-    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None, write: bool = True) -> Ticket:
+    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None, write: bool = True,
+               plan: rb.Plan | None = None, appends: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
         from the host; its ticket at once (`wait`). Without `write` nothing that computes the pass is launched (its
         signs, its receipts and tree, its top levels), only what carries its buffers to the host: a gate's control,
-        whose root and receipts are whatever the buffers held."""
+        whose root and receipts are whatever the buffers held. Over a refresh plan (`plan`, other than the store's)
+        each piece is a shard of its own (`layout`). With `appends`, the chain over the appends sent before the
+        pass's root, a chained pass's previous root is `audit.chained`'s of the root and it (`rs_chain_head`)."""
         so, G, hc = self.lib.so, len(self.gpus), self.hc
+        layout = self.layout(plan)
+        tree = self.plan if layout is None else layout[0]
         tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
         self.launched += 1
@@ -799,7 +985,7 @@ class DeviceStore:
                 if after is not None:
                     s.wait_event(self.top_done[after.slot])
                 if self.poison:
-                    self._poison(g, slot)
+                    self._poison(g, slot, layout)
                 if g == 0:
                     self.started[slot].record(s)
                 self.began[g][slot].record(s)
@@ -810,10 +996,17 @@ class DeviceStore:
                 if not write:
                     rc = 0
                 elif seed is None:
-                    rc = so.rs_chain_prepare(i, ring["roots"].data_ptr() + 64 * prev, sd.data_ptr(), pk.data_ptr(),
-                                             s.cuda_stream)
+                    if tree != self.chain_plan:
+                        self.lib.set_chain(tree, self.key)
+                    previous = ring["roots"].data_ptr() + 64 * prev
+                    if appends is not None:
+                        if so.rs_chain_head(audit.CHAINED_DOMAIN, len(audit.CHAINED_DOMAIN), appends, previous,
+                                            ring["chained"].data_ptr(), s.cuda_stream):
+                            raise RuntimeError(f"rs_chain_head on GPU {gpu.index}")
+                        previous = ring["chained"].data_ptr()
+                    rc = so.rs_chain_prepare(i, previous, sd.data_ptr(), pk.data_ptr(), s.cuda_stream)
                 else:
-                    self.set_pass(self.lib, seed)
+                    self.set_pass(self.lib, seed, tree)
                     rc = self.signs(head, pk, s)
                 hbm, *host = self.gpu_segs[g]
                 if host and not rc:
@@ -823,7 +1016,7 @@ class DeviceStore:
                     for q in host:
                         rc = rc or (write and self.host_pass(q, pk, slot))
                     self.host_done[g][slot].record(gpu.host_main)
-                first, count = self.pads[g]
+                first, count = self.pads[g] if layout is None else self.padding(tree)
                 x = self.seg_ring[hbm]
                 leaf = bool(self.leaf_ctas) and not rc
                 if leaf and write:
@@ -832,6 +1025,17 @@ class DeviceStore:
                                          x["kept"][slot].data_ptr(), self.h0, self.chunk, self.leaf_ctas, first * lc,
                                          count * lc, ring["pad"].data_ptr(), ring["pad_out"].data_ptr(),
                                          s.cuda_stream, gpu.side.cuda_stream, int(self.leaf_receipts))
+                elif write and layout is not None:
+                    for k, q in enumerate(layout[1]):
+                        pad = k == len(layout[1]) - 1
+                        rc = rc or so.rs_pass_at(self.piece_data(q).data_ptr() + q.off * BLOCK, q.n, q.at, q.j,
+                                                 pk.data_ptr(), x["ctr"].data_ptr(), x["ys"].data_ptr(),
+                                                 x["dig"].data_ptr(), x["up"].data_ptr(),
+                                                 self.piece_ring[k]["kept"][slot].data_ptr(), self.h0, self.chunk,
+                                                 self.sketch_ctas, first * lc if pad else 0, count * lc if pad else 0,
+                                                 ring["pad"].data_ptr() if pad else None,
+                                                 ring["pad_out"].data_ptr() if pad else None, s.cuda_stream,
+                                                 gpu.side.cuda_stream, 0)
                 elif write:
                     rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
                                           x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
@@ -846,16 +1050,25 @@ class DeviceStore:
                     raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the library was built without "
                                        "-DLEAF_PASS64, which rows.sh passes for a run of 64 rows with the leaf pass")
                 if rc:
-                    raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")
+                    name = "rs_leaf_pass" if leaf else "rs_pass" if layout is None else "rs_pass_at"
+                    raise RuntimeError(f"{name} on GPU {gpu.index}: {rc}")
                 if host:
                     s.wait_event(self.host_done[g][slot])
                 self.ended[g][slot].record(s)
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
+        if seed is None and write:
+            self.chain_plan = tree
         leader = self.gpus[0]
-        segs = [x["kept"][slot].data_ptr() + 64 * self.kept_at[q][hc] for q, x in enumerate(self.seg_ring)]
-        counts = [n // self.chunk for n in self.n]
-        for g, (_, count) in enumerate(self.pads):
+        if layout is None:
+            rings, pads = self.seg_ring, self.pads
+            segs = [x["kept"][slot].data_ptr() + 64 * self.kept_at[q][hc] for q, x in enumerate(self.seg_ring)]
+            counts = [n // self.chunk for n in self.n]
+        else:
+            rings, pads = self.piece_ring[:len(layout[1])], [self.padding(tree)]
+            segs = [x["kept"][slot].data_ptr() + 64 * self.kept_levels(q.n)[hc] for x, q in zip(rings, layout[1])]
+            counts = [q.n // self.chunk for q in layout[1]]
+        for g, (_, count) in enumerate(pads):
             if count:
                 segs.append(self.ring[g]["pad_out"].data_ptr())
                 counts.append(count)
@@ -881,11 +1094,11 @@ class DeviceStore:
                 c.wait_event(self.top_done[slot] if g == 0 else self.ended[g][slot])
                 for k, host in ring["host"].items():
                     host[slot].copy_(ring[k][slot], non_blocking=True)
-                for q in self.gpu_segs[g]:
-                    self.seg_ring[q]["host"][slot].copy_(self.seg_ring[q]["kept"][slot], non_blocking=True)
+                for x in (rings if layout is not None else [self.seg_ring[q] for q in self.gpu_segs[g]]):
+                    x["host"][slot].copy_(x["kept"][slot], non_blocking=True)
                 self.copied[g][slot].record(c)
-        handle = OffloadedHandle()
-        self.offload_jobs.put((slot, seed, handle))
+        handle = OffloadedHandle(layout)
+        self.offload_jobs.put((slot, seed, handle, rings))
         if tr is not None:
             self._launch_trace[slot] = tr + [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         return Ticket(slot, handle)
@@ -897,14 +1110,14 @@ class DeviceStore:
             if job is None:
                 self.offload_jobs.task_done()
                 return
-            slot, seed, handle = job
+            slot, seed, handle, rings = job
             t0 = time.perf_counter_ns()
             try:
                 for g in range(len(self.gpus)):
                     self.copied[g][slot].synchronize()
                 host = self.ring[0]["host"]
                 handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
-                                host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
+                                host["pks"][slot].clone(), [x["host"][slot].clone() for x in rings],
                                 host["top"][slot].clone())
             except BaseException as error:
                 handle.value = error
@@ -1120,15 +1333,25 @@ class DeviceStore:
         self.dropped_by_segment = [len(sel) for sel, _ in drops]
         self.sync()
 
-    def _open_segment(self, g: int, items: list, seeds: list, pos: list, offs: list, work: list, rec, path, blk) -> int:
-        """Openings of the passes in `work` ((item, the indices of its positions in segment g)) on its GPU, into rows
+    def shards(self, layout: tuple | None) -> list[Shard]:
+        """Where a pass's openings are recomputed: the store's segments, or a refresh plan's pieces."""
+        if layout is None:
+            return [Shard(self.seg_gpu[q], self.data_g[q], 0, self.n[q], self.base[q], 0, q, self.kept_at[q],
+                          self.drops[q]) for q in range(len(self.n))]
+        return [Shard(0, self.piece_data(p), p.off, p.n, p.at, p.j - p.at, q, self.kept_levels(p.n), None)
+                for q, p in enumerate(layout[1])]
+
+    def _open_segment(self, g: Shard, items: list, seeds: list, plans: list, pos: list, offs: list, work: list, rec,
+                      path, blk) -> int:
+        """Openings of the passes in `work` ((item, the indices of its positions in shard g)) on its GPU, into rows
         of rec (receipts), path (levels below hc) and blk (blocks) at their flat indices: the subtrees they fall in."""
-        torch, h0, hc, gpu = self.torch, self.h0, self.hc, self.gpus[self.seg_gpu[g]]
+        torch, h0, hc, gpu = self.torch, self.h0, self.hc, self.gpus[g.gpu]
         S, per = PER_LEAF << h0, 2 * (1 << h0) - 2
         sub_at = [0] * (h0 + 1)
         for f in range(h0):
             sub_at[f + 1] = sub_at[f] + ((1 << h0) >> f)
-        base, base_leaf = self.base[g], self.base[g] // PER_LEAF
+        base, base_leaf = g.at, g.at // PER_LEAF
+        data = g.data.data_ptr() + g.off * BLOCK
         with self.on(gpu, gpu.open) as s:
             dev = torch.device("cuda", gpu.index)
             firsts = [np.unique((pos[k][sel] // PER_LEAF) >> h0 << h0) for k, sel in work]
@@ -1142,12 +1365,18 @@ class DeviceStore:
             rows, order, hold, q0 = [], [], [], 0
             for (k, sel), first in zip(work, firsts):
                 _seed, pk, kept, _top = items[k][0]
-                pk, kp = pk.to(dev), kept[g].to(dev)
+                pk, kp = pk.to(dev), kept[g.q].to(dev)
                 hold.append((pk, kp))
-                self.set_pass(self.lib_open, seeds[k])
-                rc = self.lib_open.so.rs_subtrees(self.data_g[g].data_ptr(), base, pk.data_ptr(), cs.data_ptr() + 8 * q0,
-                                                  len(first), h0, ys.data_ptr() + 64 * S * q0,
-                                                  nodes.data_ptr() + 64 * per * q0, s.cuda_stream)
+                self.set_pass(self.lib_open, seeds[k], plans[k])
+                if g.shift:
+                    rc = self.lib_open.so.rs_subtrees_at(data, base, g.shift % (1 << 64), pk.data_ptr(),
+                                                         cs.data_ptr() + 8 * q0, len(first), h0,
+                                                         ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0,
+                                                         s.cuda_stream)
+                else:
+                    rc = self.lib_open.so.rs_subtrees(data, base, pk.data_ptr(), cs.data_ptr() + 8 * q0, len(first),
+                                                      h0, ys.data_ptr() + 64 * S * q0, nodes.data_ptr() + 64 * per * q0,
+                                                      s.cuda_stream)
                 if rc:
                     raise RuntimeError(f"rs_subtrees on GPU {gpu.index}: {rc}")
                 leaf = pos[k][sel] // PER_LEAF
@@ -1163,7 +1392,7 @@ class DeviceStore:
                         at = per * q + sub_at[h] + (sib - ((leaf >> h0 << h0) >> h))
                         addr[:, PER_LEAF + h] = nd0 + np.uint64(64) * at.astype(np.uint64)
                     else:
-                        at = self.kept_at[g][h] + sib - (base_leaf >> h)
+                        at = g.kept_at[h] + sib - (base_leaf >> h)
                         addr[:, PER_LEAF + h] = kp0 + np.uint64(64) * at.astype(np.uint64)
                 rows.append(addr)
                 order.append(offs[k] + sel)
@@ -1180,8 +1409,8 @@ class DeviceStore:
             rec[idx] = raw[:, :PER_LEAF].reshape(len(idx), -1)
             path[idx, :hc] = raw[:, PER_LEAF:]
             local = np.concatenate([pos[k][sel] for k, sel in work]) - base
-            blk[idx] = self.data_g[g].view(-1, BLOCK)[torch.from_numpy(local).to(self.data_g[g].device)].cpu().numpy()
-            dsel, true = self.drops[g]
+            blk[idx] = g.data.view(-1, BLOCK)[torch.from_numpy(local + g.off).to(g.data.device)].cpu().numpy()
+            dsel, true = g.drops if g.drops is not None else (np.zeros(0, dtype=np.int64), None)
             if len(dsel):
                 at = np.searchsorted(dsel, local)
                 hit = (at < len(dsel)) & (dsel[np.minimum(at, len(dsel) - 1)] == local)
@@ -1191,9 +1420,12 @@ class DeviceStore:
 
     def open_window(self, items: list[tuple[object, list[int]]]) -> list[list[tuple]]:
         """For each (pass handle, positions) of a window, each position's (block, leaf, leaf salt, receipt path,
-        payload salt, payload path), segment by segment (`_open_segment`, OPEN_BATCH passes a time), the path above hc
-        from each pass's top levels and the payload paths from the CPU-resident payload tree."""
+        payload salt, payload path), shard by shard (`_open_segment`, OPEN_BATCH passes a time), the path above hc
+        from each pass's top levels and the payload paths from the CPU-resident payload tree. A refresh plan's pass
+        adds its block's digest d_j and origin (`ledger`), its payload salt and path its origin's."""
         hc, H = self.hc, self.H
+        layouts = [getattr(handle, "layout", None) for handle, _ in items]
+        plans = [None if x is None else x[0] for x in layouts]
         items = [(self.ready(handle), positions) for handle, positions in items]
         seeds = [seed if isinstance(seed, bytes) else bytes(seed.cpu().numpy()) for (seed, *_), _ in items]
         tops = [(top.cpu().numpy() if hasattr(top, "cpu") else np.asarray(top)).view(np.uint64)
@@ -1205,19 +1437,25 @@ class DeviceStore:
         path = np.empty((total, H, 64), dtype=np.uint8)
         blk = np.empty((total, BLOCK), dtype=np.uint8)
         t0, subtrees = time.perf_counter_ns(), 0
-        for g in range(len(self.n)):
-            lo, hi = self.base[g], self.base[g] + self.n[g]
-            work = [(k, np.nonzero((p >= lo) & (p < hi))[0]) for k, p in enumerate(pos)]
-            work = [(k, sel) for k, sel in work if len(sel)]
+        groups: dict = {}
+        for k, (p, layout) in enumerate(zip(pos, layouts)):
+            for g in self.shards(layout):
+                sel = np.nonzero((p >= g.at) & (p < g.at + g.n))[0]
+                if len(sel):
+                    groups.setdefault((id(g.data), g.off, g.n, g.at, g.shift, g.q), (g, []))[1].append((k, sel))
+        for g, work in groups.values():
             for b in range(0, len(work), OPEN_BATCH):
-                subtrees += self._open_segment(g, items, seeds, pos, offs, work[b:b + OPEN_BATCH], rec, path, blk)
+                subtrees += self._open_segment(g, items, seeds, plans, pos, offs, work[b:b + OPEN_BATCH], rec, path,
+                                               blk)
         t1 = time.perf_counter_ns()
         for k, p in enumerate(pos):
             leaf = p // PER_LEAF
             for h in range(hc, H):
                 rows = tops[k][self.top_at[h] + ((leaf >> h) ^ 1)]
                 path[offs[k]:offs[k + 1], h] = rows.astype(">u8").view(np.uint8).reshape(-1, 64)
-        flat = np.concatenate(pos) if pos else np.zeros(0, dtype=np.int64)
+        index = [p if x is None else self.indices(x[1], p) for p, x in zip(pos, layouts)]
+        origin = [j if x is None else self.origins(j) for j, x in zip(index, layouts)]
+        flat = np.concatenate(origin) if origin else np.zeros(0, dtype=np.int64)
         hp = self.payload_H
         payload = np.empty((len(flat), hp, 8), dtype=np.uint64)
         for h in range(hp):
@@ -1231,10 +1469,14 @@ class DeviceStore:
         for k, (seed, (_handle, positions)) in enumerate(zip(seeds, items)):
             mine = []
             for r, p in enumerate(positions):
-                q = offs[k] + r
-                mine.append((blk[q].tobytes(), rec[q].tobytes(), store_salt(self.key, seed, p // PER_LEAF),
-                             tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.payload_key, PAYLOAD_LABEL, p),
-                             tuple(praw[q, h].tobytes() for h in range(hp))))
+                q, o = offs[k] + r, int(origin[k][r])
+                f = (blk[q].tobytes(), rec[q].tobytes(), store_salt(self.key, seed, p // PER_LEAF),
+                     tuple(path[q, h].tobytes() for h in range(H)), store_salt(self.payload_key, PAYLOAD_LABEL, o),
+                     tuple(praw[q, h].tobytes() for h in range(hp)))
+                if layouts[k] is not None:
+                    j = int(index[k][r])
+                    f += (b"", None) if j < self.blocks else (self.ledger.digest(j), o)
+                mine.append(f)
             out.append(mine)
         self.open_stats.append({"at_ns": t0, "openings": total, "subtrees": subtrees, "subtrees_ns": t1 - t0,
                                 "gather_ns": t2 - t1, "assemble_ns": time.perf_counter_ns() - t2})
@@ -1242,6 +1484,85 @@ class DeviceStore:
 
     def open(self, handle, positions: list[int]) -> list[tuple]:
         return self.open_window([(handle, positions)])[0]
+
+    @staticmethod
+    def indices(layout: tuple[Piece, ...], positions) -> np.ndarray:
+        """The store index at each position of a refresh plan laid out in `layout`."""
+        p = np.asarray(positions, dtype=np.int64)
+        ats = np.array([q.at for q in layout], dtype=np.int64)
+        k = np.searchsorted(ats, p, side="right") - 1
+        return np.array([q.j for q in layout], dtype=np.int64)[k] + p - ats[k]
+
+    def origins(self, index) -> np.ndarray:
+        """The store index each block's payload was first committed at: its own, or a re-key's origin's
+        (`ledger.origin_position`)."""
+        return np.array([j if j < self.blocks else self.ledger.origin_position(int(j)) for j in index], dtype=np.int64)
+
+
+def payload_digests(raw) -> bytes:
+    """Each 4 KiB payload block's digest d_j (`codec.digest`, sha512/row/v2) in `raw`'s order, 64 bytes each."""
+    h0, view = hashlib.sha512(sha512_row_v2_prefix(8 * BLOCK)), memoryview(raw)
+    out = []
+    for u in range(len(view) // BLOCK):
+        h = h0.copy()
+        h.update(view[u * BLOCK:(u + 1) * BLOCK])
+        out.append(h.digest())
+    return b"".join(out)
+
+
+class _Encoded:
+    """`Store.blocks` as `audit_prover.Refresh` reads it: None for an appended block whose encode has not landed."""
+
+    def __init__(self, ledger: Ledger) -> None:
+        self.ledger = ledger
+
+    def __getitem__(self, j: int) -> bytes | None:
+        if j < self.ledger.registration.blocks:
+            return b""
+        return b"" if self.ledger.landed(self.ledger._append_of(j).first) else None
+
+
+class Ledger(audit_prover.Store):
+    """`audit_prover.Store`'s books of a store on the card, without its payloads: the registered blocks' digests d_j,
+    taken before the encode (`payload_digests`), and its appends, a refresh's re-keys of registered runs. A re-key's
+    blocks are encoded (`blocks`, `pending`) once its encode on the device has landed (`landed`), so a plan leaves them
+    out until then (`GpuBackend.deferred`)."""
+
+    def __init__(self, registration: audit.Registration, digests: bytes, landed) -> None:
+        if len(digests) != rb.DIGEST_BYTES * registration.blocks:
+            raise ValueError(f"the registration's {registration.blocks} blocks have a digest each")
+        self.registration, self.digests, self.landed = registration, digests, landed
+        self.appends: list[audit_prover.Append] = []
+        self.coin_of: dict[int, bytes] = {}
+        self.blocks = _Encoded(self)
+
+    @property
+    def pending(self) -> dict[int, tuple]:
+        return {a.first: () for a in self.appends if not self.landed(a.first)}
+
+    def digest(self, j: int) -> bytes:
+        if j < self.registration.blocks:
+            return self.digests[rb.DIGEST_BYTES * j:rb.DIGEST_BYTES * (j + 1)]
+        a = self._append_of(j)
+        return a.digests[j - a.first]
+
+    def rekey(self, origin, count: int, slot: int | None = None) -> audit_prover.Append:
+        reg, first, n = self.registration, self.extent, self.registration.blocks
+        if (origin[0] != "registered" or len(origin) != 2 or type(count) is not int or count < 1
+                or not 0 <= origin[1] <= n - count):
+            raise ValueError(f"the card re-keys a registered run inside the store's {n} blocks, not {count} blocks "
+                             f"of {origin!r}")
+        if first + count > reg.codec.max_blocks:
+            raise ValueError(f"a store under {reg.codec.name} is at most {reg.codec.max_blocks} blocks")
+        lo, w = origin[1], rb.DIGEST_BYTES
+        digests = tuple(self.digests[w * j:w * (j + 1)] for j in range(lo, lo + count))
+        a = audit_prover.Append(first, digests, (), None, origin,
+                                audit_prover.rekey_root(reg.digest, first, count, origin), slot)
+        self.appends.append(a)
+        return a
+
+    def encode(self, first: int, coin: bytes) -> None:
+        raise TypeError("a card's appends are encoded on the device (`GpuBackend.encode_append`)")
 
 
 class GpuBackend:
@@ -1253,8 +1574,9 @@ class GpuBackend:
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
-                 host_consumers: int = 8, hbm=None, leaf_ctas: int = 0) -> None:
+                 host_consumers: int = 8, hbm=None, leaf_ctas: int = 0, refresh_blocks: int = 0) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
+        self.refresh_blocks, self.ledger, self.registered_digests = refresh_blocks, None, None
         if leaf_ctas < 0:
             raise ValueError(f"leaf_ctas counts a store's reading CTAs (0: `rs_pass`), not {leaf_ctas}")
         self.leaf_ctas = leaf_ctas
@@ -1299,7 +1621,47 @@ class GpuBackend:
         self.node = node
         root = self.store.payload_tree(node)
         self.store.sync()
+        if self.refresh_blocks:
+            self.registered_digests = self.digests()
         return root
+
+    def digests(self, step: int = 1 << 15, threads: int = 8) -> bytes:
+        """Every registered block's payload digest d_j, read off the store while it holds its payloads."""
+        s, out = self.store, []
+        with ThreadPoolExecutor(threads) as pool:
+            for j0 in range(0, s.blocks, step):
+                raw = b"".join(s.data_g[q][max(0, j0 - s.base[q]) * BLOCK:min(s.n[q], j0 + step - s.base[q]) * BLOCK]
+                               .cpu().numpy().tobytes() for q in range(len(s.n))
+                               if s.base[q] < j0 + step and j0 < s.base[q] + s.n[q])
+                part = -(-len(raw) // BLOCK // threads) * BLOCK
+                out += pool.map(payload_digests, [raw[a:a + part] for a in range(0, len(raw), part)])
+        return b"".join(out)
+
+    @property
+    def deferred(self) -> bool:
+        """A re-keyed block joins a plan once its encode has landed, not when it is queued: so with a spare area."""
+        return self.refresh_blocks > 0
+
+    def rekey(self, origin, count: int, slot: int) -> audit_prover.Append:
+        if self.ledger is None:
+            raise ValueError("a refresh re-keys into the spare area, which --refresh-gib sizes, and this prover has none")
+        return self.ledger.rekey(origin, count, slot)
+
+    def encode_append(self, first: int, coin: bytes) -> None:
+        """The re-key from `first`, encoded on the device under its coin's bound keys (`DeviceStore.rekey`)."""
+        a = self.ledger._append_of(first) if self.ledger is not None and self.ledger.appends else None
+        if a is None or a.first != first or a.origin is None or first in self.ledger.coin_of:
+            raise ValueError(f"no re-key from block {first} awaits its coin")
+        self.store.rekey(a.origin[1], first, a.count, bound_offsets(self.key, first, a.digests, coin))
+        self.ledger.coin_of[first] = coin
+
+    def begin_session(self) -> None:
+        """A session's re-keys from index N again, the last session's done."""
+        if self.ledger is not None:
+            self.store.sync()
+            self.ledger.appends.clear()
+            self.ledger.coin_of.clear()
+            self.store.rekeys.clear()
 
     def encode(self, registration: audit.Registration) -> dict:
         self.store.set_rows(registration.rows)
@@ -1312,6 +1674,10 @@ class GpuBackend:
         self.gates["encoded_last_block"] = self.store.block(last) == self.reference_last
         if not self.gates["encoded_last_block"]:
             raise RuntimeError("the store's last block is not the codec's encode of its payload")
+        self.key = registration.key
+        if self.refresh_blocks:
+            self.store.refresh_area(self.refresh_blocks)
+            self.ledger = self.store.ledger = Ledger(registration, self.registered_digests, self.store.landed)
         self.encode_bytes_per_s = rate
         return {"encode_bytes_per_s": rate, "blocks": self.blocks, "bytes": self.blocks * BLOCK}
 
@@ -1444,8 +1810,8 @@ class GpuBackend:
     def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
         self.store.start_chain(challenge, previous)
 
-    def launch(self, i: int, after: Ticket | None) -> Ticket:
-        return self.store.launch(i, after)
+    def launch(self, i: int, after: Ticket | None, plan: rb.Plan | None = None) -> Ticket:
+        return self.store.launch(i, after, plan=plan, appends=self.ledger.head if self.ledger is not None else None)
 
     def wait(self, ticket: Ticket):
         return self.store.wait(ticket)
@@ -1679,6 +2045,9 @@ def add_arguments(ap) -> None:
                          "share on its NUMA node, read in the same pass over that GPU's PCIe link")
     ap.add_argument("--host-ctas", type=int, default=16, help="a host segment's receipt CTAs")
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
+    ap.add_argument("--refresh-gib", type=float, default=0.0,
+                    help="a refresh's spare area beside the store, rounded down to whole --chunk-blocks: room for "
+                         "every re-key of a session, each written out of place (0: no refresh on this prover)")
 
 
 def from_arguments(a, log=print) -> GpuBackend:
@@ -1692,4 +2061,5 @@ def from_arguments(a, log=print) -> GpuBackend:
                       warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
                       sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                       trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
-                      host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas)
+                      host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas,
+                      refresh_blocks=int(a.refresh_gib * 2 ** 30) // BLOCK // a.chunk_blocks * a.chunk_blocks)
