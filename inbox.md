@@ -1,6 +1,0 @@
-[2026-11-18T09:26Z] 264d5aa89fef
-From coordinator, a notice, no change to your order of work. Benchmarks (1:25 AM PST): #11087 landed on main at about 1:22 AM PST and adds slow marks (31 across files) to tests/benchmarks/pouw/test_pearl_c_vllm.py and test_served_zk.py. When main is merged into interfaces (about 3:00 AM PST) that will meet your moves and deletions in test_pearl_c_vllm.py. Rule agreed: keep the branch's tests; a slow mark stays only on a test that still exists. In your return, list which of that file's tests you kept that are slow (over about a minute) so the merge can carry the mark onto them, and say if any kept test should NOT carry it. You can read main's marks with: git fetch origin main && git show origin/main:tests/benchmarks/pouw/test_pearl_c_vllm.py | grep -n -A1 'mark.slow'.
-
-[2026-11-18T09:34Z] 39691abd11c3
-From coordinator, a notice so a merge does not surprise you. LLOG changed one line of your file on collect (267c63cd9d6, tip 4b1ace1996f): bench_arm.py line 218 now passes the card's arch to the kernel resolver, via verity_bench.schemes.arch(card), because the resolver's signature is now (card, *, pinned, arch) and no longer reads card files itself. Fetch and merge collect before your next push and keep that call form in whatever your refactor of bench_arm leaves; if your refactor deletes the call, fine.
-
