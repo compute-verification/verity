@@ -53,9 +53,20 @@ T975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2
 
 
 def units(path: Path) -> dict:
-    """Each pass's device time a call over the fast kernel's, in µs, by (rows, keys): ``base`` where no row failed, over
-    the distributions timed, and ``failed`` where every row failed (a near miss or the pin's overflow), less ``base``;
-    each (lo, hi)."""
+    """`timed`, refused without the present pass (every pin's) and where a pass has times of one kind only."""
+    out = timed(path)
+    if "present" not in out:
+        raise SystemExit(f"{path}: no present times with and without a failed row")
+    if half := [p for p in timed(path, partial=True) if p not in out]:
+        raise SystemExit(f"{path}: {', '.join(half)} times of one kind only, with no failed row or with every row failed")
+    return out
+
+
+def timed(path: Path, partial: bool = False) -> dict:
+    """Each timed pass's device time a call over the fast kernel's, in µs, by (rows, keys): ``base`` where no row
+    failed, over the distributions timed, and ``failed`` where every row failed (a near miss or the pin's overflow),
+    less ``base``; each (lo, hi). A pass the file holds no times of both kinds for is left out, or with ``partial``
+    kept where it holds times of either kind."""
     base: dict = {"present": {}, "cut": {}}
     whole: dict = {"present": {}, "cut": {}}
     for line in path.read_text().splitlines():
@@ -64,20 +75,19 @@ def units(path: Path) -> dict:
             continue
         shape = (r.get("rows"), r.get("keys"))
         if "dist" in r:
-            for p in base:
+            for p in (p for p in base if p in r):
                 c = r[p]["per_call"]
                 if not c.get("rows_bisected") and not c.get("rows_refined"):
                     base[p].setdefault(shape, []).append(r[p]["added_us"])
         elif r.get("forced") in ("missed", "overflow"):
-            for p in whole:
+            for p in (p for p in whole if p in r):
                 whole[p].setdefault(shape, []).append(r[p]["us"])
     out = {}
     for p in base:
         b = {s: (min(v), max(v)) for s, v in base[p].items()}
         f = {s: (max(0.0, min(v) - b[s][1]), max(v) - b[s][0]) for s, v in whole[p].items() if s in b}
-        if not b or not f:
-            raise SystemExit(f"{path}: no {p} times with and without a failed row")
-        out[p] = {"base": b, "failed": f}
+        if (b and f) or (partial and (base[p] or whole[p])):
+            out[p] = {"base": b, "failed": f}
     return out
 
 

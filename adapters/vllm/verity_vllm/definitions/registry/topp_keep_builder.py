@@ -12,10 +12,20 @@ from collections import Counter
 from contextlib import contextmanager
 
 import numpy as np
-
 from verity.circuits.ops.scalar import BitAnd, BitOr, SelectF32, SelectI32
+
 from verity_vllm.definitions.registry.topp_geometry import spt_for, z_group
-from verity_vllm.definitions.registry.topp_word_gates import CW, GATES, SIG, WIDTH, BitXor, SelectBit, U32Xor, f32_word, numeric
+from verity_vllm.definitions.registry.topp_word_gates import (
+    CW,
+    GATES,
+    SIG,
+    WIDTH,
+    BitXor,
+    SelectBit,
+    U32Xor,
+    f32_word,
+    numeric,
+)
 
 SPLIT_COUNTS = (1, 2, 4, 8, 16, 32)
 F, R = 8, 5                      # topp_split.SPLIT_FANOUT, SPLIT_ROUNDS

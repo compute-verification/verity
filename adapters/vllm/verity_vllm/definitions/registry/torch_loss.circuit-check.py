@@ -11,6 +11,7 @@ def _boolean_roots() -> list[Any]:
     `DsaTopKOneHot_v1{N=384}`), and the loss over 16 rows with and without the mean, with its backward; then the step's blocks,
     a row and a row's backward, reaching the row's end."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import torch_loss as TL
 
     return [

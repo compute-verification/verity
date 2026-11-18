@@ -142,7 +142,7 @@ if [ -z "${PP_TP:-}" ] && [ -n "${PP_SERVE_RUN:-}${PP_LLAMA:+${PP_SERVE_STANDIN:
     ${PP_FORGED_PARTITION:+--forged $PP_FORGED_PARTITION} > $O/forged-partition.json || exit 8
 fi
 
-(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server flock-read-tmpl) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${PP_FLOCK_WORK:-$W}

@@ -17,9 +17,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SCRIPT = ROOT / "benchmarks" / "one_stage" / "proof_layers.sh"
 TEXT = SCRIPT.read_text()
-SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO", "A5_STEPS"]
+SETTINGS = ["A5_CARD", "A5_CORES", "WORK", "GPU_LEASE_WHO", "A5_STEPS", "A5_KEEP"]
 DESIGNS = {"flock": "stratified-rate:880/880", "zk": "$ZK_DESIGN", "sampling": "subset:256"}
-PLAIN = {"flock": "A5_PLAIN=1 ", "zk": "", "sampling": ""}
+PLAIN = {"flock": "A5_PLAIN=1 ", "zk": "", "sampling": "${A5_KEEP:+A5_KEEP=1 }"}
 
 
 def test_the_script_parses():
@@ -28,29 +28,33 @@ def test_the_script_parses():
 
 def test_its_runs_and_partitions_are_the_readmes():
     script_designs = {name: design for design, name in re.findall(r"\$\(part (\S+) (\w+)\)", TEXT)}
-    script_runs = {name: plain for plain, name in re.findall(r'\$\(run "(A5_PLAIN=1 )?" (\w+)\)', TEXT)}
+    script_runs = {name: plain for plain, name in re.findall(r'\$\(run "([^"]*)" (\w+)\)', TEXT)}
     assert script_designs == DESIGNS and "ZK_DESIGN=subset:880 " in TEXT
     assert script_runs == PLAIN
     assert "A5_COINS=challenger $1A5_PARTITION=" in TEXT and "bash benchmarks/one_stage/a5_llama1b_h200.sh" in TEXT
     assert "pod_bootstrap.sh --cases LLAMA32_1B_INT8" in TEXT
     assert "verity bench prove layers --flock" in TEXT and "--recursion" not in TEXT
+    assert '--sampling $(q "$WORK/out-sampling")${A5_STEPS:+ --batch $A5_STEPS} |' in TEXT
 
 
-@pytest.mark.parametrize("steps", ["", "1-16"])
+@pytest.mark.parametrize("steps", ["", "1-8", "1-16"])
 def test_its_partition_files_are_the_trees_with_the_layers_sampling_design_and_a5_steps_scope(steps, tmp_path):
-    """Unset, A5_STEPS leaves the tree's partition file as it is but for its sampling design; set, it gives each file its
-    scope's steps, and the zero-knowledge layer every proof block by rate."""
+    """Unset, or the file's own steps, A5_STEPS leaves the tree's partition file as it is but for its sampling design;
+    set to other steps, it gives each file its scope's steps, and the zero-knowledge layer every proof block by rate."""
 
     lines = TEXT.splitlines()
     start = lines.index(next(x for x in lines if x.startswith("part() {")))
-    defs = "\n".join([x for x in lines if x.startswith(("q() {", "PART=", "ZK_DESIGN="))] + lines[start:lines.index("}", start) + 1])
+    own = ("q() {", "PART=", "OWN=", '[ "$A5_STEPS" != "$OWN" ]', "ZK_DESIGN=")
+    defs = "\n".join([x for x in lines if x.startswith(own)] + lines[start:lines.index("}", start) + 1])
     tree = json.loads((ROOT / "benchmarks" / "one_stage" / "llama32_1b_rope_d64_l0.json").read_text())
-    want = {"flock": "stratified-rate:880/880", "zk": "rate:1/1" if steps else "subset:880"}
+    assert tree["scope"]["steps"] == [1, 8]
+    batch = steps not in ("", "1-8")
+    want = {"flock": "stratified-rate:880/880", "zk": "rate:1/1" if batch else "subset:880"}
     for name, design in (("flock", want["flock"]), ("zk", "$ZK_DESIGN")):
         script = f'WORK={tmp_path}; A5_STEPS={steps}\n{defs}\neval "$(part {design} {name})"'
         subprocess.run(["bash", "-c", script], cwd=ROOT, check=True)
         made = json.loads((tmp_path / f"partition-{name}.json").read_text())
-        assert made.pop("scope") == ({**tree["scope"], "steps": [1, 16]} if steps else tree["scope"])
+        assert made.pop("scope") == ({**tree["scope"], "steps": [1, 16]} if batch else tree["scope"])
         assert list(made) == [k for k in tree if k != "scope"] and want[name] in made.values()
         assert all(made[k] == tree[k] for k in made if made[k] != want[name])
 
@@ -114,3 +118,30 @@ def test_a5_steps_that_are_no_range_of_steps_are_refused(steps, tmp_path):
            "A5_STEPS": steps}
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2 and run.stderr.startswith(f"proof_layers.sh: A5_STEPS={steps}: LO-HI")
+
+
+@pytest.mark.parametrize("keep", ["rel/dir", "{w}/kept", "{tmp}"])
+def test_a5_keep_that_is_not_a_new_directory_outside_work_is_refused(keep, tmp_path):
+    keep = keep.format(w=tmp_path / "w", tmp=tmp_path)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "A5_CARD": "0", "A5_CORES": "0", "WORK": str(tmp_path / "w"),
+           "A5_KEEP": keep}
+    run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
+    assert run.returncode == 2 and run.stderr.startswith(f"proof_layers.sh: A5_KEEP={keep}: an absolute path")
+    assert 'cp -a "${w[0]}" "$A5_KEEP"' in TEXT and TEXT.index('cp -a "${w[0]}"') < TEXT.index('rm -rf "$WORK"')
+
+
+@pytest.mark.parametrize("windows", [0, 1, 2])
+def test_a5_keep_copies_the_one_sampling_window_and_counts_the_windows_it_found(windows, tmp_path):
+    lines = TEXT.splitlines()
+    start = lines.index(next(x for x in lines if x.startswith("keep() {")))
+    defs = "\n".join([next(x for x in lines if x.startswith("log() {")), *lines[start:lines.index("}", start) + 1]])
+    work, keep = tmp_path / "w", tmp_path / "kept"
+    for i in range(windows):
+        (work / "a5-llama1b" / f"r{i}" / "serving-rows").mkdir(parents=True)
+        (work / "a5-llama1b" / f"r{i}" / "serving-rows" / "window.json").write_text("{}")
+    script = f"RESULTS={tmp_path}; WORK={work}; A5_KEEP={keep}\n{defs}\nkeep"
+    run = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    if windows == 1:
+        assert run.returncode == 0 and (keep / "window.json").is_file() and run.stdout.startswith("kept:")
+    else:
+        assert run.returncode == 1 and not keep.exists() and run.stdout.endswith(f"({windows} found)\n")

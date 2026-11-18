@@ -60,6 +60,7 @@ from verity_vllm.pipeline.advice_code.schedule import (
     Engine,
     RequestIO,
     RequestState,
+    Rule,
     Step,
     Tick,
 )
@@ -418,7 +419,7 @@ class Replay:
     passed: list[int]               # the `schedule` calls already made at that step when it became visible
     forced: list[bool]              # it arrived into a quiet engine
     asked: list[list[int]]          # the open steps it was asked about, its admission last
-    clock: list[int]                # under the certified tick, T after each executed step (µs); else empty
+    clock: list[int]                # under the certified tick, T after each executed step (the rule's unit); else empty
 
 
 Emitted = list[dict[int, int]]     # per executed step, in order: request -> the index of the output it emitted there
@@ -499,7 +500,7 @@ def _whatif(s: Scheduler, queue: Queue, p: _Pass, i: int, now: bool, want: int) 
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
-           passed: Sequence[int] | None = None, decide: Decide | None = None, tick: Tick | None = None,
+           passed: Sequence[int] | None = None, decide: Decide | None = None, tick: Tick | Rule | None = None,
            released: Sequence[int] | None = None, max_steps: int | None = None, kept: Kept | None = None) -> Replay:
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
@@ -513,7 +514,9 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
     except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
     step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty
-    (`Replay.clock` keeps T after each such step).
+    (`Replay.clock` keeps T after each such step). A `Rule` in place of the `Tick` gives these in its own unit, adds
+    its ``token`` for each token the step schedules that is not a draft, and without ``quiet`` jumps T whenever nothing
+    waits.
 
     With a draft, `kept(i, row)` gives the drafts request i's emitting row `row` kept, in place of `RequestIO.kept`:
     it is asked once for each row that emits, the steps in the order they execute and a step's rows in its own."""
@@ -537,6 +540,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
             raise ValueError(f"{len(released)} release buckets for {n} requests")
         if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
             raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
+    rule = tick if tick is None or isinstance(tick, Rule) else Rule(tick.bucket_us, tick.sat_us, tick.free_us)
     s = Scheduler(engine, requests, kept)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)],
                  clock=[], passed=[0] * n)
@@ -570,11 +574,11 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         if admit is not None and passed is not None:
             while nxt < n and (admit[nxt], passed[nxt]) <= (len(out.steps), here):
                 add(s.quiet())
-        elif tick is not None and released is not None:
+        elif rule is not None and released is not None:
             if not (s.quiet() and s.finished_ids):
-                if s.quiet() and nxt < n:
-                    T = max(T, tick.close(released[nxt]))
-                while nxt < n and tick.close(released[nxt]) <= T:
+                if nxt < n and not (s.waiting or s.skipped) and (s.quiet() or not rule.quiet):
+                    T = max(T, rule.close(released[nxt]))
+                while nxt < n and rule.close(released[nxt]) <= T:
                     add(s.quiet())
         elif nxt < n and s.quiet():
             add(True)
@@ -594,8 +598,9 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         if step.rows:
             out.steps.append(step)
             here = 0
-            if tick is not None:
-                T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
+            if rule is not None:
+                T += (rule.sat if (s.waiting or s.skipped) else rule.free) + rule.token * (
+                    sum(n for *_, n in step.rows) - sum(step.drafts.values()))
                 out.clock.append(T)
         return step, samples
 
