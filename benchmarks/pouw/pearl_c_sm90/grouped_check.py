@@ -15,15 +15,16 @@ byte for byte: y, and the manifests less their run name (the transcript and reco
 digest), with every call's A rows file read and compared.  Then the arms are timed interleaved, rep by rep (the order rotated),
 the pearl arms in fresh unretained passes under their schedule, each sample closed only after the side lanes
 (`glm53_timing.timed`), beside the stock grouped arms that build (`stock_arms`), each checked against x·Wᵀ.  SCRATCH/NxK gets
-``capture.json`` and ``coins.json``, for glm53_passes.py verify; DIR gets ``grouped.json`` and each pass's manifest.  Exits 0
-only when every grouped pass agrees.
+``capture.json`` and ``coins.json``, for glm53_passes.py verify; DIR gets ``grouped.json``, with each pass's public fields
+(`PUBLIC`) and its manifest's sha256, never the manifest, which names the pass's salts and rows.  SCRATCH is private and
+neither is nor shares DIR.  Exits 0 only when every grouped pass agrees.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import hashlib
 import statistics
 import sys
 from collections.abc import Callable, Sequence
@@ -49,6 +50,17 @@ SCHEDULES = ("serial", "deferred", "deferred-a")
 #: calls a graphed arm makes before its retained pass: a layout's graphs are captured at its second call on a ring set, and
 #: the ring has at most two
 WARM_GRAPHS = 4
+
+
+#: what DIR keeps of a retained pass's manifest: its roots and counts
+PUBLIC = ("scheme", "schedule", "units", "tiles", "transcript_root", "records_root", "activation_roots", "weights_root")
+
+
+def public_of(manifest: Path) -> dict:
+    """`manifest`'s `PUBLIC` fields and its sha256."""
+    raw = manifest.read_bytes()
+    man = json.loads(raw)
+    return {"manifest_sha256": hashlib.sha256(raw).hexdigest(), **{k: man[k] for k in PUBLIC if k in man}}
 
 
 def _same(a: Path, b: Path) -> list[str]:
@@ -266,7 +278,8 @@ def check_shape(a: argparse.Namespace, n: int, k: int) -> dict:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--out", required=True)
-    p.add_argument("--passes", required=True, help="where the retained passes go (each about EXPERTS weights' rows)")
+    p.add_argument("--passes", required=True,
+                   help="where the retained passes go (each about EXPERTS weights' rows): private, outside --out")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin")
     p.add_argument("--reps", type=int, default=10)
@@ -275,14 +288,13 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--graphs", action=argparse.BooleanOptionalAction, default=True,
                    help="each schedule's grouped arm a second time with the run's graphs (its layout's lane graphs replayed)")
     a = p.parse_args(argv)
-    out = Path(a.out)
+    out, passes = Path(a.out).resolve(), Path(a.passes).resolve()
+    if passes == out or out in passes.parents or passes in out.parents:
+        p.error(f"--passes {a.passes} is --out or shares it: a pass's salts and rows never go under --out")
     out.mkdir(parents=True, exist_ok=True)
     res = {"shapes": [check_shape(a, n, k) for n, k in SHAPES]}
-    for n, k in SHAPES:
-        for m in sorted((Path(a.passes) / f"{n}x{k}").glob("*/manifest.json")):
-            dst = out / f"{n}x{k}" / m.parent.name
-            dst.mkdir(parents=True, exist_ok=True)
-            shutil.copy(m, dst / "manifest.json")
+    res["passes"] = {f"{n}x{k}": {m.parent.name: public_of(m) for m in sorted((passes / f"{n}x{k}").glob("*/manifest.json"))}
+                     for n, k in SHAPES}
     res["ok"] = all(s["ok"] for s in res["shapes"])
     (out / "grouped.json").write_text(json.dumps(res, indent=1) + "\n")
     print(f"grouped check {'PASS' if res['ok'] else 'FAIL'}", flush=True)
