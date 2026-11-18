@@ -27,7 +27,8 @@ from verity_flock import partition_units as PU  # noqa: E402
 
 
 #: a registered Definition of two q-word classes, bound through Flock's catalog resolver
-ROPE = ["--definition", "RoPE_v1{NHEADS=32,D=64}", "--resolver", "verity/protocols/proofs/flock/prover/pod/catalog.py:definition"]
+ROPE = ["--definition", "RoPE_v1{NHEADS=32,D=64}", "--resolver",
+        f"{Path(__file__).parents[6] / 'verity' / 'protocols' / 'proofs' / 'flock' / 'prover' / 'pod' / 'catalog.py'}:definition"]
 
 
 @pytest.fixture(scope="module")
