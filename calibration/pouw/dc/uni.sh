@@ -42,7 +42,7 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   fi
   srcs=()
   for t in ${UNI_TABLES:-uniform imad}; do srcs+=("$HERE/probes/${FAM}_$t.cu"); done
-  python3 "$PROBE" build --arch "$ARCH" --out "$WORK" "${srcs[@]}" \
+  python3 "$PROBE" build --out "$WORK" "${srcs[@]}" \
     >"$WORK/built" 2>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
   mapfile -t bins <"$WORK/built"
   for b in "${bins[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done
