@@ -55,7 +55,7 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -123,6 +123,19 @@ class _Group:
     leaf_table: Any
     dids: Any
     first_unit: int
+
+
+class _GraphKey(NamedTuple):
+    """What a captured graph serves: a group's add (``k``) at a slot count, the plan's pass size and leaf kernel, the SMs
+    its leaf grid was sized to (``sms``, 0 for the whole device's), and the strides it read its salts at, a row's and a
+    slot's."""
+    k: int
+    slots: int
+    temp_bytes: int
+    leaf_minb: int
+    sms: int
+    row_stride: int
+    slot_stride: int
 
 
 @dataclass(frozen=True)
@@ -308,7 +321,7 @@ class Plan:
             self.stream = None
         else:
             self.stream = self.partition.stream() if self.partition else self.torch.cuda.Stream(self.device)
-        self._graphs: dict[tuple[int, ...], _Graph] = {}
+        self._graphs: dict[_GraphKey, _Graph] = {}
         self._pool: Any = None
         self._frontiers: dict[int, Any] = {}
         self._open: StepCommitter | None = None
@@ -461,7 +474,7 @@ class Plan:
         after another on that stream), reading its tensors' addresses from its ``addr`` and its salts from ``salts`` ((G,
         slots, 192), ``StepCommitter._by_row``) until ``resalt`` points it at the next add's. A graph keeps the leaf grid
         it was captured with and the strides it read its salts at, so ``sms`` and those strides are in its key."""
-        key = (sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
+        key = _GraphKey(sc.k, sc.slots, self.temp_bytes, self.leaf_minb, self.sms, int(salts.stride(0)), int(salts.stride(1)))
         if key not in self._graphs:
             torch = self.torch
             if self._pool is None:

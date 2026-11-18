@@ -26,7 +26,7 @@ open _root_.Flock
 
 namespace FlockDeploy
 
-theorem insOf_ins {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) :
+theorem insOf_ins {zk : Bool} {x : Hash.Msg} {s : Ins} (h : insOf zk x = some s) :
     ∃ w, decode x = some w ∧ w.zk = zk ∧ w.ins = .ok s := by
   unfold insOf at h
   obtain ⟨w, hw, h2⟩ := Option.bind_eq_some_iff.1 h
@@ -127,10 +127,10 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A statement `Stmt.setupHidden` returns keeps the coin tree its setup was given.** -/
 theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program own : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
+    {sample partition : Option Lean.Json} {program own : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables sample partition program own = .ok st) :
     st.coinTree = coins.tree? := by
-  cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
+  cases sample <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
     repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -139,7 +139,7 @@ theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
 
 /-- **The facts the length bound reads, from the setup alone**: at one table under tags with hidden outputs, at any public
 inputs. -/
-theorem setup_facts_hidden {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem setup_facts_hidden {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) (hh : s.read.tags.hiddenOutputs = true) :
     ∃ (st : Flock.Stmt) (t : String) (ct : CoinTree.Spec) (own : Json) (hz : String), sts = #[st] ∧
       spec.tables = #[t] ∧ spec.coinTree = some ct ∧ Flock.JsonParse.parse spec.hello = .ok own ∧
@@ -185,11 +185,11 @@ theorem setup_facts_hidden {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts 
   · have := hsp.mPts
     omega
 
-variable {H : Claims.Msg → Claims.Msg}
+variable {H : Hash.Msg → Hash.Msg}
 
 /-- **The honest masked record weighs at most `2^8` its spec's text and `2^40`**, at one table of a session whose setup
 is `x`'s (hidden outputs, any public inputs): whatever the witness, tape and coins. -/
-theorem recordZk_size_le_hidden (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordZk_size_le_hidden (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     (hh : s.read.tags.hiddenOutputs = true) {w : Claims.Flock.Wit} {ω : TapeZk} {k : ℕ} {r : Fin k → Coin}
     {record : String} {proofs : Array ByteArray}
@@ -214,7 +214,7 @@ theorem recordZk_size_le_hidden (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins
 
 /-- **The honest masked record fits its length word** at one table of a session whose setup is `x`'s (hidden outputs,
 any public inputs), where its spec's text is under `2^55`. -/
-theorem recordFitsZkAt_of_text_hidden (h64 : Claims.Out64 H) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem recordFitsZkAt_of_text_hidden (h64 : Claims.Out64 H) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1)
     (hh : s.read.tags.hiddenOutputs = true) (ht : specText spec < 2 ^ 55) : RecordFitsZkAt H x spec sts := by
   obtain ⟨st, t, ct, own, hz, rfl, htb, hct, hown, hc, h25, h35, hms, hkm, hreg, hpm, hmp, hpt⟩ :=

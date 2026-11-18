@@ -21,7 +21,7 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "verity/circuits",
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
-    "verity/channel.py",
+    "verity/channel.py", "verity/release.py",
     "verity/protocols/__init__.py",
     "verity/protocols/resource_accounting/__init__.py",
     "verity/protocols/resource_accounting/network",

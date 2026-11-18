@@ -243,9 +243,9 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
     assert S.main(["publish", str(out), "--private", str(private)]) == 0
     assert not _window_data(out, 7), _window_data(out, 7)
-    kept = {"predicted.json", "pieces/wipe/served.json"}
+    kept, whole = {"pieces/wipe/served.json"}, {"sampled-proofs/w7/summary.json", "predicted.json", "pieces/pouw/check/check.log"}
     for rel, body in files.items():
-        assert (out / rel).exists() == (rel != "sampled-proofs/w7/summary.json"), rel
+        assert (out / rel).exists() == (rel not in whole), rel
         if rel in kept:
             assert (out / rel).read_text() == body and not (private / rel).exists(), rel
         else:
@@ -324,8 +324,8 @@ def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_a
     IO._write(out / "record" / "inference-only.json", verdict)
     (out / "pieces" / "pearlplus").mkdir(parents=True)
     (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
-    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
-    assert S.publish(out, private) == ["serve/overhead.json"]
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name not in ("overhead.json", "load.json")}
+    assert S.publish(out, private) == ["pieces/pearlplus/load.json", "serve/overhead.json"]
     (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
     assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
     assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
@@ -902,13 +902,13 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     rows = _rows(_accepted(), tmp_path)
     report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                  servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
-    assert rec["legs"]["pous"]["at"] == {d: {"holds": False, "why": f"the run established it except with {eps}, more than {d}"}
-                                         for d in ("1/100", "1/1000000")}
+    refusal = BR._bound(BR._scheme("pous"), json.loads((d / "answer.json").read_text())["profile"])["unbounded"]["why"]
+    assert rec["legs"]["pous"]["answer"]["verdict"] == "accept" and rec["legs"]["pous"]["unbounded"]["why"] == refusal
+    assert rec["legs"]["pous"]["at"] == {x: {"holds": False, "why": refusal} for x in ("1/100", "1/1000000")}
     clause = line["reason"].split("; PoUS: ", 1)[1]
     assert clause.startswith(f"accept (its weights {held}, not concurrently with the block; they are 64.9% of the "
                              "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
-                             "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-                             "it except with 1/100 + 2^-128)")
+                             f"its claim; its quantity is not established at δ = 1/100 or 1/1000000: {refusal})")
     assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
     assert line["reason"].startswith(f"{SPOT_ACCEPT}; ")
 
@@ -948,15 +948,19 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     sums = rec["composed"]["joint_horizon"]
     assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
     assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
-    assert all(x["not_established"] == [] for x in sums["at"].values())
-    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    refusal = BR._bound(BR._scheme("bandwidth"), a["profile"])["unbounded"]["why"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept" and rec["legs"]["bandwidth"]["unbounded"]["why"] == refusal
+    assert all(x["not_established"] == ["bandwidth"] for x in sums["at"].values())
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/1099511627776{beside}); ") in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
     _, rec, line = composed(written("1/100", 1))
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
-    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept"
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/100 + 2^-64{beside}); ") in line["reason"]
 
     silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
     report, rec, line = composed(silent)
@@ -1186,10 +1190,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)",
-                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})",
-                "sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        comp = {S.NAMES[k]: v[1] for k, v in S.PIECES.items()} | {S.NAMES["wipe"]: "wipe"}
+        refused = {n: why for n, c in comp.items() if c not in BR.BY_NAME
+                   and (why := BR._bound(BR._scheme(c), ACCEPTS[c]["profile"]).get("unbounded", {}).get("why"))}
+        assert {"the bandwidth audit", "PoUS", "the network certifier"} <= set(refused), refused
+        assert {n: rec["legs"][comp[n]]["unbounded"]["why"] for n in refused} == refused
+        assert all(rec["legs"][comp[n]]["at"][x] == {"holds": False, "why": refused[n]} for n in refused for x in rec["legs"][comp[n]]["at"])
+        beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
+        late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
+                for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
@@ -2138,13 +2147,14 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     full = {p.relative_to(out).as_posix(): p.read_text() for p in out.rglob("*") if p.is_file()}
     assert S.publish(out, private) == sorted(full)
     for rel, text in full.items():
-        shown = (out / rel).read_text()
+        shown = (out / rel).read_text() if (out / rel).exists() else ""
         assert (private / rel).read_text() == text and not [v for v in own if v in shown], rel
         assert "a_rows" not in shown and "bad_tiles" not in shown and "credit kept" not in shown, rel
     pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
     assert "give_up" not in pub and pub["credit"] == work and pub == {k: v for k, v in json.loads(
         full["pieces/pouw/development.json"]).items() if k != "give_up"}
-    log = (out / "pieces" / "pouw" / "piece.log").read_text().splitlines()
+    assert not (out / "pieces" / "pouw" / "piece.log").exists()
+    log = [S.public_line(x) for x in full["pieces/pouw/piece.log"].splitlines()]
     assert log[0].endswith("volunteer FAIL: " + S.GAVE_UP) and log[1].endswith("pass-00002: FAIL: " + S.GAVE_UP)
     assert log[2].endswith("round 2: tiles left over a cap after its give-up")
     shown = json.loads(log[3].removeprefix("POUW-DEV "))
@@ -2556,8 +2566,8 @@ def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_servi
     assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
     said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
     assert said == {"run": {**serving, "load": {}}}
-    (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    (tmp_path / "out" / "record").mkdir(parents=True)
+    (tmp_path / "out" / "record" / "onsite.json").write_text(json.dumps(serving))
     assert S.publish(tmp_path / "out", tmp_path / "private") == []
 
 
@@ -3873,7 +3883,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
         == {"format": "toy", "after": W_OF_7}
     assert (tmp_path / "order.commit").read_text().split() == [
-        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key")]
+        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-prover", str(d / "private" / "h1" / "w7")]
     assert (tmp_path / "order.law").read_text() == TIED_RULE
     assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
@@ -4127,8 +4137,9 @@ def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(
     templates it holds no circuit of."""
     rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", FAIL_WARM="1")
     assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
-    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): records_audit.py warm: a template's " \
-           "compose was killed; the audit composes the templates it didn't keep" in lines
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): (no exception, exit 1): {PRIVATE}; " \
+           "the audit composes the templates it didn't keep" in lines, lines
+    assert not [x for x in lines if "compose was killed" in x], lines
     audit = json.loads((tmp_path / "order.audit").read_text())
     assert "--compose-cache" in audit
 
@@ -5838,10 +5849,10 @@ def test_a_hand_off_after_v3cs_audit_gives_the_record_that_audit_and_carries_its
 
 
 @pytest.mark.parametrize("blob, said", [
-    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/inst-0.bin: a prover's instance file (its rows))"),
-    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry the served run's witness (WITNESS "
-     "sampled-proofs-served/window/m0/prover/rows.bin: a prover's input file (its rows and salts))"),
+    ("sampled-proofs-served/window/m0/inst-0.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/inst-0.bin: not on the hand-off's list (public_files.PUBLIC))"),
+    ("sampled-proofs-served/window/m0/prover/rows.bin", ": it would carry a file the list doesn't name ("
+     "sampled-proofs-served/window/m0/prover/rows.bin: not on the hand-off's list (public_files.PUBLIC))"),
     ("/elsewhere/pub-0.bin", f" (no exception, exit 1): {PRIVATE}"),
 ])
 def test_a_hand_off_that_would_carry_a_witness_or_a_blob_outside_the_serve_dir_is_refused(tmp_path, blob, said):
@@ -5866,6 +5877,97 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
     assert S.main(["witness"]) == 1
     assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
+
+
+def test_the_hand_off_carries_only_what_the_list_names_and_never_a_witness(capsys, monkeypatch):
+    """`public_files.py handoff` passes every file a hand-off carries (`HANDED_READS`, the blobs, its own files) and
+    refuses each witness kind (`HELD_BACK`, H1's prover state) and any other file of the serve dir, exiting 1 iff it
+    named one."""
+    import public_files as PF
+
+    assert PF.unlisted([*HANDED_READS, *BLOBS, *HANDED_OWN, "private/compose/inputs.sha256"]) == []
+    refused = [*HELD_BACK, "private/h1/w0/state.json", "serve.json", "windows.jsonl", "seals.jsonl", "stray.log"]
+    assert PF.unlisted(refused) == refused
+    monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
+    assert PF.main(["handoff"]) == 1
+    assert capsys.readouterr().out == "requests.jsonl: not on the hand-off's list (public_files.PUBLIC)\n"
+
+
+def test_publish_holds_every_file_the_list_does_not_name_and_the_serves_records_leave_through_the_mirror(tmp_path):
+    """`publish` keeps under OUT only what `public_files.PUBLIC` lists under ``OUT/``: a tool's log, a piece's log, a
+    sampled-proofs job's log and any file of no entry are held whole in the private directory; the serve's three records
+    are listed only as the mirror writes them."""
+    import public_files as PF
+
+    out, priv = tmp_path / "out", tmp_path / "private"
+    kept = {"verdicts.txt": "ACCEPT\n", "machine.txt": "0" * 40 + "\n", "pieces/pous/answer.json": "{}\n",
+            "v3c-audit/period.json": "{}\n", "serve/serve.json": "{}\n", "sampled-proofs/summary.json": "{}\n"}
+    held = {"build.log": "x\n", "pieces/pous/piece.log": "x\n", "sampled-proofs/honest/audit.log": "x\n",
+            "sampled-proofs/honest/audit.err": "x\n", "predict_row.json": "{}\n", "stray/thing.txt": "x\n"}
+    for rel, text in {**kept, **held}.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_text(text)
+    assert sorted(S.publish(out, priv)) == sorted(held)
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()) == sorted(kept)
+    assert all((priv / rel).read_text() == text for rel, text in held.items())
+    assert {PF.listed(f"OUT/serve/{n}") for n in ("serve.json", "windows.jsonl", "seals.jsonl")} == {PF.MIRROR}
+
+
+def test_no_launcher_line_quotes_a_tools_stderr():
+    """A tool's stderr is free text from anything the prover runs: no say line of the served launchers quotes an ``.err``
+    file by `tail`, `cut`, `head` or `grep`; `failed` says its class and exit, `said` a passing tool's own last line."""
+    quoted = re.compile(r"\$\((?:tail|cut|head|grep)[^)]*\.err")
+    found = [f"{f.name}:{i}" for f in (Path(S.__file__).parent / n for n in ("served_verdicts.sh", "served_util.sh", "served_stock.sh",
+                                                          "served_composite.sh"))
+             for i, line in enumerate(f.read_text().splitlines(), 1) if quoted.search(line)]
+    assert found == [], found
+
+
+def test_a_refusal_on_the_closed_list_is_said_by_its_name_and_no_other_sentence_ever_prints(tmp_path, capsys):
+    """`public_files.REFUSALS` is exactly our five tools' fixed refusal sentences (a literal raise, no path, host or
+    value), each under a name: `failed` and `said` print the name where a tool's last line is one of them, after at most
+    the tool's or the exception's name, and the class and exit otherwise; a sentence off the list, or a listed one with a
+    value after it, never prints."""
+    import ast
+    import public_files as PF
+
+    root, raised = Path(S.__file__).resolve().parents[2], set()
+    for f in ("benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/records_audit.py",
+              "benchmarks/one_stage/inference_only.py", "benchmarks/one_stage/served_compare.py",
+              "benchmarks/one_stage/served_verdicts.py"):
+        raised |= {n.exc.args[0].value for n in ast.walk(ast.parse((root / f).read_text()))
+                   if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
+                   and getattr(n.exc.func, "id", None) in ("ValueError", "RuntimeError", "SystemExit") and n.exc.args
+                   and isinstance(n.exc.args[0], ast.Constant) and isinstance(n.exc.args[0].value, str)}
+    assert set(PF.REFUSALS.values()) == raised, (
+        f"a fixed refusal of ours changed: name {sorted(raised - set(PF.REFUSALS.values()))} in public_files.REFUSALS "
+        f"in place of {sorted(set(PF.REFUSALS.values()) - raised)}")
+    assert all(re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", n) for n in PF.REFUSALS)
+    end = PF.REFUSALS["request-without-end"]
+    for line, said in [(f"prove_path.py window-commit: {end}", "(refused request-without-end, exit 2): "),
+                       (f"ValueError: {PF.REFUSALS['advice-not-canonical']}", "(refused advice-not-canonical, exit 2): "),
+                       ("prove_path.py weights-registration: the checkpoint /srv/ck/7 is not of record", "(ValueError, exit 2): "),
+                       (f"prove_path.py window-commit: {end} at /srv/serve/w7", "(ValueError, exit 2): "),
+                       (f"vy-dc-h200 {end}", "(ValueError, exit 2): ")]:
+        log = tmp_path / "tool.err"
+        log.write_text(f"Traceback (most recent call last):\nValueError: x\n{line}\n")
+        assert S.failed(2, [str(log)]) == said + PRIVATE, line
+        name = said.removeprefix("(").split(",")[0]
+        assert S.tool_said(2, [str(log)]) == f"{name}; {PRIVATE}", line
+        assert S.main(["failed", "2", str(log)]) == 0 and capsys.readouterr().out == said + PRIVATE + "\n"
+        assert "/srv" not in said and "not of record" not in said
+
+
+def test_a_pieces_piece_json_leaves_without_the_node_it_ran_on_which_stays_private(tmp_path):
+    """`pieces` writes each piece's `RAN` with the node it ran on, which `record` and the hand-off read in the serve dir;
+    the published copy holds its exit and limit alone, the whole file in the private directory."""
+    out, priv = tmp_path / "out", tmp_path / "private"
+    (out / "pieces" / "pous").mkdir(parents=True)
+    whole = json.dumps({"limit": "60m", "rc": 0, "server": "vy-dc-h200"}, sort_keys=True) + "\n"
+    (out / "pieces" / "pous" / S.RAN).write_text(whole)
+    assert S.publish(out, priv) == [f"pieces/pous/{S.RAN}"]
+    assert json.loads((out / "pieces" / "pous" / S.RAN).read_text()) == {"limit": "60m", "rc": 0}
+    assert (priv / "pieces" / "pous" / S.RAN).read_text() == whole and S.publish(out, priv) == []
 
 
 @pytest.mark.parametrize("extra, line", [
@@ -6339,7 +6441,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
         "whole command"])
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
-        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
+        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6}: exit 0, "
         f"the record accept, 1 files of its $OUT in the run's compose/"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
@@ -6457,8 +6559,8 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     gate = tmp_path / "gate-host"
     lines = (out / "verdicts.txt").read_text().splitlines()
     assert run.returncode == 1, (run.stderr, lines)
-    assert lines[0].startswith("HANDOFF ")
-    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 2, the record "
+    assert lines[0].startswith("HANDOFF ") and not [x for x in lines if "remote" in x.split(":", 1)[0]], lines
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]}: exit 2, the record "
                                 "pending, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
     argv = json.loads((tmp_path / "gate.argv").read_text())
     scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"
@@ -6627,8 +6729,8 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "window's witness, and its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: its node is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE"),
-    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
-     "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names a file the "
+     "list doesn't (requests.jsonl: not on the hand-off's list (public_files.PUBLIC))"),
     ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir D holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
     ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),

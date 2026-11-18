@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from test_lean_verifier import lake_build
 
 from verity.circuits.codec import canonical_json
 
@@ -30,7 +31,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 @pytest.fixture(scope="module")
 def rope(tmp_path_factory):
     """RoPE's old statement and its typed statement, and the verifier built."""
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     sub = TM.subcircuit("rope-head", D=64)
     low = lowerings.registry("C-Flock").module("rope-head").lowering(sub)
     d = tmp_path_factory.mktemp("typed")
@@ -142,7 +143,7 @@ def test_it_refuses_the_rust_provers_sessions(tmp_path):
         root = ci.fetch(f"{RUST_SESSIONS}/stage", tmp_path / "store").parent
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
-    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    lake_build(LEAN)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parents[4] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "selftest_records.py"), str(root / "records"), str(tmp_path / "s")],
                    check=True, capture_output=True)
     sessions = sorted(p for p in (tmp_path / "s").iterdir() if (p / "case.json").exists())

@@ -24,6 +24,7 @@ from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.scheme import Lacks
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR
@@ -212,12 +213,14 @@ def _stand_in(name: str, log: list) -> SimpleNamespace:
         log.append(("attach", name, dict(ctx["settings"])))
         ex.request(name, H.ComputeBlockWith(kernel))
         return SimpleNamespace(release=lambda: log.append(("release", name)))
-    return SimpleNamespace(name=name, option="", settings={"k": 0}, check_settings=lambda own: None, attach=attach,
+    return SimpleNamespace(name=name, option="", settings={"k": 0}, depends=(), resource=Lacks("a stand-in"), check_settings=lambda own: None, attach=attach,
                            requests=lambda ctx: (), messages=())
 
 
 def _listing(monkeypatch, tmp_path, protocols: str, log: list) -> Any:
-    monkeypatch.setattr(declarations, "load", lambda: {n: _stand_in(n, log) for n in ("a", "b")})
+    stand = {n: _stand_in(n, log) for n in ("a", "b")}
+    monkeypatch.setattr(declarations, "DECLARATIONS", dict.fromkeys(stand, "stand-in"))
+    monkeypatch.setattr(declarations, "get", stand.__getitem__)
     return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--protocols", protocols,
                                       "--protocols-config", json.dumps({"a": {"k": 1}})], environ={})
 

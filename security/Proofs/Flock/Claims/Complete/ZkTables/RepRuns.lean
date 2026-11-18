@@ -163,7 +163,7 @@ theorem rep_rounds (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stm
     (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ} (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit)
     (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit)
     (hin : RepIn H st tr ω i v cm pts e rep ic) (hrep : rep < 2) (prior : Array (List F128)) (ws : List ℕ)
-    (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Claims.Msg)
+    (l : Array Hash.Msg) (p : Zk.ZkProof) (t' : Transcript) (l' : Array Hash.Msg)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     t'.rounds.size = repRoundsT st v e := by
   obtain ⟨h25, h35, hms, -, p0, w, hpe, hR0, -⟩ := hT

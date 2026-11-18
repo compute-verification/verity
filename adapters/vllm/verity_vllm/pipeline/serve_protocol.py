@@ -224,12 +224,12 @@ PROTOCOLS = {"vllm": VllmProtocol, "plain": PlainProtocol}
 
 def framings() -> dict[str, Callable[..., Any]]:
     """Each completion framing by its ``--protocol`` name, called with ``force_include_usage``: the adapter's own
-    (`PROTOCOLS`) and each declared scheme's (`Scheme.framings`) over `VllmProtocol`, given its settings by keyword."""
+    (`PROTOCOLS`) and each declared scheme's (`Scheme.framings`) over `VllmProtocol`, given its settings by keyword. The
+    names are `compose.schemes.KEYS`', so no scheme is imported until its framing is called."""
     out: dict[str, Callable[..., Any]] = dict(PROTOCOLS)
-    for scheme in declarations.load().values():
-        for name, framing in scheme.framings.items():
-            out[name] = (lambda f: lambda force_include_usage=False, **given: f(base=VllmProtocol(force_include_usage),
-                                                                                 **given))(framing)
+    for name in sorted({f for k in declarations.KEYS.values() for f in k.get("framings", ())}):
+        out[name] = (lambda n: lambda force_include_usage=False, **given: declarations.get(declarations.named("framings", n))
+                     .framings[n](base=VllmProtocol(force_include_usage), **given))(name)
     return out
 
 
