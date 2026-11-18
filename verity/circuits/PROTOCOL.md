@@ -798,3 +798,37 @@ batches and scans; seeds batched over positions, and a proof block's z read from
 tampered descriptors; the canonical form; a certified mark on a template, built and decoded, and refused on a primitive,
 a program function and the root; and a pinned
 digest of one typed descriptor.
+
+## 13. `Q_fit` v1
+
+`Q_fit` v1 (`partition_object.QUERIES`, `verity.circuits.fit`) is `{"name": "Q_fit", "version": 1, "params": {"rows": r, "bits":
+b}}`: r in 1..2^16 and b in 1..2^40 (Flock's composer's 256 rows and 2^27 bits, `fit.query()`). It cuts C into proof blocks
+that each fit one Flock proof block, by rows and by bits, without writing a Definition to fit. The packing is the object's
+`blocks` (required: `blocks-missing`), which `verify` checks; the builder (`fit.build`) is one way to compute it and is not
+trusted.
+
+- **Units.** The root's Calls (§5.3), each a `call` or `batch` node (otherwise the query is inapplicable): a call is one unit, a
+  batch member one, numbered in node order then member order, as the template queries number theirs, of any Definition.
+- **Blocks.** Each entry is a set of gates inside one activation, in one of three forms: `[lo, hi]`, root units lo .. hi - 1
+  whole (the template queries' form, so a template query's blocks are `Q_fit` blocks unchanged); `{"path": [[k, m], ...],
+  "nodes": [a, b]}`, body nodes a .. b - 1 whole of the activation the path reaches; `{"path": [...], "node": j, "members": [a,
+  b]}`, members a .. b - 1 of its node j. A path starts at the root, is not empty, and each step `[k, m]` enters member m of a
+  composite body node k (m = 0 for a call). An entry that names no gates of C is `fit-entry`.
+- **Cover.** The entries are in layout order (§6): each starts at or after where the one before ends (`blocks-unsorted`), and
+  together they hold every gate of the root's Calls exactly once (`blocks-gap`).
+- **Rows.** A block's out(S) and in(S) are §11's, computed from the descriptor (`verity.circuits.boundary`), never by walking C's
+  gates. Its out(S), in increasing gate index, is cut into runs at every change of width; each run is one row, a writer row of
+  that block. A gate of in(S) lies in one writer row of an earlier block, or in a root input node's row (one row a node); an
+  input in neither is `fit-order`. A block's rows are the distinct rows its in(S) touches, each read whole, plus its output
+  runs; past r rows is `fit-rows`.
+- **Bits.** `fit.proof_block_k_log` of the block's input rows' bytes, its output rows' bytes and its ANDs (`count`), unpacked: the
+  Flock block one proof block needs. Past b bits is `fit-bits`. b is the proof block's bound, not a policy's.
+- **Inference blocks.** Given each unit's inference block, an entry of root units that holds units of two is `fit-straddles`, so
+  every proof block refines the inference blocks. A piece lies inside one unit and refines them always.
+- **The builder** packs C greedily in layout order: as many whole root units as fit (at most `cap` a block), else into the unit,
+  packing its body's nodes, then a node's members or its callee's body, depth first. A gate that alone does not fit is refused
+  at registration (`fit-gate`), as is a scan it would have to cut (`fit-form`), so no block is ever left out.
+- **Restriction.** `restrict` takes an entry as the block, and under `Q_fit` cuts the block's parameters at writer rows too, so
+  each parameter run reads one row.
+
+v1 cuts no scan, and reads a root input node as one row. Vectors: `tests/verity/circuits/test_fit.py`.
