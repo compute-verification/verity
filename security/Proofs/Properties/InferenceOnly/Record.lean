@@ -278,14 +278,16 @@ private theorem before_succ (rs : Array TRange) (tid : String) {n : ℕ} (hn : n
         if rs[n]!.template = tid then rs[n]!.count else 0 := by
   rw [Array.extract_succ_right (Nat.succ_pos n) hn, Array.filter_push, getElem!_pos rs n hn]
   by_cases h : rs[n].template = tid
-  · simp [h, Array.foldl_push]
+  · simp [h]
   · simp [h]
 
 private theorem below_iff (rs : Array TRange) (tid : String) (u : ℕ) : ∀ n, n ≤ rs.size →
     ((∃ i m, i < n ∧ rs[i]!.template = tid ∧ m < rs[i]!.count ∧
         u = ((rs.extract 0 i).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + m) ↔
       u < ((rs.extract 0 n).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0)
-  | 0, _ => by simp
+  | 0, _ => by
+    have he : rs.extract 0 0 = #[] := Array.extract_zero
+    simp [he]
   | n + 1, hn => by
     have ih := below_iff rs tid u n (by omega)
     rw [before_succ rs tid (by omega : n < rs.size)]
