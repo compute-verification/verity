@@ -344,57 +344,6 @@ def _widths(advice: Advice) -> _Widths:
                    max(advice.release, default=0).bit_length(), src.bit_length())
 
 
-class _Writer:
-    def __init__(self) -> None:
-        self.out, self.acc, self.held, self.bits = bytearray(), 0, 0, 0
-
-    def put(self, value: int, width: int) -> None:
-        if value >> width:
-            raise AssertionError(f"{value} doesn't fit {width} bits")
-        self.acc = (self.acc << width) | value
-        self.held += width
-        self.bits += width
-        while self.held >= 8:
-            self.held -= 8
-            self.out.append(self.acc >> self.held)
-            self.acc &= (1 << self.held) - 1
-
-    def uvar(self, value: int) -> None:
-        self.put(value.bit_length(), WIDTH_BITS)
-        self.put(value, value.bit_length())
-
-    def finish(self) -> bytes:
-        if self.held:
-            self.out.append(self.acc << (8 - self.held))
-        return bytes(self.out)
-
-
-class _Reader:
-    def __init__(self, data: bytes) -> None:
-        self.data, self.pos, self.size = data, 0, 8 * len(data)
-
-    def left(self) -> int:
-        return self.size - self.pos
-
-    def get(self, width: int) -> int:
-        if width == 0:
-            return 0
-        end = self.pos + width
-        if end > self.size:
-            raise MalformedAdvice(f"truncated: a {width}-bit field at bit {self.pos} of {self.size}")
-        lo, hi = self.pos >> 3, (end + 7) >> 3
-        value = (int.from_bytes(self.data[lo:hi], "big") >> (8 * hi - end)) & ((1 << width) - 1)
-        self.pos = end
-        return value
-
-    def uvar(self) -> int:
-        width = self.get(WIDTH_BITS)
-        value = self.get(width)
-        if value.bit_length() != width:
-            raise MalformedAdvice(f"a {width}-bit length-prefixed field holds {value}: its width isn't its bit length")
-        return value
-
-
 class _Layout(NamedTuple):
     data: bytes
     header: int
@@ -407,7 +356,7 @@ def _layout(advice: Advice) -> _Layout:
     """A version 1 or 2 window's bit string and each part's length in bits."""
     w = _widths(advice)
     version = advice.version
-    out = _Writer()
+    out = I1._Writer()
     out.put(version, 8)
     out.uvar(len(advice.carried))
     out.uvar(len(advice.requests))
@@ -468,7 +417,7 @@ def decode(data: bytes) -> Advice:
     if not isinstance(data, (bytes, bytearray)):
         raise MalformedAdvice(f"decode takes bytes, not a {type(data).__name__}")
     data = bytes(data)
-    rd = _Reader(data)
+    rd = I1._Reader(data)
     version = rd.get(8)
     if version == I1.VERSION:
         a = I1.decode(data)
