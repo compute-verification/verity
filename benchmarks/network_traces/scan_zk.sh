@@ -50,6 +50,8 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
   > "$OUT/build-zk-server.log" 2>&1
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "sczk: no ZK server frame"; exit 7; }
+TU=$(cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+[ -x "$TU" ] || { tail -20 "$OUT/build-tmplunit.log"; log "sczk: no flock-tmpl-unit"; exit 7; }
 if [ -n "${SC_RSS:-}" ]; then
   cat > "$W/flock-circuit-rss" <<EOF
 #!$PY
@@ -113,7 +115,7 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
 log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, network attester run $SC_WARDEN_RUN}${SC_DRAW:+, sample $SC_DRAW}${SC_CHALLENGER:+, the honest sample on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
-"$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
+"$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --tmpl-unit-bin "$TU" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000

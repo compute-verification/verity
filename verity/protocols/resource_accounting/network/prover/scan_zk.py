@@ -1852,6 +1852,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             log(f"{name}/{m['name']}: no unit sampled, no session")
             continue
         sdir = out / f"session-{m['name']}"
+        sg = pg.stagers[m["template"]]
+        m = {**m, **M.a0.templated(sg.st, sg.out, a.tmpl_unit_bin)}
         record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else free_port(), env=WZ.zk_server(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -2257,6 +2259,7 @@ def main(argv=None) -> int:
                                      "reads, --zk")
     p.add_argument("--bin")
     p.add_argument("--lean")
+    p.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit, which places a templated statement's unit for the prover")
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0, help="round i's member j listens on PORT + S·i + j, S the most "
                                                        "members a round has; 0 (the default): a free port for "
@@ -2312,8 +2315,8 @@ def main(argv=None) -> int:
         if not a.main:
             p.error("--challenger needs --main: the verifier's git rev-list --first-parent origin/main, which must hold "
                     "the commit the session's host pins")
-    if not a.dry and not (a.bin and a.lean):
-        raise SystemExit("prove needs --bin and --lean, or --dry")
+    if not a.dry and not (a.bin and a.lean and a.tmpl_unit_bin):
+        raise SystemExit("prove needs --bin, --lean and --tmpl-unit-bin, or --dry")
     return prove(a)
 
 

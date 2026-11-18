@@ -481,7 +481,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
             raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the window's "
                              f"{T} units")
         sdir = wdir / "session"
-        m = {"dir": x.statement.dir, "n": T, "pin": sg.st.pin}
+        m = {"dir": x.statement.dir, "n": T, "pin": sg.st.pin, **M.a0.templated(sg.st, sg.out, a.tmpl_unit_bin)}
         record, live, proc = M.a8.session(av, m, sdir, list(range(T)), port + j, env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = TS.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / f"pub-{T}.bin", sessions),
@@ -676,6 +676,7 @@ def main(argv=None) -> int:
                                      "decided by the tie's verifier, and the tie built from the outcomes")
     p.add_argument("--bin")
     p.add_argument("--lean")
+    p.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit, which places a templated statement's unit for the prover")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
     p.add_argument("--warden-run", dest="network_attester_run", type=Path,
@@ -692,8 +693,8 @@ def main(argv=None) -> int:
                                                       "proved")
     a = ap.parse_args(argv)
     Z.one_session(a.jobs)
-    if not a.dry and not (a.bin and a.lean):
-        raise SystemExit("prove needs --bin and --lean, or --dry")
+    if not a.dry and not (a.bin and a.lean and a.tmpl_unit_bin):
+        raise SystemExit("prove needs --bin, --lean and --tmpl-unit-bin, or --dry")
     use(a.cls, a.network_attester_run, a.windows)
     return prove(a)
 

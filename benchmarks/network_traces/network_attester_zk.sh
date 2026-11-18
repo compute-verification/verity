@@ -28,6 +28,8 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
   > "$OUT/build-zk-server.log" 2>&1
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "wzk: no ZK server frame"; exit 7; }
+TU=$(cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+[ -x "$TU" ] || { tail -20 "$OUT/build-tmplunit.log"; log "wzk: no flock-tmpl-unit"; exit 7; }
 
 RUN=$W/run
 log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
@@ -37,7 +39,7 @@ log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUES
 mkdir -p "$OUT/run"
 "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json" || { log "wzk: the publisher (auditor.py publish) exited $? on $RUN"; exit 6; }
 log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
-"$PY" benchmarks/network_traces/zk_drivers.py network_attester_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
+"$PY" benchmarks/network_traces/zk_drivers.py network_attester_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --tmpl-unit-bin "$TU" --out "$W/wzk" \
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/wzk"

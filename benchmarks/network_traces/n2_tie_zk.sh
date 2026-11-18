@@ -44,6 +44,8 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
   > "$OUT/build-zk-server.log" 2>&1
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "n2tie: no ZK server frame"; exit 7; }
+TU=$(cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+[ -x "$TU" ] || { tail -20 "$OUT/build-tmplunit.log"; log "n2tie: no flock-tmpl-unit"; exit 7; }
 
 log "n2tie: proving${N2_DRY:+, dry}"
 GPU_ARG= SMI=
@@ -54,7 +56,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
     > "$OUT/gpu-samples.csv" 2>&1 &
   SMI=$!
 fi
-"$PY" benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
+"$PY" benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin "$BIN" --lean "$LEAN" --tmpl-unit-bin "$TU" --out "$W/n2tie" \
   --class "${N2_CLASS:-test}" $GPU_ARG \
   ${N2_WARDEN_RUN:+--warden-run "$N2_WARDEN_RUN"} ${N2_WINDOWS:+--windows "$N2_WINDOWS"} \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \

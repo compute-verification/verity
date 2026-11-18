@@ -381,8 +381,8 @@ def zk_server_env(M, sg: SimpleNamespace) -> dict:
     statement's partition and Program."""
     if not os.environ.get("FC_ZK_SERVER_LEAN"):
         raise SystemExit("FC_ZK_SERVER_LEAN names no Lean ZK server frame (verity-verify-proof's flock-zk-server)")
-    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env({"partition_file": sg.partition_file,
-                                                     "program_file": sg.program_file})}
+    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env({"partition_file": sg.partition_file, "program_file": sg.program_file,
+                                                     "statement": sg.st.meta["statement"]})}
 
 
 def one_session(jobs: int) -> None:
@@ -465,7 +465,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         if list(sample.units) != [0]:
             raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
-        m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
+        m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin, **M.a0.templated(sg.st, sg.out, a.tmpl_unit_bin)}
         record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
@@ -702,6 +702,7 @@ def main(argv=None) -> int:
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
+    p.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit, which places a templated statement's unit for the prover")
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0,
                    help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
@@ -721,8 +722,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if not a.dry and not (a.bin and a.lean):
-        raise SystemExit("prove needs --bin and --lean, or --dry")
+    if not a.dry and not (a.bin and a.lean and a.tmpl_unit_bin):
+        raise SystemExit("prove needs --bin, --lean and --tmpl-unit-bin, or --dry")
     if a.debug_clear and a.witness is None:
         raise SystemExit("--debug-clear writes the in-the-clear check to the witness side alone: it needs --witness")
     if a.witness is not None and Path(a.out).resolve() in a.witness.resolve().parents:

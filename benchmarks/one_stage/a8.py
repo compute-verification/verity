@@ -206,16 +206,18 @@ def stage(sg: SimpleNamespace, S, args: list[dict], name: str, plan_salts: list[
 
 def session(a, m: dict, sdir: Path, draw: list[int], port: int, env: dict | None = None) -> tuple[dict | None, dict, dict]:
     """One live --zk session on member m's statement: the server serving ``draw`` (the verifier's own, `serve --draw-file`)
-    and one prover process (`prove --zk`, with ``--gpu`` on the device). Returns the server's record, the prover's LIVE
-    line, and the prover process's wall and CPU seconds."""
+    and one prover process (`prove --zk`, with ``--gpu`` on the device), both reading a templated statement's placed unit
+    (``m["tmpl_unit"]``, `a0.templated`) where it has one. Returns the server's record, the prover's LIVE line, and the
+    prover process's wall and CPU seconds."""
     sdir.mkdir(parents=True, exist_ok=True)
     df = sdir / "draw.json"
     df.write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(draw), "units": draw}, sort_keys=True))
     d, n = m["dir"], m["n"]
+    tu = ["--tmpl-unit", str(m["tmpl_unit"])] if m.get("tmpl_unit") else []
     env = {**os.environ, **(env or {})}
     with open(sdir / "serve.log", "w") as slog:
         serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(sdir / "sessions"),
-                                  "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables",
+                                  "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables",
                                   str(d / "tables"), "--pin", m["pin"], "--operator", "one-stage-a8", "--draw-file", str(df),
                                   "--sessions", "1"], stdout=slog, stderr=subprocess.STDOUT, text=True, env=env)
         try:
@@ -224,7 +226,7 @@ def session(a, m: dict, sdir: Path, draw: list[int], port: int, env: dict | None
                     break
                 time.sleep(0.5)
             cmd = [*a.lease, a.bin, "prove", "--zk", *(["--gpu"] if a.gpu else []), "--verifier", f"127.0.0.1:{port}",
-                   "--instances", str(d / f"inst-{n}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"),
+                   "--instances", str(d / f"inst-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(d / "tables"),
                    "--runs", "1", "--warm", "0"]
             r0, t = resource.getrusage(resource.RUSAGE_CHILDREN), time.time()
             p = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=4 * 3600)

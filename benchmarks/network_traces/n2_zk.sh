@@ -30,6 +30,8 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
   > "$OUT/build-zk-server.log" 2>&1
 [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "n2zk: no ZK server frame"; exit 7; }
+TU=$(cached tmplunit "$(lean_key "$SRC/tests/verity/protocols/proofs/flock/prover/lean/TmplUnit.lean")" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+[ -x "$TU" ] || { tail -20 "$OUT/build-tmplunit.log"; log "n2zk: no flock-tmpl-unit"; exit 7; }
 
 RUN=$W/run
 mkdir -p "$RUN" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/${N2_RUN:?}" -C "$RUN" || { log "n2zk: no run in $N2_RUN"; exit 7; }
@@ -38,7 +40,7 @@ mkdir -p "$OUT/run"
 "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json" || { log "n2zk: the publisher (auditor.py publish) exited $? on $RUN"; exit 6; }
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run "$RUN" \
-  --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
+  --bin "$BIN" --lean "$LEAN" --tmpl-unit-bin "$TU" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
   ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2zk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/n2zk"

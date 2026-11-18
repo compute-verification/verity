@@ -81,11 +81,12 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         return None, None, {"wall_s": 0.0}
     monkeypatch.setattr(M.a8, "session", session)
     monkeypatch.setattr(M.a0, "lean_verify", lambda *a, **kw: {"accepted": False, "why": "not proved here"})
+    monkeypatch.setattr(M.a0, "templated", lambda st, d, b: {"statement": st.meta["statement"]})
     monkeypatch.setattr(sz.WZ, "zk_server", lambda M, m: {})
     monkeypatch.setattr(AC, "negatives", lambda ev, pre, key, main: {})
 
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None)
-    av = SimpleNamespace(bin=None, lean=None, lease=[], gpu=False, delta=2.0 ** -20)
+    av = SimpleNamespace(bin=None, lean=None, tmpl_unit_bin=None, lease=[], gpu=False, delta=2.0 ** -20)
     with sz.challenger(a, at, tmp_path) as coins:
         res = sz.audit(M, av, at, pg, "honest-0", members, honest.trees, tmp_path / "honest", 0, k, coins, carry)
     assert "refused" not in res["draw"], res["draw"].get("refused")

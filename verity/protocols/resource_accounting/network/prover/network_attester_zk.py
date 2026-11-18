@@ -374,6 +374,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
+    m = {**m, **a0.templated(sg.st, sg.out, a.tmpl_unit_bin)}
     record, live, proc = M.a8.session(a, m, sdir, local, port, env=zk_server(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
@@ -512,14 +513,15 @@ def main(argv=None) -> int:
     p.add_argument("--run", required=True, type=Path, help="a network-certifier-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")
+    p.add_argument("--tmpl-unit-bin", help="flock-tmpl-unit, which places a templated statement's unit for the prover")
     p.add_argument("--out", required=True)
     p.add_argument("--units", type=int, default=16)
     p.add_argument("--port", type=int, default=7781)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the statements and the host's read of them: nothing proved")
     a = ap.parse_args(argv)
-    if not a.dry and not (a.bin and a.lean):
-        raise SystemExit("prove needs --bin and --lean, or --dry")
+    if not a.dry and not (a.bin and a.lean and a.tmpl_unit_bin):
+        raise SystemExit("prove needs --bin, --lean and --tmpl-unit-bin, or --dry")
     return prove(a)
 
 
