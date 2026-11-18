@@ -28,11 +28,11 @@ The claim is not empty of content on an accepted play: the policy's component ac
 This is the clause of the case as sent. The link from that case to the committed files is two checks the verifier
 lacks (the case's wires are the committed record's wires, and the case's unit is the committed `Γ`'s unit), which
 `Vocab.Holds` names with what else the claim leaves unsaid. Onsite's soundness keeps this target as a hypothesis.
-Remote's (`remote_soundness_of_subprotocols`, here) applies it, and takes in its place the two statements those checks
-would establish (`Vocab.WiresSound`, `GateARow`), which no clause of its conclusion reads and nothing proves: the
-union bound at remote's three subprotocols, SPOT's and PoUW's targets as given and the policy's as proved.
+Remote's (`remote_soundness_of_subprotocols`, here) applies it, and takes `GateARow`, which no clause of its conclusion
+reads and nothing proves: the union bound at remote's three subprotocols, SPOT's and PoUW's targets as given and the
+policy's as proved.
 
-Its witnesses are at the idle deployment (`Properties.Verity.Idle`): the two targets and the wires' statement hold at
+Its witnesses are at the idle deployment (`Properties.Verity.Idle`): the two targets hold at
 `Idle.unbounded`, where every error is `⊤` (`remote_soundness_of_subprotocols_honest`), and its conclusion fails at
 `Idle.exact` for a verifier that accepts everything (`remote_soundness_of_subprotocols_nontrivial`). `GateARow` reads
 no deployment, so no instance concludes it: it holds or fails once, for every file.
@@ -121,14 +121,13 @@ theorem holds_plain (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ :
 end Vocab
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness :=
-  fun ι α _ d V hS hW _ _ =>
+  fun ι α _ d V hS hW _ =>
     soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW (V.inferenceOnlySound .remote (by decide) (by decide)))
 
-/-- **`RemoteSoundness`'s honest lemma**: its two targets and the wires' statement hold at the idle deployment's
-compiled remote composite. -/
+/-- **`RemoteSoundness`'s honest lemma**: its two targets hold at the idle deployment's compiled remote composite. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧ Idle.unbounded.WiresSound .remote :=
-  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.wiresSound_unbounded _⟩
+    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
 the idle deployment whose errors are all `0`. -/

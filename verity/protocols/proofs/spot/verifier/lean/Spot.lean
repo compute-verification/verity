@@ -57,7 +57,6 @@ public import Spot.WiresSpan
 public import Spot.WiresOrder
 public import Spot.WiresSound
 public import Spot.WiresComplete
-public import Spot.WiresSampled
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck

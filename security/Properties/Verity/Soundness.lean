@@ -49,9 +49,8 @@ targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols.
 with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
 `BandwidthAuditSound`, `NetworkAttesterSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
 composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (SPOT, and PoUW, which
-at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
-tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
-`Properties.Verity.Committed`). `PlainSoundness` is it at remote's plain sibling, whose inference-only policy is the
+at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and `GateARow`
+(`Properties.Verity.Committed`). `PlainSoundness` is it at remote's plain sibling, whose inference-only policy is the
 rows check, with its three. They are proved by `Properties.Composition` (a composite's acceptance is its
 subprotocols' and its record's) and the union bound over one strategy in one game.
 
@@ -94,25 +93,23 @@ def Soundness : Prop :=
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
       V.BandwidthAuditSound .onsite → V.NetworkAttesterSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
 
-/-- **Soundness at remote's verifier, from two targets and the two statements on the committed files.** If SPOT and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
-Pearl+'s check published) each meet their target at remote, the record's wiring is the wiring the committed units are
-held to (`Vocab.WiresSound`, at twice SPOT's share and error), and the committed circuit has one gate a row
+/-- **Soundness at remote's verifier, from two targets and the statement on the committed circuit.** If SPOT and PoUW (`Vocab.PouwSound`: at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit
+Pearl+'s check published) each meet their target at remote and the committed circuit has one gate a row
 (`GateARow`), then the probability that remote's compiled verifier accepts files that passed the commit phase's check
 while the claim of SPOT, PoUW or the inference-only policy fails is at most their three errors at that
 strategy summed.
 
 The inference-only policy's target is no hypothesis: its claim is on the case as sent, of which it is proved
-(`Vocab.inferenceOnlySound`). The two statements are what that leaves unsaid of the committed files, and neither is
-proved. The conclusion's clause for the policy is still the one on the case as sent, and no clause of it reads either
-statement: they stand among the hypotheses so that what remote's soundness rests on names them, and a conclusion on
-the committed files waits on their proofs.
+(`Vocab.inferenceOnlySound`). The conclusion's clause for the policy is the one on the case as sent, and no clause of
+it reads `GateARow`: it stands among the hypotheses so that what remote's soundness rests on names it. A conclusion on
+the committed files waits on its proof and on `Vocab.ReadsByPath`.
 
 Discharging `V.PouwSound .remote` reads Pearl+'s properties in `Properties.Pouw.PearlPlus` (`AcceptMeans`,
 `WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`, each proved under its name in lower camel
 case, `workIsTheCredit` among them); that is the Pearl+ target's proof, not this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SpotSound .remote → V.PouwSound .remote → V.WiresSound .remote → GateARow → V.SoundnessAt .remote
+    V.SpotSound .remote → V.PouwSound .remote → GateARow → V.SoundnessAt .remote
 
 /-- **Soundness at remote's plain sibling: `SoundnessOf` at its list** (`Verity.Registration.Composite.plain`), whose
 guarantee is soundness alone. If SPOT, PoUW (Pearl+'s run verdict, its claim in MACs as at remote) and the

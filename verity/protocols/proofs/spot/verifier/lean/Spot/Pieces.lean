@@ -116,8 +116,6 @@ difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stag
   (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
-* `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
-  wired row's public string its writer's) and on the reference's entries whose unit is sampled.
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
@@ -159,7 +157,6 @@ public import Spot.Produced
 public import Spot.HiddenSample
 public import Spot.PartitionRef
 public import Spot.Returned
-public import Spot.WiresSampled
 public import Spot.OneStageZk
 public import Spot.HistoryTable
 public import Spot.PublicUnits
@@ -1118,8 +1115,6 @@ def table : List (String × (Json → V Json)) :=
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceSampled), ("wires_drawn_unrolled", Wires.pieceSampledRef),
-   ("members_wires", OneStageZk.membersWiresPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
