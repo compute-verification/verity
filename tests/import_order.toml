@@ -97,6 +97,10 @@ reason = "H1's lowering (`h1unit.py`, `stagers.py`, `live.py`) runs Flock's stag
 directory = "verity/protocols/resource_accounting/compute/pouw/verifier/receipts"
 owner = "compute-accounting"
 
+# One form opens a trusted place's `loaded_by`: a scheme's declaration is the one file that by design names its verifier
+# and states its parties, so a scheme's `scheme.py`, and no other file of that scheme, may load two trusted places: its
+# own verifier's, and the one that holds the parties' types (`verity/protocol.py`).  That is at most two lines a scheme.
+
 # The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
@@ -552,6 +556,7 @@ paths = [
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -855,6 +860,7 @@ loads = [
     "verity/protocols/resource_accounting/network/prover",
     "verity/protocols/resource_accounting/network/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
