@@ -239,6 +239,12 @@ theorem accepts (σ : Strategy (audit L Unit session)) :
     prob (fun o => o.1 = true) (audit L Unit session) σ = 1 := by
   simp [audit, prob, session, Game.map, L]
 
+theorem hk : L.miss (2 + 1) < 1 / 2 := by
+  have h0 : L.miss (2 + 1) = 0 :=
+    le_antisymm (iSup₂_le fun B hB => absurd (hB.trans (card_le_univ B)) (by simp)) zero_le
+  rw [h0]
+  exact ENNReal.div_pos one_ne_zero (by simp)
+
 end A
 
 namespace Ex
@@ -423,10 +429,13 @@ theorem Partition.audit_influence_nontrivial :
 /-- **`audit_exfiltration`'s premises hold together** at `A` and `Ex`, at `δ = 1/2`. -/
 theorem Partition.audit_exfiltration_honest :
     (W.P.analysis A.Xc A.ext).KnowledgeSound 0 ∧ (W.P.analysis A.Xc A.ext).BindSound 0 ∧
-      Partition.AnchorsSound A.Xc W.a 0 ∧
+      Partition.AnchorsSound A.Xc W.a 0 ∧ W.D ⊆ W.P.committed ∧ (∀ B, W.P.exits B ⊆ W.P.committed) ∧
+      (∀ B, W.P.Separates (W.P.exits B) B W.D) ∧
+      (∀ B, (W.P.exits B).card ≤ ∑ u ∈ B, (W.P.exits {u}).card) ∧
       IsHarmBound A.L (fun u => ((W.P.exits {u}).card : ℝ)) (1 / 2) ((∑ u, (W.P.exits {u}).card : ℕ) : ℝ) ∧
-      ∀ B, W.P.Separates (W.P.exits B) B W.D :=
-  ⟨A.hks, A.hlink, A.hin, Ex.hH _, fun B => W.P.separates_exits B W.hD⟩
+      A.L.miss (2 + 1) < 1 / 2 :=
+  ⟨A.hks, A.hlink, A.hin, W.hD, fun _ => filter_subset _ _, fun B => W.P.separates_exits B W.hD,
+    Gen.exits_card_le W.P, Ex.hH _, A.hk⟩
 
 /-- **`audit_exfiltration` needs `AnchorsSound`**: at `N`, with `W`'s exits as separators, harm bound `0` and
 `k = 0` at `δ = 1/4`, every other premise holds, `AnchorsSound 0` fails, and a one-bit message carried in the
