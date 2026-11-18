@@ -745,7 +745,7 @@ def test_a_user_is_matched_in_process_and_reaches_no_record(monkeypatch, tmp_pat
     ex.emit(H.StepBegan(0, ("e-fixed",), 8))
     ex.emit(H.StepComputed(0))
     ex.emit(H.StepEnded(0))
-    ex.emit(H.OutputsComplete("e-fixed", 0))
+    ex.emit(H.OutputLeft("e-fixed", 0))
     ex.emit(H.PhaseClosed(0, 0, b""))
     assert len(runs) == 1 and on.user_of == {}
     written = [(tmp_path / "w0" / f).read_text() for f in ("served.json", "coins.json")]

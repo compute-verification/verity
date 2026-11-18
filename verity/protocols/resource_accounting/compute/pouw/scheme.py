@@ -230,7 +230,7 @@ class Attached:
             if self.users is not None:
                 self.user_of[event.input] = event.user
             return
-        if isinstance(event, H.OutputsComplete):
+        if isinstance(event, H.OutputLeft):
             self.user_of.pop(event.input, None)
         if isinstance(event, H.PhaseOpened):
             if self.run is not None and not self.phased:
