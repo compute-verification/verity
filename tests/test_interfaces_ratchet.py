@@ -28,7 +28,8 @@ ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``,
 - ``second_descriptions``: ceilings on the number of Lean or Python files naming each copy of the one circuit handed to
   a verifier beside it (positions, links, wirings, a second circuit, partition or gate count, the adapter's hand wiring)
   and each open statement that ties such a copy to the circuit (``SECOND``); they go to zero on ``one-circuit``. A name
-  with namesakes is counted by its qualified form and its defining file."""
+  with namesakes is counted by its qualified form and its defining file. `Claims.Sampling`'s ``Prog`` stack is counted
+  apart in the proofs tree (``PROOFS``), where it may stay as proof-only definitions."""
 
 from __future__ import annotations
 
@@ -146,8 +147,9 @@ def _claims_sampling(text: str) -> bool:
 
 
 _PERIODS = "verity/commitments/periods/interface.py"
-#: {ceiling's name: (the files it counts in: a prefix and a suffix, the file defining it under its bare name or "", a
-#: substring every match holds, the test of a file's text)}
+PROOFS = "security/Proofs/"
+#: {ceiling's name: (the files it counts in: a prefix, or ``!`` and a prefix they are not under, and a suffix; the file
+#: defining it under its bare name or ""; a substring every match holds; the test of a file's text)}
 SECOND = {
     "CutIsRegistered": ("", ".lean", "", "CutIsRegistered", re.compile(r"\bCutIsRegistered\b").search),
     "PositionsCarry": ("", ".lean", "", "PositionsCarry", re.compile(r"\bPositionsCarry\b").search),
@@ -160,7 +162,9 @@ SECOND = {
     "Circuit.ofAudit": ("", ".lean", "", "Circuit.ofAudit", re.compile(r"\bCircuit\.ofAudit\b").search),
     "Partition.ofAudit": ("", ".lean", "", "Partition.ofAudit", re.compile(r"\bPartition\.ofAudit\b").search),
     "RegisteredCircuit.ofPartition": ("", ".lean", "", "ofPartition", re.compile(r"\bofPartition\b").search),
-    "Claims.Sampling.Prog": ("", ".lean", "security/Definitions/Claims/Sampling.lean", "Sampling", _claims_sampling),
+    "Claims.Sampling.Prog (read)": (f"!{PROOFS}", ".lean", "security/Definitions/Claims/Sampling.lean", "Sampling",
+                                    _claims_sampling),
+    "Claims.Sampling.Prog (proofs)": (PROOFS, ".lean", "", "Sampling", _claims_sampling),
     "unitGates": ("", ".lean", "verity/protocols/proofs/flock/verifier/Flock/TemplateQuery.lean", "unitGates",
                   re.compile(r"\bTemplateQuery\.unitGates\b").search),
     "cut_wires": ("", ".py", "", "cut_wires", re.compile(r"\bcut_wires\b").search),
@@ -413,7 +417,8 @@ def scan(files: dict[str, str]) -> Scan:
                 if path.startswith(under) and name.split()[-1] in text and pattern.search(text):
                     s.found["lean_old_names"].setdefault(name, []).append(path)
         for name, (under, suffix, home, hint, test) in SECOND.items():
-            if path.startswith(under) and path.endswith(suffix) and (path == home or hint in text and test(text)):
+            inside = not path.startswith(under[1:]) if under.startswith("!") else path.startswith(under)
+            if inside and path.endswith(suffix) and (path == home or hint in text and test(text)):
                 s.found["second_descriptions"].setdefault(name, []).append(path)
     for c, areas in named.items():
         if len(areas) < 2:
@@ -587,14 +592,16 @@ def test_a_second_description_is_counted() -> None:
     files = {"security/A.lean": "def P (posOf : ByteArray → Positions) : Prop := CutIsRegistered\n",
              "security/B.lean": "open Claims.Sampling\ntheorem t (C : Prog) : C.Correct r u := x\n",
              "security/C.lean": "open Claims.Sampling\nopen FlockSoundness\ntheorem t (C : Prog) : True := x\n",
+             "security/Definitions/G.lean": "def g (C : Claims.Sampling.Prog) : Prop := True\n",
+             "security/Proofs/H.lean": "theorem t (C : Claims.Sampling.Prog) : C.runIn r u g = none := x\n",
              "security/D.lean": "def f := posOf θ F\ndef g := Spot.Bits.unitGates kp u\n",
              "verity/E.py": "import verity.commitments.periods.interface as IF\nIF.check_order(u, w, o)\n",
              "adapters/x/row_tables.py": "def check_order(tables):\n    pass\n",
              "adapters/vllm/verity_vllm/pipeline/k_rows.py": "def wire(ms, tmpls, rows):\n    return ms\n",
              "adapters/vllm/verity_vllm/pipeline/w.py": "def f():\n    def wire(w, lo, hi):\n        pass\n",
              "tests/F.lean": "theorem t : HmLinks := x\n"}
-    assert _flagged("second_descriptions", files) == {"posOf": 1, "CutIsRegistered": 1, "Claims.Sampling.Prog": 1,
-                                                      "check_order": 1, "def wire(": 1}
+    assert _flagged("second_descriptions", files) == {"posOf": 1, "CutIsRegistered": 1, "Claims.Sampling.Prog (read)": 2,
+                                                      "Claims.Sampling.Prog (proofs)": 1, "check_order": 1, "def wire(": 1}
 
 
 def test_a_list_only_shrinks() -> None:
@@ -632,6 +639,9 @@ def main(argv: list[str]) -> int:
                   f"(kept by ruling: {', '.join(kept)})" if kept else "")
         print(f"second_descriptions: {sum(now['second_descriptions'].values())} file-mentions of "
               f"{len(now['second_descriptions'])} names")
+        read = {k: n for k, n in now["second_descriptions"].items() if not k.endswith("(proofs)")}
+        print(f"second_descriptions (read by a guarantee or by code): {sum(read.values())} file-mentions of "
+              f"{len(read)} names")
         return 0
     if argv == ["--init"]:
         LIST.write_text(dump(now))
