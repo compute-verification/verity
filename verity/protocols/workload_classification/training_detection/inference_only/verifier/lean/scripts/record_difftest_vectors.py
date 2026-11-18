@@ -290,7 +290,9 @@ class Circuit:
     (table reads) and `openings`; `ingress`; the inference `entries` with the class's `slots` and `steps`; the `order`
     it states, or None; `values`, the registered parameters its Program takes as inputs of its own; `formats`, by
     registered parameter the format of its rows where they are not 16-bit leaves in `hm96-sha512/row/v2` rows; and
-    `shared`, the registered parameters whose reads its Program's root spells as runs its units share."""
+    `shared`, the registered parameters whose reads its Program's root spells as runs its units share; and
+    `shared_roots`, whether its root spells each table read's row as a run of the table's root or domain id its units
+    share."""
 
     def __init__(self, name: str, slots: int, steps: int = 1) -> None:
         self.name, self.slots, self.steps = name, slots, steps
@@ -310,6 +312,7 @@ class Circuit:
         self.registered = True
         self.root: list | None = None
         self.shared: tuple[str, ...] = ()
+        self.shared_roots = False
 
     def add(self, fn, entries: list[tuple[list[int], list[str], int]]) -> str:
         """Template `fn` with its units laid out by `entries` (`(radix, axes, step)` each, in unit order)."""
@@ -332,7 +335,8 @@ class Circuit:
         rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
                "wires": [w.doc() for w in self.wires], **({"order": order} if order is not None else {}),
                "registered": {"params": dict(self.params), "values": list(self.values),
-                              "reads": [d for d in (r.doc() for r in self.reads) if d["param"] in self.shared]}}
+                              "reads": [d for d in (r.doc() for r in self.reads) if d["param"] in self.shared],
+                              **({"tables": self.tables, "roots": self.roots} if self.shared_roots else {})}}
         desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
         units: dict[str, int] = {}
         for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
@@ -938,6 +942,18 @@ GATHERED = {
     "Norm's weight read a row a member, the rows overlapping": (1, "own-rows"),
 }
 
+#: a table's root and domain id its units share (`shaped`), each `(how the record is then edited, the stage that
+#: refuses it)`: `Embed`'s table reads passed to the Program's builder, which spells each such row as a run of the
+#: table's root (or domain id) input node every unit reads whole, held; then the root's run declared at the later
+#: members as another table's root, as a registered read of the table's parameter, or as the table's domain id, each
+#: refused
+SHARED_TABLE = {
+    "Embed's root and domain id shared, held": (None, None),
+    "Embed's root shared, another table's at the later members": ("table", "shared-unheld"),
+    "Embed's root shared, a registered read at the later members": ("read", "shared-unheld"),
+    "Embed's root shared, the domain id at the later members": ("field", "shared-unheld"),
+}
+
 #: `Norm`'s shared weight over 4097 slots, each read a stretch a unit (`SHARED`'s), which takes the check past its
 #: bound: refused `shared-unheld`, not decided (`SHARED_UNDECIDED`)
 UNDECIDED = "4097x1 Norm's weight shared, each read a stretch a unit, past the check's bound"
@@ -1002,7 +1018,12 @@ def shaped() -> list[dict]:
     to the Program's builder, which spells each such row as a run of the weight's input node its units share. Held, it
     is taken with the served shape's verdict; with its reads dropped, or handed twice in one argument, it is refused
     (`shared-unheld`); and spelled in another form it is refused at the root (`own-rows`), or with the Program
-    (`program`)."""
+    (`program`).
+
+    Then a table's root and domain id its units share (`SHARED_TABLE`): the accepted case with its table reads passed
+    to the Program's builder, which spells each such row as a run its units share, taken; and with the root's run
+    declared at the later members as another table's, as a registered read, or as the domain id, refused
+    (`shared-unheld`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1238,6 +1259,30 @@ def shaped() -> list[dict]:
     for k, (what, (short, stage)) in enumerate(GATHERED.items()):
         first(f"2x3 {what}", lowered(2, 3), 49 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES)
               + len(FORMATS) + len(ROW_ROLE) + len(SPLITS) + len(SHARED) + k, reroot=gathered(short), broken=stage)
+
+    def later(how: str):
+        """`Embed`'s table read of the root split at the later half of its units, declared there as `how` says."""
+        def edit(d: dict) -> None:
+            reg = d["registered"]
+            r = next(r for r in reg["roots"] if r["of"] == "root")
+            h = r["units"] // 2
+            rest = {**r, "at": r["at"] + h, "units": r["units"] - h}
+            r["units"] = h
+            if how == "table":
+                reg["tables"].append({**reg["tables"][0], "name": "table/weights/embed/other"})
+                reg["roots"].append({**rest, "table": "table/weights/embed/other"})
+            elif how == "read":
+                reg["reads"].append(_read(rest["reader"], "root", reg["tables"][0]["param"], at=rest["at"],
+                                          radix=[rest["units"]]))
+            else:
+                reg["roots"].append({**rest, "of": "domain"})
+        return edit
+    for k, (what, (how, stage)) in enumerate(SHARED_TABLE.items()):
+        c = lowered(2, 3)
+        c.shared_roots = True
+        first(f"2x3 {what}", c, 51 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
+              + len(ROW_ROLE) + len(SPLITS) + len(SHARED) + len(GATHERED) + k, broken=stage,
+              edit=None if how is None else later(how))
     return out
 
 

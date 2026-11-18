@@ -261,8 +261,10 @@ RECUT_UNREAD = ("the Program reads an input node in leaves of part of its leaf w
 
 #: `Record.SHARED_UNHELD`
 SHARED_UNHELD = ("the root hands one run of input leaves to more than one row, and the record does not hold every row "
-                 "that reads it as a registered read of one parameter at those leaves. Declare each such row a "
-                 "registered read of the parameter whose leaves the run is, or give each row input leaves of its own.")
+                 "that reads it as a registered read of one parameter at those leaves, or as one table read of one "
+                 "table's root or domain id. Declare each such row a registered read of the parameter whose leaves the "
+                 "run is, or the same table read of the table whose root or domain id the run is, or give each row "
+                 "input leaves of its own.")
 #: `Record.SHARED_UNDECIDED`
 SHARED_UNDECIDED = ("not decided within the bound: the root hands one run of input leaves to more than one row, and "
                     "the check of whether the record holds every row that reads it as a registered read of one "
@@ -462,8 +464,10 @@ def _held_from(x, is_theta, tid: str, port: str, c: int, u0: int, e: int, p: str
 def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
     """`Record.sharedHeld` (`shared-unheld`): each row `c` of each shared run's members `v` (units `u0 + v` of its
     template) is filled by a registered read of one parameter `p`, θ, from the source
-    `o + b + (v mod P)·words + c·(words / k)`, `b` the run's base and `P` its stretches in `p`'s 16-bit leaves, and
-    every row of every shared run of one input node has one `p` and one offset `o`. A row not so held is refused with
+    `o + b + (v mod P)·words + c·(words / k)`, `b` the run's base and `P` its stretches in `p`'s 16-bit leaves; or,
+    where the row is uncut and each member reads the whole run, by one table read of one table's root, else its
+    domain id, the table over a θ parameter. Every row of every shared run of one input node has one source: one `p`
+    and one offset `o`, or one table, field and base. A row not so held is refused with
     `SHARED_UNHELD`; else a row whose check runs past its bound, with `SHARED_UNDECIDED`."""
     nodes = program.root.body.nodes
     by = {t.tid: t for t in templates}
@@ -493,6 +497,13 @@ def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
         g = [] if per <= 1 else [(per, words)]
         for c in range(kc):
             first = x.fill.get((tid, port), {}).get((u0, c))
+            if first is not None and first[0] == "root":
+                fill = x.fill.get((tid, port), {})
+                if not (kc == 1 and per == 1 and all(fill.get((u, c)) == first for u in range(u0, u0 + n))
+                        and is_theta(x.tables[first[1]]["param"])):
+                    raise refused("shared-unheld", SHARED_UNHELD)
+                marks.append((i, ("table", first[1], first[2] == "root", base)))
+                continue
             if first is None or first[0] != "read":
                 raise refused("shared-unheld", SHARED_UNHELD)
             p = first[1]
@@ -502,7 +513,7 @@ def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
                 raise refused("shared-unheld", SHARED_UNHELD)
             undecided = undecided or held is None
             if held:
-                marks.append((i, p, o))
+                marks.append((i, ("read", p, o)))
     if undecided:
         raise refused("shared-unheld", SHARED_UNDECIDED)
     if any(m[0] == q[0] and m != q for m in marks for q in marks):
