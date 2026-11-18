@@ -84,6 +84,8 @@ _SKETCH = ("ResourceAccounting.Assumptions.SketchHashRandom",
            "ResourceAccounting.Remote.Sketch.Assumptions.Present",
            "ResourceAccounting.Remote.Sketch.Assumptions.Receipted")
 _OUTSIDE = "the opening unit (BlockOpeningCheck_v2) is proved outside the workload's circuit: "
+
+
 def _named(role: str) -> str:
     return P2.CLOSER_PARTY if role == P2.VERIFIER else role
 
