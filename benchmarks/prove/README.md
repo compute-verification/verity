@@ -3,8 +3,9 @@
 `verity bench prove` is the one command for what a proof system's prover costs on a workload. Its code is
 `verity-bench`'s (`benchmarks/harness`: `verity_bench/prove.py` holds the rules, `prove_flock.py` Flock's prover,
 `prove_records.py` the store side and the table, its code in `prove_common.py` (the slots, the workloads, reading a
-record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_table.py` (the table and what a
-runner records) and `prove_render.py` (the text)); this directory holds its runner. It reads the store's labelled
+record), `prove_rows.py` (a steady-state row), `prove_store.py` (each input), `prove_census.py` (a census printed on
+its own, and its totals refused by name), `prove_table.py` (the table and what a runner records) and `prove_render.py`
+(the text)); this directory holds its runner. It reads the store's labelled
 records, with no GPU and no node, on a machine that has the store's client (`research`, in `uv sync`'s dev group) and a
 read key for its remote (`R2_ENDPOINT`, `R2_BUCKET` and their key, or `RESEARCH_STORE_CONFIG`). Without them it refuses
 in one line naming what it needs, exit 2 (`verity_bench/cli.py`'s `_store_missing`, before anything is read);
@@ -108,9 +109,11 @@ verity bench prove layers --flock R --zk R --sampling R --recursion R
   k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
-- **Under `--system spot`, SPOT's resampling holes in the code that ran**, over the runs among its inputs (not its
-  arts): the label (`SPOT`, or `SPOT soundness` only when both holes are closed), each hole's status, and the theorem
-  with its open premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
+- **Under `--system spot`, SPOT's holes in the code that ran**, over the runs among its inputs (not its arts): the
+  label (`SPOT`, or `SPOT soundness` only when every hole is closed), each hole's status, and the theorem with its open
+  premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON). The holes are the two
+  resampling holes and the wires between proof blocks, open until the registered circuit carries its wires; while it
+  is open, the audit's limit: each sampled block on its own inputs; the wires between blocks are not held.
 
 `--system flock` proves every block. `--system spot` takes the same costs at the blocks a sampling plan samples: a
 system is a `prove.ProofSystem`, a census in and a table out, and SPOT wraps one with a plan.
@@ -139,6 +142,28 @@ An input that isn't labelled or is superseded is refused, by name and with the l
 two unsuperseded targets claim, and a sampling plan and a census that don't cover each other. A steady-state run or
 art that is superseded, a run that holds neither `out/rate/rate.json` nor a proof server report and an art that names
 no run are left out and listed under "Refused".
+
+## A workload of several requests
+
+The census art holds one `census.json` at its root, or one a request at `REQUEST/census.json`, the tree
+`benchmarks/one_stage/block_census.sh` writes under its output for a row of several requests (`--request`). Its
+manifest's `model` names the workload's model. The requests are summed into one census, the row as served: each
+Definition's and each gap's rows and each phase's tokens (`prove.summed`).
+
+`llama32-1b` (Llama-3.2-1B on one H200, its served row
+`llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`) is a workload whose census is printed first
+(`verity_bench/prove_census.py`): each block type's proof blocks in each request and summed, its AND gates where the
+census gives a block's, and the steady-state rate of record that rates it at the stated provers and cores, or `none`.
+Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
+counted in no block total. The text prints a run of one family's Definitions that differ only in one static (as
+`Attention_v4{T=22..48,...}`) as one line, with how many it holds and their summed served rows, and names the gaps in
+the refusal by family and reason; the stored table keeps every Definition. Its totals are given only when every block type with blocks has a steady-state rate (under
+the cut of record), the census holds no gap and every other slot is labelled (`cut`, `flock-single`,
+`spot-sampling`, `lean-verify`, `flock-warm`). Otherwise the command refuses them by name, each block type with no
+rate, each gap and each slot with the label that would fill it, and exits 1. Under a research run it writes the census
+table as `out/prove-census.json`, a measurement file, and no measurement. When its totals are given, each measurement
+is the member `llama-3.2-1b-h200` of the same metric ids. GLM-5.3 (`glm53`) prices as it always has: a type with no
+steady-state row takes a figure from another source, and its table has no census section.
 
 ## A steady-state row
 
@@ -360,7 +385,8 @@ The table's columns, after the layer and its workload:
   last (the smallest δ): `at most 3 of 500 incorrect proof blocks except with probability 0.5; at most 40 except with
   probability 1e-9 (summary.json epsilon, the first and last of its 6 pairs)`. Without one, the audit's `wrong_units` (a
   `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
-  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
+  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`. Under a table with such a bound, the line `- ε at δ:`
+  gives its limit: each sampled block on its own inputs; the wires between blocks are not held.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
   another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
   block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four
@@ -389,17 +415,22 @@ proof block and the last a build:
 | `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
 | `benchmarks/proof-layer-build-seconds` | the build step's wall seconds, a5's only, with its `build_cache`; null where `steps.txt` has no `build cache:` line |
 
-Each measurement's fields name its `prover_batch`, and the build's its `build_cache`. Under each id it writes three
+Each measurement's fields name its `prover_batch` and its `prover_device` (`processors` where the table's device
+column states the CPU, else that column's words: the card in a member's name is the one the workload was served on),
+and the build's its `build_cache`. Under each id it writes three
 measurements, in this order, each member the model and card (`benchmarks/README.md`'s `member`) an a5 output's
-machine.txt states, the model of its row dir's row and the `nvidia-smi -L` name of the card it took, then the layer's
-words:
+machine.txt states, the model of its row dir's row and the `short` of the card record (`kit.card_short`) whose
+`driver` holds the `nvidia-smi -L` name of the card it took, then the layer's words. A name no card record holds
+writes no measurement, and the layer's note says why:
 
 1. the Flock layer, member `llama-3.2-1b-h200-flock`;
 2. the zero-knowledge layer, member `llama-3.2-1b-h200-flock-zero-knowledge`;
 3. the sampling layer last, member `llama-3.2-1b-h200`: Flock with zero knowledge at the sampling plan, the system as
    served, and the one the metric's title, unit and axis are for.
 
-Where no output states a model and card it writes none, and outputs that state two are refused.
+A batch study (`--batch LO-HI`, which `proof_layers.sh` passes for an `A5_STEPS` other than the partition file's own
+steps) ends every member in its batch (`llama-3.2-1b-h200-flock-b16` for 1-16), so the plain members hold the own batch
+alone. Where no output states a model and card it writes none, and outputs that state two are refused.
 
 prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
 (`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one

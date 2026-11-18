@@ -10,8 +10,8 @@ import hashlib
 import pytest
 from test_appends import N, Run, honest_session, pages, salts, store
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins
 
 
 def test_an_honest_session_opens_one_live_coin_an_append_and_each_page_decodes_under_its_own() -> None:

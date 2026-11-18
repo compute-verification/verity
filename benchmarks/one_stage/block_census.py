@@ -3,7 +3,8 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
+a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``KEY_BLOCKS`` row's key blocks and ends (the window circuit's
+cut of its heads) and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
 (`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
@@ -21,7 +22,7 @@ ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with i
 its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
 own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
-    python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
+    python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR [--request RID]
 """
 from __future__ import annotations
 
@@ -50,8 +51,9 @@ WIDTH_FLOOR = 22
 CHAIN_COLS = 64
 #: the longest row of a family taken whole, by a static of its spec: past it a row's whole statement, though its block is at
 #: most `K_MAX`, stages past a staging job's memory while its family's units stage, so it is cut like the family's longer
-#: rows (each slot's coarsest fitting option), and taken whole only when no option fits
-WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36)}
+#: rows (each slot's coarsest fitting option), and taken whole only when no option fits; an attention row is cut whatever its
+#: length, as the window circuit cuts its heads
+WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36), "Attention_v4": ("T", 0)}
 
 
 def misfit(e: dict) -> str | None:
@@ -85,7 +87,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     if base in ST.CHAINS:
         by, ways = {u["spec"]: u for u in units}, dict(ST.chain_ways(spec))
         return [[[by[u] for u, _n in ways[g]] for g in (CHAIN_COLS, None) if g in ways and all(u in by for u, _n in ways[g])]]
-    if base in ST.CUT or base in ST.STAGES:
+    if base in ST.CUT or base in ST.STAGES or base in ST.KEY_BLOCKS:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)
@@ -167,9 +169,15 @@ def _per_unit(u: dict) -> dict:
 SUMS = ("out_bits", "class_bits", "ands", "macs", "row_bytes", "open_ands")
 
 
-def census(docs: list[dict]) -> dict:
+def census(docs: list[dict], request: str | None = None) -> dict:
     """The census of the sized rank censuses ``docs``: every proof-block Definition with its counts per phase, the totals
-    per phase, per token and per request, the per-rank totals, and the gaps."""
+    per phase, per token and per request, the per-rank totals, and the gaps. ``request``: that request's alone, for a row
+    whose requests are of several shapes."""
+    if request is not None:
+        if not all(request in d["requests"] for d in docs):
+            raise ValueError(f"--request {request}: not a request of every rank (they hold "
+                             f"{sorted({r for d in docs for r in d['requests']})})")
+        docs = [{**d, "requests": {request: d["requests"][request]}} for d in docs]
     defs: dict[str, dict] = {}
     gaps: dict[str, dict] = {}
     other: dict[str, dict] = {}
@@ -213,7 +221,8 @@ def census(docs: list[dict]) -> dict:
                             rk[p][k] += by[p] * u["n"] * d[k]
                         rk[p]["blocks"] += by[p] * u["n"]
     if len(lengths) != 1:
-        raise ValueError(f"the ranks' requests are of {sorted(lengths)} (prompt, steps): one request shape a census")
+        raise ValueError(f"the ranks' requests are of {sorted(lengths)} (prompt, steps): one request shape a census, so "
+                         f"name one with --request (of {sorted({r for d in docs for r in d['requests']})})")
     (prompt, steps), = lengths
     tot = {p: {"blocks": sum(d[p] for d in defs.values()), **{k: sum(d[p] * d[k] for d in defs.values()) for k in SUMS},
                **rows[p]} for p in PHASES}
@@ -226,6 +235,21 @@ def census(docs: list[dict]) -> dict:
             "definitions": dict(sorted(defs.items(), key=lambda kv: -(kv[1]["prefill"] + kv[1]["decode"]) * kv[1]["ands"])),
             "gaps": dict(sorted(gaps.items(), key=lambda kv: -(kv[1]["prefill"] + kv[1]["decode"]))),
             "not_blocks": other, "undescribed": dict(undescribed)}
+
+
+def staged(c: dict, stages: list[dict]) -> dict:
+    """The census ``c`` with each Definition a `served_units/stage.py` statement staged (its stage.json's ``census``, the name
+    here verbatim) carrying that statement's ANDs as ``staged_ands``, and the totals' ``staged_ands`` the proof blocks' ANDs
+    with them in the estimates' place."""
+    defs = c["definitions"]
+    for s in stages:
+        if s.get("census") in defs:
+            defs[s["census"]]["staged_ands"] = s["ands"]
+    for p in PHASES:
+        c["totals"][p]["staged_ands"] = sum(d[p] * d.get("staged_ands", d["ands"]) for d in defs.values())
+        c["per_token"][p]["staged_ands"] = c["totals"][p]["staged_ands"] / c["tokens"][p]
+    c["per_request"]["staged_ands"] = sum(c["totals"][p]["staged_ands"] for p in PHASES)
+    return c
 
 
 def _by_family(rows: dict[str, dict]) -> list[tuple[str, list[dict]]]:
@@ -261,7 +285,8 @@ def table(c: dict) -> str:
             ("ands", "proof blocks' ANDs (estimate)"), ("open_ands", "ANDs opening their rows"),
             ("row_bytes", "opened row bytes"), ("circuit_ands", "the circuit's ANDs (rows unsplit)"),
             ("circuit_macs", "served MACs"), ("rows", "Program rows"), ("rows gap", "rows in a gap"),
-            ("gap_ands", "their ANDs"))
+            ("gap_ands", "their ANDs"), *((("staged_ands", "proof blocks' ANDs (staged where staged)"),)
+                                          if "staged_ands" in c["per_request"] else ()))
     out = [f"Ranks {c['ranks'][0]}-{c['ranks'][-1]}, one request: a prefill step of {t['prefill']} prompt tokens and "
            f"{t['decode']} decode steps.", "",
            "| quantity | prefill token | decode token | request |", "| --- | ---: | ---: | ---: |"]
@@ -272,7 +297,9 @@ def table(c: dict) -> str:
     for s, d in c["definitions"].items():
         of = ", ".join(f"{k} ({v})" for k, v in sorted(d["of"].items()))
         out.append(f"| `{s}` | {of} | {_n(d['prefill'] / t['prefill'])} | {_n(d['decode'] / t['decode'])} | {d['out_bits']:,} | "
-                   f"{d['class_bits']:,} | {d['in_bits']:,} | {d['ands']:,} | {d['macs']:,} | {d['row_bytes']:,} | 2^{d['k_log']} |")
+                   f"{d['class_bits']:,} | {d['in_bits']:,} | {d['ands']:,}"
+                   + (f" (staged {d['staged_ands']:,})" if "staged_ands" in d else "")
+                   + f" | {d['macs']:,} | {d['row_bytes']:,} | 2^{d['k_log']} |")
     out += ["", "Gaps: rows no cut fits, by family (each Definition in `census.json`).", "",
             "| row family | Definitions | prefill rows | decode rows | their ANDs | why (its most rows' Definition) |",
             "| --- | ---: | ---: | ---: | ---: | --- |"]
@@ -302,8 +329,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sized", nargs="+", required=True, help="each rank's `m1_families.py --estimate` output")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--request", default=None, metavar="RID", help="this request's census alone (a row of several request shapes)")
+    ap.add_argument("--staged", nargs="+", default=[], metavar="STAGE_JSON",
+                    help="`served_units/stage.py` stage.json files: each staged Definition's ANDs beside its estimate")
     a = ap.parse_args()
-    c = census([json.loads(Path(p).read_text()) for p in a.sized])
+    c = census([json.loads(Path(p).read_text()) for p in a.sized], a.request)
+    if a.staged:
+        c = staged(c, [json.loads(Path(p).read_text()) for p in a.staged])
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "census.json").write_text(json.dumps(c, indent=1, default=str) + "\n")
     (a.out / "table.md").write_text(table(c))

@@ -6,6 +6,7 @@ import ast
 import gzip
 import hashlib
 import importlib.util
+import inspect
 import itertools
 import json
 import os
@@ -91,6 +92,15 @@ def seal_off_the_checkout(tmp_path_factory, monkeypatch):
     """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
     real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
     monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
+@pytest.fixture(autouse=True)
+def main_s_globals_end_with_the_test(monkeypatch):
+    """`main` sets the globals its `global` statement names for its run (`ARTIFACTS` among them); each is put back after
+    every test, so a test that ran `main` leaves no artifact cache or tree to a later test of its worker."""
+    (names,) = [n.names for n in ast.walk(ast.parse(inspect.getsource(A.main))) if isinstance(n, ast.Global)]
+    for name in names:
+        monkeypatch.setattr(A, name, getattr(A, name))
 
 
 @pytest.fixture
@@ -2105,7 +2115,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
                  "packages": whole,                                              # the file's name, among a directory's
-                 "controls_of": whole,                                           # a control's copy of a fixture
+                 "control_case": whole,                                          # a control's copy of a fixture
                  "moves_refused": whole,                                         # refuses a moves file, before any step
                  "base_locks": whole,                                            # the base's locks a move is held to
                  "write_staged": whole,                                          # the run's writer of the locks it staged
@@ -2437,6 +2447,73 @@ def test_a_fetch_sandbox_keeps_the_network_and_writes_only_the_packages_lake_and
     assert text.split() == [os.readlink("/proc/self/ns/net"), "refused"]
     assert (pkg / ".lake" / "ok").read_text() == "lake\n" and (cache / "ok").read_text() == "cache\n"
     assert victim.read_text() == "orig\n"
+
+
+USER_RUN = Path(f"/run/user/{os.getuid()}")
+USER_BUS = {"XDG_RUNTIME_DIR": str(USER_RUN), "DBUS_SESSION_BUS_ADDRESS": f"unix:path={USER_RUN}/bus"}
+needs_user_bus = pytest.mark.skipif(not ((USER_RUN / "bus").is_socket() and shutil.which("systemd-run")),
+                                    reason="no user service manager here (no bus at /run/user/UID/bus, or no systemd-run)")
+REACHING_OUT = """import Lake
+open Lake DSL
+#eval IO.FS.writeFile "{marker}" "ran\\n"
+#eval IO.FS.writeFile "{beside}" "pwned\\n"
+#eval do
+  let args := #["--user", "--wait", "--collect", "-q", "--", "touch", "{asked}"]
+  let env := #[("XDG_RUNTIME_DIR", some "{run}"), ("DBUS_SESSION_BUS_ADDRESS", some "unix:path={run}/bus")]
+  let o ← IO.Process.output {{ cmd := "systemd-run", args, env }}
+  IO.FS.writeFile "{marker}.asked" s!"exit {{o.exitCode}}: {{o.stderr}}"
+package p
+@[default_target] lean_lib P
+"""
+
+
+@needs_unshare
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("way", ["a-write-beside-the-package", pytest.param("the-service-manager", marks=needs_user_bus)])
+def test_setup_runs_a_lakefile_s_code_only_in_its_fetch_sandbox(tmp_path, monkeypatch, way):
+    """A lakefile runs code when its workspace loads: this one writes a marker in `.lake`, a file beside the package, and
+    asks the job user's service manager to write another. Unsandboxed (`lake env true`) it does all three; through
+    `setup` it runs (the marker) and neither other file is written."""
+    toolchain = (HERE / "fixtures" / "control" / "lean-toolchain").read_text().strip()
+
+    def package(d: Path) -> tuple[Path, Path, Path]:
+        (d / "pkg" / ".lake").mkdir(parents=True)
+        pkg, marker, beside, asked = d / "pkg", d / "pkg" / ".lake" / "ran", d / "Victim.lean", d / "asked"
+        (pkg / "lean-toolchain").write_text(toolchain + "\n")
+        (pkg / "P.lean").write_text("def P.x : Nat := 1\n")
+        (pkg / "lakefile.lean").write_text(REACHING_OUT.format(marker=marker, beside=beside, asked=asked, run=USER_RUN))
+        return pkg, marker, beside if way == "a-write-beside-the-package" else asked
+
+    pkg, marker, reached = package(tmp_path / "open")
+    r = subprocess.run(["lake", "env", "true"], cwd=pkg, env=A.lake_env(), capture_output=True, text=True)
+    assert marker.exists() and reached.exists(), r.stdout + r.stderr
+    pkg, marker, reached = package(tmp_path / "setup")
+    monkeypatch.setattr(A, "_INSTALLED", set())
+    monkeypatch.setenv("MATHLIB_CACHE_DIR", str(tmp_path / "mathlib"))
+    assert A.sandboxed()
+    _, text = A.setup(pkg, toolchain, tmp_path / "setup.log")
+    assert marker.exists(), text
+    assert not reached.exists(), text
+
+
+@needs_unshare
+@needs_user_bus
+@pytest.mark.parametrize("fetch", [False, True], ids=["build", "fetch"])
+def test_the_job_user_s_service_manager_runs_nothing_for_a_sandboxed_command(tmp_path, fetch):
+    """Through the job user's bus, `systemd-run --user` starts a program outside every namespace. It does for a command
+    outside the sandbox; from inside a build's or a fetch's sandbox it is refused, and the program never runs."""
+    (rw := tmp_path / "rw").mkdir()
+
+    def ask(prefix: list[str], name: str) -> tuple[subprocess.CompletedProcess, bool]:
+        r = subprocess.run([*prefix, "systemd-run", "--user", "--wait", "--collect", "-q", "--", "touch",
+                            str(tmp_path / name)], env=os.environ | USER_BUS, capture_output=True, text=True)
+        return r, (tmp_path / name).exists()
+
+    r, wrote = ask([], "outside")
+    assert r.returncode == 0 and wrote, r.stderr
+    r, wrote = ask([*(A.UNSHARE_NET if fetch else A.UNSHARE), "--", "bash", str(A.TOOL / "sandbox.sh"),
+                    *(["--net"] if fetch else []), str(rw), "--"], "inside")
+    assert r.returncode != 0 and not wrote, r.stdout + r.stderr
 
 
 def test_setup_sh_refuses_a_toolchain_that_is_no_release_of_lean_before_elan_runs(tmp_path):
@@ -8584,6 +8661,32 @@ def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkey
     assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and ran == []
 
 
+def test_a_run_beside_the_samples_read_hold_on_its_lake_runs(tmp_path, monkeypatch):
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, {"args": []})
+    monkeypatch.setattr(A, "writable", lambda p: [p.resolve() / ".lake"])
+    with A.writing(pkg, reads=True):
+        assert tests() == ([], {"T": {"args": []}}) and len(ran) == 1
+    with A.writing(pkg):
+        fails, _ = tests()
+    assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and len(ran) == 1
+    assert not A._WRITING and not A._READING
+
+
+def test_an_update_keeps_the_run_records_it_could_not_rederive(tmp_path, monkeypatch):
+    entry = {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n"), "w.txt": sha("13\n")}}
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, entry)
+    with A._WROTE:
+        A._WRITING.add(pkg.resolve() / ".lake")
+    try:
+        fails, now = tests(update=True)
+    finally:
+        with A._WROTE:
+            A._WRITING.discard(pkg.resolve() / ".lake")
+    assert fails[0].startswith("runs: a build is still writing") and now == {"T": entry} and ran == []
+    assert tests(update=True) == ([f"runs: T's data v.txt is missing from {pkg}", f"runs: T's data w.txt is missing from {pkg}"],
+                                  {"T": {"args": ["{v.txt}"], "data": {"v.txt": sha("12\n")}}}) and ran == []
+
+
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
     pkg = tmp_path / "a" / "lean"
     pkg.mkdir(parents=True)
@@ -9819,10 +9922,19 @@ def test_the_replay_reads_a_modules_private_part_and_a_plain_files_olean_alone(t
     assert json.loads((tmp_path / "replay.json").read_text())["axioms"] == axioms
 
 
+#: {fixture: `control_clean`'s copy}, built once a worker by the first control case that needs it
+CONTROL_CLEAN: dict[str, tuple[Path | None, list[str]]] = {}
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_the_controls(tmp_path):
-    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
-    assert A.controls(toolchain, tmp_path, log=lambda *_: None) == []
+@pytest.mark.parametrize("fixture,name", [(f, n) for f in A.CONTROLS for n in A.control_cases(f)])
+def test_the_controls(tmp_path_factory, fixture, name):
+    if fixture not in CONTROL_CLEAN:
+        toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text().strip()
+        CONTROL_CLEAN[fixture] = A.control_clean(fixture, toolchain, tmp_path_factory.mktemp("controls"))
+    work, fails = CONTROL_CLEAN[fixture]
+    assert fails == []
+    assert A.control_case(work, fixture, name) == []
 
 
 def test_a_step_records_the_peak_memory_of_every_process_it_waited_for(tmp_path):

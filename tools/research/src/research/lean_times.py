@@ -24,6 +24,15 @@ A task is one of:
                 suite, timed by that suite's own seconds, with the step's outcome; another step's package, and a step's that ran
                 none, is the part of its name after `:`, else `-`. A skipped step is no task, a stopped one is unfinished.
 
+A records run and a `lean-audit` step also have parts, in minutes, from the package reports check.py wrote into its run record
+(`lean-audit/**/audit.json`, each report once; a step's, those of the packages it reran): of each part in `PARTS` (build: setup,
+stage and Lake; replay; sampled: the sampled recompile; facts: the facts and the unread facts; checks: the proved-in, dependency
+and upstream checks and the runs) the most any of its packages took,
+and its wait: a records run's as above, a step's its seconds outside its longest package's audit (its Lean audit slot's wait among
+them). The sampled recompile runs beside the replay and one check.py audits its packages at once, so the parts overlap and don't
+add up to the wall. Its group is `chain` where it compiled modules of `CHAIN` (keyed, not restored: its report's `staged`),
+`elsewhere` where it compiled others only, `none` where it restored every module. The tasks over `--over` are summarized by group.
+
 The window is the tasks that ended in it: a records run at its attempt's end, a step at its `ended_utc`. The attempts are those
 the store's remote holds that started up to `LOOKBACK_H` before the window; blobs are read from the remote and not kept, since a
 day's build logs are gigabytes. Percentiles are nearest-rank, as `research queue stats`'s.
@@ -62,6 +71,13 @@ AUDITED = re.compile(r"^AUDIT (\S+): (?:PASS|FAIL)\s+\d+ declarations in (\d+) m
 BUILT = re.compile(rb"\bBuilt ([^\s:]+) \((?:\d+m ?)?[\d.]+m?s\)")
 BUILD_LOG = re.compile(r"^lean-audit/(?:.+/)?build(?:-[a-z]+)?\.log$")
 NONE = "-"
+AUDIT_JSON = re.compile(r"^lean-audit/(?:.+/)?audit\.json$")
+#: a part of a Lean task: the keys of a package report's `seconds` (check.py's) it sums
+PARTS = {"build": ("setup", "stage", "build-plugins", "build", "build-roots"), "replay": ("replay",), "sampled": ("sampled",),
+         "facts": ("facts", "unread"), "checks": ("proved-in", "dependency-sources", "dependencies", "upstream", "runs")}
+#: the package whose import chain a proof change compiles
+CHAIN = "security/Proofs"
+GROUPS = ("chain", "elsewhere", "none", "no report")
 #: the package column's width: the longest Lake package path's
 W = 88
 ALL = "(all)"
@@ -73,6 +89,43 @@ def clock() -> datetime:
 
 def _node(ex: dict) -> str | None:
     return ex.get("machine") or (ex.get("remote") or {}).get("machine") or ex.get("host")
+
+
+def reports(paths: list[str], read: Callable[[str], bytes]) -> list[dict]:
+    """The package reports in a run record's `audit.json` files (``paths``, read by ``read``), each once: a requirer's
+    `audit.json` repeats the reports of the packages it was audited with."""
+    out: dict[tuple[str, str], dict] = {}
+    for p in sorted(p for p in paths if AUDIT_JSON.match(p)):
+        try:
+            doc = json.loads(read(p))
+        except ValueError as e:
+            print(f"research lean-times: {p} is not JSON ({e}): its package reports are left out", file=sys.stderr)
+            continue
+        for r in (doc.get("packages") or []) if isinstance(doc, dict) else []:
+            if isinstance(r, dict) and isinstance(r.get("seconds"), dict):
+                out.setdefault((str(r.get("package")), json.dumps(r["seconds"], sort_keys=True)), r)
+    return list(out.values())
+
+
+def _s(seconds: dict, key: str) -> float:
+    v = seconds.get(key)
+    return float(v) if isinstance(v, (int, float)) else 0.0
+
+
+def split(reps: list[dict], minutes: float | None = None) -> dict:
+    """A task's parts from its packages' reports ``reps`` (the module docstring), its wait the task's ``minutes`` outside its
+    longest package's `total`, and the modules it compiled: the most of any package, and `CHAIN`'s. {} without reports."""
+    if not reps:
+        return {}
+    secs = [r["seconds"] for r in reps]
+    parts = {p: max(sum(_s(s, k) for k in keys) for s in secs) / 60 for p, keys in PARTS.items()}
+    if minutes is not None:
+        parts["wait"] = max(minutes - max(_s(s, "total") for s in secs) / 60, 0.0)
+    compiled = {str(r.get("package")): max(int(st.get("keyed") or 0) - int(st.get("modules") or 0), 0)
+                for r in reps if isinstance(st := r.get("staged"), dict)}
+    chain = sum(n for p, n in compiled.items() if p == CHAIN or p.endswith(f"/{CHAIN}"))
+    return {"parts": parts, "compiled": max(compiled.values(), default=0), "compiled_chain": chain,
+            "group": "chain" if chain else "elsewhere" if any(compiled.values()) else "none"}
 
 
 def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read: Callable[[str], bytes]) -> dict:
@@ -97,13 +150,16 @@ def records_task(rid: str, doc: dict, meta: dict | None, paths: list[str], read:
     work_s = float(sum(work)) if work else max(wall - check_wait, 0.0)
     modules = {p: int(n) for p, n in AUDITED.findall(out)}
     built = {b for p in paths if BUILD_LOG.match(p) for b in BUILT.findall(read(p))}
+    if by := split(reports(paths, read)):
+        by["parts"]["wait"] = max(wall - work_s, 0.0) / 60
     return {**task, "minutes": wall / 60, "outcome": (meta.get("validation") or {}).get("status") or "unknown",
             "work_min": work_s / 60, "wait_min": max(wall - work_s, 0.0) / 60, "check_slot_wait_min": check_wait / 60,
-            "path": fp.get("path"), "built": len(built), "modules": sum(modules.values()) if modules else None}
+            "path": fp.get("path"), "built": len(built), "modules": sum(modules.values()) if modules else None, **by}
 
 
-def check_tasks(rid: str, doc: dict, meta: dict) -> list[dict]:
-    """The Lean steps (`STEPS`) of the check ``rid`` (its attempt ``doc``, its result's ``meta``) as tasks."""
+def check_tasks(rid: str, doc: dict, meta: dict, reps: list[dict] = ()) -> list[dict]:
+    """The Lean steps (`STEPS`) of the check ``rid`` (its attempt ``doc``, its result's ``meta``) as tasks, a `lean-audit` step's
+    split into parts by the reports ``reps`` of the packages it audited."""
     ex = doc.get("execution") or {}
     reuse = (meta.get("reuse") or {}).get("steps") or {}
     audited = [p for p in (reuse.get(LEAN_AUDIT_STEP) or {}).get("reran") or [] if isinstance(p, str)]
@@ -124,7 +180,10 @@ def check_tasks(rid: str, doc: dict, meta: dict) -> list[dict]:
                      **({"minutes": r["seconds"] / 60} if done and isinstance(r.get("seconds"), (int, float)) else
                         {"minutes": None, "outcome": "unfinished"})} for r in suites]
             continue
-        out.append({**task, "packages": audited} if kind == LEAN_AUDIT_STEP and not part and audited else task)
+        if kind == LEAN_AUDIT_STEP:
+            task = {**task, "packages": audited} if not part and audited else task
+            task |= split([r for r in reps if r.get("package") in task["packages"]], task["minutes"])
+        out.append(task)
     return out
 
 
@@ -179,6 +238,25 @@ def summary(tasks: list[dict], over: float = OVER_MIN) -> dict:
     return out
 
 
+def by_part(tasks: list[dict], over: float = OVER_MIN) -> dict:
+    """{kind: {group: row}} of the records runs and `lean-audit` steps over ``over`` minutes: a row is their count and the p50 and
+    p95 of each part and of the wait, in minutes, over those that have it."""
+    acc: dict[str, dict[str, list[dict]]] = {}
+    for t in tasks:
+        if t["kind"] in ("records", LEAN_AUDIT_STEP) and t["minutes"] is not None and t["minutes"] > over:
+            acc.setdefault(t["kind"], {}).setdefault(t.get("group", "no report"), []).append(t)
+    out: dict[str, dict[str, dict]] = {}
+    for kind in [k for k in KINDS if k in acc]:
+        out[kind] = {}
+        for g in [g for g in GROUPS if g in acc[kind]]:
+            row: dict = {"n": len(acc[kind][g])}
+            for p in (*PARTS, "wait"):
+                if vals := [t["parts"][p] for t in acc[kind][g] if p in (t.get("parts") or {})]:
+                    row |= {f"{p}_p50_min": round(pct(vals, 0.5), 1), f"{p}_p95_min": round(pct(vals, 0.95), 1)}
+            out[kind][g] = row
+    return out
+
+
 def _m(v: float | None) -> str:
     return "-" if v is None else f"{v:.1f}"
 
@@ -217,6 +295,14 @@ def render(s: dict, tasks: list[dict], start: datetime, end: datetime, over: flo
         if len(pk) > 80:
             pk = f"{len(t['packages'])} packages: {pk[:60]}..."
         lines.append(f"{t['run']:<22} {t['kind']:<12} {str(t['node'])[:17]:<17} {_m(t['minutes']):>6} {t['outcome']:<8} {pk}")
+    parts = (*PARTS, "wait")
+    lines += ["", f"records runs and lean-audit steps over {over:g} min by part: minutes at p50/p95, each part its longest package's "
+              f"(they overlap); group: chain compiled modules of {CHAIN}, elsewhere others only, none restored every module",
+              f"{'kind':<12} {'group':<10} {'n':>5} " + " ".join(f"{p:>13}" for p in parts)]
+    for kind, rows in by_part(tasks, over).items():
+        for g, r in rows.items():
+            lines.append(f"{kind:<12} {g:<10} {r['n']:>5} " + " ".join(
+                f"{_m(r.get(f'{p}_p50_min')) + '/' + _m(r.get(f'{p}_p95_min')):>13}" for p in parts))
     return "\n".join(lines)
 
 
@@ -250,7 +336,11 @@ def _tasks_of(store, rid: str, doc: dict) -> list[dict]:
         files = _record_files(store, out.get("run_record")) if (meta or {}).get("kind") == FAST_KIND else {}
         return [records_task(rid, doc, meta, list(files), lambda p: _bytes(store, files[p]))]
     if CHECK.search(argv) and meta:
-        return check_tasks(rid, doc, meta)
+        reps = []
+        if (((meta.get("reuse") or {}).get("steps") or {}).get(LEAN_AUDIT_STEP) or {}).get("reran"):
+            files = {p: s for p, s in _record_files(store, out.get("run_record")).items() if AUDIT_JSON.match(p)}
+            reps = reports(list(files), lambda p: _bytes(store, files[p]))
+        return check_tasks(rid, doc, meta, reps)
     return []
 
 
@@ -301,7 +391,7 @@ def main(argv: list[str], store=None) -> int:
     s = summary(tasks, a.over)
     if a.json:
         print(json.dumps({"window": {"start": f"{start:%Y-%m-%dT%H:%M:%SZ}", "end": f"{end:%Y-%m-%dT%H:%M:%SZ}"}, "over_min": a.over,
-                          "summary": s, "tasks": sorted(tasks, key=lambda t: (t["kind"], t["ended"] or "", t["run"]))}, indent=1))
+                          "summary": s, "by_part": by_part(tasks, a.over), "tasks": sorted(tasks, key=lambda t: (t["kind"], t["ended"] or "", t["run"]))}, indent=1))
     else:
         print(render(s, tasks, start, end, a.over))
     return 0

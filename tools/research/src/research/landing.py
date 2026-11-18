@@ -1286,7 +1286,8 @@ class Landing:
         None when there is none.  Of each reviewer's newest verdict at each of ``heads``, a hold by anyone or a land by none of
         `_owners` nor that head's ready mark's author, the newest decides: a hold keeps ``m``, as one at its head does (``why``,
         `queue.unreviewed`'s of its head, says so), and a land at a head with no hold carries when `delta` says so, trusting
-        ``landed`` (the landed tips) and the ``trusted`` heads."""
+        ``landed`` (the landed tips) and the ``trusted`` heads.  The land judged is the newest one no hold at a later head of
+        ``m``'s voids (`carry.voided`), and a land every such hold voids keeps ``m``, however old the hold."""
         owners = self._owners(m)
         labels = {h: self.reviews(m.pr, h) for h in heads}
         verdicts = []                                   # (when, a hold, the head, the label)
@@ -1299,15 +1300,19 @@ class Landing:
                          if lab.value == "hold" or by not in mine]
         if not (lands := [v for v in verdicts if not v[1]]):
             return None
-        old = max(lands, key=lambda v: v[0])[2]
+        holds = {v[2] for v in verdicts if v[1]}
+        standing = [v for v in lands if not carry.voided(self.repo, v[2], holds)]
+        old = max(standing or lands, key=lambda v: v[0])[2]
         if why.startswith("held"):
             return old, f"{why} at {m.head[:12]}", False
         if (v := max(verdicts, key=lambda v: v[:2]))[1]:
             return old, f"{v[3].by.lstrip('@')}'s hold at {v[2][:12]} ({v[3].ref or 'no reason'}) is newer", False
         if held := unreviewed(labels[old], (*owners, self.ready_by(m.pr, old))):
             return old, f"{held} at {old[:12]}", False
-        if _who(CI) in {_who(o) for o in owners if o}:
-            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
+        if later := carry.voided(self.repo, old, holds):
+            v = max((v for v in verdicts if v[1] and v[2] == later), key=lambda v: v[0])
+            return old, (f"{v[3].by.lstrip('@')}'s hold at {later[:12]} ({v[3].ref or 'no reason'}), a later head, voids the land "
+                         f"at {old[:12]}"), False
         d = self.delta(old, m.head, landed, trusted)
         return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 

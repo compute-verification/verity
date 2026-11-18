@@ -619,6 +619,7 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.poub.binder import Binder, Every
+
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
