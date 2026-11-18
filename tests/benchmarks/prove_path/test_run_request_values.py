@@ -162,15 +162,17 @@ def test_no_kept_file_is_written_under_out():
     assert 'K=${PP_KEEP:-$W/keep}' in text and "chmod 700" in text
 
 
-#: `prove_path.py`'s commit and audit as run() calls them: a window whose partition and siblings hold a planted value, and
-#: an audit whose error output does; registration.json, commit.log and the PROVE-PATH line are what $OUT keeps
+#: `prove_path.py`'s commit and audit as run() calls them: a window whose partition and siblings hold a planted value, whose
+#: registration and commit.json bind the advice at its length ``$BITS``, and an audit whose error output holds a planted
+#: value; commit.log and the PROVE-PATH line are what $OUT keeps
 STUB_RUN = r"""#!/bin/bash
 cmd=$1; shift; out=
 while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
 case $cmd in
   commit) mkdir -p $out/rank0 && for f in window partition index; do echo "{\"planted\": \"planted-$f\"}" > $out/rank0/$f.json; done
-          echo '{"window": "public"}' > $out/rank0/registration.json; echo planted-bin > $out/rank0/m0-public.bin
-          echo '{}' > $out/commit.json; echo '[prove-path commit] rank 0: {"bits": 4242423}';;
+          binding="{\"binding\": {\"advice\": {\"root\": \"ab\", \"bits\": $BITS}}}"
+          echo "$binding" > $out/rank0/registration.json; echo planted-bin > $out/rank0/m0-public.bin
+          echo "$binding" > $out/commit.json; echo '[prove-path commit] rank 0: {"bits": 4242423}';;
   audit) mkdir -p $out && echo '{"ok": true}' > $out/summary.json
          echo 'PROVE-PATH {"advice_bits": 4242421, "forged": false, "ok": true, "ranks": {"0": {"accepted": true, "charge": {"c": 4242422}}}}'
          echo 'a5 progress planted-progress'; echo planted-auditerr >&2;;
@@ -181,18 +183,19 @@ PLANTED_RUN = (b"planted-partition", b"planted-window", b"planted-index", b"plan
                b"4242421", b"4242422", b"4242423", b"planted-progress")
 
 
-def _run_arm(tmp_path: Path, arm: str) -> tuple[Path, Path]:
+def _run_arm(tmp_path: Path, arm: str, bits: int = 5) -> tuple[Path, Path, str]:
     out, keep, w = tmp_path / "out", tmp_path / "keep", tmp_path / "w"
     (tmp_path / "pp").write_text(STUB_RUN)
     (tmp_path / "pp").chmod(0o755)
     for d in (out, keep, w):
         d.mkdir()
     code = (f"O={out}; K={keep}; W={w}; PUBF={PUBF}; PL={PL}; PP={tmp_path / 'pp'}; TG=(); CH=(); PLAIN=(); TIME=\n"
+            f"export BITS={bits}\n"
             f"{block('keep() {', '}')}{block('run() {', '}')}{arm}\n")
     got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert not [n for n in PLANTED_RUN if n in got.stdout.encode()], "the run's stdout carries a planted value"
-    return out, keep
+    return out, keep, got.stdout
 
 
 @pytest.mark.parametrize("arm", ["run glm '--tp-commit T --build-root B' A part.json ''",
@@ -201,14 +204,15 @@ def _run_arm(tmp_path: Path, arm: str) -> tuple[Path, Path]:
 def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_path, arm):
     """The TP, single-GPU and stand-in arms each go through run(): $OUT gets the window's registration, commit.log and the
     audit's log, whose PROVE-PATH line `verity bench prove layers` reads, and none of the planted values; the keep holds them."""
-    out, keep = _run_arm(tmp_path, arm)
+    out, keep, _ = _run_arm(tmp_path, arm)
     name = arm.split()[1]
     files = {p.relative_to(out).as_posix(): p.read_bytes() for p in out.rglob("*") if p.is_file()}
     assert not [f for f, b in files.items() if any(n in b for n in PLANTED_RUN)], sorted(files)
-    assert f"{name}/windows/rank0/registration.json" in files and b"PROVE-PATH" in files[f"{name}/audit.log"]
+    assert b"PROVE-PATH" in files[f"{name}/audit.log"]
     assert f"{name}/commit.log" in files and f"{name}/summary.json" in files
     kept = {p.relative_to(keep).as_posix() for p in keep.rglob("*") if p.is_file()}
-    assert {f"{name}/windows/rank0/{f}" for f in ("partition.json", "index.json", "window.json", "m0-public.bin")} <= kept
+    assert {f"{name}/windows/rank0/{f}" for f in ("registration.json", "partition.json", "index.json", "window.json",
+                                                  "m0-public.bin")} | {f"{name}/windows/commit.json"} <= kept
     assert f"{name}/audit.err" in kept and b"4242421" in (keep / name / "audit.log").read_bytes()
     line = json.loads(files[f"{name}/audit.log"].decode().split("PROVE-PATH ", 1)[1].splitlines()[0])
     assert line == {"forged": False, "ok": True, "ranks": {"0": {"accepted": True}}}
@@ -255,3 +259,14 @@ def test_public_log_lets_only_what_its_reader_reads_go():
     assert m.public_line('A5 {"memory": {"pool": 9}}') == "A5 {}" and m.public_line("PROOF-EDITS {}") is None
     assert m.public_line("ValueError: request 9 of user-9") == "ValueError: held in the kept log"
     assert "9" not in m.public_line("PROVE-PATH not json 9") and m.public_line("[prove-path commit] rank 0: {}") is None
+
+
+@pytest.mark.parametrize("bits", [37291, 3729100])
+def test_the_windows_binding_of_the_advices_length_stays_in_the_keep(tmp_path, bits):
+    """A window's registration and commit.json bind the advice at its true length: at two lengths a hundred times apart,
+    neither reaches $OUT or stdout, and the keep holds both files."""
+    out, keep, stdout = _run_arm(tmp_path, "run glm '--tp-commit T --build-root B' A part.json ''", bits)
+    hit = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file() and str(bits).encode() in p.read_bytes())
+    assert not hit and str(bits) not in stdout, f"the advice's length reached $OUT in {hit} or stdout"
+    for f in ("windows/rank0/registration.json", "windows/commit.json"):
+        assert json.loads((keep / "glm" / f).read_text())["binding"]["advice"]["bits"] == bits
