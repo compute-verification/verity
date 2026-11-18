@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import boolean as BL
+from verity.circuits import partition_object as PO
 from verity.circuits import restrict as R
 from verity.circuits.codec import definition_digest, definition_entry, descriptor_chunks, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
@@ -106,7 +107,7 @@ def test_the_map_is_injective_and_carries_the_ports_to_the_boundary(units):
     _, _, bits = chain()
     b = block(tuple(units))
     n_in, gates = len(b.input_bits), [x for lo, hi in b.gate_ranges for x in range(lo, hi)]
-    image = [b.to_c(i) for i in range(n_in + len(gates))]
+    image = [b.to_c_bit(i) for i in range(n_in + len(gates))]
     assert len(set(image)) == len(image) and image == b.input_bits + gates
     assert list(b.inputs) == sorted(set(b.inputs)) and list(b.outputs) == sorted(set(b.outputs))
     (lo, hi), = b.words
@@ -220,7 +221,7 @@ def test_a_toys_block(name, units):
     n_in = len(b.input_bits)
     assert own[:2] == ref[:2] and own[2 + n_in:] == ref[2 + n_in:]
     assert own[2:2 + n_in] == [x.replace(b"wire", b"run") for x in ref[2:2 + n_in]]
-    image = [b.to_c(i) for i in range(n_in + len(inside))]
+    image = [b.to_c_bit(i) for i in range(n_in + len(inside))]
     assert len(set(image)) == len(image)
 
 
@@ -250,6 +251,49 @@ def test_part_of_a_batch_is_one_call_a_member_and_all_of_it_the_batch():
     forms = lambda units: [(n.form, n.n) for n in R.restrict(c, TOY_PARTITION, units, bits).program.root.body.nodes]
     assert forms([(0, 3)])[-1] == ("batch", 3)
     assert [f for f, _ in forms([(0, 2)])][-2:] == ["call", "call"] and forms([(1, 2)])[-1][0] == "call"
+
+
+def _cases():
+    return ([("chain", u) for u in MEMBERS + UNITS] + [(n, u) for n, (_f, us) in TOYS.items() for u in us])
+
+
+def _setup(name, units):
+    if name == "chain":
+        program, c, bits = chain()
+        return program, c, bits, PARTITION, block(tuple(units))
+    program, c, bits = toy(name)
+    return program, c, bits, TOY_PARTITION, R.restrict(c, TOY_PARTITION, units, bits)
+
+
+@pytest.mark.parametrize("name,units", _cases())
+def test_the_word_level_map_carries_the_blocks_descriptor_gates_onto_Cs(name, units):
+    """`to_c_gate` is injective, carries the block's input gates to in(S) at their width and binding, each computed gate to
+    C's gate of the same primitive whose operands are its operands' images, and the block's outputs to out(S)."""
+    program, c, bits, _p, b = _setup(name, units)
+    C, own = program.circuit, R.program(b.descriptor).circuit
+    image = [b.to_c_gate(i) for i in range(own.size)]
+    assert len(set(image)) == len(image) == len(b.inputs) + sum(hi - lo for lo, hi in b.words)
+    for g in own.gates():
+        cg = C.gate(image[g.index])
+        if (inp := input_id(g.prim.id)) is not None:
+            assert image[g.index] in b.inputs and inp[1] == bits.width[cg.index]
+            assert inp[0] == (bits.kind[cg.index][1] if bits.kind[cg.index][0] == "input" else R.RUN)
+        else:
+            assert g.prim.id == cg.prim.id and [image[o] for o in g.operands] == list(cg.operands)
+    assert [image[o] for o in own.root_outputs()] == list(b.outputs)
+
+
+@pytest.mark.parametrize("name,units", _cases())
+def test_the_word_level_ports_are_the_boundary_the_partition_gives(name, units):
+    """in(S) and out(S) from the template partition's own units alone: what the block's units read from outside them, and
+    what of their outputs a unit outside them reads or C returns."""
+    program, _c, _bits, partition, b = _setup(name, units)
+    tp = PO.TemplatePartition(program, partition["query"])
+    mine = {u for lo, hi in units for u in range(lo, hi)}
+    inside = {g for u in mine for g in range(*tp.gates(u))}
+    read_outside = {g for u in range(tp.population) if u not in mine for g in tp.inputs(u)}
+    assert list(b.inputs) == sorted({g for u in mine for g in tp.inputs(u)} - inside)
+    assert list(b.outputs) == sorted({g for u in mine for g in tp.outputs(u)} & (read_outside | set(program.circuit.root_outputs())))
 
 
 def test_the_bit_rule_is_one_function():
