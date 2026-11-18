@@ -1,5 +1,6 @@
 module
 
+public import Circuits.Lanes
 public import Flock.TemplateQuery
 public import Spot.Bits
 public import Spot.Wires
@@ -41,7 +42,7 @@ parts are read only after `argPartsOk` has bounded them by the root's nodes.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId)
+open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId partLanes partLeafAt laneWire fieldIx)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
@@ -101,85 +102,11 @@ def membersIn (x0 L len M s0 c : Nat) : Except String (Nat × Nat) :=
     let on := if olo ≤ ohi then ohi - olo + 1 else 0
     if cn != on then .error "edge-rows" else .ok (clo.toNat, cn.toNat)
 
-/-- A part's run and lanes, the grid it spells; an explicit part none. -/
-def partLanes : Part → Nat × List Lane
-  | .affine p i b c => (max c 1, [⟨p, i, b, 1, []⟩])
-  | .strided p i b inner os is c =>
-    let T := max 1 ((c + inner - 1) / inner)
-    (inner, [⟨p, i, b, is, if T > 1 then [(T, os)] else []⟩])
-  | .explicit _ => (0, [])
-  | .grid run lanes => (run, lanes.toList)
-
-/-- The digits of period `t` in levels `lv`, innermost first, the last unbounded. -/
-def digitsOf (t : Nat) : List (Nat × Int) → List Nat
-  | [] => []
-  | [_] => [t]
-  | (r, _) :: rest => t % r :: digitsOf (t / r) rest
-
-/-- The levels from `a` on whose radices the members' count `n` and their first period `tt` (over those levels) are
-multiples of, as far as they go: the first level not taken and the product of those taken. -/
-def absorb (lv : List (Nat × Int)) (a tt n : Nat) : Nat × Nat := Id.run do
-  let mut h := a
-  let mut P := 1
-  for _ in [0:lv.length] do
-    if h < lv.length && tt % (P * lv[h]!.1) == 0 && n % (P * lv[h]!.1) == 0 then
-      P := P * lv[h]!.1
-      h := h + 1
-  return (h, P)
-
-/-- The rows `k0 + m·L` (`m < n`) of the grid `(run, lanes)`, each `len` references inside one lane's run: the lane's
-collection, its first leaf, and the members' radix and steps in leaves, outermost first; `edge-rows` where a row
-leaves a run or the members' rows are no mixed radix of the lane's levels. -/
-def laneWire (run : Nat) (lanes : List Lane) (k0 L len n : Nat) : Except String (Nat × Nat × List Nat × List Int) := do
-  let g := lanes.length
-  if run == 0 || g == 0 then throw "edge-rows"
-  let t0 := k0 / (g * run)
-  let j := k0 % (g * run) / run
-  let o0 := k0 % (g * run) % run
-  let ln := lanes[j]!
-  if ln.p || o0 + len > run || !(len == 1 || ln.e == 1) then throw "edge-rows"
-  let ds := digitsOf t0 ln.lv
-  let leaf : Int := ln.b + (o0 : Int) * ln.e + ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum
-  if leaf < 0 then throw "edge-rows"
-  if n ≤ 1 || L == 0 then return (ln.i, leaf.toNat, [max n 1], [0])
-  if L % (g * run) != 0 then
-    if g == 1 && o0 + (n - 1) * L + len ≤ run then return (ln.i, leaf.toNat, [n], [(L : Int) * ln.e])
-    throw "edge-rows"
-  let dt := L / (g * run)
-  let m := ln.lv.length
-  let pre := ln.lv.foldl (fun (acc : Array Nat) (r, _) => acc.push (acc.back! * r)) #[1]
-  if m > 0 && dt % pre[m - 1]! == 0 then
-    return (ln.i, leaf.toNat, [n], [((dt / pre[m - 1]! : Nat) : Int) * ln.lv[m - 1]!.2])
-  let some a := (List.range m).find? (pre[·]! == dt) | throw "edge-rows"
-  let (h, P) := absorb ln.lv a (t0 / dt) n
-  let c := n / P
-  let inner := ((List.range (h - a)).map fun x => ln.lv[a + x]!).reverse
-  let levels ← if c == 1 then pure inner
-    else if h < m && ds[h]! + c ≤ ln.lv[h]!.1 then pure ((c, ln.lv[h]!.2) :: inner)
-    else throw "edge-rows"
-  if levels.isEmpty then return (ln.i, leaf.toNat, [1], [0])
-  return (ln.i, leaf.toNat, levels.map (·.1), levels.map (·.2))
-
-/-- The index of the field of `t` holding leaf `o`. -/
-def fieldIx (t : Ty) (o : Nat) : Option Nat :=
-  ((fieldsOf t).foldl (fun (acc : Option Nat × Nat × Nat) ty =>
-    (if acc.2.1 ≤ o && o < acc.2.1 + ty.leaves && acc.1.isNone then some acc.2.2 else acc.1,
-      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
-
-/-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf. -/
-def leafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × Int) :=
-  let g := lanes.length
-  if run == 0 || g == 0 then none else
-  let ln := lanes[k % (g * run) / run]!
-  let ds := digitsOf (k / (g * run)) ln.lv
-  some (ln.p, ln.i, ln.b + ((k % (g * run) % run : Nat) : Int) * ln.e +
-    ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum)
-
 /-- Whether the rows `k0 + m·L` (`m < cnt`), `len` references each, of the grid `(run, lanes)` (`c` references) read
 more than one output field of one writer node, at a row's last reference or the next member's row. -/
 def crossesFields (P : Prog) (run : Nat) (lanes : List Lane) (c k0 L len cnt : Nat) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
-  match leafAt run lanes k0 with
+  match partLeafAt run lanes k0 with
   | some (false, w, l0) =>
     if l0 < 0 || w ≥ nodes.size then false else
     let wd := P.defs[nodes[w]!.fn]!
@@ -187,7 +114,7 @@ def crossesFields (P : Prog) (run : Nat) (lanes : List Lane) (c k0 L len cnt : N
     if LW == 0 then false else
     let f0 := fieldIx wd.ret (l0.toNat % LW)
     let ks := [k0 + len - 1] ++ (if cnt > 1 then [k0 + L, k0 + L + len - 1] else [])
-    ks.any fun k => k < c && match leafAt run lanes k with
+    ks.any fun k => k < c && match partLeafAt run lanes k with
       | some (false, w', l) => w' == w && l ≥ 0 && fieldIx wd.ret (l.toNat % LW) != f0
       | _ => false
   | _ => false
