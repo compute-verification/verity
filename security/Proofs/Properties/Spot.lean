@@ -1283,6 +1283,12 @@ theorem checkSample_nil (draw pop samplingDesign : Json) : Draw.checkDraw draw p
 theorem registered_samplingDesign {v : Docket.Verifier} {rec samplingDesign : Json} (h : Registered v rec samplingDesign) :
     Draw.derive v.program v.query v.samplingDesign v.workTable = .ok samplingDesign := h.1.2.2.2.1
 
+theorem creditedGate_accept {α : Type} {prof : Core.Integrity} {o : Core.Outcome α Core.Integrity} {a : α}
+    {b : Core.Integrity} :
+    OneStage.creditedGate prof o = .accept a b ↔ prof.creditedProblem = none ∧ o = .accept a b := by
+  unfold OneStage.creditedGate
+  rcases prof.creditedProblem with _ | r <;> simp
+
 /-- The check accepts exactly what `AcceptMeans` says of an accept and a reported read of each certified value
 (`UnitsRead`). -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
@@ -1322,25 +1328,16 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           · simp only [reduceCtorEq, false_iff]
             rintro ⟨samplingDesign', d', n', -, -, -, -, -, hn', -⟩
             cases hn'
-          · split
-            next r hcp =>
-              simp only [reduceCtorEq, false_iff]
-              rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', -, rfl, hc⟩
+          · rw [creditedGate_accept]
+            simp only [Core.Outcome.accept.injEq]
+            constructor
+            · rintro ⟨hcp, rfl, rfl⟩
+              exact ⟨samplingDesign, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl, hcp⟩
+            · rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', rfl, rfl, hc⟩
               obtain rfl := uniq samplingDesign' hreg'
               rw [hpd] at hd'; cases hd'
               cases hn'
-              have hcp' : (profileOf p c e d n).creditedProblem = some r := hcp
-              rw [hcp'] at hc; cases hc
-            next hcp =>
-              simp only [Core.Outcome.accept.injEq]
-              constructor
-              · rintro ⟨rfl, rfl⟩
-                exact ⟨samplingDesign, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl, hcp⟩
-              · rintro ⟨samplingDesign', d', n', hreg', -, -, -, hd', hn', rfl, rfl, -⟩
-                obtain rfl := uniq samplingDesign' hreg'
-                rw [hpd] at hd'; cases hd'
-                cases hn'
-                exact ⟨rfl, rfl⟩
+              exact ⟨hc, rfl, rfl⟩
         · simp only [reduceCtorEq, false_iff]
           rintro ⟨samplingDesign', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
