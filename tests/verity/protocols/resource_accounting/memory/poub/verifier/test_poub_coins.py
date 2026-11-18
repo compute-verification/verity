@@ -371,8 +371,8 @@ def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(s
 
     one = ask(tmp_path / "one", False)
     many = ask(tmp_path / "many", True)
-    assert one[0] == [[("challenge", 0)], [("openings", 0)], [("challenge", 1)]]
-    assert many[0] == [[("challenge", 0)], [("openings", 0), ("challenge", 1)]]
+    assert one[0] == [[("poub/challenge", 0)], [("poub/openings", 0)], [("poub/challenge", 1)]]
+    assert many[0] == [[("poub/challenge", 0)], [("poub/openings", 0), ("poub/challenge", 1)]]
     assert many[1:3] == one[1:3] and many[4] == one[4]
     assert (one[3], many[3]) == (False, True)
 
