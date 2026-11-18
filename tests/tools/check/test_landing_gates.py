@@ -195,6 +195,9 @@ def test_every_run_holding_the_step_audits_the_facts_packages_before_it(tmp_path
         assert [argv[i + 1] for i, x in enumerate(argv) if x == "--package"] == [*dict.fromkeys(
             [p.partition(":")[2] for p in only if p.startswith("lean-audit:")] + [a.partition(":")[2] for a in audits])], only
     assert set(audits) <= set(CHECK.shard_needs()["landing-gates"])
+    got = CHECK.auto_plan(({}, {"security/Proofs": 1.0, "security": 1.0}, {}), 4, n=3)
+    [held] = [s for s in got["shards"] if "landing-gates" in s["parts"]]
+    assert set(audits) <= set(held["parts"]) and not any(b.startswith("lean-audit:") for b in held["builds"]), held
 
 
 def test_the_step_is_on_the_merge_gate_after_lean_audit_and_in_one_shard_of_every_plan():
