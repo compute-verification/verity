@@ -1,8 +1,8 @@
 """attester-piece: the network attester's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
 the active network attester in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
-    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --gate USER@HOST|local [--key KEY]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
+    python attester_piece.py front PORT SERVE_DIR OUT --peer NAME --gate USER@HOST|local --tokens N [--key KEY]
+        [--prompts 4] [--prompt-ids 24] [--vocab 128000] [--scan-class w63k4] [--height 10]
         [--minutes M] [--bucket-ms MS] [--warmup N]
     python attester_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--rows EXE] [--draw K]
         [--chain-cmd CMD] [CR_K=V ...]
@@ -194,6 +194,9 @@ NO_GATE = ("--gate is unset: USER@HOST, the gate's, which `verity run` passes fr
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
            "binding network-attester.network-attester.peer")
+#: the front's refusal without ``--tokens``
+NO_TOKENS = ("--tokens is unset: the most output tokens a request of the group asks for, which `verity run` passes from "
+             "the application's network-attester setting front_tokens")
 #: a placement's machines, each by the configuration's party on it (`[[party]] name`): the piece is handed hosts
 #: (``--gate``, ``--peer``) and no configuration's machine names, and a host's name is not public
 PROVER_MACHINE, ATTESTER_MACHINE = "the prover's machine", "the network attester's machine"
@@ -232,7 +235,7 @@ LOGS = ("piece.log", "chain.log", "period.log")
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
-PROMPTS, PROMPT_IDS, TOKENS = 4, 24, schemes.get("network-attester").settings["front_tokens"]
+PROMPTS, PROMPT_IDS = 4, 24
 HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
 #: windows closed
@@ -267,9 +270,6 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         return open_session(a, keep, out, sleep=sleep)
     a.requests = a.prompts
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
-    if a.minutes is None:
-        tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
-        a.minutes = SS.A.network_attester_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
@@ -281,8 +281,13 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         a.gate = SS.gate_at(a.gate)
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
+        if a.tokens is None:
+            raise SS.Refused(NO_TOKENS)
         if SS.A.scan_group_windows(a.tokens) != 1:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one execution phase, which the period's rows form refuses")
+        if a.minutes is None:
+            a.minutes = SS.A.network_attester_group_minutes(1, a.tokens, a.height,
+                                                            a.bucket_ms or SS.A.SCAN["--bucket-ms"]) + SS.MARGIN
         if a.warmup < 0:
             raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
         ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
@@ -1219,7 +1224,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--peer", help="the served node's name in the gate's peers file")
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
-    f.add_argument("--tokens", type=int, default=TOKENS)
+    f.add_argument("--tokens", type=int, help="the most output tokens a request of the group asks for: the "
+                   "application's network-attester setting front_tokens, which `verity run` passes")
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,
                    help=f"the gate's scan class, the schedule its network attester runs at (default {V3C_SCAN_CLASS})")

@@ -397,10 +397,13 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
                                                                                          [], {}, [])
 
 
+#: the network attester's front under `BINDINGS`, before its ``--tokens``
+FRONT = '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate user@gate-1 --peer peer-1'
+#: the network attester's setting front_tokens at its default, which the front is handed
+FRONT_TOKENS = T.schemes.get("network-attester").settings["front_tokens"]
 #: the network attester's piece without Pearl+'s tie: split around V3c at network attestation's scan class
 SPLIT = {"SERVE_ARGS": T.ID_FORM,
-         "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
-                            "--gate user@gate-1 --peer peer-1",
+         "CERTIFIER_FRONT": f"{FRONT} --tokens {FRONT_TOKENS}",
          "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
          "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
          "V3C_CLASS": "8,32,4,4,16", "CLASSES": "4,32,4 8,32,4,4,16"}
@@ -427,7 +430,7 @@ def test_under_pearl_pluss_tie_the_attesters_piece_is_whole_sets_no_class_and_fi
     assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
     assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == {
         "SERVE_ARGS": T.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
-        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
+        "CERTIFIER_FRONT": FRONT + " --tokens 2"}
 
 
 def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class():
@@ -436,6 +439,24 @@ def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class(
     assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS) == SPLIT
     got = T.variables(cfg, BINDINGS)
     assert {k: got[k] for k in SPLIT} == SPLIT and "CERTIFIER_CMD" not in got
+
+
+def test_an_applications_front_tokens_is_what_its_front_is_handed_and_moves_its_hash(tmp_path):
+    """onsite_network with the network attester's front_tokens at 2, not its default: the front the launcher writes is
+    handed 2 (`attester_piece`'s tests hold that its group's requests ask for what it is handed), the application's hash
+    is not the default's, and a value the setting's check refuses is refused by its name."""
+    raw = K.parse((ROOT / "applications" / "onsite_network.toml").read_text())
+    nid = REG.components["network-attester"].id
+    raw["params"][nid]["front_tokens"] = 2
+    (tmp_path / "two.toml").write_text(K.render(raw))
+    cfg = R.load(tmp_path / "two.toml", REG)
+    assert cfg["params"][nid]["front_tokens"] == 2 != FRONT_TOKENS
+    assert REG.parties["network-attester"][NC.WORKERS].variables(cfg, BINDINGS)["CERTIFIER_FRONT"] == f"{FRONT} --tokens 2"
+    assert K.digest(cfg) != K.digest(R.load(ROOT / "applications" / "onsite_network.toml", REG))
+    raw["params"][nid]["front_tokens"] = 0
+    (tmp_path / "zero.toml").write_text(K.render(raw))
+    with pytest.raises(K.Refused, match="front_tokens a positive integer"):
+        R.load(tmp_path / "zero.toml", REG)
 
 
 def test_two_pieces_setting_different_classes_are_refused_by_name(tmp_path, monkeypatch):

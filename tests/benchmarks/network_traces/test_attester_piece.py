@@ -1071,6 +1071,8 @@ def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
 PEER = "some-served-node"
 #: the front's --gate as the site names the gate, which `challenger_host` resolves
 GATE = ("--gate", CP.SS.GATE)
+#: the front's --tokens as `verity run` hands it from an application whose front_tokens is 2, not the default
+TOKENS = ("--tokens", "2")
 
 
 @pytest.fixture(autouse=True)
@@ -1090,10 +1092,10 @@ def _stub_gate(tmp_path: Path, monkeypatch) -> None:
 def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
     _stub_gate(tmp_path, monkeypatch)
     serve, out = tmp_path / "serve", tmp_path / "out" / "certifier-front"
-    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key")]) == 0
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, *TOKENS, "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer {PEER} --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --scan-class w63k4 --window-per-group")
+        "--tokens 2 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
@@ -1108,9 +1110,9 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"),
-                    *GATE, "--peer", PEER, "--key",
+                    *GATE, "--peer", PEER, *TOKENS, "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
-    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
+    assert (tmp_path / "request").read_text().endswith("--tokens 2 --scan-class w63 --window-per-group")
 
 
 def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variables_name_before_the_gate(tmp_path,
@@ -1135,6 +1137,16 @@ def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_g
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), *flags]) == 2
     why = json.loads((out / "session.json").read_text())["refused"]
     assert why == CP.NO_PEER and "network-attester.network-attester.peer" in why
+    assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
+
+
+def test_the_front_without_its_tokens_is_refused_by_the_settings_name_before_the_gate(tmp_path, monkeypatch):
+    """The front holds no count of output tokens of its own: without ``--tokens`` its group is refused, naming the
+    setting `verity run` passes it from, and the gate is never asked."""
+    _stub_gate(tmp_path, monkeypatch)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key")]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == CP.NO_TOKENS and "front_tokens" in CP.NO_TOKENS
     assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 
@@ -1171,10 +1183,10 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     monkeypatch.setattr(CP.SS.A, "certifier_run", certifier_run)
     monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--gate", "local", "--bucket-ms",
+    assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, "--gate", "local", *TOKENS, "--bucket-ms",
                     "4000"]) == 0
-    minutes = CP.SS.A.network_attester_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
-    assert minutes > CP.SS.A.network_attester_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
+    minutes = CP.SS.A.network_attester_group_minutes(1, 2, CP.HEIGHT, 4000) + CP.SS.MARGIN
+    assert minutes > CP.SS.A.network_attester_group_minutes(1, 2, CP.HEIGHT) + CP.SS.MARGIN
     (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
     assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes")} == {
         "bucket_ms": 4000, "scan": True, "prompts": {"count": CP.PROMPTS, "ids": CP.PROMPTS * CP.PROMPT_IDS},
@@ -1186,7 +1198,7 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
     doc = json.loads((out / "session.json").read_text())
     assert doc["request"] == (f"warden-rehearse --peer {PEER} --port 18190 --minutes {minutes} --requests 4 "
-                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 2 --scan-class w63k4 "
                               "--window-per-group")
     assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
 
@@ -1205,7 +1217,7 @@ def test_a_tick_the_gate_refuses_refuses_the_front_before_the_gate_is_asked(tmp_
         monkeypatch.setattr(CP.SS, "words", lambda a: [w for w in words(a)
                                                        if w not in ("--scan", "--prompts", "--window-per-group")])
     serve, out = tmp_path / "serve", tmp_path / "out"
-    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key"),
+    assert CP.main(["front", "18190", str(serve), str(out), *GATE, "--peer", PEER, *TOKENS, "--key", str(tmp_path / "key"),
                     "--bucket-ms", tick]) == 2
     assert json.loads((out / "session.json").read_text())["refused"] == f"the gate refuses it: {why}"
     assert not (tmp_path / "request").exists()
@@ -1276,18 +1288,18 @@ def endpoint(tmp_path, monkeypatch):
 
 def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
-    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, "--key", str(tmp_path / "key"),
+    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, *TOKENS, "--key", str(tmp_path / "key"),
                     "--warmup", "2"]) == 0
     assert [(s["path"], s["gate asked"]) for s in endpoint.seen] == [("/v1/completions", False)] * 2
     assert not any(h.startswith("x-verity-release") for s in endpoint.seen for h in s["headers"])
     bodies = [s["body"] for s in endpoint.seen]
-    assert [(len(b["prompt"]), b["max_tokens"], b["temperature"]) for b in bodies] == [(CP.PROMPT_IDS, CP.TOKENS, 0.0)] * 2
+    assert [(len(b["prompt"]), b["max_tokens"], b["temperature"]) for b in bodies] == [(CP.PROMPT_IDS, 2, 0.0)] * 2
     assert CP.PROMPT_IDS <= 32 and all(0 <= t < 128000 for b in bodies for t in b["prompt"])
     users = [b["user"] for b in bodies]
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer {PEER} --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --scan-class w63k4 --window-per-group")
+        "--tokens 2 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json",
@@ -1297,11 +1309,11 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
     port, serve, out = endpoint.server_address[1], endpoint.serve, tmp_path / "out"
     endpoint.status = 503
-    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, "--warmup", "1"]) == 2
+    assert CP.main(["front", str(port), str(serve), str(out), *GATE, "--peer", PEER, *TOKENS, "--warmup", "1"]) == 2
     assert json.loads((out / "session.json").read_text())["refused"].startswith("--warmup: request 0: HTTPError")
     assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
     endpoint.status, endpoint.record, clock = 200, False, _Clock()
-    a = argparse.Namespace(port=port, warmup=1, prompt_ids=CP.PROMPT_IDS, vocab=128000, tokens=CP.TOKENS)
+    a = argparse.Namespace(port=port, warmup=1, prompt_ids=CP.PROMPT_IDS, vocab=128000, tokens=2)
     with pytest.raises(CP.SS.Refused, match="recorded no closed window of .'warmup-"):
         CP.warmup(a, serve, clock=clock, sleep=clock.sleep)
     assert clock.t > CP.WARMUP_CLOSE_S and not (tmp_path / "request").exists()

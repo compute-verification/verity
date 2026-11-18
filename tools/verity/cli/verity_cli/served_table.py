@@ -665,10 +665,11 @@ def _attester_piece(cfg, params, bound, pinned):
     window's steps, so each is in one window."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
-    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
-    if "pearl-plus" in cfg["protocols"]:
-        tokens = min(params["front_tokens"], cfg["workload"]["params"]["window-steps"])
-        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": f"{front} --tokens {tokens}",
+    tie = "pearl-plus" in cfg["protocols"]
+    tokens = min(params["front_tokens"], cfg["workload"]["params"]["window-steps"]) if tie else params["front_tokens"]
+    front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate} --tokens {tokens}'
+    if tie:
+        return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
                 "CERTIFIER_CMD": f'{py} {ATTESTER_PIECE} piece "$@"'}
     return {"SERVE_ARGS": ID_FORM, "CERTIFIER_FRONT": front,
             "CERTIFIER_CHAIN_CMD": f'{py} {ATTESTER_PIECE} chain "$@"',
