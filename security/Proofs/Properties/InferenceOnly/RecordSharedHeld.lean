@@ -710,6 +710,41 @@ theorem run_eq_of_gate {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P p
   · omega
   · omega
 
+theorem take_count_le (l : List Part) (a : Nat) : ((l.take a).map Part.count).sum ≤ (l.map Part.count).sum := by
+  conv_rhs => rw [← List.take_append_drop a l]
+  rw [List.map_append, List.sum_append]
+  omega
+
+theorem take_count_mono (l : List Part) {a b : Nat} (h : a ≤ b) :
+    ((l.take a).map Part.count).sum ≤ ((l.take b).map Part.count).sum := by
+  have e : l.take a = (l.take b).take a := by rw [List.take_take, Nat.min_eq_left h]
+  rw [e]
+  exact take_count_le _ a
+
+/-- **A reference of a sequence of parts lies in one part.** -/
+theorem part_at {s : Flock.Program.Seq} (hs : s = Flock.Program.Seq.ofParts s.parts) {i i' k : Nat}
+    (hi : i < s.parts.size) (hi' : i' < s.parts.size) (h1 : s.starts[i]! ≤ k) (h2 : k < s.starts[i]! + s.parts[i]!.count)
+    (h1' : s.starts[i']! ≤ k) (h2' : k < s.starts[i']! + s.parts[i']!.count) : i = i' := by
+  obtain ⟨-, -, hst, -⟩ := Properties.SecurityProofs.Walk.ofParts_spec s.parts
+  rw [← hs] at hst
+  rcases Nat.lt_trichotomy i i' with h | h | h
+  · have hm := take_count_mono s.parts.toList (show i + 1 ≤ i' by omega)
+    rw [Properties.SecurityProofs.Walk.sum_take_succ_map s.parts hi, ← hst i hi, ← hst i' hi'] at hm
+    omega
+  · exact h
+  · have hm := take_count_mono s.parts.toList (show i' + 1 ≤ i by omega)
+    rw [Properties.SecurityProofs.Walk.sum_take_succ_map s.parts hi', ← hst i hi, ← hst i' hi'] at hm
+    omega
+
+/-- **A part's references are references of the sequence.** -/
+theorem start_lt_count {s : Flock.Program.Seq} (hs : s = Flock.Program.Seq.ofParts s.parts) {i o : Nat}
+    (hi : i < s.parts.size) (ho : o < s.parts[i]!.count) : s.starts[i]! + o < s.count := by
+  obtain ⟨-, -, hst, hcnt⟩ := Properties.SecurityProofs.Walk.ofParts_spec s.parts
+  rw [← hs] at hst hcnt
+  have hm := take_count_le s.parts.toList (i + 1)
+  rw [Properties.SecurityProofs.Walk.sum_take_succ_map s.parts hi, ← hst i hi, ← hcnt] at hm
+  omega
+
 /-- **A shared run lies in its node's leaves.** -/
 def SharedInNode : Prop :=
   ∀ (P : Prog), Properties.Record.SecurityProofs.ReadProg P → OwnRuns P → ∀ R, rowRuns P = some R →
@@ -900,5 +935,59 @@ theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
     rw [he]
     exact heldAt_read hf ht
   · exact ⟨"", fun r l lo hi hrl => absurd ⟨r, l, lo, hi, hrl⟩ hex⟩
+
+/-- **`SharedInNode` holds**: a shared run is the run of a part, and the part's last reference is a leaf of the run's
+node (`arg_leaf`), in that one part (`part_at`). -/
+theorem sharedInNode_holds : SharedInNode := by
+  intro P hP hO R hR x hx
+  obtain ⟨hov, hlayb⟩ := Properties.Record.SecurityProofs.read_walk hP
+  have hP' := hP
+  obtain ⟨⟨bytes, hdec⟩, -⟩ := hP'
+  obtain ⟨hroot, -, -, -, -, harg⟩ := Properties.SecurityProofs.Resolve.decoded_walk bytes P hdec hov hlayb
+  obtain ⟨-, runs, hrr, hro⟩ := rowRuns_own hO
+  rw [hR] at hrr
+  cases hrr
+  obtain ⟨hx0, q', hq', b', hpx⟩ := runsOf_shared hro hx
+  obtain ⟨xn, xb, xc⟩ := x
+  dsimp only at hx0 ⊢
+  obtain ⟨nd, hnd, hqn⟩ := List.mem_flatMap.1 hq'
+  unfold partsIn at hqn
+  obtain ⟨a, ha, hqa⟩ := List.mem_flatMap.1 hqn
+  unfold unitsOf at hnd
+  obtain ⟨hndm, hu⟩ := List.mem_filter.1 hnd
+  obtain ⟨k, hk, hke⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hndm)
+  have hke' : (P.defs[P.root]!).body.nodes[k]! = nd := by rw [getElem!_pos _ k hk]; exact hke
+  subst hke'
+  obtain ⟨i, hi, hie⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 ha)
+  have hie' : ((P.defs[P.root]!).body.nodes[k]!).args[i]! = a := by rw [getElem!_pos _ i hi]; exact hie
+  subst hie'
+  obtain ⟨qi, hqi, hqe⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hqa)
+  have hqe' : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]! = q' := by
+    rw [getElem!_pos _ qi hqi]; exact hqe
+  subst hqe'
+  have hu' : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by simpa using hu
+  have hs := harg P.root hroot.1 k hk i hi
+  have hrx : runOf P ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!) = some (xn, xb, xc) := by
+    simp [runOf, hpx]
+  have hcq : xc ≤ ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts[qi]!).count := by
+    obtain ⟨hshape, -⟩ := runOf_some hrx
+    rcases hshape with hqe | ⟨inner, cnt, hqe, -, -, hc⟩
+    · rw [hqe]
+      simp [Part.count]
+    · rw [hqe]
+      simp only [Part.count] at hc ⊢
+      omega
+  have hx' := start_lt_count hs hqi (o := xc - 1) (by omega)
+  obtain ⟨n, j, ⟨q'', base, count, hq'', hrun, h1, h2, hjj⟩, -, hj, -, -⟩ :=
+    Properties.SecurityProofs.Resolve.arg_leaf bytes P hdec hov hlayb hO hk hu' hi hx'
+  obtain rfl := part_at hs hq'' hqi h1 h2 (by omega) (by omega)
+  have hxe := hrx.symm.trans hrun
+  simp only [Option.some.injEq, Prod.mk.injEq] at hxe
+  obtain ⟨rfl, rfl, rfl⟩ := hxe
+  rw [Nat.add_sub_cancel_left, Nat.mod_eq_of_lt (by omega)] at hjj
+  omega
+
+/-- **`SharedHeld`, where every record `read` accepts is of a root with no edge and no strided part's rows.** -/
+theorem sharedHeld_holds (hNE : EdgeFreeReads) : SharedHeld := sharedHeld_of hNE (leafPart_of sharedInNode_holds)
 
 end InferenceOnlyVerifier.Record.SecurityProofs
