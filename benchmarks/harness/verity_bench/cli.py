@@ -56,7 +56,14 @@ def _make_plan(args: Any) -> jobs.Plan:
     `--again` names launched again."""
 
     root = jobs.repository_root()
-    if steady_spec.is_steady(args.spec):
+    if getattr(args, "here", False):
+        if steady_spec.is_steady(args.spec):
+            raise ValueError("--here runs a vLLM spec's point; a steady-state spec's points run with --direct NODE")
+        if args.direct is not None:
+            raise ValueError("--here runs the points on this machine, --direct NODE on that node's slots: give one")
+        # A machine not ours holds no catalog of our runs, and a shipped tree no git that names its commit's tree.
+        plan = jobs.make_plan(args.spec, root=root, lookup=lambda _identity, _commit: None)
+    elif steady_spec.is_steady(args.spec):
         plan = steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
     else:
         plan = jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
@@ -97,6 +104,8 @@ def _run(args: Any) -> int:
     if args.card is not None and args.cores is None:
         raise ValueError(f"--card {args.card} needs --cores, the booked slot's cores: the first free slot may be on "
                          "another NUMA node than the card")
+    if args.here:
+        return jobs.dispatch(plan, args.spec, here=True)
     return jobs.dispatch(plan, args.spec, direct=args.direct,
                          command=lambda *point: jobs.direct_command(*point, card=args.card, cores=args.cores,
                                                                     end=args.end))
@@ -370,6 +379,10 @@ def _parser() -> argparse.ArgumentParser:
     _again_argument(run)
     run.add_argument("--direct", metavar="NODE", default=None,
                      help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
+    run.add_argument("--here", action="store_true",
+                     help="run the spec's one point to run in this process's research run, on the machine it was started "
+                          "on: the cards its environment gives it (CUDA_VISIBLE_DEVICES) and the CPUs it may use, with no "
+                          "lease, slot or node of ours; it reads no catalog, so a passed point runs again")
     run.add_argument("--card", type=int, default=None, metavar="INDEX",
                      help="a booked card, which a direct point's lease is asked of alone (needs --cores)")
     run.add_argument("--cores", default=None, metavar="CPUS",
