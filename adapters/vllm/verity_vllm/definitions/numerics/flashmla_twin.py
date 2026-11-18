@@ -21,7 +21,7 @@ from verity.circuits.kernels import tc as CK
 from verity.circuits.ops import mufu as MU
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
-from verity_vllm.config import TARGET_NUM_SMS
+from verity_vllm.config import target_num_sms
 
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics.kernel_registry import Declined, register
@@ -43,7 +43,7 @@ LOG2F_POLY = (0x3DC6B27F, 0xBE2C7F30, 0x3E2FCF2A, 0xBE374E43, 0x3E520BF4, 0xBE76
 #: FlashMLA's `LOG_2_E` (api/common.h:31)
 LOG_2_E = 1.44269504
 #: the sm_90 decode's tile (`TOPK_BLOCK_SIZE`), the scheduler's fixed overhead per request, and the H200's SMs
-BLOCK, FIXED_OVERHEAD, H200_SMS = 64, 5, TARGET_NUM_SMS["h200"]
+BLOCK, FIXED_OVERHEAD, H200_SMS = 64, 5, target_num_sms("h200")
 
 
 def scale_log2(scale: float) -> int:
