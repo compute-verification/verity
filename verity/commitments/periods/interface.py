@@ -519,7 +519,8 @@ class Wire(_Pattern):
     """A wiring pattern (`_Pattern`): each reader row it covers is read from the ``out`` row of unit
     ``base + sum(d[k] * step[k])`` of template ``writer``, from u16 word ``offset + sum(d[k] * ostep[k])`` on (no
     ``ostep``: ``offset`` at every index), each index counting its own template's units (`Circuits.Wire`). ``out`` is
-    ``"out"``, the unit's output fields in order, or one field ``o<j>``. With no cut it reads the port's one row."""
+    ``"out"``, the unit's output fields in order as `layout` commits them (each ``ceil(bits/16)`` words), or one field
+    ``o<j>``. With no cut it reads the port's one row."""
     writer: str
     out: str
     offset: int = 0
@@ -1051,12 +1052,9 @@ def check_ranks(templates: Mapping[str, tuple[RowLayout, int]], ranks: Ranks, wi
 
 
 def _out_rows(lay: RowLayout) -> dict[str, int]:
-    """A writer's output rows in u16 words, as a wire reads them: each field ``o<j>``, and ``out``, the fields in order, a
-    leaf of ``w`` bits ``ceil(w/16)`` words (the link row's; a field of 8-bit leaves is its leaves' words, not its packed
-    bits')."""
-    outs = dict(lay.outs)
-    ws = lay.widths[len(lay.rows):]
-    return outs | {"out": sum(n * 16 // w * -(-w // 16) if w < 16 else n for (_p, n), w in zip(lay.outs, ws))}
+    """A writer's output rows in u16 words as `layout` commits them: each field ``o<j>``, and ``out``, the fields in
+    order."""
+    return dict(lay.outs) | {"out": sum(n for _p, n in lay.outs)}
 
 
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
