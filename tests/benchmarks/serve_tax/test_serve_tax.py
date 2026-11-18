@@ -158,6 +158,8 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     for inside in (out / "private", tmp_path / "run" / "private"):
         with pytest.raises(SystemExit, match="which leaves the node"):
             S.run(NS(out=str(out), private=str(inside), arm="two-stage"))
+        with pytest.raises(SystemExit, match="^--kv-dir .* which leaves the node"):
+            S.run(NS(out=str(out), private=str(tmp_path / "kept"), kv_dir=str(inside), arm="two-stage"))
     assert not seen and not (tmp_path / "run").exists()
     kept = tmp_path / "kept"
     assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0

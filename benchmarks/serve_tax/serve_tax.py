@@ -1828,6 +1828,8 @@ def run(a: argparse.Namespace) -> int:
     client, whose records and plan hold request values, refused before anything starts; under vLLM's client, where the
     arm keeps something (`keeps_private`), a cost's run, which nothing reads those files of afterwards, a fresh
     directory outside the run's, removed when the arm stops, unless the arm records (`records`), which is refused. Under ``--profile`` the profile's checks come first (`profile_run`)."""
+    if getattr(a, "kv_dir", None):
+        outside(Path(a.kv_dir), Path(a.out), "--kv-dir")
     if getattr(a, "profile", None):
         profile_run(a)
     if ARMS[a.arm].attester:
@@ -1847,13 +1849,15 @@ def run(a: argparse.Namespace) -> int:
         return serve(a, outside(Path(d).resolve(), Path(a.out)))
 
 
-def outside(private: Path, out: Path) -> Path:
-    """``private``, refused where it is inside ``out`` or the run's directory, which leave the node."""
+def outside(private: Path, out: Path, flag: str = "--private") -> Path:
+    """``private``, the directory ``flag`` names, refused where it is inside ``out`` or the run's directory, which leave
+    the node."""
     held = SHARED.RESEARCH_RUN_DIR
+    private = private.resolve()
     for public in (out.resolve(), *([Path(held).resolve()] if held else [])):
         if private.is_relative_to(public):
-            raise SystemExit(f"the private directory {private} is inside {public}, which leaves the node: --private "
-                             "DIR, outside every run's directory")
+            raise SystemExit(f"{flag} {private} is inside {public}, which leaves the node: {flag} DIR, outside every "
+                             "run's directory")
     return private
 
 
