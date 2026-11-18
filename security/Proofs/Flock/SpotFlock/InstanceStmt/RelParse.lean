@@ -109,7 +109,7 @@ theorem parse_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
   rfl
 
 /-- **The deployed parser reads a message the verifier's parser reads** (stated at variables, so the message is not unfolded). -/
-theorem parse_of {m : _root_.Claims.Msg} {p : _root_.Flock.Readable.Parsed}
+theorem parse_of {m : _root_.Hash.Msg} {p : _root_.Flock.Readable.Parsed}
     (h : _root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) m = some p) :
     (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse m =
       some (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) := by

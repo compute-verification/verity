@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import shutil
 import weakref
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -175,3 +176,19 @@ def test_a_plan_drops_tables_once_read_and_past_the_lag_after_the_producer_waits
     assert alive[3]() is not None
     plan.release(0)
     assert alive[3]() is None and producer.waited == [reads[0], reads[3]]
+
+
+def test_a_graphs_key_names_the_sms_its_leaf_grid_was_sized_to() -> None:
+    """``Plan.graph``'s key, as its own code builds it with no device: the plan's SM count is its ``sms``, by name, and the
+    strides the graph read its salts at come after it."""
+    class Held(dict):
+        def __contains__(self, key):
+            return True
+
+        def __getitem__(self, key):
+            return key
+    plan = SimpleNamespace(temp_bytes=1 << 20, leaf_minb=0, sms=16, _graphs=Held())
+    salts = SimpleNamespace(stride=lambda d: (14400, 192)[d])
+    key = G.Plan.graph(plan, SimpleNamespace(k=2, slots=75), None, (), salts)
+    assert key == (2, 75, 1 << 20, 0, 16, 14400, 192)
+    assert key.sms == 16 and (key.row_stride, key.slot_stride) == (14400, 192) and key[-1] != key.sms

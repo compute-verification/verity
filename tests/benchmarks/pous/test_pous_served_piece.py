@@ -37,6 +37,8 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting import scheme as resource_scheme
+from verity.protocols.resource_accounting.memory.pous import scheme as pous_scheme
 from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
@@ -318,6 +320,26 @@ def test_with_no_lean_an_honest_store_is_undecided_and_the_python_is_named(serve
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
+
+
+def test_a_records_wipe_row_says_its_accept_certifies_nothing_when_uncertified():
+    """The served wipe, `WipeProtocol.uncounted`, accepts with ``foreign_bits`` = ``memory_bits`` and ε 0: its quantity
+    says in words that it certified nothing; a counted wipe's says what its judge computed. The verdict, the value and
+    the error are the answer's either way, and no δ holds, each for the scheme's refusal of its bound."""
+    m = 1 << 28
+    public = {"certified": False, "egress_mib": 0, "eps": "0", "foreign_bits": m, "k": 2152, "memory_bits": m, "r": 59}
+    answer = {"protocol": "verity/wipe/v0", "verdict": "accept", "reason": None, "commitment": "00", "public": public,
+              "profile": {"k": 2152}}
+    row = BR.subprotocol("wipe", {"answer": answer}, server=NODE, runs=[])
+    refusal = str(resource_scheme.unbounded(pous_scheme.WIPE))
+    assert row["answer"]["verdict"] == "accept" and row["error"] == "0" and row["unbounded"]["why"] == refusal
+    assert row["at"] and all(a == {"holds": False, "why": refusal} for a in row["at"].values())
+    assert row["quantity"] == {"symbol": "foreign_bits", "value": m, "unit": "bits", "k": 2152, "r": 59, "M": m,
+                               "certified": False, "certifies": pous_scheme.WIPE_UNCERTIFIED}
+    assert pous_scheme.WIPE_UNCERTIFIED.startswith("not certified: survivors bounded by nothing")
+    counted = BR.subprotocol("wipe", {"answer": answer | {"public": public | {"certified": True, "foreign_bits": 7,
+                                                                             "eps": "1/8"}}}, server=NODE, runs=[])
+    assert counted["quantity"]["certifies"] == pous_scheme.WIPE_CERTIFIES and counted["error"] == "1/8"
 
 
 def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served, tmp_path, monkeypatch):

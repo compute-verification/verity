@@ -2032,9 +2032,9 @@ def test_window_commit_without_the_attesters_reader_or_state_file_is_refused_by_
 
 
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
-    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-key``, window-commit's
+    """`h1_tie`: with ``--window-registration`` W, H1's docket of the window, and ``--h1-prover``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    without the prover's directory, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
     window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
@@ -2045,13 +2045,13 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
 
     def tie(cls=cls, **kw):
-        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_key": "key", **kw}
+        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_prover": "prover", **kw}
         return PP.h1_tie(argparse.Namespace(**args), cls)
     assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
     w, meta, tables = tie()
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
-    with pytest.raises(ValueError, match="give --h1-key"):
-        tie(h1_key=None)
+    with pytest.raises(ValueError, match="give --h1-prover"):
+        tie(h1_prover=None)
     verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
     assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
@@ -2089,7 +2089,7 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
     the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
-    ``--h1-key``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
+    ``--h1-prover``, for a W whose entry isn't Pearl+'s declared option (H1's, another Pearl-C kernel's, the FP4 kernel's) or
     whose scheme isn't its entry's, and where the rounds retained aren't the class's outputs."""
     from verity_vllm.program.predict.window_circuit import PearlTables
 
@@ -2106,7 +2106,7 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     record("w.json", "pouw:pearl-c-h100-v1-h3", "pearl-c-h100-v1-h3")
 
     def tie(cls=cls, **kw):
-        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_prover": None, **kw}
         return PP.pearl_tie(argparse.Namespace(**args), cls)
     assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
     assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
@@ -2117,8 +2117,8 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
     with pytest.raises(ValueError, match="give --window-registration W"):
         tie(window_registration=None)
-    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
-        tie(h1_key="key")
+    with pytest.raises(ValueError, match="--h1-prover is H1's prover directory"):
+        tie(h1_prover="prover")
     (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
     with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
         tie(window_registration=str(tmp_path / "h1.json"))
