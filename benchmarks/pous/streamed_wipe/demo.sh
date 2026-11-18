@@ -202,7 +202,7 @@ EOF
   uv run --no-sync python - "$S/attach.json" "$TOOLS" "$STORE" "${SEGMENTS:-0}" "$RESERVE" "${THREADS:-0}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:--1}" "${READS:-0}" "${CTRL_DEV:-}" \
     "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" "$TRUSTED" <<'EOF'
-import json, os, shlex, sys
+import json, shlex, sys
 from fractions import Fraction
 (path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, reads, dev, src, mbps,
  specs, disk, dram, trusted) = sys.argv[1:]
@@ -221,10 +221,8 @@ settings = {"store": store, "segments": int(segments), "reserve_bytes": int(Frac
             "dram": json.loads(dram) or {}, "run_keys": not ch}
 if ch:
     settings |= {"host": ch, "address": addr, "command": shlex.split(cmd)}
-open(path, "w").write(json.dumps({"settings": settings, "pins": json.loads(os.environ.get("VERITY_PINS") or "[]"),
-                                  "configuration": os.environ.get("VERITY_CONFIGURATION") or None,
-                                  "trusted": trusted or None, "judge": json.loads(tools).get("wipe-protocol")},
-                                 indent=1, sort_keys=True))
+open(path, "w").write(json.dumps({"settings": settings, "trusted": trusted or None,
+                                  "judge": json.loads(tools).get("wipe-protocol")}, indent=1, sort_keys=True))
 EOF
   export DEMO_ATTACH=$S/attach.json DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_CARD=$CARD DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
@@ -259,8 +257,7 @@ from verity_vllm.messages import Exchange
 attach, out, private, node, expect = sys.argv[1:]
 a = json.loads(Path(attach).read_text())
 got = Exchange().attach(schemes.get("wipe"), a["settings"], private=private, process=H.ENGINE, side_of=Side.of,
-                        pins=a["pins"], configuration=a["configuration"], trusted=a["trusted"], node=node,
-                        judge=a["judge"])
+                        trusted=a["trusted"], node=node, judge=a["judge"])
 shutil.copy(Path(private) / "wipe" / "period.json", Path(out) / "period.json")
 (Path(out) / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
 print(json.dumps(got.summary(), indent=1, sort_keys=True), flush=True)

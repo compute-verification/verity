@@ -4,6 +4,7 @@ before, and its reader reads what it read before."""
 from __future__ import annotations
 
 import json
+import re
 from types import SimpleNamespace as NS
 
 import pytest
@@ -230,10 +231,12 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     assert M.current() is not ex
 
 
-def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path):
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once(tmp_path, monkeypatch):
     """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
     the scheme's settings under its name for the build's `Declared` and what ``attach`` returns for the run's record; a
     setting it does not have is refused."""
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
     seen: list = []
     eager = H.RequireProperty("eager", True, "its kernels")
     world = H.RequireProperty("world", 1, "its passes")
@@ -247,7 +250,7 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
     ex = M.Exchange()
     assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
     assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "gate": None, "private": None,
-                     "submit": print}]
+                     "submit": print, "pins": None, "configuration": None}]
     assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
     assert ex.reports == {"pearl": "front"}
     assert M.Exchange().key != ex.key
@@ -255,6 +258,97 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
         ex.attach(pearl, {"salt": 1})
     ex.attach(pearl, private=tmp_path)
     assert seen[-1]["private"] == tmp_path / "pearl" and (tmp_path / "pearl").is_dir()
+
+
+PIN = {"party": "memory-challenger", "protocol": "wipe", "scheme": "lms-sha512/n64-w1-h20/v0", "key-sha512": "ab" * 64}
+
+
+def _seeing(name="probe"):
+    seen: list = []
+    return seen, NS(name=name, settings={}, check_settings=lambda s: None, attach=lambda ex, ctx: seen.append(ctx),
+                    requests=lambda ctx: ())
+
+
+@pytest.fixture
+def unset(monkeypatch):
+    for name in ("VERITY_PINS", "VERITY_CONFIGURATION"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+def test_handed_pins_reach_the_scheme_exactly_and_read_only(unset):
+    """The launcher's ``pins`` reach ``ctx["pins"]`` entry for entry, as mappings the scheme can't change; ``()`` is
+    an application that pins nothing, distinct from None, none handed."""
+    seen, probe = _seeing()
+    M.Exchange().attach(probe, pins=[PIN], configuration="c" * 64)
+    got = seen[0]["pins"]
+    assert got == (PIN,) and seen[0]["configuration"] == "c" * 64
+    with pytest.raises(TypeError):
+        got[0]["key-sha512"] = "cd" * 64
+    M.Exchange().attach(probe, pins=[])
+    M.Exchange().attach(probe)
+    assert seen[1]["pins"] == () and seen[2]["pins"] is None and seen[2]["configuration"] is None
+
+
+def test_the_setting_alone_reaches_the_attach(unset):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    M.Exchange().attach(probe)
+    assert seen[0]["pins"] == (PIN,) and seen[0]["configuration"] == "c" * 64
+    M.Exchange().attach(probe, pins=[dict(PIN)], configuration="c" * 64)
+    assert seen[1]["pins"] == (PIN,)
+
+
+@pytest.mark.parametrize("key, name, given", [
+    ("pins", "VERITY_PINS", [PIN | {"key-sha512": "cd" * 64}]), ("configuration", "VERITY_CONFIGURATION", "d" * 64)])
+def test_a_keyword_and_a_setting_that_differ_are_refused_by_name(unset, key, name, given):
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    unset.setenv("VERITY_CONFIGURATION", "c" * 64)
+    seen, probe = _seeing()
+    with pytest.raises(ValueError, match=rf"probe: the launcher's {key} differ from {name}"):
+        M.Exchange().attach(probe, **{key: given})
+    assert seen == []
+
+
+def test_an_engine_attach_after_the_weights_are_registered_is_refused():
+    """An engine's attach after `RegisteredValues` is refused by name; one that names no engine process (admission on
+    the loaded engine's exchange) still attaches."""
+    seen, probe = _seeing()
+    ex = M.Exchange()
+    ex.attach(probe, process=H.ENGINE)
+    ex.emit(H.RegisteredValues((("w", "W"),), operands={"w": 0}))
+    with pytest.raises(RuntimeError, match="probe attached after the model's weights were registered: an attach in "
+                                           "the engine runs before the load"):
+        ex.attach(probe, process=H.ENGINE)
+    ex.attach(probe)
+    assert len(seen) == 2 and M.Exchange().registered is False
+
+
+def test_the_wipe_attaches_with_a_pin_and_refuses_by_name_without_one(unset, tmp_path):
+    """The wipe's attach through the exchange, on a stand-in idle card: the setting's pin gets it past its refusals
+    to its session, with the pin in its period's deployment; with none it refuses by name before any session."""
+    from verity.protocols.compose import schemes as declarations
+    from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_served
+
+    class Started(Exception):
+        pass
+
+    def session(period, node, private, side_of):
+        raise Started(json.loads((period / "period.json").read_text())["deployment"])
+
+    unset.setattr(wipe_served, "card_of", lambda ordinal: "GPU-stand-in")
+    unset.setattr(wipe_served, "busy", lambda device, idle_mib: None)
+    unset.setattr(wipe_run, "subprotocol", session)
+    wipe, bound = declarations.get("wipe"), {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "auditor"]}
+    launch = dict(private=tmp_path, process=H.ENGINE, side_of=lambda *a: None, node="node")
+    with pytest.raises(ValueError, match=re.escape("wipe: no pin was handed to it (ctx['pins'], the application's "
+                                                   "[[pin]] entries)")):
+        M.Exchange().attach(wipe, bound, **launch)
+    unset.setenv("VERITY_PINS", json.dumps([PIN]))
+    with pytest.raises(Started) as started:
+        M.Exchange().attach(wipe, bound, **launch)
+    assert started.value.args[0] == {"configuration": None, "pins": [PIN]}
 
 
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
