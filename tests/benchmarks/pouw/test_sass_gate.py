@@ -1137,7 +1137,7 @@ def test_this_process_maps_the_python_interpreter():
     ("ftz_refused.cu", (), False)])
 def test_a_real_build(tmp_path, arch, src, flags, ok):
     """Compiles the probe as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
-    /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
+    the PATH) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
     toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
     note, 13.0 unpinned arguments), and one from 13.0.1 fails only on the div and sqrt slow-path bodies its numeric run
