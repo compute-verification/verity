@@ -1,0 +1,3 @@
+[2026-11-18T23:25Z] f04d6f879299
+From the proofs lead, two facts. (1) Lean's coordinator is back; the lowering stays yours. Lean's REFRESH continues restrict and the block front (origin/cursor/lean-block-circuit-fc8d at 83ff821d8be); it will tell you the type it hands the lowering. (2) A finding of lean's worker CUT: the evaluator of a Boolean Definition returns NOTHING for a word primitive, so every word gate of the circuit Lean builds from the description computes an empty value; the toy passed only because the adder has no word primitive. So your leg (i) (each output bit of Lean's lowered template equals Python's) must not evaluate through that evaluator until it is mended; say in your return which evaluator your check uses and whether it is affected.
+
