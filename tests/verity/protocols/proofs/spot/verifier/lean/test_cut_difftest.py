@@ -170,8 +170,6 @@ FORGED = [
     ("another record's wires", _forged(CHAIN, _other_record), "cut-record"),
     ("a root that is no wired population", {**CHAIN, "wired": _desc(Program(GEMM))}, "cut-input"),
 ]
-#: circuits' refusals of a wired root and Lean's names for them (`Spot.Edges`)
-EDGES = {"cut-offset": {"edge-rows"}, "cut-units": {"edge-rows"}, "cut-fields": {"edge-fields", "edge-width"}}
 REFUSED = [("off a field's first leaf", by_hand(2, [1]), "cut-offset"),
            ("over a unit's two fields", by_hand(4, [0]), "cut-fields"),
            ("across two writer units", by_hand(4, [2]), "cut-units"),
@@ -204,7 +202,7 @@ def test_a_forged_cut_is_refused_by_name(pieces, name, j, code):
 
 @pytest.mark.parametrize("name, made, code", REFUSED, ids=[c[0] for c in REFUSED])
 def test_a_wired_root_the_cut_refuses_is_refused(pieces, name, made, code):
-    """Each wired root circuits' cut refuses by name, Lean refuses by the edges' name for it."""
+    """Each wired root circuits' cut refuses by name, Lean refuses by the same name."""
     wired, rec, templates = made
     try:
         from verity.circuits.population import cut_wires
@@ -215,8 +213,7 @@ def test_a_wired_root_the_cut_refuses_is_refused(pieces, name, made, code):
             cut_wires(wired, rec)
     cut, query = wired_population_program(templates, {**rec, "wires": []})
     j = {"wired": _desc(wired), "cut": _desc(cut), "record": rec, "query": query}
-    status, out = pieces.call("cut_why", j)
-    assert status == "output" and json.loads(out)["refusal"] in EDGES[code], out
+    assert pieces.call("cut_why", j) == ("output", D.canonical({"refusal": code}))
 
 
 def test_lean_accepts_exactly_the_cut(pieces):
