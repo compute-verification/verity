@@ -110,8 +110,8 @@ def test_the_checked_row4_templates_are_pinned(role, k):
 
 #: the deployed depth's row templates, each table check and digest about 20 seconds
 DEPLOYED_ROWS = {
-    "row_a": "fc08f808658abb29a2d5e7eb566409ae39e350a3999a990964765fd4c6593ee8f4f5fdcafad9e8a7347e48592349a66b753bad4b3587d7ab745523b87b0b78c1",
-    "row_b": "463b39057954204873d5c5efc969682ca54bd2f78732913869decdb1973bd1d6f558125a8cd4db48c74c516892c406824ac1cbb140be01c0e7c07e50f6fff297",
+    "row_a": "970658a4e7089b945d90f05698111a23a689509cd3b80415b9b0fcfe4c52f7dd98781888e97a07c00f9396c30a50b4c3166dd8d3c6dfb61596066056e4a3a779",
+    "row_b": "db8da064d0a118288206ca83ba050ed1627d04f5c1a66d69c20c1bff4d8bea00151ffa2b2b7097ee0fffc4160fc1187fb69b88739fda6a5f3a7b5bc3411e0cf3",
 }
 
 
