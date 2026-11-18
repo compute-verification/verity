@@ -34,7 +34,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
   ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`, which is the one place
-  they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run), ``hooks``, ``ports``,
+  they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run),
+  ``hooks``, ``ports`` (each with its `Layout` at a public shape when an adapter's circuit reads it, `Port.layout`),
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
   `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
@@ -150,15 +151,48 @@ class Charge:
 
 
 @dataclass(frozen=True)
+class Layout:
+    """A port's row at one public shape: its ``bits`` and each field's ``(offset, width)`` in bits, least significant bit
+    first, and ``counts``, the public integers the shape derives that place a field's own items (the scan state's ``K0``
+    prompt ids in a first cell and ``K`` in each continuation). A layout is protocol structure, one of the four public
+    kinds: it says where a value's bits sit, never what they are. Refused by name: a field that runs past ``bits`` or
+    overlaps another (a field of width 0 overlaps nothing)."""
+
+    bits: int
+    fields: Mapping[str, tuple[int, int]]
+    counts: Mapping[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if type(self.bits) is not int or self.bits < 1:
+            raise ValueError(f"a layout's bits are a positive integer, not {self.bits!r}")
+        for name, (at, width) in self.fields.items():
+            if type(at) is not int or type(width) is not int or at < 0 or width < 0:
+                raise ValueError(f"field {name}'s offset and width are integers >= 0, not ({at!r}, {width!r})")
+            if at + width > self.bits:
+                raise ValueError(f"field {name} at ({at}, {width}) runs past the layout's {self.bits} bits")
+        laid = sorted((at, at + width, name) for name, (at, width) in self.fields.items() if width)
+        for (_, end, before), (at, _, name) in zip(laid, laid[1:]):
+            if at < end:
+                raise ValueError(f"field {name} at bit {at} overlaps field {before}, which ends at bit {end}")
+        for name, v in self.counts.items():
+            if type(v) is not int:
+                raise ValueError(f"count {name} is an integer, not {v!r}")
+        object.__setattr__(self, "fields", MappingProxyType(dict(self.fields)))
+        object.__setattr__(self, "counts", MappingProxyType(dict(self.counts)))
+
+
+@dataclass(frozen=True)
 class Port:
     """An external port the scheme reads (``input``) or writes (``output``), laid out as the field ``field`` of the
-    public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions. The
-    adapter's lowering reads the layout from here; no guarantee reads it."""
+    public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions.
+    ``layout``, when declared, gives the port's `Layout` at a public shape (named integers, as `Block.cost` reads), which
+    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it."""
 
     name: str
     direction: Literal["input", "output"]
     definition: str
     field: str
+    layout: Callable[[Mapping[str, int]], Layout] | None = None
 
 
 @dataclass(frozen=True)
@@ -332,6 +366,20 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
 SCHEMES: dict[str, Scheme] = {}
 
 
+def layout(scheme: Scheme, port: str, shape: Mapping[str, int]) -> Layout:
+    """``port``'s `Layout` at ``shape``, as ``scheme`` declares it; KeyError naming the scheme's ports, or ValueError when
+    the port declares no layout."""
+    found = {p.name: p for p in scheme.ports}
+    if port not in found:
+        raise KeyError(f"{scheme.name} declares no port {port!r}; its ports: {', '.join(found) or 'none'}")
+    if found[port].layout is None:
+        raise ValueError(f"{scheme.name}'s port {port} declares no layout (`Port.layout`)")
+    got = found[port].layout(dict(shape))
+    if not isinstance(got, Layout):
+        raise ValueError(f"{scheme.name}'s port {port}'s layout gives a {type(got).__name__}, not a Layout")
+    return got
+
+
 def register(scheme: Scheme) -> Scheme:
     if scheme.name in SCHEMES:
         raise KeyError(f"a scheme named {scheme.name!r} is registered already")
@@ -398,5 +446,6 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
-           "Port", "Scheme", "Term", "bound", "credited", "register", "register_circuits", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Layout",
+           "Order", "Port", "Scheme", "Term", "bound", "credited", "layout", "register", "register_circuits",
+           "register_process", "settings"]
