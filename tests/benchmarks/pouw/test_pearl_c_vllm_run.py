@@ -8,6 +8,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+from conftest import load
+
 HERE = Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "pearl_c_vllm"
 #: sourced by the jobs, never started
 SOURCED = {"flashinfer_env.sh"}
@@ -58,3 +61,15 @@ def test_a_job_gets_the_arguments_the_environment_and_the_exit_code(tmp_path):
     r = subprocess.run(["bash", str(tmp_path / "run.sh"), "verify", "a run", "48"], capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "MODE": "smoke"})
     assert (r.returncode, r.stdout, r.stderr) == (7, "a run|48|smoke|", "")
+
+
+def test_a_served_arm_s_kernel_scheme_is_its_declaration_s_and_an_unknown_one_is_refused_by_name():
+    from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
+
+    SS = load("pearl_c_vllm/served_step.py")
+    assert SS.kernel_scheme("pouw:pearl-c-nvfp4-v0").family == "pearl-c4"
+    assert "pearl-c4 kernel scheme pearl-c-nvfp4-v0" in SS.undeclared(["pouw:pearl-c-nvfp4-v0"])
+    assert "pearl-c kernel scheme pearl-c-sm120-v1-h3" in SS.undeclared([OPTION, "pouw:pearl-c-sm120-v1-h3"])
+    assert SS.undeclared([OPTION, "pouw:eps1-sm120-h1fx1", "stock-fp8"]) is None
+    with pytest.raises(KeyError, match="pouw:pearl-c-nope: no PoUW kernel scheme .* is named 'pearl-c-nope'"):
+        SS.undeclared(["pouw:pearl-c-nope"])
