@@ -513,7 +513,7 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
   REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
-  LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-pouw:pearl-c-h100-v1-h3}
+  LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && python3 -m verity.protocols.compose.schemes pearl-plus option)} || { echo "PREFLIGHT: PEARLPLUS_ARM unset and the declared schemes name no Pearl+ option (python3 -m verity.protocols.compose.schemes pearl-plus option, above)" >&2; exit 3; }
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
   IFS=, read -r slots prompt _ <<< "${V3C_CLASS-4,32,4}"
   SLOTS=${SLOTS:-$slots} PROMPTS=${PROMPTS:-$prompt:$prompt}
