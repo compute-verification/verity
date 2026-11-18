@@ -35,13 +35,13 @@ class Declared:
 
 @dataclass(frozen=True)
 class RegisteredValues:
-    """``memory``: the registered values once resident, by name; ``linear`` names those that are a linear block's
-    weight."""
+    """``memory``: the registered values once resident, by name; ``operands`` maps each one a block reads as its weight
+    operand to that block's ``key`` (`BlockDue.key`)."""
 
     hook: ClassVar[str] = "memory"
     values: tuple[tuple[str, Handle], ...]
     step: int = 0
-    linear: frozenset[str] = frozenset()
+    operands: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -59,15 +59,24 @@ class InputArrived:
 
 @dataclass(frozen=True)
 class StepBegan:
-    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
-    inputs left waiting for a slot. Steps are numbered from 0, each ends in one `StepEnded`, and a step that computes
-    nothing has ``slots == 0`` and no ``inputs``."""
+    """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots (the positions the step
+    computes, drafted ones excluded), with ``queued`` started inputs left waiting for a slot. Steps are numbered from 0,
+    each ends in one `StepEnded`, and a step that computes nothing has ``slots == 0`` and no ``inputs``."""
 
     hook: ClassVar[str] = "steps"
     step: int
     inputs: tuple[str, ...] = ()
     slots: int = 0
     queued: int = 0
+
+
+@dataclass(frozen=True)
+class StepComputed:
+    """``steps``: step ``step``'s blocks are all issued and its outputs not yet read: between its `StepBegan` and its
+    `StepEnded`, after the next step's `StepBegan` where steps overlap. A step that computes nothing has none."""
+
+    hook: ClassVar[str] = "steps"
+    step: int
 
 
 @dataclass(frozen=True)
@@ -184,7 +193,7 @@ class OutputsComplete:
 
 
 #: every event a served run emits, each read through its ``hook``
-EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepEnded, ValueProduced, BlockDue, RangesDeclared,
+EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
           RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, RunBegan, RunEnded)
 
 
@@ -365,5 +374,5 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
            "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
+           "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]
