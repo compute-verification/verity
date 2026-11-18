@@ -54,10 +54,10 @@
 #     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its exact credit where the work is
 #     in the grid form, or its prover's give-up before the coin (the piece's give-up document and the counts in its
 #     log's volunteer and retain lines), its public form in its place. The advice registration's published copies
-#     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
-#     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
-#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
-#     them.
+#     ($OUT/registration.json, the records audit's served-records) carry its compiler's cap in place of the advice's
+#     length (`served_verdicts.py public-registration`), which hides nothing: the advice is committed at its own row
+#     count. The audit's log and run.sh's served path (its summary, registrations, sessions and audit log, which carry
+#     the advice's length) stay in the serve dir, where the record reads them.
 #  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; under
 #     PEARLPLUS_TIE the fixed load's, the one window holding its requests and no other, with CERTIFIER_FRONT's group in a
 #     window of its own, the one whose requests are all the network attester's, which the network attester's piece takes
@@ -1966,7 +1966,7 @@ done
   || { say "ADVICE: its registration has no public form"; stop advice 14; }
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
+say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "committed at its own length")' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
   "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
 [ "$rc" = 0 ] || stop compile 15

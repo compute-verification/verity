@@ -44,6 +44,24 @@ def test_real_window_cases_on_a_small_window():
     assert run.edits == {"prefill": [0, 0, [0, 1, 0, 0, 5]], "decode": [1, 0, [0, 1, 1, 5, 1]], "other_row": [1, 2, 1, 4, 1]}
 
 
+def test_the_result_and_its_line_say_the_developers_piece_checked_it(monkeypatch, tmp_path, capsys):
+    """`main`'s ``result.json`` and printed line carry ``checked_by`` `kit_report.PIECE`: the run's opened bindings are
+    stood in for, the cases run on the small window."""
+    fx = json.loads(FIXTURE.read_text())
+    S = CS.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
+                   CN=fx["CN"], CTW=fx["CTW"], CU=fx["CU"])
+    St = SimpleNamespace(**ST.statics(SimpleNamespace(**S)))
+    x = SimpleNamespace(ctx={"served_window": {"step_input_port": {"IB": St.IB, "PB": St.PB}}},
+                        rec={"served_rows": {"root": "00"}}, run=SimpleNamespace(run_root=bytes(64)),
+                        priv={"statics": S, "session": [[list(map(list, s)) for s in WINDOW]]},
+                        reqs=[{"arrival": r, "prompt_ids": ids[:5], "streamed_ids": ids[5:]} for r, ids in SEQS.items()])
+    monkeypatch.setattr(STW, "load", lambda _dir, _w: x)
+    monkeypatch.setattr(STW, "bindings", lambda _x, _S, _St: ({"run_root": True}, _steps(St, WINDOW, SEQS), {}))
+    assert STW.main(["--serve-run", str(tmp_path), "--window", "0", "--out", str(tmp_path / "out")]) == 0
+    assert json.loads((tmp_path / "out/result.json").read_text())["checked_by"] == STW.K.PIECE == "piece"
+    assert json.loads(capsys.readouterr().out)["checked_by"] == "piece"
+
+
 def test_a_run_sealed_before_the_async_and_cache_statics_reads_them_as_0():
     """A seal's record from before AS, EW and the cache's statics, its engine async or not, reads them as 0, which
     `compile_slice.step_statics` needs; a record that has them keeps its own."""

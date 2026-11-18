@@ -42,7 +42,8 @@ appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publ
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
-docket (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+docket (`public_registration`: its compiler's cap in place of the advice's length, which the advice tree's row count
+states all the same), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the sample was over, the members it drew, whose challenger's coins they were and where
 its sessions' coin trees came from, and no length of the advice or count of the scope's members), ``coin-trees`` why an
@@ -770,14 +771,16 @@ def publish(out: Path, private: Path) -> list[str]:
     return held
 
 
-#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
+#: The advice registration's fields that state the advice's own length, which `public_registration` replaces with the
+#: cap's. The advice is committed at its own length, so its tree's row count is public all the same.
 PADDED = ("binding.advice.bits", "rows")
 
 
 def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
-    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
-    no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
+    """What the run publishes of a window's advice registration: its compiler's ``cap_bits`` in place of the advice's
+    length (`PADDED`), the one length the class declares (its rows at ``row_bits`` each), which hides nothing while the
+    advice is committed at its own row count; no count or refusal of its requests, no window's number (`public_json`),
+    and the rest as registered. ``padded`` names the fields replaced."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
     out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
