@@ -62,7 +62,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
 )
-from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.definitions.numerics.rows import ROWS
@@ -712,27 +711,13 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
     scan's alike: the scan's state ports open their rows in it, by its root and domain, and its salts exist only in it and
     in the files written from it (the window's ``v<j>-private.bin``, `scan_zk.SCAN_STATE_FILE`)."""
     bits = np.asarray(rows, dtype=np.uint16)
-    if bits.shape != (cls.buckets, cls.scan.layout.bits) or bits.max(initial=0) > 1:
-        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {cls.scan.layout.bits} "
+    if bits.shape != (cls.buckets, 16 * SS.words(cls.scan)) or bits.max(initial=0) > 1:
+        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {16 * SS.words(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
     return registered_commit(program, SS.SCAN_STATE, words, bytes(32), 0, keep_rows=True,
                              row_salts=os.urandom(cls.buckets * CS.SALT_BYTES), window=window)
 
 
-def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], *,
-                  window: str) -> G.Registered:
-    """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
-    ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
-    scan = IS.Class(**cls.scan.shape)
-    states = [IS.empty(scan) for _ in range(cls.buckets)]
-    for k, (row, max_tokens) in enumerate(slots):
-        s = states[cls.anchor(k)].slots[cls.lane(k)]
-        s.occ, s.fields, s.max_tokens = int(row[0]), int(row[1]), int(max_tokens)
-        for p, v in enumerate(row[2:]):
-            s.ids[IS.position(scan, p)] = int(v)
-    return state_value(program, cls, [IS.encode(scan, st) for st in states], window=window)
-
-
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",
-           "standin_state", "state_value"]
+           "state_value"]

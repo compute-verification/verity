@@ -54,7 +54,8 @@ research run --on NODE --pool gpu --as LANE --project verity --source . --cwd so
 ~~~
 
 `VERITY_BENCH_VENV` is the node's pinned-vLLM environment (`pod_bootstrap.sh` makes one) and `HF_HOME` its checkpoint
-store; the harness defaults neither, and refuses a point with no `VERITY_BENCH_VENV`. The CUDA toolkit is `CUDA_HOME`,
+store; the harness defaults neither. With no `VERITY_BENCH_VENV`, the Python is the environment the launch runs in
+(`$VIRTUAL_ENV`: `uv run`'s, or an activated one), and a point with neither is refused. The CUDA toolkit is `CUDA_HOME`,
 else the one the machine's `[properties]` list (`benchmarks/kernels/machine.py toolkit`).
 
 `run` plans the spec as `plan` does and runs one point (`jobs.dispatch`): `--point`'s, else the spec's only point, else
@@ -113,7 +114,8 @@ benchmarks' `ran with` line). Nothing it writes is a verdict of record.
 ## The serving profiles
 
 `benchmarks/production.toml` holds the three serving profiles (`coding-agent`, `chat`, `fixed-size`): each one's
-dataset, requests, load on each card a model is served on, bounds and version, each model's stock launch and cards
+dataset, requests, load on each card a model is served on (and its ladder, the users or requests in flight
+`--find-load` finds it over), bounds and version, each model's stock launch and cards
 (the card files' `short`), and where the profiles differ from the published command. `verity_bench.profiles` reads it
 strictly into frozen objects and builds no command line: a profile's server and client are serve_tax's own
 (`run.sh --profile`). A profile's version rises with any change to what it reads, which a test pins.

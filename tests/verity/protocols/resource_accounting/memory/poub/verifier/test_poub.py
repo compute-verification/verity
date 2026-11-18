@@ -3,7 +3,7 @@ and recorded, and each way a session goes wrong is rejected with its failure."""
 
 from __future__ import annotations
 
-import ast
+import json
 import copy
 import dataclasses
 import hashlib
@@ -30,6 +30,8 @@ from verity.protocols.resource_accounting.memory.poub.verifier.audit import (
 )
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[7] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 N = 20
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
@@ -37,7 +39,6 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
-FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def payload(j: int) -> bytes:
@@ -322,7 +323,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     finish(s, prover, passes, clock)
     r = s.record()
     capacity = N * 4096 / 300e-9
-    rebuild = audit.Rebuild(r.codec, timing.SQUARINGS_PER_S["p1024"])
+    rebuild = audit.Rebuild(r.codec, FIGURES.squarings_per_s["p1024"])
     g = audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=4096, rebuild=rebuild, host=0.002)
     whole = capacity * r.span_ns / 1e9
     assert r.span_ns == 3000 + A and r.passes == 10
@@ -333,7 +334,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.counting == pytest.approx(sum(named) / 8 / whole) and r.receipts == r.passes * N
     assert sum(named) == r.passes * (audit.named_bits(N) + audit.SLACK_LOG2)
     assert sum(named) < audit.QUERIES_LOG2 * r.receipts + audit.SLACK_LOG2 * r.passes
-    assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
+    assert g.rebuild == pytest.approx(FIGURES.squarings_per_s["p1024"] * 4096 / (65_344 * capacity))
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
@@ -367,12 +368,12 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     assert [c.encode_squarings for c in (codec.DEFAULT, codec.FALLBACK, p512)] == [98_016, 65_344, 65_152]
     for c in (codec.DEFAULT, p512):
         assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
-    fractions = [audit.Rebuild(c, timing.SQUARINGS_PER_S[c.field.name]).fraction(timing.READ_BYTES_PER_S)
+    fractions = [audit.Rebuild(c, FIGURES.squarings_per_s[c.field.name]).fraction(FIGURES.read_bytes_per_s)
                  for c in (codec.DEFAULT, codec.FALLBACK, p512)]
     assert fractions == pytest.approx([6.4781e-4, 9.7172e-4, 3.1296e-3], rel=1e-4)
     r = synthetic((100, 100, 60), 5, 1e-6)
     assert r.codec == codec.DEFAULT
-    rebuild = audit.Rebuild(codec.DEFAULT, timing.SQUARINGS_PER_S["p1024"])
+    rebuild = audit.Rebuild(codec.DEFAULT, FIGURES.squarings_per_s["p1024"])
     g = audit.ledger(r, capacity_bytes_per_s=100 * 4096, chip_bytes=0, rebuild=rebuild)
     assert g.rebuild == rebuild.fraction(100 * 4096) and {w.rebuild for w in g.windows} == {g.rebuild}
     with pytest.raises(ValueError, match="p1024/k2/masked .* the record's codec p1024/k3/masked"):
@@ -1041,18 +1042,18 @@ def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term()
     assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (28_004, 7_001)
     assert s == 33_273 and audit.WINDOW_NS == 60 * timing.S
-    idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
+    idle = FIGURES.host_read_bytes_per_s / FIGURES.read_bytes_per_s
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s)
         assert 0.0020 < g.worst.sample < 0.0021 and 0.0107 < g.worst.gamma < 0.01103
         assert 0.00164 < g.counting < 0.00165 and g.chip > 0.0015
         assert g.horizon < 3e-4 and 0.0072 < g.gamma_horizon < 0.0074
         spec = timing.stated(store, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=s,
-                             capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
-        assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
+                             capacity_bytes_per_s=FIGURES.spec_bytes_per_s).worst
+        assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * FIGURES.read_bytes_per_s / FIGURES.spec_bytes_per_s)
         assert 0.0602 < spec.gamma < 0.0606
-        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS,
-                            samples=s, read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
+        hbm = timing.stated(FIGURES.gpus * 94 * 10 ** 9, audit.WINDOW_NS, 10, figures=FIGURES, rtt_ns=rtt * timing.MS,
+                            samples=s, read_bytes_per_s=FIGURES.gpus * FIGURES.gpu_read_bytes_per_s).worst
         assert hbm.timing > idle and 0.0573 < hbm.gamma < 0.0578
         twenty = timing.stated(store, 20 * timing.S, 30, figures=FIGURES, rtt_ns=rtt * timing.MS, samples=28_004).worst
         assert twenty.sample < 0.0025 and 0.013 < twenty.gamma < 0.0141
@@ -1063,33 +1064,26 @@ def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term()
 def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every
     tier, each GPU's value kept apart for the benches that read one GPU."""
-    assert timing.GPUS == 8
-    assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597568e12 + 819.2e9
-    assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
-    assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
-    assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
-    assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
+    assert FIGURES.gpus == 8
+    assert FIGURES.read_bytes_per_s == 8 * 1.539e12 + 606.8e9 and FIGURES.spec_bytes_per_s == 8 * 1.597568e12 + 819.2e9
+    assert FIGURES.chip_bytes == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
+    assert FIGURES.host_chip_bytes == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
+    assert {w: 8 * r for w, r in FIGURES.gpu_squarings_per_s.items()} == FIGURES.squarings_per_s
+    assert FIGURES.sha512_per_s == 8 * FIGURES.gpu_sha512_per_s
     gpu = 94 * 10 ** 9
     host = timing.spanning(gpu, FIGURES) - 8 * gpu
-    assert host / timing.HOST_READ_BYTES_PER_S == pytest.approx(gpu / timing.GPU_READ_BYTES_PER_S)
+    assert host / FIGURES.host_read_bytes_per_s == pytest.approx(gpu / FIGURES.gpu_read_bytes_per_s)
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     """One GPU's and the host DRAM's write ceilings are their data sheets' rates, which bound every prover where a
     measurement bounds only the kernels tried, each above every write its bench measured: the card's 1,528.98 GB/s on
-    the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  Each docstring names its
-    benches; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under the default codec,
-    and no DPU's is stated."""
-    assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597568e12 > 1528.98e9 > 56.39e9
-    assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
-    body = ast.parse(Path(timing.__file__).read_text()).body
-    docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
-            if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
-            and isinstance(b.value, ast.Constant)}
-    gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
-    assert "calibration/bandwidth/write.cu" in gpu and "SQUARINGS_PER_S[width]" in gpu
-    assert "calibration/bandwidth/write_host.c" in host and "calibration/bandwidth/write.cu" in host and "No DPU" in host
-    labels = timing.GPU_SQUARINGS_PER_S[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
+    the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  A fill of derived codec labels
+    is bounded by the labeller, about 1.05 GB/s a GPU under the default codec, and no DPU's is stated."""
+    assert FIGURES.gpu_write_bytes_per_s == FIGURES.gpu_spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
+    assert FIGURES.host_write_bytes_per_s == FIGURES.host_spec_bytes_per_s == 819.2e9 > 207.69e9
+    assert "a measured rate bounds only the kernels tried" in " ".join(timing.Figures.__doc__.split())
+    labels = FIGURES.gpu_squarings_per_s[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)
     assert not [name for name in vars(timing) if name.startswith("DPU_")]
 
@@ -1124,9 +1118,9 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 
 def test_auditros_slack_adds_at_most_2_to_the_minus_110_over_2_to_the_30_passes() -> None:
     """`SLACK_LOG2`'s reason: 2^30 of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
-    `timing.READ_BYTES_PER_S`, take about 1.4 years, and their slack adds at most 2^-110 to γ's error and the memory
+    `FIGURES.read_bytes_per_s`, take about 1.4 years, and their slack adds at most 2^-110 to γ's error and the memory
     line's δ, 2^-9 of `DELTA`."""
-    pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S
+    pass_s = 130_023_424 * codec.BLOCK_BYTES / FIGURES.read_bytes_per_s
     assert 41.2e-3 < pass_s < 41.3e-3 and 1.40 < 2 ** 30 * pass_s / (365.25 * 86400) < 1.41
     assert 2 ** 30 * 2.0 ** -audit.SLACK_LOG2 <= 2.0 ** -110 == audit.DELTA / 2 ** 9
 

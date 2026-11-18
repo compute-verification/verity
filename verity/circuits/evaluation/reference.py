@@ -52,10 +52,9 @@ class MissingValue(KeyError):
     pass
 
 
-def evaluate_region(circuit: Circuit, sub: Region | Iterable, trace: Trace, *, strict: bool = True) -> Trace:
+def evaluate_region(circuit: Circuit, sub: Region | Iterable, trace: Trace) -> Trace:
     """Evaluate every gate of `sub` (a `Region`, or any iterable of gates) in canonical order, writing into `trace`
-    (mutated and returned). `Input` gates must be present already. With `strict=False`, gates whose operands are missing are
-    skipped. In a `Region`, a primitive with ``evaluate_lazy`` resolves only the operands it reads (`Circuit.gates`' ``lazy``)."""
+    (mutated and returned). `Input` gates must be present already. In a `Region`, a primitive with ``evaluate_lazy`` resolves only the operands it reads (`Circuit.gates`' ``lazy``)."""
     gates = sub.circuit.gates(sub.lo, sub.hi, lazy=True) if isinstance(sub, Region) else sub
     for gv in gates:
         prim = gv.prim
@@ -69,15 +68,12 @@ def evaluate_region(circuit: Circuit, sub: Region | Iterable, trace: Trace, *, s
             try:
                 trace[gv.index] = lazy(lambda j, _s=ops_seq: trace[_s[j]])
             except KeyError as e:
-                if strict:
-                    raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
+                raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
             continue
         try:
             ops = [trace[o] for o in gv.operands]
         except KeyError as e:
-            if strict:
-                raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
-            continue
+            raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
         trace[gv.index] = prim.evaluate(*ops)
     return trace
 

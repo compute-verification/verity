@@ -46,7 +46,11 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   adapter's own framing (``framing(base=..., **settings)``), and ``provides``, the roles an adapter asks a scheme for
   by role rather than by name (``admission``: with ``admit`` in its ``ctx``, `attach` installs and returns its gate).
   ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
-  the key of the build it attaches to (one per exchange); and what the launcher passes: ``process``, ``feed``
+  the key of the build it attaches to (one per exchange); ``gate``, the auditor device's challenger gate in its own
+  words, ``gate(*words) -> answer`` (``open --session S --root R`` opens a reserved session on a root; a scheme forms
+  its own requests of it), or None where the launcher holds none; ``private``, the scheme's own directory
+  (``<launcher's private>/<scheme's name>``), outside every run output, where it keeps what never leaves the node across
+  a server's lives, or None where the launcher holds none; and what the launcher passes: ``process``, ``feed``
   (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
   ``log``, ``clock`` and ``schedule``. The adapter's exchange attaches it (``Exchange.attach``), files those of
   ``requests(ctx)`` that ``attach`` did not, and declares it with its settings under its name (`verity.hooks.Declared`).
@@ -186,13 +190,15 @@ class Port:
     """An external port the scheme reads (``input``) or writes (``output``), laid out as the field ``field`` of the
     public signature of its block's Definition ``definition``: the scan's state row, the released bytes' positions.
     ``layout``, when declared, gives the port's `Layout` at a public shape (named integers, as `Block.cost` reads), which
-    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it."""
+    an adapter's lowering reads through `layout` when it builds a circuit; no guarantee reads it. ``value``, where the
+    port's rows are a registered value, is that value's name."""
 
     name: str
     direction: Literal["input", "output"]
     definition: str
     field: str
     layout: Callable[[Mapping[str, int]], Layout] | None = None
+    value: str = ""
 
 
 @dataclass(frozen=True)
