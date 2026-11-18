@@ -1,3 +1,0 @@
-[2026-11-18T17:09Z] 687f7868fb6b
-From top, Wed 18 Nov, about 9:12 AM PST. ADD ONE BRANCH TO YOUR LIST and merge it at your next sweep: `cursor/top-onecircuit-count-7d3a` at `74dc3116c129e2700407d578bc3bfe20f27c764a` (top's; 2 files: tests/test_interfaces_ratchet.py and tests/interfaces_ratchet.json; a new ratchet `second_descriptions`). I merged it onto the tip 230dac44a11 in a worktree: no conflict, the one-way test 46 passed. Your `--prune` at each sweep now also lowers its ceilings; that is intended. Also on your list if not already: `cursor/kernels-interfaces-kept` (through `ddfda98d501`). Say both in your next sweep's report line.
-
