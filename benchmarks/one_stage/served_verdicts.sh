@@ -1836,8 +1836,10 @@ say "PREDICT-COMPARE against the traced Build $ROW (exit $rc): $(grep -E '^(rank
 [ "$rc" = 0 ] || stop predict-compare 18
 }
 pearl_cubin() {
-  ( export RESEARCH_RUN_DIR=$D/private/pearlplus-cubin VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-$VENV}
-    mkdir -p "$RESEARCH_RUN_DIR" && cd "$TREE" || exit 1
+  ( machine=${RESEARCH_RUN_DIR:+$RESEARCH_RUN_DIR/inputs/${RESEARCH_MACHINE:-}.toml}
+    export RESEARCH_RUN_DIR=$D/private/pearlplus-cubin VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-$VENV}
+    mkdir -p "$RESEARCH_RUN_DIR/inputs" && cd "$TREE" || exit 1
+    [ ! -f "${machine:-}" ] || cp "$machine" "$RESEARCH_RUN_DIR/inputs/" || exit 1
     # shellcheck source=/dev/null
     . benchmarks/harness/env.sh && . benchmarks/harness/setup/pearl_c_sm90.sh \
       && printf '%s\n' "$PEARLC_KERNEL" "$PEARLC_CUBIN" > "$RESEARCH_RUN_DIR/setup.paths" ) > "$LOGS/pearlplus-cubin.log" 2>&1
