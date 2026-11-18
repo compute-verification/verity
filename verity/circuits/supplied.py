@@ -120,15 +120,22 @@ def layout_fits(layout: str, w: int, nbytes: int) -> bool:
     return layout == "digest" and w == 1 and nbytes % 64 == 0
 
 
+def _of(x: Any) -> bool:
+    return (isinstance(x, list) and len(x) == 3 and isinstance(x[0], str) and all(type(v) is int for v in x[1:])
+            and 0 <= x[1] < x[2])
+
+
 def mark_of(entry: Sequence[Any]) -> Mapping[str, Any] | None:
     """An `inputs` entry's mark, or None for an unmarked ``[name, n]``; `E_SUPPLIED_MARK` for any other form."""
     if len(entry) == 2:
         return None
     m = entry[2] if len(entry) == 3 else None
-    if not (isinstance(m, Mapping) and set(m) == MARK_KEYS and isinstance(m["supplied"], str)
+    if not (isinstance(m, Mapping) and set(m) - {"of"} == MARK_KEYS and _of(m.get("of", ["", 0, 1]))
+            and isinstance(m["supplied"], str)
             and isinstance(m["args"], Mapping) and all(isinstance(k, str) and _arg(v) for k, v in m["args"].items())
             and m["layout"] in LAYOUTS and type(m["bits"]) is int and m["bits"] > 0):
-        raise SuppliedError("E_SUPPLIED_MARK", f"input {entry[0]!r}: a mark is {{supplied, args, layout, bits}}, not "
+        raise SuppliedError("E_SUPPLIED_MARK", f"input {entry[0]!r}: a mark is {{supplied, args, layout, bits}}, a part's "
+                                               f"with of = [input, lo, hi], not "
                                                f"{entry[2:]!r}")
     return m
 
@@ -161,7 +168,9 @@ def check_entry(entry: Sequence[Any], nodes: Sequence[tuple[str, int, int]],
     widths = {w for _b, w, _n in nodes}
     leaves = sum(n for _b, _w, n in nodes)
     w = next(iter(widths)) if len(widths) == 1 else None
-    if w is None or m["bits"] != 8 * nbytes or leaves * w != m["bits"] or not layout_fits(m["layout"], w, nbytes):
+    lo, hi = m["of"][1:] if "of" in m else (0, leaves)
+    if (w is None or leaves * w != m["bits"] or hi - lo != leaves or hi * w > 8 * nbytes
+            or not layout_fits(m["layout"], w, nbytes) or "of" not in m and m["bits"] != 8 * nbytes):
         raise SuppliedError("E_SUPPLIED_WIDTH", f"input {name!r}: {f.name}'s value is {8 * nbytes} bits, read by "
                                                 f"{m['layout']} as whole leaves of one width; the mark says {m['bits']} and "
                                                 f"its nodes hold {leaves} leaves of widths {sorted(widths)}")
