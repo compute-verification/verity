@@ -1037,6 +1037,17 @@ WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read ca
                "public": None, "profile": None}
 
 
+def test_a_wipe_that_ran_and_wrote_no_answer_errs_with_its_exit_not_as_unset(tmp_path):
+    """The launcher's wipe step leaves its exit in pieces/wipe/piece.json and its log in the private directory: a wipe
+    that wrote no answer errs with that exit, never reads as WIPE_CMD unset, and names no path for its log."""
+    (tmp_path / "wipe").mkdir()
+    (tmp_path / "wipe" / "piece.json").write_text('{"limit": "20m", "rc": 124}\n')
+    row = S.piece_row("wipe", tmp_path)
+    assert row["verdict"] == "error" and "_CMD unset" not in row["reason"], row
+    assert row["reason"] == f"its piece ran (exit 124, out of time at 20m) and wrote no answer; {PRIVATE}", row
+    assert S.piece_server("wipe", tmp_path) == (None, "real")
+
+
 @pytest.mark.parametrize("case", ["accept", "elsewhere", "unserved", "refused", "reject"])
 def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
     """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the

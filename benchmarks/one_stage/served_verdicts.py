@@ -2228,10 +2228,9 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path 
             return {"verdict": BR.REFUSED, "owner": owner, "reason": said[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
+            log = "in the run's private directory" if key == "wipe" else f"{comp}/piece.log"
             return {"verdict": "error", "owner": owner,
-                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {comp}/piece.log"}
-        if key == "wipe" and (d / "piece.log").exists():
-            return {"verdict": "missing", "owner": owner, "why": f"its piece wrote no answer; its log is {comp}/piece.log"}
+                    "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {log}"}
         return {"verdict": "missing", "owner": owner, "why": _unset(comp, what)}
     try:
         return row_of(owner, json.loads(f.read_text()), f.parent, run)
