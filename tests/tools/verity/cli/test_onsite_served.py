@@ -839,6 +839,8 @@ def written(*components: str, composed: bool = False) -> str:
         f"{h} {T.AS_WRITTEN}" for h in ["the composed verdict"] * composed + sorted(components))
 
 
+#: what Pearl+'s row says on every line until its coin sessions' signature pin is in Lean
+COINS_UNCHECKED = "coins' signatures checked on the served node only; not checked by the auditor"
 #: the components of the rows `published` writes by default
 BASE = ("network-attester", "pearl-plus", "pous", "sampled-proofs", "wipe")
 #: a row's ``answer_from`` that is not `AS_WRITTEN`, which the serving node may write all the same: served_verdicts.py's
@@ -883,8 +885,9 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert line["coins"] == "simulated" and line["reason"] == reason
     assert line["coins_on"] == {**{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")},
                                 "sampled-proofs": T.GATE_HOST}
-    assert line["answer_from"] == {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
-                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)}
+    assert line["answer_from"] == T.unchecked(PROTOCOLS, {NAMES[k]: f"{T.AS_WRITTEN} (its piece files in {k}/)"
+                                   for k in ("integrity", "work", "space", "communication", "wipe", *rows)})
+    assert line["answer_from"]["pearl-plus"].endswith(f"; {COINS_UNCHECKED}")
 
 
 @pytest.mark.parametrize("source", NOT_WRITTEN)
@@ -897,7 +900,8 @@ def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
     assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
-    assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+    assert set(line["components"].values()) == {"undecided"}
+    assert line["answer_from"] == {**{c: source for c in line["answer_from"]}, "pearl-plus": f"{source}; {COINS_UNCHECKED}"}
 
 
 @pytest.mark.parametrize("rows, composed, lean, verdict, rc, reason", [
