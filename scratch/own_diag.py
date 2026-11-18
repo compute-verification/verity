@@ -75,4 +75,18 @@ for a, b in zip(ordered, ordered[1:]):
             shown += 1
             print(f"REFUSE overlap, not one shared run, over {src('n', ra[0])}: run {ra} (node {a[1]} {name(a[1])} arg {a[2]}, "
                   f"part {a[3]!r}) and run {rb} (node {b[1]} {name(b[1])} arg {b[2]}, part {b[3]!r})")
+import collections
+tally = collections.Counter()
+for k, node in enumerate(nodes):
+    if is_input(node.fn):
+        continue
+    for a_i, a in enumerate(node.args):
+        for part in R._parts(a.refs):
+            if not edge(part) and R.part_run(nodes, part) is None:
+                shape = (f"Strided inner={part.inner} outer={part.outer_stride} istride={part.inner_stride} count={part.count} "
+                         f"over a {'input' if is_input(nodes[part.idx].fn) else 'computed'} {nodes[part.idx].form} node"
+                         if isinstance(part, Strided) else type(part).__name__)
+                tally[(getattr(node.fn, "name", "?"), a_i, shape)] += 1
+for (t, a_i, shape), n in tally.most_common(20):
+    print(f"TALLY {n} x template {t} argument {a_i}: {shape}")
 print(f"OWN_DIAG {p.name}: {refusals} refusals; row_runs is {'None' if R.row_runs(program) is None else 'ok'}", flush=True)

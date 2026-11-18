@@ -6,5 +6,5 @@ cd "$T/verity/protocols/workload_classification/training_detection/inference_onl
 cp "$RESEARCH_RUN_DIR/inputs/Probe.lean" WiredProbe.lean
 printf '\n[[lean_exe]]\nname = "wired-probe"\nroot = "WiredProbe"\n' >> lakefile.toml
 S=$(date +%s)
-lake build inference-only-record-check wired-probe 2>&1 | tail -4
+lake build inference-only-record-check wired-probe 2>&1 | grep -E "error|warning: .*sorry|Build completed|build failed" | head -30
 echo "LEAN_BUILT in $(( $(date +%s) - S )) s at $PWD"
