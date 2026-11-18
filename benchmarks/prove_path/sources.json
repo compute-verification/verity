@@ -2,7 +2,7 @@
   "composed": "circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 (art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)",
   "rows_3": "circuit-check --no-cache r20261027-045850-de6d; k_log an estimate, not composed: its 3 rows' (rows_k)",
   "measured": {
-    "EmbeddingRead_v1{V=128256,H=2048}": "#4227's table (ANDs and block)",
+    "EmbeddingRead_v2{V=128256,H=2048}": "#4227's table (ANDs and block)",
     "RMSNormTriton_v5{N=2048}": "r20261025-072237-b8e3",
     "RMSNormFusedCuda_v2{N=2048}": "r20261025-072834-bd85; k_log the post-attention norm's (x cut 128), the input and final norms' (x cut 4) 25",
     "Gemm_v2{K=2048,N=16}": "scaled: 16 × Gemm_v2{K=2048,N=1}'s, r20261025-072834-bd85",

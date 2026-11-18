@@ -3,7 +3,7 @@ testpaths = ["."]
 
 [tool.verity.tests]
 # settings.py is built on verity_config's registry
-inputs = ["benchmarks/serving_cost", "benchmarks/prod_repro/priced.py",
+inputs = ["benchmarks/serving_cost", "benchmarks/prod_repro/priced.py", "benchmarks/dsa_topk/units.py",
     "tools/config/verity_config",
     "verity/__init__.py",
     "benchmarks/harness/verity_bench/__init__.py",

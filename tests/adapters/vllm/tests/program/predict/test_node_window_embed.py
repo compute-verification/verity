@@ -1,6 +1,6 @@
 """verity_vllm.program.predict.node_window_embed: the vocabulary shard's embedding lowered into GLM-5.3's node window at TP8
 rank 0, beside the frame's and the dense families, at a 32-id prompt, 2 outputs and one decoder layer: per column block of 192
-words one `EmbeddingRead_v1{V=154880, H=192}` unit a member over that block's padded table, the all-reduce's own partial
+words one `EmbeddingRead_v2{V=154880, H=192}` unit a member over that block's padded table, the all-reduce's own partial
 read from the blocks' ``o0`` by wire. The tables are one width, declared and never committed by the window, and kept apart
 from the plain weights, whose nonces they don't move.
 """
@@ -32,7 +32,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NE.FAMILIES}
 WIDTH, V, BLOCKS = 6144, 154880, 6144 // NE.WIDTH
 LABEL = "model.embed_tokens.weight"
-READ = r"EmbeddingRead_v1\{V=154880,H=192\}"
+READ = r"EmbeddingRead_v2\{V=154880,H=192\}"
 
 
 @pytest.fixture(scope="module")

@@ -876,7 +876,7 @@ def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
         I.ordered(c.units, c.wires, {GID: (4,)})
 
 
-EMB = I.resolve("EmbeddingRead_v1{V=4,H=16}")
+EMB = I.resolve("EmbeddingRead_v2{V=4,H=16}")
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
 EID, G8ID = descriptor_id(EMB), descriptor_id(G8)
 WEIGHTS = 512 + 4 * 16
@@ -2757,7 +2757,7 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
     the record and its pin of the table's parameter alone, the record stated or listing the same members, which no cheaper
     test reaches. Slow (about 140 s on one core)
-    for the two population Programs of `EmbeddingRead_v1` it builds, the prover's and the verifier's, its Merkle path
+    for the two population Programs of `EmbeddingRead_v2` it builds, the prover's and the verifier's, its Merkle path
     traced in each; the cheap check of the reads themselves is `test_a_tables_reads_and_verdicts_take_its_supplied_values`."""
     win, table = embedding_window()
     with pytest.raises(ValueError, match="Window.supply"):

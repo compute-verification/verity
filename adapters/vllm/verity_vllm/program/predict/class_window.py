@@ -41,7 +41,7 @@ of those units reads by one boundary read (`interface.Read`, ``step [0]`` across
 token ANDed with its own bit, which the served-ids read takes; and the next step's key `KEY` (``o3``), its token ANDed
 with the NEXT bit, which the next step's embedding read takes as its ``tok``. At the step that stops they differ: its
 id is the n-th served id and is written, while the step after it, the first one off, must read token 0. So the
-embedding read stays `EmbeddingRead_v1`, unmasked, and opens its table's row 0 at every step past the stop, and no unit
+embedding read stays `EmbeddingRead_v2`, unmasked, and opens its table's row 0 at every step past the stop, and no unit
 downstream of it reads the request's last token. The AND is the select Definition's own, in its text and its hash: a
 select without it cannot be dropped in, since a step past the stop would then read the request's last id (proofs,
 PRF-618, 11:47 AM PST).
