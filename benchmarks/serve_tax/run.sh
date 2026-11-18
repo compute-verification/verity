@@ -378,8 +378,7 @@ if [ "${1:-}" = leased ]; then
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" "${profile[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
       ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \
-      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${SCHEME_SETTINGS:+--scheme-settings "$SCHEME_SETTINGS"} \
-      ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
     echo "after $dir: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $dir done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
     last=$dir; to_serve=$((to_serve - 1))

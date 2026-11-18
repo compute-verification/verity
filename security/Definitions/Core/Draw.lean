@@ -22,6 +22,8 @@ Every area reads these, and defines none of its own:
   own coins, so kinds of block are sampled at different rates by one design; `SamplingDesign.map f D`, `D`'s sample
   read through `f`;
 * `Draw s N`: `s` indices into `N` units, each uniform and independent of the others (`Draw.samplingDesign`, its sampling design);
+* `SamplingDesign.all S`: one coin, sampling all of `S` (the `all` rule at `S = univ`, and a level that draws every block);
+* `SamplingDesign.bernoulli n num den`: each unit sampled independently with probability `num / den`;
 * `Draw.Subset N k`: `k` of `N` units, without replacement, each `k`-subset one coin; `SamplingDesign.subset n k`,
   its sampling design (the `subset:K` rule), which misses a set of `j` units with probability `C(n − j, k)/C(n, k)`;
   `SamplingDesign.permPrefix n k`, a uniform permutation's `k`-prefix, which samples as the uniform `k`-subset does
@@ -90,6 +92,17 @@ design). -/
 abbrev Draw.Subset (N k : ℕ) : Type := {s : Finset (Fin N) // s.card = k}
 
 namespace SamplingDesign
+
+/-- **The design that samples all of `S`**: one coin, sampling `S` (the `all` rule at `S = univ`). -/
+def all {U : Type} (S : Finset U) : SamplingDesign U where
+  Ω := Unit
+  draw _ := S
+
+/-- **Each of `n` units sampled independently with probability `num / den`**: a coin in `[0, den)` per unit, the unit
+sampled when its coin is below `num` (the `bernoulli` rule). -/
+abbrev bernoulli (n num den : ℕ) [NeZero den] : SamplingDesign (Fin n) where
+  Ω := Fin n → Fin den
+  draw ω := Finset.univ.filter fun u => (ω u).val < num
 
 /-- **The uniform `k`-subset of `n` units**: the coin is a `k`-subset (`Draw.Subset`), sampled as itself. -/
 def subset (n k : ℕ) (hk : k ≤ n) : SamplingDesign (Fin n) where

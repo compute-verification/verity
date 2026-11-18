@@ -19,7 +19,7 @@ it.
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
-  members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
+  members' templates (`population.wired_population_program`, `Q_template_instances`), one stratum a member.
 * **The docket** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
@@ -85,9 +85,11 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
-from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program  # noqa: E402
+from verity.circuits.population import wired_population_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 
@@ -392,8 +394,8 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     if program is None:
-        program = P.mixed_population_program([(m.defn, m.n) for m in members])
-        query = P.template_instances_query([m.defn for m in members])
+        program, query = wired_population_program([(m.defn, m.n) for m in members],
+                                                  {"templates": [[descriptor_id(m.defn), m.n] for m in members]})
     part = P.partition(program, query)
     files = {"partition_file": out / "partition.json", "program_file": out / "program.json"}
     files["partition_file"].write_text(json.dumps(part, sort_keys=True))
@@ -436,7 +438,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    sampling_design = D.parse_design(f"stratified:{k}")
+    sampling_design = RND.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}

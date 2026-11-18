@@ -6,7 +6,10 @@
 # gates beyond each row's own receipts. Run from the repository root (research run --cwd source).
 set -uo pipefail
 O=${OUT:?}
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+if [ -z "${NVCC:-}" ]; then  # else the machine's toolkit at 13.0's nvcc
+  CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4
+  NVCC=$CUDA_HOME/bin/nvcc
+fi
 export PATH="$(dirname "$NVCC"):$PATH"
 B=$(mktemp -d /tmp/psched-probe.XXXXXX)
 FL=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
