@@ -56,7 +56,12 @@ if args[1:2] == ["rehearse"]:
     json.dump({{"registration": {{"root": "ef" * 64, "wiring": "01" * 64}}, "cost": {{"rows": 1}}}},
               open(os.path.join(run, "cells.jsonl"), "w"))
 else:
-    print("the reader's table")
+    flow = {{"to_server": {{"stream_bytes": 4242}}, "from_server": {{"stream_bytes": 4343}}}}
+    json.dump({{"between": [flow], "others": [flow], "record": {{"connections": [flow]}},
+               "compared": {{"to_server": {{"says": "agrees"}}, "from_server": {{"says": "agrees"}},
+                            "pairing": {{"says": "agrees", "flows": 1}}}}}},
+              open(args[args.index("--out") + 1], "w"))
+    print("the reader's table: 4242 4343")
 """
 #: the stand-ins, by the name the job calls each. With a `sleep` that returns at once the job's two waits end on the
 #: stand-in `tcpdump`'s line and on its file's size, and on no clock
@@ -83,9 +88,11 @@ def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_
     """With no `EGRESS`, and with `bytes`, the rehearsal gets the job's three flags and the launch's, nothing for the
     form; with `id` it gets `--ids` before the launch's. Either way the capture is the loopback's TCP kept at 54
     bytes a packet, which holds no content, what is kept of it is its packets on the deployment's two ports, and the
-    reader gets the kept file, the front's address with its port, the relay's and the run. The run is in the job's
-    temporary directory, deleted with it, and $OUT/run is what the gate's publisher gives of it, with no head, salt,
-    wiring or cost. The exit is the reader's."""
+    reader gets the kept file, the front's address with its port, the relay's and the run. The run, the kept packets
+    (the front's port is the wire before the attester) and the reader's result and table, which count each flow, are
+    in the job's temporary directory, deleted with it; $OUT/run is what the gate's publisher gives of the run, with no
+    head, salt, wiring or cost, and $OUT/capture_flows.json the reader's three verdicts alone. The exit is the
+    reader's."""
     for env, form in (({}, []), ({"EGRESS": "bytes"}, []), ({"EGRESS": "id"}, ["--ids"])):
         p, calls, out = job(tmp_path, "--requests", "3", "--lanes", "64", **env)
         assert p.returncode == 0, p.stdout + p.stderr
@@ -95,15 +102,18 @@ def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_
         assert rehearsal[1:] == ["rehearse", "--fake", "--watermark", "--out", run, *form,
                                  "--requests", "3", "--lanes", "64"]
         assert Path(run).parent == Path(capture[7]).parent and not Path(run).exists()
-        assert kept == ["tcpdump", "-r", capture[7], "-w", f"{out}/run.pcap", f"tcp port {FRONT} or tcp port {RELAY}"]
-        assert reader == ["capture_flows.py", "--capture", f"{out}/run.pcap", "--server", f"127.0.0.1:{FRONT}",
-                          "--certifier", "127.0.0.1", "--run", run, "--out", f"{out}/capture_flows.json"]
+        w = Path(capture[7]).parent
+        assert kept == ["tcpdump", "-r", capture[7], "-w", f"{w}/run.pcap", f"tcp port {FRONT} or tcp port {RELAY}"]
+        assert reader == ["capture_flows.py", "--capture", f"{w}/run.pcap", "--server", f"127.0.0.1:{FRONT}",
+                          "--certifier", "127.0.0.1", "--run", run, "--out", f"{w}/capture_flows.json"]
         assert publish == ["verity.protocols.compose.verifier.live_challenger.auditor", "publish", run, f"{out}/run"]
         assert sorted(p.name for p in (out / "run").iterdir()) == ["deployment.json", "outcome.json"]
         published = " ".join(p.read_text() for p in (out / "run").iterdir())
         assert not any(s in published for s in ("head", "salt_c", "wiring", "cost", "ab" * 64, "cd" * 64, "01" * 64))
-        assert (out / "run.pcap").read_bytes() == b"packets" and not Path(capture[7]).exists()
-        assert (out / "capture_flows.txt").read_text() == p.stdout == "the reader's table\n"
+        assert not w.exists() and sorted(p.name for p in out.iterdir()) == ["capture_flows.json", "run"]
+        says = {"says": {"to_server": "agrees", "from_server": "agrees", "pairing": "agrees"}}
+        assert json.loads((out / "capture_flows.json").read_text()) == says
+        assert not any(n in p.stdout for n in ("4242", "4343", "table")), p.stdout
 
 
 def test_a_form_that_isnt_one_or_a_flag_that_names_one_ends_the_job_before_any_capture(tmp_path):
@@ -122,4 +132,4 @@ def test_a_run_in_another_form_than_the_launchs_isnt_read(tmp_path):
     p, calls, out = job(tmp_path, "--requests", "3", STUB_FORM="id")
     assert p.returncode == 1 and "the run's egress form is id, not EGRESS's (bytes)" in p.stdout, p.stdout + p.stderr
     assert len(calls) == 3 and calls[0][0] == "tcpdump" and calls[1][1] == "rehearse" and calls[2][1] == "publish"
-    assert not (out / "run.pcap").exists() and not (out / "capture_flows.json").exists()
+    assert sorted(p.name for p in out.iterdir()) == ["run"]

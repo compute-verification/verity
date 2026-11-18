@@ -531,6 +531,8 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
             live_ledger(rng, h, **rng.choice([{"complete": False}, {"complete": None}, {"complete": 1},
                                               {"released": None}, {"released": {Wd.SALT: True}}, {"released": {Wd.SALT: 2}},
                                               {"released": {Wd.SALT: 1, Wd.DRAW: 0}}, {"released": [[Wd.SALT, 1]]}]))
+        case "unclosed":
+            live_ledger(rng, h, closed=False, ended="serve.py exited -9")
         case "received":
             # the auditor's ledger ends the session complete, but its log shows its salt coin after another root, or
             # never released
@@ -577,7 +579,7 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
 LIVE_SALT_NAMES = ["not-object", "schema", "no-schema", "matmuls-form", "weights-set", "call-range", "pass-index",
                    "key-form", "no-ledger", "forged-ledger", "in-process", "unsealed", "other-session", "other-root",
                    "on-weights", "other-epoch", "named-epoch", "h1-layout", "not-salt-only",
-                   "no-reserve", "reserve-layout", "incomplete", "received", "coins-form", "not-signed", "opening-form",
+                   "no-reserve", "reserve-layout", "incomplete", "unclosed", "received", "coins-form", "not-signed", "opening-form",
                    "after", "index", "label", "foreign", "foreign-epoch", "tampered", "malformed", "resalted", "session",
                    *RC.PIN_NAMES]
 
