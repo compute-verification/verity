@@ -151,8 +151,12 @@ def _engine(spec_name: str, arm_id: str):
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
+    from benchmarks.pouw.pearl_c_vllm.served_passes import undeclared
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
-    arm, reserved = _live(next(x for x in arms if x.id == arm_id))
+    arm = next(x for x in arms if x.id == arm_id)
+    if why := undeclared(arm.protocols):
+        raise SystemExit(f"served_step.py: {why}")
+    arm, reserved = _live(arm)
     preset, eager = arm_execution(arm, preset, eager)
     if preset.engine_settings.get("serving_defaults") and not settings.get(INDUCTOR_DIR_MARK):
         import tempfile
