@@ -39,6 +39,7 @@ from verity.protocols.resource_accounting.network.prover import scan_zk as sz
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as WS
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
+from verity.commitments import randomness as RND
 
 ROOT = Path(__file__).resolve().parents[6]
 PERIOD_CASE = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "network" / "verifier" / "network" / "period_case.py"
@@ -303,8 +304,8 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
     root, query, defs = _scan_program(cls, T)
     h = sz.host(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
     alone = sz.PA.mixed_population_program([(defs["start"], 1)])
-    programs = {sz.TEMPLATES: (root, query, sz.DR.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
-                sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), sz.DR.parse_design("stratified:1"),
+    programs = {sz.TEMPLATES: (root, query, RND.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
+                sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), RND.parse_design("stratified:1"),
                            None)}
     assert [n for n, _t in alone.fn.signature()[0]] == [sz.CARRY]
     by: dict[int, list] = {}
@@ -603,7 +604,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
-    N, design = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
+    N, design = sum(counts.values()), RND.parse_design(f"stratified:{2 * G * T}")
     lanes, sched = sz.lane_kinds(cls), SimpleNamespace(lanes=cls.NR)
     assert lanes == PC.prog_params(cls.NR)
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
@@ -655,7 +656,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
         lambda B, S_, s, *entries: B.batch(
             unit, s, *(sz.array_of([e[m // cls.EVERY] for m in range(N)]) for e in entries), axes=(None, 0, 0)),
         register=False)))
-    query, design = sz.PA.template_instances_query([unit]), sz.DR.parse_design(f"stratified:{N}")
+    query, design = sz.PA.template_instances_query([unit]), RND.parse_design(f"stratified:{N}")
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
     reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
@@ -811,7 +812,7 @@ def _program(T: int) -> tuple:
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     defs = {"start": START, "ingress": ING, "egress": EG}
     return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
-            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_design(f"stratified:{2 * T + 1}"))
+            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
 def test_an_execution_phases_answer_is_one_stages_on_its_registration():
@@ -969,7 +970,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     assert PC.scan_ok.held(PC.scan_ok.constants(T), {"roots": oks})
     roots = sz.network_attester_roots([{"network_certifier": m.network_attester} for m in honest]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
-    law = sz.DR.parse_design(f"stratified:{N}")
+    law = RND.parse_design(f"stratified:{N}")
 
     reads = sz.state_reads([m.ports for m in honest])
     assert reads == {"o0": {"leaf": 0, "units": [0, 1]}, "o1": {"leaf": 1, "units": [1, T]},
@@ -989,7 +990,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
+    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), RND.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
                        for j in range(cls.NR)]
@@ -997,7 +998,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     def block_audit(o0: list[dict], ports: list[str] = entries, scan_state: dict | None = state,
                     sampled: int | None = None, served: bool = False, registered: bool = False) -> dict:
         stated = [{"port": "scan/state", **scan_state}] if scan_state and not (served or registered) else []
-        law = sz.DR.parse_design(f"subset:{sampled}") if sampled else blaw
+        law = RND.parse_design(f"subset:{sampled}") if sampled else blaw
         held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
         window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
         breg = R.record(block, bquery, law, sz.S.SCHEME,

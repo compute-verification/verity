@@ -85,7 +85,8 @@ from verity.protocols.resource_accounting.memory.poub.prover import opening_prov
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
@@ -678,7 +679,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     n_all, ranges = P.units(program, query), P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    sampling_design = D.parse_design(f"stratified:{n_all}")
+    sampling_design = RND.parse_design(f"stratified:{n_all}")
     bound = {"partition": P.digest(part), "program": part["program"]}
     members = []
     for s, (tid, base, cnt) in zip(specs, ranges, strict=True):
@@ -931,7 +932,7 @@ def main() -> int:
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     a.k = n_all if a.k is None else a.k
     summary["k"] = a.k
-    sampling_design = D.parse_design(f"stratified:{a.k}")
+    sampling_design = RND.parse_design(f"stratified:{a.k}")
     bound = {"partition": pd, "program": part["program"]}
 
     # serving commits: each template's one member, bound to the partition
@@ -1485,7 +1486,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     fewer = R2.program([(plan_m["defn"], plan_m["n"]), (map_m["defn"], map_m["n"])], mixed=True)
     v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
+    v = V.check(rec, program, query, RND.parse_design(f"stratified:{a.k // 2 if a.k > 1 else a.k + 1}"), a0.SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-law-another-k (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, sampling_design, a0.SCHEME, {k_: w for k_, w in want.items() if not k_.startswith("canon/")}, leaf_layer=leaf_layer)

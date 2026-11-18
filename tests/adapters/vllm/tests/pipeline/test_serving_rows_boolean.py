@@ -23,7 +23,7 @@ from verity.circuits.ops.boolean import versions as BB
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from tests.pipeline import served_rope as SR
@@ -107,7 +107,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
-    v = R.check(rec, program, query, DR.parse_design(DESIGN), CS.SCHEME, ports,
+    v = R.check(rec, program, query, RND.parse_design(DESIGN), CS.SCHEME, ports,
                 leaf_layer=CS.leaf_layer({ROPE_BITS: (wdir / "m0-public.bin").read_bytes()}))
     assert v.ok, v.detail
     assert (win["partition_digest"], word["partition_digest"] != part) == (part, True)
