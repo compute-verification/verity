@@ -537,7 +537,7 @@ def sheet_of(name: str) -> tuple[str, str | None]:
 
 
 def card_bytes(sku: str) -> int:
-    """Card `sku`'s memory, its card file's `store.dram`, the verifier's `--hbm-bytes` where no node file carries it."""
+    """Card `sku`'s memory, its card file's `store.dram`, what the arena is sized from where no node file carries it."""
     return int(load_card(sku, directory=CARD_FILES)["store"]["dram"]["value"])
 
 
@@ -560,7 +560,7 @@ def card_only(sku: str, record: Path) -> str:
 
 def one_card(kind: str) -> tuple[dict, int]:
     """The verifier's node for a session on one card of node sheet `kind`: its capacities (`ledger.Node.to_json`,
-    which the verifier takes as `--node`) and its HBM (`--hbm-bytes`), from the tree's data sheets
+    what the verifier states from `one_card_figures`) and its HBM, from the tree's data sheets
     (`timing.Figures.of_sheets`) at one card, so the share is of that card's read rate and its host's. A host card
     that states no measured disk read is taken at its ceiling (`disk.read_max`); the figures no sheet states are
     `sheets.UNSHEETED`'s."""
@@ -692,8 +692,7 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
                                                leaf, given.get("NODE_ARGS")])),
-           "SESSION_NODE": kit.session_node(name, "serving", kind=kind),
-           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))}
+           "SESSION_NODE": kit.session_node(name, "serving", kind=kind)}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
     if sheet:

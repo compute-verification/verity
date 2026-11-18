@@ -32,9 +32,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   challenger's pins log, which it fetches through the same gate (`pins`), and to main's first-parent history at
   `/opt/vy-verifier/main-first-parent.txt` (`--challenger-main`; infra writes `git rev-list --first-parent origin/main`
   there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
-  (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
-  (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
-  never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
+  (`--transcript`) and keeps the registry. The audited node's figures, which its memory line is measured against
+  (`--figures`, held to `--figures-sha512`), and its ingress rate (`--ingress-bytes-per-s`) are the host's for `--peer`
+  (`/etc/vy/verifier.json`), never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
   which may open nothing else; `status RUN` says when the verifier listens, and the prover connects after that. The
   unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/poub_session/run.sh`'s ROLE=verifier
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
@@ -389,14 +389,22 @@ def parse_run(argv: list[str], settings: dict) -> dict:
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities and figures
-    (its `figures`, a file of `timing.Figures.to_json`'s form, and `figures_sha512`, their `timing.Figures.sha512`,
-    which the verifier holds the file to; refused when the peer names either not)."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's figures (its
+    `figures`, a file of `timing.Figures.to_json`'s form, and `figures_sha512`, their `timing.Figures.sha512`, which the
+    verifier holds the file to) and `ingress_bytes_per_s`; refused when the peer names any of them not, or names a
+    capacity the figures carry."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
     if "figures" not in node or "figures_sha512" not in node:
         raise Refused(f"the peer {req['peer']!r} names no figures in /etc/vy/verifier.json (its `figures`, the file "
                       "`benchmarks/poub_session/sheets.py NODE` writes for its node, and `figures_sha512`, their "
                       "`timing.Figures.sha512`): the verifier reads them and holds the file to the digest")
+    if "ingress_bytes_per_s" not in node:
+        raise Refused(f"the peer {req['peer']!r} names no ingress_bytes_per_s in /etc/vy/verifier.json: the read "
+                      "ceiling of every route into its memory but a rebuild, which the paced line charges and a "
+                      "missing one would charge as 0")
+    if stale := sorted({"host_bytes", "hbm_bytes"} & set(node)):
+        raise Refused(f"the peer {req['peer']!r} names {', '.join(stale)} in /etc/vy/verifier.json, which its figures "
+                      "carry (`host_dram_bytes`, `gpus` × `gpu_hbm_bytes`): delete them from the entry")
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
@@ -406,14 +414,12 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
             "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main),
-            "--figures", str(node["figures"]), "--figures-sha512", str(node["figures_sha512"])]
+            "--figures", str(node["figures"]), "--figures-sha512", str(node["figures_sha512"]),
+            "--ingress-bytes-per-s", str(node["ingress_bytes_per_s"])]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:
             argv += [f"--challenger-{name}" if name == "minutes" else key, str(req[name])]
-    for key in ("host_bytes", "hbm_bytes", "ingress_bytes_per_s"):
-        if key in node:
-            argv += ["--" + key.replace("_", "-"), str(node[key])]
     if "paced" in req:
         argv += ["--paced", *req["paced"]]
     return argv
