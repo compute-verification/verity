@@ -70,6 +70,10 @@ def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree wkey 0))]
 #guard refused (fileJ [("x", portJ (fieldTree wkey 0)
   [("tree", Json.mkObj [("template", Json.str wkey), ("field", Json.str "o0")])])])
 
+-- every port's reads are derived from the verifier's program: without it every port is refused
+#guard (withPositions default default none (some #[x])).toOption.isNone
+#guard (withPositions default default none none).toOption == some none
+
 -- unit 8 + i reads writer leaf 7 - i, derived from C
 def resolved? : Option Registered.Port := (treeReads prog units 0 x).toOption
 #guard resolved?.map (fun r => (r.readsRel, r.readsFrom)) == some ((Array.range 8).map fun i => some (7 - i), 8)

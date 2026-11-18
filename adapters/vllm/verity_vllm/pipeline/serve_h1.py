@@ -104,6 +104,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 from verity_vllm import messages as M
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline.serve_admit import admission_order
 
 logger = init_logger(__name__)
 
@@ -238,7 +239,6 @@ def refusal(opts: Any) -> str | None:
         return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
                 "the seal until that coin's flip: give one of them")
     if opts.protocols_config and not opts.protocols:
-        from verity_vllm.pipeline.serve_openai import admission_order
         if admission_order(opts) == "arrival":
             return "--protocols-config without --protocols or an admission order"
     if not opts.protocols:

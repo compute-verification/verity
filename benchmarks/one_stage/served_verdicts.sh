@@ -453,6 +453,9 @@ for under in "$OUT" ${RESEARCH_RUN_DIR:+"$RESEARCH_RUN_DIR"}; do
 done
 # the run's tool logs, builds and the node's facts: paths, hosts and free text, which no run record or upload may carry
 LOGS=$D/private/logs
+# step 3's records audit, relative to D: whole in the path prover's keep (PP_KEEP), since it holds the window's
+# registration, its case, the advice's length and what is counted from it; never under OUT
+SERVED_ARM=private/logs/sampled-proofs/keep/served
 logs_dir() { (umask 077; mkdir -p "$LOGS/v3c-audit"); }
 [ ! -d "$D" ] || logs_dir  # the serve dir itself is made after the preflight
 export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$D/private\"}"}  # where a replay bundle's keys and salts go
@@ -727,7 +730,7 @@ coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CH
   say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
   return 20
 }
-sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/sampled-proofs-served/summary.json" SAMPLED-PROOFS; }  # step 3's
+sampled_coins() { coin_trees_held "$SP_CHALLENGER" "$D/$SERVED_ARM/summary.json" SAMPLED-PROOFS; }  # step 3's
 v3c_trees() { coin_trees_held "$V3C_CHALLENGER" "$VW/audit/summary.json" V3C-AUDIT; }  # V3c's audit's, VW its directory
 v3c_gate() {  # V3C_CHALLENGER's gate as the command `served_verdicts.py gate` runs, the ssh records_audit's session reaches
   local g=(ssh -o BatchMode=yes)
@@ -1474,8 +1477,8 @@ deferred_inputs() {
   {
     printf '%s\n' weights_registration.json deployment-registration.json "$(v3c_record)" windows.jsonl seals.jsonl \
       requests.jsonl declaration.json \
-      h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
-      sampled-proofs-served/window/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
+      h1/log.jsonl "h1/w$K/window-commit.json" "$SERVED_ARM/summary.json" "$SERVED_ARM/window/audit.json" \
+      "$SERVED_ARM/window/registration.json" "$SERVED_ARM/runs.json" private/pouw/period/case.json \
       private/pouw/period/answer.json private/deferred/inference-only.json "pearlplus/w$K/registration.json" \
       "pearlplus/w$K/window-commit.json" served-compare/served_compare.json
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
@@ -1597,14 +1600,14 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # SPOT audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
 # tied to H1's or Pearl+'s W; else step 3's records audit
 sampled_of_record() {
-  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
+  if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo "$SERVED_ARM"; fi
 }
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
 # serve dir, and nothing else. The record's: its SPOT audit's (`sampled_of_record`) summary, audit record,
 # registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
 # private/compose/pieces), Pearl+'s verdict of record's among them (`pearlplus_of_record`'s: the auditor's ledger, the
 # coin record, Pearl+'s answer, the Lean verdict and each challenger session's public key, out/key.json at its path, and
-# no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
+# no other file of a session). The composite's: each records audit's cases ($SERVED_ARM's and V3c's
 # window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
 # file, each session's record and proofs, the lookup tables), H1's log and each record it names, the serve's first
 # registration record where it wrote one, each window's Pearl+ record W and audit's record R that the serve dir holds
@@ -1619,7 +1622,7 @@ COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.
 pearlplus-answer.json pearlplus-lean.json"
 handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once, the record's audit $1's among them
   local a blobs cases=()
-  for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+  for a in "$SERVED_ARM" "v3c-w$K-$vtag/audit"; do
     [ -f "$D/$a/window/case-v2.json" ] && cases+=("$D/$a/window/case-v2.json")
   done
   [ -f "$D/private/pouw/period/case.json" ] && cases+=("$D/private/pouw/period/case.json")
@@ -1640,7 +1643,7 @@ EOF
       private/pouw/period/case.json private/pouw/period/answer.json "pearlplus/w$K/tie/window/registration.json" \
       "pearlplus/w$K/tie/summary.json" "pearlplus/w$K/tie/circuit-record.json" served-compare/served_compare.json \
       private/front-window
-    for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
+    for a in "$SERVED_ARM" "v3c-w$K-$vtag/audit"; do
       printf "$a/window/%s\n" case.json case-v2.json case-error.txt case-v2-error.txt
     done
     [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
@@ -1657,7 +1660,7 @@ for x in open(sys.argv[1]):
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
   local d f steps why rc sampled
   sampled=$(sampled_of_record)
-  [ "$sampled" = sampled-proofs-served ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
+  [ "$sampled" = "$SERVED_ARM" ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
@@ -1694,7 +1697,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
   rc=$?
   say "COMPOSE on COMPOSE_NODE: $HANDED_WHAT of the served node, from its compose" \
       "hand-off (verifier-side files, no witness; $([ -n "${AUDITED_ON:-}" ] && echo "V3c's audit from its follow-on node" || echo "no V3c audit");" \
-      "the record's sampled proofs ${SAMPLED_AUDIT:-sampled-proofs-served}), each file as it" \
+      "the record's sampled proofs ${SAMPLED_AUDIT:-$SERVED_ARM}), each file as it" \
       "hashed it (the serve dir's private/compose/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
   [ "$rc" = 0 ] || return 3
@@ -1713,7 +1716,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     lean=(--composite "$OUT/composite")
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
-    --sampled-proofs "$D/${SAMPLED_AUDIT:-sampled-proofs-served}" \
+    --sampled-proofs "$D/${SAMPLED_AUDIT:-$SERVED_ARM}" \
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
     ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \
@@ -2370,14 +2373,16 @@ inference_only &  # beside SPOT, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { echo "BUILD $(failed "$rc" "$LOGS/build.log")"; wait "$IOV"; stop build "$rc"; }
 export PP_PARTITION PP_SETS=${PP_SETS:-}
+SP=$D/$SERVED_ARM
+rm -rf "$SP"
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_CHALLENGER="$SP_CHALLENGER" PP_MAIN="${PP_MAIN:-${MAIN_FILE:-}}" PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" \
   PP_KEEP="$LOGS/sampled-proofs/keep" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
 (cd "$OUT/sampled-proofs" 2>/dev/null && mkdir -p "$LOGS/sampled-proofs" \
   && find . -maxdepth 1 \( -name machine.txt -o -name '*.log' -o -name '*.err' -o -name m0-build \) -exec mv -t "$LOGS/sampled-proofs" {} +)
-SP=$D/sampled-proofs-served
-rm -rf "$SP"; [ ! -d "$OUT/sampled-proofs/served" ] || { mv "$OUT/sampled-proofs/served" "$SP" \
+# run.sh keeps the served arm in $SP; where it published it under OUT instead, it goes to $SP before anything reads it
+[ -d "$SP" ] || [ ! -d "$OUT/sampled-proofs/served" ] || { (umask 077; mkdir -p "${SP%/*}") && mv "$OUT/sampled-proofs/served" "$SP" \
   && (cd "$SP" && find . -name '*.json' | sed 's|^\./||') | "$SAY_PY" "$SV" rebase "$SP" "$OUT/sampled-proofs/served"; }
 # run.sh's records copy holds the window's request lists (windows.jsonl), its request count and prefill tokens
 # (serve.json) and the advice's length (registration.json): the published copy is the registration's public form alone

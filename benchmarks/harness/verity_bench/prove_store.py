@@ -446,9 +446,13 @@ def at_record(store: Any) -> dict:
 def serving(root: Path, workload: Workload) -> P.Serving:
     """The stated serving rate: the fleet's assumed serving MFU of the card's data-sheet peak."""
 
-    gpu = O.card(workload.card)
+    gpu = O.card(workload.short)
     peak = overhead_records.census(root)["flop_per_s"][gpu.gpu]
-    mfu = tomllib.loads((root / FLEETS).read_text())["fleet"][workload.fleet]["mfu_serve"]
+    fleets = tomllib.loads((root / FLEETS).read_text())["fleet"]
+    if workload.fleet not in fleets:
+        raise ValueError(f"{FLEETS} has no fleet `{workload.fleet}` for the {gpu.name} ({workload.card}): its fleets are "
+                         f"{', '.join(sorted(fleets))}")
+    mfu = fleets[workload.fleet]["mfu_serve"]
     return P.Serving(mfu["value"], peak,
                      f"MFU {mfu['value']:g} ({mfu['status']}, {mfu['low']:g} to {mfu['high']:g}: {mfu['source']}; {FLEETS} "
                      f"`{workload.fleet}`) of the {gpu.name}'s data-sheet peak, {peak:.5g} FLOP/s "

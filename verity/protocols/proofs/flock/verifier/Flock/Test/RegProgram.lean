@@ -33,7 +33,7 @@ then `Registered.check` on the statement (its units derived); setup's `checkComp
 def run (program : Option ByteArray) (f : Option Json) (p : Public) : Except String Unit := do
   let own ← f.mapM Registered.ofJson
   Registered.checkProgram program own.isSome
-  Registered.check lane p own true
+  Registered.check lane p (own.map Flock.Test.RegFormats.derivedReads) true
 
 def why (program : Option ByteArray) (f : Option Json) (p : Public) : String :=
   match run program f p with

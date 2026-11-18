@@ -177,15 +177,17 @@ class Measured:
     opening: str
     opening_ands: int
     opening_sessions: dict[str, dict[tuple[int, int], float]]
-    h200: dict[str, dict[tuple[str, int, int, int], tuple[float, float | None, float]]]
+    #: a card's own observations, by run, where its entry in the file holds them (``runs``); a card without them reads
+    #: the RTX PRO 6000's (`s8` and `opening`)
+    runs: dict[str, dict[str, dict[tuple[str, int, int, int], tuple[float, float | None, float]]]]
     cards: dict[str, tuple[dict[str, str], str]]
 
     def observations(self, card: str = "rtx-pro-6000") -> list[Observation]:
         if card not in self.cards:
             raise ValueError(f"no card {card!r}: one of {', '.join(self.cards)}")
-        if card == "h200":
+        if card in self.runs:
             return [Observation(run, t, a, c, d, prove=p, verify=v, stage=s)
-                    for run, points in self.h200.items() for (t, a, c, d), (p, v, s) in points.items()]
+                    for run, points in self.runs[card].items() for (t, a, c, d), (p, v, s) in points.items()]
         return [Observation(self.s8_run, f"ScaledMmS8Coordinate_v1{{K={k}}}", s8_coord_ands(k), c, d, prove=p, verify=v,
                             stage=s) for (k, c, d), (p, v, s) in self.s8.items()] + \
             [Observation(run, self.opening, self.opening_ands, c, d, prove=p)
@@ -202,7 +204,8 @@ def load(path: Path = MEASURED) -> Measured:
         s8={(k, c, n): (p, v, s) for k, c, n, p, v, s in d["s8"]["points"]},
         opening=d["opening"]["template"], opening_ands=d["opening"]["ands"],
         opening_sessions={run: {(c, n): p for c, n, p in pts} for run, pts in d["opening"]["sessions"].items()},
-        h200={run: {(t, a, c, n): (p, v, s) for t, a, c, n, p, v, s in pts} for run, pts in d["h200"].items()},
+        runs={card: {run: {(t, a, c, n): (p, v, s) for t, a, c, n, p, v, s in pts} for run, pts in e["runs"].items()}
+              for card, e in d["cards"].items() if "runs" in e},
         cards={card: (c["key"], c["price"]) for card, c in d["cards"].items()})
 
 
@@ -211,5 +214,4 @@ I = DEFAULT.inputs
 MODELS = DEFAULT.models
 CARDS = DEFAULT.cards
 KEY = CARDS["rtx-pro-6000"][0]
-KEY_H200 = CARDS["h200"][0]
 observations = DEFAULT.observations
