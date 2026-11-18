@@ -598,7 +598,7 @@ theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
       exact ⟨s.1, k, m, hs.1.1, hk, hp, hm, hgg, hw⟩)
     (fun s s' hs hx => ⟨(Resolve.step_ok P hroot hB hL _ s _ hs.1 hx).2 s' rfl,
       ((step_wide P hroot hB hD hW _ s _ hs.1 hx).2 s' rfl).trans hs.2⟩)
-    _ _ _ ⟨hinv, rfl⟩ h
+    _ _ _ ⟨hinv, rfl⟩ (Flock.Program.resolve_run h)
 
 /-! ## The walk arrives where the layout says -/
 

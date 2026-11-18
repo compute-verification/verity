@@ -3565,6 +3565,7 @@ theorem param_ok (P : Prog) (hF : RootFacts P) (hwk : Desc.walkable P = true) (s
         ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := Nat.mul_le_mul_left _ (by omega)
     omega
   exact OperandsResolve.resolve_ok P ⟨hF.1, hF.2.1⟩ (good_bodyOk P hF) (laidOut_of P hwk) hc hF.2.2.1 hz hfuel
+    (OperandsResolve.resolvable_recut P hres)
     sc.off sc ⟨true, i, j⟩ ⟨hg, ⟨fun _ => ⟨hi, hj⟩, fun h => by cases h⟩, fun _ => le_refl _, fun h => by cases h⟩
 
 /-- **Every parameter position a body node reads resolves**, in any activation of the body resolution reaches: the

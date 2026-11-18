@@ -42,7 +42,8 @@ record first, and the digest of the run's own record. `params` is not read.
 `evaluate` gives the summary and the verdict, or the first refusal's code, in this order:
 
 1. `instance`, `params`: a field is missing or of the wrong JSON kind; `Γ`, `α` or a pin is not as stated.
-2. `program`, `not-topological`: the Program is refused as `Desc.evaluate` refuses one before it analyzes it.
+2. `program`, `not-topological`: the Program is refused as `Desc.evaluate` refuses one before it analyzes it;
+   `recut-unread`: its root reads an input node in leaves of part of its leaf width (`Body.recut`).
 3. `record`: the record's text is no JSON object.
 4. `trusted`: as `Theta.trustedOf` refuses it.
 5. `run-program`, `run-circuit`: the run's record does not name this Program, or its `window.circuit` is not the
@@ -372,6 +373,12 @@ def OWN_ROWS : String :=
   "record: build its root as templates over input nodes of their own or other templates' outputs, each input " ++
   "leaf handed once."
 
+/-- What a `recut-unread` refusal says, with its fix. -/
+def RECUT_UNREAD : String :=
+  "the Program reads an input node in leaves of part of its leaf width (`refs.recut`), and the record " ++
+  "check reads whole input leaves, so it would misread them. Fix the Program, not the record: register " ++
+  "each input at the leaf width its reader reads."
+
 /-- A port's leaf width as a refusal names it. -/
 def widthName : Option Nat → String
   | some w => s!"{w} bits"
@@ -435,6 +442,7 @@ def front (j tr : Json) : Except String Front := do
   if P.orderViolation.isSome then throw "not-topological"
   if !(Desc.rootLaidOut P && Desc.inputsAtRoot P) then throw "program"
   if !Desc.walkable P then throw "program"
+  if !(P.defs[P.root]!).body.recut.isEmpty then throw "recut-unread"
   let doc ← match Flock.JsonParse.parse i.record with
     | .ok (.obj kvs) => pure (Json.obj kvs)
     | _ => throw "record"
@@ -852,11 +860,13 @@ def evaluate (j tr : Json) : Except String Json := do
   let failure := rate c.f.i.gamma c.f.i.num c.f.i.den s
   return Json.mkObj (s.fields ++ [("complies", Json.bool failure.isNone), ("failure", failureJson failure)])
 
-/-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`); for
+/-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`), for
+`recut-unread` `RECUT_UNREAD`; for
 `leaf-widths` the first wire that does not land whole, its two rows' bits or its two leaf widths, and the fix
 (`unwhole`). None for any other code. -/
 def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
+  else if code == "recut-unread" then some RECUT_UNREAD
   else if code == "leaf-widths" then
     match front j tr with
     | .ok f => match wiring f.P f.doc with
