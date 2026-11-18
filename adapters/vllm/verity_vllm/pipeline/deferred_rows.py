@@ -62,7 +62,7 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     if ctx.get("slim"):
         raise CPU.Refused(f"{bdir} is a slim bundle: it holds the replay's picks, not every unit of the population")
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
-    if (sw := ctx.get("served_window")):
+    if ctx.get("served_window"):
         return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
                                commitment=store.commit_scheme, manifest=None,
                                loaded={}, digests={}, programs={}, program_dirs={},
