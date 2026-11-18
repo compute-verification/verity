@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from verity import config as K
+from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity_cli import run as R
 
@@ -169,12 +170,12 @@ def test_pearl_pluss_class_is_the_runners_and_refused_by_name_where_the_workload
         rc, _, err = dry(capsys, config=remote(tmp_path, {"class": bad}))
         assert rc == 2 and "refused params: class is SLOTS,PROMPT,OUTPUTS" in err, err
     rc, _, err = dry(capsys, config=remote(tmp_path, {"classes": "4,27,2"}))
-    assert rc == 2 and "refused unknown-key" in err and "known: class, tie-uniform" in err
+    assert rc == 2 and "refused unknown-key" in err and "known: class, challenger, coins, cubin, kernel, schedule, session, tie-uniform, transcript_dir" in err
 
 
 def test_the_uniform_tie_is_set_only_when_asked(tmp_path, capsys):
     assert "PEARLPLUS_TIE_UNIFORM" not in T.variables(R.load(CONFIG, REG), BINDINGS)
-    assert R.load(CONFIG, REG)["params"][PP] == {"tie-uniform": False}
+    assert R.load(CONFIG, REG)["params"][PP] == PEARL_PLUS.settings
     for asked, want in ((True, "1"), (False, None)):
         rc, got, err = dry(capsys, "--bindings", bindings(tmp_path), config=remote(tmp_path, {"tie-uniform": asked}))
         assert rc == 0 and hooks_of(got).get("PEARLPLUS_TIE_UNIFORM") == want, err
