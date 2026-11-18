@@ -2,8 +2,9 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama32-1b-bf16-h200-served-arm"
 # `llama32-1b-bf16-rtx-served-arm` on one H200 (sm_90a): its arms, sweep, reps and engine settings, so its rows differ
-# from the RTX PRO 6000's in the device alone.
-arms = ["stock", "stock@compiled", "served-commit-rows-4k", "commit-rows-4k-eager"]
+# from the RTX PRO 6000's in the device alone, and beside them `vllm serve`'s BF16 and FP8 (`stock@serve`,
+# `stock-fp8@serve`), which the RTX's spec doesn't run.
+arms = ["stock", "stock@compiled", "served-commit-rows-4k", "commit-rows-4k-eager", "stock@serve", "stock-fp8@serve"]
 arm_modules = ["served_commit.served_arm:ROWS_4K", "served_commit.served_arm:EAGER_ROWS_4K"]
 sweep = "width"
 reps = 3

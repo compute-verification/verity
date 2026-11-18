@@ -51,12 +51,12 @@ code, and fails when the code has one this list lacks.
 
 | | |
 | --- | --- |
-| Arms | a protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`), a built-in such as `stock-fp8`, or an experimental arm a spec names by its module |
+| Arms | a protocol arm (`pouw:SCHEME`, `pous:SCHEME`, or SPOT's under the vLLM adapter's key, `sampled-proofs:SCHEME`), a built-in such as `stock-fp8` or `stock-fp8@serve` (`vllm serve`'s defaults as far as the harness sets them, `serve_defaults`), or an experimental arm a spec names by its module; a protocol arm or served variant may override engine settings and sampling for itself (`ArmOverrides`) |
 | Gates before timing | `tokens` (an arm gives its control's tokens exactly), `kv-pool` (an arm and its control get the same KV-cache pool), `arm` (the arm's own gate) |
 | Gates after timing | `timed-tokens`, `engine-identity`, `arm-closing` |
-| Modes | `resident`, every arm's engine on the GPU at once and the arms interleaved rep by rep; else `blocks`, an engine for each arm in turn |
+| Modes | `resident`, every arm's engine on the GPU at once and the arms interleaved rep by rep; else `blocks`, an engine for each arm in turn; and `alone`, an arm whose engine takes the card (`stock@serve`), gated and timed in a lifetime of its own after the others |
 | Metrics of a timed rep | `time_per_output_token_s`, `time_to_first_token_s`, `tokens_per_s`, `peak_gpu_memory_bytes`; and where every rep has them, `decode_time_per_token_s`, `inter_token_latency_p50_s`, `inter_token_latency_p99_s` |
-| A result | `verity-bench/vllm-overhead/v1`: its identity, its baseline, its sweep, its gates, how it ran, and its points |
+| A result | `verity-bench/vllm-overhead/v1`: its identity, its baseline, its sweep, its gates, how it ran, its points, and where each arm's engine differs from `vllm serve`'s defaults at the pin (`vllm_serve`) |
 | A queued point | one preemptible job of the kind `vllm-bench-1gpu` |
 
 One failed gate times nothing. Every metric is reported as a mean and as a ratio to the baseline paired by rep.

@@ -68,7 +68,7 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
     assert settings.environ()["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
-def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
+def test_a_served_variants_arm_settings_take_its_control_and_no_precision(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-fp8-1gpu-compiled-full.toml").read_text()
     path = tmp_path / "spec.toml"
     section = '[arm_settings."stock-fp8@compiled"]\ncontrol = "none"'
@@ -76,7 +76,7 @@ def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
     path.write_text(source.replace(section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock-fp8@eager"'))
     spec = load_spec(path)
     assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[2].control == "stock-fp8@eager"
-    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "takes only its control"),
+    for old, new, why in ((section, '[arm_settings."stock-fp8@compiled"]\nprecision = "bfloat16"', "no precision"),
                           (section, '[arm_settings."stock-fp8@compiled"]\ncontrol = "stock"', "control must be another arm"),
                           ('[arm_settings."stock-fp8@compiled"]', '[arm_settings."stock-fp8"]', "must name a protocol arm")):
         assert old in source
@@ -131,9 +131,10 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
     assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
     assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
-    control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-    assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled)] == [
-        ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled")]
+    control, arm, compiled, *serve = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled, *serve)] == [
+        ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled"),
+        ("stock@serve", "bfloat16", None, "compiled"), ("stock-fp8@serve", "fp8", None, "compiled")]
     assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-h100-v1-h3",), "bfloat16", None)
     assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
     with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):

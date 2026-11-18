@@ -54,4 +54,28 @@ def render(doc: Mapping[str, Any]) -> str:
         lines.append(f"| {point['point']['id']}{headline} | {METRIC_LABELS[metric]} | " + " | ".join(cells) + " |")
     if not rows:
         lines.append("| no timed points | gates failed | " + " | ".join("—" for _ in arms) + " |")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines + _serve_lines(doc, arms)) + "\n"
+
+
+def _cell(value: Any) -> str:
+    return "unset" if value is None else str(value)
+
+
+def _serve_lines(doc: Mapping[str, Any], arms: list[str]) -> list[str]:
+    """Each arm's settings that differ from `vllm serve`'s defaults (`serve_defaults.differences`), where its engine
+    reported them."""
+
+    serve = doc.get("vllm_serve")
+    if not serve:
+        return []
+    ctx = serve["context"]
+    lines = ["", f"Where each arm differs from `vllm serve MODEL`'s defaults at vLLM {serve['vllm']}, on {ctx['card']} "
+                 "and this checkpoint:"]
+    for arm in arms:
+        if (got := serve["arms"].get(arm)) is None:
+            continue
+        lines += ["", f"`{arm}`" + (f": {got['note']}." if got.get("note") else ""), "",
+                  "| setting | this arm | `vllm serve` | | where vLLM sets it |", "|---|---|---|---|---|"]
+        lines += [f"| {r['setting']} | {_cell(r['arm'])} | {_cell(r['vllm_serve'])} | {r['whose']} | {r['where']} |"
+                  for r in got["differences"]]
+    return lines

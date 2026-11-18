@@ -1,0 +1,412 @@
+{
+ "llama31-8b-1gpu-pearl-c-whole-served": {
+  "arms": {
+   "pouw-pearl-c-whole": {
+    "arm": "548ffd28e5b84dac7901750f77fd00219d4d75b2f0f66ed1c2f7415204e68389",
+    "engine_args": "4c2d68cf64fa68189b1b7f2fbb3314ff71dd68d3b8b1ee72016dca1faa458874"
+   },
+   "pouw:pearl-c-sm120-v1-h3": {
+    "arm": "e566031f2f2e61a9c6e0accd6cbd2fa37a77c531e943d025f9ea7b5d41cc8b8c",
+    "engine_args": "4c2d68cf64fa68189b1b7f2fbb3314ff71dd68d3b8b1ee72016dca1faa458874"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "cf21135f1b65c3acb590714f3c30f40970565183b658a8107118b2fa4009e4b4"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "3728a993366ce5a8fe1d8b88fa48d1995b5006fb3dd52faacc033f309075dfbe"
+   }
+  },
+  "config_sha256": "a07fe8caad448c45c9511d0d32e2e9f70c8a6eddcc1619bb98efd86e3492bf14",
+  "resolved_spec_sha256": "ccc03104debc8f1c19e42b28ae6a741c0bc61609377a233d61508a9c60c9d1dc"
+ },
+ "llama31-8b-1gpu-pearl-c-whole-served-h200": {
+  "arms": {
+   "pouw-pearl-c-whole": {
+    "arm": "548ffd28e5b84dac7901750f77fd00219d4d75b2f0f66ed1c2f7415204e68389",
+    "engine_args": "4c2d68cf64fa68189b1b7f2fbb3314ff71dd68d3b8b1ee72016dca1faa458874"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "3728a993366ce5a8fe1d8b88fa48d1995b5006fb3dd52faacc033f309075dfbe"
+   }
+  },
+  "config_sha256": "6da0e848713f6ffd179e4ae5dce46eda3beeb76922aefb47de94e9b056aa5915",
+  "resolved_spec_sha256": "9369f502e20dc820187c3236057d53ce08175f76f1220fc1f2d2062511ed84e7"
+ },
+ "llama31-8b-1gpu-pouw-protocol-served": {
+  "arms": {
+   "pouw:pearl-c-sm120-v1-h3": {
+    "arm": "e566031f2f2e61a9c6e0accd6cbd2fa37a77c531e943d025f9ea7b5d41cc8b8c",
+    "engine_args": "4c2d68cf64fa68189b1b7f2fbb3314ff71dd68d3b8b1ee72016dca1faa458874"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "cf21135f1b65c3acb590714f3c30f40970565183b658a8107118b2fa4009e4b4"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "3728a993366ce5a8fe1d8b88fa48d1995b5006fb3dd52faacc033f309075dfbe"
+   }
+  },
+  "config_sha256": "08a67c48bc887bbe903759d67600ddcad0d1aa3b6b40977b6407be218d70c9b9",
+  "resolved_spec_sha256": "01a82acd425762cef6df2fc16044878c55370e730be150c9a8a96917b3b17e14"
+ },
+ "llama31-8b-1gpu-pouw-protocol-served-b32": {
+  "arms": {
+   "pouw:pearl-c-sm120-v1-h3": {
+    "arm": "e566031f2f2e61a9c6e0accd6cbd2fa37a77c531e943d025f9ea7b5d41cc8b8c",
+    "engine_args": "4c2d68cf64fa68189b1b7f2fbb3314ff71dd68d3b8b1ee72016dca1faa458874"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "cf21135f1b65c3acb590714f3c30f40970565183b658a8107118b2fa4009e4b4"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "3728a993366ce5a8fe1d8b88fa48d1995b5006fb3dd52faacc033f309075dfbe"
+   }
+  },
+  "config_sha256": "ae273532982966054ff33fc84e469b706266348c7041a4f5604fd34a75d371a4",
+  "resolved_spec_sha256": "dbab8681b3c5126eff4df2898a505949b658a554f885fa601fdad634434fce86"
+ },
+ "llama31-8b-fp8-1gpu": {
+  "arms": {
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "42ccea04ef442ec1dcd3a8de58a2d78d39c5079f0a8854d2d4dc8a53891c5b2e"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   }
+  },
+  "config_sha256": "4619ffbeb29df44e6240277e73bb200655c1260d1553486a586f022f984549f5",
+  "resolved_spec_sha256": "4bbc834398dfc60606ea91ed457353df00a17f144d06aad2f78095406fe1de12"
+ },
+ "llama31-8b-fp8-1gpu-bandwidth-ablation": {
+  "arms": {
+   "bandwidth-audit": {
+    "arm": "5813c9117f388872c43256a7befbea6b32c41c6f423453aa9f910bfbf0e12370",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-audit-spans": {
+    "arm": "530c6463546b60b7fcd79b174a062f9ac924a29c597c5dc4beeb30e55b0fafe8",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-audit-spans-no-topup": {
+    "arm": "abb99d1f01d756a2ca834df1f997069b8fb1576e0ff48d0afa487801414536aa",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-plain": {
+    "arm": "c4f75d70473c74b7028c330e9a2c7d599a77ecc80bbfff8fcba39b3ee778c0d0",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-plain-spans": {
+    "arm": "90388327cdea5922ccce6155147113c827034f8944ff31317362b0a44615a525",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-plain-spans-no-topup": {
+    "arm": "ee5e258a0fb6d62b537694ee7c3fa9b39d132d6a98f8594454d2ec3116128ec5",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   }
+  },
+  "config_sha256": "baba871ae154a93d8db9036266f4299caa5f78af3995ca89e76cc651e9c22994",
+  "resolved_spec_sha256": "212cd5f762fd7c4560aa0321d82c18c459fa1a1af08d5d1e07e1a231be534573"
+ },
+ "llama31-8b-fp8-1gpu-bandwidth-served-h200": {
+  "arms": {
+   "bandwidth-audit": {
+    "arm": "5813c9117f388872c43256a7befbea6b32c41c6f423453aa9f910bfbf0e12370",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-plain": {
+    "arm": "c4f75d70473c74b7028c330e9a2c7d599a77ecc80bbfff8fcba39b3ee778c0d0",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "f00b20bd5f2742b8b9b327dd99bfb2631e18ebb0af3333f7eb8130f4a7a251b1"
+   }
+  },
+  "config_sha256": "32d65d1ea0572763b1fe1bea6f623a053fbde109bea48988d8f6dd58c7a51720",
+  "resolved_spec_sha256": "058d44c149f3aa92409fb4728cf47518bbe02ebc89997602293d8d41d74f6a17"
+ },
+ "llama31-8b-fp8-1gpu-bandwidth-served-r6": {
+  "arms": {
+   "bandwidth-audit": {
+    "arm": "5813c9117f388872c43256a7befbea6b32c41c6f423453aa9f910bfbf0e12370",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "bandwidth-plain": {
+    "arm": "c4f75d70473c74b7028c330e9a2c7d599a77ecc80bbfff8fcba39b3ee778c0d0",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "5dd51595b0df15762c04de6fd540ed36d99a096d4898d499308d0c6a80c1d2ff"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "f00b20bd5f2742b8b9b327dd99bfb2631e18ebb0af3333f7eb8130f4a7a251b1"
+   }
+  },
+  "config_sha256": "437af853a3280291e62c0727096b47bb16764e2aee852b35343d14fd3213fc07",
+  "resolved_spec_sha256": "fd508b90bd4af187ab2c8833ad419de54cd8155103050fd06e329645cc1a73c8"
+ },
+ "llama31-8b-fp8-1gpu-commit-served": {
+  "arms": {
+   "commit": {
+    "arm": "8a6a3a9051b170e358636fe5984a86195397348b969d9af52d2f0edfda5997af",
+    "engine_args": "0879315484146f2cf1bd65870032b65f2a9a07c9d331a040d042571ee54b54ff"
+   },
+   "commit@compiled": {
+    "arm": "246aa39b332fb39c39dc70035b2ff2d122167d293a22d618bdc98e1ca8d84b09",
+    "engine_args": "f00b20bd5f2742b8b9b327dd99bfb2631e18ebb0af3333f7eb8130f4a7a251b1"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "0879315484146f2cf1bd65870032b65f2a9a07c9d331a040d042571ee54b54ff"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "f00b20bd5f2742b8b9b327dd99bfb2631e18ebb0af3333f7eb8130f4a7a251b1"
+   }
+  },
+  "config_sha256": "396ac3c613191c5e4af71af10047c186e9fab02ef223e9e5c407d39741292772",
+  "resolved_spec_sha256": "5cf019d5376a6c3fcbbd4445c7fc63b243632e2909f2687d33f8c0c152fd1f74"
+ },
+ "llama31-8b-fp8-1gpu-commit-served-width": {
+  "arms": {
+   "commit@compiled": {
+    "arm": "246aa39b332fb39c39dc70035b2ff2d122167d293a22d618bdc98e1ca8d84b09",
+    "engine_args": "55fc6de745425664fe6590177f3ffe2abd8cfbce8fa8702cbbc8cc114c3cb538"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "55fc6de745425664fe6590177f3ffe2abd8cfbce8fa8702cbbc8cc114c3cb538"
+   }
+  },
+  "config_sha256": "b435905c77f1ba3ba604e0c5d1532cb2681ecbcace0fb111e24459544a91e3c7",
+  "resolved_spec_sha256": "fddf4a7b4a450e155c53e25642f0382cd5f096981c1d8cd862465f5e3313ae53"
+ },
+ "llama31-8b-fp8-1gpu-commit-served-width-h200": {
+  "arms": {
+   "commit@compiled": {
+    "arm": "246aa39b332fb39c39dc70035b2ff2d122167d293a22d618bdc98e1ca8d84b09",
+    "engine_args": "55fc6de745425664fe6590177f3ffe2abd8cfbce8fa8702cbbc8cc114c3cb538"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "55fc6de745425664fe6590177f3ffe2abd8cfbce8fa8702cbbc8cc114c3cb538"
+   }
+  },
+  "config_sha256": "78b88ad5fb175c27addbf17abd10415c6e6c5eddd2d67b66899cb58260cf661c",
+  "resolved_spec_sha256": "87b0a001610a555c7954b6d8892823a7987fea07963fede7693a585757d76a2e"
+ },
+ "llama31-8b-fp8-1gpu-compiled-full": {
+  "arms": {
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "cf21135f1b65c3acb590714f3c30f40970565183b658a8107118b2fa4009e4b4"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "3728a993366ce5a8fe1d8b88fa48d1995b5006fb3dd52faacc033f309075dfbe"
+   },
+   "stock-fp8@eager": {
+    "arm": "52bd9896ff1f0fbe7a878ccceac333272b6bd6588713fbdd5999c1bacf200934",
+    "engine_args": "81b9c752bcc3ce8b20ba738021cb6b2e81b7a36b6c37511a3bf9b4c99e99e172"
+   }
+  },
+  "config_sha256": "63678eeb952f6ea804ef71129026eb6b91b65fb9726f696450d4139992e932c0",
+  "resolved_spec_sha256": "d4b749b66dc01c8daa5ffe0da5265ebe7664c5bbdbfd5b90c05b75903351f512"
+ },
+ "llama31-8b-fp8-rtx-served-arm": {
+  "arms": {
+   "commit-rows-4k-eager": {
+    "arm": "d78beca73cff7b64e14b2212534a324a84f5aeca733814344f0a675c9a6e6892",
+    "engine_args": "3614888f152787a24af909b0f793f7ff2a4c980c5bc83b39e870ce41f59361dd"
+   },
+   "served-commit-rows-4k": {
+    "arm": "0173103bb00a7f7e7075eeeeed776df812b2a9fd135f41ecf610a46ee87e13be",
+    "engine_args": "aeb3a4f97f815c4265291509e79ca97e49ff7bfdb0209bedca66e23c7c052d87"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "3614888f152787a24af909b0f793f7ff2a4c980c5bc83b39e870ce41f59361dd"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "aeb3a4f97f815c4265291509e79ca97e49ff7bfdb0209bedca66e23c7c052d87"
+   }
+  },
+  "config_sha256": "96762d9f6a3ceaa47676d309dd92264d4678a769bcffa30154ab2b4c2ad28db6",
+  "resolved_spec_sha256": "0d1242cbfc8cb45927c08c28ab364ba4dd025471001372f23ded6ee638dfdda2"
+ },
+ "llama32-1b-1gpu-pouw-protocol-served-h100": {
+  "arms": {
+   "pouw:pearl-c-h100-v1-h3": {
+    "arm": "b5822d575460d31da80a0955f44c88685597d7b09e1ee96319b5167f7dcc68c3",
+    "engine_args": "0f98e2510023f507e7c5b220126ffb9d206668cb4190efbe1336000d5e41cc11"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "fd38330940bfbb68a6694456c1fd921b41740ea06d78bc0c97fbcb828a94f76e"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "bb794a796479799cd39efa9c917b9ec0c1d157e7489062b6a696a114fc7c32cf"
+   }
+  },
+  "config_sha256": "6308b3fd2e6b0aed02ac1df0ffb02a02ccd4cbb1e447af43c3d1beae2b5a7d83",
+  "resolved_spec_sha256": "ae79db1968799140cef46a603380baad43a7a6960c608b17af412ac89dfeccfc"
+ },
+ "llama32-1b-1gpu-pouw-protocol-served-h200": {
+  "arms": {
+   "pouw:pearl-c-h100-v1-h3": {
+    "arm": "b5822d575460d31da80a0955f44c88685597d7b09e1ee96319b5167f7dcc68c3",
+    "engine_args": "0f98e2510023f507e7c5b220126ffb9d206668cb4190efbe1336000d5e41cc11"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "fd38330940bfbb68a6694456c1fd921b41740ea06d78bc0c97fbcb828a94f76e"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "bb794a796479799cd39efa9c917b9ec0c1d157e7489062b6a696a114fc7c32cf"
+   }
+  },
+  "config_sha256": "93d93a977f42a70491ba7c77c081eb393831ba195c5e5d2a23566171897af038",
+  "resolved_spec_sha256": "f7b4088db93604ffb1d602992dd88a23ddc74b279e548e9189f91c5c8efc789a"
+ },
+ "llama32-1b-bf16-h100-served-arm": {
+  "arms": {
+   "commit-rows-4k-eager": {
+    "arm": "455d1bd74fc6756ff91276b25d9b885125ae580d9ce33d90df64fa996be028ef",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "served-commit-rows-4k": {
+    "arm": "645ae24121e1691b4777f233426d348a26a969c8ac50205a17e9302ee01aa7cc",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   },
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "stock@compiled": {
+    "arm": "bcadd10a8f659dc65b314b84570a8e08b66fb7df54febbc45732c344470f1cc8",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   }
+  },
+  "config_sha256": "5522881fdad8c720c86cd108e3ff9d5834133164352c46a7a8c327aee5fa6956",
+  "resolved_spec_sha256": "cbfb4dabc14e8624d12875dc365ec58c70d3a935ee9173a1ddc5423308be925a"
+ },
+ "llama32-1b-bf16-h200-served-arm": {
+  "arms": {
+   "commit-rows-4k-eager": {
+    "arm": "455d1bd74fc6756ff91276b25d9b885125ae580d9ce33d90df64fa996be028ef",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "served-commit-rows-4k": {
+    "arm": "645ae24121e1691b4777f233426d348a26a969c8ac50205a17e9302ee01aa7cc",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   },
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "stock@compiled": {
+    "arm": "bcadd10a8f659dc65b314b84570a8e08b66fb7df54febbc45732c344470f1cc8",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   }
+  },
+  "config_sha256": "8078e46cc4460d42df2a4a3addc7e5e45d99cbf5c28e147760da716c4f8e06fe",
+  "resolved_spec_sha256": "a9a78ecbf6bc877e33c02e19e744441e46525f0caec2f5d130681baf90d8e42d"
+ },
+ "llama32-1b-bf16-rtx-served-arm": {
+  "arms": {
+   "commit-rows-4k-eager": {
+    "arm": "455d1bd74fc6756ff91276b25d9b885125ae580d9ce33d90df64fa996be028ef",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "served-commit-rows-4k": {
+    "arm": "645ae24121e1691b4777f233426d348a26a969c8ac50205a17e9302ee01aa7cc",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   },
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "49f0588331a79754222080786436795e7f9168a84eac3b07a698d63d56f58a1c"
+   },
+   "stock@compiled": {
+    "arm": "bcadd10a8f659dc65b314b84570a8e08b66fb7df54febbc45732c344470f1cc8",
+    "engine_args": "e46928663f7c7f933cf0dc6baa70845dc25416958e82fd83b7de391f87582fd7"
+   }
+  },
+  "config_sha256": "9e7de6a2dc0ef55bfd1582caf03081df65469b8548772095e69fb78ed17d5734",
+  "resolved_spec_sha256": "37c36295b24f78549c55461fa489b091f71d3ae8b92592fe2e675e55823cdec6"
+ },
+ "llama32-1b-fp8-1gpu-bandwidth-served-h200": {
+  "arms": {
+   "bandwidth-audit": {
+    "arm": "5813c9117f388872c43256a7befbea6b32c41c6f423453aa9f910bfbf0e12370",
+    "engine_args": "64dc0a5ccec5cc513d99fc6309a5bf082bda8de1f4f37d47f38375ccfd7abfc2"
+   },
+   "bandwidth-plain": {
+    "arm": "c4f75d70473c74b7028c330e9a2c7d599a77ecc80bbfff8fcba39b3ee778c0d0",
+    "engine_args": "64dc0a5ccec5cc513d99fc6309a5bf082bda8de1f4f37d47f38375ccfd7abfc2"
+   },
+   "stock-fp8": {
+    "arm": "47e0b4d8a4b45fb144fc26bf6e3d346a9fb4684a84e2e729e0f75714595f7379",
+    "engine_args": "64dc0a5ccec5cc513d99fc6309a5bf082bda8de1f4f37d47f38375ccfd7abfc2"
+   },
+   "stock-fp8@compiled": {
+    "arm": "6d2cf54fa8ff8fb9a455f31215c443503f9d0af80d14616d07436011ffee67d6",
+    "engine_args": "f00b20bd5f2742b8b9b327dd99bfb2631e18ebb0af3333f7eb8130f4a7a251b1"
+   }
+  },
+  "config_sha256": "68a12d847542e9e24ff85a34831d4fc03aa8db212ff3a795b42daa24dc329293",
+  "resolved_spec_sha256": "5fc07a8173a46ddaf0c54b00dda3701af86fdf48f6e59e4f1a5c3512ffdc8bcd"
+ },
+ "qwen3-8b-bf16-rtx-served-arm": {
+  "arms": {
+   "served-commit-rows-4k": {
+    "arm": "645ae24121e1691b4777f233426d348a26a969c8ac50205a17e9302ee01aa7cc",
+    "engine_args": "42e64420a1ab2ad7fffe82ecb7b5729f9f59391e00a1a7465092600b9ff80bf7"
+   },
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "d9d3e90b620e1c049318fefd5cec71b10f77720a6abae5a8b1a910751d7cd29f"
+   },
+   "stock@compiled": {
+    "arm": "bcadd10a8f659dc65b314b84570a8e08b66fb7df54febbc45732c344470f1cc8",
+    "engine_args": "42e64420a1ab2ad7fffe82ecb7b5729f9f59391e00a1a7465092600b9ff80bf7"
+   }
+  },
+  "config_sha256": "4b6778f9d818c2f99f1430470c64cf1284f72ad680f700b91fb1ecbd1498ecb2",
+  "resolved_spec_sha256": "13ec762bd9634ab2fad437f639e5b519c5c5cf795d29c9a6b4b19ed887621f20"
+ },
+ "qwen3-8b-bf16-rtx-served-arm-eager": {
+  "arms": {
+   "commit-rows-4k-eager": {
+    "arm": "455d1bd74fc6756ff91276b25d9b885125ae580d9ce33d90df64fa996be028ef",
+    "engine_args": "d9d3e90b620e1c049318fefd5cec71b10f77720a6abae5a8b1a910751d7cd29f"
+   },
+   "stock": {
+    "arm": "dd8e8282f14181066f5ea57aa1234c15c1935c009d7485652560fe85cdd8093b",
+    "engine_args": "d9d3e90b620e1c049318fefd5cec71b10f77720a6abae5a8b1a910751d7cd29f"
+   },
+   "stock@compiled": {
+    "arm": "bcadd10a8f659dc65b314b84570a8e08b66fb7df54febbc45732c344470f1cc8",
+    "engine_args": "42e64420a1ab2ad7fffe82ecb7b5729f9f59391e00a1a7465092600b9ff80bf7"
+   }
+  },
+  "config_sha256": "8b81770c006d23a680984226410e91dce917cdc38f350690ab1006f07f3d3daf",
+  "resolved_spec_sha256": "2ee947a06eee7f6c0ba74920f457734e0dc3ec8ddd37321b63c64e2d151bb10d"
+ }
+}
