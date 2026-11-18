@@ -183,7 +183,7 @@ A spec-level reference for network attestation's timing channel:
   private. `ReplayAdvance` sits beside each step and checks its arrivals and decision bits are the execution-phase row's at the
   heads; `ReplayLoad` runs once an execution phase and carries the decisions the last one left unread; `ReplayClose` ends the
   session with none unread. The honest prover joins the execution phases by equal openings and starts the session from the
-  empty rows under public salts; the check of both (`check_chain`) is called by no verifier. Its cost at a shape is `size`;
+  empty rows under public salts; nothing checks either. Its cost at a shape is `size`;
 - the compile slice, in vLLM's compiler (`verity_vllm.compiler.compile_slice`): `CompileSlice_v1`, a Boolean Definition
   with `check` its reference, composes `ReplayLoad`, `ReplayStep_v1` and `ReplayAdvance` on shared wires,
   `CacheStep_v1`'s calls on the attested tokens checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the
