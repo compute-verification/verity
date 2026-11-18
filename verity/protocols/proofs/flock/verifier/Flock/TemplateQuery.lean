@@ -4,7 +4,7 @@ public import Flock.Program
 
 /-!
 `Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
-verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
+verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v2`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
 `Q_template_instance` v0 (`{template}`) and `Q_template_instances` v0 (`{templates}`): every root node other than an input
@@ -62,8 +62,8 @@ def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Monad
   let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"program: not JSON: {e}"
-  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
-    throw "program: not a verity-ir/descriptor/v1 descriptor"
+  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v2" then
+    throw "program: not a verity-ir/descriptor/v2 descriptor"
   let bare := match j with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
