@@ -201,7 +201,8 @@ theorem challengerStream_size {c : LiveCommitment} {segment : Json} {after : Byt
   · ⇓? ⟨cur, out⟩ => ⌜out.size = COIN_BYTES * cur.prefix.length⌝
   all_goals first
     | (rw [List.length_append, List.length_singleton]; exact step_size ‹_› ‹_› ‹_›)
-    | exact ⟨_, by simp_all [Spot.jsonStrIs], stream_size ‹_› ‹_› (by simp)⟩
+    | (refine ⟨_, ?_, stream_size ‹_› ‹_› (by simp)⟩
+       simp_all [Spot.jsonStrIs])
 
 /-- **The coins the stream opens**: 64 bytes each, as many as the coins of the segment's family `label` the log shows
 released after `after`. -/
@@ -281,35 +282,44 @@ theorem releasedAfter_push (out : Array Entry) {p : Entry} (t i : Nat) (hp : p.k
 /-- What the release log's entries `out` and the root's entry `pending` still to release show of the lines `P` read
 so far, where `out` commits no root: each family's releases after a root are as many as its records of that root, the
 lines pair up but for `pending`'s, which reads with its family and root, and each family's records are the roots its
-pairs' root lines show. -/
-def Inv (P : List String) (out : Array Entry) (pending : Option Entry) : Prop :=
+pairs' root lines show, each of a family of `c`'s. -/
+def Inv (c : LiveCommitment) (P : List String) (out : Array Entry) (pending : Option Entry) : Prop :=
   out.toList.any (·.kind == .committed) = false →
+    (∀ ℓ, c.family ℓ = none → look out.toList ℓ = []) ∧
     (∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length) ∧
     match pending with
     | none => PairsOk none P ∧ ∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)
-    | some p => p.kind = .recorded ∧ ∃ Q a, P = Q ++ [a] ∧ PairsOk none Q ∧ rootOf a = some (p.label, p.root) ∧
+    | some p => p.kind = .recorded ∧ c.family p.label ≠ none ∧ ∃ Q a, P = Q ++ [a] ∧ PairsOk none Q ∧ rootOf a = some (p.label, p.root) ∧
         ∀ ℓ, look out.toList ℓ = sel ℓ (pairs Q)
 
-theorem inv_init : Inv [] #[] none := fun _ => ⟨fun _ _ => rfl, trivial, fun _ => rfl⟩
+theorem inv_init {c : LiveCommitment} : Inv c [] #[] none := fun _ => ⟨fun _ _ => rfl, fun _ _ => rfl, trivial, fun _ => rfl⟩
 
-theorem inv_root {P : List String} {out : Array Entry} {a root label : String} {r : Json} {bytes : ByteArray}
-    {index t i : Nat} (hI : Inv P out none) (he : event a = .ok r) (hl : Spot.getD r "label" = .str label)
-    (hr : Spot.getD r "root" = .str root) (hb : (Flock.unhex root).toOption = some bytes) :
-    Inv (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) := by
+theorem inv_root {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {a root label : String}
+    {r : Json} {bytes : ByteArray} {count index t i : Nat} (hI : Inv c P out q) (hq : ¬q.isSome = true)
+    (he : event a = .ok r)
+    (hl : Spot.getD r "label" = .str label) (hf : c.family label = some count) (hr : Spot.getD r "root" = .str root)
+    (hb : (Flock.unhex root).toOption = some bytes) :
+    Inv c (P ++ [a]) out (some ⟨.recorded, label, index, bytes, t, i⟩) := by
+  obtain rfl : q = none := by cases q <;> simp_all
   intro hc
-  obtain ⟨hB, hP, hL⟩ := hI hc
-  exact ⟨hB, rfl, P, a, rfl, hP, rootOf_eq he hl hr hb, hL⟩
+  obtain ⟨hF, hB, hP, hL⟩ := hI hc
+  exact ⟨hF, hB, rfl, by simp [hf], P, a, rfl, hP, rootOf_eq he hl hr hb, hL⟩
 
-theorem inv_release {P : List String} {out : Array Entry} {p : Entry} (b : String) (t i : Nat)
-    (hI : Inv P out (some p)) : Inv (P ++ [b]) ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩) none := by
+theorem inv_release {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {p : Entry}
+    (b : String) (t i : Nat) (hI : Inv c P out q) (hq : q = some p) :
+    Inv c (P ++ [b]) ((out.push p).push ⟨.released, p.label, p.index, p.root, t, i⟩) none := by
+  subst hq
   intro hc
   have hc0 : out.toList.any (·.kind == .committed) = false := by
     simp only [Array.toList_push, List.any_append, Bool.or_eq_false_iff] at hc
     exact hc.1.1
-  obtain ⟨hB, hk, Q, a, rfl, hQ, ha, hL⟩ := hI hc0
+  obtain ⟨hF, hB, hk, hf, Q, a, rfl, hQ, ha, hL⟩ := hI hc0
   obtain ⟨hQ', hpairs⟩ := pairsOk_snoc Q hQ b (by rw [ha]; rfl)
   have e : Q ++ [a] ++ [b] = Q ++ [a, b] := by simp
-  refine ⟨fun ℓ x => ?_, e ▸ hQ', fun ℓ => ?_⟩
+  refine ⟨fun ℓ hℓ => ?_, fun ℓ x => ?_, e ▸ hQ', fun ℓ => ?_⟩
+  · have hn : p.label ≠ ℓ := fun h => hf (h ▸ hℓ)
+    rw [look_push _ hk rfl, hF ℓ hℓ]
+    simp [hn]
   · rw [releasedAfter_push _ _ _ hk, look_push _ hk rfl, List.length_append, hB ℓ x, List.filter_append,
       List.length_append]
     congr 1
@@ -322,18 +332,10 @@ theorem inv_release {P : List String} {out : Array Entry} {p : Entry} (b : Strin
     · simp [hl]
   · rw [e, look_push _ hk rfl, hpairs, sel_snoc ℓ _ ha, hL]
 
-theorem inv_commit {P : List String} {out : Array Entry} {q : Option Entry} {l : String} {k t i : Nat}
-    {b : ByteArray} : Inv P (out.push ⟨.committed, l, k, b, t, i⟩) q := by
+theorem inv_commit {c : LiveCommitment} {P : List String} {out : Array Entry} {q : Option Entry} {l : String}
+    {k t i : Nat} {b : ByteArray} : Inv c P (out.push ⟨.committed, l, k, b, t, i⟩) q := by
   intro hc
   simp [Array.toList_push, List.any_append] at hc
-
-theorem inv_final {P : List String} {out : Array Entry} {q : Option Entry} (hI : Inv P out q) (hq : q = none)
-    (hc : out.toList.any (·.kind == .committed) = false) :
-    PairsOk none P ∧ (∀ ℓ, look out.toList ℓ = sel ℓ (pairs P)) ∧
-      ∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length := by
-  subst hq
-  obtain ⟨hB, hP, hL⟩ := hI hc
-  exact ⟨hP, hL, hB⟩
 
 theorem rest_lines : ∀ (l : List String) (n : Nat),
     ((l.zipIdx n).filter fun (x, _) => !treeLine x).map (·.1) = l.filter fun x => !treeLine x
@@ -350,42 +352,51 @@ theorem rest_lines_tail (log : List String) :
     rw [List.zipIdx_cons]
     exact rest_lines l 1
 
-theorem none_of_not_isSome {q : Option Entry} (h : ¬q.isSome = true) : q = none := by
-  cases q <;> simp_all
+theorem inv_final {c : LiveCommitment} {log : List String} {out : Array Entry} {q : Option Entry}
+    (hI : Inv c (((log.zipIdx.drop 1).filter fun (x, _) => !treeLine x).map (·.1)) out q) (hq : ¬q.isSome = true)
+    (hc : out.toList.any (·.kind == .committed) = false) :
+    PairsOk none (log.tail.filter fun l => !treeLine l) ∧
+      (∀ ℓ, look out.toList ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
+      (∀ ℓ x, (releasedAfter out.toList ℓ x).length = ((look out.toList ℓ).filter (· == x)).length) ∧
+      ∀ ℓ, c.family ℓ = none → look out.toList ℓ = [] := by
+  obtain rfl : q = none := by cases q <;> simp_all
+  rw [rest_lines_tail] at hI
+  obtain ⟨hF, hB, hP, hL⟩ := hI hc
+  exact ⟨hP, hL, hB, hF⟩
 
 /-- `Inv` at `releasedLogOf`'s loop state: the lines of the entries `pre` read so far, its entries and its root still
 to release. -/
-def InvS (pre : List (String × Nat))
-    (st : MProd (Array (String × Nat)) (MProd (List (String × Nat)) (MProd (Array Entry) (Option Entry)))) : Prop :=
-  Inv (pre.map (·.1)) st.2.2.1 st.2.2.2
+def InvS (c : LiveCommitment) (pre : List (String × Nat))
+    (st : Array (String × Nat) × List (String × Nat) × Array Entry × Option Entry) : Prop :=
+  Inv c (pre.map (·.1)) st.2.2.1 st.2.2.2
 
 set_option maxHeartbeats 4000000 in
 /-- **A log that commits no root pairs up**: where `releasedLogOf` reads the release log's lines to entries that
 commit no root, its lines after its head, its coin trees' lines aside, are a root's line and its release's in turn,
 each root's line reading with its family and root; each family's recorded roots are those its pairs' root lines show;
-and each family's releases after a root are as many as its records of that root. -/
+each family's releases after a root are as many as its records of that root; and a family that isn't `c`'s has
+no records. -/
 theorem releasedLogOf_ok {c : LiveCommitment} {log : List String} {out : Log} (h : releasedLogOf c log = .ok out)
     (hc : out.any (·.kind == .committed) = false) :
     PairsOk none (log.tail.filter fun l => !treeLine l) ∧
       (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
-      ∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length := by
+      (∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ∧
+      ∀ ℓ, c.family ℓ = none → look out ℓ = [] := by
   refine of_triple (Q := fun out => out.any (·.kind == .committed) = false →
       PairsOk none (log.tail.filter fun l => !treeLine l) ∧
       (∀ ℓ, look out ℓ = sel ℓ (pairs (log.tail.filter fun l => !treeLine l))) ∧
-      ∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ?_ h hc
+      (∀ ℓ x, (releasedAfter out ℓ x).length = ((look out ℓ).filter (· == x)).length) ∧
+      ∀ ℓ, c.family ℓ = none → look out ℓ = []) ?_ h hc
   clear h hc
   mvcgen [releasedLogOf, -Spec.throw_Except, throw_spec, event_spec] invariants
-  · ⇓? ⟨cur, st⟩ => ⌜InvS cur.prefix st⌝
-  all_goals simp only [InvS, List.map_append, List.map_cons, List.map_nil] at *
+  · ⇓? ⟨cur, st⟩ => ⌜InvS c cur.prefix st⌝
+  all_goals try simp only [InvS, List.map_append, List.map_cons, List.map_nil] at *
   all_goals first
     | exact inv_init
     | exact inv_commit
-    | (subst_vars; exact inv_release _ _ _ ‹_›)
-    | (obtain rfl := none_of_not_isSome ‹_›; exact inv_root ‹_› ‹_› ‹_› ‹_› ‹_›)
-    | (intro hc
-       have := inv_final ‹_› (none_of_not_isSome ‹_›) hc
-       rw [rest_lines_tail] at this
-       exact this)
+    | exact inv_release _ _ _ ‹_› ‹_›
+    | exact inv_root ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
+    | exact fun hc => inv_final ‹_› ‹_› hc
 
 /-! ## What the read shows -/
 
@@ -1492,7 +1503,7 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   rw [hafter] at hstream
   have hf : (freshCoins dr.label c.digest log).flatten = bitsOf ξ := by
     rw [fresh_readLog _ _ _ _ h, countFresh_eq, ← (releasedLogOf_ok hrr hcm).2.1,
-      ← (releasedLogOf_ok hrr hcm).2.2, chunks_flatten _ _ (challengerStream_ok hstream hlab)]
+      ← (releasedLogOf_ok hrr hcm).2.2.1, chunks_flatten _ _ (challengerStream_ok hstream hlab)]
   unfold ShowsSample
   rw [hafter]
   exact hf ▸ List.prefix_refl _
