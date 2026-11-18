@@ -14,8 +14,10 @@ row of every unit where `Record` reads the record's description. `RecordDifftest
 unless, on every case:
 
 * `Record.checkDetail` gives Python's `check_detail`: the summary's counts, the verdict and the failure, or
-  the first refusal's code, with its message where it has one;
-* `Record.check` gives Python's `check`, the verdict or the refusal's code and message and no other field;
+  the first refusal's code, with its message where it has one (a `wires` refusal's code alone: Python's message is
+  `check_wires`' text, Lean's SPOT's check's code and wire);
+* `Record.check` gives Python's `check`, the verdict or the refusal's code and message (a `wires` refusal's code
+  alone) and no other field;
 * `Record.kinds` gives Python's `kinds`, the class of each row asked, or the refusal's code;
 * `Record.exported` gives Python's `exported`, of each row asked its unit's slot and why the row is θ, or
   the refusal's code;
@@ -124,8 +126,9 @@ def differences (i : Nat) (case py : String) : List String :=
     let tr := c.getObjValD "trusted"
     let detail := Record.checkDetail inst tr
     let pub := Record.check inst tr
-    compare i "detail" detailFields detail (p.getObjValD "detail") ++
-      compare i "public" publicFields pub (p.getObjValD "public") ++
+    let wires := (fun fs => if detail.getObjValD "error" == Json.str "wires" then fs.erase "message" else fs)
+    compare i "detail" (wires detailFields) detail (p.getObjValD "detail") ++
+      compare i "public" (wires publicFields) pub (p.getObjValD "public") ++
       unpublishable i "Lean" pub ++ unpublishable i "Python" (p.getObjValD "public") ++
       rowsDiffer "kinds" i (Record.kinds inst tr (c.getObjValD "rows")) (p.getObjValD "kinds") ++
       rowsDiffer "exported" i (Record.exported inst tr (c.getObjValD "rows")) (p.getObjValD "exported") ++

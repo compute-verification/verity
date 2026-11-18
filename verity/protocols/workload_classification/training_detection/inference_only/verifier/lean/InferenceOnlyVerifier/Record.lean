@@ -1334,7 +1334,8 @@ def evaluate (j tr : Json) : Except String Json := do
 /-- The message of a refusal whose fix is the lowering's to make: for `own-rows` the rule (`OWN_ROWS`); for
 `shared-unheld` whether a row is not held (`SHARED_UNHELD`) or the check ran past its bound (`SHARED_UNDECIDED`); for
 `leaf-widths` the first wire that does not land whole, its two rows' bits or its two leaf widths, and the fix
-(`unwhole`). None for any other code. -/
+(`unwhole`); for `wires` the code of SPOT's check's refusal and the wire it names, where the check refuses. None for
+any other code. -/
 def messageOf (j tr : Json) (code : String) : Option String :=
   if code == "own-rows" then some OWN_ROWS
   else if code == "shared-unheld" then
@@ -1354,6 +1355,17 @@ def messageOf (j tr : Json) (code : String) : Option String :=
       | .ok W => match Spot.Wires.check W with
         | .ok wired => unwhole f.P f.ts f.leaves wired
         | .error _ => none
+      | .error _ => none
+    | .error _ => none
+  else if code == "wires" then
+    match front j tr with
+    | .ok f => match wiring f.P f.doc with
+      | .ok W => match Spot.Wires.check W with
+        | .error r => some (s!"SPOT's check of the wires refuses them at `{r.code.name}`" ++
+            match r.wire.bind (W.wires[·]?) with
+            | some w => s!": wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}."
+            | none => ".")
+        | .ok _ => none
       | .error _ => none
     | .error _ => none
   else none
