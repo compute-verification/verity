@@ -216,6 +216,18 @@ class Exchange:
             if takes is None or isinstance(event, takes):
                 fn(event)
 
+    @contextmanager
+    def unheard(self) -> Iterator[None]:
+        """No scheme hears the block's pass, which is never a record (the learn-only warm-up): its events reach no
+        subscriber, its inputs start at once and its blocks are the workload's own."""
+        subscribers, requests = self.subscribers, self.requests
+        self.subscribers = {h: [] for h in H.HOOKS}
+        self.requests = [(n, r) for n, r in requests if not isinstance(r, (H.StartOnBoundary, H.ComputeBlockWith))]
+        try:
+            yield
+        finally:
+            self.subscribers, self.requests = subscribers, requests
+
     def compute(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
         ``original`` innermost; inputs a kernel hands inward replace the block's for every kernel inside it."""
@@ -367,9 +379,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
     (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
-    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned. Where one runs
+    kernels on the card (`Scheme.kernels`), the workload's device code is handed in first (`verity_torch.pouw.hand_in`)."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
+    if any(not isinstance(s.kernels, schemes.Lacks) for s, _ in listed):
+        from verity_torch.pouw import hand_in
+        hand_in()
     return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 

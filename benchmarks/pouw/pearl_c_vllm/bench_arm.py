@@ -15,8 +15,8 @@ setting exposes.
 Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
 each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
 `runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
-against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
-control changing the transcript root.
+against x·Wᵀ within `ERR` rel RMS, the same call twice with equal tile digests under different roots (its salts are
+fresh), and the ``hash_leaf``-omitted negative control changing the tile digests (`e2e.call_verdict`).
 
 Env: ``PEARLC_KERNEL`` (default the tree's directory of the kernel scheme on the card, `kernel_directory`), ``PEARLC_CUBIN``
 (default the directory's build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the
@@ -44,6 +44,16 @@ KERNELS = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "co
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
+
+
+def _e2e() -> Any:
+    """`e2e.py`, loaded from its file: the call check's verdict (`call_verdict`, `under_salt`) and `whole_check`."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
+    e2e = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(e2e)
+    return e2e
 
 
 def kernel_directory(scheme: str, card: str) -> Path:
@@ -331,10 +341,11 @@ class PearlCArm:
         self.run, self.stack, self.weights = run, stack, weights
 
     def gate(self, target: Any) -> dict[str, Any]:
-        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the commitment twice, and the negative control."""
+        """`e2e.gate`'s call check, between passes: y against x·Wᵀ, the call twice under the salt, and the negative control
+        (`e2e.call_verdict`)."""
         import torch
 
-        run, weights = self.run, self.weights
+        run, weights, e2e = self.run, self.weights, _e2e()
         checks, seen = [], set()
         gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
         for w, W in weights.items():
@@ -350,14 +361,11 @@ class PearlCArm:
                     run.omit = frozenset(omit)
                     y = run.gemm(w, x, W, None)
                     served = y if served is None else served
-                    commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+                    commits.append(e2e.under_salt(run, run.end()))
                 run.omit = frozenset()
                 ref = x.float() @ W.float().T
                 err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-                same = commits[0] == commits[1]
-                control = commits[2]["transcript_root"] != commits[0]["transcript_root"]
-                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, "rel_rms": err, "commitment_repeats": same,
-                               "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+                checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, **e2e.call_verdict(commits, err)})
         from verity_bench.vllm.runner import PER_PASS_TOKENS
 
         run.details["passes"].clear()
@@ -461,13 +469,8 @@ class PearlCWholeArm(PearlCArm):
         self.totals = dict(self.whole.take())
 
     def gate(self, target: Any) -> dict[str, Any]:
-        import importlib.util
-
         got = super().gate(target)
-        spec = importlib.util.spec_from_file_location("pearl_c_e2e", HERE / "e2e.py")
-        e2e = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(e2e)
-        whole = e2e.whole_check(self.run, self.weights, m=max(self.capture))
+        whole = _e2e().whole_check(self.run, self.weights, m=max(self.capture))
         self.run.details["passes"].clear()
         return {**got, "passed": bool(got["passed"] and whole.get("ok")), "whole": whole}
 

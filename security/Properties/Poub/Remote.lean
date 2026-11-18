@@ -112,7 +112,7 @@ plan:
    append's root, or, for a re-key, it has an origin leaf (`originLeaf`; `checkOpening` refuses with `origin` a re-key
    whose origin slot holds no append), the opening names the origin's position `q` and the payload's leaf is leaf `q`
    under the origin's root. For a re-key's block this gives the origin's leaf under whatever append the list holds in
-   the origin's slot; that the slot is the schedule's and its append fresh is `OriginsOnRota`, stated and not proved;
+   the origin's slot; that the slot is the schedule's and its append fresh is `OriginsOnRota`;
 5. the receipt recomputed from `j` and the block, under the pass's receipter, is `y`. -/
 def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : Nat) (o : Opening) :
     Prop :=
