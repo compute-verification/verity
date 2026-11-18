@@ -20,7 +20,7 @@ torch = pytest.importorskip("torch")
 import device as dv  # noqa: E402
 from device import BLOCK, Piece, rb, rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.store import PAYLOAD_LABEL, store_salt  # noqa: E402
 
@@ -121,6 +121,18 @@ def test_a_refresh_plan_holds_a_rekey_once_its_encode_lands(books):
     done.add(a.first)
     assert moved <= set(refresh.plan(1))
     assert set(refresh.plan(1)) == (set(range(8)) - set(range(origin[1], origin[1] + count))) | moved
+
+
+def test_a_backend_that_defers_residency_plans_only_landed_rekeys():
+    import prover
+
+    seen = []
+    trace = object.__new__(prover.ServingTrace)
+    trace.refresh = SimpleNamespace(plan=lambda window, pending: seen.append((window, pending)))
+    for backend in (SimpleNamespace(deferred=True), SimpleNamespace(deferred=False), SimpleNamespace()):
+        trace.backend = backend
+        trace.plan(3)
+    assert seen == [(3, False), (3, True), (3, True)]
 
 
 class FakeKv:

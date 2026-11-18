@@ -810,8 +810,9 @@ class ProverSide:
                 raise ValueError("a refresh session's period is its lifetime cap, which the session message names")
             if type(head.get("fresh_slots")) is not int:
                 raise ValueError("a refresh session's fresh slots a window, F, are the session message's fresh_slots")
-            refresh = audit_prover.Refresh(getattr(self.backend, "ledger", self.backend.store),
-                                           Schedule(N, head["lifetime"], W, head["fresh_slots"]))
+            if (store := getattr(self.backend, "ledger", self.backend.store)) is None:
+                raise ValueError("a refresh session on the card re-keys into its spare area, which --refresh-gib sizes")
+            refresh = audit_prover.Refresh(store, Schedule(N, head["lifetime"], W, head["fresh_slots"]))
         if mode == "honest" and refresh is not None:
             # serving that writes nothing: the trace's steps are the schedule's re-keys alone
             trace = ServingTrace(self.backend, self.registration, 0, self.kv_pool,

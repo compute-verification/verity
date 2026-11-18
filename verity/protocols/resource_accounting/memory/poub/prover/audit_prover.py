@@ -12,6 +12,8 @@ import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
+import numpy as np
+
 from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.memory.poub.verifier.rota import REKEY_MAX, Origin, Schedule
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
@@ -266,11 +268,8 @@ class Refresh:
                 out.append((k, origin, count))
         return tuple(out)
 
-    def _valid(self, j: int, t: int) -> bool:
+    def _valid(self, a: Append, t: int) -> bool:
         s = self.schedule
-        if j < s.blocks:
-            return t < s.lifetime
-        a = self.store._append_of(j)
         joined = s.slot_at(a.slot)[0]
         born = (joined if a.origin is None else None if a.origin[0] == "registered" else s.slot_at(a.origin[1])[0])
         return joined <= t < joined + s.lifetime and (born is None or born + s.lifetime <= t)
@@ -278,28 +277,28 @@ class Refresh:
     def plan(self, t: int, *, pending: bool = False) -> Plan:
         """The plan of window t: every kept chunk at the index it is held at, where a plan of t may hold that index and
         it is encoded, or, with `pending`, is a re-key's still awaiting the coin it is encoded under before the pass
-        reads it.  An append of pages is never planned: its blocks' first encode is their first re-key's."""
+        reads it.  An append of pages is never planned: its blocks' first encode is their first re-key's.  An append's
+        blocks are planned or not together, so it is decided once an append."""
         # Appends only grow, and between two appends the kept chunks and the appends awaiting coins only shrink.
-        key = (t, pending, len(self.store.appends), len(self.store.pending), len(self.held))
+        store, n = self.store, self.schedule.blocks
+        key = (t, pending, len(store.appends), len(store.pending), len(self.held))
         if self._plan is not None and self._plan[0] == key:
             return self._plan[1]
-        out = []
-        for j in self.held.values():
-            if j >= self.schedule.blocks and self.store._append_of(j).slot is None:
-                continue
-            if not self._valid(j, t) or (self.store.blocks[j] is None
-                                         and not (pending and self.store._append_of(j).first in self.store.pending)):
-                continue
-            out.append(j)
-        runs: list[list[int]] = []
-        for j in sorted(out):
-            if runs and runs[-1][0] + runs[-1][1] == j:
-                runs[-1][1] += 1
-            else:
-                runs.append([j, 1])
-        if not runs:
+        held = np.fromiter(self.held.values(), dtype=np.int64, count=len(self.held))
+        registered = held < n
+        keep = registered & (t < self.schedule.lifetime)
+        if store.appends:
+            firsts = np.array([a.first for a in store.appends], dtype=np.int64)
+            ok = np.array([a.slot is not None and self._valid(a, t)
+                           and (store.blocks[a.first] is not None or (pending and a.first in store.pending))
+                           for a in store.appends])
+            keep[~registered] = ok[np.searchsorted(firsts, held[~registered], side="right") - 1]
+        out = np.sort(held[keep])
+        if not len(out):
             raise ValueError(f"window {t} holds no block a plan may read: no kept chunk is valid in it")
-        plan = Plan(tuple((f, c) for f, c in runs), self.store.extent)
+        cut = np.flatnonzero(np.diff(out) != 1) + 1
+        starts, ends = np.concatenate(([0], cut)), np.concatenate((cut, [len(out)]))
+        plan = Plan(tuple((int(out[a]), int(b - a)) for a, b in zip(starts, ends)), store.extent)
         self._plan = (key, plan)
         return plan
 
