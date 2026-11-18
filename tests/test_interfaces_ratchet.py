@@ -15,7 +15,8 @@ ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``,
   (``test_the_vllm_adapter_imports_no_resource_accounting_protocol``), not repeated here.
 - ``messages_one_sided``: a class of `verity/hooks.py`, Protocol types included, that code (an import from
   ``verity.hooks`` or an attribute of the module, read by ``ast``) names in fewer than two areas (``AREAS``).
-- ``toolkit_paths``: a tracked text file naming ``/usr/local/cuda`` outside `calibration/hardware/` and the kit (``KIT``).
+- ``toolkit_paths``: a tracked text file writing a toolkit's directory (``CUDA``: ``/usr/local/cuda``, ``/opt/cuda``, a
+  ``cuda-<version>`` directory anywhere, pip's toolkit) outside `calibration/hardware/` and the kit (``KIT``).
 - ``card_names_in_code``: a Python or shell file outside `calibration/hardware/` and every ``/cards/`` that compares
   against or keys a mapping by a card, node or architecture name, case-insensitively.
 - ``lean_reexports``: a Lean ``export Verity ...`` or ``export Hash ...``, or a one-line ``abbrev N ... := Q.N x y``
@@ -65,7 +66,11 @@ KEPT = {"scheme_name_tables": {
         "the sampled proofs' verifier files each case under its protocol id itself (`SUBPROTOCOLS`, `ids_of`): which "
         "id the composite check is told is decided on the verifier's side, never handed in by a caller, and the "
         "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"}}
-CUDA = "/usr/local/cuda"
+#: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
+#: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
+CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"
+                  r"|/[\w.-]*cuda-(?:\d|\$|root\b)(?![\w.-]*\.(?:sh|py|md|toml|json|cu|txt)\b)"
+                  r"|site-packages/nvidia/cu\d")
 #: the machine record's reader and the toolkit fetcher it points at: where a toolkit's directory is written down
 KIT = ("benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
        "benchmarks/kernels/machine.py", "verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh")
@@ -304,8 +309,8 @@ def scan(files: dict[str, str]) -> Scan:
         if path.endswith(".py") and path.startswith(SCHEME_IMPORTERS) and "verity.protocols." in text:
             s.add("scheme_package_imports", path,
                   (i for i, line in enumerate(text.splitlines(), 1) if SCHEME_IMPORT.match(line)), text)
-        if CUDA in text and not path.startswith(HARDWARE) and path not in KIT:
-            s.add("toolkit_paths", path, (i for i, line in enumerate(text.splitlines(), 1) if CUDA in line), text)
+        if CUDA.search(text) and not path.startswith(HARDWARE) and path not in KIT:
+            s.add("toolkit_paths", path, (i for i, line in enumerate(text.splitlines(), 1) if CUDA.search(line)), text)
         if path.endswith(".py") and path != HOOKS and ("verity.hooks" in text or "import hooks" in text) \
                 and (area := _area(path)):
             for c in _hooks_names(text, path, classes):
@@ -440,6 +445,8 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("scheme_package_imports", "verity/a.py", "from verity.protocols.resource_accounting.compute import pouw\n", 0),
     ("toolkit_paths", "benchmarks/run.sh", "export PATH=/usr/local/cuda/bin:$PATH\n", 1),
     ("toolkit_paths", "benchmarks/run.sh", 'nvcc="$(python3 benchmarks/kernels/machine.py toolkit 13.0)/bin/nvcc"\n', 0),
+    ("toolkit_paths", "benchmarks/run.sh", "export CUDA_HOME=/workspace/jobs/cuda-12.9\nT=$ROOT/cuda-$V\n", 2),
+    ("toolkit_paths", "benchmarks/run.sh", "bash pod/cuda-13.3.sh\nP=$VENV/lib/site-packages/nvidia/cu13\n", 1),
     ("toolkit_paths", f"{HARDWARE}nodes/x.toml", 'toolkit = "/usr/local/cuda-13.0"\n', 0),
     ("toolkit_paths", "benchmarks/harness/verity_bench/kit.py", 'D = "/usr/local/cuda"\n', 0),
     ("card_names_in_code", "benchmarks/a.py", 'if card == "h200":\n    pass\nP = {\n    "SM_90A": 1,\n}\n', 2),

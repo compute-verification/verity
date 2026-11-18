@@ -233,17 +233,27 @@
  "toolkit_paths": {
   "adapters/vllm/tools/served_run/placement.toml": 4,
   "benchmarks/kernels/s8_linear/run.sh": 1,
+  "benchmarks/memory/vcf_job.sh": 2,
+  "benchmarks/one_stage/cold_sessions.sh": 1,
+  "benchmarks/one_stage/zk_cost.sh": 1,
   "benchmarks/pous/pod.sh": 2,
+  "benchmarks/pouw/harness/jobs/toolkit.sh": 2,
   "benchmarks/replay_ladder/run.sh": 1,
   "benchmarks/spot_proved/run_discover.sh": 1,
   "benchmarks/spot_proved/spot_job.sh": 1,
   "infra/vcf/vcf-bench.sh": 1,
+  "tools/research/src/research/pods/nebius/n2_build.sh": 1,
+  "tools/research/src/research/pods/nebius/n2_commit.sh": 1,
+  "tools/research/src/research/pods/nebius/sky/jobs/config-run-row.yaml": 1,
+  "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml": 3,
+  "tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml": 1,
   "verity/protocols/proofs/flock/prover/cuda_chunk_patch.py": 1,
   "verity/protocols/proofs/flock/prover/pod/20-gpu-link.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/30-cell.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/60-circuit.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/61-circuit-cell.sh": 1,
   "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": 1,
-  "verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh": 2
+  "verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh": 3,
+  "verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh": 1
  }
 }
