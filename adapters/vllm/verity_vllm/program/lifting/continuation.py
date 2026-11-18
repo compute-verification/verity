@@ -21,7 +21,7 @@ slots are NOT engine iterations: chunked prefill advances the state once, an uns
 from where the rows stop; `n_executed = n (A = 0) / min(n + 1, C) (A = 1)` with `n` served slots is a DERIVED TEST INVARIANT, never an input
 that shortens the Program.  This module is the SEMANTIC core: the reference evaluator (`next_flags`), an
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
-(`recurrence`), the named invariants (`invariants`), the Match-side checks (`check_transcript`), the slot <-> engine-iteration map
+(`recurrence`), the named invariants (`invariants`), the slot <-> engine-iteration map
 (`slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
 (`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `adapters/vllm/verity_vllm/definitions/registry/lifted.py` (`continuation_chain`); the
 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
@@ -166,9 +166,9 @@ class Slot:
 def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int], w: int = 32) -> list[Slot]:
     """The bits COMPUTED from the Program's rule and the record's RAW transcript `raw[t-1] = y_t` (the sampled token of every EXECUTED slot,
     the lag slot's discarded sample included -- the fold has it, tokens.json has only the served ones; `None` where the record produced no
-    token).  Nothing is judged here (see `check_transcript`):
-    a slot with `r_t = 1` and no raw token reads `b_t = 0` and is named there as a deleted step; a token at `r_t = 0` is named there as
-    execution past the stop.  Returns exactly `cap` slots (the population is fixed; the inactive suffix is present as slots with (0, 0))."""
+    token).  Nothing is judged here: a slot with `r_t = 1` and no raw token reads `b_t = 0` (a deleted step), and a token at
+    `r_t = 0` is execution past the stop; Match's `chronology` and the replay's `stoch_recompute.sample_accounting` refuse both.
+    Returns exactly `cap` slots (the population is fixed; the inactive suffix is present as slots with (0, 0))."""
     check_profile(A)
     if cap < 1:
         raise ValueError(f"C = {cap}: a request declares at least one token-generation slot")
@@ -361,90 +361,6 @@ def compare_sample_positions(expected: Sequence[int], sampled: Sequence[int]) ->
     if not extra and not missing and not dup and got != exp:
         problems.append(f"samples out of order: ledger {got[:8]} vs the rule's {exp[:8]}")
     return {"ok": not problems, "expected": exp, "sampled": got, "extra": extra, "missing": missing, "repeated": dup, "problems": problems}
-
-
-# ---------------------------------------------------------------------------------------------------------
-# what Match CHECKS per request, computed from the Program's rule + the raw transcript
-# ---------------------------------------------------------------------------------------------------------
-
-
-def check_transcript(*, executed_slots_of_record: Sequence[int], raw_by_slot: dict[int, int], served_of_record: Sequence[int], cap: int,
-                     A: int, eos: Iterable[int], w: int = 32) -> dict[str, Any]:
-    """(a) executed slots of record == `{t : r_t = 1}` exactly -- a row at `r_t = 0` is "execution past the stop", a missing
-    row at `r_t = 1` "a deleted step"; (b) served output == `(y_t : e_t = 1)` as a list, EOS included, position by position; (c) the lag
-    slot's token is NOT in the served output; (d) the inactive suffix has no rows (its identities stay in the population); (e)
-    `stop_t = e_t AND IsEOS(y_t)` under the PINNED set: a served early stop on a token outside the set is FAIL, never extend the
-    set; (5) the derived invariant `n_exec` checked AFTER (a).  Bits are computed from the rule + the raw transcript; nothing is supplied by
-    the prover, nothing inferred from where the rows stop.  Every failure is named; `ok` is the conjunction."""
-    check_profile(A)
-    exe = sorted(int(t) for t in executed_slots_of_record)
-    raw: list[int | None] = [raw_by_slot.get(t) for t in range(1, cap + 1)]
-    slots = recurrence(raw, cap=cap, A=A, eos=eos, w=w)
-    want = executed_slots(slots)
-    past = [t for t in exe if t not in want]
-    deleted = [t for t in want if t not in exe]
-    served_pred = served_output(slots)
-    served_rec = [int(x) for x in served_of_record]
-    first_diff = next((i for i, (a, b) in enumerate(zip(served_pred, served_rec)) if a != b), None)
-    if first_diff is None and len(served_pred) != len(served_rec):
-        first_diff = min(len(served_pred), len(served_rec))
-    lag = lag_slots(slots)
-    lag_tok = [raw_by_slot.get(t) for t in lag]
-    eos_set = {int(e) for e in eos}
-    # (e): a served stop is the LAST served token being in the pinned set (or the cap exhausted); a stop before the cap on a token outside it fails
-    stopped_before_cap = len(served_rec) < cap
-    last_in_set = bool(served_rec) and served_rec[-1] in eos_set
-    checks = {
-        "a_executed_set_equals_run_slots": {"ok": not past and not deleted, "predicted": want, "of_record": exe,
-                                            "execution_past_the_stop": past, "deleted_steps": deleted,
-                                            "why": (None if not past and not deleted else
-                                                    (f"rows at slots {past} where r_t = 0: execution past the stop; " if past else "") +
-                                                    (f"no rows at slots {deleted} where r_t = 1: a deleted step" if deleted else ""))},
-        "b_served_equals_emit_tokens": {"ok": first_diff is None, "predicted": served_pred, "of_record": served_rec, "first_differing_position": first_diff,
-                                        "why": None if first_diff is None else f"served output differs from (y_t : e_t = 1) at position {first_diff}"},
-        # (c): the served list is positional (slot t <-> position t-1 over the emit prefix); a lag token served shows as an entry past the prefix
-        "c_lag_token_not_served": {"ok": len(served_rec) <= len(served_pred), "lag_slots": lag, "lag_tokens": lag_tok,
-                                   "served_entries_past_emit_prefix": max(0, len(served_rec) - len(served_pred))},
-        "d_inactive_suffix_has_no_rows": {"ok": not any(t in exe for t in range(1, cap + 1) if not slots[t - 1].run),
-                                          "inactive_slots": [s.t for s in slots if not s.run], "note": "identities of the inactive suffix stay in the population"},
-        "e_stop_under_pinned_set": {"ok": (not stopped_before_cap) or last_in_set, "stopped_before_cap": stopped_before_cap, "last_served_in_eos_set": last_in_set,
-                                    "eos_set": sorted(eos_set), "why": None if (not stopped_before_cap) or last_in_set else
-                                    "served early stop on a token outside the pinned EOS set: FAIL, never extend the set to fit"},
-    }
-    n_srv = len(served_rec)
-    derived = n_executed_derived(n_srv, cap=cap, A=A) if 1 <= n_srv <= cap else None
-    checks["f_n_executed_derived_invariant"] = {"ok": derived is not None and derived == len(exe) == len(want), "n_served": n_srv, "n_executed_of_record": len(exe),
-                                                "n_executed_predicted": len(want), "derived": derived, "rule": "n (A = 0) / min(n + 1, C) (A = 1); checked AFTER (a), never an input"}
-    inv = invariants(slots, cap=cap, A=A)
-    return {"version": CONTINUATION_VERSION, "rules_version": L.LIFTED_RULES_VERSION, "label": L.LABEL, "A": A, "profile": PROFILES[A], "cap": cap,
-            "ok": all(c["ok"] for c in checks.values()) and all(inv.values()), "checks": checks, "invariants": inv,
-            "slots": [{"t": s.t, "emit": int(s.emit), "run": int(s.run), "kind": s.kind, "raw": s.raw, "is_eos": int(s.is_eos), "stop": int(s.stop),
-                       "out": s.out, "next_in": s.next_in} for s in slots],
-            "failed": [k for k, c in checks.items() if not c["ok"]] + [f"invariant:{k}" for k, v in inv.items() if not v]}
-
-
-def wrong_profile_negative(*, executed_slots_of_record: Sequence[int], raw_by_slot: dict[int, int], served_of_record: Sequence[int], cap: int,
-                           A_program: int | None = None, eos: Iterable[int], A_attested: int | None = None) -> dict[str, Any]:
-    """The other profile against the same transcript (a wrong profile is an applicability or Match failure, never a fitted explanation):
-    the rule under `1 - A` must FAIL by name on any record that exercised the lag (an EOS stop before the cap); on a cap-exhausting record both
-    profiles agree and the negative is 'not exercised' (stated, not claimed).  `A_program` is the PROGRAM's fixed profile (the Build's declared
-    lag; the keyword `A_attested` is accepted as its older name, the report carries only `A_program`).  When the other profile does NOT fail on a lag-exercising record, the record fits the
-    other Program -- the GM-01 G1+G6 situation (a record run under another scheduler than the one declared), named here as
-    `record_fits_other_profile`."""
-    if A_program is None:
-        A_program = A_attested
-    if A_program is None:
-        raise TypeError("wrong_profile_negative: A_program (the Program's fixed profile) is required")
-    other = 1 - check_profile(A_program)
-    res = check_transcript(executed_slots_of_record=executed_slots_of_record, raw_by_slot=raw_by_slot, served_of_record=served_of_record, cap=cap, A=other, eos=eos)
-    exercised = len(served_of_record) < cap
-    fails = (not res["ok"]) if exercised else None
-    return {"A_program": A_program, "A_tried": other, "exercised": exercised, "fails_by_name": fails,
-            "record_fits_other_profile": (res["ok"] if exercised else None),
-            "failed": res["failed"], "note": (("the wrong profile is refused by the executed-set check, not fitted" if fails else
-                                               f"the record PASSES under A = {other}, the profile the Program was NOT built for: it is an execution of "
-                                               f"another scheduler than the declared one (refused by name at GM-01's G1 and G6, never re-fitted)") if exercised else
-                                              "cap exhausted: both profiles predict C executed slots; the lag is not exercised on this record")}
 
 
 # ---------------------------------------------------------------------------------------------------------
