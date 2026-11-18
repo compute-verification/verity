@@ -5,7 +5,6 @@ public import Proofs.Properties.InferenceOnly.RecordFreshRows
 public import Proofs.Properties.InferenceOnly.RecordKinds
 public import Proofs.Properties.InferenceOnly.RecordSlots
 public import Proofs.Properties.InferenceOnly.RecordTally
-public import Circuits.Wire
 public import Mathlib.Tactic
 
 /-!
