@@ -484,4 +484,5 @@ PEARL_PLUS = register(Scheme(
     y_committed=True,
     salt_open_root=epoch_open_root,
     kernels=runs_on(KERNEL),
+    keeps_weight_copy=True,
 ))

@@ -284,7 +284,8 @@ class Scheme:
     commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
     and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
     ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
-    otherwise.
+    otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
+    against the committed root once at build.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -333,6 +334,7 @@ class Scheme:
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
     kernels: Callable[..., str] | Lacks = UNDECLARED
+    keeps_weight_copy: bool | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
