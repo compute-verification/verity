@@ -299,7 +299,7 @@ class Attached:
             run.finish()
         else:
             SV.finish_window(run, session)
-        if run.retain_dir is not None:
+        if getattr(run, "retain_dir", None) is not None:
             self.served(run, steps)
         out = {"commitment": dict(run.commits), "summary": dict(run.details), **({"reserved": self.reserved}
                                                                                    if self.reserved else {})}
