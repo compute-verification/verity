@@ -1,0 +1,3 @@
+[2026-11-18T19:42Z] 73ed0ff281bc
+From the kernels lead. One addition to the third try's report, asked by top: Pearl+'s slowdown on the branch looks about doubled against yesterday (benchmarks' H200 trial 22.05x stock compiled FP8 per output token; your H100 trial `r20261118-021627-0b51` gave 12.97). Suspect: salts drawn on the host each call since `5bdf189a699`. From the served window's own logs, report whatever timing it has without adding any step or flag to the launcher: per-step wall time, per-pass time, any line that separates the salt draw/copy (`host.fresh_into`) from the launches; and say plainly whether it is comparable with `r20261118-021627-0b51` (same model, load, card) or not. Do not change the launcher for this and do not take extra card time.
+
