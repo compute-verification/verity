@@ -204,19 +204,42 @@ theorem before_total {g h : Fin C.N} (hne : g ≠ h) : P.Before g h ∨ P.Before
     · exact Or.inr (Or.inr ⟨h1.symm, h2⟩)
   · exact Or.inr (Or.inl h1)
 
-theorem commitsIn_of_committed {L : Layout C} {g : Fin C.N} (hg : g ∈ P.committed) : ∃ j, P.CommitsIn L g j := by
-  simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and] at hg
-  rcases hg with h | h | ⟨k, hk, hne⟩
-  · exact ⟨_, Or.inl ⟨Or.inl h, rfl⟩⟩
-  · exact ⟨_, Or.inl ⟨Or.inr h, rfl⟩⟩
+/-- A gate some gate reads is read by a gate of another unit when it is an input gate. -/
+theorem reader_of_input {g h : Fin C.N} (hi : C.isInput g = true) (hgh : g ∈ C.reads h) : P.unit h ≠ P.unit g := by
+  have hh : C.isInput h = false := by
+    cases hi' : C.isInput h
+    · rfl
+    · simp [C.input_reads h hi'] at hgh
+  rw [(P.input_iff g).2 hi]
+  exact fun hn => by simp [(P.input_iff h).1 hn] at hh
+
+theorem commitsIn_of_boundary {L : Layout C} {g : Fin C.N} (hg : g ∈ P.boundary) : ∃ j, P.CommitsIn L g j := by
+  obtain ⟨hc, hr⟩ := P.mem_boundary.1 hg
+  simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and] at hc
+  rcases hc with hi | ho | ⟨k, hk, hne⟩
+  · obtain ⟨h, hgh⟩ := hr.resolve_left (by simp [hi])
+    exact ⟨_, Or.inr ⟨h, hgh, P.reader_of_input hi hgh, rfl⟩⟩
+  · cases hi : C.isInput g
+    · exact ⟨_, Or.inl ⟨hi, ho, rfl⟩⟩
+    · obtain ⟨h, hgh⟩ := hr.resolve_left (by simp [hi])
+      exact ⟨_, Or.inr ⟨h, hgh, P.reader_of_input hi hgh, rfl⟩⟩
   · exact ⟨_, Or.inr ⟨k, hk, hne, rfl⟩⟩
 
-/-- A committed gate is committed in the phase `commitPhase` names. -/
-theorem commitsIn_commitPhase {L : Layout C} {g : Fin C.N} (hg : g ∈ P.committed) :
+/-- A gate some phase commits is on the boundary. -/
+theorem mem_boundary_of_commitsIn {L : Layout C} {g : Fin C.N} {j : ℕ} (h : P.CommitsIn L g j) : g ∈ P.boundary := by
+  rcases h with ⟨hi, ho, -⟩ | ⟨k, hk, hne, -⟩
+  · exact P.mem_boundary.2 ⟨by simp [committed, ho], Or.inl hi⟩
+  · have hc : g ∈ P.committed := by
+      simp only [committed, Finset.mem_filter, Finset.mem_univ, true_and]
+      exact Or.inr (Or.inr ⟨k, hk, hne⟩)
+    exact P.mem_boundary.2 ⟨hc, Or.inr ⟨k, hk⟩⟩
+
+/-- A boundary gate is committed in the phase `commitPhase` names. -/
+theorem commitsIn_commitPhase {L : Layout C} {g : Fin C.N} (hg : g ∈ P.boundary) :
     P.CommitsIn L g (P.commitPhase L g) := by
   classical
   unfold commitPhase
-  rw [dif_pos (P.commitsIn_of_committed hg)]
+  rw [dif_pos (P.commitsIn_of_boundary hg)]
   exact Nat.find_spec _
 
 /-- **No earlier phase commits it**: `commitPhase` is the first phase that commits `g`. -/

@@ -97,10 +97,10 @@ def writerRank (g : Fin C.N) : ℕ :=
 the writer is the same and its index is smaller. -/
 abbrev Before (g h : Fin C.N) : Prop := P.writerRank g < P.writerRank h ∨ (P.writerRank g = P.writerRank h ∧ g < h)
 
-/-- Phase `j` commits `g`: its own phase when `g` is an input or an output, or the phase of a gate of another unit
-that reads it. -/
+/-- Phase `j` commits `g`: its own phase when `g` is a computed output, or the phase of a gate of another unit that
+reads it. An input gate is committed by its readers' phases, so a phase that first reads an earlier input commits it. -/
 def CommitsIn (L : Layout C) (g : Fin C.N) (j : ℕ) : Prop :=
-  ((C.isInput g = true ∨ g ∈ C.outputs) ∧ L.phase g = j) ∨ ∃ h, g ∈ C.reads h ∧ P.unit h ≠ P.unit g ∧ L.phase h = j
+  (C.isInput g = false ∧ g ∈ C.outputs ∧ L.phase g = j) ∨ ∃ h, g ∈ C.reads h ∧ P.unit h ≠ P.unit g ∧ L.phase h = j
 
 open Classical in
 /-- **The phase that commits `g`**: the first that does (`0` for a gate none commits). Only the phases up to it are
