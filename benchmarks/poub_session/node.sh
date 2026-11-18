@@ -54,7 +54,8 @@ if [ "${ROLE:-both}" = both ]; then
 fi
 # shellcheck disable=SC2086
 taskset -c "$PROVER_CPUS" "$PY" $RS/node.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-  --engines-dir "$B" --engines "${#DEVS[@]}" --lib "$B/session.so" --kv "$B/kv.so" --node "$SESSION_NODE" ${NODE_ARGS:-} \
+  --engines-dir "$B" --engines "${#DEVS[@]}" --lib "$B/session.so" --kv "$B/kv.so" --node "$SESSION_NODE" \
+  --codec "${CARD_CODEC:?run.sh states it}" ${NODE_ARGS:-} \
   > "$O/node.log" 2>&1
 P=$?
 if [ -n "$V" ]; then

@@ -350,21 +350,6 @@ def point_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path
     return [*_lease(plan.spec), *env, "bash", "benchmarks/harness/run_point.sh", *flags]
 
 
-def booked(spec: ResolvedSpec | SteadySpec, pool: str, slot: str, end: str, cards: Sequence[int]) -> list[str]:
-    """The `research run` flags of a point in a booked period: the booked slot of `pool` alone, the spec's max_minutes as its
-    bound, which `research run` refuses unless it fits before `end` (a UTC time ending in Z) and waits no later than, and
-    `--timed`, so the point isn't niced. A vLLM point's run leases the booked cards (`--card`), so its own lease takes none
-    (`_lease`); a steady-state point's node side leases its one card itself (`_steady_card`), so its run takes no lease."""
-
-    if spec.admission.max_minutes is None:
-        raise ValueError(f"spec {spec.id!r} has no admission max_minutes, which bounds a booked point's run")
-    want = 1 if isinstance(spec, SteadySpec) else spec.preset.gpu_count
-    if len(cards) != want:
-        raise ValueError(f"spec {spec.id!r} runs on {want} card(s), and the booking names {len(cards)}: {list(cards)}")
-    card = ["--card", ",".join(map(str, cards))] if not isinstance(spec, SteadySpec) else ["--env", f"GPU_LEASE_ON={cards[0]}"]
-    return ["--pool", pool, "--slot", slot, *card, "--end", end, "--timeout", f"{spec.admission.max_minutes}m", "--timed"]
-
-
 def vllm_spec(plan: Plan) -> ResolvedSpec:
     """A vLLM plan's spec; TypeError on a steady-state plan's, whose points `steady_plan` runs."""
 
