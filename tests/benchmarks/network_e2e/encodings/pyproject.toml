@@ -43,6 +43,17 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/resource_accounting/scheme.py", "verity/protocols/compose/__init__.py",
           "verity/protocols/compose/schemes.py", "verity/protocols/proofs/spot/prover/__init__.py",
           "verity/protocols/proofs/spot/prover/workload.py",
+          # the registry of schemes (`compose.schemes`) loads every declared scheme, the sampled proofs' among them, whose
+          # declaration reads SPOT's parties, its challenger and its one-stage docket, and the configuration's types
+          "verity/config.py", "verity/party.py", "verity/protocols/proofs/spot/verifier/parties.py",
+          "verity/protocols/proofs/spot/verifier/challenger/__init__.py",
+          "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
+          "verity/protocols/proofs/spot/verifier/challenger/coins.py",
+          "verity/protocols/proofs/spot/verifier/challenger/remote.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           # test_served_window compiles the served run's windows against the compile slice's fixtures
           "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json",
           "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json",
