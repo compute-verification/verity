@@ -8,8 +8,8 @@ public import Proofs.Core.LevelsMiss
 
 Two levels drawn over a circuit's nested partitions: the inner blocks are the units of `Pf`, the outer blocks those of
 `Pc`, and `Pf` refines `Pc` (`r`). The levels' blocks are sets of gates of some type `G`, and `blk`, `oblk` place the
-inner and outer units among them, an inner unit inside an outer one exactly when the outer is its parent. The outer
-trace is `τ₁` at the opened gates `O`. An inner trace extends it when it agrees with `τ₁` on `O`, and its incorrect
+inner and outer units among them, an inner unit with a gate inside an outer one exactly when the outer is its parent.
+The outer trace is `τ₁` at the opened gates `O`. An inner trace extends it when it agrees with `τ₁` on `O`, and its incorrect
 inner blocks are its incorrect units with those having an outer committed wire outside `O` (`Partition.unopened`).
 
 * `Levels.late_le_missProb_opened`: after the outer sample is drawn, the prover picks at each outer block, by any rule,
@@ -59,7 +59,8 @@ variable {G : Type} [Fintype G] [DecidableEq G]
 /-- **Committing late does not help, at a circuit's two levels, from a partly opened outer trace.** -/
 theorem late_le_missProb_opened (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂])
     {C : Circuit} {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Pf.Refines Pc)
-    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G) (hsub : ∀ v k, blk v ⊆ oblk k ↔ r.parent v = k)
+    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G)
+    (hsub : ∀ v k, (Pf.gates v).Nonempty → (blk v ⊆ oblk k ↔ r.parent v = k))
     (hparts : ∀ X ∈ l₁.blocks.parts, ∃ k, oblk k = X) (τ₁ : C.Trace) (O : Finset (Fin C.N))
     (R : (l₁.design Finset.univ).Ω → Finset G → C.Trace) (hR : ∀ ω X, ∀ g ∈ O, R ω X g = τ₁ g) :
     ∃ τ₂ : C.Trace, (∀ g ∈ O, τ₂ g = τ₁ g) ∧
@@ -73,11 +74,13 @@ theorem late_le_missProb_opened (L : Levels G) {l₁ l₂ : Level G} (hL : L.lev
     ∃ Y : C.Trace, (∀ g ∈ O, Y g = τ₁ g) ∧ T = (U ∪ Pf.incorrect Y).image blk
   have mem𝒯 : ∀ T, T ∈ 𝒯 ↔ ∃ Y : C.Trace, (∀ g ∈ O, Y g = τ₁ g) ∧ T = (U ∪ Pf.incorrect Y).image blk :=
     fun T => by simp [𝒯]
-  have hfilter : ∀ (s : Finset (Fin nf)) (k : Fin nc),
+  have hfilter : ∀ (s : Finset (Fin nf)) (k : Fin nc), (∀ v ∈ s, (Pf.gates v).Nonempty) →
       (s.image blk).filter (· ⊆ oblk k) = (s.filter (r.parent · = k)).image blk := by
-    intro s k
+    intro s k hs
     rw [Finset.filter_image]
-    exact congrArg (Finset.image blk) (Finset.filter_congr fun v _ => hsub v k)
+    exact congrArg (Finset.image blk) (Finset.filter_congr fun v hv => hsub v k (hs v hv))
+  have hne : ∀ Y : C.Trace, ∀ v ∈ U ∪ Pf.incorrect Y, (Pf.gates v).Nonempty := fun Y v hv =>
+    (Finset.mem_union.1 hv).elim Pf.gates_nonempty_of_unopened Pf.gates_nonempty_of_incorrect
   have hglue : ∀ c : Finset G → Finset (Finset G), (∀ X, c X ∈ 𝒯) →
       ∃ T ∈ 𝒯, ∀ X ∈ l₁.blocks.parts, T.filter (· ⊆ X) = (c X).filter (· ⊆ X) := by
     intro c hc
@@ -86,7 +89,7 @@ theorem late_le_missProb_opened (L : Levels G) {l₁ l₂ : Level G} (hL : L.lev
     refine ⟨(U ∪ Pf.incorrect (Pc.splice τ₁ fun k => Yc (oblk k))).image blk, (mem𝒯 _).2 ⟨_, hres, rfl⟩, ?_⟩
     intro X hX
     obtain ⟨k, rfl⟩ := hparts X hX
-    rw [hcY (oblk k), hfilter, hfilter, hfil k]
+    rw [hcY (oblk k), hfilter _ _ (hne _), hfilter _ _ (hne _), hfil k]
   obtain ⟨T, hT, hle⟩ := L.late_le_missProb hL 𝒯 hglue (fun ω X => (U ∪ Pf.incorrect (R ω X)).image blk)
     fun ω X => (mem𝒯 _).2 ⟨R ω X, hR ω X, rfl⟩
   obtain ⟨Y, hY, rfl⟩ := (mem𝒯 T).1 hT
@@ -96,7 +99,8 @@ theorem late_le_missProb_opened (L : Levels G) {l₁ l₂ : Level G} (hL : L.lev
 wire. -/
 theorem late_le_missProb_trace (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂])
     {C : Circuit} {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Pf.Refines Pc)
-    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G) (hsub : ∀ v k, blk v ⊆ oblk k ↔ r.parent v = k)
+    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G)
+    (hsub : ∀ v k, (Pf.gates v).Nonempty → (blk v ⊆ oblk k ↔ r.parent v = k))
     (hparts : ∀ X ∈ l₁.blocks.parts, ∃ k, oblk k = X) (τ₁ : C.Trace)
     (R : (l₁.design Finset.univ).Ω → Finset G → C.Trace) (hR : ∀ ω X, ∀ g ∈ Pc.committed, R ω X g = τ₁ g) :
     ∃ τ₂ : C.Trace, (∀ g ∈ Pc.committed, τ₂ g = τ₁ g) ∧
@@ -115,7 +119,8 @@ miss the late interiors' incorrect inner blocks or a break occurs, the run is ac
 the interiors extending `τ₁ p` is at most `δ` with probability at most `δ` plus the break's. -/
 theorem prCoin_accept_le_late (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂])
     {C : Circuit} {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (r : Pf.Refines Pc)
-    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G) (hsub : ∀ v k, blk v ⊆ oblk k ↔ r.parent v = k)
+    (blk : Fin nf → Finset G) (oblk : Fin nc → Finset G)
+    (hsub : ∀ v k, (Pf.gates v).Nonempty → (blk v ⊆ oblk k ↔ r.parent v = k))
     (hparts : ∀ X ∈ l₁.blocks.parts, ∃ k, oblk k = X) {P : Type} [Fintype P] [Nonempty P]
     (τ₁ : P → C.Trace) (O : P → Finset (Fin C.N)) (R : P → (l₁.design Finset.univ).Ω → Finset G → C.Trace)
     (hR : ∀ p ω X, ∀ g ∈ O p, R p ω X g = τ₁ p g)
