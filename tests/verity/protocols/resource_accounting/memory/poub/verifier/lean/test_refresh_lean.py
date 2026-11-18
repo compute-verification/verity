@@ -9,6 +9,7 @@ import copy
 import hashlib
 import json
 import shutil
+from fractions import Fraction
 
 import pytest
 import ra_cases as M
@@ -313,6 +314,42 @@ def test_refresh_refuses_a_session_off_its_schedule(server, build, failure) -> N
     out = lean(server, r)
     assert out["outcome"] == failure, out["results"]
     assert [k for k, x in enumerate(out["results"]) if "failure" in x] == [len(r.events) - 1]
+
+
+def gamma(server, registration: dict, record: dict, **extra) -> dict:
+    """`Poub.Gamma`'s terms of `record` at δ = 2^-40 and four times the least capacity its checks pass at."""
+    ws = [(sum(w["lengths"]), w["deadline_ns"] - w["released_ns"]) for w in record["windows"]]
+    span = record["windows"][-1]["deadline_ns"] - record["windows"][0]["released_ns"]
+    least = max(Fraction(u * M.codec.BLOCK_BYTES * 10 ** 9, s) for u, s in [(sum(u for u, _ in ws), span), *ws])
+    kind, text = server.call("gamma", {
+        "registration": registration, "record": record, "delta": "1/1099511627776", "block_bytes": M.codec.BLOCK_BYTES,
+        "chip_bytes": 0, "capacity_bytes_per_s": str(4 * least.numerator) + "/" + str(least.denominator),
+        "squarings_per_s": "0"} | extra)
+    assert kind == "output", text
+    return json.loads(text)
+
+
+def test_a_refresh_record_credits_its_appended_blocks_on_its_schedule_check_alone_with_no_carrier(server) -> None:
+    """Its post-seed receipts are credited given the schedule check's cap, with no stacking verdict and carrier 0;
+    without it only its registered ones are. Its probation share, the most any pass held of what it held and read
+    (window 0's second pass: 2 of 2 + 6), is reported either way."""
+    r = honest()
+    rec = lean(server, r)["record"]
+    assert sum(p for w in rec["windows"] for p in w["post_seed"]) > 0
+    plain, credited = gamma(server, r.case()["registration"], rec), gamma(server, r.case()["registration"], rec,
+                                                                          scheduled=7)
+    assert Fraction(credited["terms"]["timing"]) < Fraction(plain["terms"]["timing"])
+    assert credited["terms"]["carrier"] == plain["terms"]["carrier"] == "0"
+    assert (credited["steering_bits"], plain["steering_bits"]) == (7, None)
+    assert credited["probation"] == plain["probation"] == "1/4"
+
+
+def test_a_schedule_check_credits_nothing_on_a_record_without_refresh(server) -> None:
+    case, _ = M.recorded("honest-rekey")
+    rec = json.loads(PORT.lean(server, case)[1])["record"]
+    assert gamma(server, case["registration"], rec, scheduled=0) == {
+        "refused": "only a refresh record credits appended blocks on its schedule check alone"}
+    assert "probation" not in gamma(server, case["registration"], rec)
 
 
 def test_fresh_slots_without_refresh_are_refused(server) -> None:
