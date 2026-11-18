@@ -3,9 +3,9 @@ Python reference (`reference.py`: the trial's composition rule, in which any rej
 core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network attester's period `build`, the inference-only policy's `sampled`, which is
-never undecided, SPOT's audits under the form ``one-stage``, `form_case`: one-stage v2's over `sessionless_draws`
-(an audit whose sample at its challenger's coins is one proof block, which names no session) with one of `V2_BREAKS` or the form's
-breaks, and one-stage v1's `changed_audits`, which the form refuses by name, the wipe's signed wipes,
+never undecided, SPOT's audits of one level, `form_case`: one-stage v2's over `sessionless_draws`
+(an audit whose sample at its challenger's coins is one proof block, which names no session) with one of `V2_BREAKS` or the split's
+breaks, and one-stage v1's `changed_audits`, which one level refuses by name, the wipe's signed wipes,
 `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
 store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
@@ -160,38 +160,28 @@ V2_BREAKS = {
 }
 
 
-#: One change of SPOT's form that `VStar.Recursive.Sampled` reads: params or evidence naming no form or one no form's
-#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files, and a `levels`
-#: beside the form or alone, agreeing or not, or a two-level key in one level's params.
-FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive",
-               "params-form-not-a-string", "params-levels-one", "params-levels-only", "params-levels-two",
-               "params-levels-three", "params-levels-zero", "params-levels-a-string", "params-a-two-level-key",
-               "evidence-levels-one", "evidence-levels-two-no-form"]
-
-#: What each levels break sets beside the form (`VStar.Recursive.Sampled.split`).
-LEVELS_BREAKS = {"levels-one": {"levels": 1}, "levels-two": {"levels": 2}, "levels-three": {"levels": 3},
-                 "levels-zero": {"levels": 0}, "levels-a-string": {"levels": "1"}, "a-two-level-key": {"boundary": {}}}
+#: One change of SPOT's split that `VStar.Recursive.Sampled` reads, by what it sets on the params or the evidence: a
+#: `levels` of one, of two against one level's shape, or one no reading takes (3, 0, a string), a two-level key in one
+#: level's params, or the `form` key that SPOT's case no longer has.
+BREAKS = {"levels-one": {"levels": 1}, "levels-two": {"levels": 2}, "levels-three": {"levels": 3},
+          "levels-zero": {"levels": 0}, "levels-a-string": {"levels": "1"}, "a-two-level-key": {"boundary": {}},
+          "a-form": {"form": "one-stage"}}
+SPLIT_BREAKS = [*(f"params-{b}" for b in BREAKS), "evidence-levels-one", "evidence-levels-two", "evidence-a-form"]
 
 
-def _with_form(x, br: str | None, side: str):
-    """SPOT's form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks
-    it."""
-    if not isinstance(x, dict) or br == f"{side}-no-form":
+def _with_split(x, br: str | None, side: str):
+    """The params or the evidence of one level (`VStar.Recursive.Sampled`, which reads no `levels` as one), as they
+    are unless `br` breaks that side."""
+    if not isinstance(x, dict) or not br or not br.startswith(f"{side}-"):
         return x
-    if br == f"{side}-levels-only":
-        return {**x, "levels": 1}
-    if br == f"{side}-levels-two-no-form":
-        return {**x, "levels": 2}
-    extra = LEVELS_BREAKS.get(br.removeprefix(f"{side}-"), {}) if br and br.startswith(side) else {}
-    form = {f"{side}-form-other": "other", f"{side}-recursive": "recursive", f"{side}-form-not-a-string": 3}
-    return {**x, **extra, "form": form.get(br, "one-stage")}
+    return {**x, **BREAKS[br.removeprefix(f"{side}-")]}
 
 
 def form_case(a: dict, br: str | None = None) -> dict:
-    """An audit (`{"params", "record", "evidence"}`) as SPOT's case under the form ``one-stage`` (one-stage v2's,
-    `Spot.OneStageZk`, or v1's, which the form refuses), with `br`, one of `FORM_BREAKS`, when given."""
-    return OS._case({"params": _with_form(a["params"], br, "params"), "record": a["record"],
-                     "evidence": _with_form(a["evidence"], br, "evidence")})
+    """An audit (`{"params", "record", "evidence"}`) as SPOT's case of one level (one-stage v2's, `Spot.OneStageZk`,
+    or v1's, which one level refuses), with `br`, one of `SPLIT_BREAKS`, when given."""
+    return OS._case({"params": _with_split(a["params"], br, "params"), "record": a["record"],
+                     "evidence": _with_split(a["evidence"], br, "evidence")})
 
 
 def broken_case(a: dict, br: str) -> dict:
@@ -200,10 +190,10 @@ def broken_case(a: dict, br: str) -> dict:
 
 
 #: SPOT's cases, each refused: v2's audit naming no session (`sessionless_draws`), the same with one change or
-#: one break of the form, or v1's audit with up to two changes (refused by name).
+#: one break of the split, or v1's audit with up to two changes (refused by name).
 SAMPLED_CASES = st.one_of(sessionless_draws().map(form_case),
                           st.builds(broken_case, sessionless_draws(), st.sampled_from(list(V2_BREAKS))),
-                          st.builds(form_case, sessionless_draws(), st.sampled_from(FORM_BREAKS)),
+                          st.builds(form_case, sessionless_draws(), st.sampled_from(SPLIT_BREAKS)),
                           OS.changed_audits(most=2).map(form_case))
 
 NP = R.PERIOD
@@ -663,36 +653,39 @@ def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
     assert set(seen) == set(want), dict(seen)
 
 
-def _recursive(a: dict) -> dict:
-    """v2's audit `a` as the recursive audit's case: its params v1's under the form ``recursive``, naming the recursive
-    audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a sample, no
-    registration and no part), and its evidence under that form."""
+def _recursive(a: dict, br: str) -> dict:
+    """v2's audit `a` as the recursive audit's case: its params naming the recursive audit's own inputs
+    (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a sample, no registration and no part)
+    in place of v2's proofs (``named``) or beside them (``beside``)."""
     own = {"circuit": _sha(CIRCUIT), "draw": _sha(b"draw"), "parts": [], "public": _sha(PUBLIC), "registration": None}
-    return OS._case({"params": {**_without(a["params"], "proofs"), "form": "recursive", "recursive": own},
-                     "record": a["record"], "evidence": {**a["evidence"], "form": "recursive"}})
+    params = a["params"] if br == "beside" else _without(a["params"], "proofs")
+    return OS._case({"params": {**params, "recursive": own}, "record": a["record"], "evidence": a["evidence"]})
 
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
-def test_spot_refuses_the_recursive_form(name, request):
-    """SPOT's soundness covers its one-stage form only, so it refuses the recursive form by name at its params
-    (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before it reads their rest: v2's audit under the recursive form,
-    naming the recursive audit's own inputs (`_recursive`) or none of them (the form's break ``params-recursive``).
-    Remote and onsite, every other subprotocol aimed at acceptance on the audit's record, reject with that refusal as
-    SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
+def test_spot_refuses_the_recursive_audit(name, request):
+    """SPOT's case is one level's or two levels' params, never the recursive audit's, so the recursive audit's params
+    are refused by one level's reading of them (`_recursive`): naming its inputs in place of proofs, as v1's by name
+    (`V1_REFUSED`), and beside v2's proofs, by the parameters' keys. Remote and onsite, every other subprotocol aimed
+    at acceptance on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
     product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
     if name == "onsite":
         request.getfixturevalue("recorded")
     server = request.getfixturevalue(f"{name}_server")
-    why = f"params: {R.RECURSIVE_REFUSED}"
+    want = {"named": f"params: the parameters name no proofs: {R.V1_REFUSED}",
+            "beside": "params: the keys of the parameters are not "}
     others = [C for C in product.components if C is not R.SPOT]
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
     @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
     def check(drawn, audit):
-        for br, sampled in {"named": _recursive(audit), "unnamed": form_case(audit, "params-recursive")}.items():
+        for br in want:
+            sampled = _recursive(audit, br)
             got = R.SPOT.answer({**sampled, "blobs": BLOBS})
-            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            why = got["reason"]
+            assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
+            assert br == "beside" or why == want[br], got
             by_id = {c["id"]: c for c in (*drawn, as_component(R.SPOT, sampled))}
             case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
             assert product.answer(case)["verdict"] == R.REJECT
@@ -700,45 +693,43 @@ def test_spot_refuses_the_recursive_form(name, request):
             assert out["verdict"] == R.REJECT and f"{R.SPOT.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()
-    assert set(seen) == {"named", "unnamed"}, dict(seen)
+    assert set(seen) == set(want), dict(seen)
 
 
 def _two_stage_evidence(a: dict) -> dict:
-    """Evidence under the two-stage form that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
+    """Two levels' evidence that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
     the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
-    statement, and the form's other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
+    statement, and its other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
     interior = {**_without(a["evidence"], "proofs"),
                 "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
-    return {"form": TWO.T.TWO_STAGE, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
+    return {"levels": 2, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
             "statements": []}
 
 
 def _two_stage_cases(a: dict) -> dict[str, dict]:
-    """The two-stage form's cases on v2's audit `a`, its record and evidence: the form's params missing a key
-    (``params-keys``, `TWO.CHANGES`); v2's params with the evidence under the two-stage form missing its keys
-    (``evidence-keys``); and v2's params with evidence under the two-stage form that its Lean reads in full
-    (``evidence-other``, `_two_stage_evidence`)."""
-    v2 = {**a["params"], "form": "one-stage"}
+    """Two levels' cases on v2's audit `a`, its record and evidence: two levels' params missing a key (``params-keys``,
+    `TWO.CHANGES`); v2's params with v2's evidence naming two levels (``evidence-keys``); and v2's params with two
+    levels' evidence that its Lean reads in full (``evidence-other``, `_two_stage_evidence`)."""
+    v2 = a["params"]
     return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
-                                     "evidence": {**a["evidence"], "form": "one-stage"}}),
-            "evidence-keys": OS._case({"params": v2, "record": a["record"],
-                                       "evidence": {**a["evidence"], "form": TWO.T.TWO_STAGE}}),
+                                     "evidence": a["evidence"]}),
+            "evidence-keys": OS._case({"params": v2, "record": a["record"], "evidence": {**a["evidence"], "levels": 2}}),
             "evidence-other": OS._case({"params": v2, "record": a["record"], "evidence": _two_stage_evidence(a)})}
 
 
 def test_spot_reads_the_two_stage_form(remote_server):
-    """SPOT reads the two-stage form with the form's own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`)
-    and refuses evidence of another form than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every
-    other subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: the form's params missing a
-    key and v2's params with evidence under the two-stage form missing its keys, each refused by the form's reading, in
-    Lean as in Python (`_two_stage_cases`); and v2's params with evidence under the two-stage form, which the Lean
-    reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`): the Python reads the
-    form's evidence only up to its keys, so it decides no case past them, and an audit that passes every check is the
-    form's own difftest's to build."""
+    """SPOT reads two levels with their own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`) and refuses
+    evidence of other levels than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every other
+    subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: two levels' params missing a key
+    and v2's params with v2's evidence naming two levels, each refused by a reading of keys, in Lean as in Python
+    (`_two_stage_cases`); and v2's params with two levels' evidence, which the Lean reads in full and refuses as a
+    mismatch of levels, with the Python's words (`R.mismatch`): the Python reads two levels' evidence only up to its
+    keys, so it decides no case past them, and an audit that passes every check is two levels' own difftest's to
+    build."""
     product = R.REMOTE
     want = {"params-keys": "params: the keys of the parameters are not ",
             "evidence-keys": "evidence: the keys of the evidence are not ",
-            "evidence-other": R.mismatch("one-stage", TWO.T.TWO_STAGE)}
+            "evidence-other": R.mismatch(1, 2)}
     others = [C for C in product.components if C is not R.SPOT]
     seen = collections.Counter()
 
