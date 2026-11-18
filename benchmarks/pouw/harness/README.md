@@ -35,16 +35,18 @@ export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh)"   # prints 
 The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
 cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
 reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
-describe. Where there is no CUDA 12.9 (the RTX PRO 6000 node has 13.0), `. jobs/toolkit.sh` first assembles it from
-NVIDIA's pinned redistributable archives and the cuBLASLt wheel `env.sh` pins. `LT2_HOME` names a second cuBLAS install
-(that node's `/usr/local/cuda`, whose `libcublasLt.so.13` is 13.1.1.3): `lt.cu` is built alone against it with the host
+describe. The toolkit is `CUDA_HOME`, else the CUDA 12.9 the run's machine's `[properties]` list
+(`benchmarks/kernels/machine.py toolkit 12.9`); where they list none, `. jobs/toolkit.sh` first assembles it from NVIDIA's
+pinned redistributable archives and the cuBLASLt wheel `env.sh` pins. `LT2_HOME` names a second cuBLAS install (the
+machine's 13.0, read before `toolkit.sh` sets `CUDA_HOME`): `lt.cu` is built alone against it with the host
 compiler into `libpouw_lt2.so`, which a run loads beside the library (`RTLD_LOCAL`; `POUW_HARNESS_LT2` names another, or
 `none`), so every family also gets that cuBLASLt's candidates, named `lt<major>_…`. On that node the build is a CPU job,
 at `nice 19` on the fill queue's cores:
 
 ```bash
 research run --on MACHINE --project verity --source . --cwd source -- bash -c \
-  '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME=/usr/local/cuda &&
+  'LT2_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) && . benchmarks/pouw/harness/jobs/toolkit.sh &&
+   export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME &&
    L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" &&
    cp "${L%/*}"/{libpouw_harness.so,libpouw_lt2.so,build.json} "$RESEARCH_RUN_DIR/"'
 ```
