@@ -15,7 +15,8 @@ MODEL=${MODEL:-glm53}
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-12.9}
+CUDA_HOME=${CUDA_HOME:-$(python3 benchmarks/kernels/machine.py toolkit 12.9)} || { echo "no CUDA 12.9 (machine.py, above)" >&2; exit 2; }
+export CUDA_HOME
 export PATH="$CUDA_HOME/bin:$PATH"
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export LADDER_ARM=pinned TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0

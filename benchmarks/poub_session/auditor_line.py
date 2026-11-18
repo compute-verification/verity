@@ -284,11 +284,12 @@ def peer_of(out: Path, v: dict) -> str:
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     """A release log's lines after its head, by family: each coin's root (`after`), its request's receipt and the
-    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form)."""
+    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form).  A label's
+    former name (`coins.FORMER`) is read as that label."""
     fam: dict[str, dict[str, list]] = {}
     for i in range(1, len(lines) - 1, 2):
         root, release = json.loads(lines[i]), json.loads(lines[i + 1])
-        f = fam.setdefault(root["label"], {"after": [], "received": [], "released": []})
+        f = fam.setdefault(coins.FORMER.get(root["label"], root["label"]), {"after": [], "received": [], "released": []})
         f["after"].append(root["root"])
         f["received"].append(root["received_at"])
         f["released"].append(release["released_at"])

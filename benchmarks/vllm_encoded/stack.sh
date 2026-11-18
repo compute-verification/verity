@@ -21,7 +21,8 @@ set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 [ -x "$PY" ] || { echo "no python at $PY"; exit 3; }
-export CUDA_HOME=/usr/local/cuda-13.0 PATH=/usr/local/cuda-13.0/bin:$WORK/venv312/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || { echo "no CUDA 13.0 (machine.py, above)"; exit 3; }
+export CUDA_HOME PATH=$CUDA_HOME/bin:$WORK/venv312/bin:$PATH
 VE=benchmarks/vllm_encoded
 B=$(mktemp -d /tmp/vllm-stack.XXXXXX); trap 'rm -rf "$B"' EXIT
 CU=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
