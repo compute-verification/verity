@@ -3,7 +3,7 @@
 # Does NOT show: a recompute on a processor (the replay is the sealed bundle opened against its record), an audit, or a traced Build on the H100.
 # Needs: PY (default the node's /workspace/venv312/bin/python, both branches), CUDA_HOME (12.9, machine.py's), CARD_SKU (machine.py sku), HF_HOME (/workspace/hf), PYTHONPATH, VERITY_PROTOCOLS_CONFIG (all set here), CUDA_VISIBLE_DEVICES from the lease; the norm tap (no hidden tap: the row's manifest names no hidden class).
 # Writes: the serve's directory, the private directory (keys, salts) and every log under SR, outside the run's directory; under $OUT only smoke.txt, the last line.
-#   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/verity_vllm/ops/h100_smoke.sh   (DRY=1: off the card)
+#   research run --on vy-h100-1 --cwd source -- taskset -c 0-9 bash adapters/vllm/tools/served_run/h100_smoke.sh   (DRY=1: off the card)
 # SCHEME=pearl-plus: the same window served under Pearl+ by its name (serve-openai --protocols pearl-plus), at Pearl+'s tie
 #   (scheme.py's tie, class 4,27,2: 4 slots of 27-token prompts, 2 window steps, fixed load), its --protocols-config the
 #   file `served_passes.py arm` writes from PEARLC_KERNEL and PEARLC_CUBIN (benchmarks/harness/setup/pearl_c_sm90.sh, CUDA
