@@ -8,7 +8,9 @@ They are two protocols, each with its own verifier and its own store, and no set
   hook of the served run and has no setting.
 - `POUB` (``poub``, the adapter's option and the benchmarks' session): the remote session ``verity/remote-bandwidth/v0``
   over the node's own store (`prover.node_store`), which `prover.binder.Binder` keeps current from the served run's
-  ``memory`` and ``steps`` events, subscribed under `POUB`'s name. ``refresh`` is its one setting.
+  ``memory`` and ``steps`` events, subscribed under `POUB`'s name. ``refresh`` is its one setting. The Commit's
+  session over that store is its process `SESSION_PROCESS` (`prover.commit_session`), which reads what the build
+  declared.
 
 No verifier loads this module, and it loads none: each verifier states its own id, component name and deadline, and
 PoUB's tests hold them equal to the declarations.
@@ -23,6 +25,8 @@ blocks N and the sign blocks' rank tail ε, not one number.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from importlib import import_module
+from types import MappingProxyType
 from typing import Any
 
 from verity import hooks as H
@@ -32,6 +36,10 @@ from verity.protocols.resource_accounting import scheme as S
 #: P2's allowance from a window's boundary message to its roots' deadline, which the session's parameters carry
 #: (`verifier.p2_parties.SESSION`); the remote session's is a parameter of each session (`verifier.audit.Params`)
 DEADLINE_NS = 10**9
+#: the process `POUB` registers (`Scheme.processes`): the Commit's session, which an adapter looks up by this name
+SESSION_PROCESS = "poub-session"
+#: what the parts of `POUB` on a served run that are declared and not built wait on
+GOAL = "memory-accounting/memory-protocols-declared"
 #: what `refresh` waits on: a session with the setting on accepted by the Lean verifier
 REFRESH_GOAL = "memory-accounting/refresh-session-accepted"
 #: each scheme's own term in the Lean, by the guarantee whose conclusion carries it (`SketchBound T δs`): δs at the
@@ -87,9 +95,10 @@ POUB = S.register(S.Scheme(
     log=(S.Order("registration", "challenge"), S.Order("roots", "openings")),
     charges=tuple(S.Charge(name, f"gamma.{name}") for name in CHARGES),
     settings={"refresh": False},
-    hooks=("memory", "steps"),
+    hooks=("declared", "memory", "steps"),
     requests=lambda ctx: requests(ctx),
     attach=lambda exchange, ctx: attach(exchange, ctx),
+    processes={SESSION_PROCESS: lambda *a, **kw: session(*a, **kw)},
     requires={
         **_REQUIRES,
         "one-labelling": "its own trees: the node store's registration root and a receipt root a pass",
@@ -120,17 +129,33 @@ def requests(ctx: Mapping[str, Any]) -> tuple[H.Request, ...]:
             *(() if ctx.get("ranges") is None else (H.FixRanges(ctx["ranges"]),)))
 
 
-#: the prover's binder, entered by its module as it loads (`prover.binder`): the declaration loads no prover
-PROVER: dict[str, Any] = {}
+#: `POUB`'s prover, by what the declaration hands out, each as ``module:name``. The prover is a distribution of its
+#: own (it runs on a GPU through torch, which `verity` never imports; ``tests/import_order.toml`` lists this file as
+#: its loader), so the declaration names it and loads it on first use, as `verity.protocols.compose.schemes` loads a
+#: declaration by its scheme's name.
+PROVER: Mapping[str, str] = MappingProxyType({
+    "binder": "verity.protocols.resource_accounting.memory.poub.prover.binder:Binder",
+    SESSION_PROCESS: "verity.protocols.resource_accounting.memory.poub.prover.commit_session:CommitSession",
+})
+
+
+def prover(name: str) -> Any:
+    """What `PROVER` names ``name``, its module imported on first use."""
+    module, attribute = PROVER[name].split(":")
+    return getattr(import_module(module), attribute)
 
 
 def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
     """`POUB` on a served run (`Scheme.attach`): the binder over ``ctx["store"]`` (a `NodeMemory`), built with
     ``ctx["binder"]``'s keywords, installed on ``exchange``, which files its requests; returns the binder."""
-    if "binder" not in PROVER:
-        raise RuntimeError("poub attaches with its prover's binder: import "
-                           "verity.protocols.resource_accounting.memory.poub.prover.binder first")
-    return PROVER["binder"](ctx["store"], **ctx.get("binder", {})).install(exchange)
+    return prover("binder")(ctx["store"], **ctx.get("binder", {})).install(exchange)
+
+
+def session(verifier: str, **kw: Any) -> Any:
+    """The process `SESSION_PROCESS`: the Commit's session at ``verifier`` (``HOST:PORT``), `prover.commit_session`'s
+    `CommitSession` with its keywords. An adapter hands it ``exchange``, a call that gives the exchange of the build
+    about to be made, and drives what it gets back."""
+    return prover(SESSION_PROCESS)(verifier, **kw)
 
 
 def settings(given: Mapping[str, Any]) -> dict[str, Any]:
@@ -141,5 +166,5 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "POUB", "PROVER", "REFRESH_GOAL",
-           "REUSE_OLDEST_FREED", "SESSION", "attach", "requests", "settings"]
+__all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "GOAL", "POUB", "PROVER", "REFRESH_GOAL",
+           "REUSE_OLDEST_FREED", "SESSION", "SESSION_PROCESS", "attach", "prover", "requests", "session", "settings"]

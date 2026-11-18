@@ -1,7 +1,12 @@
-"""The Commit's PoUB session on its vLLM engine (`CommitSession`, ``--remote-verifier HOST:PORT``,
-`config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`:
-`StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine by the store binder
-(`verity.protocols.resource_accounting.memory.poub.prover.binder`), the session in lockstep with the Commit's instrumented run.
+"""The Commit's PoUB session on a served engine (`CommitSession`, an adapter's ``--remote-verifier HOST:PORT``),
+registered as the process `PROCESS` (`poub.scheme.POUB.processes`): PoUB's prover's serving loop (`node_store.serving`:
+`StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine through the adapter's exchange (`POUB.attach`:
+the store binder, `binder`), the session in lockstep with the Commit's instrumented run.
+
+It imports no adapter. The adapter looks the process up by name, hands it the exchange of the build it is about to make
+(``exchange``, called at `install`), and drives the object it gets back: `before_build` (or `install`), `check`, `begin`,
+each engine step through the `Lockstep` that `begin` returns, `end`. What the session knows of the engine is what the
+build declared on the exchange (`verity.hooks.Declared`) and the events the binder reads.
 """
 from __future__ import annotations
 
@@ -24,17 +29,19 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving 
     Lockstep,
     StoreBackend,
 )
-from verity.protocols.resource_accounting.memory.poub.scheme import POUB
+from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
+from verity.protocols.resource_accounting.memory.poub.scheme import GOAL, POUB, SESSION_PROCESS
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
 from verity import hooks as H
-from verity_vllm import messages
-from verity_vllm.engine.handle import core_in_process, engine_of
-from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
-from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
-__all__ = ["CommitSession"]
+__all__ = ["PROCESS", "RECORD_SCHEMA", "CommitSession"]
+
+#: the name the session is registered and looked up under
+PROCESS = SESSION_PROCESS
+#: the id of the session's record on disk (``remote_session.json``)
+RECORD_SCHEMA = "verity-vllm/remote-session/v0"
 
 
 class CommitSession:
@@ -42,15 +49,17 @@ class CommitSession:
 
     ~~~text
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
-    install      before the build: on the exchange, the session's requests (`requests`: one GPU, synchronous steps, no
+    install      before the build: `POUB` attached on the build's exchange (``Exchange.attach``, so the build declares it):
+                 the session's requests (`requests`: one GPU, synchronous steps, no
                  prefix caching, the KV pool at ``kv_pages`` ranges, None: the engine's own, at the row's
                  gpu_memory_utilization), which the build answers or refuses, and
                  ``binder.Binder(store, passes=False, kv=False)``, subscribed to the
-                 adapter's memory hook (`engine.kv_blocks`, which the build attaches), registering weight tensors up to
+                 workload's memory and steps events, registering weight tensors up to
                  ``weight_blocks`` blocks.  The KV pool stays outside
                  the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
-    check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
+    check        after the build, from what it declared (`verity.hooks.Declared`): the steps taken in this process, one
+                 GPU, scheduling synchronous, no prefix caching, and no KV pool registered; then
                  ``filler_gib`` GiB of zeros on the engine's GPU registered as the store's filler (`Binder.register_filler`)
     begin        before the Commit's first instrumented run: the session on its own thread, registered before the run
                  goes on, and its first window armed once the run's first step has run (`Serving.ready`).  Its
@@ -70,7 +79,8 @@ class CommitSession:
     live coin a pass) has each pass's engine step run inside its coin's window, so ``step_ms``, the step's time, goes
     into the calibration's pass times (`StoreBackend.with_step`) and the allowance covers it."""
 
-    def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int | None = 32,
+    def __init__(self, verifier: str, *, exchange: Callable[[], Any] | None = None, plan: str = "serve",
+                 kv_pages: int | None = 32,
                  weight_blocks: int | None = None, kv_lib: str | None = None,
                  out: str | Path | None = None, node: str | None = None, codec: rcodec.Codec = rcodec.DEFAULT,
                  step_ms: float = 0.0, filler_gib: float = 0.0, log: Callable[[str], None] = print) -> None:
@@ -89,6 +99,8 @@ class CommitSession:
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
         self.kv_lib, self.step_ms, self.filler_gib = kv_lib, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
+        self.exchange = exchange
+        self.declared: H.Declared | None = None
         self.store = NodeMemory()
         self.binder: Binder | None = None
         self.lockstep: Lockstep | None = None
@@ -97,8 +109,15 @@ class CommitSession:
         self._thread: threading.Thread | None = None
 
     def requests(self) -> list[H.Request]:
-        """The session's requests of the run, its declaration's (`poub.scheme.POUB.requests`); the binder files its own."""
-        return list(POUB.requests({"fifo": False, "session": True, "ranges": self.kv_pages}))
+        """What `POUB` asks of the run under the session (`poub.scheme.POUB.requests` at `ctx`), which `install`'s
+        attach files under the scheme's name."""
+        return list(POUB.requests(self.ctx()))
+
+    def ctx(self) -> dict[str, Any]:
+        """What the session hands `POUB.attach` beside its settings and the build's key: its store, that it is a
+        session in lockstep, its pool's ranges, and the binder's keywords."""
+        return {"store": self.store, "session": True, "ranges": self.kv_pages,
+                "binder": {"passes": False, "weight_blocks": self.weight_blocks, "kv": False}}
 
     def target(self, target: Any) -> None:
         """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
@@ -109,10 +128,25 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        ex = messages.current()
-        for r in self.requests():
-            ex.request("poub-session", r)
-        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install(ex)
+        """`POUB` attached on the exchange of the build about to be made: its binder over the session's store, and
+        the session's requests, filed under the scheme's name."""
+        if self.exchange is None:
+            raise NotImplementedError(f"{GOAL}: the process {PROCESS!r} is handed the exchange of the build it attaches "
+                                      "to (exchange=, called here); this adapter passed none")
+        ex = self.exchange()
+        self.binder = ex.attach(POUB, None, **self.ctx())
+        ex.subscribe(POUB.name, "declared", self._on_declared)
+
+    def _on_declared(self, declared: H.Declared) -> None:
+        self.declared = declared
+
+    def gate(self) -> H.Gate:
+        """The session's pacing as a gate asked before each step (`verity.hooks.Gate.ready`), in place of the
+        `Lockstep` the run loop is handed: not built. It waits on the Commit's run loop asking the exchange's gates
+        before each engine step, and on an event for an engine step that raised."""
+        raise NotImplementedError(f"{GOAL}: the session paces through the Lockstep `begin` returns; a gate waits on "
+                                  "the run loop asking Exchange.ready(StepDue) before each step and on an event for "
+                                  "a step that raised")
 
     def before_build(self, ekw: dict[str, Any]) -> None:
         """`target` and `install` before the Commit's engine is built (``target``)."""
@@ -120,15 +154,20 @@ class CommitSession:
         self.install()
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
-        vc, why = engine_of(llm).vllm_config, []
-        if not core_in_process(llm):
+        """After the build: the engine is one the session serves, by what the build declared; then the filler, on
+        ``runner.device``. ``llm`` is not read."""
+        if self.declared is None:
+            raise RuntimeError("the Commit's session checks its engine once the build has declared it on the exchange "
+                               "the session is installed on (`install`, then the build)")
+        p, why = self.declared.properties, []
+        if p.get("in_process") is not True:
             why.append("the engine core in another process")
-        if vc.scheduler_config.async_scheduling:
+        if p.get("async_steps") is not False:
             why.append("async scheduling resolved on")
-        if vc.cache_config.enable_prefix_caching:
+        if p.get("prefix_cache"):
             why.append("prefix caching on")
-        if vc.parallel_config.tensor_parallel_size != 1:
-            why.append(f"tensor parallel size {vc.parallel_config.tensor_parallel_size}")
+        if p.get("world") != 1:
+            why.append(f"tensor parallel size {p.get('world')}")
         if "kv" in {r.kind for r in self.store.layout().regions}:
             why.append("a KV pool registered (served writes stay outside the registration)")
         if why:
@@ -169,7 +208,7 @@ class CommitSession:
             if steps is None:
                 steps = []
             self.record = {
-                "schema": REMOTE_SESSION_SCHEMA, "verifier": self.verifier, "plan": self.plan,
+                "schema": RECORD_SCHEMA, "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks, "step_ms": self.step_ms,
@@ -193,7 +232,7 @@ class CommitSession:
         lock.finish()
         thread.join()
         rec: dict[str, Any] = self.record if self.record is not None else {
-            "schema": REMOTE_SESSION_SCHEMA, "verifier": self.verifier, "plan": self.plan, "accepted": False,
+            "schema": RECORD_SCHEMA, "verifier": self.verifier, "plan": self.plan, "accepted": False,
             "error": "the session's record was not written (its thread raised)", "memory_map": None, "encode": None}
         rec["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
         self.record = rec
