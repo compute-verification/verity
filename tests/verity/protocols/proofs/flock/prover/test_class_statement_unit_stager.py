@@ -315,6 +315,23 @@ def test_a_stager_writes_its_circuit_as_it_composes_it(which, tmp_path, monkeypa
           st.stage(rows, tmp_path / "streamed", b"k" * 32, **round_kw), st.circuit)
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize("which", list(WRITTEN))
+def test_a_stager_under_digests_only_writes_nothing_and_has_the_written_files_pin_class_and_size(which, tmp_path, monkeypatch):
+    """Under `circuit.digests_only` a stager given ``circuit`` writes no file, and its pin, class, META and the byte count
+    `digests_only` records are those of the file it writes without, whose head is the head recorded."""
+    args, rows, kw, _round_kw = WRITTEN[which]()
+    monkeypatch.setattr(IL, "CIRCUIT_DESCRIPTION_ROWS", 7)
+    st = CS.UnitStager(*args, **kw, circuit=tmp_path / "written" / "circuit.txt")
+    with FC.digests_only() as got:
+        only = CS.UnitStager(*args, **kw, circuit=tmp_path / "none" / "circuit.txt")
+    assert not (tmp_path / "none" / "circuit.txt").exists() and len(got) == 1
+    body = st.circuit.read_bytes()
+    assert (only.pin, only.class_sha512, only.meta) == (st.pin, st.class_sha512, st.meta)
+    assert (got[0]["sha512"], got[0]["class"], got[0]["bytes"]) == (hashlib.sha512(body).hexdigest(), st.class_sha512, len(body))
+    assert body.startswith(got[0]["head"].encode())
+
+
 def _packed_toy(w: int = 16) -> object:
     """A unit returning its public ``w`` (``w`` 8-bit leaves) beside four 32-bit scales ``s`` and a 2048-bit row ``x``."""
     sig = ((("w", Array(w, Value(8))), ("s", Array(4, Value(32))), ("x", Array(128, Value(16)))), Array(w, Value(8)))

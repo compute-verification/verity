@@ -55,6 +55,8 @@ instance file's header carries each block's unit indices (the VUs of the partiti
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import itertools
 import json
@@ -862,7 +864,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         unit_sha256 = low.sha256_of(unit)
     else:
         unit = None
-        unit_sha256 = "0" * 64 if template is None else _write_circuit_description(low)[0]
+        # a flat statement's META precedes its unit and names the unit's hash: a sink that can't seek back hashes it first
+        unit_sha256 = "0" * 64 if template is None and not isinstance(out, _Digests) else _write_circuit_description(low)[0]
     stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": unit_sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
@@ -914,26 +917,77 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         unit_sha256, got = _write_circuit_description(low, out)
         if got != lines:
             raise AssertionError(f"{low.name}: the unit's circuit description has {got} lines, not the {lines} its section names")
-        stand_in = meta_json.encode()
-        cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
-        if not partition:
-            meta["partition"]["digest"] = partition_digest(cover)
-        meta_json = serialized()
-        if len(b := meta_json.encode()) != len(stand_in):
-            raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
-        end = out.tell()
-        out.seek(at)
-        out.write(b)
-        out.seek(end)
+        if isinstance(out, _Digests):
+            if unit_sha256 != meta["unit_sha256"]:
+                raise AssertionError(f"{low.name}: the unit's circuit description hashes two ways, rendered twice")
+        else:
+            stand_in = meta_json.encode()
+            cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
+            if not partition:
+                meta["partition"]["digest"] = partition_digest(cover)
+            meta_json = serialized()
+            if len(b := meta_json.encode()) != len(stand_in):
+                raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
+            end = out.tell()
+            out.seek(at)
+            out.write(b)
+            out.seek(end)
     for s in [*tmpl_section, *sections(texts)]:
         _put(out, s)
     return head + meta_json + "\n"
 
 
+_DIGESTS_ONLY: contextvars.ContextVar[list | None] = contextvars.ContextVar("digests_only", default=None)
+
+
+@contextlib.contextmanager
+def digests_only():
+    """Under it `compose_to` writes no file: each compose's ``head``, pin, class and ``bytes``, those of the file it would have
+    written, hashed as the text is rendered, are appended to the list it yields. A flat statement's unit is rendered twice."""
+    got: list[dict] = []
+    token = _DIGESTS_ONLY.set(got)
+    try:
+        yield got
+    finally:
+        _DIGESTS_ONLY.reset(token)
+
+
+class _Digests:
+    """`compose`'s ``out`` that keeps no byte: the file's SHA-512 and class digest (:func:`_file_digests`'), and its length."""
+
+    def __init__(self) -> None:
+        self.file, self.cls, self.n, self._head = hashlib.sha512(), None, 0, b""
+
+    def write(self, b: bytes) -> None:
+        self.file.update(b)
+        self.n += len(b)
+        if self.cls is not None:
+            self.cls.update(b)
+            return
+        self._head += b
+        if self._head.count(b"\n") < 2:
+            return
+        j = self._head.index(b"\n", self._head.index(b"\n") + 1)
+        head = self._head[:j].decode()
+        i = head.index("\n") + 1
+        meta = {k: v for k, v in json.loads(head[i + 5:]).items() if k not in BINDING_KEYS}
+        self.cls = _sha512(itertools.chain([head[:i], "META "], _COMPACT.iterencode(meta)))
+        self.cls.update(self._head[j:])     # the class reads the file from the newline that ends META
+        self._head = b""
+
+    def tell(self) -> int:
+        return self.n
+
+
 def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:
     """`compose`'s circuit (``kw`` its keywords) written to ``path`` as it is composed (its ``out``), never held whole, and read
     once more for its digests: ``head`` (its format line and META, which `meta_of` reads), ``sha512`` its pin (:func:`digest`),
-    ``class`` (:func:`class_digest`) and ``bytes``. The file is at ``path`` only once it is whole."""
+    ``class`` (:func:`class_digest`) and ``bytes``. The file is at ``path`` only once it is whole; under `digests_only`, never."""
+    if (only := _DIGESTS_ONLY.get()) is not None:
+        sink = _Digests()
+        head = compose(low, sub, out=sink, **kw)
+        only.append(got := {"head": head, "sha512": sink.file.hexdigest(), "class": sink.cls.hexdigest(), "bytes": sink.n})
+        return got
     path = Path(path)
     part = path.with_name(f".{path.name}.part")
     try:
