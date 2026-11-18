@@ -112,7 +112,7 @@ def _grid(*lanes, run=1):
 
 _CUT = {UA: {"x": 2}, UB: {"x": 2}}
 
-#: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Part.lanes`)
+#: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Spot.Edges.partLanes`)
 GRID_CASES = [
     ("two lanes over a cut port", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
      {"wires": [_wire(UB, UA, "o0", 0, 0, 0), {**_wire(UB, UA, "o1", 0, 1, 1), "step": [-1]},

@@ -20,7 +20,7 @@ root node's outputs is one `Spot.Wires.Wire` per row of the reader's port, in cl
 
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
 `[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, and reads exactly one whole return field of
-one member of the writer node, at the field's bits. A part is a grid (`Part.lanes`): a row lies in one lane's run, and
+one member of the writer node, at the field's bits. A part is a grid (`partLanes`): a row lies in one lane's run, and
 across the members a part covers its place moves by the argument's member stride, inside that run or by whole periods
 of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
 needs the writer field to stay the same, so each step is a whole number of writer members.
@@ -107,9 +107,10 @@ structure Lane where
   b : Int
   e : Int
   lv : List (Nat × Int)
+  deriving Inhabited
 
 /-- A part's run and lanes, the grid it spells; an explicit part none. -/
-def Part.lanes : Part → Nat × List Lane
+def partLanes : Part → Nat × List Lane
   | .affine p i b c => (max c 1, [⟨p, i, b, 1, []⟩])
   | .strided p i b inner os is c =>
     let T := max 1 ((c + inner - 1) / inner)
@@ -200,7 +201,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         if it.any fun r => !r.p && r.i ≥ k then throw "not-topological"
         throw "edge-rows"
       continue
-    let (w, l0, radix, steps) ← laneWire q.lanes.1 q.lanes.2 (x0 + lo * L - s0) L len cnt
+    let (run, lanes) := partLanes q
+    let (w, l0, radix, steps) ← laneWire run lanes (x0 + lo * L - s0) L len cnt
     if w ≥ k then throw "not-topological"
     if isInputNode P w then continue
     let wnode := nodes[w]!
