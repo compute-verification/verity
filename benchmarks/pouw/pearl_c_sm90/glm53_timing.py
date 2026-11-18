@@ -47,8 +47,7 @@ one CUDA graph (`capture_stock`; run eagerly, and said so, when torch can't capt
 commit alike (`COMMITMENT`), and so must a pass of each from poisoned outputs: each capture writes the bytes the calls one
 at a time write.  Writes ``whole.json`` in DIR, one row an M; exits non-zero when any commitment differs.  With ``--nvtx``
 (under nsys), after the timed reps, each arm makes `NVTX_FORWARDS` forwards back to back, each in an NVTX range
-``call whole ARM mM #i`` (a pearlc arm's in a pass of their own, neither timed nor compared), for glm53_profile.py's
-``lanes``.
+``call whole ARM mM #i`` (a pearlc arm's in a pass of their own, neither timed nor compared).
 """
 
 from __future__ import annotations
