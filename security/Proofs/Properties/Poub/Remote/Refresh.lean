@@ -1030,11 +1030,11 @@ last ended; and once the last window is drawn, every append has joined. -/
 structure RotaOn (P : Params) (N : Nat) (as : Array Append) (js : Array Nat) (ws : Array Win) : Prop where
   onRota : P.refresh = true → ∀ a, a < as.size → OnRota P N as a
   le : js.size ≤ as.size
-  win : P.refresh = true → ∀ a, a < js.size → js[a]? = (P.slotAt N as[a]!.slot).map (·.1)
-  final : ∀ u, ws[u]!.drawn.isSome → ws[u]!.final = true
+  win : P.refresh = true → ∀ a, a < js.size → js[a]? = (P.slotAt N (as[a]! : Append).slot).map (·.1)
+  final : ∀ u, (ws[u]! : Win).drawn.isSome → (ws[u]! : Win).final = true
   size : ws.size ≤ max 1 P.windows
-  bnd : ∀ u, u + 1 < ws.size → ws[u]!.boundaryNs.isSome
-  last : ∀ u, u + 1 = P.windows → ws[u]!.drawn.isSome → js.size = as.size
+  bnd : ∀ u, u + 1 < ws.size → (ws[u]! : Win).boundaryNs.isSome
+  last : ∀ u, u + 1 = P.windows → (ws[u]! : Win).drawn.isSome → js.size = as.size
 
 def Rota (s : State) : Prop := RotaOn s.params s.reg.blocks s.appends s.joined s.windows
 
@@ -1050,8 +1050,9 @@ theorem rota_init (params : Params) (reg : Registration) (coins appendCoins : Ar
 
 /-- `ws'` is `ws` with each window as drawn as it was, final if it was, and ended if it was. -/
 def WK (ws ws' : Array Win) : Prop :=
-  ws'.size = ws.size ∧ ∀ u, ws'[u]!.drawn = ws[u]!.drawn ∧ (ws[u]!.final = true → ws'[u]!.final = true) ∧
-    (ws[u]!.boundaryNs.isSome → ws'[u]!.boundaryNs.isSome)
+  ws'.size = ws.size ∧ ∀ u, (ws'[u]! : Win).drawn = (ws[u]! : Win).drawn ∧
+    ((ws[u]! : Win).final = true → (ws'[u]! : Win).final = true) ∧
+    ((ws[u]! : Win).boundaryNs.isSome → (ws'[u]! : Win).boundaryNs.isSome)
 
 theorem rotaOn_wk {P N as js ws ws'} (h : RotaOn P N as js ws) (k : WK ws ws') : RotaOn P N as js ws' :=
   ⟨h.onRota, h.le, h.win, fun u hu => (k.2 u).2.1 (h.final u (by rw [← (k.2 u).1]; exact hu)),
@@ -1104,8 +1105,7 @@ theorem rotaOn_push {P N as js ws} (h : RotaOn P N as js ws) (w : Win) (hd : w.d
     fun u hw hu => h.last u hw (by rw [← g u]; exact hu)⟩
   · have hu' := hu
     rw [g u] at hu'
-    have hl : u < ws.size := by
-      by_contra hl; rw [drawn_past ws u hl] at hu'; cases hu'
+    have hl : u < ws.size := Decidable.byContradiction fun hl => by rw [drawn_past ws u hl] at hu'; cases hu'
     have := h.final u hu'
     rw [getElem!_pos ws u hl] at this
     rw [getElem!_pos (ws.push w) u (by simp only [Array.size_push]; omega), Array.getElem_push_lt hl]
@@ -1215,8 +1215,7 @@ theorem rota_push {s : State} (h : Rota s) {A : Bool} {count : Nat} {origin : _r
     Rota { s with appends := s.appends.push x, head := hd, extent := n } := by
   have hno : ∀ u, u + 1 = s.params.windows → s.windows[u]!.drawn.isSome → False := by
     intro u hw hu
-    have hl : u < s.windows.size := by
-      by_contra hl; rw [drawn_past _ _ hl] at hu; cases hu
+    have hl : u < s.windows.size := Decidable.byContradiction fun hl => by rw [drawn_past _ _ hl] at hu; cases hu
     have hf := h.final u hu
     have hsz := h.size
     have he : s.windows.size = s.params.windows := by omega
@@ -1293,8 +1292,7 @@ theorem rota_boundary {s : State} {now : Nat} {r : Result} {s' : State} (h : Rot
     have hmem := Array.mem_of_find?_eq_some hf
     have hnone := Array.find?_some hf
     rw [Array.mem_range] at hmem
-    have hlast : t + 1 = s.windows.size := by
-      by_contra hne
+    have hlast : t + 1 = s.windows.size := Decidable.byContradiction fun hne => by
       have := h.bnd t (by omega)
       revert this hnone
       try simp only []
