@@ -201,6 +201,20 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
 
 
+def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_read_by_name() -> None:
+    """The bandwidth audit's and the network attester's quantities are their schemes' readings under their declared
+    symbols and published units, as the record wrote them before the readers; only the sampled proofs and the work
+    row are read by name, a list that only shrinks; a subprotocol no scheme's record names is refused by name."""
+    row = {"answer": {}, "quantity": {"q_bytes": 5, "eps": "1/4", "K": 9, "windows": 3}}
+    assert R._quantity("bandwidth", row) == ({"symbol": "Q_cert", "value": 5, "unit": "bytes"}, Fraction(1, 4),
+                                             "quantity.eps")
+    assert R._quantity("certifier", row) == ({"symbol": "K", "value": 9, "unit": "bits", "windows": 3},
+                                             Fraction(1, 4), "quantity.eps")
+    assert set(R.BY_NAME) <= {"integrity", "pouw"}
+    with pytest.raises(ValueError, match="not a subprotocol"):
+        R._quantity("attester", row)
+
+
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
     """PoUS's quantity is written as `S0`, the verifier's `s_bits`, in a record built here as in the fixtures, and no
     other quantity has that symbol. The same record under `S_cert`, the quantity's older name, fits the schema and

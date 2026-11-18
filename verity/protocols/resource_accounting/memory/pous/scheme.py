@@ -28,6 +28,7 @@ has no Lean constant of its own (`StreamedWipe.bound` adds the sampling term `(g
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
 from typing import Any
 
@@ -35,8 +36,9 @@ from verity.commitments import domains
 from verity.protocol import Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.prover import workload
+from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Scheme, register
+from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Reading, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -70,6 +72,20 @@ def _pous_attach(exchange: Any, ctx: Any) -> Any:
 def _wipe_attach() -> Any:
     raise LookupError("wipe attaches through no hook of a served run: it runs before the workload's engine loads, as "
                       "its own session with the memory attester (`verifier.wipe_parties`), started by its piece")
+
+
+def _pous_reading(row: Mapping[str, Any]) -> Reading:
+    q = row["quantity"]
+    return Reading(int(q["s_bits"]), Fraction(str(q["eps"])), "quantity.eps", {"certified": bool(q["certified"])})
+
+
+def _wipe_reading(row: Mapping[str, Any]) -> Reading:
+    """A wipe's ``k`` is its public's, else, in a wipe from before `verity/wipe/v0` published it, its profile's."""
+    a = row["answer"]
+    pub = a.get("public") or {}
+    return Reading(int(pub["foreign_bits"]), Fraction(str(pub["eps"])), "answer.public.eps",
+                   {"k": pub.get("k", (a.get("profile") or {}).get("k")), "r": pub.get("r"),
+                    "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])})
 
 
 POUS = register(Scheme(
@@ -112,6 +128,8 @@ POUS = register(Scheme(
     symbol="S0",
     published=("bits", Fraction(1)),
     record_owner="memory-accounting",
+    check=period.answer,
+    reader=_pous_reading,
 ))
 
 WIPE = register(Scheme(
@@ -144,6 +162,8 @@ WIPE = register(Scheme(
     symbol="foreign_bits",
     published=("bits", Fraction(1)),
     record_owner="memory-accounting",
+    check=wipe_period.answer,
+    reader=_wipe_reading,
 ))
 
 __all__ = ["POUS", "WIPE"]

@@ -55,6 +55,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocol import DELTAS, MONITORING_PERIODS
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
@@ -65,6 +67,9 @@ SUBPROTOCOLS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 BY_SUBPROTOCOL, SAMPLED, INTEGRITY_UNIT = "legs", "drawn", "wrong units"
 #: the runner's protocol keys, by subprotocol
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+#: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
+#: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
+BY_NAME = ("integrity", "pouw")
 #: the subprotocols each product composes: onsite every subprotocol, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": SUBPROTOCOLS, "remote": ("integrity", "pouw")}
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
@@ -147,9 +152,17 @@ def error_form(error: Any, named: Mapping[str, Mapping[str, Any]] | None) -> str
 
 
 def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
-    """A subprotocol's certificate, its error and where the error is read from, out of its runner row (or the wipe's subprotocol)."""
+    """A subprotocol's certificate, its error and where the error is read from, out of its runner row (or the wipe's
+    subprotocol): its scheme's `Reading` (`Scheme.reader`) under its declared ``symbol`` and published unit, or, for a
+    subprotocol of `BY_NAME`, read here."""
+    if subprotocol not in SUBPROTOCOLS:
+        raise ValueError(f"{subprotocol}: not a subprotocol of {SUBPROTOCOLS}")
+    if subprotocol not in BY_NAME:
+        scheme = _scheme(subprotocol)
+        reading = S.declared(scheme, "reader")(row)
+        return ({"symbol": S.declared(scheme, "symbol"), "value": reading.value,
+                 "unit": S.declared(scheme, "published")[0], **reading.figures}, reading.error, reading.error_from)
     q, a = row.get("quantity") or {}, row["answer"]
-    pub = a.get("public") or {}
     if subprotocol == "integrity":
         members = row.get("members") or {}
         if members.get("sampled", 0) < members.get("registered", 0):
@@ -157,23 +170,19 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
                      "members": dict(members), "by_member": list(row["by_member"])}, frac(row["delta"]), "delta")
         return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": INTEGRITY_UNIT, **_sample(a)},
                 frac(row["delta"]), "delta")
-    if subprotocol == "pouw":
-        w = q["work"]
-        return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
-                frac(row["delta"]), "delta")
-    if subprotocol == "pous":
-        return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
-                frac(q["eps"]), "quantity.eps")
-    if subprotocol == "bandwidth":
-        return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")
-    if subprotocol == "certifier":
-        return ({"symbol": "K", "value": int(q["K"]), "unit": "bits", "windows": int(q["windows"])}, frac(q["eps"]),
-                "quantity.eps")
-    if subprotocol == "wipe":
-        k = pub.get("k", (a.get("profile") or {}).get("k"))
-        return ({"symbol": "foreign_bits", "value": int(pub["foreign_bits"]), "unit": "bits", "k": k, "r": pub.get("r"),
-                 "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])}, frac(pub["eps"]), "answer.public.eps")
-    raise ValueError(f"{subprotocol}: not a subprotocol of {SUBPROTOCOLS}")
+    w = q["work"]
+    return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
+            frac(row["delta"]), "delta")
+
+
+def _scheme(subprotocol: str) -> S.Scheme:
+    """The declared scheme whose row is ``subprotocol``'s (`Scheme.record`, its runner key)."""
+    key = RUNNER_KEYS.get(subprotocol, subprotocol)
+    for scheme in schemes.load().values():
+        if scheme.record == key:
+            return scheme
+    raise ValueError(f"{subprotocol}: no declared scheme's record is {key!r} (verity.protocols.compose.schemes); "
+                     f"declare its scheme there, with its reader")
 
 
 def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:

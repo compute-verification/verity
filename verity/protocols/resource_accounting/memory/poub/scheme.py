@@ -78,6 +78,16 @@ def _refresh(values: Mapping[str, Any]) -> str | None:
         if values["refresh"] else None
 
 
+def _bandwidth_reading(row: Mapping[str, Any]) -> S.Reading:
+    q = row["quantity"]
+    return S.Reading(int(q["q_bytes"]), Fraction(str(q["eps"])), "quantity.eps")
+
+
+#: why neither read audit has a check of a record: its Lean verifier answers the session as it runs, one event a line
+_LIVE = ("its Lean verifier ({}) checks the session live, an event a line, and no entry checks a finished record "
+         "against the verifier's registration")
+
+
 _REQUIRES = {
     "log-order": "the verifier party's own log of the session",
     "log-times": "the verifier party's clock on the auditor's host",
@@ -122,6 +132,8 @@ BANDWIDTH = S.register(S.Scheme(
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
     record_owner="memory-accounting",
+    check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
+    reader=_bandwidth_reading,
 ))
 
 POUB = S.register(S.Scheme(
@@ -160,6 +172,8 @@ POUB = S.register(S.Scheme(
     symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     record_owner=S.Lacks("no combined record has a row for the remote session"),
+    check=S.Lacks(_LIVE.format("session.lean_verifier, as session.verifier runs it")),
+    reader=S.Lacks("no combined record has a row for the remote session"),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it

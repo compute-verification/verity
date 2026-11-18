@@ -236,6 +236,18 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Reading:
+    """What a scheme's ``reader`` reads of the row its run left: its certified quantity's ``value``, in the unit it
+    publishes (``published``); the ``error`` the run established it except with, and ``error_from``, the key of the
+    row it is read from; and the quantity's other public ``figures`` by name, as the record writes them."""
+
+    value: int
+    error: Fraction
+    error_from: str
+    figures: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
     ``[params."<protocol>"]`` overrides (`settings`), and ``check_settings`` what it refuses of their values beyond their
@@ -258,8 +270,12 @@ class Scheme:
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
     the record; ``symbol``, its certified quantity's symbol; ``published``, the unit the record publishes it in and
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
-    it is the same); and ``record_owner``, the lane the record names as answering for its row. ``composed_protocol``
-    is the protocol id it carries inside a composite where that differs from ``protocol``, None where it is the same.
+    it is the same); ``record_owner``, the lane the record names as answering for its row; ``check``, its verifier of
+    record, the entry its Lean port is held to, with that entry's own arguments (a run's record and what the verifier
+    is registered with, its trusted keys among them), which answers accept or names its refusal; and ``reader``, which
+    takes its row as the runner read it from what its piece wrote (``answer``, the answer, and ``quantity``, the
+    figures read of it) and returns its `Reading`. ``composed_protocol`` is the protocol id it carries inside a
+    composite where that differs from ``protocol``, None where it is the same.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -297,6 +313,8 @@ class Scheme:
     channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     record_owner: str | Lacks = UNDECLARED
+    check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
+    reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
     composed_protocol: str | None = None
 
     def __post_init__(self) -> None:
@@ -523,5 +541,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Scheme", "Term", "bound", "credited", "declared",
+           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "bound", "credited", "declared",
            "layout", "register", "register_circuits", "register_process", "settings"]
