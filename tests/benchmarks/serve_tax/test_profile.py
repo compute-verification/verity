@@ -75,8 +75,8 @@ def test_pearl_plus_plans_on_one_gpu_with_a_reserved_session_a_lifetime_checked_
         return {"gate": "ssh -i KEY research@GATE", "pearl-plus": {
             "kernel": "/k", "challenger": "127.0.0.1:0", "session": {"session": session}}}
 
-    with pytest.raises(SystemExit, match="^the arm's schemes need pearl-plus.kernel, pearl-plus.challenger, "
-                                         "pearl-plus.session, gate: --scheme-settings"):
+    with pytest.raises(SystemExit, match="^the arm's schemes need pearl-plus.kernel, pearl-plus.challenger, gate: "
+                                         "--scheme-settings"):
         S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False)
     with pytest.raises(SystemExit, match="^--scheme-settings: arm pearl-plus is served in 2 server lifetimes and a "
                                          "reserved session opens once"):

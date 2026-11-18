@@ -667,8 +667,8 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
   lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
-  `tests/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
-  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
+  `tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
+  phase 6's split, refused through the verifier, on stand-in proofs (`tests/verity/protocols/resource_accounting/network/verifier/standin.py`), and
   `verity/protocols/resource_accounting/network/prover/n2_tie_zk.py` proves them live, its `network_attester` class the network attester path's tie.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
@@ -1321,7 +1321,7 @@ gives the batch order (Model Runner V2's stable sort by n), I1's numbering by fi
 `sources`, and the request records (`prompt_len`, `output_len`, `finish`). While the cumulative pool bound holds (sync
 scheduling, and ⌈(P + O)/B⌉ blocks for each request admitted through the step, that step's included, at most
 NB − 1), nothing has been evicted, and every hit is the longest cached prefix. Past it, every hit is the replay's block
-pool's, which the compile slice's pool derives (`CacheStep_v3`). The hits, the resumes and the new requests' order that
+pool's, and the compile slice refuses the session: it is outside the slice's class. The hits, the resumes and the new requests' order that
 the walk would otherwise read are the replay's, at 0 bits.
 
 **The arrival order**, recovered from the advice's rows (`v1.arrival_order`). FCFS admits new requests in arrival
@@ -1413,8 +1413,7 @@ charge (the composition below): what the bound counts is the charge, not the com
    largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
    `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits.
    While the bound holds each lookup's hit is h*. Past it, `CacheStep_v1`'s table, which never evicts, can't give the
-   pool's hit and v1 sends none, so the session needs `CompileSlice_v4`, whose pool (`CacheStep_v3`) derives each
-   one. The chain reads every committed value and none past them, so the values are exactly the asks and the
+   pool's hit, so the session is outside the class and refused (``rows``). The chain reads every committed value and none past them, so the values are exactly the asks and the
    deviations. Under async scheduling
    (AS) the attested O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
 3. *The charge.* The registered code runs forward over the same values: per execution phase, `code_v1`'s segment over
@@ -1529,8 +1528,8 @@ carry the table from call to call in `ReplayStep_v1`'s scheduling order:
     hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
 - *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
-  holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v3`
-  derives, so the execution-phase row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
+  holds, so a shortfall is at least 0. v1 sends none: past the bound the session is outside the slice's class and
+  refused, so the execution-phase row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
   prefix, are unused.
 - *Cost* (`verity_vllm.compiler.cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs
   each. That is 5,856 ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048):
@@ -1582,11 +1581,9 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   - That is two sorts at 2^14: about 5.3e8 ANDs for the hash records and 0.9e8 for the nodes, about 6.2e8 for the
     session, 2.8 times the never-evicting table's.
   - Each hit past the bound is the real pool's, derived at 0 bits, as v1 takes it.
-- *The gap the pool closes* (the phase-7 attack's second case). Past the bound the never-evicting table holds a hit
-  only to h*, so any hit up to the longest donor prefix passes, whatever the real pool evicted. The attack's probe
-  holds this: a hit no donor computed is refused, and a shorter one is accepted. So `CompileSlice_v1` past the bound
-  would need a sent shortfall, and the schedule it accepts needn't be the one vLLM's pool gives. v1 sends none: its
-  decoder holds each hit to the replay's pool, and `CompileSlice_v4` holds the circuit's to `CacheStep_v3`'s.
+- *Past the bound* (the phase-7 attack's second case). The never-evicting table would hold a hit only to h*, so any
+  hit up to the longest donor prefix would pass, whatever the real pool evicted. So the slice refuses such a session:
+  its cache never evicts, so its rows aren't the served ones, and no slice accepts it.
 
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
@@ -1596,14 +1593,10 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the attested record is a stand-in, the honest cert row under the network attester's
     salt, until max_tokens is read from the attested body. The circuit bounds max_tokens only from above, so a lower
-    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
-    stand-in (its ``max-tokens`` proof block is refused by the b‖c check alone); a proof of the length rule is open
+    one the output still fits passes at a lower charge. A proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
-  as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v4`
-  derives all three from `CacheStep_v3`'s pool, past the bound too.
-- Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
-  checking (above).
+  as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. A session past it is refused.
 - *The order's floor.* A server that admitted in release order at the next bucket boundary, a change to vLLM's
   serving, would send no order entries (`replay`'s `ingress="warden"` is that floor on the corpus).
 - The 14 corpus traces have no network attester. The client's send stands in for each request's release (`replay`'s
@@ -1624,8 +1617,7 @@ carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the se
 attested tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each attested
 arrival, its attested max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
 what binds its inputs, why every advised execution phase is proved, a served execution phase at its engine's class (w212 under its
-AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
-`benchmarks/network_traces/compile_slice_zk.py`.
+AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class).
 
 ## The replay at the served shape
 

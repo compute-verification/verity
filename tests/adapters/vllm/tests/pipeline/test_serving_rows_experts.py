@@ -28,21 +28,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate
-from verity.circuits.ops.boolean import gemm as BG
-from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity.commitments import salt_file as SF
-from verity.commitments.gates import embedding as EMB
+from verity_flock.class_statement import UnitStager
 from verity_vllm.definitions.numerics import fp8_moe_rows as FR
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry import moe as MOE
-from verity.commitments.periods import interface as IF
-from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
@@ -51,8 +42,18 @@ from verity_vllm.pipeline import weight_rows as WT
 from verity_vllm.query.program_view import spec_statics
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.fields import RecordError
+
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.commitments import salt_file as SF
+from verity.commitments.gates import embedding as EMB
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
-from verity_flock.class_statement import UnitStager
 
 E, TOPK, K, N, G, KB, NR, T = 8, 2, 64, 4, 32, 32, 2, 2
 NB, KG, B, P = -(-N // G), K // G, N // NR, T * TOPK
