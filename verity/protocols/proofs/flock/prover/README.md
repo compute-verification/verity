@@ -68,7 +68,8 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
 `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
 
 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
-   `bash verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+   `bash verity/protocols/proofs/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=$SM FLOCK_WORK=/workspace/jobs/<lane>`,
+   `SM` the session card's (`SM=$(python3 benchmarks/kernels/machine.py arch "NVIDIA RTX PRO 6000 Blackwell Server Edition" | tr -dc 0-9)`).
 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
 3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the

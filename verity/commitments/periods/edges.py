@@ -1,6 +1,7 @@
 """The wires a Program's root states, read off its nodes (`Spot.Edges.edgesOf`): each argument part of a root node that
 reads an earlier non-input root node's outputs is one wire per row of the reader's port, in closed form, or the first
-refusal by name (`edge-parts`, `edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-width`). The program
+refusal by name (`edge-parts`, `edge-template`, `edge-form`, `not-topological`, `edge-rows`, `edge-fields` where a part reads more than one output field of one writer, one field a
+part being the rule, `edge-width`). The program
 is a descriptor (`circuits/PROTOCOL.md` §4), the ranges ``[node, template, first, count]`` and the wiring the record's
 (its ``templates`` and ``cuts``). The work is the root's nodes and arguments, then each part times its port's rows."""
 from __future__ import annotations
@@ -108,6 +109,52 @@ def _field_at(t, o: int):
             return f, _leaves(ty), _bits(ty)
         at += _leaves(ty)
     return None
+
+
+def _field_ix(t, o: int):
+    at = 0
+    for f, ty in enumerate(_fields(t)):
+        if at <= o < at + _leaves(ty):
+            return f
+        at += _leaves(ty)
+    return None
+
+
+def _leaf_at(q, k: int):
+    _, run, lanes, _c, _w = q
+    g = len(lanes)
+    if run == 0 or g == 0:
+        return None
+    t, r = divmod(k, g * run)
+    j, o = divmod(r, run)
+    p, i, b, e, lv = lanes[j]
+    leaf = b + o * e
+    for x, (rad, d) in enumerate(lv):
+        t, dg = (0, t) if x == len(lv) - 1 else divmod(t, rad)
+        leaf += dg * d
+    return p, i, leaf
+
+
+def _crosses_fields(R, q, k0: int, L: int, ln: int, cnt: int) -> bool:
+    """Whether the rows `k0 + m·L` (`m < cnt`), `ln` references each, of the grid part `q` read more than one output
+    field of one writer node, at a row's last reference or the next member's row."""
+    first = _leaf_at(q, k0)
+    if first is None or first[0] or first[2] < 0 or first[1] >= len(R.nodes):
+        return False
+    _, w, l0 = first
+    wn = R.nodes[w]
+    lw = wn["out_leaves"]
+    if lw == 0:
+        return False
+    f0 = _field_ix(wn["ret"], l0 % lw)
+    ks = [k0 + ln - 1] + ([k0 + L, k0 + L + ln - 1] if cnt > 1 else [])
+    for k in ks:
+        if k >= _count(q):
+            continue
+        x = _leaf_at(q, k)
+        if x is not None and not x[0] and x[1] == w and x[2] >= 0 and _field_ix(wn["ret"], x[2] % lw) != f0:
+            return True
+    return False
 
 
 def _members_in(x0: int, L: int, ln: int, M: int, s0: int, c: int) -> tuple[int, int]:
@@ -246,7 +293,14 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
                     raise Refusal("not-topological")
                 raise Refusal("edge-rows")
             continue
-        w, l0, radix, steps = _lane_wire(q, max(x0 + lo * L - s0, 0), L, ln, cnt)
+        k0 = max(x0 + lo * L - s0, 0)
+        rows = "edge-fields" if _crosses_fields(R, q, k0, L, ln, cnt) else "edge-rows"
+        try:
+            w, l0, radix, steps = _lane_wire(q, k0, L, ln, cnt)
+        except Refusal as x:
+            raise Refusal(rows if str(x) == "edge-rows" else str(x)) from None
+        if len(radix) != len(steps) or 0 in radix:
+            raise Refusal("edge-rows")
         if w >= k:
             raise Refusal("not-topological")
         wn = R.nodes[w]
@@ -264,10 +318,10 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
             raise Refusal("edge-rows")
         fa = _field_at(wn["ret"], l0 % lw)
         if fa is None:
-            raise Refusal("edge-rows")
+            raise Refusal(rows)
         f, fl, fb = fa
         if fl != ln or any(r > 1 and d % lw != 0 for r, d in zip(radix, steps)):
-            raise Refusal("edge-rows")
+            raise Refusal(rows)
         if fb != _bits(ty) // cuts:
             raise Refusal("edge-width")
         out.append({"reader": rt, "port": port, "writer": wt, "out": f"o{f}", "at": rb + lo, "radix": radix,

@@ -144,6 +144,10 @@ path = "verity/errors.py"
 means = "the shared exception classes"
 
 [[tree]]
+path = "verity/ports.py"
+means = "a loopback port the OS has free"
+
+[[tree]]
 path = "verity/hooks.py"
 means = "the events a served run emits and the requests a scheme files, in the circuit's words"
 

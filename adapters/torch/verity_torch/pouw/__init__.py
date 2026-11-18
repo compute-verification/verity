@@ -2,7 +2,8 @@
 
 Importing this package hands its implementations in (`serving.tensors.use`, `use_h1`, `use_pearl_c`):
 `tensors_device.TENSORS`, the tensors on the device (pinned host copies, streams, raw pointers), `h1.h1_device.H1`, H1's
-call tables, registered rows, trace and records on the device, and Pearl-C's run with its weight roots and step limit.
+call tables, registered rows, trace and records on the device, and Pearl-C's run with its weight roots and step limit
+and Pearl+'s capture op (`pearl_plus_op`).
 Each is imported when first asked for, so this import loads no torch.
 
 The rest is the workload's device code, which `serving` names nowhere:
@@ -50,9 +51,10 @@ def _h1_impl() -> Any:
 
 
 def _pearl_c_impl() -> Any:
+    from verity_torch.pouw import pearl_plus_op
     from verity_torch.pouw.pearl_c import passes, run_device
     return SimpleNamespace(PearlCDeviceRun=run_device.PearlCDeviceRun, weight_roots=run_device.weight_roots,
-                           step_tokens=passes.step_tokens)
+                           step_tokens=passes.step_tokens, linear_op=pearl_plus_op.linear_op, runs=pearl_plus_op.RUNS)
 
 
 _tensors.use(_tensors_impl)

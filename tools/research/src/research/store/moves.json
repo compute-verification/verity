@@ -5435,6 +5435,20 @@
         "tests/verity/protocols/proofs/spot/prover/test_cost_recursion.py": "tests/calibration/sampling_plan/test_cost_recursion.py",
         "tests/verity/protocols/proofs/spot/prover/test_cost_transformer.py": "tests/calibration/sampling_plan/test_cost_transformer.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/audit/class_size.py": "benchmarks/prove_path/class_size.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py",
+        "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
+        "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
+        "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
+        "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py"
+      }
     }
   ]
 }

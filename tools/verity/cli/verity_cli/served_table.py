@@ -51,9 +51,8 @@ from verity import config as K
 from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
-from verity.protocols.resource_accounting.compute.pouw.scheme import PEARL_PLUS
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import settings
+from verity.protocols.resource_accounting.scheme import declared, settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -85,8 +84,8 @@ BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is ``work``, as H1's is
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
+#: each component's row in the record: Pearl+'s is the one it declares
+ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": declared(schemes.get("pearl-plus"), "record")}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 
@@ -133,7 +132,7 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
     try:
-        own = settings(PEARL_PLUS, own)
+        own = settings(schemes.get("pearl-plus"), own)
     except ValueError as e:
         raise Refused("params", str(e)) from None
     return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
@@ -185,10 +184,8 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params),
+    Component("pearl-plus", SP.IDS["pearl-plus"], params=_pearlplus_params,
+              **{f: declared(schemes.get("pearl-plus"), f) for f in ("parties", "channels", "needs")}),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),

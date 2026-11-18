@@ -9,7 +9,9 @@ given-up rows credit none (`UnitRecord.credited`).
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
 (``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
-arrives (`Attached.step`); outside an epoch a block is the workload's own. It ends the run's pass once each step's blocks
+arrives (`Attached.step`); outside an epoch a block is the workload's own. At a Match capture (``ctx["stage"]``
+``capture``) each call is one dispatcher op, ``verity_pouw::pearl_plus_linear`` (`serving.tensors.PearlCDevice.linear_op`),
+in the first-stage linear's form, which the capture records; its coins are in-process and credit nothing. It ends the run's pass once each step's blocks
 are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
 linears it computes, whose calls commit their A rows and y. Its settings are
 `SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
@@ -28,7 +30,8 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, Term, register
+from verity.protocol import Channel, Role
+from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
 OPTION = "pouw:pearl-c-h100-v1-h3"
 #: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
@@ -146,13 +149,14 @@ class Attached:
         self.gate: Any = ctx.get("gate")
         self.private: Any = ctx.get("private")
         self.ledger: Any = ctx.get("ledger")
-        if ctx.get("stage") == "capture":
-            raise NotImplementedError("pearl-plus at a Match capture (ctx['stage'] 'capture') records rather than commits, "
-                                      "and what it records of each call is not settled (vllm, TOP-441): its device run has "
-                                      "no record-only mode")
+        self.capture = ctx.get("stage") == "capture"
+        self.build: str = str(ctx.get("build") or "")
         if not self.own["coins"] and not self.own["challenger"]:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
+        if self.capture and self.own["challenger"]:
+            raise ValueError("pearl-plus: a Match capture (ctx['stage'] 'capture') opens no session on the auditor device's "
+                             "challenger, whose sessions are a served run's: give 'coins': 'in-process'")
         if self.own["challenger"] and not callable(self.gate):
             raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['gate'], the auditor device's "
                              "challenger gate in its own words, gate(*words) -> answer (commit_coins.ChallengerGate.call)")
@@ -257,6 +261,11 @@ class Attached:
             raise RuntimeError(f"pearl-plus: block {due.block} is due before the run registered its linear weights")
         if self.run is None:
             return original(None)
+        if self.capture:
+            from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
+
+            return pearl_c_device().linear_op()(due.inputs["x"], due.inputs["weight"], due.inputs.get("bias"), self.build,
+                                                due.key)
         return self.run.gemm(due.key, due.inputs["x"], due.inputs["weight"], due.inputs.get("bias"))
 
     def commitment(self) -> Mapping[str, Any]:
@@ -293,8 +302,12 @@ class Attached:
 
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
 
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
+
         run, session = self.run, self.session
         self.run = self.session = None
+        if self.capture:
+            pearl_c_device().runs.pop(self.build, None)
         if session is None:
             run.finish()
         else:
@@ -384,6 +397,8 @@ class Attached:
             run.commits.update(coin_source=SV.H1_CHALLENGER, session=carried)
         run.commits["registration"] = registration(scheme, SV.DomainError)
         run.details["max_step_tokens"] = device.step_tokens(run, SV.PEARL_C_CALL_CAPACITY)
+        if self.capture:
+            device.runs[self.build] = run
         if own.get("transcript_dir"):
             run.retain_dir = Path(own["transcript_dir"]) / (f"w{self.phase}" if self.phased else "")
             for d in {Path(own["transcript_dir"]), run.retain_dir}:
@@ -447,4 +462,14 @@ PEARL_PLUS = register(Scheme(
               "one-design": "its own tile sampling by ticket weight"},
     requests=requests,
     attach=attach,
+    parties=(Role("challenger", "auditor", needs=("host",)), Role("workers", "developer", needs=("serve",)), VERIFIER),
+    channels=(Channel("challenger", "workers", ("PearlSalt",), carries_coins=True),),
+    colocated=(),
+    needs=frozenset({"windows"}),
+    depends=(),
+    record="work",
+    symbol="V",
+    published=("MACs", Fraction(1)),
+    channel_schemas=Lacks("no Schema is declared for PearlSalt"),
+    record_owner="compute-accounting",
 ))
