@@ -42,9 +42,9 @@ def test_a_32_bit_entry_and_its_port():
     assert tree.entry() == {"value": "partials", "root": tree.root.hex(), "leaves": 3, "words": 2, "word_bits": 32,
                             "domain": e["domain"]}
     assert e["domain"] != PR.entry(PD, "partials", 3, 2, REG)["domain"]
-    port = PR.port("partials", e, tree.root.hex(), [None, 2, None], G.SCHEMA_V2)
+    port = RV.port("partials", e, tree.root.hex(), [None, 2, None], G.SCHEMA_V2)
     assert port == {"value": "partials", "root": tree.root.hex(), "leaves": 3, "words": 2, "word_bits": 32,
-                    "domain": e["domain"], **G.schema_entry(G.SCHEMA_V2), "reads": [None, 2, None]}
+                    "domain": e["domain"], **RV.schema_entry(G.SCHEMA_V2), "reads": [None, 2, None]}
 
 
 def _rec(docket=REG):

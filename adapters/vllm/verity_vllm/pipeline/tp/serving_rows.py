@@ -24,7 +24,7 @@ A TP Commit that deferred its ranks' replay to sealed bundles and wrote no windo
 its CPU replay opens it (`commit_replay._of_record`: pending or passed, a failed rank refused), its Programs of record, its weight
 shards opened against its committed weights root, and the window `pipeline.serving_rows.after_commit` writes under the same run and
 ``tp``.  Its rows are a fresh commitment, made after the Commit and before sampling, so the window is a ``stand-in`` whose link to
-the rank's rows-sha512 root is provenance (`stand_in`: ``of`` the TP run root, the rank, its root, the bundle's manifest digest and
+the rank's rows-sha512 root is provenance (`stand_in`: ``of`` the TP run root, the rank, its root and
 this command, and ``link``).  `source` takes a stand-in only for a rank whose bundle the record names (``replay_deferred.json``) and
 whose replay did not fail, with that ``of`` and ``link``."""
 from __future__ import annotations
@@ -64,12 +64,12 @@ def run_of(tp_root: bytes, rank: int) -> str:
     return f"{tp_root.hex()}/rank{int(rank)}"
 
 
-def stand_in(tp: dict[str, Any], bundle_manifest_sha256: str) -> dict[str, Any]:
+def stand_in(tp: dict[str, Any]) -> dict[str, Any]:
     """A rank's window's link to its TP Commit's commitment (``tp``: the window's world, rank, TP run root, rank root and root tag):
-    ``of`` the rows-sha512 commitment of the rank's root under the TP run root, the bundle's manifest digest and the command that
-    turned the bundle into rows, and ``link``."""
+    ``of`` the rows-sha512 commitment of the rank's root under the TP run root and the command that turned the bundle into rows,
+    and ``link``."""
     return {"of": {"commitment": ROWS_SCHEME, "tp_run_root": tp["tp_run_root"], "rank": int(tp["rank"]), "run_root": tp["run_root"],
-                   "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS}, "link": LINK}
+                   "rows": ROWS}, "link": LINK}
 
 
 def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int) -> dict[str, Any]:
@@ -226,7 +226,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            weights=weights, manifest=RR.manifest_of_rank(man, rank), run_root=run_of(bytes.fromhex(rec["tp_run_root"]), rank),
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
-                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
+                           index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp),
                            binding=binding, transfer_gates=transfer_gates, tables=EX.of_request(tables, rank))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
@@ -303,7 +303,7 @@ def window_of(rec: dict[str, Any], rank: int, partition_file: str | os.PathLike,
                                    p.dirs, {"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), transfer_gates=transfer_gates)
     tp = {"world": world, "rank": rank, "tp_run_root": rec["tp_run_root"], "run_root": rec["roots"][str(rank)], "root_tag": rec["root_tag"]}
     sha = rec["bundles"].get(str(rank))
-    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp, sha) if sha else None,
+    held = {"tp": tp, "served_programs": {str(k): str(x) for k, x in sorted(p.digs.items())}, "stand_in": stand_in(tp) if sha else None,
             **{k: (binding or {}).get(k) for k in BINDING}}
     return window, held
 

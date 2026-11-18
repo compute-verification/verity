@@ -99,7 +99,7 @@ def test_a_row_seg_value_is_what_core_commits(n, w):
     assert all(G.verify_read(got.domain, ref.root, p, got.bcs[p], got.path(p), G.SCHEMA_SEG) for p in range(n))
     assert NR.commit(PROGRAM, "weights/e@64/table", words, KEY, 5).root != got.root
     with pytest.raises(ValueError, match="rows of"):
-        NR.commit(PROGRAM, "v", words, KEY, 5, schema=G.SCHEMA)
+        NR.commit(PROGRAM, "v", words, KEY, 5, schema=RV.SCHEMA)
 
 
 def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():

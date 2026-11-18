@@ -162,12 +162,12 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
 
     def port(value: str, words: int, leaves: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
         return {"value": value, "root": roots[value], "leaves": leaves, "words": words, "word_bits": RV.WORD_BITS,
-                "domain": RV.domain(program, value, words, leaves, **bind).domain_id.hex(), **G.schema_entry(schema),
+                "domain": RV.domain(program, value, words, leaves, **bind).domain_id.hex(), **RV.schema_entry(schema),
                 "reads": before + [row]}
 
     def known(value: str, rows: list, salts: list, reg: RV.Registered, row: int) -> dict[str, Any]:
         return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
-                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                 "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, T, i, window=window) for i in range(T)}
@@ -208,12 +208,12 @@ def reads_file_rows(program: str, T: int, S: int, R: int, u: int, roots: dict[st
 
     def port(value: str, words: int, row: int, schema: str = G.SCHEMA_V2, **bind: str) -> dict[str, Any]:
         return {"value": value, "root": roots[value], "leaves": T, "words": words, "word_bits": RV.WORD_BITS,
-                "domain": RV.domain(program, value, words, T, **bind).domain_id.hex(), **G.schema_entry(schema),
+                "domain": RV.domain(program, value, words, T, **bind).domain_id.hex(), **RV.schema_entry(schema),
                 "reads": before + [row]}
 
     def known(value: str, rows: list, salts: list, reg: RV.Registered, row: int) -> dict[str, Any]:
         return {"value": value, "root": reg.root.hex(), "leaves": len(rows), "words": len(rows[0]),
-                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **G.schema_entry(G.SCHEMA_V2),
+                "word_bits": RV.WORD_BITS, "domain": reg.domain.domain_id.hex(), **RV.schema_entry(G.SCHEMA_V2),
                 "reads": before + [row], "known": {"rows": rows, "salts": [x.hex() for x in salts]}}
 
     ports = {f"slot_{i}": port(sv, SLOT_WORDS, j * R + i, window=window) for i in range(R)}
