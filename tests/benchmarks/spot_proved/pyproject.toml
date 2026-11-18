@@ -11,10 +11,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # the network attester's advice (through `pipeline.edge`) and verity.ml's commitments, crypto, windows and the tc kernel; capture.py's
 # site copies the SHA-512 header its device kernel includes
 # `adapters/torch/verity_torch`: the PyTorch adapter, which verity_vllm's modules the tests import load
+# spot/prover/__init__.py and docket.py: verity_vllm's boundary and interior rows build the docket's record with SPOT's prover
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/periods",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/commitments/cuda/sha512.cuh",
           "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/protocols/proofs/spot/prover/__init__.py", "verity/protocols/proofs/spot/prover/docket.py",
           "verity/channel.py", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/service.py",
           "verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/challenger/challenger.py",
