@@ -18,8 +18,8 @@ OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$SRC/../../..
 PY=(env "PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" python3)
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$SRC/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "run.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "run.sh: no nvcc at $NVCC" >&2; exit 2; }
 CUOBJDUMP=$(dirname "$NVCC")/cuobjdump
 CARD=$(nvidia-smi ${GPU_LEASE_UUID:+--id="$GPU_LEASE_UUID"} --query-gpu=name --format=csv,noheader | sort -u | paste -sd, | sed 's/,/, /g')
 ARCH=$("${PY[@]}" "$SRC/tensor_kinds.py" target "$CARD") || exit 2
