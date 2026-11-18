@@ -2066,13 +2066,14 @@ def _member_doc(m: CS.Member) -> dict[str, Any]:
     return {"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
             "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas], "tables": [list(t) for t in m.tables],
             "link_units": list(m.link_units), "links": [list(x) for x in m.links],
-            "wired": [w.doc() for w in m.wired]}
+            "wired": [w.doc() for w in m.wired], **({"values": list(m.values)} if m.values else {})}
 
 
 def _listed_members(doc: Mapping[str, Any]) -> tuple[CS.Member, ...]:
     return tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                            tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
-                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]))
+                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]),
+                           tuple(m.get("values", ())))
                  for m in doc["members"])
 
 
