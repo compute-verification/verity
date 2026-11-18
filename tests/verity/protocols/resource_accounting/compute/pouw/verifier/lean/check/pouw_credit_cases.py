@@ -6,7 +6,7 @@ A `credited` case is an honest served execution phase read through its challenge
 manifest rows (the serving process's call rows, each with its credit bit, a credited one with its z table's root), the
 round log (each round's root the challenger received, over its inner root and its A segments, `_a_log`, and its coin),
 the execution phase's registered entries (each K's A and B values, their domains one-stage's registration's under the execution phase's
-open root and its circuit, `registered.domain`), and the sample: `credit.draw_root` over them, recorded by the
+open root and its circuit, `registered_value.domain`), and the sample: `credit.draw_root` over them, recorded by the
 challenger, then its sampling coin opened after it; the auditor's ledger opens and ends the session for the execution phase, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
@@ -143,6 +143,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import window as
 from verity.protocols.resource_accounting.compute.pouw.verifier import live_reads as LR
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 
@@ -245,7 +246,7 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         if v == target and off == "ids-missing":
             return
         first = Cr.ids_step(v) == 0
-        dom = G.domain(prog, v, words, leaves, window=None if first else own, session=session if first else None)
+        dom = RV.domain(prog, v, words, leaves, window=None if first else own, session=session if first else None)
         # rows from one short sample: 64 sampled bytes a row made an execution phase's smallest example too large for Hypothesis
         seed = rng.randbytes(8) + v.encode()
         rows = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest() for i in range(leaves)]
@@ -273,14 +274,14 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
             a(f"{prefix}a/{k}", k // 2, steps * rng.choice([1, 2, 3, 4]), None)
         if weights is None:
             b = {"value": f"{prefix}b/{k}", "root": _hex(rng), "leaves": rng.randint(1, 64), "words": k // 2,
-                 **({G.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
+                 **({RV.WIDTH_KEY: 32} if rng.random() < 0.3 else {})}
             entries.append({**b, "domain": Cr.domain_of(program, window, b)})
     entries += [dict(e) for e in weights or ()]
     for v, words, n, st, x in tables:
         a(v, words, (n - (v == target and off == "a-call-missing")) * m * x, st)
     for c, k in enumerate(calls or []):
         zy = {"value": f"{prefix}zy@{c}", "root": _hex(rng), "leaves": rng.randint(1, 8), "words": 3}
-        entries.append({**zy, "domain": G.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
+        entries.append({**zy, "domain": RV.domain(prog, zy["value"], 3, zy["leaves"], window=own).domain_id.hex()})
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
     if calls and t is not None:
@@ -294,8 +295,8 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
             and (off in REQ0_NAMES or t is not None or rng.random() < 0.5)):
         n = leaves if t is None else t + 1 if off == "live-requests-rows" else t
         v = f"x/{prefix}requests@0" if off == "req0-other-prefix" else f"{prefix}requests@0"
-        dom = (G.domain(prog, v, REQUEST_WORDS, n, window=own) if off == "req0-window" else
-               G.domain(prog, v, REQUEST_WORDS, n, session=f"{sid}-other" if off == "req0-other-session"
+        dom = (RV.domain(prog, v, REQUEST_WORDS, n, window=own) if off == "req0-window" else
+               RV.domain(prog, v, REQUEST_WORDS, n, session=f"{sid}-other" if off == "req0-other-session"
                         else sid if off == "ids0-other-session" else session))
         e = {"value": v, "root": _hex(rng) if off == "req0-root-off" else requests, "leaves": n,
              "words": REQUEST_WORDS, "domain": dom.domain_id.hex()}
@@ -1298,10 +1299,10 @@ def b_leaf_words(codes: bytes, sw: float) -> list[list[int]]:
 
 
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
-    """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
+    """The entry of `rows` registered as the served path registers each K's B rows (`registered_value.Registered`, each row
     its `b_leaf_words`, salts sampled once, binding no execution phase)."""
     words = [w for codes, sw in rows for w in b_leaf_words(codes, sw)]
-    return G.Registered.commit(program, v, words, G.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
+    return RV.Registered.commit(program, v, words, RV.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
 
 
 def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
@@ -1309,7 +1310,7 @@ def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:
     out = []
     for e in weights:
         v = prefix + "b/" + e["value"].rsplit("/", 1)[1]
-        out.append({**e, "value": v, "domain": G.domain(program, v, e["words"], e["leaves"]).domain_id.hex()})
+        out.append({**e, "value": v, "domain": RV.domain(program, v, e["words"], e["leaves"]).domain_id.hex()})
     return out
 
 
@@ -1727,7 +1728,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
             v = _opened(rng, d, "a")
             e = next(e for e in d["entries"] if e["value"] == v)
             k, bad = rng.choice([("words", 0), ("words", None), ("words", True), ("words", Cr.MAX_ROWS + 1),
-                                 (G.WIDTH_KEY, 16), (G.WIDTH_KEY, 8), (G.WIDTH_KEY, "32"), ("extra", 1)])
+                                 (RV.WIDTH_KEY, 16), (RV.WIDTH_KEY, 8), (RV.WIDTH_KEY, "32"), ("extra", 1)])
             e[k] = bad
         case "weights-period":
             e = rng.choice(d["weights"])
@@ -1750,7 +1751,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
         case "weights-leaves":
             e = rng.choice([x for x in d["entries"] if Cr.is_held(x["value"])])
             e["leaves"] += rng.choice([-1, 1]) if e["leaves"] > 1 else 1
-            e["domain"] = G.domain(hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest(), e["value"], e["words"],
+            e["domain"] = RV.domain(hashlib.sha512(bytes.fromhex(d["descriptor"])).hexdigest(), e["value"], e["words"],
                                    e["leaves"]).domain_id.hex()
         case _ if credit in CREDIT_NAMES:
             _mutate_credit(d, s, credit, rng)
@@ -2266,7 +2267,7 @@ def _b_entry(program: str, v: str, k: int, n: int, rng: random.Random) -> dict:
     """K's ``b/<K>`` of `n` rows: `weights.chunks` (K) leaves a row of `weights.leaf_words` (K) words."""
     x, w = Wt.chunks(k), Wt.leaf_words(k)
     return {"value": v, "root": _hex(rng), "leaves": x * n, "words": w,
-            "domain": G.domain(program, v, w, x * n).domain_id.hex()}
+            "domain": RV.domain(program, v, w, x * n).domain_id.hex()}
 
 
 def weights_instance(rng: random.Random, name: str = "honest") -> dict:
@@ -2311,9 +2312,9 @@ def weights_instance(rng: random.Random, name: str = "honest") -> dict:
         case "other-words":
             e["words"] = rng.choice([e["words"] + 1, k // 2, k, str(e["words"])])
         case "other-domain":
-            e["domain"] = rng.choice([_hex(rng)[:64], G.domain(_hex(rng), e["value"], e["words"], e["leaves"]).domain_id.hex(),
-                                      G.domain(program, e["value"], e["words"], e["leaves"], window=_hex(rng)).domain_id.hex(),
-                                      G.domain(program, e["value"], e["words"], e["leaves"] + 1).domain_id.hex(), None])
+            e["domain"] = rng.choice([_hex(rng)[:64], RV.domain(_hex(rng), e["value"], e["words"], e["leaves"]).domain_id.hex(),
+                                      RV.domain(program, e["value"], e["words"], e["leaves"], window=_hex(rng)).domain_id.hex(),
+                                      RV.domain(program, e["value"], e["words"], e["leaves"] + 1).domain_id.hex(), None])
         case "entry-form":
             got = rng.choice(["extra", "drop", "bits"])
             if got == "extra":

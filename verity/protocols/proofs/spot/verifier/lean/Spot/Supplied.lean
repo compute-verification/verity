@@ -46,7 +46,7 @@ def SALT_BYTES : Nat := 192
 /-- A supplied value's rows, each its sources `(kind, name)` in order. -/
 abbrev Rows := Array (Array (String × String))
 
-/-- `registered.supplied_salts`' row `i`: SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for `c < SALT_BYTES / 64`,
+/-- `registered_value.supplied_salts`' row `i`: SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for `c < SALT_BYTES / 64`,
 each output whole. -/
 def salt (program value : String) (i : Nat) : ByteArray :=
   let msg := (((SUPPLIED_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ Flock.le32 i.toUInt32
@@ -174,7 +174,7 @@ def pack (bits wordBits : Nat) (row : Array Nat) : Array Nat :=
   (Array.range (row.size * bits / wordBits)).map fun j =>
     (List.range wordBits).foldl (fun acc t => acc + bit (j * wordBits + t) * 2 ^ t) 0
 
-/-- `registered.row_digest`: a registered row's `x` in `schema`, `sha512/row/v1` of its u16 words (`rowWords`), else the
+/-- `registered_value.row_digest`: a registered row's `x` in `schema`, `sha512/row/v1` of its u16 words (`rowWords`), else the
 bit row of its u16 words, little-endian, under `sha512/row/v2` or `sha512/row-seg/v1`. -/
 def rowDigest (schema : String) (row : Array Nat) (wordBits : Nat) : ByteArray :=
   if schema == Registered.SCHEMA then Flock.ZkServer.rowDigest (rowWords row wordBits) else

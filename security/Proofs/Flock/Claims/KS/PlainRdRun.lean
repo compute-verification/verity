@@ -37,7 +37,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **An accepted plain run has no level columns at or past its schedule's last level**: its reader's shape is table
 0's, whose schedule is the statement's `fast100` one. -/
-theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
@@ -67,7 +67,7 @@ theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pr
     split <;> simp [htop]
 
 /-- `plainRawLevelCols_topK` at the deployed plain verifier (`keep := id`). -/
-theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
@@ -79,7 +79,7 @@ theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg
 record the deployed reps' later entries (`hE`), an output the concrete simulator's live outcome returns that opens
 rep `r`'s level-`ℓ + 1` position `q` at its recorded `ℓ`-th cap to `v` is one where `P`'s run accepts, and `v` is a
 row the run's level-`ℓ + 1` columns of rep `r` hold at `q` (`plain_liveRow`). -/
-theorem plainRel_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plainRel_of {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (T : TabSpec spec.mPts)
@@ -121,7 +121,7 @@ that of opening off the table, at read sets holding the run's own level columns*
 `hdec` and openings `opn` whose outputs record the deployed reps' later entries (`hE`): `plain_accPr_le_rdL`, the
 simulated strategy meeting each slot at its fork round (`plainLive_schedL`, `leadsAfter_simAt`, `slotRSL_lead`) and
 each decoded opening a row of the run's columns (`plainRel_of`). -/
-theorem plain_accPr_le_rdRun {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+theorem plain_accPr_le_rdRun {x : Hash.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (L : Layout st) (m k0 : ℕ)
@@ -195,7 +195,7 @@ tables reading the coins before each slot's fork round: at `leaf512` where the o
 hm96 leaves (`plain_hdecAt`, `plain_hdecHAt`; `plain_laterEntriesAt`, `plain_laterEntriesHAt`; the live self-clash's
 clash `plainSimClashAt_of_later`), at `leafPlain` under plain SHA-512 leaves (`plain_hdecHUAt`,
 `plain_laterEntriesHUAt`, `plainSimClashHU`). -/
-theorem plain_accPr_le_rdAll {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
+theorem plain_accPr_le_rdAll {x : Hash.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     ∃ (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (m k0 : ℕ)
       (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ),
       setupOf false x = some (ins, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧

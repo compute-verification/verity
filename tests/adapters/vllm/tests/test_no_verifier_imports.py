@@ -67,7 +67,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.registered",
         ),
         # The compiler's served rows (`verity_vllm/compiler/served_rows.py`): the Lean verifier's `--registered` port form
-        # (`produced.port`, `registered.READS_FROM`), until SPOT's workload side offers the registered-port format.
+        # (`produced.port`, `registered_value.READS_FROM`), until SPOT's workload side offers the registered-port format.
         "verity_vllm/compiler/served_rows.py": (
             "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
         ),
@@ -79,10 +79,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),
-    },
-    "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/protocols/pouw/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
     },
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps

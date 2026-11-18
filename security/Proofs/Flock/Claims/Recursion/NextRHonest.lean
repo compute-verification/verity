@@ -78,7 +78,7 @@ open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames repFrames_ch
 /-! ## What the honest prover sends -/
 
 /-- A row's bytes, as a message. -/
-def rowMsg (b : ByteArray) : Claims.Msg := b.data.toList
+def rowMsg (b : ByteArray) : Hash.Msg := b.data.toList
 
 /-- **The honest prover's rows at a rep's rounds**, along its schedule: each round's top nodes' rows (the next of
 `caps`, in order, each `nodeRow`), then, where the round absorbs, one row of the values its frames `ch` absorb, padded
@@ -99,8 +99,8 @@ def capRows (caps : Array (Array ByteArray)) : List ByteArray := (caps.toList.ma
 
 /-- **The honest prover's element-level messages**: round 0's rows (`capRows`, each `nodeRow`), then each rep's
 rounds' rows, rep by rep, each round joined (`joinR`); then the last message. -/
-def honestMsgs (caps : Array (Array ByteArray)) (reps : List (List (List ByteArray))) (last : Claims.Msg) :
-    List Claims.Msg :=
+def honestMsgs (caps : Array (Array ByteArray)) (reps : List (List (List ByteArray))) (last : Hash.Msg) :
+    List Hash.Msg :=
   (joinR (((capRows caps).map nodeRow).map rowMsg) :: reps.flatten.map fun rs => joinR (rs.map rowMsg)) ++ [last]
 
 /-- **An honest rep's proof**: the lengths a proof decoded at the rep's shape has (`DecodeZL.ProofSizes`, which
@@ -152,7 +152,7 @@ those messages `decR` decides. It reads round 0 as the link of the caps, each ta
 with no public words; every rep's proof as `ps[k]`; the round messages as the honest proofs' framed bytes; and the
 record as the reader's (`recJ`) at the statement. -/
 def ReadsBack : Prop :=
-  ∀ (rd : Claims.Msg → Option FinalP) (x last : Claims.Msg) (cs : List Coin) (s : Ins) (spec : SessionSpec)
+  ∀ (rd : Hash.Msg → Option FinalP) (x last : Hash.Msg) (cs : List Coin) (s : Ins) (spec : SessionSpec)
     (sts : Array Stmt) (c₁ : Coin) (caps : Array (Array ByteArray)) (ps : Array Flock.Proof) (Ts : ℕ → F128)
     (fl : FinalP),
     setupOf false x = some (s, spec, sts) → cs.head? = some c₁ →
@@ -408,7 +408,7 @@ theorem rowsOf_rows {rs : List ByteArray} (h : RowsFit rs) : rowsOf (joinR (rs.m
     show b.data.toList.length < 2 ^ 64
     rw [Array.length_toList]
     exact h.2 b hb)]
-  have e : ((fun r : Claims.Msg => (⟨r.toArray⟩ : ByteArray)) ∘ rowMsg) = id := funext fun _ => rfl
+  have e : ((fun r : Hash.Msg => (⟨r.toArray⟩ : ByteArray)) ∘ rowMsg) = id := funext fun _ => rfl
   rw [List.map_map, e, List.map_id]
 
 theorem mapM_rowsOf : ∀ {l : List (List ByteArray)}, (∀ rs ∈ l, RowsFit rs) →
