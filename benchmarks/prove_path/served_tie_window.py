@@ -78,7 +78,8 @@ def _ints(chunks: list[bytes], read, St) -> list[int]:
 
 
 def bindings(x: SimpleNamespace, S, St) -> tuple[dict, list[SimpleNamespace], dict]:
-    """The verifier's native checks, and each executed step's N, port chunks and embedding input."""
+    """The native checks the design gives the verifier, run here by the developer on values in the clear, and each
+    executed step's N, port chunks and embedding input."""
     import numpy as np
 
     C, G = ST.CHUNK, ST.geometry(St)
