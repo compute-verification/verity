@@ -5,18 +5,20 @@ public import InferenceOnlyVerifier.Record
 /-!
 # What the record proofs read off the root
 
-`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge and no
-strided part's rows (`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge,
-`edgeOf`) or a strided part whose rows lie apart, each member's own (`Record.gathered`), and `EdgeFreeReads` is the
-hypothesis that every record `read` accepts is of a root with neither, false of any root with one. On a root with
-neither, `Record.rowRuns` reads every part of every argument of a root node that is no input node
+`OwnRuns` is the reading of the root the record proofs cover: `Record.ownRows` admits it and it has no edge
+(`EdgeFree`). `Record.ownRows` admits a root whose argument reads another unit's outputs (an edge, `edgeOf`), and
+`EdgeFreeReads` is the hypothesis that every record `read` accepts is of a root with none, false of any root with one.
+On a root with none, `Record.rowRuns` reads every part of every argument of a root node that is no input node, through
+`runsOf` or, where a strided part's rows lie apart, each member's own (`Record.gathered`), through `gatherRows`
 (`rowRuns_own`). This module states what `OwnRuns` gives, by position: every such part is a run of leaves of one input
-node (`part_run`), an affine part or a strided part whose reference k is the run's leaf k mod the run (`runOf_some`); a
-batch node of those has `dims` on every argument (`batch_dims`); a strided part that reads its run more than once reads
-a shared run (`part_shared`); and two parts at two positions, each of some leaf, are runs that share none, or one
-shared run (`runs_shared`). The test sorts the runs and compares neighbours; sorted, neighbours the same or apart are
-all the same or apart (`same_or_apart_of_sorted`), two the same are neighbours the same with all between
-(`shared_of_sorted`), and the order they stood in does not matter (`List.Perm.pairwise_iff`).
+node, an affine part or a strided part whose reference k is the run's leaf k mod the run (`runOf_some`), or a strided
+part whose rows are leaves of one input node (`part_cover`, `gatherRuns_some`); a batch node of those has `dims` on
+every argument (`batch_dims`); a strided part that reads its run more than once reads a shared run (`part_shared`); two
+parts at two positions, each of some leaf, are runs that share none, or one shared run (`runs_shared`); and a row of one
+shares no leaf with a run or a row of the other (`rows_apart`). The tests sort the runs and compare neighbours; sorted,
+neighbours the same or apart are all the same or apart (`same_or_apart_of_sorted`, `eq_or_apart_of_sorted`), two the
+same are neighbours the same with all between (`shared_of_sorted`), and the order they stood in does not matter
+(`List.Perm.pairwise_iff`, `pieces_perm`).
 -/
 
 @[expose] public section
@@ -438,7 +440,7 @@ theorem eq_or_apart_of_sorted : ∀ (l : List ((Nat × Nat × Nat) × Bool)),
     have ih := eq_or_apart_of_sorted (y :: rest) hs' (by simpa using ha')
     refine List.pairwise_cons.2 ⟨fun z hz => ?_, ih⟩
     have hxy' : (x.1.1 ≠ y.1.1 ∨ x.1.2.1 + x.1.2.2 ≤ y.1.2.1) ∨ (x.1 = y.1 ∧ x.2 = false ∧ y.2 = false) := by
-      simpa [or_assoc] using hxy
+      simpa [or_assoc, and_assoc] using hxy
     have hlxy : x.1.1 < y.1.1 ∨ (x.1.1 = y.1.1 ∧ x.1.2.1 ≤ y.1.2.1) := by
       simpa [runLe] using hx y List.mem_cons_self
     rcases hxy' with hap | ⟨he, hx2, hy2⟩
@@ -592,8 +594,8 @@ theorem part_shared {n : Node} (hn : n ∈ unitsOf P) {q : Part} (hq : q ∈ par
   refine ⟨runs, hrr, ?_⟩
   rcases hro with hro | hro
   · exact shared_of_flag hro hmem hr hp
-  · exact shared_of_flag (gatherRows_some hro).1
-      (List.mem_filter.2 ⟨hmem, by simp [not_gathered (r := r) (by simp [runOf, hr])]⟩) hr hp
+  · have hng : gathered P q = false := by simp [gathered, hr]
+    exact shared_of_flag (gatherRows_some hro).1 (List.mem_filter.2 ⟨hmem, by simp [hng]⟩) hr hp
 
 /-- The runs of the parts `ownRows` reads, those of some leaf, are apart or one shared run: as parts, in the order they
 stand in. -/
