@@ -867,12 +867,12 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
-    cap = "research run --on auto: it is cut 60 min after it starts, the default cap: `research run --timeout 2h` (any length) raises it"
-    assert cap in err.splitlines(), "a run under the default cap is told the flag that raises it"
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h` (any length) raises it"
+    assert limit in err.splitlines(), "a run under the default time limit is told the flag that raises it"
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
     assert main([*runs, "--timeout", "2h", "--", "pytest", "-q"]) == 3
     assert launched[-1]["command"][launched[-1]["command"].index("--run-max") + 1] == "7200"
-    assert "default cap" not in capsys.readouterr().err, "a run that names its time is not told of the default"
+    assert "default time limit" not in capsys.readouterr().err, "a run that names its time is not told of the default"
 
 
 def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
@@ -908,7 +908,7 @@ def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, mon
     assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
     assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
     assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
-    assert queued["said"][-1].startswith("it is cut 60 min after it starts, the default cap: "), "the queue's cap is said too"
+    assert queued["said"][-1].startswith("it is stopped 60 min after it starts, the default time limit: "), "the queue's time limit is said too"
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
 
 
@@ -1408,7 +1408,7 @@ def test_on_auto_says_when_the_run_should_start_and_warns_or_refuses_a_late_one(
         read["docs"] = lines[line]
         rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", *flags, "--", "pytest", "-q"])
         err = capsys.readouterr().err.splitlines()
-        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith((head + "spilled to ", head + "it is cut "))]
+        return rc, [e[len(head):] for e in err if e.startswith(head) and not e.startswith((head + "spilled to ", head + "it is stopped "))]
 
     late = (f"it isn't expected to start within 10 min: it should start in about 40 min on {at}: 7 waiting ahead (the oldest "
             f"for 29 min) for the 5 slots that run there")
@@ -1517,12 +1517,12 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
-    cap = "research run --on auto: it is cut 60 min after it starts, the default cap: `research run --timeout 2h`"
+    limit = "research run --on auto: it is stopped 60 min after it starts, the default time limit: `research run --timeout 2h`"
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
         f"research run --on auto: spilled to {CPU1}'s research pool", f"research run --on auto: it starts now on {CPU1}'s research pool",
-        cap, f"research run --on auto: passed over {CPU1}, which can start no run",
+        limit, f"research run --on auto: passed over {CPU1}, which can start no run",
         f"research run --on auto: spilled to {CPU5}'s research pool", f"research run --on auto: it starts now on {CPU5}'s research pool",
-        cap, f"research: run {launched[1]['run_id']} launched on {CPU5}"]
+        limit, f"research: run {launched[1]['run_id']} launched on {CPU5}"]
     assert said[3] == f"research run --on auto: passed over {CPU1}, which can start no run ({why}); placing the job again without it"
     assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said[4], "the second placement says why the first is out"
     assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
