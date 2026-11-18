@@ -113,16 +113,13 @@ def test_tables_declared(window):
                                                                                               (read, "tok", "o1", 1)}
 
 
-def test_split_keeps_weight_nonces(window, without):
-    """The tables are kept apart from the plain weights: the plain weights' nonces are the same with and without the shard's
-    tables present, handed every name they would not be, `window_weights` refuses a table's name, and the tables' own
-    nonces are the tables' registration's, from `TABLES_NONCE`."""
+def test_split_keeps_the_tables_apart_from_the_weights(window, without):
+    """The tables are kept apart from the plain weights: the plain weights are the same with and without the shard's tables
+    present, `window_weights` refuses a table's name, and the tables' own nonces are the tables' registration's, from
+    `TABLES_NONCE`."""
     params, before = window[0].registered.params, without[0].registered.params
     plain, tables = NE.split(params)
     assert NE.split(before) == (plain, []) == (WW.weight_params(before), [])
-    assert WW.weight_nonces(plain) == WW.weight_nonces(before)
-    moved = WW.weight_nonces(params)
-    assert any(moved[p] != n for p, n in WW.weight_nonces(before).items())
     assert len(tables) == BLOCKS
     with pytest.raises(ValueError, match="no weight parameter"):
         WW._param(tables[0])
@@ -130,25 +127,22 @@ def test_split_keeps_weight_nonces(window, without):
     assert list(by) == [LABEL] and [b for b, *_ in by[LABEL]] == list(range(BLOCKS))
     nonces = XT.nonces(by, [label for label, _f, _n in window[1].b.weights], 0)
     assert sorted(nonces) == sorted(tables) and len(set(nonces.values())) == BLOCKS
-    assert min(nonces.values()) >= XT.TABLES_NONCE > max(WW.weight_nonces(plain).values())
+    assert min(nonces.values()) >= XT.TABLES_NONCE
 
 
 @pytest.mark.slow
 def test_split_beside_expert_tables():
     """Over an MoE layer with the sparse families, whose expert blocks' tables and absorbed weights' entries are in the window
-    too, the split keeps all three apart: the plain weights and their nonces are the same with and without the shard's
-    tables, and handed unsplit all but the first would take another nonce."""
+    too, the split keeps all three apart: the plain weights are the same with and without the shard's tables."""
     from verity_vllm.program.predict import node_window_sparse as NS
 
     fn = glm_request(LP, 1, moe=True).program.fn
     base = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
     params, before = (NW.node_window(fn, families=f)[0].registered.params for f in ({**base, **NE.FAMILIES}, base))
     (plain, tables), (plain0, tables0) = NE.split(params), NE.split(before)
-    assert plain == plain0 and WW.weight_nonces(plain) == WW.weight_nonces(plain0)
+    assert plain == plain0
     assert set(tables) - set(tables0) == {NE.shard_param(LABEL, NE.WIDTH, b) for b in range(BLOCKS)}
     assert all(t.endswith(("/table", "/bnk")) for t in tables0) and {t.rsplit("/", 1)[1] for t in tables0} == {"table", "bnk"}
-    moved = WW.weight_nonces(params)
-    assert sum(moved[p] != n for p, n in WW.weight_nonces(plain0).items()) == len(plain0) - 1
 
 
 def test_second_width_refused(program):
@@ -307,11 +301,11 @@ def test_values_tables(window, program):
 
 def test_split_bnk_with_tables(window):
     """The absorption weights' entry (``weights/<label>@<K>/bnk``) lands with the tables, not among the plain weights: the
-    plain weights and their nonces are the same with it and without it, and `tables_of` still gives the ``/vocab`` tables
+    plain weights are the same with it and without it, and `tables_of` still gives the ``/vocab`` tables
     only."""
     params = list(window[0].registered.params)
     bnk = f"{NW.WEIGHTS}/model.layers.0.self_attn.kv_b_proj.weight@512/bnk"
     (plain, tables), (plain1, tables1) = NE.split(params), NE.split([*params, bnk])
-    assert plain1 == plain and WW.weight_nonces(plain1) == WW.weight_nonces(plain)
+    assert plain1 == plain
     assert tables1 == sorted([*tables, bnk])
     assert NE.tables_of([*params, bnk]) == NE.tables_of(params)

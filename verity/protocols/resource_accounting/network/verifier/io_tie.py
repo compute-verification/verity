@@ -65,7 +65,6 @@ read port rows (each with its salt and path, the registered reads'), and the swi
 """
 from __future__ import annotations
 
-import hashlib
 import struct
 from dataclasses import dataclass
 from typing import Any, NamedTuple, Sequence
@@ -73,7 +72,6 @@ from typing import Any, NamedTuple, Sequence
 from verity.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
-from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
@@ -400,14 +398,6 @@ def rows_root(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes]) -
 def rows_path(levels: Sequence[Sequence[bytes]], pos: int) -> tuple[bytes, ...]:
     """Row `pos`'s siblings from the leaves up (`FrameV3Read`'s path)."""
     return tuple(levels[k][(pos >> k) ^ 1] for k in range(len(levels) - 1))
-
-
-def fake_salt(seed: bytes, i: int) -> bytes:
-    """A deterministic hiding salt for a fake upstream's tests (a prover samples fresh ones)."""
-    out = b""
-    while len(out) < hm96.SHA512.salt_bytes:
-        out += hashlib.sha512(seed + i.to_bytes(8, "big") + len(out).to_bytes(4, "big")).digest()
-    return out[:hm96.SHA512.salt_bytes]
 
 
 @dataclass(frozen=True)
@@ -737,6 +727,6 @@ __all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "END", "END_ENTRY", "ID_AT", "ID_EV
            "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTieRoute", "IoTieSwitch", "MAP", "MapEntry",
            "Output", "PORT", "Parsed", "SAMPLED", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply",
            "bucket_arguments", "bucket_reference", "bucket_rows", "cells_match", "content_arguments", "data_cell",
-           "domain", "end_cell", "entry_perm", "expected_cell", "fake_salt", "id_event", "map_bytes", "open_port",
+           "domain", "end_cell", "entry_perm", "expected_cell", "id_event", "map_bytes", "open_port",
            "pad_cell", "parse_cell", "port_id", "port_reads", "port_row", "reference", "reference_parts",
            "route_depth", "rows_levels", "rows_path", "rows_root", "switches", "window_map"]

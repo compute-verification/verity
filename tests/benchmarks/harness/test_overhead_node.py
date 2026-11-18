@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 from overhead_standins import (
@@ -128,6 +129,8 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     assert "--capture-range=cudaProfilerApi" in prof
     bench = prof[prof.index("-o") + 2:]
     assert {"--traced", "--twins", "--bridge"} <= set(bench) and between(bench, "--families") == ["fp8-e4m3-rowwise"]
+    passes = Path(bench[bench.index("--passes") + 1])
+    assert passes.name == "passes" and tmp_path / "scratch" in passes.parents and run_dir not in passes.parents
     assert between(bench, "--methods") == ["graph", "burst"] and between(bench, "--arm") == [scheme.arm]
     assert len(exports) == 1 + 2 * len(LINEARS) == len(doc["reports"]) and all(e["exit"] == 0 for e in doc["reports"])
     assert doc["reports"][0] == {"report": "prof.1.nsys-rep", "exit": 0, "items": 0, "stray_kernels": 0}
@@ -150,13 +153,17 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
 
 def test_a_profiling_pass_keeps_its_reports_in_out_and_is_not_of_record(tmp_path, scheme):
     points = node_points(tmp_path, Node(tmp_path))
-    rc, run_dir = node_run(tmp_path, Node(tmp_path), points, "pearl-plus", "art:" + "b" * 64, extra=["--keep-reports"])
+    node = Node(tmp_path)
+    rc, run_dir = node_run(tmp_path, node, points, "pearl-plus", "art:" + "b" * 64, extra=["--keep-reports"])
     doc = json.loads((run_dir / "out" / "overhead.json").read_text())
     kept = run_dir / "out" / "nsys"
     assert rc == 0 and doc["whys"] == [overhead_node.KEEP_REPORTS_WHY]
     assert [r["report"] for r in doc["reports"]] == sorted(p.name for p in kept.glob("*.nsys-rep")) != []
     assert not list((tmp_path / "scratch").rglob("*.nsys-rep"))
     assert all(p["gamma"]["gamma"] == pytest.approx(0.55, rel=1e-4) for p in doc["points"].values())
+    prof = node.calls[0]
+    passes = Path(prof[prof.index("--passes") + 1])
+    assert passes.name == "passes" and tmp_path / "scratch" in passes.parents and run_dir not in passes.parents
 
 
 def test_stocks_gamma_is_the_aa_control_of_its_twinned_kernel_against_its_original(tmp_path):
