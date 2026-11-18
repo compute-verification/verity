@@ -178,8 +178,10 @@ class Hook(scheduler_step.Part):
 
 def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable[[str], str] = request_key) -> Hook:
     """Put the admission and release hook on ``sched`` (a vLLM V1 scheduler) for ``exchange`` (this process's by default)
-    until it is uninstalled. Where a scheme filed a gate, refused for a scheduler policy other than FCFS, whose waiting
-    queue is the order the gates start requests in, and for one of several data-parallel engines."""
+    until it is uninstalled; the one already on it where there is one, so a scheduler's steps have one emitter, and
+    refused where that one is another exchange's or reads inputs by another ``key``. Where a scheme filed a gate,
+    refused for a scheduler policy other than FCFS, whose waiting queue is the order the gates start requests in, and
+    for one of several data-parallel engines."""
     ex = exchange or messages.current()
     if any(isinstance(r, H.StartOnBoundary) for _, r in ex.requests):
         policy = getattr(getattr(sched, "scheduler_config", None), "policy", None)
@@ -190,6 +192,12 @@ def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable
         if dp != 1:
             raise RuntimeError(f"a gate on starting inputs orders one engine's admissions; this one is one of {dp} "
                                f"data-parallel engines")
+    on = [p for p in scheduler_step.parts(sched) if isinstance(p, Hook)]
+    if on:
+        if on[0].ex is not ex or on[0].key is not key:
+            raise RuntimeError("this scheduler has the admission hook already, for another exchange or input key: its "
+                               "steps have one emitter, so install it once with both")
+        return on[0]
     hook = Hook(sched, ex, key)
     hook._removal = scheduler_step.add(sched, hook)
     return hook

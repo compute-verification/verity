@@ -94,7 +94,7 @@ CLASS, TABLES = WindowClass(1, 32, 2), Tables(K, M, CALLS)
 #: H1's linears at K and their calls, a round each linear once (`pouw_h1_served.Served`'s)
 LINEARS = [("qkv", K, 3072), ("o", K, K), ("gate_up", K, 512)]
 #: the committers' secret keys: V3c's, and H1's run key
-KEY, H1_KEY = bytes(range(32)), bytes(range(64, 96))
+H1_KEY = bytes(range(64, 96))
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
@@ -227,7 +227,7 @@ def make_toy() -> SimpleNamespace:
     fields = _weights(low.fn)
     state = WRS.standin_state(IB.program_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)],
                               window=OPEN)
-    values = {**WW.weight_values(reg, fields, KEY, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(reg, fields, None, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])
              for row, _ in WRS.scan_slots(low, state.rows)]
     rows = WRS.Rows(low, slots, values)

@@ -13,7 +13,7 @@ from verity.protocols.resource_accounting.network.prover.lengths_row import Leng
 from verity.protocols.resource_accounting.network.prover.response_tie import ResponseTieNoStop, ResponseTieStop
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay
 from verity.protocols.resource_accounting.scheme import register_process
@@ -45,6 +45,7 @@ NETWORK_ATTESTER = register(Scheme(
     hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
+    ports=(Port("scan-state", "input", IngressScanStart.id, "sin"), Port("released", "output", EgressBucket.id, "o1")),
 ))
 
 register_process("id-relay", id_relay.process)
