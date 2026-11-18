@@ -1,0 +1,94 @@
+module
+
+public import Flock.Lower
+
+/-!
+# A Boolean Definition's value
+
+`Prog.evalBool P d x` is Definition `d` of the decoded Program `P` evaluated on its parameter bits `x`: the one evaluator of
+a Boolean Definition, whose every primitive is one of PROTOCOL.md §9's gates. It is the meaning `Flock.Lower.lower`'s
+template is held to and the operation of the word-level circuit's gates (`boolSem`), defined once here.
+
+Its body's nodes run in order, each node's value the list of its output leaves, low leaf first, as PROTOCOL.md §6 resolves
+a reference: parameter `i`'s leaf `j` is bit `start i + j` of `x`, node `i`'s leaf `j` that node's leaf `j`.
+- **A primitive** is its gate on every operand of every argument: `And<n>` their conjunction, `Xor<n>` their sum, `Not`
+  the negation of its one, a `Const1` its constant.
+- **A call** is the callee on its arguments' leaves, in order.
+- **A batch** of `n` is the callee on each member's arguments, its members' values one after another. An argument mapped
+  over an axis of `(d, L)` gives member `m` its leaf `t` at reference `(t / L · d) · L + t % L + m · L`; one not mapped
+  is the same for every member.
+- **A scan** of `n` iterations threads its carry, the callee's first parameter: iteration 0 reads `init`, iteration `m`
+  the carry iteration `m − 1` returned, an `xs` argument its leaf `t` at reference `t + m · cnt`, a shared one the same
+  every iteration. Its value is the last carry, then each iteration's `y`.
+
+A reference reads its sequence's references in order (`Seq.toArray`). Where it meets a primitive that is not a §9 gate,
+or a callee not before its caller, its value is `[]`.
+-/
+
+@[expose] public section
+
+namespace Flock.Program
+
+/-- A §9 gate's value on its operands. -/
+def gateVal : Flock.Lower.Gate → List Bool → Bool
+  | .and_, ops => ops.all id
+  | .xor_, ops => ops.foldl xor false
+  | .not_, ops => !(ops.headD false)
+  | .const_ b, _ => b
+
+/-- Each parameter's first bit. -/
+def paramStarts (params : Array (String × Ty)) : Array Nat :=
+  (params.foldl (fun (acc : Array Nat × Nat) p => (acc.1.push acc.2, acc.2 + p.2.leaves)) (#[], 0)).1
+
+/-- Reference `r`'s bit, given the parameter bits `x` (parameter `i` from bit `st[i]`) and the nodes' values so far. -/
+def refVal (x : List Bool) (st : Array Nat) (outs : Array (List Bool)) (r : Ref) : Bool :=
+  if r.p then x.getD (st.getD r.i 0 + r.j) false else (outs.getD r.i []).getD r.j false
+
+/-- Bits `k 0, …, k (cnt − 1)` of argument `a`'s references, in order (`Seq.toArray`). -/
+def argVals (v : Ref → Bool) (a : Arg) (cnt : Nat) (k : Nat → Nat) : List Bool :=
+  let rs := a.seq.toArray
+  (List.range cnt).map fun t => v (rs.getD (k t) default)
+
+/-- Definition `d`'s value on `x`, at most `fuel` calls deep. -/
+def evalDef? (P : Prog) : Nat → Nat → List Bool → Option (List Bool)
+  | 0, _, _ => none
+  | fuel + 1, d, x => do
+    let defn ← P.defs[d]?
+    if defn.prim then
+      let g ← Flock.Lower.gateOf? defn.id
+      return [gateVal g x]
+    let callOf (e : Nat) (ins : List Bool) : Option (List Bool) := evalDef? P fuel e ins
+    let st := paramStarts defn.params
+    let outs ← defn.body.nodes.toList.foldlM (init := (#[] : Array (List Bool))) fun outs nd => do
+      let v := refVal x st outs
+      if d ≤ nd.fn then none
+      let callee ← P.defs[nd.fn]?
+      let leaves (i : Nat) : Nat := ((callee.params.getD i default).2).leaves
+      match nd.form with
+      | .prim | .call => outs.push <$> callOf nd.fn (nd.args.toList.flatMap fun a => argVals v a a.seq.count id)
+      | .batch =>
+        let ms ← (List.range nd.n).mapM fun m => callOf nd.fn ((List.range nd.args.size).flatMap fun i =>
+          let a := nd.args.getD i default
+          match a.dims with
+          | none => argVals v a a.seq.count id
+          | some (dd, L) => argVals v a (leaves i) fun t => (t / L * dd) * L + t % L + m * L)
+        return outs.push ms.flatten
+      | .scan =>
+        let c := leaves 0
+        let init := argVals v (nd.args.getD 0 default) c id
+        let (carry, ys) ← (List.range nd.n).foldlM (init := (init, ([] : List Bool))) fun (carry, ys) m => do
+          let ins := carry ++ ((List.range nd.args.size).drop 1).flatMap fun i =>
+            let a := nd.args.getD i default
+            if i ≤ nd.nxs then argVals v a (leaves i) fun t => t + m * leaves i else argVals v a (leaves i) id
+          let o ← callOf nd.fn ins
+          return (o.take c, ys ++ o.drop c)
+        return outs.push (carry ++ ys)
+    let rs := defn.body.ret.toArray
+    return (List.range defn.body.ret.count).map fun t => refVal x st outs (rs.getD t default)
+
+/-- **Boolean Definition `d`'s value on its parameter bits `x`**, low bit first in its parameters' order: its return's
+bits, `[]` where it is not Boolean. -/
+def Prog.evalBool (P : Prog) (d : Nat) (x : List Bool) : List Bool :=
+  (evalDef? P (P.defs.size + 1) d x).getD []
+
+end Flock.Program

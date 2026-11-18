@@ -37,8 +37,8 @@ class Case:
         self.lw, self.sample, self.syncs, self.tmp = lw, sample, syncs, tmp
         self.certificates = [r.certificate for r in opening.records]
         self.delivered = standin.prove(lw, opening, sample, syncs, tmp / "honest")
-        self.findings, refused = standin.lean(self.delivered.proof, program=lw.program, partition=lw.partition,
-                                              units=[(u, u + 1) for u in sample.units])
+        self.findings, refused = standin.lean(self.delivered.proof,
+                                              program=lw.program, partition=lw.partition)
         assert refused is None
         self._files = itertools.count()
 

@@ -308,8 +308,7 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     the session, a public file whose instance is another proof block, the
     public or the output row's salt not the one committed, a proof on a head edited under its attestation (its
     verdict bit 0), with or without a forged output word, a forged signature, an attestation whose signed digest isn't
-    the one the proof's public row holds, and the attestations swapped. The delivered circuit file is never read: one
-    of other bytes decides as the honest proof does."""
+    the one the proof's public row holds, and the attestations swapped."""
     run = Run(tmp_path)
     lw = run.lw
     opening = run.honest(0)
@@ -334,11 +333,8 @@ def test_the_verdict_of_record_is_the_proofs(tmp_path):
     forged = replace(eg.certificate, signature=bytes(len(eg.certificate.signature)))
     recertified = run.honest(0).records[0].certificate
     assert recertified.digest != eg.certificate.digest
-    elsewhere = prove(opening, "elsewhere")
-    elsewhere.proof.circuit.write_text("another circuit\n")
-    assert verdict(elsewhere)["accepted"]
-    cases = [(prove(opening, 0, accepted=False), {}),
-             (prove(opening, 1, units=[1]), {}), (prove(opening, 2, salts={"pub": bytes(192)}), {}),
+    cases = [(prove(opening, 0, accepted=False), {}), (prove(opening, 1, units=[1]), {}),
+             (prove(opening, 2, salts={"pub": bytes(192)}), {}),
              (prove(opening, 3, salts={"o0": bytes(192)}), {}), (prove(off, 4), {}), (prove(off, 5, word=0b11), {}),
              (honest, {"certificates": [forged, certs[1]]}), (honest, {"certificates": [recertified, certs[1]]}),
              (honest, {"certificates": certs[::-1]})]
@@ -546,8 +542,7 @@ def test_a_late_proof_is_a_reject(tmp_path):
     sample = run.stream.select(run.register(opening))
     delivered = run.prove(opening, sample)
     run.clock.now = 125.0
-    assert run.lw.outcome(run.stream, sample, [r.certificate for r in opening.records], SYNCS,
-                          delivered).verdict.codes == ("late",)
+    assert run.lw.outcome(run.stream, sample, [r.certificate for r in opening.records], SYNCS, delivered).verdict.codes == ("late",)
     assert run.stream.symbols == ("late", "late")
 
 

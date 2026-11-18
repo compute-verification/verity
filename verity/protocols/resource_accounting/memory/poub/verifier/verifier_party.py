@@ -30,6 +30,8 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, BinaryIO
 
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+
 from . import audit, wire
 from . import coins as C
 from . import period as P
@@ -107,12 +109,19 @@ def command() -> tuple[str, ...]:
     return (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0")
 
 
+#: the verifier's and its challenger's machine as a placement names it, by its party and never by a name it goes by
+VERIFIER_MACHINE = "the verifier's machine"
+
+
 def placement(node: str, host: str) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-device`'s premise holds: that the verifier and its challenger
-    ran on a machine the developer doesn't control, which is never the developer's node."""
-    return {"parties": {"challenger": host, "prover": node, "verifier": host},
-            PREMISE: (f"holds: the verifier and its challenger ran on {host}, not the developer's {node}" if host != node else
-                      f"unmet: the verifier and its challenger ran on the developer's node {node}")}
+    """Which machine ran each party, by its party, and whether `trusted-device`'s premise holds: that the verifier and
+    its challenger ran on a machine the developer doesn't control, which is never the developer's node. The two names
+    given are compared, and neither is written."""
+    prover = mc.PROVER_MACHINE
+    verifier = prover if host == node else VERIFIER_MACHINE
+    return {"parties": {"challenger": verifier, "prover": prover, "verifier": verifier},
+            PREMISE: (f"holds: the verifier and its challenger ran on {verifier}, not on {prover}" if host != node else
+                      f"unmet: the verifier and its challenger ran on {prover}")}
 
 
 def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,

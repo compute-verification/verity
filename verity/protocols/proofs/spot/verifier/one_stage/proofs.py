@@ -82,6 +82,13 @@ EXE = "verity-verify-proof"
 VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
+#: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
+TMPL_FORMAT = "flock-circuit/tmpl"
+#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
+TMPL_SWITCH = "VERITY_DOOR_TMPL"
+TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
+TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 #: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
@@ -180,6 +187,30 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
                 return (m, f.readline().decode().split()) if isinstance(m, dict) else None
             for _ in range(int(head[2])):
                 f.readline()
+    return None
+
+
+def statement() -> str:
+    """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
+    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+
+
+def tmpl_why(circuit: Path) -> str | None:
+    """The templated reader's refusals (`HmOut.parseTmpl`) on the circuit file's head: a file not in the templated form
+    (`TMPL_FLAT_WHY`: its format line and META's ``format`` and ``statement`` not the templated ones), and a META naming
+    a ``definition`` (`TMPL_DEFINITION_WHY`); None when neither applies."""
+    with open(circuit, "rb") as f:
+        fmt = f.readline().decode(errors="replace").split(" ")[0]
+        line = f.readline().decode(errors="replace")
+    try:
+        meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
+    except ValueError:
+        meta = None
+    if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
+            or meta.get("statement") != TMPL_STATEMENT:
+        return TMPL_FLAT_WHY
+    if "definition" in meta:
+        return TMPL_DEFINITION_WHY
     return None
 
 
@@ -408,17 +439,18 @@ def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> boo
     return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
 
 
-def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], units: Sequence[tuple[int, int]],
+def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block: int,
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (C, its
     descriptor's bytes), `partition` and `registered` file (theta's registration; None only for a program that reads no
     registered value, such as N2's, whose proof block opens the committed value inside its circuit), on the circuit file
-    of the proof block of `units`, the drawn block's, derived from C and the partition (`one_circuit.restrict`), never
-    `proof`'s own circuit file; the findings in session order and None, or None and the refusal (``registered``:
-    `registered` is None and the program reads registered values, `reads_registered`; ``circuit``: C, the partition or
-    `units` give no C_S, or its base circuit is not derived yet, `one_circuit.lower`; ``proof``: a file is missing or the
+    of the drawn proof block, the partition object's block `block` (`one_circuit.block`), derived from C and the
+    partition (`one_circuit.restrict`), never `proof`'s own circuit file; the findings in session order and None, or None
+    and the refusal (``registered``: `registered` is None and the program reads registered values, `reads_registered`;
+    ``circuit``: C and the partition give no block `block` or no C_S of it, or its base circuit is not derived yet,
+    `one_circuit.lower`; ``proof``: a file is missing or the
     verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
@@ -441,27 +473,30 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], units:
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
     try:
-        derived = OC.restrict(program, partition, units)
+        derived = OC.restrict(program, partition, OC.block(program, partition, block))
     except (OC.NotDerived, OC.Refused) as e:
         return None, ("circuit", str(e))
     if not (proof.public.is_file() and proof.sessions and all((s / "session.json").is_file() for s in proof.sessions)):
         return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
                                "holding its session.json")
     try:
-        OC.lower(derived)
+        base = OC.lower(derived)
     except OC.NotDerived as e:
         return None, ("circuit", str(e))
+    name = statement()
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
-        files = {"circuit": Path(d, "circuit.json"), "program": Path(d, "program.json"),
+        files = {"circuit": Path(d, "circuit.txt"), "program": Path(d, "program.json"),
                  "partition": Path(d, "partition.json"), "registered": Path(d, "registered.json")}
-        files["circuit"].write_bytes(derived)
+        files["circuit"].write_bytes(base)
+        if name == TMPL_STATEMENT and (why := tmpl_why(files["circuit"])) is not None:
+            return None, ("circuit", why)
         files["program"].write_bytes(program)
         files["partition"].write_text(json.dumps(partition))
         reads = []
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(files["circuit"]),
+        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
@@ -570,7 +605,8 @@ class Member:
 def members_v2(members: Sequence[Member],
                names: Mapping[str, Sequence[str]] | None = None) -> tuple[dict, dict, list[Path]]:
     """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
-    (``{"members": {name: {public, registered, units, vus_per_block}}}``), the evidence's
+    (``{"members": {name: {public, registered, block, vus_per_block}}}``, ``block`` its rank by first unit, its block of
+    the partition object's ``blocks``), the evidence's
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
@@ -586,9 +622,10 @@ def members_v2(members: Sequence[Member],
         if len(m.proof.sessions) > 1:
             raise ValueError(f"member {m.name} has {len(m.proof.sessions)} sessions: a statement is exactly one session "
                              f"on live coins, never retried")
+    rank = {m.name: k for k, m in enumerate(sorted(members, key=lambda m: min(lo for lo, _ in m.units)))}
     params = {"members": {m.name: {"public": m.public_sha512,
                                    "registered": None if m.registered is None else dict(m.registered),
-                                   "units": [[lo, hi] for lo, hi in m.units], "vus_per_block": m.vus_per_block}
+                                   "block": rank[m.name], "vus_per_block": m.vus_per_block}
                           for m in members}}
     statements, blobs = [], []
     for m in sorted((m for m in members if m.proof.sessions), key=lambda m: min(lo for lo, _ in m.units)):

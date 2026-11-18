@@ -1,6 +1,7 @@
 module
 
 public import Flock.Lower
+public import Proofs.Flock.Soundness.Assumptions.Lower
 
 /-!
 # A lowered template unrolls

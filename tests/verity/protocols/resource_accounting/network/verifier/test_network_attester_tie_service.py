@@ -101,7 +101,8 @@ class Run:
                                        self.tmp / f"tie-{sample.docket.order}", **kw)
 
     def decide(self, w, sample, delivered, inputs, head=None):
-        return self.tie.outcome(self.stream, sample, delivered, inputs=inputs, releases=self.served.releases,
+        return self.tie.outcome(self.stream, sample, delivered,
+                                inputs=inputs, releases=self.served.releases,
                                 head=self.cells[w].head if head is None else head, opening=self.cells[w])
 
     def round(self, w, inputs, lanes=OWN_LANES, **kw) -> S.Outcome:
@@ -151,7 +152,8 @@ def test_the_registered_reads_name_every_port_so_an_honest_window_is_proved(tmp_
     assert reads["ports"]["o0"][TS.KNOWN_KEY]["rows"] == [[1]] * run.tie.T
     assert {p: reads["ports"][p]["reads"] for p in TS.PORTS} == {p: list(range(run.tie.T)) for p in TS.PORTS}
     assert run.tie.registered(head, lanes[1:]) is None and run.tie.registered(head, None) is None
-    kw = {"program": run.tie.program, "partition": run.tie.partition, "units": [(u, u + 1) for u in sample.units]}
+    kw = {"program": run.tie.program,
+          "partition": run.tie.partition}
     findings, refused = standin.lean(delivered.proof, registered=reads, **kw)
     assert refused is None and run.tie.proved(findings)
     wit_only = WR.reads_file({TS.REGISTERED: reads["ports"][TS.REGISTERED]})
@@ -171,8 +173,9 @@ def test_an_output_0_or_rows_under_fresh_salts_fail_the_registered_reads(tmp_pat
     run = Run(tmp_path / "zero")
     lanes = run.tie.lanes(forged, SERVED.releases, 0)
     assert 0 in [run.tie.outputs(r, ln) for r, ln in zip(run.cells[0].rows, lanes)]
-    sample, delivered = run.prove(0, forged, words={u: 1 for u in range(4)})
-    kw = {"program": run.tie.program, "partition": run.tie.partition, "units": [(u, u + 1) for u in sample.units]}
+    _, delivered = run.prove(0, forged, words={u: 1 for u in range(4)})
+    kw = {"program": run.tie.program,
+          "partition": run.tie.partition}
     findings, refused = standin.lean(delivered.proof, registered=run.tie.registered(run.cells[0].head, lanes), **kw)
     assert refused is None and not findings[0].accepted and "port o0: table row" in findings[0].why
 

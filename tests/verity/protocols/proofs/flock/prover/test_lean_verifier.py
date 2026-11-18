@@ -400,7 +400,7 @@ def test_stratified_sample_from_the_verifiers_own_program(tmp_path):
     import hashlib
     lake_build(LEAN)
     ref = _stratified_agree()
-    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0"], "root": "Root_v0",
+    desc = {"schema": "verity-ir/descriptor/v2", "callees": ["Input8_v1", "T0_v0", "T1_v0"], "root": "Root_v0",
             "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
                 {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
                 {"form": "batch", "fn": 1, "n": 1}]}},
@@ -443,7 +443,7 @@ def _work_program(tmp_path):
     """Three templates' units under `Q_template_instances` (T0 at [0, 2) and [5, 6), T1 at [2, 5), T2 at [6, 10)), and a
     writer of work tables that returns the verifier's flags for it."""
     import hashlib
-    desc = {"schema": "verity-ir/descriptor/v1", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
+    desc = {"schema": "verity-ir/descriptor/v2", "callees": ["Input8_v1", "T0_v0", "T1_v0", "T2_v0"], "root": "Root_v0",
             "definitions": {"Root_v0": {"form": "composite", "body": {"nodes": [
                 {"form": "primitive", "fn": 0}, {"form": "batch", "fn": 1, "n": 2}, {"form": "batch", "fn": 2, "n": 3},
                 {"form": "batch", "fn": 1, "n": 1}, {"form": "batch", "fn": 3, "n": 4}]}},

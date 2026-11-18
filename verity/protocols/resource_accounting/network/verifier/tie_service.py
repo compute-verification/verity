@@ -549,8 +549,8 @@ class IngressTie:
     def verify(self, sample: S.Draw, delivered: Delivered, *, inputs: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
-        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit it derives from the Program, the
-        partition and the sampled proof blocks, and the verifier's own registered reads, `registered`: the network attester's root at `head`, the
+        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        and the verifier's own registered reads, `registered`: the network attester's root at `head`, the
         network attester's head of the registered root, and its own lanes of each bucket from `inputs` and `releases`, `lanes`,
         and the output words 1) accepts every session, they prove this tie's registered unit (`proved`) and every sampled
         proof block, and each sampled proof block's public row opens to the verifier's own copy (`public_arguments` on its lanes) and
@@ -569,9 +569,9 @@ class IngressTie:
         lanes = self.lanes(inputs, releases, w) if ok_head else None
         reads = None if lanes is None else self.registered(head, lanes)
         if reads is not None:
+            findings, refused = PF.verify(delivered.proof, program=self.program,
+                                          partition=self._partition, registered=reads)
             units = list(sample.units)
-            findings, refused = PF.verify(delivered.proof, program=self.program, partition=self._partition,
-                                          units=[(u, u + 1) for u in units], registered=reads)
             proved = refused is None and self.proved(findings) and all(list(f.units) == units for f in findings)
             accepted = proved and len(units) == self.T and all(
                 _opened(delivered, u, self.row(self.public_arguments(lanes[u]), "pub"), self.bits("pub")) == 1
@@ -594,7 +594,8 @@ class IngressTie:
     def outcome(self, stream: S.Stream, sample: S.Draw, delivered: Delivered, *, inputs: Any,
                 releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> S.Outcome:
         """`stream.outcome` on the verifier's verdict (`verify`), with the registered root as the session's."""
-        verdict = self.verify(sample, delivered, inputs=inputs, releases=releases, head=head, opening=opening)
+        verdict = self.verify(sample, delivered, inputs=inputs, releases=releases,
+                              head=head, opening=opening)
         return stream.outcome(sample, {VERIFIER: verdict}, self.statement(sample),
                               session_roots={VALUE: sample.docket.record["roots"][0]["root"]})
 
