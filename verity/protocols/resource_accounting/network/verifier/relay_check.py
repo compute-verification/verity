@@ -42,6 +42,8 @@ ROWS_EXE = Path(__file__).resolve().parent / "lean" / ".lake" / "build" / "bin" 
 ROWS = "verity/network-rows/v1"
 #: the Python audit's refusal of an egress cell no id-form reading takes, which `network-rows` doesn't hold
 ID_FORM = "a cell out of the id egress form"
+#: `lean` of a run whose deployment isn't the one the check was handed: no key of it reaches `network-rows`
+UNHELD = "not-covered: the deployment record is not the one the check was handed, so network-rows is not run"
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -101,7 +103,8 @@ def lean_rows(run: Path, dep: dict, params: NetworkAttesterParams, held: list[st
     """``network-rows``' verdict on the run (`rows_audit_case`) and the problems it adds: ``accepted``, ``refused:
     REASON``, ``not-covered: WHY`` where the run is outside what it checks, or ``absent: WHY`` where ``exe`` isn't
     built. ``held`` is the Python check's refusals of the statement it checks; a verdict that isn't theirs, the
-    id-form refusals aside, is the problem ``lean-disagrees``."""
+    id-form refusals aside, is the problem ``lean-disagrees``, also where the run is refused anyway for what ``held``
+    doesn't list (the start, the load, the cells' registrations)."""
     if params.max_tokens_cap is not None:
         return ("not-covered: the schedule has a max_tokens_cap, and network-rows holds no response to its request's "
                 "max_tokens"), []
@@ -252,7 +255,10 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     gives as ``audit: PROBLEM`` without their execution phase, among its first 50. `lean` is ``network-rows``'
     (``rows_exe``) verdict on the same records (`lean_rows`): ``accepted`` only where it ran and accepted, and the
     check accepts only where the Python check does and ``network-rows`` didn't refuse; ``not-covered`` and ``absent``
-    say it decided nothing. ``under`` is what the auditor hands
+    say it decided nothing. ``absent`` is no problem only until the device's pin builds ``network-rows``: the change
+    that adds the build makes it a problem on the device's entry. Where ``under`` is given, ``network-rows`` is
+    handed the deployment's key only once the deployment is held to it, and a deployment that isn't refuses the run
+    with ``network-rows`` not run. ``under`` is what the auditor hands
     it: the SHA-512 of the network attester's public key (`connection_rows_check.key_sha512`) and its session, which the
     run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
     the registrations' file there: what it was checked under and each registration of connection rows it held,
@@ -265,7 +271,8 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     # first what the whole check is held under: a reader that cuts the problems' list must not lose it
-    problems = [] if under is None else CRC.not_under(dep, under)
+    unheld = [] if under is None else CRC.not_under(dep, under)
+    problems = list(unheld)
     if params.digest.hex() != dep["digest"]:
         problems.append("the deployment's digest isn't its parameters'")
     problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
@@ -297,7 +304,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     audited_problems = [] if verdict["accepted"] else [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
     held += audited_problems
     problems += audited_problems
-    lean, lean_problems = lean_rows(run, dep, params, held, rows_exe)
+    lean, lean_problems = (UNHELD, []) if unheld else lean_rows(run, dep, params, held, rows_exe)
     problems += lean_problems
     audited = {c["ordinal"]: c for c in verdict["connections"]}
     schedule = egress_cells(records[EGRESS], params)

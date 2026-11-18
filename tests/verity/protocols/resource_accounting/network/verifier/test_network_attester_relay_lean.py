@@ -1,8 +1,9 @@
 """The relay check's `lean` (`relay_check.lean_rows`): each of its outcomes on a network attester run at the scan's
 w63k4 schedule, ``network-rows`` a stand-in that answers as told (its real verdicts are the agreement test's, in the
 suite of the network checks' Lean): accepted, refused with its reason, not covered (a schedule with a
-`max_tokens_cap`, the bytes egress form) and absent, none of the last two run or read as accepted, and a verdict that
-isn't the Python check's the problem ``lean-disagrees``."""
+`max_tokens_cap`, the bytes egress form, a deployment not of the key and session the check was handed) and absent,
+none of the last two run or read as accepted, and a verdict that isn't the Python check's the problem
+``lean-disagrees``."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from pathlib import Path
 
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import _run
 from verity.protocols.resource_accounting.network.attester import network_attester_serve as ws
+from verity.protocols.resource_accounting.network.verifier import connection_rows_check as CRC, record_files as RF
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.verifier.network_attester import W63K4, NetworkAttesterParams
 
@@ -86,3 +88,15 @@ def test_a_verdict_that_isnt_the_python_checks_is_lean_disagrees_with_both(tmp_p
     result = RC.check(forged(honest, tmp_path / "forged"), rows_exe=stand_in(tmp_path / "accept", "accept"))
     assert (result["accepted"], result["lean"]) == (False, "accepted")
     assert f"lean-disagrees: network-rows accepted; the Python check refuses ({UNCERTIFIED})" in result["problems"]
+
+
+def test_a_run_not_of_the_key_the_check_was_handed_is_refused_with_network_rows_not_run(tmp_path):
+    run = served(tmp_path / "run")
+    dep = json.loads((run / "deployment.json").read_text())
+    own = CRC.key_sha512(RF.read_public(dep["key"])), bytes.fromhex(dep["session"])
+    result = RC.check(run, under=own, rows_exe=stand_in(tmp_path / "accept", "accept"))
+    assert (result["accepted"], result["lean"]) == (True, "accepted"), result["problems"]
+    for under in ((bytes(64), own[1]), (own[0], bytes(32))):
+        result = RC.check(run, under=under, rows_exe=stand_in(tmp_path / "never", None))
+        assert (result["accepted"], result["lean"]) == (False, RC.UNHELD)
+        assert result["problems"][0].startswith("the deployment record's ")
