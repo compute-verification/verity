@@ -25,7 +25,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/compose/__init__.py", "verity/protocols/compose/schemes.py",
           # the launcher's declared_unchecked loads every declaration of that table, dither's among them
           "verity/protocols/experimental/__init__.py", "verity/protocols/experimental/dither/__init__.py",
-          "verity/protocols/experimental/dither/scheme.py",
+          "verity/protocols/experimental/dither/scheme.py", "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
           # and attaches it on the adapter's exchange; the case's tests load SPOT's prover and the table's poub declaration
           "adapters/vllm/verity_vllm/messages.py", "verity/protocols/proofs/spot/prover/__init__.py",
           "verity/protocols/proofs/spot/prover/workload.py", "verity/protocols/resource_accounting/memory/poub/scheme.py",
