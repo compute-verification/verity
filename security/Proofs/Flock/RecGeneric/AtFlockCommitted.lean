@@ -102,6 +102,7 @@ def KSLinkOnC [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bo
           linkRhs H D Bd DO Cp x (Bridge.simProverM S (compDep D Bd DO).V.k P) M R +
           2 * (compDep D Bd DO).V.k x * δ₁.toReal
 
+omit [DecidableEq Col] [DecidableEq Col'] in
 /-- **`KSLinkOn` gives `KSLinkOnC`** wherever the composite's verifier answers each round with its coin, through an
 injective `ans`, or with nothing: `Bridge.Pr_acc_runCM_le` at the composite's extractor, with `PrBad` at the simulating
 prover bounded by `KSLinkOn` there. -/
