@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Properties.Spot.Labels
 public import Spot.RecordText
 
 /-!
@@ -52,16 +53,17 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- **Reads by path open at the writer's leaf**, at composite `k`: on every play SPOT's verdict at `k` accepts, for
 every case of the policy (`PolicyCase`) and every wiring its record names (`RecordWiring`), each reader unit `u`'s
-wired row `row` reads, under the root the record names for its writer's output field (`fieldRoot`), a registered
-place the writer unit `Circuits.Wire.leafAt` gives writes. It is `FlockProofs.Registered.check_ok` extended to tree
+wired row `row` reads the value of its label (`Circuits.Wire.toLabel`, a `Verity.Label.wire`): under the root the
+record names for the label's writer's output field (`fieldRoot`), a registered place the label's unit writes. It is `FlockProofs.Registered.check_ok` extended to tree
 ports, lifted to the record: `Flock.Registered.check` holds every link row to a tree port (`checkLinked`) and opens it at
 its writer's leaf in the writer template's tree, which the verifier's program gives (`Registered.withTrees`,
 `HmLinks.treeLeaf`), under its registered root. -/
 def ReadsByPath (k : Verity.Registration.Composite) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (o : Exchange), V.Verdict k .sampled o →
     ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →
-      ∀ w ∈ W.wires, ∀ (u row v : ℕ), w.leafAt u row = some v →
-        ∀ R, RecordRoot r.record (fieldRoot w.writer w.out) R →
+      ∀ w ∈ W.wires, ∀ (u row : ℕ) (reg writer field : String) (v : ℕ),
+        w.toLabel reg u row = some (.wire reg writer field v) →
+        ∀ R, RecordRoot r.record (fieldRoot writer field) R →
           ∃ (q : Place) (g h : Fin (V.circuitOf θ F).N) (gu hv : Fin (V.units θ F)),
             q.root = R ∧ V.place θ F c h = some q ∧ (V.partsOf θ F).unit h = some hv ∧ hv.val = v ∧
             (V.partsOf θ F).unit g = some gu ∧ gu.val = u ∧ h ∈ (V.circuitOf θ F).reads g

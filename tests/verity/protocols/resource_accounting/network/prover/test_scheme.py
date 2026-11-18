@@ -110,3 +110,16 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
         {"key": "a", "run": "r", "n": 0, "bucket": 3}, {"key": "b", "run": "r", "n": 1, "bucket": 3},
         {"run": "r", "n": 1, "passed": True}]
     assert isinstance(admitter, A.Admitter) and admitter.gate is not None and admitter.front is None
+
+
+@pytest.mark.parametrize("lanes,outputs,every", [(4, 64, 16), (2, 8, 4)])
+def test_the_scan_states_port_lays_its_row_out_as_the_scan_does(lanes, outputs, every) -> None:
+    from verity.protocols.resource_accounting import scheme as S
+    from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+
+    shape = {"B": 512, "r": 4, "lanes": lanes, "C": 47, "IDB": 17, "EVERY": every, "WITHIN": 12, "D": 12 + every - 1,
+             "KO": outputs, "KI": 1024}
+    cls = IS.Class(**shape)
+    got = S.layout(NS.NETWORK_ATTESTER, "scan-state", shape)
+    assert got.bits == IS.state_bits(cls) and dict(got.fields) == IS.layout(cls)
+    assert dict(got.counts) == {"K0": cls.K0, "K": cls.K}
