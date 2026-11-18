@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 import numpy as np
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT
 
 from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
 from verity_torch.pouw.pearl_c.host import (
@@ -33,6 +34,7 @@ from verity_torch.pouw.pearl_c.host import (
     _event,
     _Lane,
     _zeros,
+    fresh_into,
     torch_uint8,
 )
 from verity_torch.pouw.pearl_c.screen import scatter_into
@@ -97,11 +99,11 @@ class GraphCalls(WholeCalls, _RunState):
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
-        pass's, the copies to its stage, once its A tree is done: A's words and tree, and y's m real rows); otherwise its own
-        graph replayed after its slot.  vLLM's warm-up forward before each capture runs outside it, and makes the graphs and
-        stages."""
+        pass's, the copies to its stage, once its A tree is done: A's words and tree, and y's m real rows), its A salts its
+        pipeline's own, which `whole_replay` writes fresh; otherwise its own graph replayed after its slot and fresh A
+        salts.  vLLM's warm-up forward before each capture runs outside it, and makes the graphs and stages."""
         if self._whole is not None and _capturing():
-            self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
+            self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles, self.salts_a(sh, pipe)))
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
                 self._tree_joined()
@@ -121,6 +123,7 @@ class GraphCalls(WholeCalls, _RunState):
             self.statement.prepare(w, sh)
         if self.hashing:
             self._slot(w, index, sh.m16, m, caller)
+            fresh_into(self.salts_a(sh, pipe), sh.m16)
         return self._replay(w, sh, pipe, raw, tiles, m)
 
     @staticmethod
@@ -132,6 +135,13 @@ class GraphCalls(WholeCalls, _RunState):
         """Whether a call of `sh` leaves its A words' widening (`LaneCalls._stage_a`) to its `_into`: inside a whole capture
         forking A's scales, at a shape that replays as a graph, which is where the call goes to `_into`."""
         return self._forks_stats() and self._whole is not None and self._graphed(sh.m16) and _capturing()
+
+    @staticmethod
+    def salts_a(sh: Any, pipe: Any) -> Any:
+        """The device bytes a call's A salts are in, `HM96_SALT` a row of its m₁₆: its pipeline's own (a graphed call's,
+        `PearlCDeviceRun._pipe`), else the shape's set the call took (`_Shape.buf`)."""
+        own = getattr(pipe, "salts_a", None)
+        return (sh.buf("salts_a") if own is None else own)[:HM96_SALT * sh.m16]
 
     def _graphed(self, m16: int) -> bool:
         """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from

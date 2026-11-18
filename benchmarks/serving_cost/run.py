@@ -5,9 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -34,10 +32,8 @@ METRIC = "benchmarks/serving-cost-priced"
 UNIT = "percent"
 MEASURED = "vllm/prod-serving-cost-glm53"
 DIFFERENCE = "serving-cost-measured-less-priced"
-STEPS_OF = "steps_of"
 STEPS = f"*/server/{priced.S.STEPS.format('*')}"
-CONVERTER = ("`benchmarks/serve_tax/serve_tax.py steps-of-trace RUN_OUT --to DIR` over run {run}'s fetched out/, "
-             "stored by a research run, then `research data label THAT_RUN " + STEPS_OF + " {run} --by LANE --ref {run}`")
+CONVERTER = "`benchmarks/serve_tax/serve_tax.py steps-of-trace RUN_OUT [--to DIR]`"
 MAKERS = {
     "minify": "vllm's stand-in (`benchmarks/prod_repro/run.sh --model glm53-standin`), which stores it",
     "units": "proofs' `benchmarks/dsa_topk/stress.py units --shapes decode|prefill`, which is to store it",
@@ -53,9 +49,7 @@ HOLDS = {
     "replay": "out/replay.json, passed only where the replay is bit-exact",
     "exact": f"{EXACT}: the replay's verdict on the copy and circuit-check's on the real model's bindings",
     "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/) with their public steps "
-               f"(ARM.N/server/steps.PID.jsonl.gz; where it holds none, the newest record labelled `{STEPS_OF}` with its run "
-               "id holds them), "
-               "topk_counters.json and prod_repro.json",
+               "(ARM.N/server/steps.PID.jsonl.gz), topk_counters.json and prod_repro.json",
     "price": f"its figure under {METRIC}",
     "profile": "our extra card time a token under the model's serving-cost metric, its latencies and share within the "
                "profile's bounds beside it",
@@ -70,8 +64,7 @@ FINGERPRINT = {
     "capture": "; its fingerprint names the minify run under `minify`, the exact run under `exact` once an exact "
                "record exists, and the member's model and card under `served` and `card` (as `serve_tax.member` gives "
                "them: `glm-5.3`, `h200`)",
-    "price": "; its fingerprint names the capture, minify and units runs under `capture`, `minify` and `units`, and "
-             "under `steps` the record its public steps came from where the capture holds none",
+    "price": "; its fingerprint names the capture, minify and units runs under `capture`, `minify` and `units`",
     "profile": "; its fingerprint names the profile, its version and digest, the model, the card, stock and the "
                "feature under `profile`, `version`, `digest`, `model`, `card`, `stock` and `feature`",
 }
@@ -344,54 +337,6 @@ def priced_point(out: Path, tables: dict, a: argparse.Namespace, fp: dict, units
     return r
 
 
-def labels_store() -> Any:
-    """The local store, holding every label the remote has (`jobs.StoreCompletion.pull_labels`'s pull)."""
-
-    from research.store import labels_sync
-    from research.store.local import LocalStore
-
-    store = LocalStore()
-    if store.remote is not None:
-        labels_sync.sync(store, push=False)
-    return store
-
-
-def steps_records(store: Any, run: str) -> list[tuple[str, str]]:
-    """The (target, ts) of each record whose latest `steps_of` label names `run`, as `served_table.records` reads
-    `run_of_record`, newest first."""
-
-    latest = {t: (v, ts) for t, v, ts in store.index.sql(
-        "SELECT target, value, ts FROM labels WHERE key = ? ORDER BY ts, path", (STEPS_OF,))}
-    return sorted(((t, ts) for t, (v, ts) in latest.items() if v == run), key=lambda x: x[1], reverse=True)
-
-
-def with_steps(out: Path, run: str, scratch: Path) -> tuple[Path, str | None]:
-    """`out`, the capture's out/, where it holds its public steps; else a scratch copy of it (files linked, never
-    the fetched record written) with the newest record labelled `steps_of` `run` laid over it, and that record."""
-
-    if any(out.glob(STEPS)):
-        return out, None
-    found = steps_records(labels_store(), run)
-    if not found:
-        refuse("price", f"capture run {run} holds no public steps (out/{STEPS}), and no record is labelled "
-                        f"`{STEPS_OF}={run}`: make one with {CONVERTER.format(run=run)}")
-    (src, ts), rest = found[0], found[1:]
-    steps = fetch(src) / "out"
-    if not any(steps.glob(STEPS)):
-        refuse("price", f"run {src} is labelled `{STEPS_OF}={run}` but holds no public steps (out/{STEPS})")
-    into = scratch / "out"
-    shutil.copytree(out, into, symlinks=True, copy_function=lambda s, d: Path(d).symlink_to(Path(s).resolve()))
-    for f in steps.glob(STEPS):
-        dst = into / f.relative_to(steps)
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.unlink(missing_ok=True)
-        shutil.copyfile(f, dst)
-    print(f"price: capture run {run} holds no public steps; its steps are run {src}'s (labelled `{STEPS_OF}={run}` "
-          f"at {ts})" + (f", the newest of {len(found)} so labelled (also {', '.join(t for t, _ in rest)})"
-                         if rest else ""))
-    return into, src
-
-
 def price(a: argparse.Namespace) -> int:
     if not a.minify:
         stored("minify", None, "price")
@@ -404,18 +349,20 @@ def price(a: argparse.Namespace) -> int:
     if "decode" not in tables:
         refuse("price", f"no source gives top-k's unit costs at decode shapes; the minify record: {contract('minify')}")
     runs = [a.minify, *units]
-    with tempfile.TemporaryDirectory(prefix="serving-cost-steps-") as scratch:
-        out_dir, steps_from = with_steps(capture_dir / "out", a.capture, Path(scratch))
-        r = priced_point(out_dir, tables, a, fp, " and ".join(runs))
+    if not any((capture_dir / "out").glob(STEPS)):
+        refuse("price", f"capture run {a.capture} holds no public steps (out/{STEPS}), the schedule priced.py reads: "
+                        f"a run stored before its step traces were kept private holds only those, which {CONVERTER} "
+                        "turns into public steps; price a capture that holds them")
+    r = priced_point(capture_dir / "out", tables, a, fp, " and ".join(runs))
     unpriced, by = r["unpriced"], priced_by(came)
     out = place(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "priced.json").write_text(json.dumps(r | {"priced_by": by}, indent=1) + "\n")
     w = kit.writer(out, KINDS["price"])
-    w.fingerprint(capture=a.capture, minify=a.minify, units=units, **({"steps": steps_from} if steps_from else {}))
+    w.fingerprint(capture=a.capture, minify=a.minify, units=units)
     evidence = [w.measurement_file((out / "priced.json").resolve().relative_to(w.out.resolve()).as_posix())]
     mark = "partial" if unpriced else "modeled"
-    inputs = [a.capture, *([steps_from] if steps_from else []), *runs]
+    inputs = [a.capture, *runs]
     extra = {"unpriced": unpriced, "priced_by": by, "stock": a.stock}
     if r.get("point"):
         p = r["point"]

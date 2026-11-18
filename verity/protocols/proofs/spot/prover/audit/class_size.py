@@ -34,7 +34,6 @@ import json
 import math
 from collections import Counter
 from collections.abc import Callable, Mapping
-from pathlib import Path
 from typing import Any
 
 from verity.commitments.periods.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
@@ -151,25 +150,21 @@ def project(probe: Mapping[str, int], at: Any, cls: Any, scan: str, masked_from:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: the sources that cite a run, an artifact or a change, kept as data (``benchmarks/prove_path/sources.json``): ``composed`` and ``rows_3``, a
-#: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
-SOURCES: dict[str, Any] = json.loads((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path" / "sources.json").read_text())
-#: the compositions of the blocks this estimate scaled or interpolated, each staged by Flock's `UnitStager` at V3b's
-#: cuts
-COMPOSED: str = SOURCES["composed"]
-#: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
-ROWS_3: str = SOURCES["rows_3"]
-#: ANDs and k_log a unit at Llama-3.2-1B, each with its source (None: its label's in `SOURCES`): k_log is the cut reads'
-#: table unless said otherwise
-MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][lab] if src is None else src)
-                                             for lab, (ands, k, src) in {
+#: A unit's source, resolved against the caller's sources (``benchmarks/prove_path/sources.json``: ``composed``,
+#: ``rows_3``, a unit's by its label under ``measured`` and a family's under ``families``) by `measured`: None for its
+#: label's, (KEY, SUFFIX) for a top-level source with a suffix, else the text itself
+Source = None | str | tuple[str, str]
+COMPOSED: tuple[str, str] = ("composed", "")
+ROWS_3: tuple[str, str] = ("rows_3", "")
+#: ANDs and k_log a unit at Llama-3.2-1B, each with its `Source`: k_log is the cut reads' table unless said otherwise
+MEASURED: dict[str, tuple[int, int, Source]] = {
     "EmbeddingRead_v2{V=128256,H=2048}": (5_392_976, 25, None),
     "RMSNormTriton_v5{N=2048}": (9_416_444, 25, None),
     "RMSNormFusedCuda_v2{N=2048}": (10_474_114, 27, None),
     "Gemm_v2{K=2048,N=16}": (16 * 1_053_595, 27, None),
     "Gemm_v2{K=8192,N=4}": (4 * 4_215_067, 27, None),
     "Gemm_v2{K=2048,N=1}": (1_053_595, 24, None),
-    "RoPEHead_v1{D=64}": (191_872, 22, COMPOSED + ", x cut 4"),
+    "RoPEHead_v1{D=64}": (191_872, 22, ("composed", ", x cut 4")),
     "SiluMul_v2{I=8192}": (8192 * 1380, 26, None),
     "TokenSelectGroups_v1{C=2672,G=16}": (292_083, 27, None),
     "TokenSelectCombine_v2{V=128256,C=16}": (1_346_657, 26, None),
@@ -180,7 +175,7 @@ MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
     "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, None),
-}.items()}
+}
 
 
 def _calls(*labs: str) -> tuple[int, int, str]:
@@ -219,35 +214,37 @@ def rows_k(rows: int) -> int:
     return proof_block_k_log([LAST_BLOCK_BYTES + 1] + [1] * (rows - 1))
 
 
-def measured(lab: str) -> tuple[int, int, str]:
+def measured(lab: str, sources: Mapping[str, Any]) -> tuple[int, int, str]:
     """(ANDs, k_log, source) of a unit ``lab`` at Llama-3.2-1B, refused where nothing measured it or a binding it scales from."""
     if lab in MEASURED:
-        return MEASURED[lab]
+        ands, k, src = MEASURED[lab]
+        text = sources["measured"][lab] if src is None else src if isinstance(src, str) else sources[src[0]] + src[1]
+        return ands, k, text
     fam, s = statics(lab)
-    by = SOURCES["families"]
+    by, composed = sources["families"], sources["composed"]
     if fam == "AttnBlockFirst_v1" and (s["D"], s["BN"]) == (64, 128) and 1 <= s["NVIS"] <= 128:
         v, (lo, hi) = s["NVIS"], next((a, b) for a, b in zip(FIRST_BLOCKS, list(FIRST_BLOCKS)[1:]) if s["NVIS"] <= b)
         ands = round(FIRST_BLOCKS[lo] + (FIRST_BLOCKS[hi] - FIRST_BLOCKS[lo]) * max(v - lo, 0) / (hi - lo))
         k = next(k for last, k in FIRST_K if v <= last)
-        return ands, k, by[fam] + " and " + COMPOSED + ("" if v in FIRST_BLOCKS else ": ANDs interpolated")
+        return ands, k, by[fam] + " and " + composed + ("" if v in FIRST_BLOCKS else ": ANDs interpolated")
     if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
-        return 30 if s["FIRST"] else 62, k, by[fam] + "; k_log " + COMPOSED + (
+        return 30 if s["FIRST"] else 62, k, by[fam] + "; k_log " + composed + (
             "" if s["NP"] in dict(FEED_K) else ", an upper bound")
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 
-def size(units: Mapping[str, int], times: int = 1) -> dict[str, Any]:
+def size(units: Mapping[str, int], sources: Mapping[str, Any], times: int = 1) -> dict[str, Any]:
     """``units`` (a census) ``times`` over, priced by `measured`: units, ANDs, m and each template's row; refused naming every
     template with no measurement."""
     missing = []
     for lab in units:
         try:
-            measured(lab)
+            measured(lab, sources)
         except ValueError:
             missing.append(lab)
     if missing:
         raise ValueError(f"no measured ANDs or k_log at Llama-3.2-1B for {', '.join(missing)}: add each to MEASURED")
-    rows = [(lab, n * times, *measured(lab)) for lab, n in units.items()]
+    rows = [(lab, n * times, *measured(lab, sources)) for lab, n in units.items()]
     past = [f"{lab} (2^{k})" for lab, _, _, k, _ in rows if k > K_MAX]
     if past:
         raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, Flock's most; cut it finer")

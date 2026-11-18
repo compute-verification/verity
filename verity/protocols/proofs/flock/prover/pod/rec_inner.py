@@ -12,10 +12,11 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
                                                              --stacked: R registered at staging, rec_session.stage_stacked: the
                                                              circuit registration META binds, circuit-registration.json, and the
                                                              prover's R.bin, ROOT.json and circuit-registration-private.json)
-    python rec_inner.py stage-window --window DIR --member K --subcircuit ID --sets DIR --out DIR [--zk-out DIR]
+    python rec_inner.py stage-window --window DIR --member K --subcircuit ID --sets DIR --out DIR [--zk-out DIR] [--units A-B,C]
                                                              the same files over every unit of a served window's member K
                                                              (stage_window), plain leaves, the bodies the window's own bytes;
-                                                             --zk-out: the member under the hm96 circuit too (85's stage-zk)
+                                                             --zk-out: the member under the hm96 circuit too (85's stage-zk);
+                                                             --units: those instances alone, committed again (subset_window)
     python rec_inner.py forge --what challenge|query --inner DIR [--record session|prover]
                                                              flips one coin of rep 0 in DIR's session.json (session/'s, or
                                                              prover/'s: candidate 3's, challenge only) and public.json,
@@ -121,7 +122,72 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
     return _shape(out, low, s.subcircuit.id, n, part)
 
 
-def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, zk_out: Path | None = None) -> dict:
+def units_arg(text: str) -> list[int]:
+    """``--units``: a member's instance indices as ``A-B`` (inclusive) and single indices, comma-separated."""
+    got = []
+    for part in text.split(","):
+        a, _, b = part.strip().partition("-")
+        got += range(int(a), int(b) + 1) if b else [int(a)]
+    return got
+
+
+def subset_window(window: Path, k: int, units: list[int], subcircuit: str, sets: Path, out: Path) -> dict:
+    """A one-member window over instances ``units`` of ``window``'s member ``k``: their rows, salts and ``b || c``
+    unchanged, committed again in frame-v3 trees over those instances alone, each bound (`window_binding`) to the
+    subset's own partition, `Q_template_instance` over a population of ``len(units)`` instances of the member's
+    template, whose instance j is the member's instance ``units[j]``. That partition is not the window's and its roots
+    are not the registered ones: a subset's statement is not the member's, and the window's registration does not
+    bind it. ``window.json``'s ``subset`` names what it was cut from. Refused for a member whose body is not its own
+    rows (shared rows, registered or wired ports)."""
+    from verity.commitments import hm96
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain, tree_levels
+    from verity.commitments.rowleaf import row_leaf
+    from verity.commitments.window import window_binding
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+    from verity_flock import subcircuit_templates as TM
+
+    win = json.loads((window / "window.json").read_text())
+    mem = win["members"][k]
+    n = int(mem["n"])
+    if not units or len(set(units)) != len(units) or units != sorted(units) or units[0] < 0 or units[-1] >= n:
+        raise ValueError(f"units: distinct ascending instances of member {k}'s {n}, not {units[:8]}...")
+    if left := [key for key in ("shared_rows", "registered", "value_rows", "wired_rows") if mem.get(key)]:
+        raise ValueError(f"member {k} has {left}: its body is not its own rows, which a subset cuts")
+    ports = [(p, int(w)) for p, w in mem["ports"]]
+    words, bc, salt = sum(w for _, w in ports), hm96.SHA512.proven_bytes, hm96.SHA512.salt_bytes
+    private, public = (window / f"m{k}-private.bin").read_bytes(), (window / f"m{k}-public.bin").read_bytes()
+    if len(private) != n * (2 * words + salt * len(ports)) or len(public) != n * bc * len(ports):
+        raise ValueError(f"member {k}: m{k}-private.bin or m{k}-public.bin is not the size its {n} instances' ports make")
+    rows, salts = private[:2 * n * words], private[2 * n * words:]
+    m, row, sl, pb = len(units), 2 * words, salt * len(ports), bc * len(ports)
+    sub_private = b"".join(rows[u * row:(u + 1) * row] for u in units) + b"".join(salts[u * sl:(u + 1) * sl] for u in units)
+    sub_public = b"".join(public[u * pb:(u + 1) * pb] for u in units)
+    _s, _low, part, _program = _population(TM.parse_subcircuit_id(subcircuit), m, sets, SEED)
+    fv = mem["frame_v3"]
+    frame = {**fv, "roots": {}, "domain_ids": {}, "bindings": {}}
+    for j, (p, _w) in enumerate(ports):
+        binding = window_binding(part["program"], P.digest(part), p, fv["schemas"][p], m, win["run"])
+        dom = CommitmentDomain(binding, int(fv["owner"]), RangeIndexedDomain(0, m), hash="sha512")
+        leaves = [row_leaf(dom, i, hm96.SHA512.tree_leaf(hm96.SHA512.default_key, sub_public[i * pb + j * bc:i * pb + (j + 1) * bc]),
+                           fv["schemas"][p]) for i in range(m)]
+        frame["roots"][p], frame["domain_ids"][p] = tree_levels(dom, leaves)[-1][0].hex(), dom.domain_id.hex()
+        frame["bindings"][p] = binding.hex()
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "m0-private.bin").write_bytes(sub_private)
+    (out / "m0-public.bin").write_bytes(sub_public)
+    subset = {"run": win["run"], "registration_digest": win["registration_digest"], "partition_digest": win["partition_digest"],
+              "member": k, "n": n, "units": units, "public_sha512": mem["public_sha512"]}
+    sub_mem = {**mem, "k": 0, "n": m, "base": 0, "frame_v3": frame, "public_sha512": hashlib.sha512(sub_public).hexdigest()}
+    (out / "window.json").write_text(json.dumps({**win, "population": m, "members": [sub_mem], "partition": part,
+                                                 "partition_digest": P.digest(part), "registration_digest": None,
+                                                 "subset": subset}))
+    (out / "registration.json").write_text((window / "registration.json").read_text())
+    return subset
+
+
+def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, zk_out: Path | None = None,
+                 units: list[int] | None = None) -> dict:
     """The inner statement over every unit of a served window's member ``k`` (``prove_path.py commit``'s window dir:
     ``window.json``, ``registration.json``, ``m<k>-public.bin`` and the prover's ``m<k>-private.bin``), with plain SHA-512
     leaves, under the circuit the verifier composes for the member's template from an input set of ``subcircuit`` (its
@@ -130,11 +196,16 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     member alone. The bodies are the window's bytes (`flock_inputs.flock_input_files`): every row's salt and ``b || c`` are
     the ones the window's registration commits, so ``pub-<n>.bin``'s body is ``m<k>-public.bin`` itself, which the result's
     ``public_body`` states. ``zk_out``: the same member under the hm96 circuit as well (today's ``--zk`` statement, 85's
-    ``stage-zk``)."""
+    ``stage-zk``). ``units``: those instances of member ``k`` alone, staged from their `subset_window` (beside ``out``),
+    whose statement is not the member's."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.commitments.periods.flock_inputs import flock_input_files
     from verity_flock import subcircuit_templates as TM
 
+    if units is not None:
+        sub = out.parent / f"{out.name}-window"
+        subset_window(window, k, units, subcircuit, sets, sub)
+        window, k = sub, 0
     win = json.loads((window / "window.json").read_text())
     mem = win["members"][k]
     n = int(mem["n"])
@@ -160,7 +231,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     return {**_shape(out, low, s.subcircuit.id, n, part), "window": {
         "run": win["run"], "registration_digest": win["registration_digest"], "member": k, "template": mem["template"],
         "public_sha512": mem["public_sha512"]}, "public_body": hashlib.sha512(public).hexdigest(),
-        "zk_circuit_sha512": got.get(str(zk_out))}
+        "zk_circuit_sha512": got.get(str(zk_out)), **({"subset": win["subset"]} if "subset" in win else {})}
 
 
 def forge(what: str, inner: Path, level: int = 0, record: str = "session") -> dict:
@@ -321,6 +392,7 @@ def main(argv=None) -> int:
     sw.add_argument("--sets", required=True)
     sw.add_argument("--out", required=True)
     sw.add_argument("--zk-out", help="also the member under the hm96 circuit (today's --zk statement)")
+    sw.add_argument("--units", type=units_arg, help="only these instances of the member (A-B,C,...): a subset's statement, not the member's")
     fg = sp.add_parser("forge")
     fg.add_argument("--what", choices=("challenge", "query", "nodraw", "partial", "top", "unsalted"), required=True)
     fg.add_argument("--inner", required=True)
@@ -367,7 +439,8 @@ def main(argv=None) -> int:
         res = stage(a.n, Path(a.sets), Path(a.out), a.plain_leaves, sparse, a.stacked and Path(a.stacked), a.forge,
                     a.subcircuit, a.seed)
     elif a.cmd == "stage-window":
-        res = stage_window(Path(a.window), a.member, a.subcircuit, Path(a.sets), Path(a.out), a.zk_out and Path(a.zk_out))
+        res = stage_window(Path(a.window), a.member, a.subcircuit, Path(a.sets), Path(a.out), a.zk_out and Path(a.zk_out),
+                           a.units)
     else:
         res = forge(a.what, Path(a.inner), a.level, a.record)
     json.dump(res, sys.stdout, sort_keys=True)

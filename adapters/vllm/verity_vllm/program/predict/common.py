@@ -115,14 +115,14 @@ class _Stochastic:
 def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, chunks: tuple[int, ...] | None,
                    dense: bool, edge: bool = False) -> tuple[bool, tuple[int, ...], list[int], list[bool]]:
     """A wrapper's forward passes, as `drive` runs them -> (resumed, its prefill chunks, each pass's rows, whether each samples): a
-    `step`'s M rows; a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
+    `step`'s M rows (after its history of C, which `build.build_program` holds to pos0); a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
     only the last sampling) and its T decodes; or, off the `dense` decoder, one resumed at decode C >= LP, its decodes C..LP+T-1,
     and one whose rows are a Commit window's edge (`edge`, `build.build_program`'s), which may stop inside its prompt at LP + T
     (T < 0), sampling nothing."""
     lp: Any = LP   # as given: a step states neither, and where one is read without being stated it is int(None)'s TypeError
     t: Any = T
     E = int(lp) + int(t) if wrapper == "request" else 0
-    if C and not 0 < C < (int(lp) if dense else E):
+    if C and wrapper == "request" and not 0 < C < (int(lp) if dense else E):
         raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
                             (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
     if edge and (wrapper != "request" or dense) or wrapper == "request" and not (int(t) >= 0 or edge and max(C, 0) < E):

@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR] [TICK_RULE=JSON]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -256,7 +256,7 @@ else
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
-WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
+WINDOW_S=${WINDOW_S:-600}; PLAN=${PLAN:-${PRIVATE:+$PRIVATE/plan.jsonl}}
 PLAN_FILE=${PLAN_FILE:-$(ls "$D"/inputs/plan.jsonl 2>/dev/null)}
 [ -z "$PLAN_FILE" ] || [ -f "$PLAN_FILE" ] || { echo "serve-tax: no plan at PLAN_FILE=$PLAN_FILE"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
@@ -376,7 +376,7 @@ if [ "${1:-}" = leased ]; then
     profile=(); [ -n "${PROFILE:-}" ] && profile=(--profile "$PROFILE")
     [ -n "${PROFILE:-}" ] && [ "$arm" != "$STOCK" ] && [ -n "${OURS:-}" ] && profile+=(--ours "$OURS")
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" "${profile[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
-      --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
+      --window-s "$WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
       ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
     echo "after $dir: $(fi_cache)" >> "$OUT/engine_env.txt"
@@ -435,7 +435,7 @@ fresh_kv=0
 if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
   KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
 fi
-export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
+export PLAN DOCS WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig

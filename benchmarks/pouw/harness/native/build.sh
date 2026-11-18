@@ -12,15 +12,16 @@
 # The output directory is keyed by a hash of these sources, nvcc's version and the cuBLAS headers' (OUT_DIR overrides it); a
 # build that exists there is reused, so a timed run never compiles. Each object is cached under objects/ by the hash of its own
 # unit, the headers, its flags and those versions, so editing one unit recompiles only that one. CUTLASS is header-only, pinned
-# below (cloned into the cache if absent). CUDA 12.9 is CUDA_HOME, else the run's machine's (machine.py toolkit 12.9); a
-# machine without it sources jobs/toolkit.sh first, which sets CUDA_HOME.
+# below (cloned into the cache if absent). The CUDA toolkit is ../identity.py's TOOLKIT: CUDA_HOME, else the run's
+# machine's (machine.py toolkit); a machine without it sources jobs/toolkit.sh first, which sets CUDA_HOME.
 # Writes libpouw_harness.so, libpouw_lt2.so with LT2_HOME, and build.json (the key, versions, and each kernel's SASS MMA counts
 # and registers, stack, shared and spill bytes); prints only the library's path on stdout.
 set -euo pipefail
 exec 3>&1 1>&2
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MACHINE="$HERE/../../../kernels/machine.py"
-CUDA_HOME="$(python3 "$MACHINE" toolkit 12.9)"
+TOOLKIT="$(python3 -c 'import sys; sys.path[:0] = [sys.argv[1]]; import identity; print(identity.TOOLKIT)' "$HERE/..")"
+CUDA_HOME="$(python3 "$MACHINE" toolkit "$TOOLKIT")"
 NVCC="$CUDA_HOME/bin/nvcc"
 CACHE="${POUW_HARNESS_BUILD:-$HERE/build}"
 CUTLASS_TAG="v4.8.0"

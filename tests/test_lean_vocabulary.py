@@ -422,7 +422,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 424
+KNOWN_MAX = 423
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -521,8 +521,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the data sheet (`Verity.Accel.Card`; `ResourceAccounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
-    "security/Definitions/Flock/Circuit.lean::Spot.Sampling.Partition":
-        "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game":
         "duplicate of `Verity.Game`: becomes it (deleted) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game.Strategy":
@@ -722,8 +720,8 @@ KNOWN: dict[str, str] = {
     "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
-    "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
+    "calibration/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
+    "calibration/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "calibration/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # applications/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":

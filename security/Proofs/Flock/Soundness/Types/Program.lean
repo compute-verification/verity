@@ -832,7 +832,7 @@ def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
     intro h
     obtain ⟨v', hv', hvv⟩ := Option.map_eq_some_iff.1 h
     rw [Fin.castSucc_inj.1 hvv] at hv'
-    exact W.outside j hj (by simpa using hv')
+    exact W.outside j hj (by simpa [Spot.Sampling.Partition.unit] using hv')
   mem j hj hkj := by
     show (snoc p s src valid).unitB _ = _
     rw [unitB_old (by simp)]

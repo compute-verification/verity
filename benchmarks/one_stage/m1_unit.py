@@ -26,8 +26,8 @@ stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`
 
 A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
 (`a0.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
-population Program of its one Definition at ``--n`` instances and that Program's partition (`population.wired_population_program`,
-as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
+population Program of its one Definition at ``--n`` instances and that Program's partition
+(`population.wired_population_program`), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/adapters/torch \\

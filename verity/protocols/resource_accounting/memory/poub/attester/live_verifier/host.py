@@ -390,11 +390,13 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
     first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities and figures
-    (its `figures`, a file of `timing.Figures.to_json`'s form, refused when the peer names none)."""
+    (its `figures`, a file of `timing.Figures.to_json`'s form, and `figures_sha512`, their `timing.Figures.sha512`,
+    which the verifier holds the file to; refused when the peer names either not)."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
-    if "figures" not in node:
+    if "figures" not in node or "figures_sha512" not in node:
         raise Refused(f"the peer {req['peer']!r} names no figures in /etc/vy/verifier.json (its `figures`, the file "
-                      "`benchmarks/poub_session/sheets.py NODE` writes for its node): the verifier reads them")
+                      "`benchmarks/poub_session/sheets.py NODE` writes for its node, and `figures_sha512`, their "
+                      "`timing.Figures.sha512`): the verifier reads them and holds the file to the digest")
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
@@ -404,7 +406,7 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
             "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main),
-            "--figures", str(node["figures"])]
+            "--figures", str(node["figures"]), "--figures-sha512", str(node["figures_sha512"])]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:
