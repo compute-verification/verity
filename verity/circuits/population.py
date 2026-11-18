@@ -22,7 +22,7 @@ import numpy as np
 
 from .codec import canonical_json, descriptor_id, register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from .partition_object import template_instance_query, template_instances_query
+from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
 from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, runs, spell
@@ -341,8 +341,7 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             made[j].insert(i, (lo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
         return coll_concat(rets, [coll_concat(Array(n, sigs[j][1]), [o for _, o in made[j]]) for j, n in enumerate(units)])
 
-    named = {"templates": tuple(ids), "record": hashlib.sha512(canonical_json(
-        {k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest(), "counts": tuple(units)}
+    named = {"templates": tuple(ids), "record": _record_digest(record), "counts": tuple(units)}
     defn = CompositeDefinition("WiredPopulations", 1, tuple(named), lambda S: (params, rets), body,
                                doc="wired units of " + ", ".join(f"{n} x {t.id}" for t, n in templates), register=False)
     free_rows = [{"reader": t, "port": p, "at": at, "units": n, **({} if rows == (0, cut(index[t], p)) else {"cut": list(rows)})}
@@ -354,19 +353,24 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
 Positions = dict[tuple[str, str, int], dict[str, tuple[np.ndarray, np.ndarray]]]
 
 
-def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str, int]], values: Sequence[str]
-                               ) -> tuple[Program, dict[str, Any], Positions]:
-    """A `wired_population_program`'s unwired population and template query, as the periods' `population_program` builds
-    them, and its wires' positions: by (reader, port, row), each writer tree ``<writer>/o<field>`` the reader's own units
-    and the writer's own units they read (`rows.Binding.reads`). ``cuts`` and ``values`` are the record's, which the root
-    does not state: a port's rows, and which of its leading parameters are registered values (the rest of them, its other
-    reads, become the readers' own rows). Refused (ValueError) by name: cut-input, cut-form, cut-return, cut-root,
-    cut-rows, cut-offset, cut-units, cut-fields."""
+def _record_digest(record: Mapping[str, Any]) -> str:
+    return hashlib.sha512(canonical_json({k: record[k] for k in WIRED_FIELDS if k in record})).hexdigest()
+
+
+def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dict[str, Any], Positions]:
+    """``program``, the `wired_population_program` of ``record``, with every wire cut to an input row of the same leaves
+    and nothing else changed (that builder over ``record`` with no wires), and the wires' positions read off its edges:
+    by (reader, port, row of the record's cuts), each writer tree ``<writer>/o<field>`` the reader's own units and the
+    writer's own units they read (`rows.Binding.reads`). The root names its record by digest alone. Refused (ValueError)
+    by name: cut-input, cut-record, cut-form, cut-return, cut-rows, cut-offset, cut-units, cut-fields."""
     fn = program.fn
     if not isinstance(fn, SpecializedDefinition) or (fn.defn.name, fn.defn.version) != ("WiredPopulations", 1):
         raise ValueError(f"cut-input: {descriptor_id(fn)} is no WiredPopulations_v1, so it has no wires to cut")
     ids, counts = list(fn.bindings["templates"]), [int(n) for n in fn.bindings["counts"]]
-    body, index = fn.body, {t: j for j, t in enumerate(ids)}
+    if fn.bindings["record"] != _record_digest(record) or [list(x) for x in record.get("templates", ())] != [
+            [t, n] for t, n in zip(ids, counts)]:
+        raise ValueError("cut-record: the record is not the one the wired Program's root names by digest")
+    body, index, cuts = fn.body, {t: j for j, t in enumerate(ids)}, record.get("cuts", {})
     nodes, defs, of = body.nodes, {}, []
     for k, nd in enumerate(nodes):
         j = index.get(descriptor_id(nd.fn)) if nd.form == "batch" else None
@@ -388,22 +392,6 @@ def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str,
         first[i], pos = (pos - bounds[j]) // ret[j], pos + hi
     if pos != bounds[-1] or min(first, default=0) < 0:
         raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
-    own = {f"{j}.{p}" for j, (ps, _) in enumerate(sigs) for p, _ in ps}
-    k0 = next((i for i, (p, _) in enumerate(body.params) if p in own), len(body.params))
-    lead = body.params[:len(values)]
-    if [p for p, _ in lead] != list(values) or len(values) > k0 \
-            or not all(isinstance(t, Array) and isinstance(t.elem, Value) for _, t in lead):
-        raise ValueError(f"cut-root: values {list(values)} are not the root's first parameters, each an array of words: "
-                         f"{[(p, t) for p, t in body.params[:max(k0, len(values))]][:4]}")
-    values = [(p, t.n, t.elem.w) for p, t in lead]
-    if any(p not in own for p, _ in body.params[k0:]):
-        raise ValueError(f"cut-root: root parameters {[p for p, _ in body.params[k0:] if p not in own]} follow the "
-                         "templates' own")
-    members = [(defs[j], n) for j, n in enumerate(counts)]
-    if len(members) == 1 and not values:
-        unwired, query = population_program(*members[0]), template_instance_query(members[0][0])
-    else:
-        unwired, query = mixed_population_program(members, values=values), template_instances_query([t for t, _ in members])
     fields = []
     for _, r in sigs:
         fs = _fields(r)
@@ -421,8 +409,9 @@ def unwired_population_program(program: Program, cuts: Mapping[str, Mapping[str,
                 if s == "n":
                     _wired_rows(got, ids, of, first, fields, ret, k, j, port, kc, rl, at, i, lo, hi)
                 at += hi - lo
-    return unwired, query, {key: {tree: tuple(np.concatenate(x) for x in zip(*ps)) for tree, ps in trees.items()}
-                            for key, trees in got.items()}
+    cut, query = wired_population_program([(defs[j], n) for j, n in enumerate(counts)], {**record, "wires": []})
+    return cut, query, {key: {tree: tuple(np.concatenate(x) for x in zip(*ps)) for tree, ps in trees.items()}
+                        for key, trees in got.items()}
 
 
 def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int],
@@ -609,5 +598,5 @@ def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> 
     return bind(defn, **named, N=n)
 
 
-__all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "leaf_type", "mixed_population_program",
-           "population", "population_program", "unwired_population_program", "wired_population_program", "word_of"]
+__all__ = ["BitsWord", "POPULATION_VERSIONS", "WIRED_FIELDS", "WordBits", "bit_of", "cut_wires", "leaf_type",
+           "mixed_population_program", "population", "population_program", "wired_population_program", "word_of"]

@@ -1,4 +1,4 @@
-"""`population.unwired_population_program`: a wired population's cut into the unwired one and its wires' positions."""
+"""`population.cut_wires`: a wired population with its wires cut to input rows, and the wires' positions."""
 from __future__ import annotations
 
 import pytest
@@ -7,12 +7,11 @@ from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
-from verity.circuits.population import unwired_population_program
+from verity.circuits.population import _record_digest, cut_wires, wired_population_program
 from verity.circuits.program import Program
-from verity.circuits.refs import Coll, coll_concat, concat
+from verity.circuits.refs import Coll, coll_concat, concat, runs
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.periods import interface as I
-from verity.commitments.periods.population import population_program
 
 RUN, SAMPLING_DESIGN = "ab" * 64, {"law": "stratified", "k": 2}
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -34,19 +33,31 @@ def chain(requests: int = 2, steps: int = 2, layers: int = 2) -> I.Circuit:
                      order=I.ordered({GID: n}, wires, {GID: range(0, n, requests)}))
 
 
-def _values(circuit: I.Circuit) -> list[str]:
-    return [v for v, _n, _w in I.program_values(circuit.registered)]
+def held(values: tuple[str, ...]) -> I.Circuit:
+    """Four ``Gemm_v2`` units each reading registered ``w`` whole, ``values`` the registered values."""
+    reads = (I.Read(GID, "w", "w", 0, (4,), 0, (0,)),)
+    return I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=values))
 
 
-@pytest.mark.parametrize("make", [rounded, chain])
-def test_the_cut_is_the_unwired_population_and_its_positions_are_the_members_reads(make):
-    """The cut of a circuit's wired Program is the periods' unwired population of its templates, digest and query, and
-    each member's wired port reads, unit by unit, the writer units the cut's positions give (`rows.Binding.reads`)."""
+def record(circuit: I.Circuit) -> dict:
+    return {**circuit.description(), "external": list(circuit.external)}
+
+
+def edges(program: Program) -> int:
+    return sum(1 for nd in program.fn.body.nodes for a in nd.args for s, *_ in runs(a.refs) if s == "n")
+
+
+@pytest.mark.parametrize("make", [rounded, chain, lambda: held(()), lambda: held(("w",))])
+def test_the_cut_is_the_wired_builder_with_no_wires_and_its_positions_are_the_members_reads(make):
+    """The cut of a circuit's wired Program is `wired_population_program` of its record with no wires, digest and query:
+    the same root batches in the same order, none reading another. Each member's wired port reads, unit by unit, the
+    writer units the cut's positions give (`rows.Binding.reads`), and the positions are the wires' rows, one each."""
     circuit = make()
     wired, _ = circuit.program()
-    unwired, query, positions = unwired_population_program(wired, circuit.cuts, _values(circuit))
-    want, want_query = population_program(list(circuit.templates), values=I.program_values(circuit.registered))
-    assert (program_digest(unwired), query) == (program_digest(want), want_query)
+    cut, query, positions = cut_wires(wired, record(circuit))
+    want, want_query = wired_population_program(list(circuit.templates), {**record(circuit), "wires": []})
+    assert (program_digest(cut), query) == (program_digest(want), want_query)
+    assert len(cut.fn.body.nodes) == len(wired.fn.body.nodes) and edges(cut) == 0
     w = I.Window(circuit, RUN, SAMPLING_DESIGN, 2).window
     reads = {}
     for m in w.members:
@@ -56,32 +67,25 @@ def test_the_cut_is_the_unwired_population_and_its_positions_are_the_members_rea
             lo = w.owns[m.key]
             assert [by[u] for u in range(lo, lo + m.n)] == w.reads(m, x.port).tolist()
             reads.update((u, by[u]) for u in range(lo, lo + m.n))
-    assert sum(len(a) for trees in positions.values() for a, _ in trees.values()) == len(reads) > 0
+    assert sum(len(a) for trees in positions.values() for a, _ in trees.values()) == len(reads) == sum(
+        wire.units for wire in circuit.wires)
 
 
-@pytest.mark.parametrize("held", [(), ("w",)])
-def test_registered_values_stay_and_other_reads_become_the_readers_own_rows(held):
-    """Four ``Gemm_v2`` units each reading registered ``w`` whole: held, ``w`` is the unwired population's value; not
-    held, its root parameter is a read the cut drops, each reader's row its own. The record's values out of the root's
-    order are refused (cut-root)."""
-    reads = (I.Read(GID, "w", "w", 0, (4,), 0, (0,)),)
-    circuit = I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=held))
+def test_a_cut_program_has_nothing_to_cut_and_another_record_is_refused():
+    """A cut Program is the wired builder's of its record with no wires, so cutting it again under that record returns
+    it with no positions; under the wired record, or any record its root does not name by digest, it is refused
+    (cut-record), as is a root that is no wired population (cut-input)."""
+    circuit = chain()
     wired, _ = circuit.program()
-    assert "w" in dict(wired.fn.body.params)
-    unwired, query, positions = unwired_population_program(wired, circuit.cuts, _values(circuit))
-    want, want_query = population_program(list(circuit.templates), values=I.program_values(circuit.registered))
-    assert (program_digest(unwired), query, positions) == (program_digest(want), want_query, {})
-    with pytest.raises(ValueError, match="cut-root"):
-        unwired_population_program(wired, circuit.cuts, ("v", *held))
-
-
-def test_an_unwired_population_is_refused_as_no_wired_one():
-    """An unwired Program states no wires to cut, and a cut of it would let it stand where a registration names the wired
-    one, so it is refused, not returned."""
-    circuit = rounded()
-    unwired, _ = unwired_population_program(circuit.program()[0], circuit.cuts, ())[:2]
+    cut, _, _ = cut_wires(wired, record(circuit))
+    again, _, positions = cut_wires(cut, {**record(circuit), "wires": []})
+    assert (program_digest(again), positions) == (program_digest(cut), {})
+    with pytest.raises(ValueError, match="cut-record"):
+        cut_wires(cut, record(circuit))
+    with pytest.raises(ValueError, match="cut-record"):
+        cut_wires(wired, {**record(circuit), "cuts": {GID: {"x": 2}}})
     with pytest.raises(ValueError, match="cut-input"):
-        unwired_population_program(unwired, {}, ())
+        cut_wires(Program(GEMM), record(circuit))
 
 
 V16 = Value(16)
@@ -97,11 +101,12 @@ def reader(leaves: int) -> object:
                                     lambda B, S, x: B.call(COPY, x[0]), register=False))
 
 
-def wired_by_hand(leaves: int, offsets: list[int], writers: int = 2) -> tuple[object, str]:
-    """A ``WiredPopulations_v1`` root: ``writers`` `PAIR` units (two fields of two leaves each), then a reader of
-    ``leaves`` leaves a unit, unit i reading the writers' output leaves from ``offsets[i]``."""
+def wired_by_hand(leaves: int, offsets: list[int], cut: int = 1, writers: int = 2) -> tuple[Program, dict, str]:
+    """A ``WiredPopulations_v1`` root and its record: ``writers`` `PAIR` units (two fields of two leaves each), then a
+    reader of ``leaves`` leaves a unit in ``cut`` rows, unit i reading the writers' output leaves from ``offsets[i]``."""
     rd = reader(leaves)
     ids, counts = (descriptor_id(PAIR), descriptor_id(rd)), (writers, len(offsets))
+    rec = {"templates": [[t, n] for t, n in zip(ids, counts)], **({"cuts": {ids[1]: {"x": cut}}} if cut > 1 else {})}
     rets = Tuple(Array(writers, PAIR_RET), Array(len(offsets), Value(16)))
 
     def body(B, S, x):
@@ -111,7 +116,7 @@ def wired_by_hand(leaves: int, offsets: list[int], writers: int = 2) -> tuple[ob
 
     defn = CompositeDefinition("WiredPopulations", 1, ("templates", "record", "counts"),
                                lambda S: ((("0.x", Array(writers, Array(2, V16))),), rets), body, register=False)
-    return Program(bind(defn, templates=ids, record="0" * 128, counts=counts)), ids[1]
+    return Program(bind(defn, templates=ids, record=_record_digest(rec), counts=counts)), rec, ids[1]
 
 
 def _listed(positions) -> dict:
@@ -122,26 +127,25 @@ def test_each_wired_row_reads_one_whole_field_of_one_writer_unit():
     """Uncut, reader unit 0 reads writer unit 1's field o1 and unit 1 reads unit 0's o0; cut in two rows, a reader unit's
     rows read writer unit 0's o1 and unit 1's o0, contiguous in the writers' outputs and still a field a row."""
     pid = descriptor_id(PAIR)
-    prog, rid = wired_by_hand(2, [6, 0])
-    assert _listed(unwired_population_program(prog, {}, ())[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [1]),
-                                                                              f"{pid}/o0": ([1], [0])}}
-    prog, rid = wired_by_hand(4, [2])
-    assert _listed(unwired_population_program(prog, {rid: {"x": 2}}, ())[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [0])},
-                                                                            (rid, "x", 1): {f"{pid}/o0": ([0], [1])}}
+    prog, rec, rid = wired_by_hand(2, [6, 0])
+    assert _listed(cut_wires(prog, rec)[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [1]), f"{pid}/o0": ([1], [0])}}
+    prog, rec, rid = wired_by_hand(4, [2], cut=2)
+    assert _listed(cut_wires(prog, rec)[2]) == {(rid, "x", 0): {f"{pid}/o1": ([0], [0])},
+                                                (rid, "x", 1): {f"{pid}/o0": ([0], [1])}}
 
 
-@pytest.mark.parametrize("leaves, offsets, cuts, refusal", [
+@pytest.mark.parametrize("leaves, offsets, cut, refusal", [
     (2, [1], 1, "cut-offset"),
     (4, [0], 1, "cut-fields"),
     (4, [2], 1, "cut-units"),
     (4, [1], 2, "cut-offset"),
 ])
-def test_a_wired_row_that_is_no_whole_field_of_one_writer_unit_is_refused_by_name(leaves, offsets, cuts, refusal):
+def test_a_wired_row_that_is_no_whole_field_of_one_writer_unit_is_refused_by_name(leaves, offsets, cut, refusal):
     """A row read off its field's first leaf (cut-offset), over a unit's two fields (cut-fields) or across two writer
     units (cut-units) is refused, by name."""
-    prog, rid = wired_by_hand(leaves, offsets)
+    prog, rec, _ = wired_by_hand(leaves, offsets, cut)
     with pytest.raises(ValueError, match=refusal):
-        unwired_population_program(prog, {rid: {"x": cuts}}, ())
+        cut_wires(prog, rec)
 
 
 def test_a_wired_row_at_another_width_is_no_root():
