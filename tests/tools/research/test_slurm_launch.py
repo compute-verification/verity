@@ -108,6 +108,7 @@ def test_no_gpus_asked_takes_the_entrys_gres_and_zero_takes_none(site):
     (("--max-min", "31"), None, r"above vcf-node's max_minutes 30"),
     (("--pool", "research", "--as", "infra"), None, r"--pool: vcf-node has no pool or slot of ours: drop it; Slurm gives the job"),
     (("--gpu-host",), None, r"--gpu-host: no card lease of ours runs on vcf-node: ask the cards with --gpus N"),
+    (("--card", "3"), None, r"--card: Slurm picks the cards: ask how many with --gpus N"),
     ((), ("gpu-lease", "1", "--", "python", "-c", "pass"), r"asks gpu-lease for cards.*ask the cards with --gpus N"),
     (("--wait",), None, r"--wait: its records reach the store only once `via` publishes them"),
     (("--env-host", "vy-via"), None, r"--env-host: it would send a machine's address to the cluster"),
