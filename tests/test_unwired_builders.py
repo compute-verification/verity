@@ -36,7 +36,6 @@ CALLERS: dict[str, str] = {
     "benchmarks/one_stage/a7.py": "new-run",
     "benchmarks/one_stage/forged_proofs.py": "new-run",
     "benchmarks/one_stage/form_refusals.py": "new-run",
-    "benchmarks/one_stage/inference_only.py": "new-run",
     "benchmarks/one_stage/r2_population.py": "both",
     "benchmarks/one_stage/replay.py": "replay",
     "benchmarks/one_stage/served_cases.py": "replay",
