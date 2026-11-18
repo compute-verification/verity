@@ -137,15 +137,17 @@ sample() {  # one line: the job's own PSS, the machine's memory in use and WORK'
 peak() { tail -n +"$((from + 1))" "$MEM" | awk -v c="$1" '$c > m {m = $c} END {printf "%.1f GB", m * 1024 / 1e9}'; }
 ( while :; do sample; sleep 10; done ) &
 SAMPLER=$!
+keep() {  # the sampling run's window copied to A5_KEEP; fails unless exactly one is under WORK
+  local w=() o
+  for o in "$WORK"/a5-llama1b/*/serving-rows; do [ ! -d "$o" ] || w+=("$o"); done
+  if [ ${#w[@]} = 1 ] && cp -a "${w[0]}" "$A5_KEEP"; then log "kept: the sampling run's window in $A5_KEEP"
+  else log "A5_KEEP=$A5_KEEP: no one sampling window under $WORK/a5-llama1b to keep (${#w[@]} found)"; return 1; fi
+}
 finish() {  # at exit, success or failure: the records copied to --out, then WORK removed
-  local rc=$? o w
+  local rc=$? o
   kill "$SAMPLER" 2>/dev/null
   for o in out-flock out-zk out-sampling bootstrap; do [ ! -e "$WORK/$o" ] || cp -a "$WORK/$o" "$RESULTS/"; done
-  if [ -n "$A5_KEEP" ]; then
-    w=("$WORK"/a5-llama1b/*/serving-rows)
-    if [ ${#w[@]} = 1 ] && [ -d "${w[0]}" ] && cp -a "${w[0]}" "$A5_KEEP"; then log "kept: the sampling run's window in $A5_KEEP"
-    else log "A5_KEEP=$A5_KEEP: no one sampling window under $WORK/a5-llama1b to keep (${#w[@]} found)"; [ "$rc" != 0 ] || rc=3; fi
-  fi
+  [ -z "$A5_KEEP" ] || keep || [ "$rc" != 0 ] || rc=3
   log "WORK=$WORK at the end: $(du -sh "$WORK" 2>/dev/null | cut -f1); removing it"
   rm -rf "$WORK" && log "removed: $WORK"
   rm -f "$MEM"

@@ -134,6 +134,15 @@ def test_a_subset_of_a_members_instances_stages_over_their_own_bytes_under_its_o
     for bad in ([3, 1], [1, 1], [n]):
         with pytest.raises(ValueError, match="distinct ascending"):
             ri.subset_window(tmp_path / "window", 0, bad, sub, sets, tmp_path / "bad")
+    win = json.loads((tmp_path / "window" / "window.json").read_text())
+    for key in ("shared_rows", "registered", "value_rows", "wired_rows"):
+        win["members"][0][key] = [0]
+        (tmp_path / "window" / "window.json").write_text(json.dumps(win))
+        with pytest.raises(ValueError, match=rf"member 0 has \['{key}'\]: its body is not its own rows"):
+            ri.subset_window(tmp_path / "window", 0, units, sub, sets, tmp_path / "shared")
+        del win["members"][0][key]
+    assert not (tmp_path / "shared").exists()
+    (tmp_path / "window" / "window.json").write_text(json.dumps(win))
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")
     p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(out / "circuit.txt"), "--public", str(out / "pub-2.bin"),

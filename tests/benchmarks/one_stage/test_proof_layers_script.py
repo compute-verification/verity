@@ -128,3 +128,20 @@ def test_a5_keep_that_is_not_a_new_directory_outside_work_is_refused(keep, tmp_p
     run = subprocess.run(["bash", str(SCRIPT), "--dry-run"], cwd=ROOT, env=env, capture_output=True, text=True)
     assert run.returncode == 2 and run.stderr.startswith(f"proof_layers.sh: A5_KEEP={keep}: an absolute path")
     assert 'cp -a "${w[0]}" "$A5_KEEP"' in TEXT and TEXT.index('cp -a "${w[0]}"') < TEXT.index('rm -rf "$WORK"')
+
+
+@pytest.mark.parametrize("windows", [0, 1, 2])
+def test_a5_keep_copies_the_one_sampling_window_and_counts_the_windows_it_found(windows, tmp_path):
+    lines = TEXT.splitlines()
+    start = lines.index(next(x for x in lines if x.startswith("keep() {")))
+    defs = "\n".join([next(x for x in lines if x.startswith("log() {")), *lines[start:lines.index("}", start) + 1]])
+    work, keep = tmp_path / "w", tmp_path / "kept"
+    for i in range(windows):
+        (work / "a5-llama1b" / f"r{i}" / "serving-rows").mkdir(parents=True)
+        (work / "a5-llama1b" / f"r{i}" / "serving-rows" / "window.json").write_text("{}")
+    script = f"RESULTS={tmp_path}; WORK={work}; A5_KEEP={keep}\n{defs}\nkeep"
+    run = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    if windows == 1:
+        assert run.returncode == 0 and (keep / "window.json").is_file() and run.stdout.startswith("kept:")
+    else:
+        assert run.returncode == 1 and not keep.exists() and run.stdout.endswith(f"({windows} found)\n")
