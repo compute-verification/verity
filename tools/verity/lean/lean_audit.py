@@ -991,6 +991,9 @@ RECORDS_KEPT = 3
 LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
 #: `lean_changed.py`'s kept passes under `lean-records/`, not a tree: they have their own cap (`PASSES_KEPT`)
 RECORDS_PASSES = "passes"
+#: `lean_changed.py`'s facts cache under `lean-records/` (`facts_dir`), not a tree: `check.py --facts-from` reads it after
+#: the run that stored it
+RECORDS_FACTS = "facts"
 
 
 def build_slots(slots: Path | None = None) -> int:
@@ -1019,7 +1022,7 @@ def prune_records(store: Path, kept: int | None = None, slots: int | None = None
     used = []
     for tree in store.iterdir() if store.is_dir() else ():
         try:
-            if tree.is_dir() and tree.name != RECORDS_PASSES:
+            if tree.is_dir() and tree.name not in (RECORDS_PASSES, RECORDS_FACTS):
                 stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
                 used.append((tree.name in own, max(stamps, default=tree.stat().st_mtime), tree))
         except OSError:

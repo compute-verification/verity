@@ -2460,9 +2460,9 @@ def test_records_trees_beyond_the_limit_go_least_recently_used_first_unless_a_ru
 def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
     """Trees seeded for `build 8` keep their source's old `.who`, and an hourly prune that keeps 3 would take some of them,
     so a waiting run would build Mathlib from scratch on the root disk. The slots' own trees stay, the
-    ones a lowered limit left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
+    ones a lowered limit left (`build-8`) go first whatever their use, and `passes/` and `facts/` are not trees."""
     store = tmp_path / "lean-records"
-    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):
+    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes", "facts"]):
         (store / name).mkdir(parents=True)
         (store / name / ".who").write_text("r")
         t = 2000 - 100 * (name != "build-8") - i
@@ -2471,10 +2471,10 @@ def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_an
     slots.write_text("check 4\nbuild 8   # one per tree\n")
     assert LA.build_slots(slots) == 8 and LA.build_slots(tmp_path / "absent") == 0
     assert LA.prune_records(store, slots=8) == 1
-    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "passes"])
+    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "facts", "passes"])
     slots.write_text("build 2\n")
     assert LA.prune_records(store, slots=LA.build_slots(slots)) == 5
-    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "passes"]
+    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "facts", "passes"]
 
 
 def test_a_scratch_tree_refuses_a_tracked_link_and_in_tree_resolves_before_it_compares(tmp_path, monkeypatch):
