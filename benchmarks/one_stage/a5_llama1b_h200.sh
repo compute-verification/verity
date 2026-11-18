@@ -127,7 +127,7 @@ PB=$!
 
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 if [ -z "${CUDA_HOME:-}" ]; then
-  for v in 12.9 13.0; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit "$v" 2> /dev/null) && break; done
+  for v in 12.9 13.0 ""; do CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit ${v:+"$v"} 2> /dev/null) && break; done
 fi
 if [ ! -f "$CUDA_HOME/include/cusparse.h" ]; then  # a toolkit without the math libraries' headers: the venv's wheels hold them
   for lib in cusparse cusolver cufft curand; do
