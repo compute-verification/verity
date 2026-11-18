@@ -67,7 +67,6 @@ from verity_vllm.compiler import served_rows as SRW
 from verity_vllm import messages as M
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.engine.served_seed import SeedCoins, param_of
-from verity_vllm.errors import Refused
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
@@ -248,8 +247,7 @@ class CommitWindows:
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
-    ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live ``BlockPool``)
-    and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`). ``coins``
+    ``sealed`` hears each window's seal line, or why it has none. ``coins``
     (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each window opens
     under in its line (``seed_coin``)."""
 
@@ -260,13 +258,9 @@ class CommitWindows:
                  served: Mapping[str, int] | None = None, no_slice: str | None = None, sealer: Any = None,
                  window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None, release: Any = None, pool: Callable[[], Any] | None = None,
-                 pool_block: int | None = None, coins: SeedCoins | None = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None,
+                 coins: SeedCoins | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
-        if (pool is None) != (pool_block is None):
-            raise ValueError("a pool row needs both the live pool and its blocks' size")
-        self.pool, self.pool_block = pool, pool_block
-        self._pool_out: dict[int, dict[str, Any]] = {}   # each window's pool row record (`_pool_row`), until its line
         self.coins = coins if coins is not None else SeedCoins()
         self.seed_coin: dict[str, Any] | None = None      # the open window's seed coin (`SeedCoins.record`)
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
@@ -446,9 +440,6 @@ class CommitWindows:
         if self.arm is not None:
             self._close_arm()
             lap("arm")
-        if self.pool is not None:
-            self._pool_row()
-            lap("pool_row")
         if self.off_loop:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
@@ -476,20 +467,6 @@ class CommitWindows:
         if isinstance(job, tuple):
             self._land(rec, job)
         return rec
-
-    def _pool_row(self) -> None:
-        """The prefix cache's pool at the close as its row (`engine.pool_row.export`), the row and its root to
-        ``pool_rows/w<k>.json``: the window line's ``pool_row`` is the row's NB and root, or why the row can't hold
-        the pool (a block a running request holds). No coin or verdict reads it yet, so it doesn't fail the window."""
-        from verity_vllm.engine import pool_row as PR
-
-        assert self.pool is not None and self.pool_block is not None
-        try:
-            got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
-        except Refused as e:
-            got = {"refused": str(e)[:500]}
-        with self._lock:
-            self._pool_out[self.window] = got
 
     def _close_off_loop(self, laps: list[tuple[str, float]], lap: Callable[[str], None]) -> None:
         view = self.com.detach() if int(self.com._step_index) else None
@@ -609,8 +586,6 @@ class CommitWindows:
                 return
             if self.arm is not None:
                 rec[self.arm_key] = self._arm_out.pop(rec["window"], None)
-            if self.pool is not None:
-                rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
             M.append(self.out / "windows.jsonl", "Run", json.dumps(rec).encode())
 
