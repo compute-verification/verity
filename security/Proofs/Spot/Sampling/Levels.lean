@@ -55,32 +55,16 @@ theorem SlotsAreBlocks.injective_fin {L : Levels G} {P : Claims.Sampling.Partiti
 level that misses each set's blocks with `D`'s miss (`auditBound_one`). Every audit strategy is accepted while the
 levels' sample misses its committed transcript's incorrect blocks with probability at most `δ` with probability at most
 `δ` plus `Sound`'s knowledge and binding errors at its registration and state. -/
-theorem accept_le_of_sound (hS : Spot.Sampling.Sound) (L : Levels G) {l : Level G} (hL : L.levels = [l]) {n : ℕ}
-    (D : SamplingDesign (Fin n)) (blk : Fin n → Finset G)
+theorem accept_le_of_sound (hS : Spot.Sampling.Sound) (L : Levels G) {l : Level G} (hL : L.levels = [l]) {U : Type}
+    [DecidableEq U] (D : SamplingDesign U) (blk : U → Finset G)
     (hD : ∀ S, (l.design Finset.univ).missProb (S.image blk) = D.missProb S)
-    (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) (Tr : Type) (incorrect : Tr → Finset (Fin n))
-    (committed : (R : Reg) → ((ω : D.Ω) → Strategy (session (D.draw ω) R)) → Tr)
-    (ks : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → ℝ≥0∞)
-    (link : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Tr → ℝ≥0∞)
-    (hcover : ∀ S R (τ : Strategy (session S R)) u X, u ∈ S → u ∈ incorrect X →
-      prob (· = true) (session S R) τ ≤ ks S R τ u + link S R τ u X)
-    (εks εbind : (R : Reg) → ((ω : D.Ω) → Strategy (session (D.draw ω) R)) → ℝ≥0∞)
-    (hks : ∀ R (τ : (ω : D.Ω) → Strategy (session (D.draw ω) R)) (tgt : D.Ω → Option (Fin n)),
-      avg (fun ω => (tgt ω).elim 0 fun u => if u ∈ D.draw ω then ks (D.draw ω) R (τ ω) u else 0) ≤ εks R τ)
-    (hlink : ∀ R (τ : (ω : D.Ω) → Strategy (session (D.draw ω) R)) (tgt : D.Ω → Option (Fin n)),
-      avg (fun ω => (tgt ω).elim 0 fun u =>
-        if u ∈ D.draw ω then link (D.draw ω) R (τ ω) u (committed R τ) else 0) ≤ εbind R τ)
-    (σ : Strategy (Game.send Reg fun R => Game.coin D.Ω fun ω =>
-        (session (D.draw ω) R).map fun ok => (ok, D.draw ω))) :
-    let cont : (ω : D.Ω) → Strategy (session (D.draw ω) σ.1) := fun ω =>
-      Strategy.ofMap (fun ok => (ok, D.draw ω)) (session (D.draw ω) σ.1) (σ.2 ω)
-    let X := committed σ.1 cont
-    AuditBound L.design
-      (fun p => prob p
-        (Game.send Reg fun R => Game.coin D.Ω fun ω => (session (D.draw ω) R).map fun ok => (ok, D.draw ω)) σ)
-      (fun o => o.1 = true) (fun _ => (incorrect X).image blk) (εks σ.1 cont + εbind σ.1 cont) :=
-  L.auditBound_one hL D blk hD
-    (Spot.Sampling.givesAuditBound hS n D Reg session Tr incorrect committed ks link hcover εks εbind hks hlink σ)
+    (Reg : Type) (session : Finset U → Reg → Game Bool) (A : Spot.Sampling.ExtractionAnalysis D Reg session)
+    {εks εbind : (R : Reg) → Spot.Sampling.Cont D Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (σ : Strategy (Spot.Sampling.audit D Reg session)) :
+    AuditBound L.design (fun p => prob p (Spot.Sampling.audit D Reg session) σ) (fun o => o.1 = true)
+      (fun _ => (A.incorrect (A.committedOf σ)).image blk)
+      (εks (Spot.Sampling.reg σ) (Spot.Sampling.cont σ) + εbind (Spot.Sampling.reg σ) (Spot.Sampling.cont σ)) :=
+  L.auditBound_one hL D blk hD (Spot.Sampling.givesAuditBound hS D Reg session A εks εbind hks hlink σ)
 
 end Levels
 

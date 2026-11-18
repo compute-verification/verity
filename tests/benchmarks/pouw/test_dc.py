@@ -336,7 +336,7 @@ def test_record_writes_the_fastest_form_over_honest_and_a_failed_gate_writes_non
     assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "unknown")]) == 0
     [m] = json.loads((tmp_path / "unknown" / "result.json").read_text())["measurements"]
     assert m["value"] is None and "member" not in m
-    assert m["why"].startswith("0 card records under ") and repr(UNKNOWN) in m["why"]
+    assert m["why"].startswith("0 GPU card files under ") and repr(UNKNOWN) in m["why"]
     assert an.main(["sm90", str(tmp_path / "rows"), "--record", str(tmp_path / "bad"),
                     "--failed", "a dgemm gate is not exact"]) == 1
     doc = json.loads((tmp_path / "bad" / "result.json").read_text())
