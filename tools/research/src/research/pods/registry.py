@@ -322,7 +322,7 @@ def _replace(p: Path, text: str) -> None:
 
 def write_key(p: Path, key: str, value: Any | None) -> None:
     """Set (None: remove) top-level `key` of the machine record at `p` (`with_key`): every writer of one key of a record
-    goes through here, so no mark lands inside a table (tests/tools/research/test_record_writers.py)."""
+    goes through here, so no mark lands inside a table (tests/test_machine_record_writers.py)."""
     _replace(p, with_key(p.read_text(), key, value))
 
 
