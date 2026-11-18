@@ -16,7 +16,7 @@
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/run.sh
+#     -- bash benchmarks/pouw/edited_gemm/run.sh
 set -uo pipefail
 export O=${OUT:?}
 export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH

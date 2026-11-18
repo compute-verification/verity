@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
-# The tensor-core receipts (TB4, TB2, TB1; fgemm.cu's header) beside duo and duo2 on one leased sm_120 GPU (cwd =
-# the clone's root): build and SASS counts outside any lease; the gate (every arm's outputs and receipts at run.sh's six
-# small shapes, every tile config, poisoned outputs) under a short lease, checked by ref.py after it; only if every check
-# passes, the interleaved timing of FG_ARMS at the served shapes and ncu under a second lease. Clocks are read, never set.
+# fgemm.cu on one leased sm_120 GPU (cwd = the clone's root): the build and its SASS counts outside any lease; the gate
+# (every arm's outputs and receipts at six small shapes over the four tile configs, poisoned outputs) dumped under a
+# short lease and checked on the CPU by ref.py after it; only if every check passes, the interleaved timing at the
+# served shapes and ncu's tensor-pipe counts under a second lease. Clocks are read, never set (ncu --clock-control
+# none). Results in $OUT.
 #
 #   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-#     --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/tb_run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/tb_run.sh"'
-# STAGE=build|gate|all (default all); REPS (default 15); SHAPES, NCU_SHAPES (name:m:n:k:C); FG_ARMS.
+#     --send benchmarks/pouw/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+# STAGE=build|gate|all (default all); REPS (default 15); SHAPES (name:m:n:k:C ..., C the tile config P, Q, W or D); NCU_SHAPES (same).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
-# the references import their siblings as verity's modules, from the clone's root
-export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
-export B; B=$(mktemp -d /tmp/tb-receipt.XXXXXX); trap 'rm -rf "$B"' EXIT
+export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version | tail -2 > "$O/nvcc.txt"
 nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/fgemm" $D/fgemm.cu -lcuda -lcublasLt -lnvidia-ml \
   > "$O/build.log" 2>&1 || { tail -80 "$O/build.log"; exit 4; }
-grep -A1 -E "Compiling entry function '_Z[0-9]+(w|q|d|p)_(g0|duo32|duo2_32|tb4_32|tb2_32|tb1_32)" "$O/build.log" | head -80
-grep -E "spill|Used" "$O/build.log" | head -100 > "$O/regs.txt"
+grep -E "spill|Used" "$O/build.log" | head -60
 cuobjdump -sass "$B/fgemm" > "$B/fgemm.sass"
 python3 $D/sass_mix.py "$B/fgemm.sass" > "$O/sass-mix.json" || { echo "no IMMA in the binary"; exit 5; }
 gzip -c "$B/fgemm.sass" > "$O/fgemm.sass.gz"
@@ -42,10 +40,9 @@ cat "$O/gate.jsonl"
 [ "$STAGE" = gate ] && exit 0
 
 export REPS=${REPS:-15}
-export FG_ARMS=${FG_ARMS:-"lt,g0,b,c,c2,t4,t1,t2w,t1w,t4c,t2wc,t1wc,t4g,t1g,t2wg,t1wg,t4cg,t2wcg,t1wcg"}
-export NCU_ARMS=${NCU_ARMS:-"lt g0 t4g t1g t2wg t1wg t4cg t2wcg t1wcg"}
-export SHAPES=${SHAPES:-"w_qkv:8192:6144:4096:W w_o:8192:4096:4096:W w_gate_up:8192:28672:4096:W w_down:8192:4096:14336:W wsq4096:4096:4096:4096:W q_qkv:8192:6144:4096:Q q_o:8192:4096:4096:Q q_gate_up:8192:28672:4096:Q q_down:8192:4096:14336:Q qsq4096:4096:4096:4096:Q d_qkv:128:6144:4096:D d_o:128:4096:4096:D d_gate_up:128:28672:4096:D d_down:128:4096:14336:D"}
-export NCU_SHAPES=${NCU_SHAPES:-"w_o:8192:4096:4096:W q_o:8192:4096:4096:Q d_o:128:4096:4096:D"}
+# prefill shapes on 128 x 128 tiles of 8 warps (P) and of 16 (W), and on 128 x 64 (Q); decode on 128 x 32 (D)
+export SHAPES=${SHAPES:-"p_qkv:8192:6144:4096:P p_o:8192:4096:4096:P p_gate_up:8192:28672:4096:P p_down:8192:4096:14336:P sq4096:4096:4096:4096:P q_qkv:8192:6144:4096:Q q_o:8192:4096:4096:Q q_gate_up:8192:28672:4096:Q q_down:8192:4096:14336:Q qsq4096:4096:4096:4096:Q w_qkv:8192:6144:4096:W w_o:8192:4096:4096:W w_gate_up:8192:28672:4096:W w_down:8192:4096:14336:W wsq4096:4096:4096:4096:W d_qkv:128:6144:4096:D d_o:128:4096:4096:D d_gate_up:128:28672:4096:D d_down:128:4096:14336:D"}
+export NCU_SHAPES=${NCU_SHAPES:-"p_o:8192:4096:4096:P q_o:8192:4096:4096:Q w_o:8192:4096:4096:W sq4096:4096:4096:4096:P d_o:128:4096:4096:D"}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min 30 -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit \
@@ -59,11 +56,19 @@ gpu-lease 1 --wait --max-min 30 -- bash -c '
   M=gpu__time_duration.sum,sm__cycles_elapsed.avg,sm__inst_executed_pipe_tensor.sum,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_alu_cycles_active.avg.pct_of_peak_sustained_active,sm__pipe_fma_cycles_active.avg.pct_of_peak_sustained_active,smsp__issue_active.avg.pct_of_peak_sustained_active,dram__throughput.avg.pct_of_peak_sustained_elapsed
   for s in $NCU_SHAPES; do
     IFS=: read -r nm m n k c <<< "$s"
-    for arm in $NCU_ARMS; do
+    for arm in lt plain g0 c d c2 c3 c4; do
       ncu --clock-control none --profile-from-start off --metrics $M --csv "$B/fgemm" one $arm $m $n $k $c \
         > "$O/ncu-$nm-$arm.csv" 2>&1 || echo "ncu $nm $arm rc $?" >> "$O/rc.txt"
     done
+  done
+  for c in Q W; do
+    for arm in g0 c c2 c3 c4; do
+      ncu --clock-control none --profile-from-start off --section WarpStateStats --section SchedulerStats --csv \
+        "$B/fgemm" one $arm 8192 4096 4096 $c > "$O/ncu-stall-$c-o-$arm.csv" 2>&1 || echo "ncu stall $c $arm rc $?" >> "$O/rc.txt"
+      ncu --clock-control none --profile-from-start off --csv \
+        --metrics "regex:^smsp__average_warps_issue_stalled_.*_per_issue_active\.ratio$" \
+        "$B/fgemm" one $arm 8192 4096 4096 $c > "$O/ncu-stallr-$c-o-$arm.csv" 2>&1 || echo "ncu stallr $c $arm rc $?" >> "$O/rc.txt"
+    done
   done'
-python3 $D/tb_table.py "$O/bench.jsonl" "$O" > "$O/table.md" 2> "$O/table.err"
+python3 $D/table.py "$O/bench.jsonl" "$O" > "$O/table.md" 2> "$O/table.err"
 cat "$O/rc.txt" "$O/table.md"
-[ "${DIFF:-1}" = 1 ] && python3 $D/diff.py --trials "${DIFF_TRIALS:-200000}" --json "$O/diff.json" > /dev/null 2> "$O/diff.err"

@@ -11,7 +11,7 @@
 # profiles and their TOML end the run. Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-#     -- bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/edited_gemm/aprun.sh
+#     -- bash benchmarks/pouw/edited_gemm/aprun.sh
 set -uo pipefail
 export O=${OUT:?}
 export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
