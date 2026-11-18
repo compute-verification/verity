@@ -119,12 +119,16 @@ def boundaryLevel (p : SampledTwo.Params) (c : OneStage.Commitment) : Option (Co
   let partition := match getD c.record "partition" with | .str s => s | _ => ""
   pure ({ name := BOUNDARY_LEVEL, query := some partition, size := n, draw := some draw }, designCount draw)
 
+/-- `prof` with level `l`, `k` of its members sampled, before its own levels, coarse to fine. -/
+def coarser (l : Core.Level) (k : Nat) (prof : Core.Integrity) : Core.Integrity :=
+  { prof with levels := #[l] ++ prof.levels, drawn := #[(l.name, k)] ++ prof.drawn }
+
 /-- A two-stage accept with its coarse level (`boundaryLevel`) before the interior's, coarse to fine. -/
 def withBoundary (p : SampledTwo.Params) (c : OneStage.Commitment) :
     Core.Outcome OneStage.Public Core.Integrity → Core.Outcome OneStage.Public Core.Integrity
   | .accept pub prof =>
     match boundaryLevel p c with
-    | some (l, k) => .accept pub { prof with levels := #[l] ++ prof.levels, drawn := #[(l.name, k)] ++ prof.drawn }
+    | some (l, k) => .accept pub (coarser l k prof)
     | none => .reject "two-stage: the boundary's sampling design has no profile"
   | o => o
 
@@ -229,6 +233,23 @@ def protocol : Core.BlobProtocol where
     { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[],
       levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }) with
   | .accept _ _ => true
+  | _ => false
+private def interiorProfile : Core.Integrity :=
+  { programs := #[], prescribed := #[], linked := false, covered := #[], delta := ⟨1, 2⟩, drawn := #[("unit", 2)],
+    levels := #[{ name := "unit", query := none, size := 4, draw := some (.subset 2) }] }
+private def twoLevelProfile : Core.Integrity :=
+  coarser { name := BOUNDARY_LEVEL, query := some "p", size := 6, draw := some (.subset 3) } 3 interiorProfile
+#guard twoLevelProfile.levels.map (·.name) == #[BOUNDARY_LEVEL, "unit"]
+#guard twoLevelProfile.levels.map (·.size) == #[6, 4]
+#guard twoLevelProfile.levels.map (·.draw) == #[some (.subset 3), some (.subset 2)]
+#guard twoLevelProfile.drawn == #[(BOUNDARY_LEVEL, 3), ("unit", 2)]
+#guard twoLevelProfile.credited.isEmpty && twoLevelProfile.creditedProblem.isNone
+#guard ({ twoLevelProfile with credited := #[0] }).creditedProblem.isSome
+#guard match levelsHeld 2 (.accept ⟨#[], #[], 0, none, true⟩ twoLevelProfile) with
+  | .accept _ prof => prof.levels.size == 2
+  | _ => false
+#guard match levelsHeld 1 (.accept ⟨#[], #[], 0, none, true⟩ twoLevelProfile) with
+  | .reject r => r == LEVELS_PROFILE 1 2
   | _ => false
 #guard designCount (.stratified #[⟨"a", 3, 1⟩, ⟨"b", 5, 2⟩]) == 3
 

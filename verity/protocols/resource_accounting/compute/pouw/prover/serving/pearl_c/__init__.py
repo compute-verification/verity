@@ -99,8 +99,9 @@ def no_salt_key(scheme: str) -> bytes:
     """Pearl+ draws no salt key: every leaf's salt is fresh bytes from the OS, B's rows' those of the weights' registration
     (`weight_row_salts`)."""
     _runs(scheme)
-    raise NotImplementedError("Pearl+'s install with no salt key: the vLLM adapter's weights' commit under the salts of "
-                              "the salt file beside the model's registration, which it hands the device run")
+    raise NotImplementedError("Pearl+'s device run with no salt key: hash_h3.cuh's hm_leaves taking each leaf's salt as "
+                              "data (p2, 192 bytes a leaf; @kernels), then the device run handing it B's salts "
+                              "(`weight_row_salts`) and A's, the tiles' and y's fresh ones")
 
 
 def weight_row_salts(registration: str | Path, param: str, rows: Iterable[int] | None = None) -> bytes:

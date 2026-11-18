@@ -1,5 +1,5 @@
 """The release front of an arm on the certified tick that vLLM's client sends (`serve_tax`'s ``prod-all-on``): a stand-in for
-the network attester's release side on the node, between the client and the server's `tick_plugin.TickFeed`.
+the network attester's release side on the node, between the client and the server's `scheme_plugin.Front`.
 
 It numbers each completion or chat request in the order it comes and puts it in the bucket of its arrival
 (`corpus.StandIn`), in the release headers, and streams the watermark of those buckets to the server's
@@ -24,7 +24,7 @@ for p in (ROOT / "benchmarks/network_e2e/traces", ROOT / "adapters/vllm"):
 
 from corpus import StandIn  # noqa: E402 (the tree's, put on sys.path above)
 from verity.protocols.resource_accounting.network.prover.admission import BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH  # noqa: E402
-from verity_vllm.pipeline.tick_plugin import SAMPLED_PATHS  # noqa: E402
+from verity_vllm.pipeline.scheme_plugin import SAMPLED_PATHS  # noqa: E402
 
 #: the headers the front writes itself, dropped from what it relays
 HOP = frozenset({"connection", "keep-alive", RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER})

@@ -22,7 +22,7 @@ misses a set `B` of units.
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
 
-`subset n k` is the uniform `k`-subset of `n` units, whose escape is hypergeometric:
+`subset n k`, core's uniform `k`-subset of `n` units (`Verity.SamplingDesign.subset`), has a hypergeometric escape:
 `C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 
@@ -45,14 +45,8 @@ variable {n : ℕ}
 
 /-! ## The uniform `k`-subset -/
 
-/-- The uniform `k`-subset of `n` units. -/
-def subset (n k : ℕ) (hk : k ≤ n) : SamplingDesign n where
-  Ω := {S : Finset (Fin n) // S.card = k}
-  nonempty := by
-    obtain ⟨S, -, hS⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
-      (by simpa using hk)
-    exact ⟨⟨S, hS⟩⟩
-  draw := Subtype.val
+/- The uniform `k`-subset of `n` units is core's (`Verity.SamplingDesign.subset`). -/
+export Verity.SamplingDesign (subset)
 
 /-! ## Bernoulli samples -/
 

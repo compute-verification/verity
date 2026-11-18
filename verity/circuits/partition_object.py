@@ -408,8 +408,8 @@ def _out_of_order(refs: Any, params: int, nodes: int) -> list | None:
     parts = [refs]
     while parts:
         r = parts.pop()
-        if isinstance(r, Concat):
-            parts.extend(reversed(r.parts))
+        if isinstance(r, (Concat, Grid)):
+            parts.extend(reversed(r.parts if isinstance(r, Concat) else r.pieces()))
             continue
         names = ([(x[0], x[1]) for x in r.items] if isinstance(r, Explicit) else
                  [(s, i) for s, i, *_ in r.lanes] if isinstance(r, Grid) else [(r.space, r.idx)] if r.count else [])

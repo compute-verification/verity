@@ -1601,7 +1601,7 @@ def run(j):
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front. Under a two-stage rule the
     docket's query is its grain (`grain`), `select` is the first stage, then `interiors` and `second`
     (`_interior_steps`) before `deliver`, and the interior docket's audit record over the second stage's sample,
-    with round 2's statement check of the interior's `statements` (`second_stage.check_twin` under `second_stage.FORM`), is
+    with round 2's statement check of the interior's `statements` (`second_stage.check_twin`), is
     under `interior`, the symbol accepting when both do."""
     j = _json(j)
     if not isinstance(j, dict):
@@ -1716,7 +1716,7 @@ def run(j):
                      SS.replay_wires(p["program"], it["replay"]["program_fn"]),
                      SS.replay_rows(p["program"], it["replay"]["program_fn"]),
                      SS.replay_returns(p["program"], it["replay"]["program_fn"], rec))
-        out2 = SS.attach(out2, SS.check_twin(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
+        out2 = SS.attach(out2, SS.check_twin(own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
                                "receipt": inner["receipt"]}}
@@ -4818,21 +4818,21 @@ def _returns_of(j):
 
 
 def second_statements(j):
-    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check_twin`) of `statements` (null for none), the
-    two-stage form allowed when `allow`, over what `_second_own` reads of `j`."""
-    allow, own, statements = _second_own(j)
-    return SS.check_twin(allow, own, statements).to_json()
+    """`Pieces.secondStatements`: round 2's statement check (`second_stage.check_twin`) of `statements` (null for none),
+    over what `_second_own` reads of `j`."""
+    own, statements = _second_own(j)
+    return SS.check_twin(own, statements).to_json()
 
 
 def second_interior_reads(j):
     """`Pieces.secondInteriorReads`: of the second_statements piece's input (`_second_own`), the statements' reads that
     rest on the interior's own values (`second_stage.interior_reads`)."""
-    _, own, statements = _second_own(j)
+    own, statements = _second_own(j)
     return SS.interior_reads(own, statements or ())
 
 
 def _second_own(j):
-    """`Pieces.secondOwn`: of `j`, whether the two-stage form is allowed (`allow`), what round 2 holds of the run
+    """`Pieces.secondOwn`: of `j`, what round 2 holds of the run
     (`second_stage.Own`) and the statements (null for none). Round 2 holds the parts the interior `program`'s strata
     under `query` make for the replay `sample`, the `interior` and `boundary` records, the second stage's units `drawn`,
     the design's `links` and `wires` (each null for none derived), the `rows` they place its units at (null for
@@ -4847,9 +4847,7 @@ def _second_own(j):
     `{parameter: entry}`, `service.pinned_tables`, null for none), and the words of the rows each wire joins (`widths`,
     null for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
-    if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
-        raise D.Reject("allow is not a boolean")
-    if not (isinstance(j.get("sample"), list) and all(map(_nat, j["sample"]))):
+    if not (isinstance(j, dict) and isinstance(j.get("sample"), list) and all(map(_nat, j["sample"]))):
         raise D.Reject("sample is not a list of replay blocks")
     if not (isinstance(j.get("drawn"), list) and all(map(_nat, j["drawn"]))):
         raise D.Reject("drawn is not a list of slots")
@@ -4899,7 +4897,7 @@ def _second_own(j):
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
                  tuple(fixed or ()), tuple((reads or {}).items()), tuple(sorted((tables or {}).items())), widths)
-    return j["allow"], own, statements
+    return own, statements
 
 
 #: A two-template interior, PAIR's six slots then TRIPLE's four, its ports under their templates' names.
@@ -4912,8 +4910,7 @@ SECOND_BOUNDARY = {"scheme": SCHEME, "population": BOUNDARY.population, "registe
     "roots": [{"port": p, "root": BOUNDARY_ROOTS[p], **BOUNDARY.ports[p]} for p in sorted(BOUNDARY.ports)]}
 
 
-def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], links=(), allow: bool = False,
-                 own=(), wires=()) -> dict:
+def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], links=(), own=(), wires=()) -> dict:
     """The second_statements piece's input for an honest run over interior `s` after the replay sample `sample` of
     `BOUNDARY`'s replay blocks: the interior record, of `s`'s program and partition in a served window that names the
     replay sample in order, with roots of each template's `out` and `x` (each `<template>/<port>` when `named`), a tree
@@ -4970,7 +4967,7 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
         statements.append(s_)
         reported[f"{p.template}/x"] = {"value": read["value"], "root": read["root"]}
     lean = {"of_record": True, "accepted": True, **({"registered": reported} if reported else {})}
-    return {"allow": allow, "sample": sample, "drawn": drawn, "program": s.desc, "query": s.query, "interior": rec,
+    return {"sample": sample, "drawn": drawn, "program": s.desc, "query": s.query, "interior": rec,
             "boundary": SECOND_BOUNDARY, "statements": statements, "verdicts": {"lean": lean, **_checked_by(statements)},
             "links": [{"template": t, "port": "x", "value": BX} for t in sorted(links)],
             "wires": [{"template": t, "port": "x", "writer": w, "wport": "out"} for t, w in sorted(wired.items())],
@@ -5634,8 +5631,8 @@ def second_statement_runs(draw) -> dict:
     its ports unprefixed) or the two-template one (`SECOND_MIXED`), after a replay sample of two of `BOUNDARY`'s four
     replay blocks (or one, or three, which `SECOND_MIXED`'s four TRIPLE slots don't divide), the second stage's units one
     or none in each part's cell of each sampled replay block (or any slots), each part's `x` rooted, linked to the
-    boundary, read from its own or wired to the other template's `out` (its own, with one template), and the form allowed
-    or not; with up to two changes (`SECOND_CHANGES`), or a field of another type or missing."""
+    boundary, read from its own or wired to the other template's `out` (its own, with one template); with up to two
+    changes (`SECOND_CHANGES`), or a field of another type or missing."""
     s, named = draw(st.sampled_from([(INTERIOR, False), (SECOND_MIXED, True)]))
     sample = sorted(draw(st.sets(st.integers(0, 3), min_size=1, max_size=3)))
     q, strata = len(sample), P.strata(s.program, s.query)
@@ -5646,14 +5643,14 @@ def second_statement_runs(draw) -> dict:
         drawn = draw(st.lists(st.integers(0, s.population + 1), max_size=5))
     kinds = {t: draw(st.sampled_from(["root", "link", "own", "wire"])) for t in s.templates}
     writer = {t: next((u for u in s.templates if u != t), t) for t in s.templates}
-    c = _second_case(s, named, sample, drawn, {t for t, k in kinds.items() if k == "link"}, draw(st.booleans()),
+    c = _second_case(s, named, sample, drawn, {t for t, k in kinds.items() if k == "link"},
                      {t for t, k in kinds.items() if k == "own"},
                      [(t, writer[t]) for t, k in kinds.items() if k == "wire"])
     for _ in range(draw(st.sampled_from([0, 0, 1, 1, 2]))):
         c = draw(st.sampled_from(SECOND_CHANGES))(c, draw(st.integers(0, 63)))
     if draw(st.integers(0, 4)) == 0:
         key, value = draw(st.sampled_from([
-            ("allow", 1), ("allow", None), ("sample", [-1]), ("sample", "s"), ("drawn", [True]), ("drawn", None),
+            ("sample", [-1]), ("sample", "s"), ("drawn", [True]), ("drawn", None),
             ("program", []), ("query", None), ("query", {}), ("statements", 5), ("interior", 5), ("boundary", None),
             ("links", 5), ("wires", 5), ("wires", [{"template": "t", "port": "x", "writer": "w"}]), ("rows", 5),
             ("rows", [{"template": "t", "port": "x", "per": -1, "runs": []}]),
@@ -7831,9 +7828,7 @@ def test_the_run_reaches_every_step(pieces):
 def test_a_two_stage_run_reaches_every_step(pieces):
     """A two-stage run (`_two_stage_case`), Lean's the Python's whole: its first stage two of the four replay blocks and
     its second one proof block in each, its session reading the ports the links derived from `BLOCK` name (PAIR's `x`
-    and `o0`) at the boundary, with both audit records, and accepted, the form being allowed (`second_stage.FORM`, on in
-    the Lean and the Python); with it off in the Python it is rejected on round 2's refusal of the form alone
-    (`two-stage-form`), as is the run whose session also reads the interior's own `out`, each slot its own rows, which its verifier reports and its template's
+    and `o0`) at the boundary, with both audit records, and accepted, as is the run whose session also reads the interior's own `out`, each slot its own rows, which its verifier reports and its template's
     reference statement reads; a session reading `out` its reference doesn't is refused (`second-values`), as is one
     reading its linked `x` from the interior's own (`second-read`), a statement whose verifier checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
@@ -7859,9 +7854,6 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     assert [k for k, c in inner["checks"].items() if not c["ok"]] == []
     assert inner["checks"]["statements"]["codes"] == []
     assert len(out["draw"]["units"]) == 2 and sorted(u // 3 for u in out["interior"]["draw"]["units"]) == [0, 1]
-    with mock.patch.object(SS, "FORM", False):
-        refused = run(copy.deepcopy(case))
-    assert refused["symbol"] == "reject" and refused["public"] == {}, refused
     def reads(referred=True, **ports):
         def change(c, x):
             it = c["interior"]
@@ -7946,8 +7938,7 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     """Round 2's statement check, Lean's the Python's whole, over the two-template interior (`SECOND_MIXED`, its ports
     named by template) after a replay sample of two: the honest statements pass, one for each part, by position in the
     parts' order (else `second-order`), with a part's `x` read from the boundary where the design links it, each slot
-    at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and pass, the form being
-    allowed (and fail only on the form where it is not, `two-stage-form`); every part needs a statement, the second stage sampling in it or not
+    at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and pass; every part needs a statement, the second stage sampling in it or not
     (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
     its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
     the boundary port its link names (or the interior's value of its name, where the interior registers one), or a
@@ -7964,10 +7955,10 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     parts (`second-cells`)."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
     h0, h1 = (s["header"] for s in honest["statements"])
     b0 = h0["frame_v3"]["bindings"]
-    odd = _second_case(SECOND_MIXED, True, [1, 3], [], allow=True)
+    odd = _second_case(SECOND_MIXED, True, [1, 3], [])
 
     def placed(c: dict, **w) -> dict:
         return {**c, "interior": {**c["interior"], "window": {**c["interior"]["window"], **w}}}
@@ -7986,25 +7977,23 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     assert elsewhere != honest["refs"][triple] and SS.blank_run(elsewhere) == SS.blank_run(honest["refs"][triple])
     assert h0["set"] == "served/r-test/m0" and h1["set"] == "served/r-test/m1" and sorted(b0) == ["out", "x"]
     assert b0["x"] == SS.port_binding(honest["interior"], f"{pair}/x", SECOND_SCHEMAS["x"], "r-test")
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
+    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple})
     reads = linked["statements"][1]["registered"]["ports"]["x"]
     bx = _second_case(SECOND_MIXED, True, sample, drawn, links={pair})["statements"][0]["registered"]
-    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair}, allow=True)
+    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair})
     mine = own["statements"][0]["registered"]["ports"]["x"]
     assert [s["draw"]["units"] for s in honest["statements"]] == [[1, 4], [0, 3]] and reads["reads"] == [0, 1, 6, 7]
     assert mine["value"] == f"{pair}/x" and mine["reads"] == list(range(6)) and mine["leaves"] == 6
     cases = [
         (honest, []),
-        ({**honest, "allow": False}, ["two-stage-form"]),
         ({**honest, "statements": honest["statements"][::-1]}, ["second-order"]),
         (linked, []),
         (wide(linked, 2 ** 64 // linked["boundary"]["population"]), []),
         (wide(linked, 2 ** 64 // linked["boundary"]["population"] + 1), ["second-read"]),
         (own, []),
-        ({**own, "allow": False}, ["two-stage-form"]),
-        (_second_case(SECOND_MIXED, True, sample, drawn, links={pair, triple}, allow=True), []),
-        (_second_case(SECOND_MIXED, True, sample, [1, 4], allow=True), []),
-        ({**_second_case(SECOND_MIXED, True, sample, [1, 4], allow=True), "statements": honest["statements"][:1]},
+        (_second_case(SECOND_MIXED, True, sample, drawn, links={pair, triple}), []),
+        (_second_case(SECOND_MIXED, True, sample, [1, 4]), []),
+        ({**_second_case(SECOND_MIXED, True, sample, [1, 4]), "statements": honest["statements"][:1]},
          ["second-cover"]),
         ({**honest, "statements": honest["statements"][1:]}, ["second-order", "second-cover"]),
         ({**honest, "statements": honest["statements"][:1]}, ["second-cover"]),
@@ -8023,7 +8012,7 @@ def test_round_two_holds_each_session_to_its_part(pieces):
         (_second_with(honest, 0, registered=bx), ["second-read", "second-values", "second-reported"]),
         ({**linked, "links": None}, ["second-links"]),
         ({**linked, "links": [*linked["links"], {"template": "Other_v0", "port": "x", "value": BX}]}, ["second-links"]),
-        (_second_case(SECOND_MIXED, True, [0, 1, 2], drawn, allow=True), ["second-cells"]),
+        (_second_case(SECOND_MIXED, True, [0, 1, 2], drawn), ["second-cells"]),
         ({**honest, "refs": None}, ["second-header"]),
         ({**honest, "refs": {pair: honest["refs"][pair]}}, ["second-header"]),
         ({**honest, "refs": {**honest["refs"], triple: {**honest["refs"][triple], "set": "served/r/m1"}}}, []),
@@ -8065,7 +8054,7 @@ def test_round_two_holds_the_boundary_schedule_to_its_replay_blocks(pieces):
     request's positions or skip some, cover fewer or more blocks than the population, hold no block or no position, or
     aren't runs fail ``second-schedule``, after ``second-interior-order`` when the interior names another sample; and
     each block's request and positions are `schedule.at`'s (`second_schedule`)."""
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
 
     def scheduled(runs) -> dict:
         return {**honest, "boundary": {**honest["boundary"], "window": {"schedule": runs}}}
@@ -8124,7 +8113,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
     when the links are none too, and a wire not of strings is refused."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
-    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)], allow=True)
+    wired = _second_case(SECOND_MIXED, True, sample, drawn, wires=[(triple, pair)])
     s1 = wired["statements"][1]
     x, h1 = s1["registered"]["ports"]["x"], s1["header"]
     assert f"{triple}/x" not in {r["port"] for r in wired["interior"]["roots"]}
@@ -8138,7 +8127,6 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
     wire = wired["wires"][0]
     cases = [
         (wired, []),
-        ({**wired, "allow": False}, ["two-stage-form"]),
         (reading(reads=[1, 1, 4, 4]), ["second-read"]),
         (reading(reads=[3, 3, 0, 0]), ["second-read"]),
         (reading(reads=[0, 0, 3, None]), []),
@@ -8175,7 +8163,7 @@ def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
     that output and the interior record's port is what the reader is held to, two entries nothing holds to each other.
     The design fails `second-wires`, its links derived, alike in both."""
     pair, triple = SECOND_MIXED.templates
-    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)])
     per, n = BOUNDARY.ports[BX]["leaves"] // BOUNDARY.population, wired["rows"][0]["per"]
     case = {**wired, "links": [{"template": pair, "port": "out", "value": BX}],
             "rows": [*wired["rows"], {"template": pair, "port": "out", "per": per, "runs": _runs(n, per)}]}
@@ -8189,7 +8177,7 @@ def test_round_two_refuses_a_wire_whose_readers_port_a_link_names(pieces):
     wire naming that port too holds nothing of what its sessions read. The design fails `second-wires` alone, its links
     derived (the wire's rows place the reader's units), alike in both; without the link the same design passes."""
     pair, triple = SECOND_MIXED.templates
-    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)])
     wire = wired["wires"][0]
     linked = {**wired, "links": [{"template": wire["template"], "port": wire["port"], "value": BX}]}
     for case, codes in ((wired, []), (linked, ["second-wires"])):
@@ -8211,8 +8199,8 @@ def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
     other than the writer's units a block refuse the wire (`second-wires`)."""
     pair, triple = SECOND_MIXED.templates
     sample, units = [0, 2], [1, 4, 6, 9]
-    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple}, allow=True)
-    wired = _second_case(SECOND_MIXED, True, sample, units, wires=[(triple, pair)], allow=True)
+    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple})
+    wired = _second_case(SECOND_MIXED, True, sample, units, wires=[(triple, pair)])
     lx, wx = (c["statements"][1]["registered"]["ports"]["x"] for c in (linked, wired))
     (lr,), (wr,) = linked["rows"], wired["rows"]
     assert (lr["per"], lr["runs"], lx["reads"], lx["leaves"]) == (3, [[0, 2, 0, 1]], [0, 1, 6, 7], 12)
@@ -8263,8 +8251,8 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     is `second-read`'s."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
-    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
+    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair})
     both = _shared_at(own, 0, ("out", "x"), reads=("out",))
     mine = both["statements"][0]["registered"]["ports"]["x"]
     assert both["statements"][0]["header"]["shared_rows"] == {"out": 6, "x": 6} == both["refs"][pair]["shared_rows"]
@@ -8301,7 +8289,7 @@ def test_round_two_takes_a_statement_of_only_its_sampled_blocks(pieces):
     header shares rows at it); and a sampled slot read at another slot's row (`second-read`)."""
     pair, triple = SECOND_MIXED.templates
     sample, second = [0, 2], [1, 4, 6, 9]
-    own = _second_case(SECOND_MIXED, True, sample, second, links={triple}, own={pair}, allow=True)
+    own = _second_case(SECOND_MIXED, True, sample, second, links={triple}, own={pair})
     whole = _shared_at(_shared_at(own, 0, ("out", "x"), reads=("out",)), 1, ("out", "x"), reads=("out",))
     one, both = _sampled_at(whole, 0), _sampled_at(_sampled_at(whole, 0), 1)
     s0 = one["statements"][0]
@@ -8317,7 +8305,6 @@ def test_round_two_takes_a_statement_of_only_its_sampled_blocks(pieces):
         (whole, []),
         (one, []),
         (both, []),
-        ({**one, "allow": False}, ["two-stage-form"]),
         (_second_with(one, 0, header={**units(indices=[1, 4, 5]), "instances": 3}),
          ["second-header", "second-population", "second-sample"]),
         (_second_with(one, 0, header={**units(indices=[1]), "instances": 1}),
@@ -8357,9 +8344,9 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
     (`_read_registered`): the run never chooses the value, nor the rows."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
-    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
+    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple})
+    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair})
     ref = linked["ref_reads"][triple]
     x = ref["ports"]["x"]
     assert honest["ref_reads"] == {pair: None, triple: None}
@@ -8408,8 +8395,8 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
     after the first stage's sample, the first is refused by name beside the read's own code (`second-inputs`)."""
     pair, triple = SECOND_MIXED.templates
     sample, units = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, units, allow=True)
-    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, sample, units)
+    linked = _second_case(SECOND_MIXED, True, sample, units, links={triple})
     for x in range(10):
         case, codes = _read_interior(honest, x), [] if x < 2 else ["second-read"]
         got = second_statements(copy.deepcopy(case))
@@ -8427,8 +8414,8 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
         got = second_interior_reads(copy.deepcopy(case))
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
-    _, own, statements = _second_own(_read_interior(honest, 0))
-    v = SS.check_twin(True, own, statements)
+    own, statements = _second_own(_read_interior(honest, 0))
+    v = SS.check_twin(own, statements)
     assert v.ok and SS.attach({"checks": {}}, v, SS.interior_reads(own, statements))["interior_reads"] == [h]
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
 
@@ -8443,7 +8430,7 @@ def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_i
     root, an index) reaches a template's parameter this way, and only such a value: one the prover registers under
     the link's name is refused (`second-inputs`), though the read of it is placed alike."""
     _, triple = SECOND_MIXED.templates
-    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
+    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple})
     for x in range(6):
         case, codes = _read_linked(linked, x), [] if x == 0 else ["second-read"]
         got = second_statements(copy.deepcopy(case))
@@ -8470,7 +8457,7 @@ def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
     (`second-values`). `test_lean_registered_bit_rows.py`'s supplied value opens under its `row-seg/v1` read at that
     root alone."""
     _, triple = SECOND_MIXED.templates
-    linked = _row_schema(_second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True),
+    linked = _row_schema(_second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}),
                          G.SCHEMA_SEG)
     value = {schema: _supplied_linked(linked, schema) for schema in G.SCHEMAS}
     assert len({v["root"] for v in value.values()}) == len(G.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
@@ -8493,8 +8480,8 @@ def test_round_two_refuses_an_interior_that_registers_a_name_round_one_has(piece
     linked, the interior's value of the link's name beside the boundary's port of it (`_read_linked`, `kept`), refused
     though the read as placed passes `second-read`, and with it at the boundary port's root."""
     _, triple = SECOND_MIXED.templates
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
-    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
+    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple})
     names = len(SECOND_BOUNDARY["roots"]) + len(SECOND_BOUNDARY["registered"])
     unreturned = {**honest, "returns": []}
     cases = [*((_shadowing(unreturned, x), ["second-interior-names"]) for x in range(names)),
@@ -8519,8 +8506,8 @@ def test_round_two_reads_what_a_replay_block_returns_only_at_round_ones_port(pie
     read at the boundary record's port."""
     _, triple = SECOND_MIXED.templates
     assert SS.replay_returns(BOUNDARY.program, codec.descriptor_id(BLOCK), SECOND_BOUNDARY) == (BOUT,)
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
-    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
+    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple})
     assert honest["returns"] == linked["returns"] == [BOUT]
     ref = linked["ref_reads"][triple]
     out = {**linked, "links": [{**linked["links"][0], "value": BOUT}], "ref_reads": {**linked["ref_reads"], triple: {
@@ -8561,7 +8548,7 @@ def test_round_two_takes_a_value_of_the_interior_registration_only_as_the_verifi
     interior record, another value, a position or the window, the first is refused by name, and with `h` alone held,
     or `opened` filled from a table's name left unresolved, `opened` is (`_verifier_held`). The code is reported beside the others: the honest
     run's other checks still pass."""
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
     filled = _read_interior(honest, 0)
     assert sorted(filled["supplied"]) == ["h", "opened"]
     for x, want in ((0, "h"), (1, None), (2, "h"), (3, "h"), (4, "h"), (5, "h"), (6, "opened"), (7, "opened")):
@@ -8588,7 +8575,7 @@ def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_th
     as a table's name; a value no link names is; and the salt is,
     where another template's reference reads it. A key the block computes, a wire, is refused with its own reason
     (`KEY_WHY`). The read's template is no part's here, so every case is refused as a design too (`second-links`)."""
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
     others = {1: "tok", 6: "root", 7: "root", 17: "unread", 21: "salt", 30: "root"}
     for x in range(OPENINGS):
         case = _read_opening(honest, x)
@@ -8610,8 +8597,8 @@ def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
     its session up as two tables, or names no table count, is refused, even beside one that names one table."""
     triple = SECOND_MIXED.templates[1]
     sample, drawn = [0, 2], [1, 4, 6, 9]
-    honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
-    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, allow=True)
+    honest = _second_case(SECOND_MIXED, True, sample, drawn)
+    linked = _second_case(SECOND_MIXED, True, sample, drawn, links={triple})
     s0, v0, v1 = honest["statements"][0], honest["verdicts"]["lean-verify/0"], linked["verdicts"]["lean-verify/1"]
 
     def verdict(c: dict, name: str, v: dict) -> dict:
@@ -9224,7 +9211,7 @@ def test_round_two_of_record_is_the_twin_held_to_the_leans_codes_on_tampered_inp
     """`second_stage.check` over runs a prover tampered with: no statements, one dropped, a read of a value neither docket
     registers (`second-read`). The Lean's codes (`second_statements`) are the verdict, and the same call with any other
     codes is `disagree` alone."""
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9])
     cases = [honest, {**honest, "statements": None}, {**honest, "statements": honest["statements"][:-1]},
              _read_interior(honest, 5)]
     refused = 0
@@ -9232,8 +9219,8 @@ def test_round_two_of_record_is_the_twin_held_to_the_leans_codes_on_tampered_inp
         kind, body = D.replay(SECOND_STATEMENTS, case, pieces)
         assert kind == "output"
         lean = json.loads(body)["codes"]
-        allow, own, statements = _second_own(copy.deepcopy(case))
-        assert list(SS.check(allow, own, statements, lean).codes) == lean
-        assert list(SS.check(allow, own, statements, [*lean, "second-read"]).codes) == ["disagree"]
+        own, statements = _second_own(copy.deepcopy(case))
+        assert list(SS.check(own, statements, lean).codes) == lean
+        assert list(SS.check(own, statements, [*lean, "second-read"]).codes) == ["disagree"]
         refused += bool(lean)
     assert refused >= 2 and not json.loads(D.replay(SECOND_STATEMENTS, honest, pieces)[1])["codes"]
