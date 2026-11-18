@@ -7,7 +7,7 @@ and nothing is scheduled meanwhile, so nothing is on the GPU and the host has ev
 
 - the KV pool (`KvPool`): every storage under the model runner's KV cache, copied to pinned host memory and hashed where
   it lies by the row-table kernels (`row_tables_device.step_roots`, one table a layer and one row a block, so the root
-  commits each block id's bytes), with a per-block fingerprint that only locates a difference;
+  commits each block id's bytes, under salts fixed for the pool's life: `KvPool.salted`), with a per-block fingerprint that only locates a difference;
 - the scheduler: each `Request` whole (prompt, outputs so far, ``num_computed_tokens``, sampling parameters, block
   hashes, async scheduling's placeholders and lag counters), pickled with its block hasher named rather than held; and
   every attribute of the scheduler, its KV cache manager, coordinator and per-group managers that is plain data or
@@ -34,6 +34,7 @@ import enum
 import hashlib
 import io
 import json
+import os
 import pickle
 import re
 import time
@@ -41,6 +42,8 @@ from collections import Counter, deque
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, NamedTuple
+
+from verity.commitments import salt_file as SF
 
 SCHEMA = "verity-bench/serve-tax/boundary/v0"
 PRIMS = (type(None), bool, int, float, str, bytes)
@@ -683,7 +686,7 @@ class KvPool:
     first reach them), each layer's view of its storage (``views``), and, where every layer lays its blocks out first and
     contiguous, each layer as rows of int8, one row a block (``rows``)."""
 
-    def __init__(self, kv_caches: Iterable[Any], num_blocks: int) -> None:
+    def __init__(self, kv_caches: Iterable[Any], num_blocks: int, group: int = 9) -> None:
         import torch
 
         layers = [x for t in kv_caches for x in (t if isinstance(t, (list, tuple)) else (t,))]
@@ -700,6 +703,39 @@ class KvPool:
         ok = all(x.shape[0] == num_blocks and x.is_contiguous() for x in layers)
         self.rows = [x.view(torch.int8).view(num_blocks, -1) for x in layers] if ok else None
         self.nbytes = sum(int(f.numel()) for f in self.storages)
+        self.calls = self._calls(group)
+        self.salts: list[bytes] | None = None
+
+    def _calls(self, group: int) -> list[dict[str, Any]]:
+        """The outputs of each `row_tables_device.step_roots` call that hashes the pool: rows of 9 layers' tables a call,
+        one row a block, or without rows each storage as 1 MiB rows, 4,096 a call."""
+        import torch
+
+        if self.rows:
+            ids = [("kv", b) for b in range(self.num_blocks)]
+            zero = torch.zeros(self.num_blocks, dtype=torch.float32, device=self.rows[0].device)
+            return [{f"model.layers.{i}.kv": (ids, self.rows[i], zero) for i in range(lo, min(lo + group, len(self.rows)))}
+                    for lo in range(0, len(self.rows), group)]
+        k, out = 1 << 20, []
+        for f in self.storages:
+            r = f[: f.numel() // k * k].view(torch.int8).view(-1, k)
+            for lo in range(0, r.shape[0], 4096):
+                c = r[lo:lo + 4096]
+                out.append({"kv": ([("kv", i) for i in range(c.shape[0])], c, c.new_zeros(c.shape[0], dtype=torch.float32))})
+        return out
+
+    def salt_rows(self) -> dict[str, int]:
+        """Each call's rows by its name in the pool's salt file."""
+        return {f"kv.{j}": sum(len(ids) for ids, _c, _s in call.values()) for j, call in enumerate(self.calls)}
+
+    def salted(self, path: str | Path) -> KvPool:
+        """The pool with its rows' salts read from the salt file ``path`` (`draw_salts`), refused unless it holds this
+        pool's rows: equal bytes then give equal roots in any process that reads the same file."""
+        want = self.salt_rows()
+        if (got := SF.params(path)) != want:
+            raise ValueError(f"{path}: salts for {got}, not this pool's calls {want}")
+        self.salts = [SF.read(path, name) for name in want]
+        return self
 
     def layout(self) -> dict[str, Any]:
         return {"storages": [int(f.numel()) for f in self.storages], "views": self.views, "num_blocks": self.num_blocks,
@@ -710,34 +746,20 @@ class KvPool:
 
         return torch.empty(self.nbytes, dtype=torch.uint8, pin_memory=True)
 
-    def take(self, host: Any = None, group: int = 9, key: bytes = bytes(32), fingerprint: bool = True) -> dict[str, Any]:
-        """The pool's root (the row-table kernels': one table a layer, one row a block, under ``key``; the zero key by
-        default, so equal bytes give equal roots in any process), unless ``fingerprint`` is false each block's
-        fingerprint (int64 per block and layer, a fixed random linear form of its words: only to locate a difference),
+    def take(self, host: Any = None, fingerprint: bool = True) -> dict[str, Any]:
+        """The pool's root (the row-table kernels': one table a layer, one row a block, under its salts, `salted`),
+        unless ``fingerprint`` is false each block's fingerprint (int64 per block and layer, a fixed random linear form of its words: only to locate a difference),
         and, with ``host``, its bytes copied there; all at once on three streams, waited on."""
         import torch
 
         from verity_vllm.commit import row_tables_device as RTD
 
+        if self.salts is None:
+            raise RuntimeError("a pool is hashed under its salts: salted(path) first")
         dev = self.storages[0].device
         cur = torch.cuda.current_stream(dev)
         out: dict[str, Any] = {}
-        pend = []
-        if self.rows:
-            ids = [("kv", b) for b in range(self.num_blocks)]
-            zero = torch.zeros(self.num_blocks, dtype=torch.float32, device=dev)
-            for lo in range(0, len(self.rows), group):
-                tabs = {f"model.layers.{i}.kv": (ids, self.rows[i], zero) for i in range(lo, min(lo + group, len(self.rows)))}
-                pend.append(RTD.step_roots(bytes(64), 0, tabs, key, timing=True))
-        else:
-            k = 1 << 20
-            for f in self.storages:
-                r = f[: f.numel() // k * k].view(torch.int8).view(-1, k)
-                for lo in range(0, r.shape[0], 4096):
-                    c = r[lo:lo + 4096]
-                    pend.append(RTD.step_roots(bytes(64), 0, {"kv": ([("kv", i) for i in range(c.shape[0])], c,
-                                                                   c.new_zeros(c.shape[0], dtype=torch.float32))},
-                                               key, timing=True))
+        pend = [RTD.step_roots(bytes(64), 0, call, salts=ys, timing=True) for call, ys in zip(self.calls, self.salts)]
         copy_ms = None
         if host is not None:
             ready = torch.cuda.Event()
@@ -800,6 +822,16 @@ class KvPool:
         return size
 
 
+#: the pool's salt file in its ``kv_dir`` (`draw_salts`)
+SALTS = "kv.salts"
+
+
+def draw_salts(path: str | Path, rows: dict[str, int]) -> Path:
+    """A pool's salt file at ``path``, replacing one there: 192 fresh OS bytes for each of ``rows[name]`` rows
+    (`KvPool.salt_rows`), drawn once for the pool's life and read by every process that hashes it."""
+    return SF.write(path, {name: os.urandom(n * SF.SALT_BYTES) for name, n in rows.items()})
+
+
 def write_host(host: Any, path: str, chunk: int = 1 << 30) -> int:
     """A pinned host buffer's bytes to ``path``, a chunk at a time."""
     mv = memoryview(host.numpy())
@@ -818,28 +850,34 @@ KV_COPY = ("all", "first", "none")
 
 
 def rank_pool(worker: Any, num_blocks: int, copy: str = "all") -> dict[str, Any]:
-    """This rank's `KvPool` over its model runner's KV cache, kept for `rank_take`, with a pinned host buffer if ``copy``
-    (`KV_COPY`) names the rank; hashed once here, so that the hash kernels are built before the first edge. What it
-    holds and the first hash's seconds. ``worker`` is as ``collective_rpc`` hands it."""
+    """This rank's `KvPool` over its model runner's KV cache, kept for `rank_salted` and `rank_take`, with a pinned host
+    buffer if ``copy`` (`KV_COPY`) names the rank. What it holds and its salt file's rows (`KvPool.salt_rows`).
+    ``worker`` is as ``collective_rpc`` hands it."""
     if copy not in KV_COPY:
         raise ValueError(f"copy is one of {KV_COPY}, not {copy!r}")
     kv = KvPool(worker.model_runner.kv_caches, num_blocks)
     host = kv.host() if copy == "all" or (copy == "first" and worker.rank == 0) else None
-    t = time.perf_counter()
-    kv.take(fingerprint=False)
     RANKS[worker.rank] = {"kv": kv, "host": host}
     return {"rank": worker.rank, "bytes": kv.nbytes, "storages": len(kv.storages), "layers": len(kv.views),
-            "rows": kv.rows is not None, "host_bytes": kv.nbytes if host is not None else 0,
-            "build_s": time.perf_counter() - t}
+            "rows": kv.rows is not None, "host_bytes": kv.nbytes if host is not None else 0, "salt_rows": kv.salt_rows()}
 
 
-def rank_take(worker: Any, key: bytes) -> dict[str, Any]:
+def rank_salted(worker: Any, path: str) -> dict[str, Any]:
+    """This rank's pool salted from the salt file ``path`` (`KvPool.salted`), the one every rank reads, and hashed once,
+    so that the hash kernels are built before the first edge; the hash's seconds."""
+    kv = RANKS[worker.rank]["kv"].salted(path)
+    t = time.perf_counter()
+    kv.take(fingerprint=False)
+    return {"rank": worker.rank, "build_s": time.perf_counter() - t}
+
+
+def rank_take(worker: Any) -> dict[str, Any]:
     """At a drained edge, this rank's part of the boundary state where it lies: its KV pool (`rank_pool`'s) hashed under
-    ``key`` and copied to its host buffer if it has one, then its runner rows and the process's generators, all kept here
+    its salts and copied to its host buffer if it has one, then its runner rows and the process's generators, all kept here
     until the next edge replaces them. The pool's root, the bytes copied and each part's seconds."""
     me = RANKS[worker.rank]
     t0 = time.perf_counter()
-    kv = me["kv"].take(me["host"], key=key, fingerprint=False)
+    kv = me["kv"].take(me["host"], fingerprint=False)
     t1 = time.perf_counter()
     me["rows"] = {"runner": runner_state(worker.model_runner), "rng": rng_state()}
     t2 = time.perf_counter()

@@ -296,7 +296,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-veri
               "verity/protocols/resource_accounting/network/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-verifier-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-attester-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
               "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
