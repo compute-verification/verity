@@ -1350,6 +1350,27 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
 
 
+#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
+#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
+PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
+                                                    "remote": {p: "piece" for p in PREMISES}}
+#: what a premise's ``why`` says of who ran its check (`ran_by`)
+RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
+          "lean": "recomputed on the compose node by the Lean verifier",
+          "device": "run by an auditor's device"}
+
+
+def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
+    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
+    doc = row.get("development")
+    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        return dict(row)
+    runners = PREMISE_RUNNERS[product]
+    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
+                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
+
+
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
          check: Check, statements: Path | None = None, live: Path | None = None,
          lean_answers: Path | None = None) -> dict[str, Any]:
@@ -2615,7 +2636,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
