@@ -149,6 +149,14 @@ def pytest_collection_modifyitems(items) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _one_exchange_a_test():
+    """What a test files on or subscribes to the process's exchange (`messages.current`) never reaches the next test."""
+    yield
+    if (m := sys.modules.get("verity_vllm.messages")) is not None:
+        m.close()
+
+
+@pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
     """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
     SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""

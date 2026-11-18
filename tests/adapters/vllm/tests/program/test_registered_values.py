@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.registry import b1, hopper
-from verity_vllm.definitions.registry import fa2_check_inf as F2
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry import value_inputs as VI
-
 from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import value_inputs as VI
 
 
 def _bf16(rng, n: int, scale: float = 1.0) -> list[int]:
@@ -93,6 +93,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     """A tiny greedy serve derived with `registered_values`: the norms' eps and the attention scale are the fields of the registered
     `values` parameter, held as no constant, and the Program computes what the constants derivation's flat Program computes."""
     import torch
+
     from verity_vllm.definitions.numerics.serve3_reference import materialize
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.vllm_derive import derive_report
@@ -135,11 +136,11 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     """The tiny registered-values serve on bits: every Call has a Boolean version (the norms with eps an input, `Attention_v14`),
     the lift is σ of the word function, and the `values` parameter is the fields' bits."""
     import torch
-    from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.vllm_derive import derive_report
-
     from verity.circuits import boolean as BL
     from verity.circuits.ops.boolean import versions as BB
+
+    from verity_vllm.program.frontend import derive_examples as ex
+    from verity_vllm.program.frontend.vllm_derive import derive_report
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):

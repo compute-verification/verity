@@ -262,8 +262,8 @@ heads need not sort a phase's rows into the same classes; under the head read a 
 accept under another head counts for nothing.
 
 A verdict states two fields more, and both names are its verifier's own: `withheld`, null or the one word for
-what the verifier held its accept back for (today `two-stage-form`, which only the compute audit's second stage
-states), and `codes`, a list of the verifier's own code words, empty on an accept. The charge reads neither: a
+what the verifier held its accept back for (`two-stage-form`, which only the compute audit's second stage states, and
+which the verifier no longer gives while its switch is on), and `codes`, a list of the verifier's own code words, empty on an accept. The charge reads neither: a
 verdict counts only where `accepted` is exactly true, and a withheld one leaves its class at its whole schedule
 as a refused one does, under any head. A line says "withheld" with the word of a verdict that is not accepted and
 states one, and "refused" where `withheld` is null; `codes` is handed on as written, beside the six fields. Every

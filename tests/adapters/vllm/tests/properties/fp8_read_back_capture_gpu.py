@@ -453,6 +453,7 @@ def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -
     """Every saved row through the Definition's evaluator; with ``library``, the loaded vLLM's ``_C_stable_libtorch.abi3.so``
     by sha256 (against ``expect_sha256``, a build whose SASS was read, where given) and its kernel's SASS."""
     from verity.circuits.evaluation import evaluate_batch
+
     from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
     D = U.glm53_row()

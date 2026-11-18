@@ -154,7 +154,7 @@ def zk_check(partition: Mapping[str, Any], tps: Iterable[Any]) -> None:
 
 #: the rows of DSA's long row's index units that the verifier supplies (a chunk's ``c``, a slot's ``j``: each an I32, its index
 #: among its template's units of an instance), by family, and the row format they are committed in, the one place that names it
-INDEX_ROWS = {"DsaPositionsChunk_v1": "c", "DsaPositionsSlot_v1": "j"}
+INDEX_ROWS = {"DsaPositionsChunk_v1": "c", "DsaPositionsSlot_v2": "j"}
 INDEX_SCHEMA = IF.V2
 
 

@@ -7,7 +7,7 @@ its account in the output accounting (the advice through `reads.gate`):
   public bound on the advice's length in bits, and the advice code, if the registration selects it (`Registered.code`).
 - `salt`: the window's seed salt, public, which a stochastic request's seed derives from where its body names none
   (`reads.seed_of`): the bytes of the window record's ``seed_salt``.
-- `advice`: I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity_vllm.pipeline.advice_code.format`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
   code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network attester's certified record
@@ -124,17 +124,22 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-import verity.protocols.resource_accounting.network.verifier.advice as I1
+import verity_vllm.pipeline.advice_code.format as I1
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
-from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
+from verity_torch.prune import dead_units
+
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.engine.profiles.engine_classes import (
+    CLASS_G,
+    CLASS_G_EXECUTIONS,
+    CLASS_G_LIMITS,
+)
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
-from verity_torch.prune import dead_units
-from verity_vllm.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape

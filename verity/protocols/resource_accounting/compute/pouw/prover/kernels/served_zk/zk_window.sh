@@ -13,7 +13,8 @@
 # spends nothing on building; its sums are checked again before the lease.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
-WORK=/workspace/pouw/mvp-e2e; PASSES=$WORK/passes/$ID; CUDA=/usr/local/cuda-13.0
+WORK=/workspace/pouw/mvp-e2e; PASSES=$WORK/passes/$ID
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}; export CUDA_HOME
 S=$(mktemp -d /workspace/pouw/tmp-served-zk-window.XXXXXX); trap 'rm -rf "$S"' EXIT
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 stamp() { echo "served-zk: $* at $(date -u +%H:%M:%SZ)"; }
@@ -23,7 +24,7 @@ B=${PREBUILT:-$S}
 if [ "$MODE" = build ] || [ -z "${PREBUILT:-}" ]; then
   stamp "ship and hm96_rows.cubin build into $B"
   mkdir -p "$B" && rm -rf "$B/ship-${HEAD:0:8}"
-  CUDA=$CUDA bash benchmarks/pouw/pearl_c_sm120/ship.sh "$B/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+  bash benchmarks/pouw/pearl_c_sm120/ship.sh "$B/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
     || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
   tar -cf "$B/ship.tar" -C "$B" "ship-${HEAD:0:8}"
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$B/hm96_rows.cubin" \

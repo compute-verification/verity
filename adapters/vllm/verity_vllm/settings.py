@@ -247,7 +247,7 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- other programs' variables the library reads
     S("CUBLASLT_WORKSPACE_SIZE", str, None, VALUE, "cuBLASLt's workspace in KiB; the replay's dependencies record it"),
     S("CUBLAS_WORKSPACE_CONFIG", str, None, VALUE, "cuBLAS's workspace configuration, :SIZE:COUNT; the replay's dependencies record it"),
-    S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
+    S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build refuses without it"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
     S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
     S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
@@ -273,7 +273,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
     S("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", str, None, VALUE, "1, torch's default: Inductor picks a reduction kernel's tiling per "
       "process at its first launch; an engine pins 0 (`engine.env.ENGINE`) and refuses another"),
-    S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
+    S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it from its card file)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
       "credential, which a record names and never holds", secret=True),
@@ -353,6 +353,14 @@ def get(name: str, environ: Mapping[str, str] | None = None) -> Any:
         return s.type(v)
     except ValueError as e:
         raise ValueError(f"{name}={v!r}: {e}") from None
+
+
+def cuda_home() -> str:
+    """The CUDA toolkit an extension build compiles with (`CUDA_HOME`), refused by name when unset."""
+    home = get("CUDA_HOME")
+    if not home:
+        raise ValueError("CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)")
+    return home
 
 
 def put(name: str, value: str) -> None:

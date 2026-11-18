@@ -94,7 +94,7 @@ def test_steps_count_decode_rows_past_k_and_their_longest(tmp_path):
 
 def test_without_failed_rows_only_the_base_is_priced_and_no_point_stands(tmp_path, capsys):
     out = job(tmp_path, {"rows_long": 1, "rows_tied": 0, "rows_at": 1, "calls": 1})
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly = r["layers"][0]
     assert not ly["failed_priced"] and r["point"] is None and "no failed rows" in r["no_point"]
@@ -123,7 +123,7 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     mine = {"arm": "prod-record", "over": "prod-trace", "value": 0.02, "ci95": [0.01, 0.03], "pairs": 2}
     out = job(tmp_path, {"rows_long": 1, "rows_tied": 0, "rows_bisected": 80, "rows_refined": 1600, "rows_at": 1,
                          "calls": 1}, [below, mine])
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly, p = r["layers"][0], r["point"]
     assert ly["failed_priced"] and ly["each"][0]["pass"] == "cut"
@@ -139,21 +139,21 @@ def test_the_point_is_the_priced_layer_and_the_measured_one_below_marked_modeled
     assert p["ci95"] == pytest.approx([100 * (c["lo"] - 0.01), 100 * (c["hi"] + 0.02)])
     assert p["inputs"][0].startswith("modeled: ")
     # the door's call: the same layers and point, its runs in the point's inputs, under the id it gives
-    d = Q.price(out, Q.units(units_file(tmp_path)), tested_by="r-capture", units_from="r-minify", ours=["prod-record"],
+    d = Q.price(out, Q.units(units_file(tmp_path)), tested_by="r-capture", units_from="r-minify", ours=["prod-record"], card="h200",
                 name="x/priced")
     assert d["layers"][0]["cost"] == c and d["member"] == p["member"] and "no_point" not in d
     assert d["point"]["name"] == "x/priced" and d["point"]["tested_by"] == "r-capture"
     assert "at r-minify's device times a call" in d["point"]["inputs"][0]
     with pytest.raises(SystemExit, match="none of prod-record-bisect was served"):
-        Q.price(out, Q.units(units_file(tmp_path)), tested_by="r", units_from="u", ours=["prod-record-bisect"])
+        Q.price(out, Q.units(units_file(tmp_path)), tested_by="r", units_from="u", ours=["prod-record-bisect"], card="h200")
     with pytest.raises(SystemExit):
-        Q.main([str(out), "--units", str(units_file(tmp_path)), "--result"])
+        Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--result"])
 
 
 def test_a_lifetime_whose_server_ran_no_canonical_top_k_is_refused(tmp_path):
     out = job(tmp_path, None)
     with pytest.raises(SystemExit, match="no canonical top-k"):
-        Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-trace"])
+        Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-trace"])
 
 
 def steps_file(d: Path, lines: list[dict], stats=("rows_long", "rows_tied", "rows_bisected")) -> None:
@@ -190,7 +190,7 @@ def test_counts_by_step_price_each_steps_own_failed_rows_on_its_slowest_card(tmp
             {"step": 1, "tokens": 24, "device": "cuda:1", "rows_long": 9, "rows_tied": 0, "rows_bisected": 12},
             # the second's tokens are not the trace's: it joins nothing
             {"step": 2, "tokens": 7, "device": "cuda:0", "rows_long": 9, "rows_tied": 0, "rows_bisected": 5}])
-    assert Q.main([str(out), "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", str(units_file(tmp_path)), "--ours", "prod-record"]) == 0
     x = json.loads((out / "priced.json").read_text())["layers"][0]["each"][0]
     assert x["counts_by_step"] and x["rows_at"] is None and x["unjoined_steps"] == 1
     assert x["rows_failed_a_card"] == {"rows_bisected": 12} and x["prefill_rows_failed_a_card"] == {"rows_bisected": 30}
@@ -211,7 +211,7 @@ def test_prefill_steps_are_priced_only_at_prefill_unit_times_and_else_given_meas
                                                                   for k in (1, 2)}}))
     (out / "prod_repro.json").write_text(json.dumps({"run": "r-ab", "layers": {"each": [below]}}))
     units = str(units_file(tmp_path))
-    assert Q.main([str(out), "--units", units, "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", units, "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     ly = r["layers"][0]
     assert not ly["prefill_priced"] and "--prefill-units" in ly["prefill_refused"]
@@ -223,7 +223,7 @@ def test_prefill_steps_are_priced_only_at_prefill_unit_times_and_else_given_meas
     assert any(i.startswith("measured, not priced: prod-record's prefill steps") for i in p["inputs"])
     assert "prefill steps not priced: no prefill unit time" in capsys.readouterr().out
     # with prefill unit times, the prefill step is priced at them and is no measured term of the point
-    assert Q.main([str(out), "--units", units, "--prefill-units", units, "--ours", "prod-record"]) == 0
+    assert Q.main([str(out), "--card", "h200", "--units", units, "--prefill-units", units, "--ours", "prod-record"]) == 0
     r = json.loads((out / "priced.json").read_text())
     x = r["layers"][0]["each"][0]
     pb = Q.units(units_file(tmp_path))["present"]["base"]
@@ -251,3 +251,14 @@ def test_the_measured_cost_adjusted_for_steps_is_paired_by_pass_and_marked_model
     assert a["ci95"][0] < a["value"] < a["ci95"][1]
     assert 0.015 < a["value"] < 0.025
     assert Q.adjusted(out, "prod-record", "prod") is None
+
+
+@pytest.mark.parametrize("card", [None, "h20"])
+def test_a_card_no_gpu_card_file_names_is_refused(tmp_path, card):
+    """The card is a member's name part: given, and a GPU card file's `short`, else refused by name."""
+    out = tmp_path / "out"
+    out.mkdir()
+    with pytest.raises(SystemExit) as e:
+        Q.main([str(out), *(["--card", card] if card else []), "--units", str(units_file(tmp_path)), "--ours", "prod-record"])
+    assert card is None or "is the `short` of no GPU card file" in str(e.value.code)
+

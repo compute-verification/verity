@@ -589,6 +589,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/experimental/dither/prover/pouw_scheme.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",
@@ -871,8 +872,9 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/response_tie.py",
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
+    "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "verity/protocols/resource_accounting/network/prover/window_chain.py",
+    "adapters/vllm/verity_vllm/pipeline/window_chain.py",
     "verity/protocols/resource_accounting/network/prover/window_charge.py",
 ]
 
