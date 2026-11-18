@@ -719,7 +719,7 @@ def _two_stage_cases(a: dict) -> dict[str, dict]:
 
 def test_spot_reads_the_two_stage_form(remote_server):
     """SPOT reads two levels with their own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`) and refuses
-    evidence of other levels than the params' by name (`VStar.Recursive.Sampled.mismatch`). Remote, every other
+    evidence of other levels than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every other
     subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: two levels' params missing a key
     and v2's params with v2's evidence naming two levels, each refused by a reading of keys, in Lean as in Python
     (`_two_stage_cases`); and v2's params with two levels' evidence, which the Lean reads in full and refuses as a
