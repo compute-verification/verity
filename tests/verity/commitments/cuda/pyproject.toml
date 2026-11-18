@@ -10,4 +10,6 @@ untraced = ["test_commit_gpu_salts.py", "test_row_commit.py", "test_sha512.py"]
 # which import verity.circuits, verity.commitments.crypto and verity.errors.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits",
           "verity/commitments/crypto",
+          # a device build's target is the first GPU's card file's arch (cuda_build.arch), read as the engine's callers do
+          "verity/device.py", "verity/channel.py", "calibration/hardware/cards",
           "adapters/vllm/verity_vllm/definitions/__init__.py"]

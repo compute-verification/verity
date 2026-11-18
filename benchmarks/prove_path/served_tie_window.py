@@ -27,8 +27,10 @@ rows with their salts, the requests), and it establishes nothing for the auditor
     a decode row's request id changed to another arrival's;
   - one with a row of another request in place of one.
 
-  ``ids`` is IoTieRequest's statement in integers: each token's committed input id is its request's prompt-and-output id
-  at its position, read through `served_tie.ids`. The tie binds start and n, so the id is ``ids``' to refuse.
+  ``ids`` is a check in integers, in the clear, against the serve's own log: each token's committed input id, read
+  through `served_tie.ids`, is its request's prompt-and-output id at its position in ``requests.jsonl``. The ingress
+  tie (IoTieRequest) holds prompt lengths and arrival order, not the ids' values, and no proof of ``ids`` runs. The
+  tie binds start and n, so the id is ``ids``' to refuse.
 
 The port is a stream tensor of its own. The embedding reads ``model.embed_tokens/in``, a second copy, until vllm aliases the
 port's ranges as the embedding's and the rotary's inputs. So the tie binds the rows to the stream's port chunks, not yet
@@ -126,7 +128,7 @@ def statics_held(window: list, steps: list[SimpleNamespace]) -> bool:
 
 
 def ids_ok(St, window: list, steps: list[SimpleNamespace], seqs: dict[int, list[int]]) -> bool:
-    """IoTieRequest's statement in integers: slot k's tokens [lo, lo + n) carry its request's ids at [start, start + n)."""
+    """Slot k's tokens [lo, lo + n) carry its request's ids at [start, start + n) of ``seqs``, the serve's own log."""
     for u, rows in enumerate(window):
         lo = 0
         for _slot, req, _kind, start, n in rows or ():

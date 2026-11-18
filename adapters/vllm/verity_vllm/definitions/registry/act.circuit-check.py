@@ -6,13 +6,14 @@ from typing import Any, Callable
 
 
 def _boolean_roots() -> list[Any]:
-    """`silu_and_mul`'s served row, `SiluMul_v2`, at I = 8: the word view of `boolean_silu`'s `SiluMul_v4`."""
+    """`silu_and_mul`'s served row at I = 8: `SiluMul_v2` and its Boolean form `SiluMul_v4`; `SiluMulBf16_v4` is static-free."""
     from verity.circuits.defs import bind
 
     from verity_vllm.definitions.registry import act
 
     return [
         bind(act.SiluMul, I=8),
+        bind(act.SiluMulExpf, I=8),
     ]
 
 

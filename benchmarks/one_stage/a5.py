@@ -215,7 +215,7 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import replace
@@ -442,37 +442,6 @@ def coins_sample(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, 
     finally:
         segment = coins.drawn() if a.coins is not None else None
     return stream, draw, counts, coins, segment, refused, coins.need if a.coins is not None else None
-
-
-def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, coins: AC.VerifierCoins,
-                     rec: dict, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
-                     sessions: list[str], verdicts: dict, statement: dict, given: dict, history: dict | None = None
-                     ) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record on the verifier's own coins (each stream registering with the window's history
-    tables, ``history``): its proof delivered (`Stream.deliver`) and its outcome
-    (`Stream.outcome`, ``given`` its proved units, instances, served units and session roots) with no coins' evidence,
-    whose audit record fails `run` unless the Lean verifier's whole run (`Run.run`, `coin_source` verifier, its
-    window the TP run root) is the Python's. Then the refusals that apply to the verifier's coins
-    (`a5_coins.verifier_negatives`), each its own stream's on the honest sample's bytes or the honest stream's. -> (the audit
-    record, None for a late proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
-    def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
-        late = s.deliver(d, sessions)
-        return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), s.records[-1]["audit"]
-
-    try:
-        o, result = outcome(stream, draw, None)
-        told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
-    except (S.Refused, S.Pending) as e:
-        result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
-    neg = AC.verifier_negatives(
-        lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
-        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                             **registering(a, history)),
-        stream, coins, draw, outcome, a.window_root)
-    checks = (result or {}).get("checks") or {}
-    record = {"source": stream.coins_from, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
-              "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
-    return result, neg, record
 
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
@@ -818,7 +787,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         raise SystemExit(f"--plain: {why}")
     if drawn is None and not streamed(a) and sampling_design.get("law") != "subset":
         raise SystemExit(f"a5 samples by the subset sampling design with Lean on a development challenger's coins; the partition "
-                         f"file's is {sampling_design}: sample it through a rank's service.Stream (--challenger or --coins verifier, "
+                         f"file's is {sampling_design}: sample it through a rank's service.Stream (--challenger, "
                          "a TP Commit)")
     if (why := output_refusal(a, sampled_design := D.derive(program, query, sampling_design, table))) is not None:
         summary["refused"] = why

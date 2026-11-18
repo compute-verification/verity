@@ -137,7 +137,7 @@ STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         "eps_at_delta.incorrect_at_delta.*": O}
 #: the chain's report less what `attester_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
-    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
+    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O, "tied_form": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
