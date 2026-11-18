@@ -1,5 +1,5 @@
 """The Lean decoder's width refusals against the codec's, on the inference-only difftest's mistyped descriptors
-(`desc_difftest_vectors.mistyped`) and a PoUW window's shape (`_tile_window`)."""
+(`desc_difftest_vectors.mistyped`), a PoUW window's shape (`_tile_window`) and a recut root (`_recut_root`)."""
 from __future__ import annotations
 
 import importlib.util
@@ -38,19 +38,39 @@ def _tile_window(bits: bool) -> str:
         "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
 
 
+def _recut_root(V) -> str:
+    """A root reading its registered input node, a batch of 32 `RegisteredInput16_v1`, as 16 of `RegisteredInput32_v1`,
+    its reader's references unchanged: each 16-bit leaf it reads is half of a 32-bit gate (`refs.recut`), which the codec
+    decodes and its gate layout refuses (`recut-gates`)."""
+    w = 16
+    total = V.vectors.summing(32, w, w)
+    fn = V.bind(V.CompositeDefinition("NciRecutDecl", 1, (), lambda S: ((("x", V.Array(32, V.Value(w))),), V.Value(w)),
+                                      lambda B, S, x: B.call(total, x), register=False))
+    desc = json.loads(V.codec.canonical_json(V.codec.encode_program(V.Program(fn, registered=("x",)))))
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    desc["callees"].append("RegisteredInput32_v1")
+    desc["definitions"]["RegisteredInput32_v1"] = {"form": "primitive", "id": "RegisteredInput32_v1", "params": [],
+                                                   "ret": ["Value", 32]}
+    desc["types"] += [t for t in (["Value", 32], ["Array", 16, ["Value", 32]]) if t not in desc["types"]]
+    nodes[0].update(fn=len(desc["callees"]) - 1, n=16, out=desc["types"].index(["Array", 16, ["Value", 32]]))
+    return V.codec.canonical_json(desc).decode()
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_width_refusals_agree_with_the_codec(tmp_path):
     """The inference-only difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
-    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, and a recut root as its gate layout does (`recut-gates`),
-    with the codec's message
-    (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
+    template's bits and its bits as them (`_tile_window`), and a root reading its input node recut (`_recut_root`): the
+    Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and PoUW's `Credit.programOf` share, refuses as
+    `E_REINTERPRET` exactly those the codec does, and a recut root as the codec's gate layout does (`recut-gates`), with
+    the codec's message (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py
+    --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
     with open(tmp_path / "widths.jsonl", "w") as f:
-        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)},
+                     {"program": _recut_root(V)}]:
             desc = json.loads(inst["program"])
             try:
                 refuse_recut(V.reference.codec.decode_program(desc, V.reference.declared(desc)).root)
@@ -63,4 +83,4 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
                         "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "recut": 89, "neither": 126}
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 212, "recut": 90, "neither": 126}
