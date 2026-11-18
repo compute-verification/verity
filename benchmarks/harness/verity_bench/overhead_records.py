@@ -179,12 +179,10 @@ def trial_why(store: Any, attempt: Mapping, files: str, run: str) -> str | None:
     result can't tell."""
 
     try:
-        said = _json(store, files, kit.RESULT).get("trial") is True
+        result = _json(store, files, kit.RESULT)
     except Exception as ex:  # noqa: BLE001 - the store's NotFound, named in the why
         return f"{run}'s {kit.RESULT} can't be read ({type(ex).__name__}: {ex}), so not whether it is a trial"
-    if said or kit.trial_attempt(attempt):
-        return f"{run} is a trial run ({kit.TRIAL}): its measurements are its own, and a trial is never of record"
-    return None
+    return kit.trial_why(run, attempt, result)
 
 
 def _superseded(store: Any, target: str) -> list[str]:
@@ -210,7 +208,7 @@ def of_record(store: Any, run: str) -> tuple[dict | None, list[str]]:
         doc = _json(store, files, "out/overhead.json")
     except (OSError, ValueError, KeyError) as ex:
         return None, [f"{run} has no readable out/overhead.json ({type(ex).__name__}: {ex})"]
-    whys = []
+    whys = [why] if (why := trial_why(store, attempt, files, run)) else []
     if doc.get("schema") != O.RUN_SCHEMA:
         whys.append(f"{run}'s overhead.json is {doc.get('schema')!r}, not {O.RUN_SCHEMA}")
     if RUN_RECORD not in [lab.value for lab in store.labels(run, key=RUN_OF_RECORD)]:
@@ -311,9 +309,6 @@ def record_run(store: Any, run: str, by: str = BY) -> list[str]:
 
     doc, whys = of_record(store, run)
     whys = [w for w in whys if not w.endswith(f"isn't labelled {RUN_OF_RECORD}={RUN_RECORD}")]
-    attempt, files = run_files(store, run, "run")
-    if attempt is not None and (why := trial_why(store, attempt, files, run)):
-        whys.append(why)
     if doc is None or whys:
         raise ValueError(f"{run} can't be of record: {'; '.join(whys)}")
     store.add_label(run, RUN_OF_RECORD, RUN_RECORD, by=by)
