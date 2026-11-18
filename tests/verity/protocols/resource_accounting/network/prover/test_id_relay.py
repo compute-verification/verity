@@ -115,6 +115,50 @@ def test_a_client_that_breaks_mid_request_leaves_one_record_and_the_relay_serves
     assert [r.get("broken") for r in log] == ["client", None] and (log[1]["n"], log[1]["ended"]) == (4, True)
 
 
+def test_a_server_that_resets_mid_answer_leaves_one_record_and_the_relay_serves_the_next():
+    async def go() -> tuple[bytes, bytes, list[dict]]:
+        log: list[dict] = []
+        logged, read = asyncio.Event(), asyncio.Event()
+        ticks, calls = itertools.count(1), itertools.count()
+
+        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            await reader.readuntil(b"\r\n\r\n")
+            if next(calls):
+                writer.write(b"HTTP/1.1 200 OK\r\n\r\n{}")
+                writer.close()
+                return
+            writer.write(b"HTTP/1.1 200 OK\r\n\r\npart")
+            await writer.drain()
+            await read.wait()
+            writer.get_extra_info("socket").setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+            writer.transport.abort()                     # a reset, not a close
+
+        upstream = await asyncio.start_server(handle, "127.0.0.1", 0)
+        front = R.Front(upstream.sockets[0].getsockname()[:2], P, request_of=request_of, stream_ids=stream_ids,
+                        log=lambda r: (log.append(r), logged.set()), clock=lambda: float(next(ticks)))
+        listening = await asyncio.start_server(front.handle, "127.0.0.1", 0)
+        async with upstream, listening:
+            at = listening.sockets[0].getsockname()[:2]
+            reader, writer = await asyncio.open_connection(*at)
+            writer.write(b"GET /v1/models HTTP/1.1\r\n\r\n")
+            cut = await reader.readexactly(len(b"HTTP/1.1 200 OK\r\n\r\npart"))
+            read.set()
+            await logged.wait()
+            cut += await reader.read()
+            writer.close()
+            reader, writer = await asyncio.open_connection(*at)
+            writer.write(b"GET /v1/models HTTP/1.1\r\n\r\n")
+            writer.write_eof()
+            whole = await reader.read()
+            writer.close()
+            await asyncio.gather(*front.handlers)
+        return cut, whole, log
+
+    cut, whole, log = asyncio.run(go())
+    assert cut == b"HTTP/1.1 200 OK\r\n\r\npart" and whole == b"HTTP/1.1 200 OK\r\n\r\n{}"
+    assert log == [{"broken": "server", "error": "ConnectionResetError", "at": 2.0}]
+
+
 def test_a_payload_below_an_id_event_is_refused():
     with pytest.raises(ValueError, match="an id event is at least"):
         R.Front(("127.0.0.1", 1), 137, request_of=request_of, stream_ids=stream_ids)
