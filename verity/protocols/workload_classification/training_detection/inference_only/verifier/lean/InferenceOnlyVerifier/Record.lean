@@ -89,15 +89,17 @@ A root of any other form is refused: the form reads no row it cannot show to be 
 
 ## Shared runs
 
-A registered weight that every member of a batch reads, or that several nodes read, is one run of input leaves
-handed to more than one row. The wired builder spells it as a strided part with outer stride 0 and inner stride 1
-over an input node (every member handed the one run), or as the same affine run in parts of several nodes.
-`rowRuns` tells these runs (`shared`) from runs one row reads (`own`): two runs it reads are the same run or share no
-leaf, and any other overlap is refused. Two rows of one gate are one value only where the record declares both
-rows alike, so a shared run is admitted only where every row that reads it is held as a registered read of one
-parameter, which the registration commits once. The block count counts a row whole for each unit that reads it, so
-it counts a shared weight once for each member that reads it: more than the circuit's inputs, which errs toward the
-bound.
+A registered weight that several members of a batch read, or that several nodes read, is one run of input leaves
+handed to more than one row. The wired builder spells it as a strided part over an input node with outer stride 0,
+inner stride 1, its inner count the run and its count a multiple of it: reference k is leaf k mod the run, so members
+of w leaves each read the run's successive stretches of w and, past the run, read them again (a matmul's members
+across slots sharing one row of its weight; where w is the run, every member reads all of it). Several nodes reading
+one weight are the same run in parts of each. `rowRuns` tells these runs (`shared`) from runs one row reads (`own`):
+two runs it reads are the same run or share no leaf, and any other overlap is refused. Two rows of one gate are one
+value only where the record declares both rows alike, so a shared run is admitted only where every row that reads it
+is held as a registered read of one parameter, which the registration commits once. The block count counts a row
+whole for each unit that reads it, so it counts a shared weight once for each member that reads it: more than the
+circuit's inputs, which errs toward the bound.
 
 ## Wires whole
 
@@ -353,7 +355,7 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
       if Widths.homo ty == some 1 && !on.contains i then some name else none }
 
 /-- The runs of input leaves the root's argument parts read, `(input node, first leaf, leaves)` each, none empty:
-`own`, each read by one part, and `shared`, each read by one strided part that hands every member the one run or
+`own`, each read by one part, and `shared`, each read by one strided part that reads it more than once over or
 by more than one part ("Shared runs"), in the order of their nodes and first leaves, a run read by several parts
 once for each after the first. -/
 structure Runs where
@@ -366,8 +368,8 @@ from the root's body: every part of an argument of a root node that is no input 
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
 of leaves of one of the root's input nodes (an input node a primitive or a batch of one, a leaf a gate): an affine
 part, or a strided part from a leaf at or after 0 with outer stride 0, inner stride 1 and a count a multiple of its
-inner run, which hands the run to each of its members; a batch maps every argument over its members (each has the `dims`
-resolution reads a member's leaves by); and two runs, of one argument or of two, are the same run or share no leaf.
+inner run, whose reference k is the run's leaf k mod the run; a batch maps every argument over its members (each
+has the `dims` resolution reads a member's leaves by); and two runs, of one argument or of two, are the same run or share no leaf.
 None where the root is of another form. It costs the root's argument parts, sorted. -/
 def rowRuns (P : Prog) : Option Runs :=
   let nodes := (P.defs[P.root]!).body.nodes
