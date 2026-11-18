@@ -45,7 +45,7 @@ inputs = [
     "tools/research/src/research/pythonpath.py",
     "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
-    # bench_arm loads it from its file for the call check's verdict
+    # the call check's verdict (`call_verdict`), which bench_arm's gate loads from it
     "benchmarks/pouw/pearl_c_vllm/e2e.py",
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",
     "benchmarks/pouw/settings.py",
