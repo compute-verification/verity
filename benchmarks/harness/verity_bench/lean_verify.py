@@ -81,7 +81,7 @@ from verity_flock.circuit import PARTITION_RULE as PARTITION_COVER
 from verity_flock.circuit import PARTITION_V1, meta_of, partition_digest
 
 from verity_bench import settings
-from verity_bench.checked_by import LEAN
+from verity_bench.kit_report import LEAN
 
 SCHEMA = "verity-bench/lean-verify/v1"
 #: the record's name in the directory the command writes
