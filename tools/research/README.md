@@ -191,6 +191,16 @@ needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` pl
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
 `--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
+`research run --on MACHINE --gpus N` runs the workload in such a lease; `--card N,...` makes it a lease of exactly those
+cards (gpu-lease's `--on`), and `--timed` a timed one (`gpu-lease --timed`).
+
+A pool is a machine's slots file (`slot_only.POOLS`, else `/workspace/research/locks/NAME/slots`): `research run --on MACHINE
+--pool NAME --as LANE --source .` waits in its line by `tools/check/slot.py` for the first free slot, up to `--pool-wait`
+(4 h), and runs the workload pinned to the slot's cores under `nice -n 19`, so a lane's run yields to the checks; its
+`--timeout` counts from taking the slot. `--slot NAME` takes that slot and no other (refused at launch where the file has
+no such line), and `--end UTC` is a booked period's end: the launch refuses a `--timeout` that doesn't fit before it, the
+wait gives up (exit 75, naming the end) once less than the `--timeout` is left, and the run ends by it. `--timed` runs the
+workload without the nice, for a measurement whose time is the result.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner, and goes there only through `research deploy install NODE --by WHO
