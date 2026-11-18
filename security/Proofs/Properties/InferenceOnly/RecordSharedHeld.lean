@@ -592,7 +592,7 @@ theorem sharedOf_arg {P : Prog} {sh : List Shared} (h : sharedOf P = some sh) {k
     exact hc
 
 /-- A plan's template, port, first unit and count. -/
-def Plan.at : Plan → String × String × Nat × Nat
+def planAt : Plan → String × String × Nat × Nat
   | .read tid port u0 n _ _ _ _ => (tid, port, u0, n)
   | .table tid port u0 n _ _ => (tid, port, u0, n)
 
@@ -600,7 +600,7 @@ def Plan.at : Plan → String × String × Nat × Nat
 and its first unit (`u0_eq`) and count, the row one of the port's cuts. -/
 theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
     {ds : List Decl} {s : Shared} {c : Nat} {pl : Plan} {tid port : String} {u0 n : Nat}
-    (h : sharedPlan P rs ts W ds s c = some pl) (hat : pl.at = (tid, port, u0, n)) :
+    (h : sharedPlan P rs ts W ds s c = some pl) (hat : planAt pl = (tid, port, u0, n)) :
     ∃ r t ty, rs.find? (·.node == s.node) = some r ∧ ts.find? (·.tid == r.template) = some t ∧
       (P.defs[t.defn]!).params[s.arg]? = some (port, ty) ∧ tid = r.template ∧
       u0 = (Spot.RecordText.rangesAt rs r.template).foldl (fun a q => if q.first < r.first then a + q.count else a) 0 ∧
@@ -636,14 +636,14 @@ theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} 
               · split at h <;> try (simp at h; done)
                 simp only [Option.some.injEq] at h
                 subst h
-                simp only [Plan.at, Prod.mk.injEq] at hat
+                simp only [planAt, Prod.mk.injEq] at hat
                 obtain ⟨rfl, rfl, rfl, rfl⟩ := hat
                 refine ⟨hp, rfl, rfl, rfl, ?_⟩
                 simp_all
               · split at h <;> try (simp at h; done)
                 simp only [Option.some.injEq] at h
                 subst h
-                simp only [Plan.at, Prod.mk.injEq] at hat
+                simp only [planAt, Prod.mk.injEq] at hat
                 obtain ⟨rfl, rfl, rfl, rfl⟩ := hat
                 refine ⟨hp, rfl, rfl, rfl, ?_⟩
                 simp_all
@@ -1032,7 +1032,7 @@ theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
       rw [hcuts]
       exact hrw
     · have hcommon : ∀ {pl : Plan} {tid' port' : String} {u0 n : Nat}, sharedPlan c.f.P rs' c.f.ts c.W c.x.decls s r.row = some pl →
-          pl.at = (tid', port', u0, n) → tid' = r.tid ∧ port' = r.port ∧ u0 ≤ r.unit ∧ r.unit < u0 + n := by
+          planAt pl = (tid', port', u0, n) → tid' = r.tid ∧ port' = r.port ∧ u0 ≤ r.unit ∧ r.unit < u0 + n := by
         intro pl tid' port' u0 n hplan hat
         obtain ⟨r', t', ty, hr', ht', hp', htid, hu0, hn, -⟩ := plan_of hplan hat
         rw [hfind] at hr'
