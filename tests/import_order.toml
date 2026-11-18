@@ -319,6 +319,15 @@ paths = [
 
 [[place]]
 paths = [
+    "verity/commitments/cuda/sha512_stream",
+]
+loads = [
+    "verity/commitments",
+    "verity/commitments/randomness",
+]
+
+[[place]]
+paths = [
     "verity/commitments/identity",
 ]
 trusted = true
