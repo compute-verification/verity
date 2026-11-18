@@ -1141,6 +1141,9 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
     q: list[Any] = []
     admit = sa.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
     got: list[sa.Delta] = []
+    ex = messages.Exchange()
+    admit.attach(ex)
+    ex.refuse = lambda input, why: (got.append(sa.Delta([], "", error=why)), admit.abort(input))   # the server's answer
 
     def head(n: int, run: str = RUN) -> dict[str, str]:
         return {"x-verity-release": str(n), "x-verity-release-run": run}
@@ -1219,8 +1222,10 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
 
     gate.add = counted
     admit = sa.TickAdmit(loop.submit, loop.abort, take)
+    admit.attach(hook.ex)
     server = so.Server(proto=so.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
-                       submit=loop.submit, abort=loop.abort, clock=lambda: 7, order=admit)
+                       submit=loop.submit, abort=loop.abort, clock=lambda: 7, order=admit, exchange=hook.ex,
+                       arrive=hook.arrive)
     http = so.HttpThread(server, "127.0.0.1", 0)
     runner = threading.Thread(target=loop.run, daemon=True)
     runner.start()
@@ -1346,6 +1351,7 @@ def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does()
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
         assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
         assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
+        assert so.request_line(line.decode("latin-1")) == hd.request_line(line), line
 
 
 def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_release_over_http():
@@ -1381,7 +1387,7 @@ def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_re
         wm.sendall(REL.WATERMARK_END)
         end = read_all(wm)
     assert [a.split(b"\r\n", 1)[0] for a in answers] == [b"HTTP/1.1 400 Bad Request"] * 2
-    assert all(hd.NO_REQUEST_LINE.encode() in a for a in answers)
+    assert all(so.NO_REQUEST_LINE.encode() in a for a in answers)
     assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
     assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
     s = e.gate.summary()

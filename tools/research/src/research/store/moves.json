@@ -5281,6 +5281,19 @@
     },
     {
       "paths": {
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.py": "verity/protocols/interface/charge/arith_encode.py",
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.circuit-check.py": "verity/protocols/interface/charge/arith_encode.circuit-check.py",
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.circuit-check.json": "verity/protocols/interface/charge/arith_encode.circuit-check.json",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.py": "verity/protocols/interface/charge/charge_chain.py",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.circuit-check.py": "verity/protocols/interface/charge/charge_chain.circuit-check.py",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.circuit-check.json": "verity/protocols/interface/charge/charge_chain.circuit-check.json",
+        "verity/protocols/resource_accounting/network/prover/window_charge.py": "verity/protocols/interface/charge/window_charge.py",
+        "verity/protocols/resource_accounting/network/prover/window_charge.circuit-check.py": "verity/protocols/interface/charge/window_charge.circuit-check.py",
+        "verity/protocols/resource_accounting/network/prover/window_charge.circuit-check.json": "verity/protocols/interface/charge/window_charge.circuit-check.json"
+      }
+    },
+    {
+      "paths": {
         "security/Definitions/Flock/Audit/": "security/Definitions/Spot/Sampling/",
         "security/Proofs/Flock/Soundness/Audit/": "security/Proofs/Flock/SpotFlock/Sampling/",
         "security/Proofs/Flock/Soundness/Audit/Circuit.lean": "security/Proofs/Spot/Sampling/Circuit.lean",
@@ -5314,6 +5327,22 @@
         "security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean": "security/Proofs/Spot/Sampling/StratifiedProj.lean",
         "security/Proofs/Flock/Soundness/Audit/Window.lean": "security/Proofs/Spot/Sampling/Window.lean",
         "security/Proofs/Flock/Soundness/Audit/Work.lean": "security/Proofs/Spot/Sampling/Work.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/poub/binder.py": "verity/protocols/resource_accounting/memory/poub/prover/binder.py"
+      }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1_class.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class.json",
+        "tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json": "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json",
+        "verity/protocols/resource_accounting/network/verifier/protocol/served-shape.md": "adapters/vllm/verity_vllm/compiler/served-shape.md"
       }
     }
   ]
