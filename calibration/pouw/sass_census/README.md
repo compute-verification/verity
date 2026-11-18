@@ -39,5 +39,5 @@ cuobjdump -sass lib.so | python3 sass_count.py count --source NAME > NAME.json  
 python3 sass_count.py merge counts/*.json > census.json                          # one census a device family
 python3 sass_count.py summary census.json
 python3 diff_menu.py FAMILY census.json [--out diff.json] [--unused]              # FAMILY: sm_90, sm_100 or sm_120
-python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]              # the counts in OUT/TAG/ARCH/apv.gi.sass.gz, nvdisasm -c -gi dumps
+python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] --ref ARCH [--json FILE] # the counts in OUT/TAG/ARCH/apv.gi.sass.gz, nvdisasm -c -gi dumps
 ~~~
