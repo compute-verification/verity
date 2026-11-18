@@ -129,7 +129,7 @@ def fresh(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots:
 
 
 def declaration(doc: Any) -> tuple[str, int, int, int]:
-    """A declaration's SHA-512 (its JSON, sorted keys, compact) and its natural ``c``, ``k`` and ``n``; refused
+    """A declaration's SHA-512 (its canonical JSON) and its natural ``c``, ``k`` and ``n``; refused
     (ValueError) where it isn't a JSON object holding them."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
@@ -137,7 +137,7 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
     c, k, n = got
-    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), c, k, n
+    return hashlib.sha512(codec.canonical_json(doc)).hexdigest(), c, k, n
 
 
 def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:

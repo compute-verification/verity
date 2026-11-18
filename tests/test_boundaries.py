@@ -1053,7 +1053,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
-    "adapters/vllm/verity_vllm/program/predict/scan_state.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
@@ -1183,8 +1182,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
     "protocols/proofs/spot/prover/cost/inputs.py":
         "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/resource_accounting/memory/poub/verifier/timing.py":
-        "memory-accounting: each bound's note cites the probe that measured it",
     "protocols/proofs/spot/prover/cost/transformer.py":
         "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }

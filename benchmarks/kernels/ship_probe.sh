@@ -11,6 +11,7 @@
 set -euo pipefail
 : "${CUDA:?the toolkit, which ship_cuda sets}" "${TMPDIR:?which the frame of ship.sh sets}"
 SHIP_NVCC=$(dirname "${BASH_SOURCE[0]}")/ship_nvcc.sh
+gencode=$(python3 "$(dirname "${BASH_SOURCE[0]}")/machine.py" gencode sm_90a)
 p=$(mktemp -d "$TMPDIR/ship_probe.XXXXXXXX"); trap 'rm -rf "$p"' EXIT
 places=("$p/as_is" "$p/moved/to_another_depth/under_other_names")
 includes=("probe.cuh" "headers/of_its_own/probe.cuh")
@@ -29,7 +30,7 @@ PROBE
   echo "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u + 1u; }" > "${places[i]}/${includes[i]}"
 done
 # a ship's cubin flags (ship_cubin_flags), less ptxas's report
-flags=(-O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false -cubin)
+flags=(-O3 -std=c++17 -gencode "$gencode" -fmad=false -cubin)
 for cc in "$CUDA/bin/nvcc" "$SHIP_NVCC"; do
   for i in 0 1; do
     "$cc" "${flags[@]}" -o "$p/$(basename "$cc").$i.cubin" "${places[i]}/probe.cu" || {

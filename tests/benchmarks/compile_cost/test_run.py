@@ -38,9 +38,16 @@ def test_llama_3_2_1b_compiles_its_class_circuit_in_place_of_a_window() -> None:
 
 H200, H100, UNKNOWN = "NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA A100-SXM4-80GB"
 
-H200_TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
-               "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
-               "moe_backend": "triton", "card": "h200-sxm-141gb"}
+H200_TARGET = {"card": "h200-sxm-141gb", "batch_invariant": False, "attention_backend": None, "vllm_revision": "d9105ea80",
+               "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "moe_backend": "triton"}
+H200_PROFILE = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
+                "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "moe_backend": "triton",
+                "card": "h200-sxm-141gb"}
+
+
+def profile(card: str):
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    return TargetProfile(**run.target(card))
 
 
 def test_the_card_has_no_default_and_the_h200_target_is_the_one_written_in_naming_its_card(capsys) -> None:
@@ -49,15 +56,18 @@ def test_the_card_has_no_default_and_the_h200_target_is_the_one_written_in_namin
     assert "--card" in capsys.readouterr().err
     assert run.parse(H200_ARGS).card == run.PINS_CARD == "h200-sxm-141gb"
     assert json.dumps(run.target(run.PINS_CARD)) == json.dumps(H200_TARGET)
+    assert {k: v for k, v in profile(run.PINS_CARD).to_json().items() if k in H200_PROFILE} == H200_PROFILE
+    assert profile(run.PINS_CARD).device_name == H200
 
 
 def test_another_card_is_read_from_its_card_file() -> None:
-    assert run.target(run.parse(["--card", "h100-sxm-80gb"]).card) == {**H200_TARGET, "device_name": H100, "card": "h100-sxm-80gb"}
-    assert {k: run.target("rtx-pro-6000-server")[k] for k in ("compute_capability", "num_sms", "device_name")} == {
-        "compute_capability": [12, 0], "num_sms": 188, "device_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition"}
+    assert run.target(run.parse(["--card", "h100-sxm-80gb"]).card) == {**H200_TARGET, "card": "h100-sxm-80gb"}
+    assert profile("h100-sxm-80gb").device_name == H100
+    rtx = profile("rtx-pro-6000-server")
+    assert (rtx.compute_capability, rtx.num_sms, rtx.device_name) == ((12, 0), 188, "NVIDIA RTX PRO 6000 Blackwell Server Edition")
 
 
-@pytest.mark.parametrize("card, why", [("a100-sxm4-80gb", "no card 'a100-sxm4-80gb'"), ("xeon-6776p-2s", "is no compile target")])
+@pytest.mark.parametrize("card, why", [("a100-sxm4-80gb", "no card 'a100-sxm4-80gb'"), ("xeon-6776p-2s", "is no target")])
 def test_a_card_with_no_gpu_file_is_refused_by_name(capsys, card, why) -> None:
     with pytest.raises(SystemExit):
         run.parse(["--card", card])

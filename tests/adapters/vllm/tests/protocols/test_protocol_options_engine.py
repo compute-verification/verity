@@ -26,7 +26,7 @@ from verity_vllm.protocols import spot
 from verity_vllm.protocols.interface import BUILD_BOUND
 
 POUW, POUS, SPOT = ALL
-CAPTURED = TargetProfile(protocols=(POUW, SPOT), compilation="piecewise")
+CAPTURED = TargetProfile.default().with_overrides(protocols=(POUW, SPOT), compilation="piecewise")
 
 
 def _both(monkeypatch, log):
@@ -144,7 +144,7 @@ def test_a_capture_installs_its_set_without_spot_on_the_engines_model_and_says_s
 def test_a_capture_installs_nothing_for_a_target_with_no_such_protocol_or_a_set_it_refuses(monkeypatch, capsys):
     _both(monkeypatch, [])
     model, before = Model(), hooks.live()
-    assert PO.at_capture(None, model) is None and PO.at_capture(TargetProfile(), model) is None
+    assert PO.at_capture(None, model) is None and PO.at_capture(TargetProfile.default(), model) is None
     with pytest.raises(PO.Refused) as e:
         PO.at_capture(CAPTURED, model, {"pous": {}})
     assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
@@ -156,7 +156,7 @@ def test_a_commit_installs_its_set_on_its_model_records_it_in_the_versions_and_s
     _both(monkeypatch, [])
     model, before = Model(), hooks.live()
     versions: dict[str, Any] = {"engine_kwargs": {}}
-    comp = PO.at_commit(TargetProfile(protocols=(POUS, SPOT)), model, versions)
+    comp = PO.at_commit(TargetProfile.default().with_overrides(protocols=(POUS, SPOT)), model, versions)
     try:
         assert capsys.readouterr().out == f"[delta] protocol options installed beside the committers: ['{POUS}', '{SPOT}']\n"
         assert (comp.context.stage, comp.entries) == ("commit", (POUS, SPOT))
@@ -173,8 +173,8 @@ def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeyp
     _both(monkeypatch, [])
     model, before = Model(), hooks.live()
     versions: dict[str, Any] = {"engine_kwargs": {}}
-    declared = TargetProfile(protocols=(POUS, SPOT))
-    assert PO.at_commit(None, model, versions) is None and PO.at_commit(TargetProfile(), model, versions) is None
+    declared = TargetProfile.default().with_overrides(protocols=(POUS, SPOT))
+    assert PO.at_commit(None, model, versions) is None and PO.at_commit(TargetProfile.default(), model, versions) is None
     with pytest.raises(PO.Refused) as e:
         PO.at_commit(declared, model, versions, {"pouw": {}})
     assert e.value.reasons == ("the protocols config names ['pouw'], which this run does not enable",)
