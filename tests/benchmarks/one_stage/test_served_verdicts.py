@@ -3687,10 +3687,11 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0",
            "VY_CHALLENGER_1_HOST": CHALLENGER_HOST}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
-    rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
-                        capture_output=True).returncode
+    run = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
+                         capture_output=True)
+    (tmp_path / "run.log").write_bytes(run.stdout + run.stderr)
     read = lambda f: (tmp_path / f).read_text().split() if (tmp_path / f).exists() else []  # noqa: E731
-    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
+    return run.returncode, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
 #: where V3c's audit's coins come from in `_v3c`'s development run, as `served_verdicts.sh v3c`'s first line says
@@ -3717,7 +3718,7 @@ def test_v3c_runs_the_attesters_chain_beside_its_audit_and_its_period_check_on_t
     assert not _window_data(tmp_path / "out", 7), _window_data(tmp_path / "out", 7)
     held = (tmp_path / "serve" / "private" / "verdicts.txt").read_text()
     assert "chain on window 7" in held and '"population": 37' in held and "chain on window K" in "\n".join(lines)
-    assert '"population": 37' in (tmp_path / "serve" / "private" / "out" / "v3c-audit" / "audit.log").read_text()
+    assert '"population": 37' in (tmp_path / "serve" / "private" / "logs" / "v3c-audit" / "audit.log").read_text()
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
     assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
     heads = [line.split(" (")[0].split(":")[0] for line in lines]
@@ -7972,3 +7973,17 @@ def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(t
     else:
         assert run.returncode == 21 and not phase.exists(), (run.stdout, run.stderr)
         assert "STOP at window (exit 21)" in run.stdout.splitlines()
+
+
+def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_the_serve_dirs_logs(tmp_path):
+    """The node's user, host name, GPUs and the serve dir's path go to the serve dir's private/logs/machine.txt, never to
+    $OUT or the run's stdout and stderr; $OUT/machine.txt is the tree's commit alone (`onsite_record`'s one read of it)."""
+    host, sha = "node-SECRET-host", "5e" * 20
+    for name, body in (("hostname", f"echo {host}"), ("nvidia-smi", f"echo GPU 0: {host}-uuid")):
+        _script(tmp_path / "bin" / name, body)
+    _v3c(tmp_path, RESEARCH_SOURCE_SHA=sha)
+    out = tmp_path / "out"
+    assert (out / "machine.txt").read_text().split() == [sha], (tmp_path / "run.log").read_text()
+    assert host in (tmp_path / "serve" / "private" / "logs" / "machine.txt").read_text()
+    left = (tmp_path / "run.log").read_text() + "".join(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())
+    assert host not in left and f"serve dir {tmp_path / 'serve'}" not in left, left
