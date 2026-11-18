@@ -214,7 +214,7 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
     assert v["why"] == ("setup: registered reads: the statement's units are taken as stated, and a read's position binds only "
                         "as far as its unit does: the verifier derives them from its own program (--partition, --program)"), v
     obj = json.loads((d / "partition.json").read_text())
-    obj["query"]["params"]["template"] = "RecOpen_v4{LANES=8,H=2}"
+    obj["query"]["params"]["templates"] = ["RecOpen_v4{LANES=8,H=2}"]
     (tmp_path / "partition.json").write_text(json.dumps(obj))
     (tmp_path / "program.json").write_text(json.dumps({**json.loads((d / "program.json").read_text()), "x": 1}))
     for part, prog, why in ((tmp_path / "partition.json", d / "program.json",

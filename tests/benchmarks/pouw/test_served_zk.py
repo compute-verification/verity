@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
 from verity.commitments.merkle import tree_levels
@@ -1044,7 +1045,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
-    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
+    prog, q = PN.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
     sampling_design, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
     p = OR.registration_params(prog, q, sampling_design, S.SCHEME, ports, [], params["delta"])
     record = ORL.Record()

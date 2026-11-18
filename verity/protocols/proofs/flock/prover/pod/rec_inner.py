@@ -58,15 +58,18 @@ STREAM = "circuit/rep0"
 
 def _population(sub, n: int, sets: Path, seed: int):
     """The input set of ``sub`` at ``n`` (seeded samples), its lowering, and the `verity/partition/v1` object
-    `Q_template_instance` v0 over `population_program` of its template at ``n`` (instance i is unit i), with that program."""
+    `Q_template_instances` v0 over `wired_population_program` of its template at ``n`` (instance i is unit i), with that
+    program."""
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.population import wired_population_program
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_flock.input_sets import InputSet
     from verity_flock.synthetic import generate
 
     s = InputSet.open(generate(sub, n, seed, sets)["path"])
     template = s.subcircuit.definition(**FC.set_statics(s))
-    program = P.population_program(template, n)
-    return s, FC.lowering_for_set(s), P.partition(program, P.template_instance_query(template)), program
+    program, query = wired_population_program([(template, n)], {"templates": [[descriptor_id(template), n]]})
+    return s, FC.lowering_for_set(s), P.partition(program, query), program
 
 
 def _write_binding(out: Path, part: dict, program) -> None:
@@ -98,7 +101,7 @@ def _shape(out: Path, low, sub_id: str, n: int, part: dict) -> dict:
 def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None, stacked: Path | None = None,
           forge: str | None = None, subcircuit: str | None = None, seed: int = SEED) -> dict:
     """The inner statement over ``n`` seeded samples of ``subcircuit`` (a census-style id, RoPE d64 by default), bound to the
-    `verity/partition/v1` object `Q_template_instance` v0 over `population_program` of the set's template at ``n``, which
+    `verity/partition/v1` object `Q_template_instances` v0 over `wired_population_program` of the set's template at ``n``, which
     every verifier of the inner statement holds (``--partition``, ``--rec-inner-partition``), written beside it as
     ``partition.json`` with its program, ``program.json``, and its full sample, ``draw.json``. ``stacked``
     (flock-circuit, with ``sparse``, the bucket's `rec_sparse.Shape`): the stacked table R registered with it here
