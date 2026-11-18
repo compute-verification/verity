@@ -30,7 +30,6 @@ import datetime as dt
 import hashlib
 import json
 import os
-import re
 import sys
 from collections.abc import Iterable
 from fractions import Fraction
@@ -40,7 +39,7 @@ from typing import Any
 import price_twins as P
 from verity_config.settings import of
 
-from verity.protocols.resource_accounting.compute.pouw.verifier import serving
+from verity.protocols.resource_accounting.compute.pouw.verifier import kernel_schemes, serving
 
 #: what `verify.py`, the filler's `arms.py` and `score.py`, and the tests read
 __all__ = [
@@ -177,17 +176,28 @@ def typed_gamma(result: dict) -> dict[str, str]:
     return out
 
 
-#: `verity.protocols.resource_accounting.compute.pouw.verifier.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
-#: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
-_SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
+#: a Pearl-C scheme's device names the record: sm120 (G = 4) is the panel's v1, sm120-unpromoted its v2; a name neither
+#: declared nor in `SchemeId`'s grammar (``pearl-c-sm120-v2-hot-h3``) isn't checked
+def _family_device(scheme: str) -> tuple[str, str] | None:
+    """A scheme's family and device: its declaration's (`kernel_schemes`), else, for a development name, `SchemeId`'s;
+    None for a name neither holds."""
+    if (k := kernel_schemes.BY_NAME.get(scheme)) is not None:
+        return k.family, k.parameters.get("device", "")
+    try:
+        s = serving.SchemeId.parse(scheme)
+    except ValueError:
+        return None
+    return s.family, s.device
 
 
 def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
     """The scheme's device record against the panel version's statement."""
-    m = _SCHEME.fullmatch(scheme or "")
-    if m is None or not statement or not statement.startswith("pearl-c-sm120/"):
+    if not scheme or not statement or not statement.startswith("pearl-c-sm120/"):
         return None
-    if (m["device"] == "sm120-unpromoted") != statement.split("/", 1)[1].startswith("v2"):
+    got = _family_device(scheme)
+    if got is None or got[0] != "pearl-c" or got[1] not in ("sm120", "sm120-unpromoted"):
+        return None
+    if (got[1] == "sm120-unpromoted") != statement.split("/", 1)[1].startswith("v2"):
         return f"scheme {scheme} isn't {statement}'s device record"
     return None
 
