@@ -4,7 +4,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../../../.."
 RUN=window
-case ${1:-} in window|compose|setup|copy|audit|settings|bindings) RUN=$1; shift;; esac
+case ${1:-} in window|compose|setup|copy|audit|settings|bindings|device-pin) RUN=$1; shift;; esac
 DRY=0 DEV=0 TIE=0
 while :; do
   case ${1:-} in --dry-run) DRY=1; shift;; --development) DEV=1; shift;; --tie) TIE=1; shift;; *) break;; esac
@@ -70,17 +70,16 @@ def workload(row: str) -> tuple[Path, dict]:
     return f, json.loads(f.read_text())
 
 
-if run == "settings":
-    model = sys.argv[5] if len(sys.argv) > 5 else ""
-    here_first = sorted(("row", "tied_row"), key=lambda k: not (here.parents[1] / "workloads" / f"{placement[k]}.json").is_file())
-    if (k := next((k for k in here_first if workload(placement[k])[1]["model"] == model), None)) is None:
-        sys.exit(f"run.sh: settings takes the model of a row placement.toml places ({placement['row']}, "
-                 f"{placement['tied_row']}), not {model!r}")
-    tie = k == "tied_row"
-
-
 on = fill(r["node"], f"{run} run's node")
 node = placement["node"].get(on, {})
+rows = {k: node.get("rows", {}).get(k, placement[k]) for k in ("row", "tied_row")}
+if run == "settings":
+    model = sys.argv[5] if len(sys.argv) > 5 else ""
+    here_first = sorted(rows, key=lambda k: not (here.parents[1] / "workloads" / f"{rows[k]}.json").is_file())
+    if (k := next((k for k in here_first if workload(rows[k])[1]["model"] == model), None)) is None:
+        sys.exit(f"run.sh: settings takes the model of a row placement.toml places ({rows['row']}, "
+                 f"{rows['tied_row']}), not {model!r}")
+    tie = k == "tied_row"
 
 
 def git(*args: str) -> subprocess.CompletedProcess:
@@ -118,7 +117,7 @@ if coins.get("main_line"):
     (main := Path(tempfile.mkdtemp(prefix="served-run-")) / "main.txt").write_text(line)
     send.append(str(main))
 if r.get("send_workload"):
-    row = placement["tied_row" if tie else "row"]
+    row = rows["tied_row" if tie else "row"]
     f, doc = workload(row)
     env |= {"REPO": doc["model"], "REV": doc["engine"]["revision"], "ROLE": doc["case"], "ROW_ID": row}
     if (built := node.get("builds", {}).get(row)) is not None:
@@ -163,6 +162,9 @@ if [ "$RUN" = settings ] || [ "$RUN" = bindings ]; then
   for kv in "${ARGV[@]}"; do export "${kv?}"; done
   log() { echo "run.sh settings: $*" >&2; }
   . adapters/vllm/tools/served_run/workload_env.sh || exit 2
+  if [ -n "${CARD:-}" ]; then
+    . adapters/vllm/tools/served_run/pin_card.sh "$(mktemp -d "${RESEARCH_RUN_DIR:-${TMPDIR:-/tmp}}/card-$CARD.XXXXXX")" || exit 2
+  fi
   mkdir -p "$SERVE_ROOT" && chmod 700 "$SERVE_ROOT"
   "$@"
   exit

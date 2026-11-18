@@ -13,8 +13,9 @@ tried: no application lists it, and its guarantee rests on a premise that is sta
 - `prover/f1_fast.py`: a vectorised evaluation of the scheme's F1′ item, which a caller may pass to the scheme in place
   of its pure-Python rule.
 - `prover/pearl_c4.py`, `prover/pearl_c4_c_L.py`: the scheme's scalar reference, a PoUW scheme. Importing this package
-  registers it with PoUW's registry (`schemes.register`) under `pearl-c-nvfp4-v0`, which raises
-  `NotImplementedError("compute-accounting/pearl-c4-experimental")` until then: PoUW loads nothing of `experimental/`.
+  registers its builder with PoUW's (`schemes.register`, family `pearl-c4`); PoUW's kernel schemes name
+  `pearl-c-nvfp4-v0` and raise `NotImplementedError` naming this package until then: PoUW loads nothing of
+  `experimental/`.
 - `prover/pc4.py`: its tile check as a circuit, on PoUW's shared tile-check parts (`circuit.tile_units`), and
   `prover/pc4_rowk.py` its row proof blocks cut along k on `circuit.rowk`'s cut, each with its circuit-check sidecar.
 - `tests/`: the twin, the fixture, the gate and `f1_fast` against the scalar reference, the scheme's pinned vectors

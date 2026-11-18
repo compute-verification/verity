@@ -147,7 +147,7 @@ def isTreeSpec (spec : Json) : Bool :=
       | _ => false)
 
 /-- `coin_trees_of` (module docstring): the coin trees the release log `log` shows the challenger sampled, in the order
-sampled, each with the rounds it shows opened; every other line is a root's or a release's (`releasedRootsOf`). -/
+sampled, each with the rounds it shows opened; every other line is a root's or a release's (`releasedLogOf`). -/
 def coinTreesOf (log : List String) : V (Array LoggedTree) := do
   let mut trees : Array LoggedTree := #[]
   for line in log do
@@ -298,7 +298,7 @@ def SAMPLE_LINK_FIRST : String :=
   "released after a coin tree's round is opened, or the first round opened is not a tree's " ++ TREE_SESSION ++
   " stream, the link points"
 
-/-- **The family and the root a root line of the release log shows**, as `releasedRootsOf` reads them; `none` where the
+/-- **The family and the root a root line of the release log shows**, as `releasedLogOf` reads them; `none` where the
 line doesn't parse or names no family or no root. -/
 def rootOf (l : String) : Option (String × ByteArray) := do
   let r ← (event l).toOption
@@ -334,7 +334,7 @@ def sampleLinkFirstFrom (label : String) (after : ByteArray) : Bool → Option S
         else sampleLinkFirstFrom label after opened none ls
 
 /-- `sample_link_first`, **the sample, then the link, then the other rounds**, in the release log's lines `log` after its
-head. Read as `releasedRootsOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a root's line
+head. Read as `releasedLogOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a root's line
 and its coin's release: no coin of family `label` whose root's line names `after` (`rootOf`) is released after a line
 opening a coin tree's round (`openLine`), and the first such line opens the stream `TREE_SESSION` (`linkLine`), whose
 first round is the link points. A coin tree's own line may come anywhere. In v2's one-stage audit `label` is the

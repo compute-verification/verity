@@ -1,71 +1,70 @@
-"""The named PoUW schemes.  `get(name)` returns a configured `verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme`; each name's module
-docstring states its steps, and its pinned vectors are under ``verifier/tests/vectors``.  A name in `EXPERIMENTAL` is
-named here and brought by an experimental package, which `register`s its factory when imported: PoUW imports nothing of
-``verity/protocols/experimental/``, so until then `get` raises `NotImplementedError` naming the seam."""
+"""The PoUW kernel schemes' builders. The schemes are named once, in
+`verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes` (`KERNEL_SCHEMES`); `get(name)` builds the
+configured `verity.protocols.resource_accounting.compute.pouw.verifier.protocol.PoUWScheme` an entry names, and
+`of(scheme, card, pinned)` the one a resource scheme runs on a card. Each family's module docstring states its steps, and
+its pinned vectors are under ``verifier/tests/vectors``. A family an experimental package builds (an entry's ``seam``)
+is `register`ed by that package when imported: until then building it raises `NotImplementedError` naming the seam."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import (
+    KERNEL_SCHEMES, KernelScheme, named, resolve)
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import PoUWScheme
 
 
-def _ncp(perm: str) -> Callable[..., PoUWScheme]:
-    def make(**config: Any) -> PoUWScheme:
-        from .ncp import NCP
-        return NCP(perm, **config)
-    return make
+def _ncp(**config: Any) -> PoUWScheme:
+    from .ncp import NCP
+    return NCP(**config)
 
 
-def _pearl(**config: Any) -> PoUWScheme:
+def _pearl_kw(**config: Any) -> PoUWScheme:
     from .pearl_kw import PearlKW
     return PearlKW(**config)
 
 
-def _pearl_c(device: str) -> Callable[..., PoUWScheme]:
-    def make(**config: Any) -> PoUWScheme:
-        from .pearl_c import PearlC
-        from .pearl_c_device import DEVICES
-        return PearlC(device=DEVICES[device], hashing="h3", **config)
-    return make
+def _pearl_c(*, device: str, **config: Any) -> PoUWScheme:
+    from .pearl_c import PearlC
+    from .pearl_c_device import DEVICES
+    return PearlC(device=DEVICES[device], **config)
 
 
-#: name -> the seam of the experimental package that registers it (Pearl-C4: ``verity/protocols/experimental/pearl_c4/``)
-EXPERIMENTAL: dict[str, str] = {"pearl-c-nvfp4-v0": "compute-accounting/pearl-c4-experimental"}
+#: family -> builder of a configured scheme from its entry's parameters (further keyword arguments configure it, as a
+#: commitment scheme's ports do)
+BUILDERS: dict[str, Callable[..., PoUWScheme]] = {"ncp": _ncp, "pearl-kw": _pearl_kw, "pearl-c": _pearl_c}
 
 
-def _experimental(name: str) -> Callable[..., PoUWScheme]:
-    def make(**config: Any) -> PoUWScheme:
-        raise NotImplementedError(EXPERIMENTAL[name])
-    return make
-
-
-#: name -> factory of the configured scheme (keyword arguments configure it, as a commitment scheme's ports do)
-SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
-    "ncp-v1": _ncp("word"),
-    "ncp-v1-shift24": _ncp("shift24"),
-    "pearl-fp8-v4": _pearl,
-    "pearl-c-h100-v1-h3": _pearl_c("h100"),
-    "pearl-c-sm120-v1-h3": _pearl_c("sm120"),
-    "pearl-c-nvfp4-v0": _experimental("pearl-c-nvfp4-v0"),
-}
+def build(entry: KernelScheme, **config: Any) -> PoUWScheme:
+    """The scheme ``entry`` names, configured by ``config`` over its parameters."""
+    if entry.family not in BUILDERS:
+        if entry.seam:
+            raise NotImplementedError(f"{entry.name}: built by {entry.seam}, which registers {entry.family!r} when "
+                                      "imported")
+        raise KeyError(f"{entry.name} is a {entry.family} scheme, which no PoUWScheme builds")
+    return BUILDERS[entry.family](**entry.parameters, **config)
 
 
 def get(name: str, **config: Any) -> PoUWScheme:
-    """The scheme registered under `name`; `KeyError` names the registered ones."""
-    try:
-        make = SCHEMES[name]
-    except KeyError:
-        raise KeyError(f"no PoUW scheme {name!r}; registered: {', '.join(SCHEMES)}") from None
-    return make(**config)
+    """The scheme named ``name``; `KeyError` names the named ones."""
+    return build(named(name), **config)
 
 
-def register(name: str, make: Callable[..., PoUWScheme]) -> None:
-    """Install ``make`` as the factory of ``name``, a name `EXPERIMENTAL` holds: its package calls this when imported."""
-    if name not in EXPERIMENTAL:
-        raise KeyError(f"{name!r} is not registered by an experimental package; those are: {', '.join(EXPERIMENTAL)}")
-    SCHEMES[name] = make
+def of(scheme: str, card: str, pinned: bool, **config: Any) -> PoUWScheme:
+    """The scheme the resource scheme ``scheme`` runs on the card whose short name is ``card``, with registration
+    pinning the weights B or not (`kernel_schemes.resolve`)."""
+    entry = resolve(scheme, card, pinned)
+    return build(entry, **config) if entry.cards else build(entry, card=card, pinned=pinned, **config)
 
 
-__all__ = ["EXPERIMENTAL", "SCHEMES", "get", "register"]
+def register(family: str, make: Callable[..., PoUWScheme]) -> None:
+    """Install ``make`` as the builder of ``family``, one an entry's ``seam`` names: its package calls this when
+    imported."""
+    seams = {k.family: k.seam for k in KERNEL_SCHEMES if k.seam}
+    if family not in seams:
+        raise KeyError(f"{family!r} is not built by an experimental package; those are: {', '.join(seams)}")
+    BUILDERS[family] = make
+
+
+__all__ = ["BUILDERS", "build", "get", "of", "register"]

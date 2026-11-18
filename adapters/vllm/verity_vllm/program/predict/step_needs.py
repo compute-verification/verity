@@ -3,7 +3,7 @@ each Definition by id with its calls, and, where `dsa` would raise `Unexpressibl
 while the rest of the step is still counted.
 
 Each selection is the one `dsa._Model` makes, through the same registry calls (the all-reduce's served route and the capture that
-covers it, the captured cuBLAS route, the LL bf16 tier, the grouped top-k kernel, the tuned fused-MoE tile, FA3's split count over
+covers it, the captured cuBLAS route of φ's device, the LL bf16 tier, the grouped top-k kernel, the tuned fused-MoE tile, FA3's split count over
 the launch's key counts) and the vocabulary's kind at the statics `dsa` passes (`common.kind`). Every token-count-dependent
 selection reads the step's launch: the tokens the CUDA-graph dispatch pads it to. A request's query rows past the decode threshold
 are one refusal per row and layer (the dense-MHA prefill backend while its sequence fits INDEX_TOPK keys, the sparse-MQA prefill past
@@ -157,14 +157,19 @@ class StepNeeds:
         return self.kind("flashinfer_fp8_linear" if M < 32 else "deepgemm_fp8_linear", K=K, N=N)
 
     def _cublas(self, M: int, w: object, f32: bool = False) -> Need:
-        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
-
+        from verity_vllm.definitions.registry.bf16_gemm_check import (
+            default_cublas_route,
+        )
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
             _f32out_phase,
         )
         N, K = self._shape[w]
         phase = _f32out_phase(K, N) if f32 else "linear"
-        route = default_cublas_route(phase, M, K, N)
+        try:
+            route = default_cublas_route(phase, M, K, N, self.net.device)
+        except KeyError as e:
+            return Need("router-gemm" if f32 else "cublas-bf16-gemm", _id(f"cublas-{phase}", K=K, N=N, M=M),
+                        f"no route pin: {e.args[0]}", "on a pinned device")
         if route is None:
             return Need("router-gemm" if f32 else "cublas-bf16-gemm", _id(f"cublas-{phase}", K=K, N=N, M=M), "no capture",
                         "at other statics")
@@ -187,7 +192,6 @@ class StepNeeds:
 
     def _all_reduce(self, M: int, n: int) -> Need:
         from verity_vllm.definitions.registry import tp_allreduce as AR
-
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
             _ROUTE_KINDS,
         )
@@ -211,12 +215,11 @@ class StepNeeds:
                 return [(Need("fused-allreduce-rmsnorm", _id("allreduce-rmsnorm-fused", N=self.H, M=M), "no capture",
                               "at other statics"), n)]
             return [(self.kind("all_reduce_rmsnorm_mnnvl", WORLD=self.W, N=self.H, SHOT=AR.mnnvl_shot(M, self.H, self.W),
-                               CLUSTER=AR.mnnvl_grid(M, self.H)[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
+                               CLUSTER=AR.mnnvl_grid(M, self.H, int(self.tp.num_sms))[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
         return [(self._all_reduce(M, n), 1), (self.kind("rmsnorm_fused", N=self.H, EPS=self.EPS, TARGET=self.tp, M=M), n)]
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
         from verity_vllm.definitions.registry.moe import router_kernel
-
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
         E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])

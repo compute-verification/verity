@@ -1,17 +1,22 @@
-"""The linear sites of a vLLM model, and a `Stack` attached to them: the one module of `verity_vllm.protocols.linear` that touches vLLM.
+"""The linear sites of a vLLM model, each called through the exchange: the one module of `verity_vllm.protocols.linear` that
+touches vLLM.
 
 `discover` finds every ``LinearBase`` layer by type, in module order (a layer's ordinal is its weight id on one rank), and
 describes it as a `LinearSite`.  `attach` wraps each distinct ``quant_method.apply`` once, through the `engine.hooks.Hooks` it
 is given, so every patch is recorded, tagged and put back, and a site is found by the layer's identity: nothing is set on
-vLLM's objects.  A layer that isn't a site goes to vLLM's own ``apply``.
+vLLM's objects.  A site's call is a `verity.hooks.BlockDue` that the process's exchange computes through the kernels schemes
+filed (`messages.Exchange.compute`), vLLM's own ``apply`` innermost; with no kernel and no reader, and for a layer that
+isn't a site, it is vLLM's own ``apply``.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 from typing import Any
 
+from verity import hooks as H
+from verity_vllm import messages
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.protocols.linear.api import LinearSite, Shard, Stack
+from verity_vllm.protocols.linear.api import LinearSite, Shard, WithWeight
 
 #: torch's dtype names -> the site's weight format
 FORMATS = {"bfloat16": "bf16", "float16": "fp16", "float32": "fp32", "float8_e4m3fn": "e4m3", "uint8": "packed-u8"}
@@ -40,17 +45,26 @@ def discover(model: Any, shard: Shard = _UNSHARDED, types: tuple[type, ...] | No
     return out
 
 
-def attach(stack: Stack, sites: Sequence[tuple[LinearSite, Any]], hooks: Hooks) -> None:
-    """Every distinct ``quant_method.apply`` of `sites`' layers wrapped once, through `hooks`, to call `stack.apply` for a site's
-    layer and vLLM's own ``apply`` for any other."""
+def attach(sites: Sequence[tuple[LinearSite, Any]], hooks: Hooks) -> None:
+    """Every distinct ``quant_method.apply`` of `sites`' layers wrapped once, through `hooks`, to hand a site's call to the
+    exchange as a `BlockDue` and any other layer's to vLLM's own ``apply``."""
     by_layer = {id(layer): site for site, layer in sites}
 
     def make(original: Any) -> Any:
         def apply(layer: Any, x: Any, bias: Any = None) -> Any:
             site = by_layer.get(id(layer))
-            if site is None:
+            ex = messages.current()
+            if site is None or not (ex.computes() or ex.wants("blocks")):
                 return original(layer, x, bias)
-            return stack.apply(site, layer, x, bias, original)
+            due = H.BlockDue(site.qualname, site.weight_id, {"n": site.n, "k": site.k}, site.weight_format,
+                             {"x": x, "weight": layer.weight, "bias": bias}, ex.step)
+
+            def own(given: Any) -> Any:
+                given = given or {}
+                held = layer if "weight" not in given else WithWeight(layer, given["weight"])
+                return original(held, given.get("x", x), given.get("bias", bias))
+
+            return ex.compute(due, own)
         return apply
 
     for qm in {id(layer.quant_method): layer.quant_method for _, layer in sites}.values():

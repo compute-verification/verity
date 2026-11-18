@@ -2,8 +2,8 @@ schema = "verity-bench/steady-spec/v0"
 id = "glm53-flock-steady-head-block-h200"
 # The proof server's rate at steady state on GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms
 # (`FIRST=false`, `FIRST=true`): each one's full statement of 256 blocks at one, two and four provers on one H200 with
-# ten cores. Launch with `verity-bench run SPEC --direct NODE`, NODE an H200 node of `verity_bench.jobs.DIRECT_NODES`
-# whose GPU slots each give a run ten cores.
+# ten cores. Run a point with `research run --on NODE --pool gpu ... -- uv run verity-bench run SPEC --point POINT`, NODE
+# an H200 node whose GPU slots each give a run ten cores (`benchmarks/harness/README.md`).
 workload = "glm53"
 card = "h200"
 # The cores of the GPU slot a point is launched through, which pins the run to them. A point's lease declares them to

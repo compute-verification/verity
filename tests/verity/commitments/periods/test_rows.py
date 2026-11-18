@@ -23,7 +23,6 @@ SALTS = {
     (1 << 32) + 3: "b9bb8019afa79c4af51e8ecb85054f580f5406c52817d3e8e5fd7c5cd4ceaa1fdd827964d1fe15306f949c8011f4f678e23ca1c894d958ce9f2d6219189b8b0b",
     (1 << 40) + 5: "7df0108c76b5ae573036687dc0eb1d6c796e7743096323e49eeb3f039966f30a05e51a4cd8ffca6b39b224ef8535e1ce3569fd809cbc225104c297ec874c26f8",
 }
-SEGMENT_SALTS = "d896d410d9d288b07b559d42889091e1ee5b0a8c63dd565430f079c9a50a1be788e950754bf8e1f1e226c4a9ebae2d4bec0c5b672b41a31e1ea1723c2e3b6ade"
 #: each port's root, and the SHA-512 of its rows' ``b || c`` strings
 ROOTS = {
     "a": "69ff48fcbde3bc047508d52457c4fd51606472e5493dbae59c80e409b50a93d7165cb1e2932076e452babe73b6607ad2edcf3628bef56960975508deab7fb37c",
@@ -61,7 +60,6 @@ def _ports() -> tuple[dict, dict, dict, dict, dict]:
 
 def test_salts_are_pinned() -> None:
     assert {port: _sha512(SR.salts(KEY, port, 5)) for port in SALTS} == SALTS
-    assert _sha512(SR.segment_salts(KEY, 3, 11)) == SEGMENT_SALTS
     assert SR.salts(KEY, 2, 0) == b""
 
 

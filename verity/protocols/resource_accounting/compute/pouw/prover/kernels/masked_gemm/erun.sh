@@ -10,7 +10,7 @@
 # STAGE=build|gate|all (default all); REPS (default 11); SHAPES (name:m:n:k:batch); EG_ARMS.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm
 # the references import their siblings as verity's modules, from the clone's root
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}

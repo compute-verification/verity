@@ -5,7 +5,10 @@
 #
 #   card    (the default) on a GPU node, on the CPUs CORES (ten, the card's NUMA node's) where given, else on the run's
 #           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
-#           (benchmarks/harness/setup/flock_prover.sh, CUDA 13.3) in FLOCK_WORK on the node's disk; the statement
+#           (benchmarks/harness/setup/flock_prover.sh) in FLOCK_WORK on the node's disk with CUDA 13.3, CUDA_HOME
+#           where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py, which the setup reads too),
+#           fetched and handed to it as CUDA_HOME where the record lists none, and refused before any lease where there is
+#           no record or its toolkit is unread; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
 #           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,
 #           running STEPS (a-own,b-wide,c-wide,d-own,e-own,f-wide; SESSIONS 120 timed sessions after WARM 3 warm, one
@@ -35,9 +38,9 @@ rfetch() {   # rfetch STORE ARGS...: the statement's files through the tree's re
   PYTHONPATH=$ROOT/tools/research/src:$ROOT/tools/config:${PYTHONPATH:-} python3 -m research data fetch "$ART" --store "$st" "$@"
 }
 
-cuda_fetch() {   # a node with no CUDA 13.3 and no apt source for it: the packages cuda-13.3.sh takes, from NVIDIA's
-  # repository by name and version, each held to its Packages SHA256, unpacked to FLOCK_WORK/cuda-root, where it finds them
-  [ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -x "$FLOCK_WORK/cuda-root/usr/local/cuda-13.3/bin/nvcc" ] && return 0
+cuda_fetch() {   # a machine whose record lists no CUDA 13.3, with no apt source for it: the packages cuda-13.3.sh takes, from
+  # NVIDIA's repository by name and version, each held to its Packages SHA256, unpacked to FLOCK_WORK/cuda-root
+  [ -x "$FLOCK_WORK/cuda-root/usr/local/cuda-13.3/bin/nvcc" ] && return 0
   apt-cache show cuda-nvcc-13-3 > /dev/null 2>&1 && return 0
   local R=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64 d=$FLOCK_WORK/cuda-debs pv p v f s
   mkdir -p "$d" && curl -fsS "$R/Packages.gz" | gunzip > "$d/Packages" || { log "cuda: NVIDIA's Packages could not be fetched"; return 1; }
@@ -90,7 +93,14 @@ inside)
 card)
   export FLOCK_WORK=${FLOCK_WORK:-/workspace/tmp/kernels-wide-leaf}; mkdir -p "$FLOCK_WORK/scratch"
   log "card: $(git rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-?}") on $(hostname); $NAME; steps $STEPS"
-  cuda_fetch || { log "REFUSED: no CUDA 13.3 here"; exit 4; }
+  TOOLKIT=13.3   # the CUDA flock_prover.sh builds the prover with
+  python3 benchmarks/kernels/machine.py toolkit "$TOOLKIT" > /dev/null; rc=$?
+  case $rc in
+    0) ;;
+    3) cuda_fetch || { log "REFUSED: no CUDA $TOOLKIT here, and none fetched"; exit 4; }
+       [ -x "$FLOCK_WORK/cuda-root/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_HOME=$FLOCK_WORK/cuda-root/usr/local/cuda-13.3 ;;
+    *) log "REFUSED: no CUDA $TOOLKIT (machine.py, above)"; exit 4 ;;
+  esac
   setup
   export SCRATCH; SCRATCH=$(mktemp -d "$FLOCK_WORK/scratch/run-XXXXXX"); export STAGED=$SCRATCH/z
   trap 'rm -rf "$SCRATCH"' EXIT
