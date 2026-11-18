@@ -126,6 +126,18 @@ def _slots(widths: Sequence[int], packed: bool = False) -> tuple[list[tuple[int,
     return at, leaf + (1 if bit else 0)
 
 
+def _framed(widths: Sequence[int], packed: bool, frame: tuple[int, int] | None) -> tuple[list[tuple[int, int]], int]:
+    """`_slots` in a row of ``frame = (first, words)``: the words start at leaf ``first`` of a row of ``words`` leaves (a link
+    port's: its writer's whole output row, the reader's leaves at their outputs' words)."""
+    at, used = _slots(widths, packed)
+    if frame is None:
+        return at, used
+    first, words = frame
+    if first + used > words:
+        raise ValueError(f"words of {used} leaves from leaf {first} are past a row of {words}")
+    return [(leaf + first, bit) for leaf, bit in at], words
+
+
 @dataclass
 class ClassDefinition:
     """What M0's writers read of a Definition: one ``u16`` row parameter per input source and one ``u16`` result array, or
@@ -201,6 +213,10 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
     return [packed] * len(groups) if isinstance(packed, bool) else list(packed)
 
 
+def _frames(frames: Sequence[tuple[int, int] | None] | None, groups: list[list[int]]) -> list[tuple[int, int] | None]:
+    return [None] * len(groups) if frames is None else list(frames)
+
+
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
@@ -257,22 +273,27 @@ def cut_reads(tp: PO.TemplatePartition, units: Sequence[int]) -> list[list[tuple
     return out
 
 
-def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
-    """The writer whose whole output row ``reads`` is, in order; None when every read is an Input gate; else a ValueError."""
+#: META ``links``' key of a link's offset: the first of the writer's outputs its leaves read, written only where it is not 0
+LINK_AT = "at"
+
+
+def _writer_run(reads: Sequence[tuple[int, int] | None], n_out) -> tuple[int, int] | None:
+    """``(v, at)`` where ``reads`` are writer ``v``'s outputs ``at``, ``at + 1``, … in order (``n_out(v)``: its output
+    count); None when every read is an Input gate; else a ValueError."""
     if all(x is None for x in reads):
         return None
-    v = reads[0][0] if reads[0] is not None else None
-    if v is None or any(x is None or x != (v, j) for j, x in enumerate(reads)) or len(reads) != n_out(v):
-        raise ValueError(f"reads {list(reads)[:4]}...: not one unit's whole output row in order, nor all circuit inputs")
-    return v
+    v, at = reads[0] if reads[0] is not None else (None, 0)
+    if v is None or any(x != (v, at + j) for j, x in enumerate(reads)) or at + len(reads) > n_out(v):
+        raise ValueError(f"reads {list(reads)[:4]}...: not a run of one unit's outputs in order, nor all circuit inputs")
+    return v, at
 
 
 def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
-    circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
-    read is refused. Returns the groups (an unsplit group as it was), each one's original group, and each one's template leaf
-    range ``(lo, hi)`` (a segment some unit links) or None."""
+    circuit inputs only or one writer's outputs ``at``, ``at + 1``, … in order (`_writer_run`), ``at`` the same in every unit
+    that links it. Returns the groups (an unsplit group as it was), each one's original group, and each one's template leaf
+    range and offset ``(lo, hi, at)`` (a segment some unit links) or None."""
     if any(x >= 0 for x in uc.inputs):
         raise ValueError("a wired class reads template parameters only (its unit is one whole template instance)")
     leaf = [-1 - x for x in uc.inputs]
@@ -289,35 +310,56 @@ def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list]
         for a, b in zip(cuts, cuts[1:]):
             seg = g[a:b]
             ls = [leaf[t] for t in seg]
-            linked = [_whole_row([r[x] for x in ls], n_out) for r in reads]
-            if any(w is not None for w in linked) and ls != list(range(ls[0], ls[0] + len(ls))):
+            linked = [_writer_run([r[x] for x in ls], n_out) for r in reads]
+            ats = {w[1] for w in linked if w is not None}
+            if ats and ls != list(range(ls[0], ls[0] + len(ls))):
                 raise ValueError(f"a linked segment's leaves {ls[:4]}... are not consecutive")
+            if len(ats) > 1:
+                raise ValueError(f"a linked segment's leaves {ls[:4]}... read their writers' outputs from offsets {sorted(ats)}: "
+                                 "a link has one offset")
             out.append(seg)
             origin.append(gi)
-            spans.append((ls[0], ls[-1] + 1) if any(w is not None for w in linked) else None)
+            spans.append((ls[0], ls[-1] + 1, *ats) if ats else None)
     return out, origin, spans
+
+
+def _link_frame(uc: ProofBlockCircuit, group: list[int], at: int) -> tuple[int, int]:
+    """A link port's row (`_framed`): its writer's whole output row, one of the class's own units' (``uc``'s outputs, as
+    ``out`` holds them), the group's words at outputs ``at``, ``at + 1``, …'s."""
+    widths = [uc.in_widths[t] for t in group]
+    if widths != list(uc.out_widths[at:at + len(widths)]):
+        raise ValueError(f"a link's reads of widths {widths[:4]}... are not its writer's outputs from {at}")
+    return sum(_words(w) for w in uc.out_widths[:at]), sum(_words(w) for w in uc.out_widths)
+
+
+def _link(port: str, lo: int, hi: int, at: int) -> dict:
+    return {"port": port, "leaves": [lo, hi], **({LINK_AT: at} if at else {})}
 
 
 def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -> list[tuple[int, str, int]]:
     """Every link the circuit's META ``links`` declares, as (reader instance, port, writer instance), from the units' reads
     (`cut_reads` of the statement's units ``indices``): a link port's leaves are, in the reader, circuit inputs (no link) or one
-    writer's whole output row, the writer one of the statement's instances. Refuses a cut wire (a leaf reading another unit's
-    output) that no link port carries."""
+    writer's outputs from the link's offset (`LINK_AT`, 0 without it), the writer one of the statement's instances. Refuses a
+    cut wire (a leaf reading another unit's output) that no link port carries."""
     links = meta.get("links") or []
     pos = {u: i for i, u in enumerate(indices)}
-    covered = [(x["port"], *x["leaves"]) for x in links]
+    covered = [(x["port"], *x["leaves"], x.get(LINK_AT, 0)) for x in links]
     out = []
     for i, r in enumerate(reads):
         for t, x in enumerate(r):
-            if x is not None and not any(lo <= t < hi for _p, lo, hi in covered):
+            if x is not None and not any(lo <= t < hi for _p, lo, hi, _a in covered):
                 raise ValueError(f"cut wire: unit {indices[i]}'s parameter leaf {t} reads unit {x[0]}'s output {x[1]}, and no link port carries it")
-        for port, lo, hi in covered:
+        for port, lo, hi, at in covered:
             try:
-                v = _whole_row(r[lo:hi], n_out)
+                run = _writer_run(r[lo:hi], n_out)
             except ValueError as e:
                 raise ValueError(f"link port {port}: unit {indices[i]}'s leaves [{lo}, {hi}): {e}") from None
-            if v is None:
+            if run is None:
                 continue
+            v = run[0]
+            if run[1] != at:
+                raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}'s outputs from {run[1]}, and the link's "
+                                 f"offset is {at}")
             if v not in pos:
                 raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}, which is not one of the statement's units")
             out.append((i, port, pos[v]))
@@ -335,12 +377,15 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
 
 
 def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
-                   packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
+                   packed: bool | Sequence[bool] = False, blocks: bool = True,
+                   frames: Sequence[tuple[int, int] | None] | None = None) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
-    words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
-    SHA-512 blocks (not ``blocks``: the words it uses, a bit row's ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
+    words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence; ``frames``: per group, the
+    row `_framed` places them in), each padded to whole 64-word SHA-512 blocks (not ``blocks``: the words it uses, a bit row's
+    ``ceil(bits / 16)``), and ``out0 .. out{W_out-1}``."""
     groups = groups or [list(range(len(uc.inputs)))]
-    slots = [_slots([uc.in_widths[t] for t in g], pk) for g, pk in zip(groups, _packs(packed, groups), strict=True)]
+    slots = [_framed([uc.in_widths[t] for t in g], pk, fr)
+             for g, pk, fr in zip(groups, _packs(packed, groups), _frames(frames, groups), strict=True)]
     port_words = tuple(_pad(used, BLOCK_WORDS) if blocks else used for _at, used in slots)
     C = gf2.Circuit()
     leaves = []
@@ -368,16 +413,17 @@ def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: li
 
 
 def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
-         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
+         groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False,
+         frames: Sequence[tuple[int, int] | None] | None = None):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
-    the layout `class_lowering` reads (``packed`` as there)."""
+    the layout `class_lowering` reads (``packed`` and ``frames`` as there)."""
     groups = groups or [list(range(len(uc.inputs)))]
     port_words = port_words or [w_in]
     n = len(ins[0]) if ins else len(want[0])
     rows = np.zeros((n, w_in), np.uint16)
     base = 0
-    for g, wp, pk in zip(groups, port_words, _packs(packed, groups)):
-        at, _used = _slots([uc.in_widths[t] for t in g], pk)
+    for g, wp, pk, fr in zip(groups, port_words, _packs(packed, groups), _frames(frames, groups)):
+        at, _used = _framed([uc.in_widths[t] for t in g], pk, fr)
         for t, (leaf, bit) in zip(g, at):
             w = uc.in_widths[t]
             v = np.asarray(ins[t], dtype=np.uint64)
@@ -636,9 +682,10 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the size class's ``definition`` (the class names itself in ``program_digests``), and every read of another
-    unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's output row's words (one word per output,
-    as ``out`` holds them, never packed), one table row per reading instance, committed under the writer's ``out`` salt (and,
-    ``strict``, checked here to be the writer's row).
+    unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's whole output row (one word per output,
+    as ``out`` holds them, never packed), the reader's leaves at their outputs' words from the link's offset (`_link_frame`),
+    one table row per reading instance, committed under the writer's ``out`` salt (and, ``strict``, checked here to be the
+    writer's row).
 
     ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
@@ -672,6 +719,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [list(zip(*(idents[i] for i in j))) for j in joins] if idents is not None else None
     packs: bool | list[bool] = packed
     spans: list = []
+    frames: list | None = None
     writers: list = []
     definition = None
     if wiring is not None:
@@ -689,10 +737,11 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         leaf = {u: i for i, u in enumerate(tree_leaves(tp, definition))} if wiring.tree is not None else None
         groups, origin, spans = link_ports(uc, groups, reads, n_out)
         packs = [packed and s is None for s in spans]
+        frames = [None if s is None else _link_frame(uc, g, s[2]) for g, s in zip(groups, spans)]
         for s in spans:
             ws = None
             if s is not None:
-                ws = [_whole_row(r[s[0]:s[1]], n_out) for r in reads]
+                ws = [None if run is None else run[0] for run in (_writer_run(r[s[0]:s[1]], n_out) for r in reads)]
                 if leaf is not None:
                     if None in ws:
                         raise ValueError(f"class {name}: a tree port's every instance reads a writer's leaf, and one reads circuit "
@@ -706,12 +755,21 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [idents[o] if s is None else [(("tree", w) if leaf is not None else ("link", w, k)) if w is not None else ("in", k)
                                                for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
-    links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
-    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
+    links = [_link(f"p{i}", *s) for i, s in enumerate(spans) if s is not None]
+    low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows, frames=frames)
     whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
                        (b"/links:" + json.dumps(links).encode() if links else b""), len(groups), act.fn if whole else None)
-    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
+    rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs,
+                                frames)
+    for i, (ws, fr) in enumerate(zip(writers, frames or [])):
+        if ws is None:
+            continue
+        lo, hi = fr[0], fr[0] + _slots([uc.in_widths[t] for t in groups[i]])[1]
+        for k, w in enumerate(ws):
+            if w is not None:
+                row = np.asarray(wiring.tree.rows[w], np.uint16) if wiring.tree is not None else outs[w]
+                per_port[f"p{i}"][k, :lo], per_port[f"p{i}"][k, hi:len(row)] = row[:lo], row[hi:]
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     if real is not None:
         outs[real:] = got[real:].astype(np.uint16)

@@ -6,7 +6,8 @@ them, each link row the writer's leaf by path (a tree port). The honest staging'
 same circuit with link rows that differ, as do a reader whose read is moved to another unit's leaf (``other_leaf``) and one
 whose link row is a row of other words under its writer's salt (``other_words``). The Lean verifier
 (`verity-verify-proof statement --program --registered`, when a Lean toolchain is present) accepts the writers and the
-honest readers and refuses every cheat, a linked statement without its program, and one without registered reads; a
+honest readers and refuses every cheat, a linked statement without its program, and one without registered reads, and
+accepts a reader of part of its writer's outputs (``partial``), whose link row is the writer's whole row from an offset; a
 one-layer statement, with no cut wire, is accepted with its units derived when staged with `Wiring`, and as before when
 staged without. When ``FLOCK_CIRCUIT`` names a build of ``flock-circuit``, the live verifier gives the same verdicts
 with its own links file. Linking binds a public topology; it does not hide the topology."""
@@ -39,6 +40,8 @@ G, N_IN, N_OUT, N = 4, 4, 2, 2
 NC = N_IN + N_OUT
 #: layer 0 reads c[0:4]; layer 1 reads c[4:6], then layer 0's outputs
 WIRED = ((("c", 0, N_IN),), (("c", N_IN, NC), ("u", 0, 0, N_OUT)))
+#: layer 1 reads c[4:6] and c[0], then layer 0's second output alone: a link from offset 1
+PART = ((("c", 0, N_IN),), (("c", N_IN, NC), ("c", 0, 1), ("u", 0, 1, N_OUT)))
 FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
@@ -195,6 +198,13 @@ def staged(tmp_path_factory):
     return d, _stage(WIRED, d, True), flat, _stage(FLAT, flat, False)
 
 
+@pytest.fixture(scope="module")
+def partial(tmp_path_factory):
+    CS.cache_slot_circuits()
+    d = tmp_path_factory.mktemp("partial")
+    return d, _stage(PART, d, True)
+
+
 def _meta(d: Path) -> dict:
     return json.loads((d / "circuit.txt").read_text().split("\n", 2)[1][5:])
 
@@ -241,7 +251,20 @@ def test_honest_link_rows_are_their_writers_output_rows_and_each_cheat_breaks_th
     assert all(bc["wrong_salt"](t, port) != bc["writers"](t, "out") for t in range(N))
 
 
-def test_link_triples_refuse_a_cut_wire_no_link_carries_and_a_partial_read(staged):
+def test_a_read_of_part_of_a_writers_outputs_links_its_whole_row_from_its_offset(partial):
+    """Reader instance t reads writer t's second output alone: its link row is still writer t's whole output row, the same
+    `b || c`, and the link names offset 1."""
+    d, (_fn, _p, _q, tp, _st) = partial
+    [link] = _meta(d / "honest")["links"]
+    x0 = len(tp.inputs(0)) - N_IN
+    assert link == {"port": link["port"], "leaves": [x0 + N_IN - 1, x0 + N_IN], CS.LINK_AT: 1}
+    assert json.loads((d / "links.json").read_text())["links"] == [[N + t, link["port"], t] for t in range(N)]
+    bc = {k: _bc(d / k, N) for k in ("writers", "honest", "own", "made_up")}
+    assert all(bc[k](t, link["port"]) == bc["writers"](t, "out") for k in ("honest", "own") for t in range(N))
+    assert all(bc["made_up"](t, link["port"]) != bc["writers"](t, "out") for t in range(N))
+
+
+def test_link_triples_refuse_a_cut_wire_no_link_carries_a_read_at_another_offset_and_not_a_run(staged):
     _d, (_fn, _p, _q, tp, _st), _flat, _ = staged
     indices = list(range(tp.population))
     reads = CS.cut_reads(tp, indices)
@@ -249,9 +272,11 @@ def test_link_triples_refuse_a_cut_wire_no_link_carries_and_a_partial_read(stage
     n_out = lambda v: len(tp.outputs(v))  # noqa: E731
     with pytest.raises(ValueError, match="no link port carries it"):
         CS.link_triples({}, reads, indices, n_out)
-    with pytest.raises(ValueError, match="not one unit's whole output row"):
+    with pytest.raises(ValueError, match="outputs from 1, and the link's offset is 0"):
         CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN - 1]},
                                    {"port": "p1", "leaves": [x0 + N_IN - 1, x0 + N_IN]}]}, reads, indices, n_out)
+    with pytest.raises(ValueError, match="not a run of one unit's outputs in order"):
+        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT - 1, x0 + N_IN]}]}, reads, indices, n_out)
     with pytest.raises(ValueError, match="not one of the statement's units"):
         CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN]}]}, reads[N:], indices[N:], n_out)
 
@@ -318,6 +343,25 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     ok, out = _lean("--circuit", str(flat / "plain" / "circuit.txt"), "--public", str(flat / "plain" / f"pub-{k}.bin"),
                     "--partition", str(flat / "partition.json"))
     assert ok is not None and ok["partition_check"]["units"] == "as stated", out
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_lean_accepts_a_read_from_an_offset_and_refuses_a_made_up_one(partial):
+    d, _st = partial
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
+
+    def at(name: str, reads: str):
+        return _lean("--circuit", str(d / name / "circuit.txt"), "--public", str(d / name / f"pub-{N}.bin"), *bound,
+                     "--registered", str(d / reads))
+
+    ok, out = at("writers", "writers.reads.json")
+    assert ok is not None, out
+    for name, reads in (("honest", "readers.reads.json"), ("own", "own.reads.json")):
+        ok, out = at(name, reads)
+        assert ok is not None and f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], (name, out)
+    bad, out = at("made_up", "readers.reads.json")
+    assert bad is None and NOT_OPEN in out, out
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
