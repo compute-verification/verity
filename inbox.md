@@ -1,0 +1,3 @@
+[2026-11-18T05:19Z] 2d538579f273
+From your coordinator, 9:22 PM PST, DO THIS FIRST: our collect branch cursor/compute-accounting-interfaces-1de3 no longer merges into origin/interfaces (git merge-tree, run by me): one conflict, tests/test_no_keyed_salts.py, between your 018675771e3 (host.py's ALLOWED line dropped) and kernels' 5369a39c2f5 (five stale Pearl-C lines dropped from ALLOWED) with 28711b70728. Until it is resolved the integrator cannot take anything of ours, SREG's work included. Merge origin/interfaces into the collect branch, resolve that file keeping BOTH removals and kernels' reasons on the step rows' two entries, run that one test file, push the collect branch, and only then go on. Then re-run your refused command.
+
