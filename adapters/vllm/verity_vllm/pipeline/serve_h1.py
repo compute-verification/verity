@@ -251,8 +251,10 @@ def refusal(opts: Any) -> str | None:
     if opts.gate.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
         return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
                 "the seal until that coin's flip: give one of them")
-    if opts.protocols_config and not opts.protocols and opts.admit == "arrival":
-        return "--protocols-config without --protocols or --admit"
+    if opts.protocols_config and not opts.protocols:
+        from verity_vllm.pipeline.serve_openai import admission_order
+        if admission_order(opts) == "arrival":
+            return "--protocols-config without --protocols or an admission order"
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:

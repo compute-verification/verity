@@ -21,7 +21,7 @@ class EngineLoop:
     ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
     requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish.
     With ``hook`` (the admission hook on the engine's scheduler, `engine.admission`), the loop steps only once it is
-    ready, and a drain opens it; with ``gate`` (``--admit tick``, the network attester's gate among the hook's holds), the
+    ready, and a drain opens it; with ``gate`` (order ``tick``, the network attester's gate among the hook's holds), the
     gate's records come through `tick`, in queue order with the admissions.
 
     Each request goes into the engine with the seed `engine.served_seed.served` gives it: a stochastic one that sent none is
