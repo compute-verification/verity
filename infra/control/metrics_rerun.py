@@ -31,10 +31,13 @@ that finds it held does nothing and says so. Then:
                 `--on NODE` with a pool) runs on `--on`, in `--pool`. Never `auto`, never a small-disk machine (SMALL_DISK);
               - none of its numbers has a launch of this loop's still in flight, or one that passed less than that number's
                 `every` ago, or one that failed (it ran and ended non-zero, it never ran, or its launch named no run) less
-                than RETRY_S or its `every`, the shorter, ago, whatever the door says (the record);
+                than RETRY_S or its `every`, the shorter, ago, whatever the door says (the record). A run that waited out its
+                pool's line (`slot_timeout`) is no failure: it is launched again at a later pass, unrung and uncounted;
               - it has not ended the same way (`cause`) SAME_CAUSE times running under the declaration it has now, unless
                 HOLD_S has passed since the last: a change to its rows launches it again;
               - the record was not reset (a corrupt one moved aside) less than that number's `every` ago;
+              - fewer than `--max-in-flight` of this loop's launches are in flight (launching, queued or running), counting
+                this pass's;
               - this pass has launched fewer than `--max`;
               - the stop file (`--stop`) is absent, read again just before each launch: it stops every launch (a dry run
                 judges all the same).
@@ -67,7 +70,7 @@ The plan, written by the lead for the week (TOML; a missing file lists no machin
 usage (the watchers' `metrics-rerun` loop on the control pod, infra/control/watchers.toml; research importable, the store's
 key, a site key with events:read in $JOBS_TOKEN, and $SLACK_BOT_TOKEN for its rings):
   python3 infra/control/metrics_rerun.py --tree DIR --state FILE --stop FILE --plan FILE --on MACHINE --pool POOL --every S
-      [--max 2] [--once] [--dry-run]
+      [--max 2] [--max-in-flight 4] [--once] [--dry-run]
   python3 infra/control/metrics_rerun.py classify --tree DIR     # each number of a checkout by `classify`, and the counts
 """
 from __future__ import annotations
@@ -134,7 +137,11 @@ OWNERS = "NODE"                                         # `--on NODE`: a machine
 PLACEHOLDER = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*=)?\[?([A-Z][A-Z0-9_]+)\]?$")  # FIRE_RUN, [RUN], A5_CARD=CARD: the owner's
 NEVER_RAN = ("unlaunched", "unrun")                     # the run never registered or reached its machine; it never took its slot
 UNSENT = "unsent"                                       # a registered run whose launch stopped before it reached its machine
-OVER = ("passed", "failed", *NEVER_RAN)
+WAITED = "waited"                                       # its pool had no slot for it within the wait (`slot_timeout`): not started
+NOT_STARTED = 75                                        # slot.py's exit when it never ran its command
+#: slot.py's slot.json `why` when its waiter left the line at --wait-max, before its command could run
+SLOT_WAIT = "no check slot within --wait-max"
+OVER = ("passed", "failed", WAITED, *NEVER_RAN)
 FAILED = ("failed", *NEVER_RAN)                         # a launch that rings its owners and is tried again
 RETRY_S = 3600                                          # a failed number is launched again this long after, or its every if shorter
 SAME_CAUSE = 3                                          # failures in a row that ended alike, before the number is held
@@ -168,6 +175,7 @@ REASONS = {
     "failing": "it ended the same way SAME_CAUSE times running, and is held HOLD_S unless its rows change",
     "reset": "the record was reset less than its every ago",
     "max": "the pass made its --max launches",
+    "cap": "the loop has its --max-in-flight launches in flight",
     "stopped": "the stop file stands",
 }
 
@@ -181,6 +189,7 @@ class Settings:
     on: str
     pool: str
     max: int = 2
+    max_in_flight: int = 4
     url: str = URL
     helper: str = HELPER
 
@@ -384,9 +393,10 @@ def of(record: list[dict], metric: str) -> list[dict]:
 
 
 def settle(e: dict, status: Callable[[str], dict | None], now: float, over: bool, say: Callable[[str], None]) -> None:
-    """How launch `e` stands, read from its run's own record: passed, failed (it ran), unrun (it never took its slot), unlaunched
-    (no record of the run, or one that never reached its machine, once its launch is `over`), or in flight. A run whose record
-    can't be read stays in flight."""
+    """How launch `e` stands, read from its run's own record: passed, failed (it ran), waited (its pool had no slot for it in
+    time: no failure, never rung or counted), unrun (it never took its slot otherwise), unlaunched (no record of the run, or one
+    that never reached its machine, once its launch is `over`), or in flight. A run whose record can't be read stays in
+    flight."""
     try:
         s = status(e["run"]) if e.get("run") else None
     except Exception as x:  # noqa: BLE001  (a run whose machine can't be read stays in flight; read again next pass)
@@ -396,6 +406,9 @@ def settle(e: dict, status: Callable[[str], dict | None], now: float, over: bool
         if over:
             why = f"run {e.get('run')} never reached its machine" if s else f"no record of run {e.get('run')}"
             e.update(state="unlaunched", ended=iso(now), why=why, cause="unlaunched", rung=False)
+        return
+    if s["state"] in ENDED and s.get("waited"):
+        e.update(state=WAITED, ended=iso(now), rc=s["rc"], how=s["state"])
         return
     if s["state"] in ENDED:
         ok = "passed" if s["state"] == "done" and s["rc"] == 0 else "failed" if s["started"] else "unrun"
@@ -410,21 +423,39 @@ def settle(e: dict, status: Callable[[str], dict | None], now: float, over: bool
 
 
 def refresh(record: list[dict], status: Callable[[str], dict | None], now: float, say: Callable[[str], None]) -> None:
-    """How each launch the record holds as in flight stands now (`settle`). A launch is over once LAUNCH_S has passed since it
-    began: until then a pass that died during it may have left its `research run` still registering the run."""
+    """How each launch the record holds as in flight stands now (`settle`), and one line naming those that waited out their
+    pool's line at this pass. A launch is over once LAUNCH_S has passed since it began: until then a pass that died during it
+    may have left its `research run` still registering the run."""
+    waited = []
     for e in record:
         if e.get("state") not in OVER:
             settle(e, status, now, now - at(e["at"]) >= LAUNCH_S, say)
+            if e["state"] == WAITED:
+                waited.append(e)
+    if waited:
+        say(f"congestion: {len(waited)} run(s) had no slot within their pool's wait and never started, each launched again on "
+            "a later pass, with no ring and no count toward a hold: "
+            + "; ".join(f"{e['run']} ({', '.join(e['metrics'])}) on {e.get('machine')}" for e in waited))
+
+
+def slot_timeout(s: dict) -> bool:
+    """Whether the run of summary `s` (`runs.summarize`) ended because its pool had no slot for it within the wait: slot.py
+    exited NOT_STARTED having left the line at --wait-max (slot.json `left`, SLOT_WAIT). A workload's own exit 75 is never
+    this: its run took a slot (slot.json `held`), or ran in none (no slot.json)."""
+    slot = s.get("slot") or {}
+    return (s.get("rc") == NOT_STARTED and slot.get("state") == "left"
+            and str(slot.get("why") or "").startswith(SLOT_WAIT))
 
 
 def trim(record: list[dict], declared: set[str]) -> None:
-    """The newest KEEP launches, every launch in flight, and for each declared number its newest SAME_CAUSE + 1 launches and
-    its newest two that ran, which the bounds read."""
+    """The newest KEEP launches, every launch in flight, and for each declared number its newest launch, its newest
+    SAME_CAUSE + 1 that didn't wait for a slot and its newest two that ran, which the bounds read."""
     keep = set(range(max(0, len(record) - KEEP), len(record)))
     keep |= {i for i, e in enumerate(record) if e.get("state") not in OVER}
     for m in declared:
         mine = [i for i, e in enumerate(record) if m in e.get("metrics", [])]
-        keep |= set(mine[-(SAME_CAUSE + 1):])
+        keep |= set(mine[-1:])
+        keep |= set([i for i in mine if record[i].get("state") != WAITED][-(SAME_CAUSE + 1):])
         keep |= set([i for i in mine if record[i].get("state") in ("passed", "failed")][-2:])
     record[:] = [e for i, e in enumerate(record) if i in keep]
 
@@ -458,9 +489,12 @@ def cause(e: dict) -> str:
 
 
 def streak(record: list[dict], metric: str, declared: str | None = None) -> list[dict]:
-    """`metric`'s newest launches, newest first, while each failed with the newest's cause (under `declared`, when given)."""
+    """`metric`'s newest launches, newest first, while each failed with the newest's cause (under `declared`, when given); one
+    that waited for a slot is passed over, neither counting nor breaking it."""
     out = []
     for x in reversed(of(record, metric)):
+        if x.get("state") == WAITED:
+            continue
         if x.get("state") not in FAILED or (declared and x.get("declared") != declared) or (out and cause(x) != cause(out[0])):
             break
         out.append(x)
@@ -487,12 +521,18 @@ def bound(record: list[dict], r: dict, job: Job, now: float) -> tuple[str, str] 
     return None
 
 
+def in_flight(record: list[dict]) -> int:
+    """The loop's launches not yet ended: launching, queued or running, as `refresh` last read them."""
+    return sum(e.get("state") not in OVER for e in record)
+
+
 def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cfg: Settings, now: float,
            held_since: str | None = None) -> list[Decision]:
     """What a pass does with each job, with its reason of REASONS: a job that is due, or that the door doesn't list, is said;
     a fresh one and a loop's are not."""
     readings = {str(m.get("id")): m for m in door.get("metrics") or [] if isinstance(m, dict)}
     busy = {e.get("machine") for e in record if e.get("state") not in OVER}
+    flying = in_flight(record)
     out, launched = [], 0
     for job in jobs:
         def skip(reason: str, why: str, job: Job = job, **kw) -> None:
@@ -537,6 +577,10 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
             machine, pool = free[0], None
         else:
             machine, pool = v.machine, cfg.pool
+        if flying + launched >= cfg.max_in_flight:
+            skip("cap", f"{why}; but {flying + launched} of this loop's launches are in flight, its --max-in-flight "
+                        f"{cfg.max_in_flight}")
+            continue
         if launched >= cfg.max:
             skip("max", f"{why}; but this pass has made its {cfg.max} launches (--max)")
             continue
@@ -607,7 +651,8 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
     said = [d for d in out if d.said]
     say(f"main at {commit[:12]}: {sum(len(j.rows) for j in jobs)} numbers declared, {len(said)} said, "
         f"{sum(d.launch for d in out)} to launch" + (" (dry run: none is)" if dry_run else "")
-        + f"; by reason: {', '.join(f'{r} {n}' for n, r in counts)}")
+        + f"; {in_flight(record)} in flight (--max-in-flight {cfg.max_in_flight}), "
+          f"{sum(d.reason == 'cap' for d in out)} held back for it; by reason: {', '.join(f'{r} {n}' for n, r in counts)}")
     ring_placeholders(state, jobs, out, fx, now, say, dry_run)
     for k, d in enumerate(said):
         nums = ", ".join(d.job.ids)
@@ -763,7 +808,7 @@ class Pod:
         """The run's state and exit code, whether it started (took its slot, or, outside a pool, ran and didn't exit as
         slot.py does when it never ran its command), and its failure's class and line where `research run` classified one. None when no run of that id is registered here; UNSENT when its launch
         stopped before it named the run's directory on its machine (remote.json's `remote_run_dir`), so it never got there."""
-        from research import asker, monitors, remote, runs
+        from research import asker, remote, runs
 
         d = runs.runs_root() / run
         if not d.is_dir():
@@ -775,8 +820,9 @@ class Pod:
         if rec.get("last_fetch_error"):
             raise ConnectionError(f"its machine is unreachable (rc {rec['last_fetch_error'].get('rc')})")
         s = runs.summarize(d)
-        started = asker.started(s) or (s.get("slot") is None and bool(s.get("started_utc")) and s.get("rc") != monitors.NOT_STARTED)
-        return {"state": s["state"], "rc": s["rc"], "started": started, "class": s.get("class"), "why": s.get("why")}
+        started = asker.started(s) or (s.get("slot") is None and bool(s.get("started_utc")) and s.get("rc") != NOT_STARTED)
+        return {"state": s["state"], "rc": s["rc"], "started": started, "class": s.get("class"), "why": s.get("why"),
+                "waited": slot_timeout(s)}
 
     def launch(self, argv: list[str]) -> tuple[int | None, str]:
         """`argv`, a `research run`, in the clone with the clone's own research and without the pod's keys (LEFT_OUT): (its
@@ -826,7 +872,10 @@ def load_state(path: Path, now: float, say: Callable[[str], None], dry_run: bool
 def save_state(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(state, indent=1) + "\n")
+    with open(tmp, "w") as f:
+        f.write(json.dumps(state, indent=1) + "\n")
+        f.flush()
+        os.fsync(f.fileno())                             # on disk before the rename, so a crash leaves the old or the new
     tmp.replace(path)
 
 
@@ -847,13 +896,16 @@ def parse(argv: list[str] | None = None) -> tuple[Settings, argparse.Namespace]:
     ap.add_argument("--pool", required=True, help="a CPU command's pool on that machine")
     ap.add_argument("--every", required=True, type=float, metavar="S", help="seconds between passes")
     ap.add_argument("--max", type=int, default=2, help="launches a pass at most")
+    ap.add_argument("--max-in-flight", type=int, default=4, metavar="N",
+                    help="the loop's launches not yet ended (queued or running) at most: a pass launches nothing new at N")
     ap.add_argument("--url", default=URL, help="origin")
     ap.add_argument("--credential-helper", default=HELPER, help="git's credential helper for origin ('' for none)")
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="one pass that says what it would launch and why, launching nothing "
                                                            "and writing no record")
     ns = ap.parse_args(argv)
-    return Settings(ns.tree, ns.state, ns.stop, ns.plan, ns.on, ns.pool, ns.max, ns.url, ns.credential_helper), ns
+    return Settings(ns.tree, ns.state, ns.stop, ns.plan, ns.on, ns.pool, ns.max, ns.max_in_flight, ns.url,
+                    ns.credential_helper), ns
 
 
 def census(tree: Path, out=print) -> dict[str, int]:
