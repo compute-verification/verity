@@ -1,0 +1,5 @@
+2x3 registered	{"blocks": 2, "gates": 84, "inputs": 6880, "fresh": 64, "cross_wires": 0, "free": 0, "ingress": 0, "unregistered": 64, "openings": 0, "wired_rows": 140, "wired_bits": 4224, "complies": true, "failure": null}
+4x35 registered	{"blocks": 4, "gates": 980, "inputs": 115936, "fresh": 64, "cross_wires": 0, "free": 0, "ingress": 0, "unregistered": 64, "openings": 0, "wired_rows": 7832, "wired_bits": 243968, "complies": true, "failure": null}
+2x3 one input run handed to two rows	{"error": "inputs"}
+2x3 a template in two root nodes	{"error": "program"}
+2x3 composite plain7 alone	{"error": "inputs"}
