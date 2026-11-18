@@ -196,6 +196,7 @@ from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME  # noqa: E402
 from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
@@ -692,7 +693,7 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
     w = tied["log"][0]
     scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
+    pearl = isinstance(scheme, str) and getattr(BY_NAME.get(scheme), "family", None) == "pearl-c"
     return {"record": DD.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 
