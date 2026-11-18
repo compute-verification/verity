@@ -28,6 +28,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
+          "verity/protocols/proofs/spot/prover/produced.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
           "adapters/vllm/verity_vllm/errors.py",
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
