@@ -291,7 +291,6 @@
   "benchmarks/pous/p2_v1/bw_session.sh": 1,
   "benchmarks/pous/pod.sh": 5,
   "benchmarks/pous/streamed_wipe/run.sh": 1,
-  "benchmarks/pouw/edited_gemm_profile/fattnrun.sh": 1,
   "benchmarks/pouw/filler/capfill_co_probe.sh": 1,
   "benchmarks/pouw/filler/capfill_fit_probe.sh": 1,
   "benchmarks/pouw/filler/capfill_fold_probe.sh": 1,
