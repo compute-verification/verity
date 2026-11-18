@@ -198,7 +198,8 @@ def current_spec(spec_id: str) -> str:
     now = former_spec(spec_id)
     if now is None:
         return spec_id
-    return now[0] if load_spec(now[0]).cards == (now[1],) else f"{now[0]}@{now[1]}"
+    doc = tomllib.loads(_spec_path(now[0]).read_text())
+    return now[0] if doc.get("cards", [doc.get("card")]) == [now[1]] else f"{now[0]}@{now[1]}"
 
 
 def _spec_path(spec: str | Path) -> Path:
