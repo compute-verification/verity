@@ -38,4 +38,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam",
           "calibration/hardware/cards",
-          "verity/device.py"]
+          "verity/device.py",
+          # what loading the bandwidth audit's declaration reads, through which its codec is read (`scheme.part`)
+          "verity/hooks.py", "verity/party.py", "verity/protocol.py", "verity/protocols/compose",
+          "verity/protocols/resource_accounting/memory/poub/scheme.py",
+          "verity/protocols/resource_accounting/memory/pous/__init__.py",
+          "verity/protocols/resource_accounting/memory/pous/attester",
+          "verity/protocols/resource_accounting/memory/pous/verifier",
+          "verity/protocols/resource_accounting/scheme.py",
+]

@@ -16,4 +16,15 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/codec.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/word_codec"]
+          "verity/protocols/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py", "verity/protocols/resource_accounting/memory/poub/__init__.py", "benchmarks/word_codec",
+          # what loading the bandwidth audit's declaration reads, through which its codec is read (`scheme.part`)
+          "verity/channel.py", "verity/circuits", "verity/hooks.py", "verity/party.py", "verity/protocol.py",
+          "verity/protocols/compose", "verity/protocols/proofs/__init__.py",
+          "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/verifier",
+          "verity/protocols/resource_accounting/memory/poub/scheme.py",
+          "verity/protocols/resource_accounting/memory/poub/verifier",
+          "verity/protocols/resource_accounting/memory/pous/__init__.py",
+          "verity/protocols/resource_accounting/memory/pous/attester",
+          "verity/protocols/resource_accounting/memory/pous/verifier",
+          "verity/protocols/resource_accounting/scheme.py",
+]

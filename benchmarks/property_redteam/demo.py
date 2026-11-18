@@ -39,7 +39,10 @@ from verity.circuits.silicon.integer import (
 )
 from verity.circuits.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
 from verity.circuits.types import Array, Value
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as C
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+C = part(schemes.get("bandwidth"), "codec")
 
 M32 = (1 << 32) - 1
 

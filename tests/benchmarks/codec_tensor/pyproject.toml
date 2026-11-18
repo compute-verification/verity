@@ -33,4 +33,12 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/codec_tensor/
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           # bench.py's MODELS, which run.py's --model takes: the harness's Llama-3.1 shapes (overhead.SHAPES)
           "benchmarks/harness/verity_bench/overhead.py",
-          "tools/config/verity_config"]
+          "tools/config/verity_config",
+          # what loading the bandwidth audit's declaration reads, through which its codec is read (`scheme.part`)
+          "verity/hooks.py", "verity/party.py", "verity/protocol.py", "verity/protocols/compose",
+          "verity/protocols/resource_accounting/memory/poub/scheme.py",
+          "verity/protocols/resource_accounting/memory/pous/__init__.py",
+          "verity/protocols/resource_accounting/memory/pous/attester",
+          "verity/protocols/resource_accounting/memory/pous/verifier",
+          "verity/protocols/resource_accounting/scheme.py",
+]

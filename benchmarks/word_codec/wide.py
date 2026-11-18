@@ -41,7 +41,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as RB
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+RB = part(schemes.get("bandwidth"), "codec")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 

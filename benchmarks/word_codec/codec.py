@@ -36,8 +36,11 @@ from __future__ import annotations
 import hashlib
 import struct
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as RB
-from verity.protocols.resource_accounting.memory.poub.verifier.codec import Key
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+RB = part(schemes.get("bandwidth"), "codec")
+Key = RB.Key
 
 FIELD = RB.Field("m61", 61, 1)
 P = FIELD.p

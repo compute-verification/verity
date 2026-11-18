@@ -73,7 +73,10 @@ from gates import (
     proven,
 )
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+codec = part(schemes.get("bandwidth"), "codec")
 
 F = codec.P1024
 P = F.p

@@ -21,10 +21,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.protocols.resource_accounting.memory.poub.verifier.codec import BLOCK_BYTES
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
 
 from .physical import Datacenter
 from .time import Interval
+
+BLOCK_BYTES = part(schemes.get("bandwidth"), "codec").BLOCK_BYTES
 
 
 @dataclass(frozen=True)

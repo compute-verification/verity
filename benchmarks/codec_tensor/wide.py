@@ -36,19 +36,13 @@ consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of 
 
 from __future__ import annotations
 
-from verity.protocols.resource_accounting.memory.poub.verifier import codec as RB
-from verity.protocols.resource_accounting.memory.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
-    MASK_INDEX,
-    P512,
-    P1024,
-    SEED_BYTES,
-    Field,
-    Key,
-    Sloth,
-    derive,
-    rho,
-    rho_inv,
-)
+from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import part
+
+RB = part(schemes.get("bandwidth"), "codec")
+#: the store codec's, which this module's users take
+MASK_INDEX, P512, P1024, SEED_BYTES = RB.MASK_INDEX, RB.P512, RB.P1024, RB.SEED_BYTES
+Field, Key, Sloth, derive, rho, rho_inv = RB.Field, RB.Key, RB.Sloth, RB.derive, RB.rho, RB.rho_inv
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 TASK_BYTES = 8192
