@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 import pytest
 
 from tests import fake_vllm
+from verity import hooks as H
+from verity_vllm import messages
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.linear import vllm_site
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Shard, Stack
@@ -89,11 +91,17 @@ def test_attach_patches_each_quant_method_once_through_hooks_and_sets_nothing_on
     ex = Executor()
     stack = Stack([s for s, _ in sites], ex)
     h = hooks.Hooks(tag="pouw:test")
-    vllm_site.attach(stack, sites, h)
+    messages.close()
+    vllm_site.attach(sites, h)
     try:
         assert len(h.entries) == 2 and [dict(vars(layer)) for _, layer in sites] == before
         layers = [layer for _, layer in sites]
+        assert layers[0].quant_method.apply(layers[0], "x") == ("stock", "qkv", "x", None)       # no kernel: vLLM's own
+        seen = []
+        messages.current().subscribe("s", "blocks", seen.append)
+        messages.current().request("pouw:test", H.ComputeBlockWith(stack))
         assert layers[0].quant_method.apply(layers[0], "x") == ("stock", "qkv", "x", None)       # inactive: vLLM's own
+        assert [(d.block, d.key, d.shape, d.format) for d in seen] == [("model.layers.0", 0, {"n": 6144, "k": 4096}, "bf16")]
         stack.activate(Arm("pearlc", "bf16", ex.name))
         with stack.pass_(PassSpec(index=3)):
             assert layers[1].quant_method.apply(layers[1], "x1", "b") == ("pearl", 1)
@@ -103,6 +111,7 @@ def test_attach_patches_each_quant_method_once_through_hooks_and_sets_nothing_on
         assert ex.calls == [(1, "model.layers.2", "x1"), (2, "model.layers.3", "x2")] and stack.passes == [{"calls": 2}]
     finally:
         h.uninstall()
+        messages.close()
     assert hooks.live("pouw:test") == () and all("apply" not in vars(layer.quant_method) for _, layer in sites)
 
 

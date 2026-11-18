@@ -72,23 +72,9 @@ def test_refusals(bad: dict, match: str) -> None:
 
 
 def test_hooks() -> None:
-    assert _toy(hooks=("kv", "build")).hooks == ("kv", "build")
+    assert _toy(hooks=("memory", "declared")).hooks == ("memory", "declared")
     with pytest.raises(ValueError, match="not hooks of a served run"):
-        _toy(hooks=("kv", "pouw-gemm"))
-
-
-def test_hook_types_hold_no_tensor_type() -> None:
-    page = object()
-    step = S.Step(3, (S.KvWrite(7, 0, 16),))
-    assert step.writes[0].count == 16 and not step.ended
-    assert S.KvPool(4, 16, 128, 2, (page,)).layers == (page,)
-    assert S.KvBlocks("freed", (7,)).blocks == (7,)
-    assert S.Admission("scheduled", ("req-1",), step=3).step == 3
-
-    def wrap(call: S.LinearCall, original):
-        return original(None)
-    call = S.LinearCall(0, "model.layers.0.mlp", 8, 4, "int8", page, page)
-    assert wrap(call, lambda weight: ("served", weight)) == ("served", None)
+        _toy(hooks=("memory", "pouw-gemm"))
 
 
 def test_time_only_through_an_assumption() -> None:

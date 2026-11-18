@@ -30,6 +30,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
@@ -62,15 +63,26 @@ REGISTRATION = "5e" * 64
 PARAMS = tuple(f"weights/model.layers.0.mlp.experts.{p}@{H}/b0/table" for p in ("gate_up_proj", "down_proj"))
 
 
-def _read_signature(S_):
-    return EMB.read(S_.V, S_.H).signature()[0], Tuple(Array(S_.H, EMB.BF16), BL.BIT)
+def _bits_signature(S_):
+    params = EMB.read(S_.V, S_.H).signature()[0]
+    return (("tok", EMB.TOKEN), *params[1:]), Tuple(Array(S_.H, EMB.BF16), BL.BIT)
 
 
 #: a read's ports and (h, ok) without its hashes: h the row (a read's elements are its key, eight words each of its root
 #: and domain id, then the row's H), ok 1
-READ = TR.part("InteriorRegisteredTablesTestRead", ("V", "H"), _read_signature,
-               lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's ports with none of its hashes",
-               version=0, register=False)
+_READ_BITS = TR.part("InteriorRegisteredTablesTestReadBits", ("V", "H"), _bits_signature,
+                     lambda C, S_, *e: [*e[17:17 + S_.H], [ONE]], "h = row, ok = 1: a read's bits with none of its hashes",
+                     version=0, register=False)
+
+
+def _read_body(B_, S_, tok, *rest):
+    h, ok = B_.call(bind(_READ_BITS, V=S_.V, H=S_.H), B_.call(bind(WordBits, W=32), tok), *rest)
+    return coll_concat(EMB.read(S_.V, S_.H).signature()[1], [B_.batch(bind(BitsWord, W=16), h, axes=(0,)), ok])
+
+
+#: the read's ports and words around `_READ_BITS`, as `EmbeddingRead_v2` wires its own
+READ = CompositeDefinition("InteriorRegisteredTablesTestRead", 0, ("V", "H"), lambda S_: EMB.read(S_.V, S_.H).signature(),
+                           _read_body, doc="h = row, ok = 1: a read's ports with none of its hashes", register=False)
 FUSED = bind(BM.MoeExpertFp8ReadGemmV1, READ=bind(READ, V=E, H=H), K=K, N=1, G=K, KB=K, SWAP=False,
              DOT=BG.HopperE4m3MmaV2Dot32)
 TID = descriptor_id(FUSED)
@@ -148,6 +160,10 @@ def _words(b: bytes) -> list[int]:
 
 def _bits(words) -> list[int]:
     return [(int(w) >> b) & 1 for w in words for b in range(16)]
+
+
+def _tok(words) -> int:
+    return int(words[0]) | int(words[1]) << 16
 
 
 @functools.cache
@@ -236,7 +252,7 @@ def _copies(pins) -> dict:
 def test_a_spans_unit_is_the_fused_blocks_own_function():
     """This module's spans are the block's: a unit's y and ok are the fused block's reference on its rows."""
     data = _span(SAMPLE[0]).data
-    out = evaluate(FUSED, *(_bits(data["rows"][p][0]) for p in PORTS))
+    out = evaluate(FUSED, *(_tok(data["rows"][p][0]) if p == "tok" else _bits(data["rows"][p][0]) for p in PORTS))
     assert list(out) == [*_bits(data["outs"]["o0"][0]), int(data["outs"]["o1"][0][0])]
 
 

@@ -20,7 +20,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     variant_refusals,
 )
 
-#: every Pearl-C name in use: `schemes.SCHEMES`, `pouw_pearl_c_device.SCHEMES`, Pearl-C4 and its -h3, and PearlC's
+#: every Pearl-C name in use: `kernel_schemes.KERNEL_SCHEMES`, Pearl-C4 and its -h3, and PearlC's
 #: price-override spelling
 NAMES_IN_USE = ("pearl-c-h100-v1-h3", "pearl-c-sm120-v1-h3", "pearl-c-h100-v1-h3@sm_120", "pearl-c-sm120-unpromoted-v1-h3",
                 "pearl-c-nvfp4-v0", "pearl-c-nvfp4-v0-h3", "pearl-c-mxfp4-v0")

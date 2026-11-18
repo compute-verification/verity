@@ -151,11 +151,14 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/), clone thi
 below from the clone's root. The first `uv run` installs the workspace's Python environment (`uv sync` does it alone).
 
 ~~~text
-uv run verity bench compute --from tests/benchmarks/compute/fixtures/record
-uv run verity bench compute --from DIR --per-call --top 5
+uv run verity bench compute --protocol pearl-plus --from tests/benchmarks/compute/fixtures/record
+uv run verity bench compute --protocol pearl-plus --from DIR --per-call --top 5
 ~~~
 
-`--from DIR` reads a run's record from the directory DIR, through no network and with no key. `verity bench` starts
+`--protocol` names the useful-work scheme by its registered name (`verity.protocols.resource_accounting.scheme`):
+`pearl-plus` is the one a served run answers for today, and `dither` raises `NotImplementedError`, since no kernel
+serves it and no verifier answers for a served run of it. `--from DIR` reads a run's record from the directory DIR,
+through no network and with no key. `verity bench` starts
 the command at the clone's root, so a relative DIR is taken from the root. Run it from the root too: `uv run` in a
 directory with a `pyproject.toml` of its own, as `tests/benchmarks/compute/` has, makes that directory's environment
 instead of the workspace's.
@@ -182,7 +185,7 @@ on your own card it is not an accept, so PoUW credits nothing of the run, and th
 alone.
 
 To keep what it prints as files too (`compute.json` and `result.json`, below), set `OUT` to a
-directory: `OUT=/tmp/compute uv run verity bench compute --from tests/benchmarks/compute/fixtures/record`.
+directory: `OUT=/tmp/compute uv run verity bench compute --protocol pearl-plus --from tests/benchmarks/compute/fixtures/record`.
 
 The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
@@ -190,7 +193,7 @@ The tests: `cd benchmarks/compute && uv run --project ../.. pytest tests`.
 
 A record is the directory a served run writes: the Pearl+ verifier's answer and the Lean verifier's verdict on it,
 the run's policy, and the rest listed below. One command makes one: `serve.sh` serves the load on one card under
-Pearl+, takes Pearl+'s verdict in Python and in Lean, writes the record directory and ends with `run.py --from` on it,
+Pearl+, takes Pearl+'s verdict in Python and in Lean, writes the record directory and ends with `run.py --protocol pearl-plus --from` on it,
 which prints the number:
 
 ~~~text
@@ -334,7 +337,7 @@ when the policy's load is not the benchmark's (`load.toml`), or when the split `
 
 On our machines `--from` also takes a run id of our evidence store, read through research's store client with a key
 that reads the store; a withdrawal of part of a stored record is honored (a withdrawn required file refuses the record,
-a withdrawn optional one is read as absent). `verity bench compute --from RUN` reads a run id that names no directory.
+a withdrawn optional one is read as absent). `verity bench compute --protocol pearl-plus --from RUN` reads a run id that names no directory.
 
 `metrics.toml` holds the metrics the console's Metrics tab reads: `compute-accounting/verified-compute-share`
 (the number) and the others `run.py` writes, each written by the served run that measured them, at `serve.sh`'s last
@@ -342,5 +345,5 @@ step, as a `--from` of another run writes none; `h200_share.py` prints `compute-
 for the goal `accounting/h200-97-percent`: an honest H200's e4m3 rate (a `calibration/tensor_duty --arms fp32-beside`
 run's arm A on uniform operands) over the card's ceiling at each reading of its tensor clock, times `run.py`'s share of
 a served run. Both need the store:
-`uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN`. Its docstring states the model and what it leaves
+`uv run python benchmarks/compute/h200_share.py --protocol pearl-plus --from RUN --duty RUN`. Its docstring states the model and what it leaves
 out, which makes its number an upper bound on the served share.

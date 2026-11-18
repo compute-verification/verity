@@ -8,7 +8,8 @@
 # - The Python: 3.12 with numpy and blake3, kept under FLOCK_WORK too (VERITY_BENCH_STEADY_PY), with the PYTHONPATH
 #   benchmarks/one_stage/server_rate.py imports from.
 # - The CUDA 13.3 toolkit the prover is built with, first on PATH, where the node side reads its version, and its lib64
-#   on LD_LIBRARY_PATH: the installed one, else the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh unpacks. Its compat
+#   on LD_LIBRARY_PATH: benchmarks/kernels/machine.py's (CUDA_HOME at 13.3, else the run's machine's [properties]'), else
+#   where that names none the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks. Its compat
 #   library, which a driver older than the toolkit needs, is left out: a spec names its driver.
 # - The scratch (VERITY_BENCH_STEADY_SCRATCH): a directory on the node's disk beside the builds, never the node's memory,
 #   so a statement a row names in the store can be fetched into it. A point removes its own directory there at its end; one
@@ -23,12 +24,17 @@ mkdir -p "$steady_out" "$FLOCK_WORK/flock-circuit" "$FLOCK_WORK/scratch" \
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1
 unset CARGO_TARGET_DIR
 
-# the unpacking runs in a subshell, which keeps this shell's arguments (the point's) from its `set --`; sourced again,
-# the script only names the toolkit it finds
-( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) > "$steady_out/cuda.log" 2>&1 \
-  || { tail -20 "$steady_out/cuda.log" >&2; echo "setup: the node has no CUDA 13.3 toolkit and none could be unpacked (out/setup/cuda.log)" >&2; exit 4; }
-. verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
-steady_cuda=${CUDA_TK:-/usr/local/cuda-13.3}
+if steady_cuda=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$steady_out/cuda.log"); then
+  export CUDA_TK=$steady_cuda
+else
+  unset CUDA_TK
+  # the unpacking runs in a subshell, which keeps this shell's arguments (the point's) from its `set --`; sourced again,
+  # the script only names the toolkit it finds, leaving CUDA_TK unset for an installed /usr/local/cuda-13.3
+  ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$steady_out/cuda.log" 2>&1 \
+    || { tail -20 "$steady_out/cuda.log" >&2; echo "setup: the node has no CUDA 13.3 toolkit and none could be unpacked (out/setup/cuda.log)" >&2; exit 4; }
+  . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
+  steady_cuda=${CUDA_TK:-/usr/local/cuda-13.3}
+fi
 export PATH=$steady_cuda/bin:$PATH LD_LIBRARY_PATH=$steady_cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
 # the build scripts write their own out/ files: they get a run directory of their own under the setup's

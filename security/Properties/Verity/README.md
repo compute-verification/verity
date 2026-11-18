@@ -31,22 +31,23 @@ at that strategy summed. Onsite's is the same conclusion over its seven, from it
 by name, which are the target of every subprotocol its list names, `SoundnessOf`'s hypothesis (`Vocab.targets_remote`,
 `Vocab.targets_onsite`).
 
-**The two statements on the committed files** (`Committed.lean`) stand at remote where the policy's target stood. The
-policy's claim is on the case as sent, of which its target is proved (`Vocab.inferenceOnlySound`); these are what that
-leaves unsaid of the committed files, each stated and not proved:
+**The two statements on the committed files** (`Committed.lean`): the one not proved stands at remote where the
+policy's target stood. The policy's claim is on the case as sent, of which its target is proved
+(`Vocab.inferenceOnlySound`); these are what that leaves unsaid of the committed files:
 
-- `Vocab.WiresSound`: the wiring the policy's record names is the wiring the committed proof blocks are held to. On an
-  accepted play, at most a `2ε` share of the committed proof blocks are unbound or read a row that is not the row the wiring
-  gives them, but for twice SPOT's error.
-- `GateARow`: every proof block of the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a
-  block, counts the gates PoUW's claim counts.
+- `Vocab.WiresSound`, stated and not proved: the wiring the policy's record names is the wiring the committed proof
+  blocks are held to. On an accepted play, at most a `2ε` share of the committed proof blocks are unbound or read a row
+  that is not the row the wiring gives them, but for twice SPOT's error.
+- `Flock.Bridge.GateARow`, proved (`Flock.Bridge.gateARow`, `Proofs/Flock/Bridge/GateARow.lean`): every proof block of
+  the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a block, counts the gates
+  PoUW's claim counts. Being proved, it is no hypothesis of remote's soundness.
 
 No clause of the conclusion reads either: the conclusion's clause for the policy is still on the case as sent.
 
 The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
-the targets and, at remote, the two statements, and with its two witnesses at the idle deployment (`Idle.lean`):
+the targets and, at remote, the wires' statement, and with its two witnesses at the idle deployment (`Idle.lean`):
 `*_honest`, every target (and `Vocab.WiresSound`) holds at `Idle.unbounded`, and `*_nontrivial`, the conclusion fails
-at `Idle.exact` for a verifier that accepts everything. `GateARow` reads no deployment, so no instance concludes it.
+at `Idle.exact` for a verifier that accepts everything.
 
 ## The subprotocols each composes
 

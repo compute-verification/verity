@@ -95,6 +95,7 @@ VERDICTS = ("accept", "reject", "undecided")
 NAME = re.compile(r"[A-Za-z][A-Za-z0-9_./ -]{0,63}")
 VALUE = re.compile(r"[0-9A-Fa-f]{16}")
 SAMPLED = "verity/sampled-proofs/v1"
+TWO_STAGE = "two-stage"
 
 
 class Parser(argparse.ArgumentParser):
@@ -232,6 +233,12 @@ def members_reached(cases: Sequence[dict[str, Any]]) -> tuple[int, int] | None:
     return None
 
 
+def two_stage_accepted(cases: Sequence[dict[str, Any]]) -> bool:
+    """Whether SPOT's case is in the two-stage form and its verifier accepted it."""
+    return any(p["id"] == SAMPLED and p["params"].get("form") == TWO_STAGE
+               and outcome(p["id"], p["answer"])["verdict"] == "accept" for p in cases)
+
+
 def uncited(p: dict[str, Any]) -> str | None:
     """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
     if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
@@ -324,6 +331,9 @@ def run(a: argparse.Namespace) -> int:
         if ran["cites"] is not None and (got := members_reached(cases)) is not None and got[0] < got[1]:
             ran["not_covered"] = {"id": SAMPLED, "members": {"sampled": got[0], "registered": got[1]}}
             lines.append(f"NOT_COVERED {SAMPLED} {got[0]} of {got[1]} members sampled: {ran['cites']} does not cover it")
+        if ran["cites"] is not None and two_stage_accepted(cases):
+            ran["not_covered"] = {"id": SAMPLED, "form": TWO_STAGE}
+            lines.append(f"NOT_COVERED {SAMPLED} {TWO_STAGE} form: {ran['cites']} does not cover it, its form is not yet proved")
         lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
         if rc == 0 and (why := uncited(ran)) is not None:
             lines.append(f"UNCITED {why}")

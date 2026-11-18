@@ -52,7 +52,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.commitments.gates.frame_v3 import _part, _refs
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 
 from verity_vllm.compiler import replay_chain as RC
 from verity_vllm.compiler import served_rows as SR
@@ -106,16 +106,16 @@ def _sig(S):
 
 
 def _body(B, S, pub, srb):
-    Z, K = widths(S), HC._Consts(B)
+    Z, K = widths(S), GB._Consts(B)
     pr, sr = _refs(pub), _refs(srb)
     step = bind(ServedStaticsStep, **{k: getattr(S, k) for k in STEP})
     counts, poss = [], []
     for g in range(S.G):
         tie = ST._tie(S, sr[g * Z.SB:(g + 1) * Z.SB])
-        o = _refs(B.call(step, HC._coll(Array(Z.TB, BIT), tie), HC._coll(Array(Z.TB, BIT), pr[g * Z.TB:(g + 1) * Z.TB])))
+        o = _refs(B.call(step, GB._coll(Array(Z.TB, BIT), tie), GB._coll(Array(Z.TB, BIT), pr[g * Z.TB:(g + 1) * Z.TB])))
         counts.append(o[0])
         poss.append(o[1])
-    return HC._coll(Array(16, BIT), [ST._all(B, counts), ST._all(B, poss), *K.bits(0, 16 - len(FLAGS))])
+    return GB._coll(Array(16, BIT), [ST._all(B, counts), ST._all(B, poss), *K.bits(0, 16 - len(FLAGS))])
 
 
 ServedStaticsTie = CompositeDefinition(

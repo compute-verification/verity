@@ -5069,9 +5069,10 @@ def _stack_sites(weights):
     return [LinearSite(w, w, f"model.layers.{w}", t.shape[0], t.shape[1], "bf16") for w, t in weights.items()]
 
 
-class _Layer:
-    def __init__(self, weight):
-        self.weight = weight
+def _due(site, x, weight):
+    from verity.hooks import BlockDue
+    return BlockDue(site.qualname, site.weight_id, {"n": site.n, "k": site.k}, site.weight_format,
+                    {"x": x, "weight": weight, "bias": None})
 
 
 def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path, monkeypatch):
@@ -5097,7 +5098,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
     with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
         for w, x in xs:
-            stack.apply(sites[w], _Layer(weights[w]), x, None, lambda *a: pytest.fail("the stack called vLLM's own apply"))
+            stack(_due(sites[w], x, weights[w]), lambda given: pytest.fail("the stack called vLLM's own apply"))
     got = stack.passes[-1]
     assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
     a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
@@ -5118,13 +5119,13 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     sites = _stack_sites(weights)
     stack = Stack(sites, PPDR.PearlCExecutor(run))
     stack.activate(arms["bf16"])
-    assert stack.apply(sites[0], _Layer(weights[0]), "x", None, lambda layer, x, bias: ("stock", x)) == ("stock", "x")
+    assert stack(_due(sites[0], "x", weights[0]), lambda given: ("stock", given)) == ("stock", None)
     stack.activate(arms["pearlc"])
     kernel.dev.log.clear()
     spec = arms["pearlc"].spec.__class__(controls=(Control("omit", E2E.CONTROL_OMITS),), schedule="deferred")
     with stack.pass_(spec):
         assert run.omit == E2E.CONTROL_OMITS
-        stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
+        stack(_due(sites[0], torch.randn(32, 1024).to(torch.bfloat16), weights[0]), None)
     names = {n for n, *_ in kernel.dev.log}
     assert not names & {"s512_tile_segs", "s512_row_segs", "s512_tile_leaves", "s512_rows", "pd_commit_851", "pd_tiles_851"}
     assert run.omit == frozenset()
