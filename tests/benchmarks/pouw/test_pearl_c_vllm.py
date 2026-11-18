@@ -1818,22 +1818,21 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
-#: the fewest draws under which both verdicts' samples of the give-up test's pass hold a tile over its cap besides the
-#: exclusion tile every verdict replays: the run verdict's first such draw is its seventh
-DRAWS_OVER = 7
+#: the smallest sample under which both verdicts sample a tile of the give-up test's pass over its cap besides the
+#: exclusion tile every verdict replays: the run verdict's first such tile is the seventh it samples
+SAMPLE_OVER = 7
 
 
 @pytest.mark.slow
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
-    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin whose first `DRAWS_OVER`
-    draws sample them, ``verify``
-    (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
+    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin whose first `SAMPLE_OVER`
+    sampled tiles hold them, ``verify`` (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
     it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
     give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any.  Nothing cheaper catches a
-    verdict whose rule has moved off ``volunteer-needed``'s, which only replaying drawn tiles under each rule shows; it
-    replays each verdict's draws and exclusion tile at the scalar reference, over a minute."""
+    verdict whose rule has moved off ``volunteer-needed``'s, which only replaying sampled tiles under each rule shows; it
+    replays each verdict's sample and exclusion tile at the scalar reference, over a minute."""
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
@@ -1852,11 +1851,11 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
             yes, took = capsys.readouterr().out.split()
             assert yes in ("yes", "no") and took in SP.OVER_INERT_BOUND and took == (rule or took)
             if verdict == "run":
-                _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", str(DRAWS_OVER), *flag)
-                drawn = {v["tile"] for v in doc["verdicts"][:DRAWS_OVER]}
+                _, doc, answer = served_verify(d, tmp_path / "verify.json", "--draws", str(SAMPLE_OVER), *flag)
+                drawn = {v["tile"] for v in doc["verdicts"][:SAMPLE_OVER]}
                 rejects = answer["verdict"] == "reject" and "replayed debit" in answer["reason"]
             else:
-                r = VR.verify(path, DRAWS_OVER, 1, "test", source, coins=coins,
+                r = VR.verify(path, SAMPLE_OVER, 1, "test", source, coins=coins,
                               **({} if rule is None else {"over_cap": rule}))
                 drawn, rejects = set(r["tiles"][:r["drawn"]]), not r["accepted"] and "replayed debit" in r["line"]
             assert drawn & set(over), (verdict, rule, sorted(drawn), sorted(over))
