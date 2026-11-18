@@ -318,14 +318,6 @@ class Broken(Exception):
 
 
 @dataclass(frozen=True)
-class HoldRelease:
-    """A scheme's request that no output of ``input`` leave before step ``until``."""
-
-    input: str
-    until: int
-
-
-@dataclass(frozen=True)
 class HoldResident:
     """A scheme's request that range ``range`` stay allocated until step ``until``."""
 
@@ -364,11 +356,11 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldResident
                 | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
+__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
            "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
