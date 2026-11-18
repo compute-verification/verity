@@ -159,7 +159,7 @@ theorem countFresh_zero {c : LiveCommitment} {log : List String} {out : Log} {la
     {after : ByteArray} (hr : releasedLogOf c log = .ok out) (hc : out.any (·.kind == .committed) = false)
     (h : VStar.Recursive.SampledTwo.interiorShown (byFamily c out) label after = false) :
     Verity.Sampled.countFresh label after (log.tail.filter fun l => !treeLine l) = 0 := by
-  obtain ⟨-, hL, -, hF⟩ := Verity.Sampled.releasedLogOf_ok hr hc
+  obtain ⟨-, hL, -, hF, -⟩ := Verity.Sampled.releasedLogOf_ok hr hc
   rw [Verity.Sampled.countFresh_eq, ← hL label, List.length_eq_zero_iff, List.filter_eq_nil_iff]
   intro x hx hxa
   rw [beq_iff_eq] at hxa
