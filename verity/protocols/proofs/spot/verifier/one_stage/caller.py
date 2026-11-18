@@ -95,14 +95,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, wired: Program | None = None) -> Verdict:
     """The caller's codes for `rec` against `docket.check`'s arguments (`Caller.check`). The arguments it doesn't read
     are `docket.check`'s, so a caller hands both the same."""
     c = _Collect()
     days = R._declarations(day, declarations)
     log = list(log)
     pool = R._pool(pool, registered or {}, supplied, pinned, outputs, schemas)
-    supplied, outputs, schemas = R.pool_values(pool, program, supplied, outputs, schemas, log)
+    supplied, outputs, schemas = R.pool_values(pool, program, supplied, outputs, schemas, log, wired)
     supplied = R.with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
     v2 = bool(registered) or bool(R._certified(certified, registered or {}, sup))
@@ -140,7 +140,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         _compiler(c, w, reads)
     if v2 and pool is not None:
         _pool_chain(c, rec_, pool, lambda: R.pool_open(pool, rec_, program, registered, formats, window, fixed, sup, log,
-                                                       bound))
+                                                       bound, wired))
     if v2:
         _ports_refused(c, outs, verdicts)
     return c.verdict()

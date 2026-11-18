@@ -260,7 +260,8 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
             tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None,
             compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
-            verdicts: Mapping[str, bool] | None = None) -> dict[str, Any]:
+            verdicts: Mapping[str, bool] | None = None, wired: Program | None = None,
+            wired_record: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered` or `tied`, which name them; the certified entries name none."""
@@ -302,6 +303,8 @@ def _params(program: Program, query: Mapping[str, Any], sampling_design: Mapping
         p["certified"] = {v: dict(e) for v, e in certified.items()}
     if verdicts is not None:
         p["verdicts"] = dict(verdicts)
+    if wired is not None:
+        p["wired"] = {"program": codec.encode_program(wired), "record": dict(wired_record or {})}
     return p
 
 
@@ -317,7 +320,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
           compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, wired: Program | None = None,
+          wired_record: Mapping[str, Any] | None = None) -> Verdict:
     """`docket.check` (R1-R8) by the verifier, then, where it passes, the caller's check (`caller.check`, `Caller.gate`):
     the declared day when it passes `day` and `declarations`, the binding when it passes `binding`, the seed salt when it
     passes `seed_salt`, the registered compiler when it passes `compiler`, and the pool's reset, week and spent mark, a
@@ -339,13 +343,13 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, members=members, day=day,
                                      declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
-                                     compiler=compiler, certified=certified, verdicts=verdicts)
+                                     compiler=compiler, certified=certified, verdicts=verdicts, wired=wired)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
     params = _params(program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                      supplied, pinned, binding, schemas, window_root, held, outputs, day, declarations, seed_salt, pool,
-                     tied, history, compiler, certified, verdicts)
+                     tied, history, compiler, certified, verdicts, wired, wired_record)
     got = _codes(lean("registration", {
         "params": params, "record": dict(rec),
         **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})}))
@@ -361,7 +365,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         return spot
     py = C.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs, schemas, window_root, held, members, day, declarations, seed_salt,
-                 pool, tied, history, compiler, certified, verdicts)
+                 pool, tied, history, compiler, certified, verdicts, wired)
     caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)})), py, whole=False)
     return C.gate(spot, caller)
 

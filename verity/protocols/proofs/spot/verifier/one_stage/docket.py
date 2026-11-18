@@ -274,7 +274,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, wired: Program | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -286,7 +286,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which the caller's check holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
-    program must still be `program`'s, and the population is `query`'s.  R1 holds the registered sampling design to the verifier's own
+    program must still be `program`'s, and the population is `query`'s.  `wired`: the wired Program `program` is the cut
+    of: R2 holds the record's program to its digest and the partition's to `program`'s, and the pool chain reads either
+    (`Docket.Verifier.chains`); whether `program` is its cut is the Lean's alone (`Cut.check`), whose refusal the
+    verifier reads as a disagreement.  R1 holds the registered sampling design to the verifier's own
     sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
@@ -341,7 +344,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
     if verdicts is not None:
         _verdicts(verdicts)
-    supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
+    supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log, wired)
     supplied = with_history(supplied, history, leaf_layer)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not registered:
@@ -382,7 +385,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     except ValueError as e:
         c.fail("R2-partition", {"registered": rec["partition"], "verifier": str(e)})
         part_digest = None
-    for field, mine in (("program", part["program"]), ("query", query_digest(part["query"])), ("partition", part_digest)):
+    recorded = part["program"] if wired is None else P.program_digest(wired)
+    for field, mine in (("program", recorded), ("query", query_digest(part["query"])), ("partition", part_digest)):
         if mine is not None and rec[field] != mine:
             c.fail(f"R2-{field}", {"registered": rec[field], "verifier": mine})
     try:
@@ -789,17 +793,20 @@ def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]])
     return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
 
 
-def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
+def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program,
+                wired: Program | None = None) -> bool:
     """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
     public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
-    record, registered its program (`Docket.Pool.chains`). Otherwise it opens the empty pool."""
+    record, registered its program, or the wired Program `program` is the cut of (`Docket.Verifier.chains`). Otherwise
+    it opens the empty pool."""
     last = log[-1] if log else None
+    names = {P.program_digest(program)} | ({P.program_digest(wired)} if wired is not None else set())
     return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
-            and last.get("program") == P.program_digest(program))
+            and last.get("program") in names)
 
 
 def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any, outputs: Any, schemas: Any,
-                log: Sequence[Mapping[str, Any]]) -> tuple[Any, Any, Any]:
+                log: Sequence[Mapping[str, Any]], wired: Program | None = None) -> tuple[Any, Any, Any]:
     """The verifier's supplied values, output values and row formats with its pool's `pin` among them (Pool chain): the
     previous record's `pout`, reused (`{"record": last_digest(log), "value": pout}`) in `pout`'s row format, when the
     window carries the previous window's pool (`pool_chains`), else filled from the empty pool's root (`[[{"bytes":
@@ -808,7 +815,7 @@ def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any,
     if pool is None:
         return supplied, outputs, schemas
     pin, pout = pool["pin"], pool["pout"]
-    if not pool_chains(pool, log, program):
+    if not pool_chains(pool, log, program, wired):
         if supplied is not None and not isinstance(supplied, Mapping):
             return supplied, outputs, schemas
         return {**(supplied or {}), pin: [[{"bytes": pool["genesis"]}]]}, outputs, schemas
@@ -822,12 +829,12 @@ def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any,
 def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program, values: Mapping[str, int],
               schemas: Mapping[str, str] | None, window: str | None, fixed: Sequence[str],
               supplied: Mapping[str, Any], log: Sequence[Mapping[str, Any]],
-              binding: Mapping[str, str] | None) -> tuple[str, str] | str:
+              binding: Mapping[str, str] | None, wired: Program | None = None) -> tuple[str, str] | str:
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
     last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the
     domain the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
     (`registered.supplied_root`); where there is none, why (`Docket.poolOpen`, none there)."""
-    if pool_chains(pool, log, program):
+    if pool_chains(pool, log, program, wired):
         es = log[-1].get("registered")
         hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
         d, r = (hits[-1].get("domain"), hits[-1].get("root")) if hits else (None, None)

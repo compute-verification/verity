@@ -276,6 +276,13 @@ private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=
   | some (.obj kvs) => some (.obj (kvs.insert k x))
   | some j => some j
 
+/-- The program digest `poolValues` chains at: `Docket.Verifier.chains`'s, the one the previous record named. -/
+private def chainedProgram (pool : Option Docket.Pool) (program : Program) (wired : Option Program) (log : Array Json) :
+    String :=
+  match pool, wired with
+  | some p, some w => if p.chains log (Flock.hexOf w.sha512) then Flock.hexOf w.sha512 else Flock.hexOf program.sha512
+  | _, _ => Flock.hexOf program.sha512
+
 /-- The parameters' supplied values, output values and row formats with the pool's `pin` among them
 (`registration.pool_values`): the previous record's `pout`, reused, in `pout`'s row format, when the window carries the
 previous window's pool (`Docket.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
@@ -323,10 +330,13 @@ def paramsParsed (j : Json) : V Params := do
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
-  if let some w := field? j "wired" then
-    exactly (← obj w "wired") #["program", "record"] "wired"
-    let wp ← Program.parse (← Flock.canon (← obj (getD w "program") "wired program")).toUTF8
-    Cut.checkWith (← obj (getD w "record") "wired record") wp program query
+  let wired ← match field? j "wired" with
+    | none => pure none
+    | some w => do
+      exactly (← obj w "wired") #["program", "record"] "wired"
+      let wp ← Program.parse (← Flock.canon (← obj (getD w "program") "wired program")).toUTF8
+      Cut.checkWith (← obj (getD w "record") "wired record") wp program query
+      pure (some wp)
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"
@@ -366,8 +376,8 @@ def paramsParsed (j : Json) : V Params := do
   let pool ← match getD j "pool" with
     | .null => pure none
     | pj => some <$> poolOf pj registered given (field? j "row_schemas")
-  let (suppliedJ, outputsJ, schemasJ) := poolValues pool (Flock.hexOf program.sha512) log (field? j "supplied")
-    (field? j "outputs") (field? j "row_schemas")
+  let (suppliedJ, outputsJ, schemasJ) := poolValues pool (chainedProgram pool program wired log) log
+    (field? j "supplied") (field? j "outputs") (field? j "row_schemas")
   let (suppliedJ, tables) ← match field? j "history" with
     | none => pure (suppliedJ, (#[] : Array (String × ByteArray × ByteArray)))
     | some h => do
@@ -489,7 +499,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, samplingDesign, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, verdicts, tied, compiler, certified },
+                                    declared, seedSalt, pool, verdicts, tied, compiler, certified, wired },
                       delta, challenger, tables, windowValues }
   let again := Docket.unwindowed p.verifier
   if !again.isEmpty then

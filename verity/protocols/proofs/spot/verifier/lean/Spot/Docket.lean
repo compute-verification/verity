@@ -58,6 +58,10 @@ declarations) holds the record's program to the day's one registered circuit (`d
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
+A verifier given a wired Program (`wired`, which its parameters hold `program` to be the cut of: `Cut.check`,
+`OneStage.paramsParsed`) holds the record's `program` to the wired Program's digest (`R2-program`) and the partition's
+to the unwired `program`'s; the declarations and the pool chain then read the wired digest, the record's own.
+
 A value that is an output of an earlier run (`outputs`; never the inference-only policy's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
 digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
@@ -252,6 +256,9 @@ structure Verifier where
   verifier built from a registration it read under the deployment's key, which R7 holds the record's entry for the
   value to (`checkOutputs`, `certifiedHeld`) -/
   certified : Array (Registered.Entry × String) := #[]
+  /-- the wired Program `program` is the cut of (`Cut.check`, which `OneStage.paramsParsed` runs): given, the record's
+  `program` is its digest and the partition's is `program`'s; none: both are `program`'s -/
+  wired : Option Program := none
 
 /-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
 def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
@@ -475,12 +482,26 @@ def Pool.chains (p : Pool) (log : Array Json) (program : String) : Bool :=
   | some e => !p.reset && !p.refused log && jeq (getD e "program") (Json.str program)
   | none => false
 
+/-- `Pool.chains` at the program R2 holds the record's `program` to: the wired Program's, or, the previous record
+registered before the wired one was, the unwired `program`'s, so a wired record's window doesn't open the empty pool
+for want of the digest its previous record named. -/
+def Verifier.chains (v : Verifier) (p : Pool) : Bool :=
+  match v.wired with
+  | none => p.chains v.log (Flock.hexOf v.program.sha512)
+  | some w => p.chains v.log (Flock.hexOf w.sha512) || p.chains v.log (Flock.hexOf v.program.sha512)
+
+/-- The record's `program` R2 holds it to: the partition's, or the wired Program's digest when the verifier has one. -/
+def Verifier.recordProgram (v : Verifier) (part : Json) : Json :=
+  match v.wired with
+  | none => getD part "program"
+  | some w => Json.str (Flock.hexOf w.sha512)
+
 /-- The domain and root of the pool the record's window opens (`registration.pool_open`): the previous record's entry
 for `pout` (its last naming it) when the window carries the previous window's pool (`Pool.chains`), else the empty
 pool's: the domain the verifier gives `pin` (`ownEntries`) and the root R7 recomputes for it filled from `genesis`
 (`Supplied.root`); none where there is none. -/
 def poolOpen (rec : Json) (v : Verifier) (p : Pool) : Option (String × String) :=
-  if p.chains v.log (Flock.hexOf v.program.sha512) then
+  if v.chains p then
     match v.log.back?.map (getD · "registered") with
     | some (.arr es) =>
       match es.reverse.find? fun e => (e matches .obj _) && jeq (getD e "value") (Json.str p.pout) with
@@ -591,7 +612,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let partDigest := Partition.digest part
   if partDigest.isNone then c := addCode c "R2-partition"
   let mine : List (String × Option Json) :=
-    [("program", some (getD part "program")), ("query", (queryDigest (getD part "query")).toOption.map Json.str),
+    [("program", some (v.recordProgram part)), ("query", (queryDigest (getD part "query")).toOption.map Json.str),
      ("partition", partDigest.map Json.str)]
   for (name, m) in mine do
     if let some m := m then
@@ -656,7 +677,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   let partDigest := Partition.digest part
   if partDigest.isNone then c := addCode c "R2-partition"
   let mine : List (String × Option Json) :=
-    [("program", some (getD part "program")), ("query", (queryDigest (getD part "query")).toOption.map Json.str),
+    [("program", some (v.recordProgram part)), ("query", (queryDigest (getD part "query")).toOption.map Json.str),
      ("partition", partDigest.map Json.str)]
   for (name, m) in mine do
     if let some m := m then
