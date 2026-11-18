@@ -34,6 +34,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
@@ -93,7 +94,7 @@ def main() -> int:
     n = int(rec["population"])
     sampling_design = RND.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
-    program = P.population_program(template, n)
+    program = PN.population_program(template, n)
     query = P.template_instance_query(template)
     part = P.partition(program, query)
     if a.legacy_partition:

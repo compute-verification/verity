@@ -2500,7 +2500,7 @@ def registered_reads(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, M
                 raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
                                  f"the port's {words} 16-bit words in {want}-bit leaves")
             ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
-                        "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": [positions[int(i)] for i in refs], RV.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": ports}
     return out

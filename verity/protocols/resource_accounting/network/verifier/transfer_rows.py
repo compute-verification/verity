@@ -62,7 +62,6 @@ from verity.commitments import hm96
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.merkle import CommitmentDomain
 from verity.protocols.resource_accounting.network.verifier.certificate import DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text, _u
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
@@ -269,5 +268,5 @@ def port(head: TransferHead, reads: Sequence[int | None], reads_from: int = 0) -
     if any(r is not None and not (type(r) is int and 0 <= r < head.rows) for r in reads):
         raise ValueError(f"a read is a row of the value's {head.rows}, or None")
     e = {"leaves": head.rows, "words": head.words, "word_bits": head.word_bits, "domain": head.domain.hex()}
-    return produced.port(head.value, e, head.root.hex(), list(reads), head.schema) | \
+    return RV.port(head.value, e, head.root.hex(), list(reads), head.schema) | \
         ({RV.READS_FROM: int(reads_from)} if reads_from else {})

@@ -52,6 +52,9 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter runs: H1 + fx1 (`pouw_h1.SCHEME`), beside the int8_exact arm, which serves y itself.
 EXECUTED = (H1_SCHEME,)
 CHALLENGED = PHS.CHALLENGED
+#: its install commits each linear's weights from the layer's own ``weight`` (`commit_weights`), so it refuses to run
+#: beside a scheme that releases them (`hooks.ReleaseValue`)
+READS_LAYER_WEIGHT = True
 KEYS = ("coins", "retain_steps", "transcript_dir", "rows", "steps", "runner", "rounds", "challenger", "session", "admission",
         "gate", "served", "graphs", "period", "unit", "ks", "draw_session", "commit_record")
 
