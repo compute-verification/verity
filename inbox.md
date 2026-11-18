@@ -1,0 +1,3 @@
+[2026-11-18T16:18Z] 5404da13bbc2
+WIDELEAF: Daniel ruled (16:14Z): where a check runs does not matter for now; deployment/hand-off work is not today's unless already built. So DROP item (2) (the hand-off's circuit record) unless it is already written and tested: if it is, push it; if not, leave it and say so. Item (1) stands and is the priority: all FOUR yeses are in (ci, network, memory, vLLM) for the hold's one reader: memory-accounting trial-merged your head onto its merge of main cleanly: merge the CURRENT tip into the hold branch, re-run the listed tests on the merged head, and PUSH IT TO interfaces by merge when they match the tip's (my go is given now, on those runs); tell me the SHA and the counts.
+
