@@ -16,7 +16,7 @@ public import Definitions.Core.CircuitLevels
 public import Definitions.Core.LevelsCount
 public import Definitions.Core.LevelsCredited
 public import Definitions.Core.LevelsKinds
-public import Definitions.Core.LevelsProofBlocks
+public import Definitions.Claims.LevelsProofBlocks
 public import Definitions.Core.Scheme
 public import Definitions.Core.ZkCompiler
 public import Definitions.Core.Challenger

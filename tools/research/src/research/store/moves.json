@@ -5490,6 +5490,11 @@
         "tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py": "tests/adapters/vllm/flock/test_tmpl_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_unit_range.py": "tests/adapters/vllm/flock/test_unit_range.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Core/LevelsProofBlocks.lean": "security/Definitions/Claims/LevelsProofBlocks.lean"
+      }
     }
   ]
 }
