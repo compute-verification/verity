@@ -542,12 +542,58 @@ def _values(given: Any, members: Sequence[tuple[Any, int]]) -> tuple[tuple[str, 
     return tuple(values)
 
 
+def circuit_of(audit: Path) -> dict[str, Any] | None:
+    """The window's registered circuit record, ``circuit.json`` in the window directory beside its audit, when there."""
+    path = audit.parent / "window" / "circuit.json"
+    return _json(path) if path.is_file() else None
+
+
+def wired(root: Any, circuit: Mapping[str, Any]) -> Any:
+    """`population.wired_population_program` of the circuit record ``circuit``, each template the root's batch of its id."""
+    from verity.circuits.population import wired_population_program
+    from verity.circuits.program import is_input
+
+    fns = {codec.descriptor_id(n.fn): n.fn for n in root.body.nodes if not is_input(n.fn)}
+    named = circuit.get("templates")
+    _need(isinstance(named, list) and all(isinstance(t, list) and len(t) == 2 and t[0] in fns for t in named),
+          "the circuit record's templates aren't the root's")
+    try:
+        return wired_population_program([(fns[t], int(n)) for t, n in named], circuit)[0]
+    except (ValueError, TypeError, KeyError) as e:
+        raise Refused(f"the circuit record's wired Program doesn't build: {type(e).__name__}: {e}") from None
+
+
+def recorded(desc: Mapping[str, Any], root: Any, want: str, given: Any = None,
+             circuit: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], list[list[Any]]]:
+    """The Program the record's ``program`` (``want``) names and its program function's ``[[name, type], ...]``, which
+    the descriptor doesn't carry: v1's descriptor ``desc`` when its digest is ``want``, the wired Program of the window's
+    circuit record (`wired`) when that is, else the population program (`parameters`); or, when ``want`` is the wired
+    Program's and ``desc`` is that Program with its wires cut (`population.cut_wires`), the wired Program's descriptor."""
+    from verity.circuits.population import cut_wires
+
+    mine = codec.program_digest(dict(desc))
+    w = wired(root, circuit) if circuit is not None else None
+    if w is not None and codec.program_digest(w) == want and (
+            mine == want or codec.program_digest(cut_wires(w, circuit)[0]) == mine):
+        got = [[n, t.to_json()] for n, t in w.fn.signature()[0]]
+        _need(given is None or given == got, "v1's params' parameters aren't its Program's program function's")
+        return (dict(desc) if mine == want else json.loads(codec.canonical_json(codec.encode_program(w)))), got
+    _need(mine == want, "the record names another Program than v1's params"
+          + (", and not the wired Program of the window's circuit record" if circuit is not None else
+             ", and no circuit record beside the audit gives the wired Program it might name"))
+    try:
+        return dict(desc), parameters(desc, root, given)
+    except Refused as e:
+        raise Refused(f"{e}, nor the wired Program of " + ("the window's circuit record" if circuit is not None else
+                                                           "a circuit record (none is beside the audit)")) from None
+
+
 def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[list[Any]]:
     """The program function's ``[[name, type], ...]``, which the descriptor doesn't carry (it inlines the function into
     its root): the population program (`population.mixed_population_program`, or `population_program` for one template)
-    rebuilt over the root's template batches in order, held to the descriptor's digest. ``given``, v1's own copy where
-    its params carry one, names the registered values the population takes ahead of its templates' parameters
-    (`_values`), and must be the rebuilt program's."""
+    rebuilt over the root's template batches in order, held to the descriptor's digest, a recorded run's whose record
+    names its population program. ``given``, v1's own copy where its params carry one, names the registered values the
+    population takes ahead of its templates' parameters (`_values`), and must be the rebuilt program's."""
     from verity.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
     from verity.circuits.program import is_input
 
@@ -575,33 +621,36 @@ def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[li
 
 
 def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
-                      log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """The inference-only case (module docstring) from v1's case of the window's audit."""
+                        log: Sequence[Mapping[str, Any]] = (), circuit: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """The inference-only case (module docstring) from v1's case of the window's audit, on the Program its record names
+    (`recorded`; ``circuit``, the window's circuit record, `circuit_of`)."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
     _need(isinstance(desc, dict), "v1's params hold no Program descriptor")
-    _need(codec.program_digest(desc) == rec.get("program"), "the record names another Program than v1's params")
     _need(isinstance(gamma, int) and not isinstance(gamma, bool) and gamma >= 0, f"Γ is a natural, not {gamma!r}")
     _chain(log, rec)
-    text = codec.canonical_json(desc).decode()
     NR = _reference()
     try:
-        inputs, _registered, _spans = NR.root_nodes(text)
         root = codec.decode_program(desc, NR.declared(desc)).root
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Refused(f"v1's Program doesn't decode: {type(e).__name__}: {e}") from None
-    params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log],
-              "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
+    program, names = recorded(desc, root, rec.get("program"), v1["params"].get("parameters"), circuit)
+    text = codec.canonical_json(program).decode()
+    try:
+        inputs, _registered, _spans = NR.root_nodes(text)
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise Refused(f"the record's Program doesn't decode: {type(e).__name__}: {e}") from None
+    params = {"alpha": _ratio(alpha), "gamma": gamma, "log": [dict(r) for r in log], "parameters": names, "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
 
 
 def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,
-                    scratch: Path) -> tuple[Fraction, int]:
+                    scratch: Path, circuit: Mapping[str, Any] | None = None) -> tuple[Fraction, int]:
     """α and Γ read off the case's own division (``--from-division``): the policy's Lean check at no budget
     (`UNBOUNDED`) profiles each block's gates and fresh-input bits; Γ is the largest block's gates and α the most bits a
     gate of any block, so the check at them confirms that the division complies."""
-    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log), scratch)
+    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log, circuit), scratch)
     profile = answer.get("profile")
     blocks = profile.get("blocks") if isinstance(profile, Mapping) else None
     _need(answer.get("verdict") == "accept",
@@ -766,10 +815,10 @@ def produce(a: argparse.Namespace) -> int:
         if not a.from_division:
             _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
                   "and --gamma, or --from-division")
-            return inference_only_case(v1, a.alpha, a.gamma, log)
-        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch")
+            return inference_only_case(v1, a.alpha, a.gamma, log, circuit_of(audit))
+        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch", circuit_of(audit))
         kept[INFERENCE_ONLY] = {"policy.json": {"alpha": _ratio(alpha), "gamma": gamma, "read": FROM_DIVISION}}
-        return inference_only_case(v1, alpha, gamma, log)
+        return inference_only_case(v1, alpha, gamma, log, circuit_of(audit))
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
     if period is not None:

@@ -790,6 +790,20 @@ def test_the_parameters_are_the_population_programs_and_no_other_programs():
         SC.inference_only_case({"commitment": codec.canonical_json(rec).hex(), "params": {"program": desc}}, 1, 1)
 
 
+def test_the_parameters_are_the_wired_programs_where_the_record_names_it():
+    """A record naming a wired Program takes its parameters from that Program rebuilt over the window's circuit record;
+    with no circuit record it is refused, the population program being no other Program's."""
+    record = {"templates": [[codec.descriptor_id(PAIR), SLOTS]], "external": []}
+    program, query = PN.wired_population_program([(PAIR, SLOTS)], record)
+    v1 = v1_case(program, query)
+    got = SC.inference_only_case(v1, 1, 1, circuit=record)["params"]["parameters"]
+    assert got == [[n, t.to_json()] for n, t in program.fn.signature()[0]]
+    with pytest.raises(SC.Refused, match=r"nor the wired Program of a circuit record \(none is beside the audit\)"):
+        SC.inference_only_case(v1, 1, 1)
+    with pytest.raises(SC.Refused, match="the circuit record's templates aren't the root's"):
+        SC.inference_only_case(v1, 1, 1, circuit={**record, "templates": [["Other_v1", SLOTS]]})
+
+
 def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     program, query = toy()
     first = {"format": DM.REGISTRATION, "previous": None, "program": "11" * 64}
@@ -1388,13 +1402,14 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     reg = Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target=H200), default_seed=7)
     circuit = class_circuit(reg, WindowClass(4, 32, 4), None, Grain(gemm_words=1024, rows=256, select=64))
     program, query = circuit.program()
+    record = {**circuit.description(), "external": list(circuit.external)}
     v1 = v1_case(program, query)
-    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s")
+    alpha, gates = SC.division_policy(v1, [], inference_only_exe, tmp_path / "s", record)
     bits = alpha * gates
     assert bits.denominator == 1, (alpha, gates)
     bits = bits.numerator
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
-        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma), tmp_path / "s")
+        got, _ = SC.lean_answer(inference_only_exe, SC.inference_only_case(v1, alpha, gamma, circuit=record), tmp_path / "s")
         assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))
