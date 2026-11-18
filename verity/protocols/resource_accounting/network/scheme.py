@@ -28,7 +28,7 @@ def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
 
 
 NETWORK_ATTESTER = register(Scheme(
-    name="certifier",
+    name="network-attester",
     protocol="verity/certifier/v0",
     resource="egress",
     blocks=tuple(Block(d.id, output_bits(d)) for d in DEFINITIONS),
