@@ -1110,11 +1110,11 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     if refusals:  # why a session never ran: flock-circuit's own words (a statement outside its shape, say)
         got["proof_server_refused"] = refusals
     stmts = None
-    if s.get("draw") is not None:
+    if (units := s.get("draw")) is not None:
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
-        own = _round_two_own(*replay, sample, window, irec, brec, s["draw"], record, proofs, tie)
+        own = _round_two_own(*replay, sample, window, irec, brec, units, record, proofs, tie)
         got["round_two_python"] = SS.check_twin(True, own, stmts).to_json()
         got["round_two_negatives"] = {name: SS.check_twin(True, own, tampered).ok is False
                                       for name, tampered in (("dropped", stmts[:-1]), ("none", None))}
