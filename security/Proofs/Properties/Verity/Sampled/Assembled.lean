@@ -164,15 +164,16 @@ theorem fresh_logRead_ne {k : Verity.Registration.Composite} {s : Verity.Sent} {
   obtain ⟨key, hch, hafter⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
-  obtain ⟨cm, roots, hts, hstream⟩ := drawCoins_ok hraw
+  obtain ⟨cm, roots, hts, hcm, hlab, hstream⟩ := drawCoins_ok hraw
   obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok hts
   obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   rw [logRead_eq (caseOf_of hS hcase hp hc hev) hch hξ (linesOf_of hlog hls)] at h
   obtain ⟨rs, -, h⟩ := Option.bind_eq_some_iff.1 h
   rw [hafter] at hstream
-  rw [hafter, fresh_readLog _ _ _ _ h, countFresh_eq, ← releasedRootsOf_ok hrr]
-  exact chunks_ne_nil_of_size _ _ (challengerStream_ok hstream)
+  rw [hafter, fresh_readLog _ _ _ _ h, countFresh_eq, ← (releasedLogOf_ok hrr hcm).2.1,
+    ← (releasedLogOf_ok hrr hcm).2.2.1]
+  exact chunks_ne_nil_of_size _ _ (challengerStream_ok hstream hlab)
 
 /-- **The read with v2's own tests meets `SampleReadAll`**, with no premise. -/
 theorem sampleReadAll_logRead (k : Verity.Registration.Composite) : SampleReadAll k logRead := by
