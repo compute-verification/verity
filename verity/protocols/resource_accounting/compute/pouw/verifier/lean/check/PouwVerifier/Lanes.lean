@@ -2,6 +2,7 @@ module
 
 public import PouwVerifier.Credit
 public import PouwWindow.KnownRows
+public import PouwWindow.RegFile
 public import Spot.Produced
 
 /-!
@@ -303,19 +304,22 @@ def rootsAt (roots : Json) (v : String) : List Json :=
 
 private def regErr {α : Type} (x : Flock.V α) : R α := x.mapError fun e => ("registration", e)
 
-/-- A `--registered` port (`registered_value.port`) of `value` at row `row`, a `row/v2` value of 16-bit leaves. -/
-def portJson (value root : String) (leaves words : Nat) (domain : ByteArray) (row : Nat) : Json :=
+/-- A `--registered` port (`registered_value.port` before its reads) of `value`, a `row/v2` value of 16-bit leaves: the
+keys of a `Flock.Registered.FORMAT` port and no position, which C and the partition give (`Flock.OneCircuit.pos`). -/
+def portJson (value root : String) (leaves words : Nat) (domain : ByteArray) : Json :=
   Json.mkObj [("value", Json.str value), ("root", Json.str root), ("leaves", toJson leaves), ("words", toJson words),
     ("word_bits", toJson (16 : Nat)), ("domain", Json.str (Flock.hexOf domain)),
-    (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2), ("reads", Json.arr #[toJson row])]
+    (SCHEMA_KEY, Json.str Flock.HmRow.ROW_SCHEMA_V2)]
 
 /-- `credit.leaf_registered_file`: the verifier's `--registered` file of sampled leaf `u`'s statement `st` and its known
-openings (`{name: [(0, b ‖ c)]}`), or the refusal (`registration`): each `reads` port at its value's table and row past
-the leaf's place (`leafPlace`), each table's entry the verifier's own at the one root `roots` gives it (its domain
-binding the window's open root `window` but for the weights' `b/<K>`), each partials port at the produced record's root
+openings (`{name: [(0, b ‖ c)]}`), or the refusal (`registration`): a `Flock.Registered.FORMAT` file, each `reads`
+port at its value's table at the leaf's place (`leafPlace`) and no position, each table's entry the verifier's own at
+the one root `roots` gives it (its domain binding the window's open root `window` but for the weights' `b/<K>`), each
+partials port at the produced record's root
 `produced` under the window's sample root `registration`; its known ports (`pub` of the window's Program salt `salt`,
 position u and the call's roots, `admit` every row, `o0` the row 1, each its own served value under `knownSalt`). An A,
-B or partials port is read in full. -/
+B or partials port is read in full, which the format cannot mark: a statement with one is refused by name
+(`PouwWindow.Lanes.fullHole`), and every leaf statement has one. -/
 def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : Nat) (st : St) (roots : Json)
     (window : String) (steps : Nat) (salt registration : String) (produced : List (String × String)) :
     R (Json × Array (String × Array (Nat × String))) := do
@@ -338,9 +342,11 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
       s!"{if rcs.isEmpty then "not" else "twice"}: a lanes-form call registers its receipt table once, the receipts " ++
       "the combine checks the lanes' XOR against")
   let lanes := r / 4 * (c / 8)
+  let full := ((reads r c st).filter fun (_, v, _) => v == "a" || v == "b" || v == PARTIALS).map (·.1)
+  if !full.isEmpty then throw ("registration", PouwWindow.Lanes.fullHole full.toArray)
   let mut ports : List (String × Json) := []
-  for (port, v, row) in reads r c st do
-    let (table, base) := place v
+  for (port, v, _) in reads r c st do
+    let (table, _) := place v
     let (root, leaves, words_, domain) ← if v == PARTIALS then do
         let ws := 2 * words k
         pure (Json.str ((produced.lookup table).getD ""), lanes, ws,
@@ -356,11 +362,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
     let some _ := digest? root
       | throw ("registration", s!"drawn leaf {u}'s statement {st.repr} reads {table}, whose root the verifier does " ++
           "not hold as a SHA-512 digest")
-    let j := portJson table ((str? root).getD "") leaves words_ domain (base + row)
-    let full := v == "a" || v == "b" || v == PARTIALS
-    ports := ports ++ [(port, match full, j with
-      | true, .obj kvs => .obj (kvs.insert READ_IN_FULL (.bool true))
-      | _, j => j)]
+    ports := ports ++ [(port, portJson table ((str? root).getD "") leaves words_ domain)]
   let (some ra, some rb) := (digest? ((rootsAt roots a).headD .null), digest? ((rootsAt roots b).headD .null))
     | throw ("registration", s!"drawn leaf {u}'s pub row reads the roots of {a} and {b}, which are not both " ++
         "SHA-512 digests (128 lowercase hex): register each table at its tree's root")
@@ -377,9 +379,9 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
     let name := served shape.pre value u
     let (root, bc) ← regErr (Spot.Produced.known program name row (knownSalt registration name) registration 16)
     let d ← regErr (Spot.Produced.domain program name row.size 1 16 registration)
-    ports := ports ++ [(port, portJson name (Flock.hexOf root) 1 row.size d 0)]
+    ports := ports ++ [(port, portJson name (Flock.hexOf root) 1 row.size d)]
     openings := openings.push (name, #[(0, Flock.hexOf bc)])
-  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0), ("ports", Json.mkObj ports)], openings)
+  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT), ("ports", Json.mkObj ports)], openings)
 
 /-- `credit._lanes_record`: the produced record's root of each produced value of the window's sampled lanes-form leaves
 `units`, when the lanes evidence's record `rec` holds (`Spot.Produced.check` against the sample root
