@@ -57,7 +57,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **io** writes the kept network attester run's attested I/O (`network_attester_chain.io`: each request's prompt and streamed ids as the
   network attester's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
-  prints only its path and counts.
+  prints only its path and the network attester run.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
   dir (``--from``, its ``--out``) holds requests.jsonl and advice_trace.jsonl, whose arrive, step and finish records
   carry each request's prompt length, sampling (its seed), rows and emitted ids. It copies the trace, windows.jsonl,
@@ -641,14 +641,14 @@ def certified(a: argparse.Namespace) -> int:
         raise Refused(f"no kept fetch {fetch}: the session's run writes it")
     dep, io = attested_io(fetch)
     if not io["accepted"]:
-        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise Refused(f"the kept network attester run's I/O doesn't read whole off its cells: "
+                      f"{len(io['violations'])} violation(s)")
     dest = a.keep / a.run / CERTIFIED
     fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump({"deployment": dep, "io": io}, f)
     dest.chmod(0o600)
-    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"], "requests": io["requests"],
-                      "tokens": io["tokens"]}), flush=True)
+    print(json.dumps({"io": str(dest), "warden_run": dep["run_id"]}), flush=True)
     return 0
 
 
