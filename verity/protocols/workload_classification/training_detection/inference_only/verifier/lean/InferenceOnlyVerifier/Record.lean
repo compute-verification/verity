@@ -364,8 +364,8 @@ structure Runs where
 from the root's body: every part of an argument of a root node that is no input node, but a part reading another
 such node's outputs (a grid, in every lane; an edge, which the record's wiring holds: `Spot.Edges.edgesOf`), is a run
 of leaves of one of the root's input nodes (an input node a primitive or a batch of one, a leaf a gate): an affine
-part, or a strided part with outer stride 0 and inner stride 1 whose count is a multiple of its inner run, which
-hands the run to each of its members; a batch maps every argument over its members (each has the `dims`
+part, or a strided part from a leaf at or after 0 with outer stride 0, inner stride 1 and a count a multiple of its
+inner run, which hands the run to each of its members; a batch maps every argument over its members (each has the `dims`
 resolution reads a member's leaves by); and two runs, of one argument or of two, are the same run or share no leaf.
 None where the root is of another form. It costs the root's argument parts, sorted. -/
 def rowRuns (P : Prog) : Option Runs :=
@@ -382,7 +382,9 @@ def rowRuns (P : Prog) : Option Runs :=
   let runs := parts.filterMap fun
     | .affine false i base count => if input i then some ((i, base, count), false) else none
     | .strided false i base inner 0 1 count =>
-      if input i && inner > 0 && count % inner == 0 then some ((i, base, min inner count), count > inner) else none
+      if input i && 0 ≤ base && inner > 0 && count % inner == 0 then
+        some ((i, base.toNat, min inner count), count > inner)
+      else none
     | _ => none
   let sorted := (runs.filter fun r => r.1.2.2 > 0).mergeSort fun a b =>
     a.1.1 < b.1.1 || (a.1.1 == b.1.1 && a.1.2.1 ≤ b.1.2.1)
