@@ -31,6 +31,9 @@ tests = [
 ]
 paths = ["verity"]
 
+# the Lean package's record reference reads a pin's closure digest through the network suite's `period_case`, which
+# imports the served circuits' Definitions (`verity_vllm.definitions`)
 [[tool.verity.tests.reads]]
 tests = ["test_inference_only_record_check.py", "test_inference_only_record_difftest.py"]
-paths = ["verity"]
+paths = ["verity", "tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py",
+         "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions"]
