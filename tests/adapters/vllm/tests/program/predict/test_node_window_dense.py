@@ -171,14 +171,12 @@ def test_free_rows_unwired(window):
 
 
 def test_left_free(program):
-    """The token select and the stop check stay unlowered: the select's one unit (`TokenSelect_v4` is no ``STAGES`` row)
-    reads 309,760 bytes of logits, past a proof block, and the stop check's ports are 32-bit ids and no serving template's
-    u16 words."""
+    """The token select stays unlowered: its one unit (`TokenSelect_v4` is no ``STAGES`` row) reads 309,760 bytes of logits,
+    past a proof block. The stop check's ports are 32-bit ids, so its serving template is laid out as its bits."""
     specs = {getattr(n.fn, "name", ""): descriptor_id(n.fn) for n in program.body.nodes}
     with pytest.raises(ValueError, match="past 2\\^27"):
         IF.check_proof_block(ST.template(specs["TokenSelect"]).fn)
-    with pytest.raises(ValueError, match="commit u16 words"):
-        ST.template(specs["StopCheck"])
+    assert ST.template(specs["StopCheck"]).layout == "bits"
 
 
 def _after(family: str, lower, prefix: str, extra):
