@@ -87,8 +87,9 @@ end Reading
 it was shown (`shown`), which are therefore before it, and carries data: a digest of what it says (`data`) and, where
 the device reads its clock as it signs, that reading (`reading`). The network certifier's signed records
 (`NetTiming.RecordFormat`), the memory challenger's signatures (`Properties.Challenger.Signed`, the memory attester's
-`Signed`), the sampled audit's challenger's signed messages (`Vocab.signer`) and a coin released with its reading are
-each such an entry; a clock reading is one field of it. -/
+`Signed`), the sampled audit's challenger's signed messages (`Vocab.signer`) and the entry beside a coin's release
+that signs the coin's digest with its reading are each such an entry; a clock reading is one field of it. A coin is
+released only as a `.released` entry, so `Log.coins` reads every coin. -/
 structure Attested (k : String) where
   shown : List Hash.Msg
   data : Hash.Msg
@@ -101,10 +102,12 @@ def Between {E : Type} {k : String} (reads : E → Attested k → Prop) (digest 
     (a b : Attested k) : Prop :=
   reads e a ∧ digest e ∈ b.shown
 
-/-- **A bracketed entry**: attester `k`'s entry `a` releases a coin with its reading `ra`, the prover's entry `e` reads
-it, and `k`'s entry `b` signs `e`'s digest with its reading `rb`; so `e` was made within `ra.elapsed rb` of that one
-device's clock. It is the four steps (a reading, the coin released, the commitment recorded, a reading) with the coin's
-release and its reading one entry. A deadline and a salt's age read it and bound `ra.elapsed rb`. -/
+/-- **A bracketed entry**: attester `k`'s entry `a` signs a released coin's digest with its reading `ra`, the prover's
+entry `e` reads it, and `k`'s entry `b` signs `e`'s digest with its reading `rb`. It is the four steps (a reading, the
+coin released, the commitment recorded, a reading) with the coin's reading on the entry beside its release. What it
+bounds is the device's real time between its own two entries `a` and `b`; it says nothing of when `e` was made, which
+needs the model's order tied to real time, a premise no module declares. A deadline and a salt's age read it and bound
+`ra.elapsed rb`. -/
 def Bracketed {E : Type} {k : String} (reads : E → Attested k → Prop) (digest : E → Hash.Msg) (e : E)
     (a b : Attested k) (ra rb : Reading k) : Prop :=
   Between reads digest e a b ∧ a.reading = some ra ∧ b.reading = some rb
