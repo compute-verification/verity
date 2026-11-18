@@ -74,6 +74,27 @@ In the one-stage form, v2's verdicts are its own run of `verity-verify-proof ver
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
+## Levels
+
+SPOT is one protocol with levels (`levels.py`): each level is a partition into blocks with its sampling design. One
+level is the audit over one partition and its law. Two levels sample outer blocks first (the boundary docket, under the
+two-level rule with its grain and count), then inner blocks inside each drawn outer block (the interior). More levels
+are refused by name (`levels-not-built`). `recursive` is not a level: it is how many blocks' proofs are compressed, and
+it stays refused by name.
+
+- **The verdict's count is the auditor's.** It is read off the shape of the case's parameters, fixed before any coin
+  (`levels.of_params`). A case's `levels` (an integer) and its `form` (`one-stage` or `two-stage`, which the Lean
+  dispatcher reads today) must name that shape. A case that names neither reads as one level, and a mismatch is
+  refused with both values named.
+- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field (from
+  `levels.record_field`, its one writer) holds the count. A record without the field is of one level, unless its
+  format is the boundary commitment's (`verity-vllm/boundary-rows/v1`), which is of two. A record that served another
+  count than the parameters check is refused (`levels-record-mismatch`).
+- **Each level's partition and sampling design** are the integrity profile's `levels`, coarse to fine
+  (`profile.IntegrityProfile.to_json`). Their length is the count.
+- **A command that can't run the count it is given refuses it** (`levels-no-path`) rather than running another:
+  `a5.py` runs one level, `two_stage.py` two.
+
 ## Outline
 
 **The one-stage audit** is the audit protocol in use. One round goes like this:

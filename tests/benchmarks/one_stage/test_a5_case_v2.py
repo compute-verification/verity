@@ -211,7 +211,7 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     write(tmp_path, {})
     assert json.loads((tmp_path / "case-v2.json").read_text()) == zk
     got = json.loads((tmp_path / "case-sampled.json").read_text())
-    assert got == a5.case_with_form(zk)
+    assert got == a5.case_with_levels(zk)
     assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
     assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
@@ -248,7 +248,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
     assert (got["blobs"], got["commitment"]) == (zk["blobs"], zk["commitment"])
     sampled = json.loads((tmp_path / "case-sampled.json").read_text())
-    assert sampled == a5.case_with_form(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
+    assert sampled == a5.case_with_levels(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 
@@ -492,7 +492,7 @@ def test_the_per_member_case_is_the_v2_case_and_its_one_stage_form(tmp_path, mon
     a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
                   session_roots={}, served=[], v2="not read", per_member={"members": {}, "tables": []})
     assert json.loads((tmp_path / "case-v2.json").read_text()) == pm
-    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_form(pm)
+    assert json.loads((tmp_path / "case-sampled.json").read_text()) == a5.case_with_levels(pm)
     assert not (tmp_path / "case-v2-error.txt").exists()
     other = tmp_path / "plain"
     other.mkdir()
