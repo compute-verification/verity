@@ -127,7 +127,6 @@ POUS = register(Scheme(
     record="space",
     symbol="S0",
     published=("bits", Fraction(1)),
-    record_owner="memory-accounting",
     check=period.answer,
     reader=_pous_reading,
 ))
@@ -161,7 +160,6 @@ WIPE = register(Scheme(
     record="wipe",
     symbol="foreign_bits",
     published=("bits", Fraction(1)),
-    record_owner="memory-accounting",
     check=wipe_period.answer,
     reader=_wipe_reading,
 ))

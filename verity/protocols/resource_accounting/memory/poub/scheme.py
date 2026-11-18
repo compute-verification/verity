@@ -131,7 +131,6 @@ BANDWIDTH = S.register(S.Scheme(
     record="bandwidth",
     symbol="Q_cert",
     published=("bytes", Fraction(1, 8)),
-    record_owner="memory-accounting",
     check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
     reader=_bandwidth_reading,
 ))
@@ -171,7 +170,6 @@ POUB = S.register(S.Scheme(
                    "(benchmarks/poub_session)"),
     symbol=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
-    record_owner=S.Lacks("no combined record has a row for the remote session"),
     check=S.Lacks(_LIVE.format("session.lean_verifier, as session.verifier runs it")),
     reader=S.Lacks("no combined record has a row for the remote session"),
 ))

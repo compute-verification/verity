@@ -472,7 +472,6 @@ PEARL_PLUS = register(Scheme(
     published=Lacks("Pearl+ declares its costs in MACs and its Lean instance in the reference work unit: the exact "
                     "factor between them is its owner's to say"),
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
-    record_owner="compute-accounting",
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s certified quantity is its owner's to name"),
 ))

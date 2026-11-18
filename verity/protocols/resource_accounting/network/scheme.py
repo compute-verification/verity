@@ -134,7 +134,6 @@ NETWORK_ATTESTER = register(Scheme(
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),
-    record_owner="network-accounting",
     check=S.Lacks("the network attester's verifier of record is its owner's to declare"),
     reader=_reading,
 ))

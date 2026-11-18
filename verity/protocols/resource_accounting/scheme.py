@@ -270,12 +270,10 @@ class Scheme:
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
     the record; ``symbol``, its certified quantity's symbol; ``published``, the unit the record publishes it in and
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
-    it is the same); ``record_owner``, the lane the record names as answering for its row; ``check``, its verifier of
-    record, the entry its Lean port is held to, with that entry's own arguments (a run's record and what the verifier
-    is registered with, its trusted keys among them), which answers accept or names its refusal; and ``reader``, which
-    takes its row as the runner read it from what its piece wrote (``answer``, the answer, and ``quantity``, the
-    figures read of it) and returns its `Reading`. ``composed_protocol`` is the protocol id it carries inside a
-    composite where that differs from ``protocol``, None where it is the same.
+    it is the same); ``check``, its verifier of record, the entry its Lean port is held to, with that entry's own
+    arguments (a run's record and what the verifier is registered with, its trusted keys among them), which answers
+    accept or names its refusal; and ``reader``, which takes its row as the runner read it from what its piece wrote
+    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     is a `Lacks` saying so: it is in the one table with its parties and record, and `bound` and `credited` refuse it by
@@ -312,10 +310,8 @@ class Scheme:
     symbol: str | Lacks = UNDECLARED
     channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
-    record_owner: str | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
-    composed_protocol: str | None = None
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
