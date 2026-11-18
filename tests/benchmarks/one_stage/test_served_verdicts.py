@@ -445,7 +445,10 @@ def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference
         assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
-def test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_population_or_steps(tmp_path, capsys):
+def test_the_spot_line_names_the_partition_and_how_many_proof_blocks_were_sampled_and_publishes_no_population(tmp_path,
+                                                                                                               capsys):
+    """The line says how many proof blocks were sampled; the population's size, which counts the execution phase's
+    tokens, is in the private copy and cut from the published one; the advice's length and the steps are in neither."""
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "rate:2/4",
@@ -455,7 +458,10 @@ def test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_p
     assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law rate:2/4), drawn members [0, 2]"
     assert "steps" not in line and "11" not in line
     assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
-    assert "population" not in line and "37" not in line and row["population"] == 37
+    assert (json.loads(rec)["population"], json.loads(rec)["sampled"]) == (37, 2)
+    published = S.public_line(line)
+    assert "population" not in published and "37" not in published
+    assert json.loads(published.partition(": RECORDS ")[2])["sampled"] == 2
     (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
     (tmp_path / "p.json").write_text(json.dumps(part))
     assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
@@ -464,11 +470,11 @@ def test_the_spot_line_names_the_partition_and_its_sample_and_no_advice_length_p
     assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
-GATE = "gate:research@challenger.invalid"
+GATE_COINS = "gate:research@challenger.invalid"
 
 
 @pytest.mark.parametrize("challenger, coins", [
-    (GATE, "coins the gate's, the auditor's challenger"),
+    (GATE_COINS, "coins the gate's, the auditor's challenger"),
     ("local", "coins a development challenger's (local), not the auditor's"),
     ("loopback:127.0.0.1:7811", "coins a development challenger's (loopback), not the auditor's"),
 ])
@@ -493,11 +499,11 @@ def test_the_spot_line_says_whose_coins_they_were_and_where_the_sessions_coin_tr
 
 
 @pytest.mark.parametrize("challenger, summary, refused", [
-    (GATE, {"coin_trees": "own"}, True),
-    (GATE, {"coin_trees": "window"}, False),
-    (GATE, {"coin_trees": "own", "plain": True}, False),
-    (GATE, {"ok": False}, False),
-    (GATE, None, False),
+    (GATE_COINS, {"coin_trees": "own"}, True),
+    (GATE_COINS, {"coin_trees": "window"}, False),
+    (GATE_COINS, {"coin_trees": "own", "plain": True}, False),
+    (GATE_COINS, {"ok": False}, False),
+    (GATE_COINS, None, False),
     ("local", {"coin_trees": "own"}, False),
     ("loopback:127.0.0.1:7811", {"coin_trees": "own"}, False),
 ], ids=["gate, own trees", "gate, the sample's session's trees", "gate, plain", "gate, no session reached",
@@ -531,13 +537,13 @@ def _sampled_coins(tmp_path: Path, summary: dict | str | None, *args: str, audit
 
 
 @pytest.mark.parametrize("summary, extra, rc", [
-    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 20),
-    ("{", {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 20),
-    ({"coin_trees": "window", "ok": True}, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 0),
-    (None, {"PP_CHALLENGER": GATE, "V3C_CLASS": ""}, 0),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE_COINS, "V3C_CLASS": ""}, 20),
+    ("{", {"PP_CHALLENGER": GATE_COINS, "V3C_CLASS": ""}, 20),
+    ({"coin_trees": "window", "ok": True}, {"PP_CHALLENGER": GATE_COINS, "V3C_CLASS": ""}, 0),
+    (None, {"PP_CHALLENGER": GATE_COINS, "V3C_CLASS": ""}, 0),
     ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": "local", "V3C_CLASS": "", "DEVELOPMENT": "1"}, 0),
     ({"coin_trees": "own", "ok": True}, {"V3C_CLASS": "", "DEVELOPMENT": "1"}, 0),
-    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE}, 0),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE_COINS}, 0),
 ], ids=["gate, own trees", "gate, a summary that isn't JSON", "gate, the sample's session's trees",
         "gate, no summary", "local", "PP_CHALLENGER unset", "gate with V3c on: step 3 local"])
 def test_step_3_on_the_gates_coins_stops_where_its_sessions_took_their_own_coin_trees(tmp_path, summary, extra, rc):
@@ -565,10 +571,10 @@ def test_the_main_run_checks_step_3s_coin_trees_right_after_its_line_and_stops_o
 
 
 @pytest.mark.parametrize("challenger, summary, said", [
-    (GATE, {"coin_trees": "window"}, "coins the gate's, the auditor's challenger, coin_trees window"),
+    (GATE_COINS, {"coin_trees": "window"}, "coins the gate's, the auditor's challenger, coin_trees window"),
     ("local", {"coin_trees": "own"}, "coins a development challenger's (local), not the auditor's, coin_trees own"),
-    (GATE, None, "coins the gate's, the auditor's challenger, coin_trees none"),
-    (GATE, "{", "coins the gate's, the auditor's challenger, coin_trees unread: summary.json is not JSON"),
+    (GATE_COINS, None, "coins the gate's, the auditor's challenger, coin_trees none"),
+    (GATE_COINS, "{", "coins the gate's, the auditor's challenger, coin_trees unread: summary.json is not JSON"),
 ])
 def test_v3cs_line_says_whose_coins_its_audit_took_and_its_coin_trees(tmp_path, capsys, challenger, summary, said):
     path = tmp_path / "summary.json"
@@ -582,11 +588,11 @@ V3C_AUDIT = "v3c-w7-4-32-4/audit"
 
 
 @pytest.mark.parametrize("summary, extra, rc", [
-    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": GATE}, 20),
-    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE}, 20),
-    ("{", {"V3C_CHALLENGER": GATE}, 20),
-    ({"coin_trees": "window", "ok": True}, {"V3C_CHALLENGER": GATE}, 0),
-    (None, {"V3C_CHALLENGER": GATE}, 0),
+    ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": GATE_COINS}, 20),
+    ({"coin_trees": "own", "ok": True}, {"PP_CHALLENGER": GATE_COINS}, 20),
+    ("{", {"V3C_CHALLENGER": GATE_COINS}, 20),
+    ({"coin_trees": "window", "ok": True}, {"V3C_CHALLENGER": GATE_COINS}, 0),
+    (None, {"V3C_CHALLENGER": GATE_COINS}, 0),
     ({"coin_trees": "own", "ok": True}, {"V3C_CHALLENGER": "local", "DEVELOPMENT": "1"}, 0),
     ({"coin_trees": "own", "ok": True}, {"DEVELOPMENT": "1"}, 0),
 ], ids=["V3C_CHALLENGER the gate, own trees", "the gate by PP_CHALLENGER, own trees", "the gate, a summary that isn't JSON",
@@ -603,6 +609,67 @@ def test_v3cs_audit_on_the_gates_coins_fails_where_its_sessions_took_their_own_c
         assert ("FLOCK_CHALLENGER unset" in lines[0]) is (summary != "{")
     else:
         assert lines == []
+
+
+@pytest.mark.parametrize("summary, rc, said", [
+    ({"coin_trees": "own", "ok": True}, 20, "HANDOFF refused: the audit's summary says coin_trees='own'"),
+    ({"coin_trees": "window", "ok": True}, 1, "HANDOFF refused: the window has no engine steps"),
+], ids=["own trees", "the sample's session's trees"])
+def test_the_hand_off_of_a_record_whose_v3c_audit_was_refused_its_coin_trees_is_refused(tmp_path, summary, rc, said):
+    """No compose is asked of a record whose SPOT audit, V3c's on the gate's coins, took its sessions' own coin trees:
+    the hand-off refuses first, exit 20 with the refusal's one line; with the sample's session's trees it goes on (here to
+    the toy serve dir's want of engine steps)."""
+    got, lines = _sampled_coins(tmp_path, summary, "handoff", audit=V3C_AUDIT, K="7", V3C_CHALLENGER=GATE_COINS)
+    assert got == rc and len(lines) == 1 and lines[0].startswith(said), lines
+
+
+def _integrity_entry(size: int, sampled: int) -> dict:
+    """The block record's sampled-proofs entry of an accepted uniform sample of ``sampled`` of ``size`` proof blocks."""
+    a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
+         "public": {"bound": 0, "drawn": list(range(sampled)), "per_template": None, "proved": list(range(sampled))},
+         "profile": {"levels": [{"name": "unit", "size": size}], "drawn": {"unit": sampled}, "delta": "1/2"}}
+    return BR.subprotocol("integrity", S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent")), server="n", runs=[])
+
+
+def test_two_sampled_of_three_bound_the_one_not_sampled_and_the_published_clause_gives_no_count():
+    """`rate:2/4` samples 2 of 3 proof blocks: at either δ the record gives, at most 1 incorrect except with probability
+    δ, ε = 1/3, the one proof block not sampled, and not vacuous. With the number sampled, b gives N (here b + 2 = N),
+    so the published clause gives neither b nor ε, and the private line both."""
+    entry = _integrity_entry(3, 2)
+    assert [BR.integrity_bound(3, 2, d) for d in BR.DELTAS] == [1, 1]
+    clause = S.bound_said(entry)
+    assert clause == [f"at most b incorrect proof blocks except with probability δ, at δ = 1/100 and 1/1000000 ({S.BOUND_HELD})"]
+    assert "at most 1 " not in clause[0] and "1/3" not in clause[0] and "vacuous" not in clause[0]
+    assert S.bound_held(entry) == ("SAMPLED-PROOFS bound: at most 1 of the 3 proof blocks incorrect except with probability "
+                                   "1/100, ε = 1/3; at most 1 of the 3 proof blocks incorrect except with probability "
+                                   "1/1000000, ε = 1/3")
+
+
+def test_a_bound_of_every_proof_block_reads_vacuous_and_another_subprotocol_says_no_bound():
+    entry = {"quantity": {"of": 5}, "at": {"1/100": {"by": "draw", "value": 5, "epsilon": "1", "holds": True},
+                                         "1/1000000": {"by": "draw", "value": 5, "epsilon": "1", "holds": True}}}
+    assert S.bound_said(entry) == ["vacuous at δ = 1/100 and 1/1000000: every proof block may be incorrect"]
+    assert S.bound_held(entry).endswith("at most 5 of the 5 proof blocks incorrect except with probability 1/1000000, "
+                                        "ε = 1 (vacuous)")
+    pous = {"quantity": {"symbol": "S0"}, "at": {"1/100": {"by": "run", "value": 9, "holds": True}}}
+    assert S.bound_said(pous) == [] and S.bound_held(pous) is None
+
+
+@pytest.mark.parametrize("node, said", [
+    ("auditor = true\nadmin = true\n", "composed on the auditor's device"),
+    ("admin = true\n", "not known: the deploy manifest marks h admin = true, which it gives the control host too"),
+    ("record = \"/r\"\n", "composed off the auditor's device"),
+    (None, "not known: the deploy manifest lists no node h"),
+], ids=["auditor", "admin alone", "a lanes' node", "unlisted"])
+def test_the_record_says_whether_it_was_composed_on_the_auditors_device_as_the_deploy_manifest_says(tmp_path, node, said):
+    manifest = tmp_path / "deploy.toml"
+    manifest.write_text("[nodes.other]\nadmin = true\n" + (f"[nodes.h]\n{node}" if node is not None else ""))
+    assert S.auditor_device("h", manifest) == said
+    assert S.auditor_device("h", manifest, served_node=True) == "composed off the auditor's device: on the served node"
+    assert S.auditor_device("h", None) == "not known: no deploy manifest given (record --deploy-manifest)"
+    assert S.auditor_device("h", tmp_path / "gone.toml") == "not known: the deploy manifest gone.toml can't be read (FileNotFoundError)"
+    manifest.write_text("[nodes")
+    assert S.auditor_device("h", manifest).startswith("not known: the deploy manifest deploy.toml can't be read (TOMLDecodeError)")
 
 
 def test_v3cs_audit_says_its_coins_and_fails_on_its_coin_trees_after_its_records_line():
@@ -791,6 +858,11 @@ def _accepted() -> dict:
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
 
+#: the record's clause of `_accepted`'s sampled proofs: 2 of 4 proof blocks sampled leave at most 2 incorrect at each δ
+SPOT_ACCEPT = ("sampled proofs: accept (at most b incorrect proof blocks except with probability δ, at δ = 1/100 and "
+               f"1/1000000 ({S.BOUND_HELD}))")
+
+
 def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
@@ -836,7 +908,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
                              "it except with 1/100 + 2^-128)")
     assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
-    assert line["reason"].startswith("sampled proofs: accept; ")
+    assert line["reason"].startswith(f"{SPOT_ACCEPT}; ")
 
 
 def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
@@ -1081,7 +1153,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)",
-                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
+                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})",
+                "sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
@@ -1136,12 +1209,15 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
     names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
     assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
-    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert line["reason"] == f"{SPOT_ACCEPT}; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    held = (tmp_path / "serve" / "private" / "verdicts.txt").read_text().splitlines()
+    assert held == ["SAMPLED-PROOFS bound: at most 2 of the 4 proof blocks incorrect except with probability 1/100, "
+                    "ε = 1/2; at most 2 of the 4 proof blocks incorrect except with probability 1/1000000, ε = 1/2"]
     assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
     assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
-    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM}
+    where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM, "auditor_device": "composed off the auditor's device: on the served node"}
     assert report["composed_on"] == line["composed_on"] == where and "deferred" not in line and "deferred" not in report
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
     left = "V3c's audit and the composite, to a follow-on on a node with the memory, which composes the final record"
@@ -1169,12 +1245,13 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     assert S.main(argv) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    assert line["composed_on"] == {"host": "vy-auditor-2", "served_node": False, "from": S.COPIED_FROM}
+    assert line["composed_on"] == {"host": "vy-auditor-2", "served_node": False, "from": S.COPIED_FROM,
+                                 "auditor_device": "not known: no deploy manifest given (record --deploy-manifest)"}
     (tmp_path / "serve" / "requests.jsonl").unlink()
     assert S.main([*argv, "--steps", "5,11", "--off-node"]) == 2
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
-    handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM}
+    handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM, "auditor_device": "not known: no deploy manifest given (record --deploy-manifest)"}
     assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
     assert S.TAKEN_AS_GIVEN == ("a verdict computed off the auditor's device and handed in is taken as given, for the "
                                 "whole chain")
@@ -1717,7 +1794,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {} and rec["composed"]["answer"] is None
     reason = report["composed"]["reason"]
-    assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
+    assert reason.startswith(f"{SPOT_ACCEPT}; PoUW: {why}; ")
     for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
                       ("the wipe", "WIPE")):
         assert f"; {name}: missing: {cmd}_CMD unset: " in reason
@@ -1802,7 +1879,7 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and line["development"] == {"PoUW": "accept"}
     assert line["missing"]["PoUW"] == why and BR.check(rec) == {}
-    assert report["composed"]["reason"].startswith(f"sampled proofs: accept; PoUW: {why}; ")
+    assert report["composed"]["reason"].startswith(f"{SPOT_ACCEPT}; PoUW: {why}; ")
     got = S.pieces(tmp_path, 1, tmp_path / "again", env={"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""})
     assert "POUW (development run, credits nothing) " in capsys.readouterr().out
     assert (got["pouw"]["verdict"], got["pouw"]["passes"], got["pouw"]["credited"]) == ("accept", 4, False)
@@ -5229,12 +5306,13 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-6] == [
+    assert argv[:-8] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / f"v3c-w7-{VTAG}" / "audit"),
         "--pieces", str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote",
         "--node", "vy-dc-h200"]
-    assert (argv[-6], len(argv[-5]), argv[-4:]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
-                                                                           str(out / "composite")])
+    assert (argv[-8], len(argv[-7]), argv[-6:-2]) == ("--key-sha512", 128, ["--lane", "vllm", "--composite",
+                                                                             str(out / "composite")])
+    assert argv[-2] == "--deploy-manifest" and argv[-1].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
 
@@ -5811,9 +5889,9 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200", "--steps", "0,3"]
-    assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
-                                                                         "--tree", SHA, "--composite",
-                                                                         str(out / "composite")])
+    assert (argv[17], len(argv[18]), argv[19:23], argv[25:]) == (
+        "--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean"], ["--tree", SHA, "--composite", str(out / "composite")])
+    assert argv[23] == "--deploy-manifest" and argv[24].endswith("/tools/research/src/research/pods/nebius/deploy.toml")
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", "h1", str(d), str(out)]
     assert (tmp_path / "order.development").read_text() == ""
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
@@ -6325,6 +6403,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
     assert composed["composed"]["verdict"] == "pending" and all(
         composed["protocols"][k]["verdict"] == "accept" for k in ("integrity", "work"))
+    assert isinstance(composed["composed_on"].pop("auditor_device"), str)  # by the pinned tree's manifest, of this host
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]

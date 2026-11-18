@@ -239,7 +239,8 @@
 # stops the run there (`sampled_coins`, exit 20; `served_verdicts.sh sampled-coins` runs that check alone on D). V3c's
 # audit is held to the same on V3C_CHALLENGER's coins: its V3C-AUDIT line says whose coins and its coin_trees, and on the
 # gate's it fails, exit 20 with the same refusal, as a V3c audit that fails does (`v3c_trees`; `served_verdicts.sh
-# v3c-coins K` alone on D at V3C_CLASS). A record
+# v3c-coins K` alone on D at V3C_CLASS), and the compose hand-off of a record whose SPOT audit it is refuses the same
+# way (`handoff`), so no compose is asked of it. A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
 # research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
@@ -434,6 +435,7 @@ if [ -n "${SETTINGS:-}" ]; then
 fi
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
+DEPLOY_MANIFEST=$TREE/tools/research/src/research/pods/nebius/deploy.toml  # infra's, where research reads the auditor devices
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
@@ -690,7 +692,7 @@ coin_trees_held() {  # CHALLENGER SUMMARY STEP: an audit on the gate's coins (CH
   # from the session that sampled them, by its SUMMARY (`served_verdicts.py coin-trees`), else 20 with STEP's refusal
   # line; a development session's coins pass as before
   local why
-  why=$("$PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
+  why=$("$SAY_PY" "$SV" coin-trees --challenger "$1" --summary "$2" 2>&1) && return 0
   say "$3 refused: $(tail -1 <<< "$why" | cut -c1-1200)"
   return 20
 }
@@ -1545,7 +1547,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/$(sampled_of_record)" \
     --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" ${wt[@]+"${wt[@]}"} \
-    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" ${lean[@]+"${lean[@]}"} 2>&1 | publish_lines
+    --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" ${lean[@]+"${lean[@]}"} \
+    --deploy-manifest "$DEPLOY_MANIFEST" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$comp" = 0 ] || return 1
@@ -1615,6 +1618,7 @@ for x in open(sys.argv[1]):
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
   local d f steps why rc sampled
   sampled=$(sampled_of_record)
+  [ "$sampled" = sampled-proofs-served ] || coin_trees_held "$V3C_CHALLENGER" "$D/$sampled/summary.json" HANDOFF || return 20
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
@@ -1674,6 +1678,7 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
     --pieces "$COMPOSE_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" --steps "$STEPS" \
     ${PEARLPLUS_TIE:+--window-tie "$(pearl_dir)/tie" --served-compare "$SERVED_COMPARE"} \
     --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --off-node --sampled-lean \
+    --deploy-manifest "$DEPLOY_MANIFEST" \
     ${SAMPLED_EXE:+--sampled-exe "$SAMPLED_EXE"} --tree "$(tree_sha)" ${COMPOSE_TREE_ON:+--tree-on "$COMPOSE_TREE_ON"} \
     ${lean[@]+"${lean[@]}"} 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
@@ -2371,7 +2376,7 @@ if [ "$COMPOSE_OFF_NODE" = 1 ]; then
 elif [ -n "$DEFER" ]; then LEFT="$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"; fi
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
   --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" ${WT[@]+"${WT[@]}"} ${SC[@]+"${SC[@]}"} \
-  --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" \
+  --key-sha512 "$H1_KEY_SHA512" --lane "${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}" --deploy-manifest "$DEPLOY_MANIFEST" \
   ${LEFT:+--deferred "$LEFT"} 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
