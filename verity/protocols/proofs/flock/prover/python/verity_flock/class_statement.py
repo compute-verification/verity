@@ -210,12 +210,23 @@ class Wiring:
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
     their own program, which is part of the circuit. ``strict`` False and ``writer_salts`` False stage what a cheating
     prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
-    own."""
+    own.
+
+    ``tree`` (`registered.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
+    instance's ``out`` row is its leaf's row under its leaf's salt, and each link row the writer's leaf, opened by path in
+    the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement."""
     program: Any
     query: dict
     indices: Sequence[int]
     strict: bool = True
     writer_salts: bool = True
+    tree: Any = None
+
+
+def tree_leaves(tp: PO.TemplatePartition, template: str) -> list[int]:
+    """The units of ``template`` in root order: unit ``tree_leaves(...)[i]`` is leaf ``i`` of its output field's tree
+    (Lean's `HmLinks.treeLeaf`)."""
+    return [u for _k, t, a, n in tp.ranges if t == template for u in range(a, a + n)]
 
 
 LINKS_FORMAT = "verity/flock-links/v1"
@@ -633,7 +644,8 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``share_rows=False``: every instance opens its own row per port, equal rows included, and the public file has no shared-row
     tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); a wired class's link
-    rows are then each reading instance's own, still under its writer's ``out`` salt.
+    rows are then each reading instance's own, still under its writer's ``out`` salt. With ``wiring.tree`` the file keeps
+    tables, every instance its own row of each, since a registered read is a table's.
 
     ``salts``: every row's (`circuit.write`'s), given as data, else fresh."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
@@ -672,17 +684,25 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         reads = cut_reads(tp, wiring.indices)
         n_out = lambda v: len(tp.outputs(v))  # noqa: E731
         pos = {u: i for i, u in enumerate(wiring.indices)}
+        leaf = {u: i for i, u in enumerate(tree_leaves(tp, definition))} if wiring.tree is not None else None
         groups, origin, spans = link_ports(uc, groups, reads, n_out)
         packs = [packed and s is None for s in spans]
         for s in spans:
             ws = None
             if s is not None:
                 ws = [_whole_row(r[s[0]:s[1]], n_out) for r in reads]
-                if any(v is not None and v not in pos for v in ws):
-                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its salts are another statement's)")
-                ws = [None if v is None else pos[v] for v in ws]
+                if leaf is not None:
+                    if None in ws:
+                        raise ValueError(f"class {name}: a tree port's every instance reads a writer's leaf, and one reads circuit "
+                                         "inputs at its link row: stage the writers and the readers apart")
+                    ws = [leaf[v] for v in ws]
+                elif any(v is not None and v not in pos for v in ws):
+                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its salts are another statement's; give Wiring its tree)")
+                else:
+                    ws = [None if v is None else pos[v] for v in ws]
             writers.append(ws)
-        idents = [idents[o] if s is None else [("link", w, k) if w is not None else ("in", k) for k, w in enumerate(writers[i])]
+        idents = [idents[o] if s is None else [(("tree", w) if leaf is not None else ("link", w, k)) if w is not None else ("in", k)
+                                               for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
     links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
@@ -731,27 +751,46 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
     salts = None if salts is None else {k: list(v) for k, v in salts.items()}
-    if links:
+    tree = wiring.tree if wiring is not None else None
+    registered = None
+    if tree is not None and not share_rows:
+        tables, refs = dict(per_port), {p: np.arange(n) for p in per_port}
+        firsts = {p: list(range(n)) for p in per_port}
+    if links or tree is not None:
         ports = FC._meta_ports(meta)
-        salts = salts or FC.stage_salts(0, n, ports,
-                                        {p.name: len(tables[p.name]) if p.name in tables else n for p in ports} if share_rows else None)
+        salts = salts or FC.stage_salts(0, n, ports, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports}
+                                        if share_rows or tree is not None else None)
         out_name = ports[-1].name
+        rows_of = lambda w: np.asarray(tree.rows[w], np.uint16)  # noqa: E731
+        if tree is not None:
+            own = [leaf[u] for u in wiring.indices]
+            for k, w in enumerate(own):
+                if wiring.strict and not np.array_equal(outs[k], rows_of(w)):
+                    raise AssertionError(f"class {name}: instance {k}'s output row is not its leaf {w}'s row of {tree.value}")
+                salts[out_name][k] = tree.salts[w]
+            registered = {out_name: {"value": tree.value, "positions": own, "paths": [tree.path(w).hex() for w in own]}}
         for i, ws in enumerate(writers):
             if ws is None:
                 continue
-            for r, k in enumerate(firsts[f"p{i}"] if share_rows else range(n)):
+            at = []
+            for r, k in enumerate(firsts[f"p{i}"] if share_rows or tree is not None else range(n)):
                 w = ws[k]
                 if w is None:
                     continue
-                row = tables[f"p{i}"][r] if share_rows else per_port[f"p{i}"][k]
-                if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
-                    raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
+                row = tables[f"p{i}"][r] if share_rows or tree is not None else per_port[f"p{i}"][k]
+                want = rows_of(w) if tree is not None else outs[w]
+                if wiring.strict and (not np.array_equal(row[:outs.shape[1]], want) or row[outs.shape[1]:].any()):
+                    raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not its writer's output row ({w})")
                 if wiring.writer_salts:
-                    salts[f"p{i}"][r] = salts[out_name][w]
-    if not share_rows:
+                    salts[f"p{i}"][r] = tree.salts[w] if tree is not None else salts[out_name][w]
+                at.append(w)
+            if tree is not None:
+                registered[f"p{i}"] = {"value": tree.value, "positions": at, "paths": [tree.path(w).hex() for w in at]}
+    if not share_rows and tree is None:
         tables = refs = None
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", rows=per_port, outs={"out": outs},
-                    share_rows=share_rows, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
+                    share_rows=tables is not None, tables=tables, refs=refs, salts=salts, registered=registered,
+                    indices=list(wiring.indices) if wiring else None)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
