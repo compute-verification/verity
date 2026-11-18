@@ -4,8 +4,8 @@ read at the router's slot id from a table registered one expert a row, so no pro
 A MoE layer's pair (t, k), for each projection (w13, and w2 with the routed weight g):
 
     MoeRouterSigmoidBiasSlots_v2{E, TOPK, SCALE, KERNEL}  (logits, bias) -> (g_0 .. g_{TOPK-1}, e_0 .. e_{TOPK-1})  a unit a token
-    EmbeddingRead_v1{V=E, H=N K / 2}      (tok, root, domain, row, salt, path) -> (h, ok)  rows [bN, bN + N) of expert tok
-    EmbeddingRead_v1{V=E, H=2 K / G}      (tok, root, domain, row, salt, path) -> (h, ok)  their G-block's scale row
+    EmbeddingRead_v2{V=E, H=N K / 2}      (tok, root, domain, row, salt, path) -> (h, ok)  rows [bN, bN + N) of expert tok
+    EmbeddingRead_v2{V=E, H=2 K / G}      (tok, root, domain, row, salt, path) -> (h, ok)  their G-block's scale row
     MoeExpertFp8BlockGemm(W)_v4{K, N, G, KB, SWAP, DOT}   (xq, sx, [g,] w, ws) -> [N] bf16
 
 A table is a registered parameter of its own (`interface.Table`): its row e is the block's rows of expert e as their e4m3 bytes
@@ -13,7 +13,7 @@ in u16 words (a row's little-endian bytes, `interface.words`), or the scale row'
 reads, and its row, salt and path an opening at the hidden key ``tok``, which the verdict ``o1`` holds to the root. ``tok`` is
 the router's row ``o{TOPK + k}``, ``g`` its row ``o{k}``, and ``w`` and ``ws`` the reads' ``h``, each a wire. Fused, the
 weight rows' read and its GEMM are one unit, `MoeExpertFp8ReadGemm(W)_v1{READ, K, N, G, KB, SWAP, DOT}` (tok, root, domain,
-row, salt, path, xq, sx, [g,] ws) -> (y, ok) with READ = EmbeddingRead_v1{V=E, H=N K / 2}, and its table declared on it, so
+row, salt, path, xq, sx, [g,] ws) -> (y, ok) with READ = EmbeddingRead_v2{V=E, H=N K / 2}, and its table declared on it, so
 no unit outputs a weight row.
 
 * the cut computes the gather form: the router's slots, the reads of the experts they name and the per-expert GEMMs over the
@@ -70,7 +70,7 @@ class _Table:
         self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in rows], self.salts)
 
     def read(self, tok: int, at: int | None = None) -> tuple[list[int], int]:
-        """`EmbeddingRead_v1`'s (h, ok) at key ``tok`` on the opening of row ``at`` (``tok``'s own by default)."""
+        """`EmbeddingRead_v2`'s (h, ok) at key ``tok`` on the opening of row ``at`` (``tok``'s own by default)."""
         e = tok if at is None else at
         p = self.tree.path(e)
         return EMB.reference(len(self.rows), tok, self.tree.root, self.dom.domain_id, self.rows[e].tolist(), self.salts[e],

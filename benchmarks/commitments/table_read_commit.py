@@ -7,7 +7,7 @@ GPU, and its CPU twin's rate on one thread.
         PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
         ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
-A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v1{V=2^17,H=576}``),
+A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v2{V=2^17,H=576}``),
 and each read commits four fresh rows (`ROWS`): the history row it opens, the row's salt, its path (17 siblings of 64 bytes) and
 its output row. A step's reads at batch B are, per layer and per kind, one row table of ``B * reads`` rows of that kind's bytes,
 laid out as the committer takes rows (int8 codes of K = bytes - 4, then a 4-byte scale), so a table's hashing is the reads':
