@@ -60,9 +60,10 @@ from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties impo
 NAME = "wipe"
 SMI = "nvidia-smi"
 #: the launcher's facts, at the values its launcher hands by default: never in an application
-FACTS = {"device": 0, "streamer": "native", "threads": 0, "links": [], "disk": {}, "dram": {}, "egress_bits": -1,
-         "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False, "simulated": False,
-         "foreign_bytes": 0, "foreign_past_bound": False}
+FACTS = {"device": wipe_run.CONFIG["device"], "streamer": "native", "threads": 0, "links": wipe_run.CONFIG["links"],
+         "disk": {}, "dram": {}, "egress_bits": -1, "idle_mib": 1024, "host": "", "address": "", "command": [],
+         "run_keys": False, "simulated": False, "foreign_bytes": wipe_run.CONFIG["foreign_bytes"],
+         "foreign_past_bound": False}
 #: the facts that make a run a development run, named in its record's ``served.development``
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
