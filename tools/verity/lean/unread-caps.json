@@ -5,6 +5,10 @@
    "modules": 1,
    "declarations": 19
   },
+  "Definitions/Core": {
+   "modules": 4,
+   "declarations": 27
+  },
   "Definitions/Pouw": {
    "modules": 21,
    "declarations": 89
@@ -12,6 +16,10 @@
   "Proofs/Certifier": {
    "modules": 4,
    "declarations": 34
+  },
+  "Proofs/Core": {
+   "modules": 7,
+   "declarations": 60
   },
   "Proofs/Flock": {
    "modules": 226,

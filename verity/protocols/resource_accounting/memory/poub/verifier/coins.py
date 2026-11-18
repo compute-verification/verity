@@ -62,6 +62,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     LiveOpening,
     LiveRecord,
     Verify,
+    by_family,
     ledger_head,
     live_reason,
     order_reason,
@@ -383,7 +384,8 @@ def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: Chal
     if period is not None and held != period:
         raise CoinError(f"the auditor's ledger holds the session's window in period {held}, not the audit's "
                         f"period {period}")
-    commitment, roots = remote.trusted_session(directory, heads, w, key, verify)
+    commitment, log = remote.trusted_session(directory, heads, w, key, verify)
+    roots = by_family(commitment, log)
     got = lean_answer("challenger_session", asked | {"session": remote.session_files(directory)},
                       {"commitment": commitment.to_json(), "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})
     return (LiveCommitment.from_json(got["commitment"]),

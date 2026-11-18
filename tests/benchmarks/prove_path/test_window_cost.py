@@ -78,9 +78,9 @@ def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census(to):
 
 def test_a_probe_unit_its_definition_doesnt_give_is_refused():
     probe = _census(WindowClass(1, 2, 2), 1)
-    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v2{"))
+    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v3{"))
     probe["templates"][scan]["bytes"]["value"] += 2
-    with pytest.raises(ValueError, match=r"ScanSlots_v2\{.*\} is not its Definition's rows at the probe's class"):
+    with pytest.raises(ValueError, match=r"ScanSlots_v3\{.*\} is not its Definition's rows at the probe's class"):
         W.project(probe, 2, 4, 2, "sm120")
 
 

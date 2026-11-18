@@ -258,8 +258,7 @@ def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:
     assert _unowned(f, {"owner": "nobody"}, reg) == []
 
 
-#: our machines are all named vy-*; the register `research run --on` resolves them by is not in the tree, and
-#: verity_bench.jobs.DIRECT_NODES lists only the GPU nodes
+#: our machines are all named vy-*; the register `research run --on` resolves them by is not in the tree
 _MACHINE = re.compile(r"(?<![\w/.-])vy-[a-z0-9]+(?:-[a-z0-9]+)*")
 _LEASE = re.compile(r"(?<![\w-])gpu-lease\b(.*?)(?=\s--\s|$)", re.S)
 _CARD = re.compile(r"--on [A-Z][A-Z0-9_]*\b")
