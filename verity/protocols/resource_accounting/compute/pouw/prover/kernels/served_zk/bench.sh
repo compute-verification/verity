@@ -8,7 +8,7 @@
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e; PY=$WORK/venv312/bin/python
-CUDA=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}
 if [ "${1:-}" != gpu ]; then
   S=$(mktemp -d /workspace/pouw/tmp-served-zk-bench.XXXXXX); trap 'rm -rf "$S"' EXIT
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin -o "$S/pearl_c_sm120.cubin" \

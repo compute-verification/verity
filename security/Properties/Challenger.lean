@@ -106,7 +106,7 @@ def Run.released (s : Run) (label : String) (after : ByteArray) : ByteArray :=
   match s.commitment with
   | none => .empty
   | some c =>
-    match releasedRootsOf c s.log with
+    match byFamily c <$> releasedLogOf c s.log with
     | .error _ => .empty
     | .ok roots =>
       let rs := ((roots.find? (·.1 == label)).map (·.2)).getD []
@@ -389,13 +389,13 @@ def SampledByDevice : Prop := SampledByDeviceAt sampleCoins
 /-! ## A family's coins follow one commitment -/
 
 /-- The roots the run's own log shows family `label`'s coins released after, in order: root `i` is the 64 bytes the run
-received before it released the family's coin `i` (`releasedRootsOf` over the whole of its log); none when its log
+received before it released the family's coin `i` (`releasedLogOf` over the whole of its log); none when its log
 doesn't read as its commitment's. -/
 def Run.roots (s : Run) (label : String) : List ByteArray :=
   match s.commitment with
   | none => []
   | some c =>
-    match releasedRootsOf c s.log with
+    match byFamily c <$> releasedLogOf c s.log with
     | .error _ => []
     | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
 

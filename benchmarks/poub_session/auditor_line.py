@@ -282,7 +282,7 @@ def peer_of(out: Path, v: dict) -> str:
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     """A release log's lines after its head, by family: each coin's root (`after`), its request's receipt and the
-    coin's release, on the challenger's clock, in index order (`challenger.released_roots_of` checks the form)."""
+    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form)."""
     fam: dict[str, dict[str, list]] = {}
     for i in range(1, len(lines) - 1, 2):
         root, release = json.loads(lines[i]), json.loads(lines[i + 1])
@@ -931,7 +931,8 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
         trust = {"read": "trusted_session", "period": got["period"], "cap": got["cap"], "circuit": got["circuit"]}
     else:
         key = Ch.ChallengerKey.from_json(json.loads((d / remote.KEY).read_text()))
-        commitment, roots, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        commitment, log, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        roots = Ch.by_family(commitment, log)
         try:
             served_session_answer(key, files, {"commitment": commitment.to_json(), "session": sid,
                                                "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})

@@ -7,8 +7,7 @@ overlap). Two kinds of plugin act there:
 
 - a `Gate` holds the input loop: no step runs while a gate isn't ready. Meanwhile the loop keeps handling client requests,
   waiting on the input queue at most the least ``poll_s`` of the gates still waiting, and ``has_work()`` holds while a
-  gate has requests pending. At shutdown every gate is opened. With one gate the loop makes the calls
-  `verity_vllm.pipeline.tick_plugin`'s does.
+  gate has requests pending. At shutdown every gate is opened.
 - an `Edge` acts between two steps: once it is due, each step drains the oldest batch in flight and schedules nothing, and
   once none is in flight every due edge is taken, in `EDGES` order, before the engine core schedules again. A `HeldEdge`
   also waits, once none is in flight, until it is ready: meanwhile the input loop holds as it does for a gate, handling
@@ -37,14 +36,14 @@ from verity_vllm.engine.hooks import Hooks, patched
 __all__ = ["EDGES", "GATES", "SEAM", "Drained", "Edge", "EngineCoreGate", "Gate", "HeldEdge"]
 
 #: the gates' names, in the order each pass of the input loop asks them
-GATES = ("tick", "release")
+GATES = ("admission", "release")
 #: the edges' names, in the order the edges due at one step are taken: a cut before the boundary state, so that the state
 #: taken is the one the next window starts from
 EDGES = ("cut", "boundary")
 
 
 class Gate(Protocol):
-    """Holds the engine core's input loop (`verity_vllm.pipeline.serve_admit.TickGate` is one)."""
+    """Holds the engine core's input loop (`verity_vllm.engine.admission.Hook` is one)."""
 
     poll_s: float
 

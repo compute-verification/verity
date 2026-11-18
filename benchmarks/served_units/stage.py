@@ -93,7 +93,7 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 table's capacity), H = 576 words (a kv row's 512 latent and 64 rope bf16 words), L = 8192 rows filled.
     dsa-chunk   DsaPositionsChunk_v1{K,W}: chunk c of the long row's index, the merge's K = 2048 slots in chunks of W = 32,
                 each port its own row; its slots below N = 131072 (the longest row's class) but a tenth of any u32.
-    dsa-slot    DsaPositionsSlot_v1{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs."""
+    dsa-slot    DsaPositionsSlot_v2{K,N}: slot j of a chunk (K = 32), held below N = 131072 whatever its inputs."""
 from __future__ import annotations
 
 import hashlib
