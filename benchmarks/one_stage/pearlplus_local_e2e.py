@@ -45,12 +45,14 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from verity.protocols.compose import schemes
+
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 LANE, PEER, HOST = "vllm", "local", "local-challenger"
 #: the scratch challenger key's LMS (W, H): 2^6 signatures, over the ledger's and both sessions' few dozen
 PARAMS = (4, 6)
-SCHEME = "pearl-c-h100-v1-h3"
+SCHEME = schemes.get("pearl-plus").option.partition(":")[2]
 PERIOD = "pearlplus-e2e"
 #: the toy row's one refusal, after every other condition of record held: a test instance's passes credit nothing
 TOY_ROW = "the Lean verdict credits 0 MACs over {tiles} tiles: nothing"
