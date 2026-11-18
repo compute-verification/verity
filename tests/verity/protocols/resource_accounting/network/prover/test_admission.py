@@ -110,7 +110,7 @@ def test_uninstall_removes_the_subscription_and_an_admission_installs_once():
     with pytest.raises(RuntimeError, match="is installed"):
         a.install(ex, "n")
     a.uninstall()
-    assert ex.subscribers == [] and len(ex.requests) == 2
+    assert ex.subscribers == [] and len(ex.requests) == len(ex.routes) == 1
 
 
 def test_the_name_is_the_network_attesters_declaration():
