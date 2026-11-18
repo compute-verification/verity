@@ -206,7 +206,9 @@ def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, An
 
 
 def digest(doc: Any) -> str:
-    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    from verity.circuits.codec import canonical_json
+
+    return hashlib.sha512(canonical_json(doc)).hexdigest()
 
 
 # -- the session and the policy ---------------------------------------------------------------------------------------
