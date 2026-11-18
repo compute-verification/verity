@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity bench rate_squaring NAME [ARGS]`: this directory's one runner (cwd = the source tree). It hands ARGS to NAME's
+# `verity calibrate rate_squaring NAME [ARGS]`: this directory's one runner (cwd = the source tree). It hands ARGS to NAME's
 # own script, unchanged. Each script is the command of a `research run`, as its header says.
 #
 #   sq      sq.sh: sq.cu on one GPU, every (FOLD, ILP) form gated against Python's pow and then timed

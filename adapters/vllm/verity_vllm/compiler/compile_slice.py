@@ -157,7 +157,7 @@ WORD = 16
 
 
 def chain(S) -> RC.Shape:
-    return RC.Shape(**{k: getattr(S, k) for k in RC.STATICS})
+    return RC.Shape(**{k: getattr(S, k) for k in RC.STATICS}, TAU=getattr(S, "TAU", 0))
 
 
 def step_statics(S) -> SimpleNamespace:

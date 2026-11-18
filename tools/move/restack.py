@@ -26,8 +26,9 @@ same script rather than by rename detection:
 4. run the result's own `pins.py --regen` (`PINS_FILES`) at its root, which runs each stale pin's command, and commit what it
    rewrote (`--no-pins` skips it). A result with a pin still stale, its command failed, is `pins-stale`.
 
-Before the steps, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
-and the same for every branch. With `--kept`, a check that passed is kept as a file under
+Before step 1, M is checked to be what the script writes on B, by running it there (`check_generated`): as long as step 2,
+and the same for every branch. A branch that already contains M, is up to date, or is `based-after` M (below) runs no script
+on M, and M isn't checked for it. With `--kept`, a check that passed is kept as a file under
 `~/.cache/verity-check/restack-generated/`, in the check's cache, and one kept there is read: on one machine the first
 restack across a move pays for the check and the rest don't. The file's key is everything that decides the check
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
@@ -149,12 +150,17 @@ KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: this file, it reads nothing of the machine's and leaves nothing on it: the suites give each test a `$CHECK_CACHE` of its
 #: own, which this file doesn't read
 KEEP = False
+#: whether a hand change that meets a line the branch changed keeps the branch's side of that hunk (`hand_ours`,
+#: `--hand-ours`) instead of stopping the crossing as `conflicted` at step `hand`
+HAND_OURS = False
+#: from this many moves on, `carry` says first how many there are and how to cross them in parts
+MANY_MOVES = 20
 #: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared.
 #: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
 WORKTREES_LOCK = "research-worktrees.lock"
 #: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move
-CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", "json")
+CARRIED = ("main", "python", "push_to", "remote", "kept", "hand_ours", "dry_run", "no_pins", "json")
 #: what registers in a clone the merge drivers `.gitattributes` names, as `research`'s own clones have them
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
@@ -638,6 +644,36 @@ def refused_after(branch: str, late: str, base: str, move: str, command: list[st
             "the new layout, and check that the merge's tree holds the branch's own files at the new paths")
 
 
+def hand_ours(tree: str, files: list[str], base: str, ours: str, theirs: str, cwd: str | None) -> tuple[str, list[str]]:
+    """``tree`` with each of ``files`` that all three of ``base`` (the script's tree on the move's base), ``ours`` (the
+    branch, the script run on it) and ``theirs`` (the move) hold merged by `git merge-file --ours`: a hunk where a hand change
+    meets the branch's own line keeps the branch's line, in the script's names; every other hand change stands. Returns the
+    tree and the files so merged; a file one side lacks, or one `git merge-file` refuses (exits nonzero, as on a binary
+    file), stays a conflict as the merge left it."""
+    both = [f for f in files if all(git("cat-file", "-e", f"{c}:{f}", cwd=cwd, ok=(0, 128)).returncode == 0
+                                    for c in (base, ours, theirs))]
+    if not both:
+        return tree, []
+    done = []
+    with tempfile.TemporaryDirectory(prefix="restack-ours-") as tmp:
+        sides = [os.path.join(tmp, s) for s in ("ours", "base", "theirs")]
+        env = {**os.environ, "GIT_INDEX_FILE": os.path.join(tmp, "index")}
+        subprocess.run(["git", "read-tree", tree], cwd=cwd, env=env, check=True)
+        for f in both:
+            for path, c in zip(sides, (ours, base, theirs)):
+                with open(path, "wb") as fh:
+                    fh.write(git("show", f"{c}:{f}", cwd=cwd).stdout)
+            run = subprocess.run(["git", "merge-file", "-p", "--ours", *sides], capture_output=True)
+            if run.returncode != 0:
+                continue
+            done.append(f)
+            oid = git("hash-object", "-w", "--stdin", cwd=cwd, input=run.stdout).stdout.decode().strip()
+            mode = out("ls-tree", ours, "--", f, cwd=cwd).split(" ")[0]
+            subprocess.run(["git", "update-index", "--cacheinfo", f"{mode},{oid},{f}"], cwd=cwd, env=env, check=True)
+        return subprocess.run(["git", "write-tree"], cwd=cwd, env=env, check=True, capture_output=True,
+                              text=True).stdout.strip(), done
+
+
 def restack(branch: str, move: str, onto: str | None = None, base: str | None = None, python: str = sys.executable,
             cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
     head, move = rev(branch, cwd), rev(move, cwd)
@@ -645,7 +681,6 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     onto = rev(onto, cwd) if onto else move
     if not contains(move, onto, cwd):
         raise SystemExit(f"--onto {onto[:12]} doesn't contain the move {move[:12]}")
-    generated = check_generated(move, base, python, cwd)
     r = {"branch": branch, "head": head, "move": move, "base": base, "onto": onto, "steps": []}
     _, plain = merge_trees(head, onto, cwd)
     r["plain"] = {"status": "conflicted" if plain else "clean", "files": plain}
@@ -659,6 +694,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
                 "error": refused_after(branch, late, base, move, command, [])}
     tip, ran = head, False
     if not contains(move, head, cwd):
+        generated = check_generated(move, base, python, cwd)
         if not contains(base, head, cwd):
             tree, conflicts = merge_trees(head, base, cwd)
             if conflicts:
@@ -683,6 +719,11 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             hand = sorted({*hand_of(move, cwd), *([own] if own else [])})
             script_on_base = commit_tree(generated, [], f"restack: what {SCRIPT} writes on {base[:12]}\n", cwd)
             tree, conflicts = merge_trees(tip, move, cwd, base=script_on_base)
+            if conflicts and HAND_OURS:
+                tree, ours = hand_ours(tree, conflicts, script_on_base, tip, move, cwd)
+                conflicts = [f for f in conflicts if f not in ours]
+                if ours:
+                    r["hand_ours"] = ours
             if conflicts:
                 return {**r, "status": "conflicted", "step": "hand", "files": conflicts}
             if tree != tree_of(tip, cwd):
@@ -726,18 +767,83 @@ def move_line(commit: str, cwd: str | None) -> tuple[str, tuple[str, ...]] | Non
     return (LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) if m else None
 
 
+#: whether a merge's tree is its first parent's (an `-s ours` merge, which took nothing from its other parents), by commit id
+KEEPS_FIRST: dict[str, bool] = {}
+#: the commits a tip reaches through its trees over its whole history (`reached`), and the bodies of those with a move line,
+#: by the tip, for `ran`: the last few tips
+REACHED: dict[str, tuple[frozenset[str], dict[str, str]]] = {}
+
+
+def reached(graph: dict[str, tuple[str, list[str]]], cwd: str | None) -> set[str]:
+    """The commits of ``graph`` (each commit of a range `TIP ^HEAD`, or of TIP's whole history: its tree and parents) that TIP
+    reaches without stepping from a merge whose tree is its first parent's to one of its other parents: such a merge (`-s
+    ours`, as a branch's earlier, landed work is merged back keeping the tree) took nothing from that side. A first parent
+    outside ``graph`` has its tree read, once for all; a merge whose trees can't be read keeps every parent. The same walk as
+    research's `queue.reached`."""
+    parents = {p for _, ps in graph.values() for p in ps}
+    outside = sorted({ps[0] for c, (_, ps) in graph.items() if len(ps) > 1 and c not in KEEPS_FIRST and ps[0] not in graph})
+    p = git("rev-parse", *(f"{x}^{{tree}}" for x in outside), cwd=cwd, ok=(0, 128)) if outside else None
+    trees = dict(zip(outside, p.stdout.decode().split())) if p is not None and p.returncode == 0 else {}
+    for c, (tree, ps) in graph.items():
+        if len(ps) > 1 and c not in KEEPS_FIRST and (first := graph[ps[0]][0] if ps[0] in graph else trees.get(ps[0])):
+            KEEPS_FIRST[c] = tree == first
+    seen, todo = set(), [c for c in graph if c not in parents]
+    while todo:
+        if (c := todo.pop()) in seen or c not in graph:
+            continue
+        seen.add(c)
+        ps = graph[c][1]
+        todo.extend(ps[:1] if KEEPS_FIRST.get(c) else ps)
+    return seen
+
+
+def ran(tip: str, lines: dict[str, dict], want: set[str], cwd: str | None) -> set[str]:
+    """The move lines of ``want`` that ``tip`` holds at a commit it reaches through its trees (`reached` over its whole
+    history): a commit's own line, or its entry's in ``lines``, and none whose entry says `move = false`. What the history
+    holds (the commits reached, and the bodies of those with a move line) is read once a tip, by two logs."""
+    if tip not in REACHED:
+        log = out("log", "--format=%H %T %P", tip, cwd=cwd)
+        on = reached({c: (t, ps) for c, t, *ps in (x.split() for x in log.splitlines() if x)}, cwd)
+        log = out("log", "--no-merges", "-E", "--grep=^(Move|Layout-move): tools/move/", "--format=%H%x00%B%x1e", tip, cwd=cwd)
+        bodies = dict(rec.partition("\x00")[::2] for rec in filter(None, (x.strip() for x in log.split("\x1e"))))
+        if len(REACHED) >= 4:
+            REACHED.clear()
+        REACHED[tip] = (frozenset(on), {c: b for c, b in bodies.items() if c in on})
+    on, bodies = REACHED[tip]
+    held = set()
+    for commit in {*bodies, *lines}:
+        entry = lines.get(commit, {})
+        if commit in on and entry.get("move") is not False and (
+                m := MOVE_LINE.search(entry.get("line") or bodies.get(commit, ""))) and m[0] in want:
+            held.add(m[0])
+    return held
+
+
 def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple[str, ...]]]:
     """The moves ``ref`` has and ``head`` lacks, oldest first: (commit, script, arguments) of each commit with a move line,
-    its `MOVE_LINES` entry's where it has one; none whose entry says `move = false`."""
-    log = out("log", "--topo-order", "--reverse", "--no-merges", "--format=%H%x00%B%x1e", ref, f"^{head}", cwd=cwd)
-    found, lines = [], corrections()
+    its `MOVE_LINES` entry's where it has one, and none whose entry says `move = false`. A move ``ref`` holds only through the
+    other parents of a merge that kept its first parent's tree (`reached`) is left out where ``ref`` also holds its move line
+    at a commit it reaches through its trees (`ran`): that merge took none of the copy's change, and ``ref`` ran the same
+    line itself. Without such a line it stays in, since its change may have reached ``ref`` by another commit (this script's
+    rerun of a move, which carries no move line, on its moved merge's first parent). The same rule as research's
+    `queue.moves_between`."""
+    log = out("log", "--topo-order", "--reverse", "--format=%H %T %P%x00%B%x1e", ref, f"^{head}", cwd=cwd)
+    recs = []
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
-        commit, body = rec.split("\x00", 1)
-        if lines.get(commit, {}).get("move") is False:
+        line, body = rec.split("\x00", 1)
+        commit, tree, *parents = line.split()
+        recs.append((commit, tree, parents, body))
+    on = reached({c: (t, ps) for c, t, ps, _ in recs}, cwd)
+    moves, lines = [], corrections()
+    for commit, _, parents, body in recs:
+        if len(parents) > 1 or lines.get(commit, {}).get("move") is False:
             continue
         if m := MOVE_LINE.search(lines.get(commit, {}).get("line") or body):
-            found.append((commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())))
-    return found
+            moves.append((commit, m))
+    held = {m[0] for commit, m in moves if commit in on}
+    if lost := {m[0] for commit, m in moves if commit not in on} - held:
+        held |= ran(recs[-1][0], lines, lost, cwd)
+    return [(commit, LINE_SCRIPT[m[1]], ("--map", m[2], *m[3].split())) for commit, m in moves if commit in on or m[0] not in held]
 
 
 def _glob(path: str, glob: str) -> bool:
@@ -842,16 +948,23 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
     The last move has no later one, so it still refuses, with `carry`, the command that carries ``branch`` against the move's
     own commit (`carried_against`: the moves found, or each named up to it)."""
     global SCRIPT, SCRIPT_ARGS
-    head, tip, crossed, skipped, locks, ran = rev(branch, cwd), branch, [], [], [], []
+    head, tip, crossed, skipped, locks, ran, ours = rev(branch, cwd), branch, [], [], [], [], []
     if not moves:
         return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
                 "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
+    if len(moves) >= MANY_MOVES:
+        print(f"restack.py: {branch} lacks {len(moves)} moves, each crossed in turn (a line as each starts). Where this "
+              f"is too slow, carry it in parts: name the first few with --move-commit, in order, and run again on the "
+              f"result. They are, oldest first: {' '.join(rev(m, cwd)[:12] for m, *_ in moves)}", file=sys.stderr, flush=True)
     for i, (move, script, args) in enumerate(moves):
         SCRIPT, SCRIPT_ARGS = script, tuple(args)
         last = i == len(moves) - 1
+        print(f"restack.py: {branch}: move {i + 1} of {len(moves)}, {rev(move, cwd)[:12]} "
+              f"({shlex.join([script, *args])})", file=sys.stderr, flush=True)
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
-        r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped}
+        ours += [f for f in r.get("hand_ours", []) if f not in ours]
+        r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped, **({"hand_ours": ours} if ours else {})}
         scripted = r.pop("ran", False)
         if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
             skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
@@ -879,7 +992,7 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         stale = stale_error(words, r["result"])
         r = {**r, "status": "stale-words", "words": words,
              "error": stale + (f"\n{r['error']}" if r["status"] == "locks-stale" else "")}
-    return {**r, "crossed": crossed, "skipped": skipped}
+    return {**r, "crossed": crossed, "skipped": skipped, **({"hand_ours": ours} if ours else {})}
 
 
 def confirming(r: dict, a: argparse.Namespace, ap: argparse.ArgumentParser) -> list[str]:
@@ -911,6 +1024,9 @@ def line(r: dict) -> str:
         f"\n    skipped the move {s['move'][:12]} ({shlex.join([s['script'], *s['args']])}): {r['branch']} is based after its "
         "base, so its script was NOT run on the branch's own lines, and the base merge of a later move carries it. Look for "
         "that map's old names in what the branch adds." for s in r.get("skipped", []))
+    if r.get("hand_ours"):
+        skipped += ("\n    --hand-ours kept the branch's side where a move's hand change met its own line, in: "
+                    f"{', '.join(r['hand_ours'])}; read those hunks")
     if "confirm" in r:
         skipped += ("\n    with a move skipped nothing is pushed and the exit is 1. If the skip is right, say so by crossing "
                     f"with the moves named, which skips none:\n    {shlex.join(r['confirm'])}")
@@ -924,7 +1040,7 @@ def line(r: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    global SCRIPT, SCRIPT_ARGS, KEEP
+    global SCRIPT, SCRIPT_ARGS, KEEP, HAND_OURS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("branches", nargs="+", metavar="BRANCH")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA",
@@ -949,6 +1065,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kept", action="store_true",
                     help=f"keep each move's check, once it passed, under {KEPT_DIR}/, and read one kept there: on one "
                          "machine only the first restack across a move runs the script on the move's base")
+    ap.add_argument("--hand-ours", action="store_true",
+                    help="where a move's hand change meets a line the branch changed, keep the branch's side of that hunk, "
+                         "in the script's names, rather than stop conflicted at step hand; the result names each such file")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")
     ap.add_argument("--no-pins", action="store_true", help=f"don't run the result's {PINS} --regen")
     ap.add_argument("--json", action="store_true")
@@ -959,7 +1078,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--script, --script-arg and --base are one --move-commit's")
     if a.push_to and len(a.branches) != 1:
         ap.error("--push-to takes one branch")
-    KEEP = a.kept
+    KEEP, HAND_OURS = a.kept, a.hand_ours
     if why := drivers(a.python):
         print(f"restack: {why}", file=sys.stderr)
         return 2

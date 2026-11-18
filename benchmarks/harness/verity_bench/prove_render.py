@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity_bench import prove as P
+from verity_bench import prove_census as PC
 from verity_bench.prove_common import (
     LEAN,
     SAMPLING,
@@ -208,8 +209,14 @@ def _record(target: str | None) -> str:
 
 
 def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
-    """The table as Markdown; `rows`: only the block types that take the most proving time, the rest in one row."""
+    """The table as Markdown; `rows`: only the block types that take the most proving time, the rest in one row. A
+    table with a census table (`prove_census`) ends with it; one whose totals are refused is that and the refusal."""
 
+    if "census" in doc:
+        census = "\n".join(PC.render(doc)) + "\n"
+        if doc["refusal"] is not None:
+            return f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})\n\n" + census
+        return render({k: v for k, v in doc.items() if k != "census"}, rows) + "\n" + census
     t, spot = doc["totals"], doc["system"].startswith("spot")
     planned = t.get("planned")
     lines = [f"# verity bench prove: {doc['system']} on {doc['workload']} ({doc['model']})", "",

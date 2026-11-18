@@ -1,31 +1,29 @@
-# `circuit-check`
+# circuit-check
 
-`circuit-check` is the property checks every circuit passes whenever it is built or changed: a Definition, a subcircuit
-template or one of its subcircuits, a served workload's request Program, and their Boolean lowerings. A change that adds or
-modifies a circuit puts its report in the PR, and `check` runs `circuit-check --all`.
+circuit-check is the test a circuit passes before anything uses it. It takes a circuit (a Definition, a subcircuit
+template, a served workload's request Program) and runs it against its reference on edge and random inputs: every
+realization of it, its kernels and its Boolean lowering included, must equal the reference bit for bit. It also checks
+the circuit's declared port intervals, its redundant and dead gates, and whether it fits a Flock proof block.
 
-## Interface
+A change that adds or modifies a circuit puts its report in the pull request, and `check` runs `circuit-check --all`.
+A new Definition gets a binding in its module's sidecar (`<module>.circuit-check.py`): the suite fails any registered
+Definition family the catalog doesn't reach.
 
-- **Provides:** the `circuit-check` command (`circuit_check.cli:main`) and its report. `targets` (what a target string
-  names) and `structural` are imported as modules too.
-- **Loaded by:** `check`, which runs the command and plans it by target (`tools/check/plan.py`); the benchmarks
-  that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
-  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
-  `adapters/vllm/tools`.
-- **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
-  `verity_vllm.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
-  registers itself by a sidecar (below), and its modules that have one are then loaded like `verity`'s.
-
-## Commands and modules
+## Try it
 
 ~~~sh
-uv run circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'    # Definitions, at a binding
-uv run circuit-check MODULE.circuit-check.py                         # what a sidecar's bindings reach in its module
-uv run circuit-check --all                                           # every registered Definition and template
-uv run circuit-check --structural UNIT.tmpl TARGET                   # a template as the Definition's lowering
-uv run circuit-check --structural DIR TARGET                         # a split, its nets wired to lookup slots, as it
-uv run circuit-check --ambient TARGET...                             # each lowering, read under a perturbed interpreter
+uv run circuit-check F32Add_v1
 ~~~
+
+This checks one Definition, binary32 addition, in under a minute with no GPU. The last line counts the targets, the
+failures and the warnings; a failure is named on its own line (`FAIL NAME`) and the command exits 1.
+
+`circuit-check --all` checks every registered Definition and template. It needs about 24 GB a process, so run it on a
+node through `research run --on auto`. `circuit-check --help` lists every other form a target takes.
+`circuit-check --reached BASE` lists the `--all` targets a change since BASE reaches, from the cache's own record of what
+each read, and `--check` checks them.
+
+## Failures, warnings and the cache
 
 It exits 1 when a check fails, and names each failure (`FAIL NAME`). Redundant and dead gates are warnings with counts
 (`--fail-on-warnings` makes them fail), as is a Definition over the partition's cost target of 5,000,000 gates
@@ -39,21 +37,9 @@ input is unchanged is reused
 from the result cache (`--no-cache` checks it now). It needs about 24 GB a process, so run it on a node through
 `research run --on auto`.
 
-| Module (`src/circuit_check/`) | What it holds |
-| --- | --- |
-| `checks.py` | the checks: correspondence with the reference on every realization, declared port intervals, redundant and dead gates, the partition, the Flock block a Definition needs as one unit |
-| `block_held.py` | the Definitions past the Flock block that the report holds rather than fails, each with why; it only shrinks: a held one that fits, or that the whole catalog no longer checks, fails |
-| `bodies.py` | a composite's evaluation and its non-constant gates, body by body |
-| `targets.py` | what a target string names, and the catalog `--all` runs over |
-| `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json`, and where they are found |
-| `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
-| `vectors.py` | the edge and seeded random input vectors |
-| `structural.py`, `structural_slots.py`, `ambient.py`, `by_calls.py` | `--structural` on a template and on a split (`verity_flock.struct_slots`), `--ambient`, and a Program root checked by its calls alone |
-| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged; a checker version no run has used for 72 hours is removed by the next run that uses the cache |
-| `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
-| `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
+## Sidecars
 
-circuit-check names no circuit of the catalog it is handed (`tests/test_handed_names.py`): what it knows of one is in
+circuit-check names no circuit of the catalog it is handed (`tests/tools/verity/circuit_check/test_handed_names.py`): what it knows of one is in
 the sidecars of the module that defines it. Beside a module's binding file (`<module>.circuit-check.py`) and pins file
 (`.circuit-check.json`), its unkeyed file (`.circuit-check.unkeyed.json`) holds what the scheduler, the task list's guard
 and the report read and no check does, so no key holds it: the peak memory, in GiB, of each of its targets that grows
