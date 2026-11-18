@@ -70,7 +70,7 @@ def unit13 (c : Circuit) : String := res (HmLinks.check c (at_ [0, 13]) (some #[
 -- the reader's own output row may be of another width than its writer's row
 #guard unit13 { lk 0 1 none with ports := #[inP, { outP with words := 64 }] } == "ok 1"
 #guard unit13 (lk 0 1 (some 0)) == "ok 1"
-#guard HmLinks.fieldSpans prog 3 == [(0, 0, 1, 1), (1, 1, 1, 1)]
+#guard HmLinks.fieldSpans prog 3 == [(0, 0, 1, 2), (2, 1, 1, 2)]
 -- `at` counts words, each field `⌈bits / 16⌉` of its own: behind a field of two 16-bit leaves and one of a 32-bit leaf,
 -- the third field starts at word 4 and leaf 3; two 8-bit leaves share a word, and a 32-bit leaf is two
 #guard HmLinks.fieldSpansOf (.tuple #[.array 2 (.value 16), .value 32, .array 3 (.value 8)]) ==
@@ -78,13 +78,14 @@ def unit13 (c : Circuit) : String := res (HmLinks.check c (at_ [0, 13]) (some #[
 #guard HmLinks.fieldSpansOf (.tuple #[.array 2 (.value 8), .value 16]) == [(0, 0, 2, 1), (1, 2, 1, 1)]
 #guard HmLinks.fieldSpansOf (.tuple #[.array 4 (.value 8), .value 32]) == [(0, 0, 4, 2), (2, 4, 1, 2)]
 #guard HmLinks.fieldSpansOf (.tuple #[.array 2 (.value 32), .value 16]) == [(0, 0, 2, 4), (4, 2, 1, 1)]
--- wrong_offset: the program's field is unit 0's first; its second is of the same leaves, and a run from leaf 2 is no field
-#guard (unit13 (lk 0 1 (some 1))).startsWith "links: unit 13's leaves [0, 1) (row x) are not unit 0's field [1, 2), in order"
-#guard (unit13 (lk 0 1 (some 2))).startsWith "links: unit 13's leaves [0, 1) (row x) read unit 0's outputs [2, 3), which are not one whole return field"
+-- wrong_offset: the program's field is unit 0's first; its second, of the same leaves, starts at word 2 (each field one
+-- 32-bit leaf), and word 1, its second field's leaf, is inside its first field
+#guard (unit13 (lk 0 1 (some 2))).startsWith "links: unit 13's leaves [0, 1) (row x) are not unit 0's field [1, 2), in order"
+#guard (unit13 (lk 0 1 (some 1))).startsWith "links: unit 13's link row x starts at word 1 of unit 0's output row, where no return field starts"
 -- a straddle: leaf 1 is a circuit input
 #guard (unit13 (lk 0 2 (some 0))).startsWith "links: unit 13's leaves [0, 2) (row x) read unit 0's outputs and other leaves"
--- the row holds the read inside its words, and a link has no other key
-#guard (unit13 (lk 0 1 (some 4))).startsWith "META links: x is not a hm96-sha512/row/v1 row holding its 1 leaves from leaf 4"
+-- the link's offset is one of the row's words, and a link has no other key
+#guard (unit13 (lk 0 1 (some 4))).startsWith "META links: x is not a hm96-sha512/row/v1 row whose word 4 is one of its 4 words"
 #guard (unit13 { lk 0 1 none with metaJ := Json.mkObj [("links", Json.arr #[Json.mkObj [("port", Json.str "x"),
     ("leaves", toJson [0, 1]), ("at", toJson 0), ("len", toJson 1)]])] }).startsWith "META links: a link is exactly"
 
