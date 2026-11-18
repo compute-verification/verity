@@ -9,15 +9,16 @@
 #   benchmarks/one_stage/server_rate.py imports from.
 # - The CUDA 13.3 toolkit the prover is built with, first on PATH, where the node side reads its version, and its lib64
 #   on LD_LIBRARY_PATH: benchmarks/kernels/machine.py's (CUDA_HOME at 13.3, else the run's machine's [properties]'), else
-#   where that names none the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks. Its compat
+#   where that names none the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh unpacks; a node whose own 13.3
+#   its record doesn't list is refused, naming the record. Its compat
 #   library, which a driver older than the toolkit needs, is left out: a spec names its driver.
 # - The scratch (VERITY_BENCH_STEADY_SCRATCH): a directory on the node's disk beside the builds, never the node's memory,
 #   so a statement a row names in the store can be fetched into it. A point removes its own directory there at its end; one
 #   a killed point left is removed here once it is a day old, far past any point's bound.
 #
-# FLOCK_WORK is /workspace/jobs/verity-bench-steady unless the run's environment names another. The logs go to
+# FLOCK_WORK is verity-bench-steady under $XDG_CACHE_HOME (~/.cache) unless the run's environment names another. The logs go to
 # $RESEARCH_RUN_DIR/out/setup. A step that fails ends the run with 4, as a refusal does: nothing was timed.
-export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/verity-bench-steady}
+export FLOCK_WORK=${FLOCK_WORK:-${XDG_CACHE_HOME:-$HOME/.cache}/verity-bench-steady}
 steady_out=${RESEARCH_RUN_DIR:-$PWD}/out/setup
 mkdir -p "$steady_out" "$FLOCK_WORK/flock-circuit" "$FLOCK_WORK/scratch" \
   || { echo "setup: cannot make $FLOCK_WORK or $steady_out" >&2; exit 4; }
@@ -29,11 +30,13 @@ if steady_cuda=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$steady_
 else
   unset CUDA_TK
   # the unpacking runs in a subshell, which keeps this shell's arguments (the point's) from its `set --`; sourced again,
-  # the script only names the toolkit it finds, leaving CUDA_TK unset for an installed /usr/local/cuda-13.3
+  # the script only names the toolkit it unpacked, and leaves CUDA_TK unset where the node has its own 13.3
   ( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) >> "$steady_out/cuda.log" 2>&1 \
     || { tail -20 "$steady_out/cuda.log" >&2; echo "setup: the node has no CUDA 13.3 toolkit and none could be unpacked (out/setup/cuda.log)" >&2; exit 4; }
   . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
-  steady_cuda=${CUDA_TK:-/usr/local/cuda-13.3}
+  [ -n "${CUDA_TK:-}" ] || { cat "$steady_out/cuda.log" >&2
+    echo "setup: the node has its own CUDA 13.3, which the run's machine's [properties] don't list under toolkit: list it there, or set CUDA_HOME (out/setup/cuda.log)" >&2; exit 4; }
+  steady_cuda=$CUDA_TK
 fi
 export PATH=$steady_cuda/bin:$PATH LD_LIBRARY_PATH=$steady_cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 

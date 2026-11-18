@@ -49,8 +49,13 @@ A point is one recorded `research run` whose command is `verity-bench run SPEC`,
 
 ~~~sh
 research run --on NODE --pool gpu --as LANE --project verity --source . --cwd source --timeout 130m --require-result \
-  --tool verity_bench.tool:VLLM_BENCH_POINT --env GPU_LEASE_ON=N -- uv run verity-bench run SPEC --point POINT
+  --tool verity_bench.tool:VLLM_BENCH_POINT --env GPU_LEASE_ON=N --env VERITY_BENCH_VENV=VENV [--env HF_HOME=DIR] \
+  -- uv run verity-bench run SPEC --point POINT
 ~~~
+
+`VERITY_BENCH_VENV` is the node's pinned-vLLM environment (`pod_bootstrap.sh` makes one) and `HF_HOME` its checkpoint
+store; the harness defaults neither, and refuses a point with no `VERITY_BENCH_VENV`. The CUDA toolkit is `CUDA_HOME`,
+else the one the machine's `[properties]` list (`benchmarks/kernels/machine.py toolkit`).
 
 `run` plans the spec as `plan` does and runs one point (`jobs.dispatch`): `--point`'s, else the spec's only point, else
 the one `--again` names. A point a passing run stands for runs only when `--again` names it; it exits 0 saying which run

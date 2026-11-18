@@ -373,6 +373,16 @@ def toolkit(version: str) -> str:
     return at[0]
 
 
+def machine_toolkit() -> str:
+    """The directory of the CUDA toolkit the run's machine's properties (`machine_properties()`) list first, its
+    default; refused by name where they list none or it is unread."""
+    found = machine_properties()["toolkit"]["value"]
+    name = settings.RESEARCH_MACHINE
+    if found in ("unread", "none"):
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit {found}: set CUDA_HOME")
+    return found["directory"]
+
+
 def gpu_target(sku: str, *, directory: Path | None = None) -> dict[str, Any]:
     from verity.device import compute_capability, load_card, number
     from verity.errors import InvalidArtifact
