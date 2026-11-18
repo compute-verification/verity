@@ -868,7 +868,7 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1, mem_
             ready = multiprocessing.connection.wait(list(running), timeout=WARM_DISK_EVERY_S)
             if time.time() - looked >= WARM_DISK_EVERY_S:
                 looked, free = time.time(), shutil.disk_usage(cache).free
-                print("DISK " + json.dumps({"free_gib": round(free / 2**30, 1), "taken_gib": round((free0 - free) / 2**30, 1),
+                print("DISK " + json.dumps({"free_gib": round(free / 2**30, 1), "taken_gib": round(max(0, free0 - free) / 2**30, 1),
                                             "running": sorted(t for _p, t in running.values()), "done": len(got), "of": of}),
                       flush=True)
                 floor()
