@@ -1702,6 +1702,7 @@ def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
     return doc, test, VR.load(path, coins), out, run
 
 
+@pytest.mark.slow
 def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
     """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
     credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
@@ -1733,6 +1734,7 @@ def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_
     assert rc == 1 and "no pass in" in said and not out.exists()
 
 
+@pytest.mark.slow
 def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_path, monkeypatch, capsys):
     """A run held to its class's fixed load (`verify_run.grid_work`) publishes the passes' whole MACs (the checked MACs
     and the excluded and voluntary cells') and their credit less the give-up padded up to the execution phase grid.
@@ -1778,6 +1780,7 @@ def _replay_every_tile(p) -> dict[int, str]:
     return {tid: reason for _, tid, ok, reason, *_ in got if not ok}
 
 
+@pytest.mark.slow
 def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeypatch):
     """P3's forming term in the tile rule (`pearl_c_inert_work.inert_elements`): credited row 9 holds one entry 300 times its
     RMS, which keeps the per-row rules and is salt-dead, inert work of fs·|cols|/n = 64 over the row's bound of 41 at
@@ -1790,6 +1793,7 @@ def test_a_salt_dead_element_puts_its_row_over_the_inert_bound(tmp_path, monkeyp
     assert _replay_every_tile(p) == {}
 
 
+@pytest.mark.slow
 def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes(tmp_path):
     """V-EX's remedy on a retained pass before its sampling coin: under the h100 record's zero key a credited row is over its
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
@@ -1818,6 +1822,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+@pytest.mark.slow
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
     says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
@@ -1919,6 +1924,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     assert (cpu["voluntary_a"], cpu["voluntary_b"]) == (out["voluntary_a"], out["voluntary_b"])
 
 
+@pytest.mark.slow
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
     of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
@@ -1974,6 +1980,7 @@ def window_record(*paths: Path, version: int = 2) -> dict:
                            {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
 
+@pytest.mark.slow
 def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
     """``served_passes.py verify --tie W`` accepts a run whose execution phase record registers each call's A rows and y at the roots
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
@@ -2041,6 +2048,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 
+@pytest.mark.slow
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
     """``retain --window-record W`` on a serve of a warm-up pass, a pass without calls and two timed passes: it drops the
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
@@ -2101,6 +2109,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
 
 
+@pytest.mark.slow
 def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve(tmp_path):
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
@@ -2160,6 +2169,7 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
         assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
 
 
+@pytest.mark.slow
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
@@ -2202,6 +2212,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     assert json.loads((d / SP.COIN).read_text()) == coin
 
 
+@pytest.mark.slow
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
@@ -2217,6 +2228,7 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     assert VR.verify_passes([path], 3, 1, "test", coins, test_instance=True)["answer"]["verdict"] == "accept"
 
 
+@pytest.mark.slow
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
     """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
@@ -2391,6 +2403,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
         assert asked == (["ledger", "reserve", "ledger"] if case == "raced" else ["ledger"]), case
 
 
+@pytest.mark.slow
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
     entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
@@ -2584,6 +2597,7 @@ def test_a_class_held_runs_work_is_its_structural_credit_less_the_give_up_on_the
     assert whole_record == PW.UnitRecord(Matmul(0, Shape(128, 2048, 2048), 0), 100, 2048)
 
 
+@pytest.mark.slow
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):
     """W registers each weight's B rows once, so a tie over passes whose execution phases commit weight 0 under two roots (other
     weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
@@ -3031,6 +3045,7 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
         PPD.manifest_epoch(early, c)
 
 
+@pytest.mark.slow
 def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
     """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
     ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is

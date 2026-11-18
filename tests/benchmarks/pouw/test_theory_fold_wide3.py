@@ -4,11 +4,14 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import fold_opt_fx as fx
 
 THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
+@pytest.mark.slow
 def test_fold_wide3_matches_fold_opt_fx(tmp_path):
     """Over three inputs at width 4 the kernel's first instructions are fold_opt_fx.py's (every form, by count), and it
     finds every control of `wide3_controls` (w, kx and m1 read as y, z and a): each two-word form as a first and as a

@@ -4,12 +4,15 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import fold_opt_fx as fx
 import fold_wide32 as w32
 
 THEORY = Path(__file__).resolve().parents[3] / "calibration" / "pouw" / "theory"
 
 
+@pytest.mark.slow
 def test_fold_wide3_at_32_bits(tmp_path):
     """Over three inputs at two 32-bit points, the kernel's first instructions are fold_opt_fx.py's (by count), and it
     finds every control (w, kx and m1 read as y, z and a), fold_wide32's SEL.64 control included."""
