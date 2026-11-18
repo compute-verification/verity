@@ -33,7 +33,6 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "quantize": (f"{_SERVING}.operands", "quantize"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
