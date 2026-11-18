@@ -403,11 +403,13 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
+    from verity_vllm.engine.kv_events import KvEvents
     from verity_vllm.protocols.poub.binder import Binder
 
     serving, NodeMemory = provers()
     store = NodeMemory()
-    binder = Binder(store, passes=False).install()
+    binder = Binder(store, passes=False)
+    events = KvEvents(binder, **binder.asks).install()
     with tempfile.TemporaryDirectory() as work:
         trace = Trace(engine(Path(work)))
         clock = PassClock() if a.local else None
@@ -426,7 +428,7 @@ def main(argv: list[str] | None = None) -> int:
             th.join()
             if "error" in result:
                 raise result["error"]
-    binder.uninstall()
+    events.uninstall()
     out = {"schema": "verity/remote-session/serve/v0", "plan": a.plan, "model": TINY, "pages": PAGES,
            "slots": SLOTS, "budget": BUDGET, "store": binder.stats(), "layout": backend.layout(),
            "trace": {"steps": trace.steps, "requests": trace.requests}, "prover": prover_result,

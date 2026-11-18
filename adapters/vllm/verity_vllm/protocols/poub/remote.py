@@ -28,6 +28,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
 from verity_vllm.engine.handle import core_in_process, engine_of
+from verity_vllm.engine.kv_events import KvEvents
 from verity_vllm.protocols.poub.binder import Binder
 from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
@@ -113,7 +114,8 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
+        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False)
+        KvEvents(self.binder, **self.binder.asks).install()
 
     def before_build(self, ekw: dict[str, Any]) -> None:
         """`engine_args`, `target` and `install` on the Commit's engine build arguments (``engine_args``, ``target``)."""

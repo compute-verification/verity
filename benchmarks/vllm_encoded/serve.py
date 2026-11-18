@@ -333,10 +333,10 @@ class DeviceWords:
     decode = encode
 
 
-def store_weights(runner, install: Install, args) -> list:
+def store_weights(loaded, install: Install, args) -> list:
     """The store's weight regions: every parameter left after the install (identity), and each encoded linear's words."""
-    from verity_vllm.protocols.poub.binder import WeightRegion, model_weights
-    out = model_weights(runner)
+    from verity_vllm.protocols.poub.binder import WeightRegion, weight_regions
+    out = weight_regions(loaded)
     for name, lin in install.linears:
         nbytes = lin.store.numel() * lin.store.element_size()
         words = getattr(lin, "words", None) or lin.store.numel()
@@ -616,8 +616,9 @@ def main() -> None:
             ap.error("--lib is required for every arm but stock, --wide-lib for the wide arm only and --tensor-lib for the "
                      "tensor arm only")
         hook_runner(hooks, install)
-    binder = None
+    binder = events = None
     if args.store:
+        from verity_vllm.engine.kv_events import KvEvents
         from verity_vllm.protocols.poub.binder import Binder, Every
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
@@ -626,7 +627,8 @@ def main() -> None:
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(NodeMemory(), weights=lambda r: store_weights(r, install, args), **window).install()
+        binder = Binder(NodeMemory(), weights=lambda loaded: store_weights(loaded, install, args), **window)
+        events = KvEvents(binder, **binder.asks).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:
@@ -739,7 +741,7 @@ def main() -> None:
         result["stack"] = S.summary(install.stack)
     if binder:
         result["store"] = binder.stats()
-        binder.uninstall()
+        events.uninstall()
     hooks.uninstall()
     if install.hooks is not None:
         install.hooks.uninstall()

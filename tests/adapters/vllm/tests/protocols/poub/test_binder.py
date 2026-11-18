@@ -1,4 +1,4 @@
-"""The binder's pieces on the CPU, against fake vLLM objects: the KV page layout read off a cache tensor's strides,
+"""The adapter's ``kv`` hook and the store's binder subscribed to it, on the CPU, against fake vLLM objects: the KV page layout read off a cache tensor's strides,
 weights and KV registration from a runner, the scheduler's appends, FIFO reuse of freed pages, a step's pass, and
 the binder installed on vLLM's classes under the stand-in for vLLM."""
 from __future__ import annotations
@@ -28,19 +28,42 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.verify i
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, memory_map
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb
 
+from verity.protocols.resource_accounting.scheme import KvWrite
+
 from tests import fake_vllm
 from verity_vllm.engine.hooks import Hooks, Patch
+from verity_vllm.engine.kv_events import KERNEL_BLOCK_SIZES, KvEvents, loaded
 from verity_vllm.protocols.poub.binder import (
-    KERNEL_BLOCK_SIZES,
     Binder,
     Every,
     Inbox,
     PagedBacking,
     TorchBacking,
-    model_weights,
     page_layout,
     storage_bytes,
+    weight_regions,
 )
+
+#: what a run calls on the hook; the rest is the binder's own
+HOOK = ("on_load", "on_kv", "on_schedule", "on_free", "writes_of", "end", "hooks", "uninstall")
+
+
+class Wired:
+    """A binder subscribed to the adapter's hook as a run wires the two, each name answered by the side that has it."""
+
+    def __init__(self, binder: Binder) -> None:
+        self.binder, self.events = binder, KvEvents(binder, **binder.asks)
+
+    def __getattr__(self, name: str):
+        return getattr(self.events if name in HOOK else self.binder, name)
+
+    def install(self, hooks: Hooks | None = None) -> Wired:
+        self.events.install(hooks)
+        return self
+
+
+def wired(store: NodeMemory, **kw) -> Wired:
+    return Wired(Binder(store, **kw))
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -126,7 +149,7 @@ def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
 @pytest.mark.parametrize("shared,interleaved", [(False, False), (True, False), (False, True)])
 def test_registration_from_a_runner(shared, interleaved):
     s = NodeMemory()
-    b = Binder(s, block_bytes=1024)
+    b = wired(s, block_bytes=1024)
     r = runner(shared, interleaved)
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -138,7 +161,7 @@ def test_registration_from_a_runner(shared, interleaved):
 
 
 def test_the_models_weights_are_each_storage_once_none_empty_and_found_through_its_wrappers():
-    """`model_weights`: a parameter that shares its storage with an earlier one is listed once, under the first name;
+    """`loaded`: a parameter that shares its storage with an earlier one is listed once, under the first name;
     one of no elements is not listed; and a model held inside wrappers that have no parameters of their own (each with
     a ``runnable``) is the one listed, which a ``runnable`` of its own does not change."""
 
@@ -151,7 +174,7 @@ def test_the_models_weights_are_each_storage_once_none_empty_and_found_through_i
     model.empty, model.last = torch.nn.Parameter(torch.zeros(0)), torch.nn.Parameter(torch.ones(3))
     assert [n for n, _ in model.named_parameters()] == ["first", "tied", "empty", "last"]
     for held in (model, SimpleNamespace(runnable=SimpleNamespace(runnable=model))):
-        got = model_weights(SimpleNamespace(model=held))
+        got = weight_regions(loaded(SimpleNamespace(model=held)).weights)
         assert [(x.name, x.source, x.encode) for x in got] == [("first", "param:first", False), ("last", "param:last", False)]
         assert got[0].tensor.data_ptr() == w.data_ptr() and got[1].tensor.tolist() == [1.0, 1.0, 1.0]
 
@@ -161,7 +184,7 @@ def test_a_weight_that_ends_inside_a_block_is_registered_to_its_last_whole_block
     tensor's name, and under a budget of blocks the tensor takes 8 of it."""
     for budget, registered in ((None, 8 * 1024), (8, 8 * 1024), (7, 0)):
         s = NodeMemory()
-        b = Binder(s, block_bytes=1024, weight_blocks=budget)
+        b = wired(s, block_bytes=1024, weight_blocks=budget)
         b.on_load(SimpleNamespace(model=torch.nn.Sequential(torch.nn.Linear(64, 33, bias=False))))
         assert b.unregistered == ({"0.weight[tail]": 256} if registered else {"0.weight": 8 * 1024 + 256}), budget
         assert [(x.name, x.blocks) for x in s.layout().regions] == ([("0.weight", 8)] if registered else [])
@@ -172,7 +195,7 @@ def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
     """Under either runner's name for them.  vLLM gives a cache group whose backend doesn't take the manager's block size
     a kernel block size that divides it, and the pages registered here are the manager's; the same runner with the
     manager's size under that name registers."""
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     del r.kernel_block_sizes
     setattr(r, name, [SLOTS, SLOTS // 2])
     with pytest.raises(NotImplementedError, match=rf"kernel block sizes \[{SLOTS}, {SLOTS // 2}\] other than the manager's {SLOTS}$"):
@@ -187,7 +210,7 @@ def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
 def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
     """A runner with neither name, or with one that holds no size, is refused, by a message that says both names: it is
     never taken to use the manager's block size."""
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     del r.kernel_block_sizes
     vars(r).update(named)
     with pytest.raises(RuntimeError, match=r"names no kernel block sizes \(kernel_block_sizes or _kernel_block_sizes\)"):
@@ -197,7 +220,7 @@ def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
 
 @pytest.mark.parametrize("bound", [[], None, "absent"])
 def test_a_runner_that_bound_no_kv_caches_is_refused(bound):
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     if bound == "absent":
         del r.kv_caches
     else:
@@ -210,7 +233,7 @@ def test_a_runner_that_bound_no_kv_caches_is_refused(bound):
 def test_kv_layers_of_different_page_shapes_are_refused():
     """One layer's slot is 128 bytes and the next one's 256: the pool is one layout, so the second layer is refused and
     no layer is registered."""
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, d, dtype=torch.bfloat16) for d in (DIM, 2 * DIM)]
     with pytest.raises(NotImplementedError, match="KV layers of different page shapes"):
         b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -222,7 +245,7 @@ def test_two_kv_layers_whose_planes_overlap_in_one_storage_are_refused(planes_ap
     """Two layers in one storage, the second's pages starting ``planes_apart`` planes after the first's. On the same
     planes, half a plane on and one plane on (its K plane the first's V plane) they overlap and are refused, with
     nothing registered; two planes on, the next layer of the storage, they register."""
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     whole = torch.zeros(PAGES, 3, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)
     first, plane = whole[:, 0], SLOTS * HEADS * DIM
     second = torch.as_strided(whole, first.shape, first.stride(), int(planes_apart * plane))
@@ -239,7 +262,7 @@ def test_two_kv_layers_whose_planes_overlap_in_one_storage_are_refused(planes_ap
 def test_the_bytes_of_a_kv_storage_that_no_layers_page_holds_are_counted_unregistered():
     """A cache that is the first ``PAGES`` pages of a storage of one page more: the pool is the ``PAGES`` pages, and
     the last page's two planes are counted, under ``kv[unpaged]``."""
-    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    b, r = wired(NodeMemory(), block_bytes=1024), runner()
     r.kv_caches = [torch.zeros(PAGES + 1, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)[:PAGES]]
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     assert b.stats()["bytes_by_kind"] == {"kv": 2 * PAGES * 2048} and b.unregistered == {"kv[unpaged]": 2 * 2048}
@@ -248,7 +271,7 @@ def test_the_bytes_of_a_kv_storage_that_no_layers_page_holds_are_counted_unregis
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
 def test_a_weight_block_budget_registers_the_tensors_that_fit_and_counts_the_rest(budget, registered):
     s = NodeMemory()
-    b = Binder(s, block_bytes=1024, weight_blocks=budget)
+    b = wired(s, block_bytes=1024, weight_blocks=budget)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -263,7 +286,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     writes KV (its appends, its frees) writes no registered block: the memory map numbers the step and records no
     line."""
     s = NodeMemory()
-    b = Binder(s, passes=False, kv=False)
+    b = wired(s, passes=False, kv=False)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
@@ -305,7 +328,7 @@ def memory_map_lines(m) -> list:
 
 def test_a_filler_of_less_than_one_block_is_refused_and_a_longer_one_is_its_whole_blocks():
     s = NodeMemory()
-    b = Binder(s, passes=False, kv=False)
+    b = wired(s, passes=False, kv=False)
     with pytest.raises(ValueError, match="filler of 4095 bytes holds no 4096-byte block"):
         b.register_filler(4095, "cpu")
     assert s.layout().regions == ()
@@ -324,7 +347,7 @@ def test_a_fixed_schedule_of_no_passes_a_window_is_refused_and_one_with_no_last_
 
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     s = NodeMemory()
-    b = Binder(s, block_bytes=1024)
+    b = wired(s, block_bytes=1024)
     r = runner()
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     blocks = [Block(i) for i in range(PAGES)]
@@ -338,7 +361,7 @@ def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
     sched = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNamespace(single_type_managers=[stm])),
                             requests=reqs)
     so = SimpleNamespace(num_scheduled_tokens={"a": 20, "c": 3})
-    assert b.appends(sched, so) == [Append(1, 0, 16), Append(2, 0, 4), Append(3, 0, 3)]
+    assert b.writes_of(sched, so) == (KvWrite(1, 0, 16), KvWrite(2, 0, 4), KvWrite(3, 0, 3))
     b.on_schedule(sched, so)
     assert s.in_pass and s._open_pass.blocks[0].tolist() == [4, 5, 6, 7]
     b.end()
@@ -363,7 +386,7 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
     s = NodeMemory()
     recs: list[WindowRecord] = []
     sigma = [bytes([t]) * 32 for t in range(3)]
-    b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
+    b = wired(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
     r = runner()
     b.on_load(r)
@@ -384,7 +407,7 @@ def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_reg
     s, inbox = NodeMemory(), Inbox()
     recs: list[WindowRecord] = []
     digest = bytes(range(64))
-    b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
+    b = wired(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
                reader=lambda segments: b"\x02" * 64)
     r = runner()
     b.on_load(r)
@@ -417,7 +440,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
     s = NodeMemory()
-    b = Binder(s, passes=passes)
+    b = wired(s, passes=passes)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
     b.on_load(r)
@@ -455,7 +478,7 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     verifies with the tile's z."""
     s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
     recs: list[WindowRecord] = []
-    b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
+    b = wired(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
     assert isinstance(b.receipt, PoubReceipt)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
@@ -563,7 +586,7 @@ def binder():
     made: list[Binder] = []
 
     def make(store: NodeMemory, **kw) -> Binder:
-        made.append(Binder(store, **kw))
+        made.append(wired(store, **kw))
         return made[-1]
 
     yield make
@@ -586,7 +609,7 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
     assert hooks is not None and len(v.sites) == (9 if first_runner else 7) == len(hooks.entries)
     assert all(vars(cls)[name] is not own for (cls, name), own in v.sites.items())
     patches = [e for e in hooks.entries if isinstance(e, Patch)]
-    assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-store") for cls, name in v.sites}
+    assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-kv") for cls, name in v.sites}
     for i, cls in enumerate(v.runners):
         r = cls()
         r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
@@ -596,7 +619,7 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
     assert [x.name for x in s.layout().regions] == [f"{i}.weight" for i in range(len(v.runners))]
     b.uninstall()
     assert all(vars(cls)[name] is own for (cls, name), own in v.sites.items()) and hooks.entries == ()
-    Binder(NodeMemory()).uninstall()
+    wired(NodeMemory()).uninstall()
 
 
 def test_installed_a_profiling_kv_cache_registers_nothing_and_the_real_one_registers_the_pool(monkeypatch, binder):

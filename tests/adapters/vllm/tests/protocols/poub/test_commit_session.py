@@ -70,9 +70,7 @@ class Binding:
         self.made = (args, kwargs)
         self.calls: list[Any] = []
 
-    def install(self) -> Binding:
-        self.calls.append("install")
-        return self
+    asks = {"fifo": True, "writes": False}
 
     def register_filler(self, nbytes: int, device: Any) -> None:
         self.calls.append(("register_filler", nbytes, device))
@@ -82,15 +80,27 @@ class Binding:
         return {"weights": 3}
 
 
+class Events:
+    """A stand-in for the adapter's ``kv`` hook that records on its subscriber what it was installed with."""
+
+    def __init__(self, sink: Binding, **asks: bool) -> None:
+        self.sink, self.asks = sink, asks
+
+    def install(self) -> Events:
+        self.sink.calls.append(("install", self.asks))
+        return self
+
+
 def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(monkeypatch):
     """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
-    the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
+    the session's store and its ``weight_blocks``, and subscribes it to the ``kv`` hook with what it asks; `before_build` sets the engine
     arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
     monkeypatch.setattr(remote, "Binder", Binding)
+    monkeypatch.setattr(remote, "KvEvents", Events)
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
     assert cs.binder is None
     cs.install()
-    assert isinstance(cs.binder, Binding) and cs.binder.calls == ["install"]
+    assert isinstance(cs.binder, Binding) and cs.binder.calls == [("install", Binding.asks)]
     assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
 
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=None)
