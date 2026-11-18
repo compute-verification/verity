@@ -5,6 +5,7 @@ public import Definitions.Core.Partition
 public import Definitions.Core.Challenger
 public import Definitions.Core.Assumptions
 public import Definitions.Core.Interaction
+public import Definitions.Spot.Sampling.Analysis
 public import Definitions.Certifier.Tap
 public import Mathlib.Data.Nat.Log
 public import Mathlib.Data.Set.Card
@@ -145,6 +146,28 @@ def BreaksWithinTerm : Prop :=
     (∀ s, ∀ p ∈ (play s).calls, H p.1 = p.2) →
     let Sc := scheme ph ρ op hop Root Coin Complete fixed (Claims.ecrBound H (callsFinder play) q) hcharge
     ENNReal.ofReal (Claims.Pr fun s => Sc.breaks (play s)) ≤ Sc.δscheme
+
+/-- **The attester's scheme gets back at one execution phase**: where the proof system's analysis of the phase's audit
+is knowledge sound and binding, the runs' verdict and sample are at most as likely as the audit's, the runs' committed
+values have the incorrect blocks of the analysis's committed transcript but with probability zero, and the break event
+is within the scheme's term, the scheme gets back at every cutoff, the audit's error its knowledge and binding errors at
+the strategy's registration and state. -/
+def PhaseGetsBack : Prop :=
+  ∀ (ph : Phase) (Chan : Type) [Fintype Chan] (ρ : Chan → ph.C.Trace) (op : ph.Operator Chan) (hop : op.ReadsBefore)
+    (Root Coin : Type) (Complete : Chan → Prop) (fixed : Root → Prop) (δtap : ℝ≥0∞) (hcharge : ph.ChargeHolds ρ op)
+    (L : SamplingDesign (Fin ph.m)) (Reg : Type) (session : Finset (Fin ph.m) → Reg → Game Bool)
+    (A : Spot.Sampling.ExtractionAnalysis L Reg session)
+    (εks εbind : (R : Reg) → Spot.Sampling.Cont L Reg session R → ℝ≥0∞),
+    A.KnowledgeSound εks → A.BindSound εbind → ∀ (σ : Game.Strategy (Spot.Sampling.audit L Reg session))
+    (pr : (PhaseRun ph Chan Root Coin → Prop) → ℝ≥0∞),
+    (∀ p q : PhaseRun ph Chan Root Coin → Prop, (∀ r, p r → q r) → pr p ≤ pr q) →
+    (∀ p q : PhaseRun ph Chan Root Coin → Prop, pr (fun r => p r ∨ q r) ≤ pr p + pr q) →
+    (∀ p : Bool × Finset (Fin ph.m) → Prop,
+      pr (fun r => p (r.ok, r.sample)) ≤ Game.prob p (Spot.Sampling.audit L Reg session) σ) →
+    pr (fun r => ph.incorrectOf r.X ≠ A.incorrect (A.committedOf σ)) = 0 →
+    pr (scheme ph ρ op hop Root Coin Complete fixed δtap hcharge).breaks ≤ δtap →
+    ∀ δ, (scheme ph ρ op hop Root Coin Complete fixed δtap hcharge).GetsBack (fun _ => L) pr δ
+      (εks (Spot.Sampling.reg σ) (Spot.Sampling.cont σ) + εbind (Spot.Sampling.reg σ) (Spot.Sampling.cont σ))
 
 /-- **The secrets one execution phase's record singles out**: over the secrets whose phase's committed values the
 design misses with probability above `δ`, at most the number of such block sets times two to the missable bits plus
