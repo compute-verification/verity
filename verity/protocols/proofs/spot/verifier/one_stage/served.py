@@ -28,7 +28,7 @@ is one of three, and no other:
 
 Each tree names its row format (`row_schema`, the `--registered` port's key for it, one of `SCHEMAS`): the
 frame-v3-sha512 leaf schema its leaves were hashed under, which must be the format of the circuit port that reads it
-(`Flock.Registered.checkPort`). Absent means `hm96-sha512/row/v1` (`registered.SCHEMA`), so a v1 tree's port names none.
+(`Flock.Registered.checkPort`). Absent means `hm96-sha512/row/v1` (`registered_value.SCHEMA`), so a v1 tree's port names none.
 H1's and PoUW's served rows are `row/v2` and `row-seg/v1` bit rows: a row is exactly its `words` leaves of `word_bits`
 bits, as many of the parameter's own leaves as those bits hold (`registered.row_leaves`; H1's A, K int8 codes, is K/2
 u16 words), which sets the tree's rows and its domain. The record's `registered` entry names no format: R7 counts a
@@ -84,7 +84,7 @@ class ServedTree:
     domain: str
     word_bits: int = RV.WORD_BITS
     output: tuple[str, str] | None = None
-    row_schema: str = G.SCHEMA
+    row_schema: str = RV.SCHEMA
     reused: tuple[str, str] | None = None
 
     @classmethod
@@ -180,7 +180,7 @@ def register_served(program: Program, query: Mapping[str, Any], served: Sequence
     if held is not None and not all(isinstance(v, str) and v in names for v in held):
         raise ValueError(f"held values are served trees' values: {held!r}")
     values = {t.value: t.words for t in served}
-    schemas = {t.value: t.row_schema for t in served if t.row_schema != G.SCHEMA}
+    schemas = {t.value: t.row_schema for t in served if t.row_schema != RV.SCHEMA}
     fixed = [*(held or ()), *(t.value for t in served if t.output is not None or t.reused is not None)]
     mine = G.registered_entries(program, values, schemas, RV.window_root(window_root), fixed)
     log = list(log)

@@ -29,6 +29,7 @@ from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+from verity.circuits import population as PN
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -769,7 +770,7 @@ def main() -> int:
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": sampling_design, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
-    program = P.population_program(template, n)
+    program = PN.population_program(template, n)
     query = P.template_instance_query(template)
     bind = None
     if a.bind:
@@ -871,7 +872,7 @@ def main() -> int:
         key = "prover-ignores-the-draw (M0 selftest)" if case == "unit_draw_ignored_refused" else "m0-selftest-unit-draw-session"
         neg[key] = {"refused" if case == "unit_draw_ignored_refused" else "passed": bool(res and res.get("pass")), "case": res}
     tn = 8
-    tprog = P.population_program(template, tn)
+    tprog = PN.population_program(template, tn)
     tpart = P.partition(tprog, query)
     tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)

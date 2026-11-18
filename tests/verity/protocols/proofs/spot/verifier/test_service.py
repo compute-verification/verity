@@ -9,6 +9,7 @@ import random
 
 import pytest
 
+from verity.circuits import population as PN
 import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -73,7 +74,7 @@ def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None) -> S.Stre
 
 
 def _ports(n: int) -> dict:
-    part = P.partition(P.population_program(PAIR, n), QUERY)
+    part = P.partition(PN.population_program(PAIR, n), QUERY)
     return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
@@ -81,7 +82,7 @@ def _ports(n: int) -> dict:
 def _record(n: int = 6, sampling_design=None, row: int = 0, previous: str | None = None, work_table=None, **change) -> dict:
     ports = _ports(n)
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    rec = R.record(P.population_program(PAIR, n), QUERY, sampling_design or {"law": "subset", "k": 2}, S.SCHEME, roots,
+    rec = R.record(PN.population_program(PAIR, n), QUERY, sampling_design or {"law": "subset", "k": 2}, S.SCHEME, roots,
                    {"kind": "served", "run": RUN, "row": row}, previous=previous, work_table=work_table)
     return {**rec, **change}
 
@@ -89,7 +90,7 @@ def _record(n: int = 6, sampling_design=None, row: int = 0, previous: str | None
 def _rated(text: str, n: int = 6, table=None, **change) -> dict:
     """A record of `n` proof blocks under the rate `text` as a stream registers it: its sampling design and work table the ones the
     rate names over them (`selection_sampling_design`, `selection_table`), from the verifier's work `table`."""
-    rule, program = S.SamplingDesign(text), P.population_program(PAIR, n)
+    rule, program = S.SamplingDesign(text), PN.population_program(PAIR, n)
     return _record(n, sampling_design=S.selection_sampling_design(rule, n, D.strata_sizes(program, QUERY)),
                    work_table=S.selection_table(rule, program, QUERY, table), **change)
 
@@ -367,7 +368,7 @@ def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pad
     state, would fall to 2/60."""
     for text, table in (("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
         for n, k in ((6, 2), (60, 20)):
-            program = P.population_program(PAIR, n)
+            program = PN.population_program(PAIR, n)
             sampling_design, rated = S.params_sampling_design(text, program, QUERY, table)
             assert [s["k"] for s in D.derive(program, QUERY, sampling_design, rated)["strata"]] == [k] and 3 * k >= n, (text, n)
             stream = _stream(_spec(S.SamplingDesign(text), public=(*RECORD_ITEMS, STRATUM)))
@@ -394,8 +395,8 @@ def test_a_stratified_rate_is_the_stratified_sampling_design_at_the_least_k_its_
         assert all(den * D.stratum_k(k, s, n) >= num * s for s in sizes), (sizes, num, den, k)
         assert k == 1 or any(D.stratum_k(k - 1, s, n) < D.rate_count(num, den, 1, s) for s in sizes), (sizes, num, den, k)
     assert _refused(lambda: S.selection_sampling_design(S.SamplingDesign("stratified-rate:1/3"), 6, [])) == ("rate",)
-    assert _refused(lambda: S.selection_table(S.SamplingDesign("work-rate:1/3"), P.population_program(PAIR, 6), QUERY, None)) == ("rate",)
-    program, word = P.population_program(PAIR, 6), {"name": "Q_word", "version": 1, "params": {"X": 8}}
+    assert _refused(lambda: S.selection_table(S.SamplingDesign("work-rate:1/3"), PN.population_program(PAIR, 6), QUERY, None)) == ("rate",)
+    program, word = PN.population_program(PAIR, 6), {"name": "Q_word", "version": 1, "params": {"X": 8}}
     assert S.selection_sizes(S.SamplingDesign("stratified-rate:1/3"), program, QUERY) == [6]
     assert [S.selection_sizes(S.SamplingDesign(t), program, word) for t in ("rate:1/3", "work-rate:1/3")] == [[], []]
     with pytest.raises(S.Refused) as e:
