@@ -89,7 +89,7 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_block(t
     monkeypatch.setattr(PF, "executable", _never)
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
                          program=program, partition={}, units=[(0, 1)], registered=registered)
-    assert got is None and why[0] == "circuit" and "E_QUERY" in why[1], why
+    assert got is None and why[0] == "circuit" and why[1].startswith("E_DESCRIPTOR"), why
 
 
 @pytest.mark.parametrize("indices, strata, ok", [
