@@ -57,8 +57,9 @@ record first, and the digest of the run's own record. `params` is not read.
    below).
 8. `wires`: the record's wiring is refused (`RecordText.wiring`: the text's cuts as SPOT's reader reads them, and
    the wires the Program's root states, `Spot.Edges.edgesOf`), or SPOT's check refuses it (`Spot.Wires.check`).
-9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
-   inside one leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
+9. `leaf-widths`: some wire's offset is no field's first word of its writer's output, or its row is not that one
+   field; or its row holds bits its writer's field lacks; or a leaf of some wire's writer does not lie inside one
+   leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
 10. `inputs`: a registered read, table, table read, opening, ingress or row format declaration is malformed for the
     templates and cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered
     read is a wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
@@ -87,14 +88,18 @@ A root of any other form is refused: the form reads no row it cannot show to be 
 
 ## Wires whole
 
-`Spot.Wires.check` holds a wire's two rows to the same words. A row is its leaves' bits in leaf order, and a gate
-reads leaves, so equal words alone leave a writer's leaf free to straddle leaves of the row that reads it: a gate of
-the reader then reads part of a gate of the writer, and a template that passes a leaf on, with no gate, carries that
-part further than the one row the wire fills. `unwhole` takes a wire in one of two ways and refuses any other.
+`Spot.Wires.check` holds a wire's row inside its writer unit's output row `out`, from the word `offset`: the unit's
+return fields end to end, each its bits rounded up to whole words. `unwhole` reads a wire as one whole field of its
+writer: the field whose first word is the wire's offset (`Spot.Edges.fieldWord`), its words the row's. A wire whose
+offset is no field's first word, or whose row is not that one field's words, is refused. A row is its leaves' bits in
+leaf order, and a gate reads leaves, so equal words alone leave a writer's leaf free to straddle leaves of the row
+that reads it: a gate of the reader then reads part of a gate of the writer, and a template that passes a leaf on,
+with no gate, carries that part further than the one row the wire fills. `unwhole` takes a wire in one of two ways
+and refuses any other.
 
-Of either way, every bit of the row is a bit of its writer's output. A row is whole 16-bit words and an output's
-words are its bits rounded up, so equal words let an output of 8 bits fill a row of 16, and the row's other 8 bits
-are no gate's. A wire whose writer's output's bits are not the row's is refused.
+Of either way, every bit of the row is a bit of its writer's field. A row is whole 16-bit words and a field's words
+are its bits rounded up, so equal words let a field of 8 bits fill a row of 16, and the row's other 8 bits are no
+gate's. A wire whose writer's field's bits are not the row's is refused.
 
 As built on both sides: the reader's row and the writer's output each have leaves of one width, and the writer's
 divides the reader's. With equal words, every leaf of the writer's output then lies inside one leaf of the row that
@@ -241,9 +246,10 @@ module. On a record `read` accepts, `c` what it reads, with the Program `c.f.P` 
 In proportion to the Program's description and the record: each template is read once, from its Definition, and
 multiplied through its units; the root's arguments are read as their parts, never leaf by leaf (`ownRows`); what a
 Definition passes on is read from its body's reference parts, once for each Definition (`passedOn`); each wire is
-four lookups among the templates (`unwhole`); each wire and each declaration is counted in closed form through the
-entries' digits (`inSlot`); the greatest over the slots is taken over the slots where some declaration's count
-changes (`slotsToTry`), never over every slot of a class that has more; `sameSlot` visits at most `FUEL` boxes of
+four lookups among the templates and a pass over its writer's return fields (`unwhole`); each wire and each
+declaration is counted in closed form through the entries' digits (`inSlot`); the greatest over the slots is taken
+over the slots where some declaration's count changes (`slotsToTry`), never over every slot of a class that has
+more; `sameSlot` visits at most `FUEL` boxes of
 digits for a wire, past which the wire counts as crossing; and a closure digest is taken once for each template an
 opening or a table read names as its reader (`rolesOf`). No gate, unit or row is visited one by one.
 -/
@@ -376,43 +382,54 @@ def widthName : Option Nat → String
   | none => "more than one width"
 
 /-- **Every wire lands whole** (the module docstring's "Wires whole"), or the first wire that does not, as a
-refusal's message: the wire, its two rows' bits or its two leaf widths, and the fix. Of every wire, the writer's
-output's bits are the row's (`short`): a wire's two rows have the same words (`Spot.Wires.check`), a row's bits are
-its words', so the output's bits are then its own words'. And a wire is taken in one of two ways. The reader's row
-is closed (`Leaves.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the
-writer's leaves. Or the reader's row and the writer's output each have leaves of one width, and the writer's
-divides the reader's: with the same words, every leaf of the writer's output then lies inside one leaf of the row
-that reads it. It costs the wires, each four lookups among the templates. -/
-def unwhole (ts : List Tmpl) (ls : List Leaves) (wires : List Spot.Wires.Wire) : Option String :=
+refusal's message: the wire, its offset, its two rows' bits or its two leaf widths, and the fix. A wire reads the
+field of its writer's return whose first word in the unit's output row is the wire's offset (`field`,
+`Spot.Edges.fieldWord`); an offset that is no field's first word is refused. Of every wire, that field's bits are
+the row's (`short`), the row's words those `Spot.Wires.check` gives it (`Summary.rowWords`): so the row is that one
+field, whole, and a field's bits are its own words'. And a wire is taken in one of two ways. The reader's row is
+closed (`Leaves.closed`): its leaves are of one bit and its Definition passes none of them on, whatever the writer's
+leaves. Or the reader's row and the writer's field each have leaves of one width, and the writer's divides the
+reader's: with the same words, every leaf of the writer's field then lies inside one leaf of the row that reads it.
+It costs the wires, each four lookups among the templates and a pass over its writer's return fields. -/
+def unwhole (P : Prog) (ts : List Tmpl) (ls : List Leaves) (s : Spot.Wires.Summary) : Option String :=
   let leaves := fun (tid : String) => ls.find? (·.tid == tid)
   let width := fun (tid port : String) => ((leaves tid).bind fun l => l.leaf.lookup port).join
   let closed := fun (tid port : String) => ((leaves tid).map fun l => l.closed.contains port).getD false
-  let short := fun (w : Spot.Wires.Wire) =>
-    match (leaves w.writer).bind fun l => l.bits.lookup w.out,
-        (ts.find? (·.tid == w.writer)).bind fun t => t.outs.lookup w.out with
-    | some b, some n => if b == 16 * n then none else some (b, 16 * n)
-    | _, _ => none
-  let whole := fun (w : Spot.Wires.Wire) => closed w.reader w.port ||
-    match width w.reader w.port, width w.writer w.out with
+  let field := fun (w : Spot.Wires.Wire) => (ts.find? (·.tid == w.writer)).bind fun t =>
+    let ret := (P.defs[t.defn]!).ret
+    (List.range (fieldsOf ret).length).find? fun f => Spot.Edges.fieldWord ret f == w.offset
+  let short := fun (w : Spot.Wires.Wire) (f n : Nat) =>
+    match (leaves w.writer).bind fun l => l.bits.lookup s!"o{f}" with
+    | some b => if b == 16 * n then none else some (b, 16 * n)
+    | none => none
+  let whole := fun (w : Spot.Wires.Wire) (f : Nat) => closed w.reader w.port ||
+    match width w.reader w.port, width w.writer s!"o{f}" with
     | some r, some o => o != 0 && r % o == 0
     | _, _ => false
-  (wires.find? fun w => (short w).isSome || !whole w).map fun w =>
-    let wire := s!"wire {w.writer}.{w.out} -> {w.reader}.{w.port}: "
-    match short w with
-    | some (b, r) =>
-      wire ++ s!"the writer's output is {b} bits and the row it fills {r}. Every bit of a row a wire fills is a " ++
-      "bit of its writer's output: a row is whole 16-bit words, and a bit of it past its writer's output is no " ++
-      "gate's. Fix the Definitions, not the record: give the writer's output whole 16-bit words, each bit a gate " ++
-      "of its own."
+  (s.wires.zip s.rowWords).findSome? fun (w, n) =>
+    let wire := s!"wire {w.writer}.out at word {w.offset} -> {w.reader}.{w.port}: "
+    match field w with
+    | none => some (wire ++ s!"word {w.offset} of the writer's output row is no field's first word. A wire reads " ++
+      "one whole field of its writer's return, from that field's first word. Fix the Program, not the record: have " ++
+      "the root read each writer's field whole, from its first leaf.")
+    | some f =>
+    match short w f n with
+    | some (b, r) => some (
+      wire ++ s!"the writer's field {f} is {b} bits and the row it fills {r}. Every bit of a row a wire fills is a " ++
+      "bit of the one writer's field it reads: a row is whole 16-bit words, and a bit of it past that field is no " ++
+      "gate's, or another field's. Fix the Definitions, not the record: give the writer's field whole 16-bit " ++
+      "words, each bit a gate of its own, and the reader's row that field's words.")
     | none =>
-    wire ++ "the writer's leaves are of " ++
-    s!"{widthName (width w.writer w.out)} and the reader's of {widthName (width w.reader w.port)}. Every leaf of a " ++
-    "writer's output lies inside one leaf of the row that reads it, each side's leaves of one width and the " ++
+    let o := s!"o{f}"
+    if whole w f then none else some (
+    wire ++ s!"the writer's field {f} has leaves of " ++
+    s!"{widthName (width w.writer o)} and the reader's row of {widthName (width w.reader w.port)}. Every leaf of a " ++
+    "writer's field lies inside one leaf of the row that reads it, each side's leaves of one width and the " ++
     "writer's dividing the reader's; or the reader's row is one-bit leaves and its Definition passes none of them " ++
     "on: its return refers to no part of that row, itself or through a call, a batch or a scan. Fix the " ++
     "Definitions, not the record: give the reader's row leaves of the writer's width or a multiple of it, or the " ++
-    "writer's output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
-    "its Definition return gates of its own in their place."
+    "writer's field leaves of a width that divides the reader's, or make the reader's row one-bit leaves and have " ++
+    "its Definition return gates of its own in their place.")
 
 /-! ## The record, as far as its templates -/
 
@@ -747,7 +764,7 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
   let wired ← match Spot.Wires.check W with
     | .ok s => pure s
     | .error _ => throw "wires"
-  if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
+  if (unwhole f.P f.ts f.leaves wired).isSome then throw "leaf-widths"
   let x ← inputsOf f.ts W f.doc
   if !formatsHeld f.T f.doc x.params then throw "formats"
   let (S, grids) ← gridsOf f.ts f.doc
@@ -859,7 +876,7 @@ def messageOf (j tr : Json) (code : String) : Option String :=
     match front j tr with
     | .ok f => match wiring f.P f.doc with
       | .ok W => match Spot.Wires.check W with
-        | .ok wired => unwhole f.ts f.leaves wired.wires
+        | .ok wired => unwhole f.P f.ts f.leaves wired
         | .error _ => none
       | .error _ => none
     | .error _ => none
