@@ -13,7 +13,7 @@ proofs=$root/security/Proofs
 pkg=$(cd "${1:-$proofs}" && pwd)
 one=$(mktemp)
 two=$(mktemp)
-(cd "$pkg" && lake build Proofs.Flock.Soundness.Audit.Influence Proofs.Flock.Soundness.Audit.StratifiedMiss \
+(cd "$pkg" && lake build Proofs.Spot.Sampling.Influence Proofs.Spot.Sampling.StratifiedMiss \
   Proofs.Flock.SamplingGeneric.TwoTable >&2 && lake env lean --run "$here/ExfiltrationVectors.lean" > "$one" &&
   lake env lean --run "$here/ExfiltrationTwoVectors.lean" > "$two")
 python3 - "$one" "$two" "$here" "$pkg" <<'PY'
@@ -37,9 +37,9 @@ def write(out: Path, name: str, inputs: dict, keys: tuple) -> None:
 
 write(one, "exfiltration_lean.json",
       {tests + "ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
-       **{soundness + f: sha(pkg / f) for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/SamplingDesign.lean",
-                                                "Flock/Soundness/Audit/Stratified.lean",
-                                                "Flock/Soundness/Audit/StratifiedMiss.lean", *pins)}},
+       **{soundness + f: sha(pkg / f) for f in ("Spot/Sampling/Influence.lean", "Spot/Sampling/SamplingDesign.lean",
+                                                "Spot/Sampling/Stratified.lean",
+                                                "Spot/Sampling/StratifiedMiss.lean", *pins)}},
       ("vectors", "stratified"))
 write(two, "exfiltration_two_lean.json",
       {tests + "ExfiltrationTwoVectors.lean": sha(here / "ExfiltrationTwoVectors.lean"),

@@ -47,7 +47,7 @@ namespace FlockVBridge.OfVStar
 
 open Flock.HmNets hiding and
 open Flock FlockSoundness.Discharge.Hm
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge
 
 /-- **V*'s input rows, port by port**: ports whose (name, words, bits) begin with V*'s input rows of words `ws` have
 their names, words and 16 bits a word, and start past the words of the rows before them. -/
@@ -395,7 +395,7 @@ end FlockVBridge.OfVStar
 namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 
 section family

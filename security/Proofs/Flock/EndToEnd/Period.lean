@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.EndToEnd.Period.Statement
 public import Proofs.Flock.EndToEnd.Period.Union
 public import Proofs.Flock.EndToEndHidden
-public import Proofs.Flock.Soundness.Audit.Pooled
+public import Proofs.Spot.Sampling.Pooled
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -58,7 +58,7 @@ end Flock.SecurityProofs
 
 namespace Flock.Guarantees.SamplingBlock
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open scoped ENNReal

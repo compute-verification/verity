@@ -2235,10 +2235,11 @@ def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
 end HmIn
 
 /-! `HmOut` Linking: under a template query, with the verifier's own program, every cut wire between two units of
-the statement is a check on the public file. A reader whose parameter leaves are another unit's outputs commits them in a link
-row (META `links`): an input row encoded as the one output row is, under the writer's salt, so that its `b ‖ c` is the
-writer's output row's. This binds a public topology; it does not hide the topology: the wiring is read from the verifier's own
-program, so in this model the topology is public, a known leak that later work removes. -/
+the statement is a check on the program. A reader whose parameter leaves are another unit's outputs reads them in a link
+row (META `links`): an input row encoded as the one output row is, which the registered reads read by path in its writer's
+output field's tree (`Registered.checkLinked`, a wired port's positions `Registered.Port.readAt`'s closed form), so the
+reader's row is the writer's committed row as one commitment, not a second commitment compared with it. The wiring is
+read from the verifier's own program, so in this model the topology is public, a known leak that later work removes. -/
 namespace HmLinks
 
 open HmRow
@@ -2293,11 +2294,10 @@ def outGates (P : Program.Prog) (k m : Nat) : V (Array Nat) := do
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
 lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or exactly
-one unit's outputs in order, and then that writer is a unit of the file (`inst`, its place) and the reader's link row's
-`b ‖ c` is the writer's output row's. The cut wires checked. -/
-def checkUnit (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Nat × Nat × Nat)) (popIdx : Array Nat)
-    (inst : Std.HashMap Nat Nat) (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
-  let np := c.ports.size
+one unit's outputs in order, which its link row reads by path in the writer's output field's tree (`Registered.checkLinked`),
+whether or not the writer is a unit of the file. The cut wires checked. -/
+def checkUnit (c : Circuit) (P : Program.Prog) (links : Array (Nat × Nat × Nat)) (popIdx : Array Nat)
+    (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
   let some u := popIdx[i]? | throw s!"links: unit {i} of the draw is outside the public file's {popIdx.size} units"
   let some (k, m) := unitOf u | throw s!"links: unit {u} is outside the program's {n} units"
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
@@ -2319,10 +2319,6 @@ def checkUnit (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Na
       let og ← outGates P kv mv
       if og != rd then
         throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
-      let some w := inst[v]?
-        | throw s!"links: unit {u}'s row {name} reads unit {v}, which is not a unit of this public file (a link across statements is not checked)"
-      if pop.digest i p np != pop.digest w (np - 1) np then
-        throw s!"links: cut wire [{lo}, {hi}) from unit {v} to unit {u}: the reader's row {name} is not the writer's committed output row (their b ‖ c differ)"
       wires := wires + 1
   return wires
 
@@ -2330,17 +2326,16 @@ def checkUnit (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Na
 def checkAt (c : Circuit) (pop : Public) (P : Program.Prog) (links : Array (Nat × Nat × Nat))
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n : Nat) (readers : Option (Array Nat)) : V Nat := do
   let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-  let inst : Std.HashMap Nat Nat := (Array.range popIdx.size).foldl (fun m i => m.insert popIdx[i]! i) {}
   let mut wires := 0
   for i in readers.getD (Array.range popIdx.size) do
-    wires := wires + (← checkUnit c pop P links popIdx inst unitOf ownerOf n i)
+    wires := wires + (← checkUnit c P links popIdx unitOf ownerOf n i)
   return wires
 
 /-- Linking on the registered population `pop`, for each unit the sample proves (`readers`, places in the public file: the
 sample's units and their closure; every unit without a sample): `checkUnit`, with each unit and each gate's unit read from the
 root body's nodes (`unitAt`, `ownerAt`), so its work is the program's description and the proved units', never the
-population's. A reader is held to its writer's committed row whether or not the writer is sampled; an unsampled reader's wires
-are its own proof's, which the sample samples like any other part of it. The cut wires checked. -/
+population's. A reader's link row is its writer's committed row by path whether or not the writer is sampled; an unsampled
+reader's wires are its own proof's, which the sample samples like any other part of it. The cut wires checked. -/
 def check (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : V Nat := do
   let links ← parse c
   let P ← Program.decode program
@@ -2394,7 +2389,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
         let note ← HmRow.deriveTemplateUnits c obj prog indices
         let wires ← HmLinks.check c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row read by path in its writer's output field's tree"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFinding c pub obj prog f
@@ -2551,7 +2546,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
         let note ← HmRow.deriveTemplateUnits c obj prog indices
         let wires ← HmLinks.check c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row read by path in its writer's output field's tree"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFinding c pub obj prog f

@@ -5281,6 +5281,61 @@
     },
     {
       "paths": {
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.py": "verity/protocols/interface/charge/arith_encode.py",
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.circuit-check.py": "verity/protocols/interface/charge/arith_encode.circuit-check.py",
+        "verity/protocols/resource_accounting/network/verifier/arith_encode.circuit-check.json": "verity/protocols/interface/charge/arith_encode.circuit-check.json",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.py": "verity/protocols/interface/charge/charge_chain.py",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.circuit-check.py": "verity/protocols/interface/charge/charge_chain.circuit-check.py",
+        "verity/protocols/resource_accounting/network/verifier/charge_chain.circuit-check.json": "verity/protocols/interface/charge/charge_chain.circuit-check.json",
+        "verity/protocols/resource_accounting/network/prover/window_charge.py": "verity/protocols/interface/charge/window_charge.py",
+        "verity/protocols/resource_accounting/network/prover/window_charge.circuit-check.py": "verity/protocols/interface/charge/window_charge.circuit-check.py",
+        "verity/protocols/resource_accounting/network/prover/window_charge.circuit-check.json": "verity/protocols/interface/charge/window_charge.circuit-check.json"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Flock/Audit/": "security/Definitions/Spot/Sampling/",
+        "security/Proofs/Flock/Soundness/Audit/": "security/Proofs/Flock/SpotFlock/Sampling/",
+        "security/Proofs/Flock/Soundness/Audit/Circuit.lean": "security/Proofs/Spot/Sampling/Circuit.lean",
+        "security/Proofs/Flock/Soundness/Audit/Closure.lean": "security/Proofs/Spot/Sampling/Closure.lean",
+        "security/Proofs/Flock/Soundness/Audit/Extraction.lean": "security/Proofs/Spot/Sampling/Extraction.lean",
+        "security/Proofs/Flock/Soundness/Audit/Harm.lean": "security/Proofs/Spot/Sampling/Harm.lean",
+        "security/Proofs/Flock/Soundness/Audit/HarmBound.lean": "security/Proofs/Spot/Sampling/HarmBound.lean",
+        "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean": "security/Proofs/Spot/Sampling/HarmBudget.lean",
+        "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean": "security/Proofs/Spot/Sampling/HarmBudgetLife.lean",
+        "security/Proofs/Flock/Soundness/Audit/Influence.lean": "security/Proofs/Spot/Sampling/Influence.lean",
+        "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean": "security/Proofs/Spot/Sampling/InfluenceWitness.lean",
+        "security/Proofs/Flock/Soundness/Audit/OneStage.lean": "security/Proofs/Spot/Sampling/OneStage.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning.lean": "security/Proofs/Spot/Sampling/Partitioning.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean": "security/Proofs/Spot/Sampling/Partitioning/Guarantees.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean": "security/Proofs/Spot/Sampling/Partitioning/Model.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Bernoulli.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfil/Bernoulli.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Rungs.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfil/Rungs.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Witnesses.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfil/Witnesses.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfiltration.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfiltration.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/FreeCompute.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/FreeCompute.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/TwoStage.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/TwoStage.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Bounds.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Unequal/Bounds.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean",
+        "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Witnesses.lean": "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Unequal/Witnesses.lean",
+        "security/Proofs/Flock/Soundness/Audit/Periods.lean": "security/Proofs/Spot/Sampling/Periods.lean",
+        "security/Proofs/Flock/Soundness/Audit/Pooled.lean": "security/Proofs/Spot/Sampling/Pooled.lean",
+        "security/Proofs/Flock/Soundness/Audit/RegDraw.lean": "security/Proofs/Spot/Sampling/RegDraw.lean",
+        "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean": "security/Proofs/Spot/Sampling/SamplingDesign.lean",
+        "security/Proofs/Flock/Soundness/Audit/Stratified.lean": "security/Proofs/Spot/Sampling/Stratified.lean",
+        "security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "security/Proofs/Spot/Sampling/StratifiedMiss.lean",
+        "security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean": "security/Proofs/Spot/Sampling/StratifiedProj.lean",
+        "security/Proofs/Flock/Soundness/Audit/Window.lean": "security/Proofs/Spot/Sampling/Window.lean",
+        "security/Proofs/Flock/Soundness/Audit/Work.lean": "security/Proofs/Spot/Sampling/Work.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/poub/binder.py": "verity/protocols/resource_accounting/memory/poub/prover/binder.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/verity_vllm/pipeline/network_admission.py": "verity/protocols/resource_accounting/network/prover/admission.py"
       }
     }

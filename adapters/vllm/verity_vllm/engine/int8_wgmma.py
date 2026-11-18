@@ -13,7 +13,7 @@ the same accumulators the call's z/y records over `rows` slots (`int8_exact.zy_r
 
 The library is built by the nvcc on the path, else torch's CUDA_HOME's (`-fmad=false`, no FTZ or fast-math flag), for
 `int8_gemm_configs.WGMMA_ARCH`, and kept under ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's
-version, as `commit.row_tables_device` builds its kernels.  `available()` says whether the current device can run it;
+version, as `commit.row_tables_device` builds its kernels.  `available()` says whether the card `CARD_SKU` names can run it;
 `int8_fused.pick_wgmma` takes it only then.
 """
 from __future__ import annotations
@@ -28,7 +28,9 @@ from pathlib import Path
 
 import torch
 
+from verity_vllm import settings
 from verity_vllm.engine.int8_exact import ZY_BYTES, zy_units
+from verity_vllm.engine.profiles.devices import card_arch
 from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH, WGMMA_ZY
 
 HERE = Path(__file__).resolve().parent
@@ -133,9 +135,9 @@ def layout() -> dict[str, dict[str, int]]:
 
 
 @cache
-def available(index: int) -> bool:
-    """Whether device `index` is sm_90 and the library builds and loads."""
-    if torch.cuda.get_device_capability(index) != (9, 0):
+def available() -> bool:
+    """Whether the card file `CARD_SKU` names is `WGMMA_ARCH`'s and the library builds and loads."""
+    if card_arch(settings.card_sku()) != WGMMA_ARCH:
         return False
     try:
         lib()

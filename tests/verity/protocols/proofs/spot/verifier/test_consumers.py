@@ -113,7 +113,7 @@ def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():
     `harm_bound` is at least H and below H + b; `location_bits` is at least log2 admissible and within log2(n + 1) of
     it, and n once K >= n / 2; so `exfiltration_bound` is at least log2 of the numerator."""
     data = json.loads(LEAN_VECTORS.read_text())
-    assert data["statement"] == "FlockSoundness.Audit.Partition.audit_exfiltration" and len(data["vectors"]) == 24
+    assert data["statement"] == "Spot.Sampling.Partition.audit_exfiltration" and len(data["vectors"]) == 24
     for v in data["vectors"]:
         n, K, H, b, admissible = v["n"], v["K"], v["H"], v["bits"], v["admissible"]
         p = IntegrityProfile(("unit",), (n,), {"unit": Subset(v["k"])}, 2.0 ** v["delta_log2"])
@@ -156,15 +156,15 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
 
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
-    `audit_exfiltration` (`Audit/Influence.lean`), the uniform sampling design and `subset_miss` (`Audit/SamplingDesign.lean`), the stratified
-    sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
+    `audit_exfiltration` (`Sampling/Influence.lean`), the uniform sampling design and `subset_miss` (`Sampling/SamplingDesign.lean`), the stratified
+    sampling design and `stratified_miss_eq_greedy` (`Sampling/Stratified.lean`, `Sampling/StratifiedMiss.lean`), and the toolchain and
     Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "security/Proofs/"
     assert set(recorded) == {"tests/verity/protocols/proofs/spot/verifier/lean/ExfiltrationVectors.lean",
-                             *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/SamplingDesign.lean",
-                                                       "Flock/Soundness/Audit/Stratified.lean",
-                                                       "Flock/Soundness/Audit/StratifiedMiss.lean",
+                             *(soundness + f for f in ("Spot/Sampling/Influence.lean", "Spot/Sampling/SamplingDesign.lean",
+                                                       "Spot/Sampling/Stratified.lean",
+                                                       "Spot/Sampling/StratifiedMiss.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}
     stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
     assert not stale, f"changed since the vectors were generated, rerun tests/verity/protocols/proofs/spot/verifier/lean/generate.sh: {stale}"

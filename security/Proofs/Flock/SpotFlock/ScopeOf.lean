@@ -76,7 +76,7 @@ end Claims.Sampling
 
 namespace Flock.Bridge
 
-open FlockSoundness.Audit Claims.Sampling
+open Spot.Sampling Claims.Sampling
 
 /-! ## A circuit's units' proof blocks partition its lowering -/
 
@@ -84,14 +84,14 @@ section blocks
 
 variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool} {n : ℕ}
 
-theorem nodup_blockOf (P : FlockSoundness.Audit.Partition C n) (u : Fin n) : (blockOf P κ u).Nodup := by
+theorem nodup_blockOf (P : Spot.Sampling.Partition C n) (u : Fin n) : (blockOf P κ u).Nodup := by
   refine List.nodup_append.2 ⟨nodup_unitGates P u, ((List.nodup_finRange C.N).filter _).map posOf_injective, ?_⟩
   intro a ha b hb he
   obtain ⟨g, hg, rfl⟩ := List.mem_map.1 hb
   subst he
   exact progOf_ne_input_of_unit (κ := κ) ha (gates_posOf_input (mem_insOf.1 hg).1 (mem_insOf.1 hg).2.1)
 
-theorem disjoint_blockOf (P : FlockSoundness.Audit.Partition C n) {u v : Fin n} (huv : u ≠ v) :
+theorem disjoint_blockOf (P : Spot.Sampling.Partition C n) {u v : Fin n} (huv : u ≠ v) :
     (blockOf P κ u).Disjoint (blockOf P κ v) := by
   intro i hi hj
   rcases mem_blockOf.1 hi with hi | ⟨g, hg, rfl⟩ <;> rcases mem_blockOf.1 hj with hj | ⟨g', hg', hj⟩
@@ -102,13 +102,13 @@ theorem disjoint_blockOf (P : FlockSoundness.Audit.Partition C n) {u v : Fin n} 
   · obtain rfl := posOf_injective hj
     exact huv (Option.some.inj ((mem_insOf.1 hg).2.2.symm.trans (mem_insOf.1 hg').2.2))
 
-theorem lt_length_blockOf {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ} (hi : i ∈ blockOf P κ u) :
+theorem lt_length_blockOf {P : Spot.Sampling.Partition C n} {u : Fin n} {i : ℕ} (hi : i ∈ blockOf P κ u) :
     i < (progOf C κ).gates.length := by
   rcases mem_blockOf.1 hi with hi | ⟨g, -, rfl⟩
   · exact lt_length_of_unit hi
   · exact Members.posOf_lt_length g
 
-theorem length_blockOf_le (P : FlockSoundness.Audit.Partition C n) (u : Fin n) :
+theorem length_blockOf_le (P : Spot.Sampling.Partition C n) (u : Fin n) :
     (blockOf P κ u).length ≤ (progOf C κ).gates.length := by
   rw [← List.toFinset_card_of_nodup (nodup_blockOf P u), ← Finset.card_range (progOf C κ).gates.length]
   exact Finset.card_le_card fun i hi => Finset.mem_range.2 (lt_length_blockOf (List.mem_toFinset.1 hi))
@@ -129,7 +129,7 @@ theorem input_pos {i : ℕ} (h : (progOf C κ).gates[i]? = some .input) :
     exact lower_ne_input hni _ (List.mem_of_getElem? hx) rfl
 
 /-- A wire some gate reads has an owner. -/
-theorem isSome_owner (P : FlockSoundness.Audit.Partition C n) {a g : Fin C.N} (ha : a ∈ (C.op g).args) :
+theorem isSome_owner (P : Spot.Sampling.Partition C n) {a g : Fin C.N} (ha : a ∈ (C.op g).args) :
     (owner P a).isSome := by
   have hg : (C.op g).isInput = false := by
     cases h : (C.op g).isInput
@@ -144,7 +144,7 @@ theorem isSome_owner (P : FlockSoundness.Audit.Partition C n) {a g : Fin C.N} (h
 
 /-- **Every gate of the lowering but a constant or an unread input is in some unit's block**, where no output is an
 input: an input gate some gate reads is its owner's, every other gate its unit's. -/
-theorem exists_blockOf (P : FlockSoundness.Audit.Partition C n) (hout : ∀ o ∈ C.outputs, (C.op o).isInput = false)
+theorem exists_blockOf (P : Spot.Sampling.Partition C n) (hout : ∀ o ∈ C.outputs, (C.op o).isInput = false)
     {i : ℕ} (hi : i < (progOf C κ).gates.length) (hc : ∀ b, (progOf C κ).gates[i]? ≠ some (.const b))
     (hun : ¬ (progOf C κ).Unread i) : ∃ u, i ∈ blockOf P κ u := by
   by_cases hin : (progOf C κ).gates[i]? = some .input
@@ -175,7 +175,7 @@ theorem exists_blockOf (P : FlockSoundness.Audit.Partition C n) (hout : ∀ o �
 
 /-- **A circuit's units' proof blocks partition its lowering**, where every unit has a lowered gate, no output is an
 input, and each block commits at most `sizeClassMax` values. -/
-theorem partitions_blockOf (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem partitions_blockOf (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
     (hne : ∀ u, unitGates P u ≠ []) (hout : ∀ o ∈ C.outputs, (C.op o).isInput = false)
     (hw : ∀ u, committed (progOf C κ) (blockOf P κ u) ≤ sizeClassMax) :
     (⟨[[(List.finRange n).map (blockOf P κ)]]⟩ : Claims.Sampling.Partition).Partitions (progOf C κ) := by

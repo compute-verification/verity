@@ -30,7 +30,7 @@ needs only the checkout.
     first; `check.sh` beside it runs the Lean check on `security` with the grader, on scratch submissions that
     import `Proofs.Pous.Statements`.
   - `tests/verity/protocols/proofs/spot/verifier/lean/generate.sh` runs `ExfiltrationVectors.lean`
-    (`Proofs.Flock.Soundness.Audit.Influence`, `Proofs.Flock.Soundness.Audit.StratifiedMiss`) and
+    (`Proofs.Spot.Sampling.Influence`, `Proofs.Spot.Sampling.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
   - `tests/verity/protocols/proofs/flock/prover/lean/generate.sh` runs `RandomnessVectors.lean` beside it
     (`Proofs.Flock.Soundness.PlanDraw`).
