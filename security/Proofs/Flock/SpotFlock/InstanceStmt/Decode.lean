@@ -271,7 +271,8 @@ theorem bodyBad_one (defs : Array Defn) (key : String) (B : Body) (w : Nat)
     change out = _ at ho
     subst ho
     rw [Array.eq_empty_of_size_eq_zero ha]
-    simp only [Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
+    obtain ⟨s', hs'⟩ : ∃ s', Std.Stream.next? (Std.toStream (#[0] : Array ℕ)) = some (0, s') := ⟨_, rfl⟩
+    simp only [hs', Widths.bodyBad, List.size_toArray, List.length_cons, List.length_nil, Nat.zero_add,
       List.getElem!_toArray, List.getElem!_eq_getElem?_getD, Widths.seqBad, Widths.partOk, Widths.Src.ty?,
       Array.getElem?_map, List.map_toArray, List.map_cons, List.map_nil, List.getElem?_toArray, Widths.Src.homo?,
       homo_A, Part.count, slice_A, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true, gt_iff_lt, Nat.div_pos_iff, List.cons_append,
