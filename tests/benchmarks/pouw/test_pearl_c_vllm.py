@@ -28,6 +28,7 @@ import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
@@ -393,12 +394,12 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
     run.begin(retain=str(tmp_path))
     retained, given = run._retained, {}
 
-    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None, salts=None):
+    def with_tree(cur, mm, m, flags, xa, tree, salts, y=None, y_tree=None, y_salts=None):
         ys = fresh_salts(y.shape[0])
         honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, ys)[1]
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
-        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8),
-                        salts=salts, y_salts=torch.frombuffer(bytearray(b"".join(ys)), dtype=torch.uint8))
+        return retained(cur, mm, m, flags, xa, tree, salts, y=y,
+                        y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8), y_salts=torch.frombuffer(bytearray(b"".join(ys)), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
     monkeypatch.setattr(SYD, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
@@ -526,20 +527,36 @@ class _Engine:
         return []
 
 
+def seeded_device_salts(monkeypatch, seed=11):
+    """Every salt the device run draws (A's and the tiles', `host.fresh_into`, wherever imported; y's) from streams seeded
+    with `seed`, so two runs making the same calls draw the same salts and commit the same bytes."""
+    import sys
+
+    rng, ys = random.Random(f"{seed} fresh_into"), random.Random(f"{seed} y")
+
+    def fresh_into(dst, n, raw=None):
+        dst[:HM96_SALT * n].copy_(torch.frombuffer(bytearray(rng.randbytes(HM96_SALT * n)), dtype=torch.uint8))
+    for name in ("ends", "graphs", "grouped", "host", "lanes_device", "run_device", "whole_calls"):
+        mod = sys.modules.get(f"verity_torch.pouw.pearl_c.{name}")
+        if hasattr(mod, "fresh_into"):
+            monkeypatch.setattr(mod, "fresh_into", fresh_into)
+    monkeypatch.setattr(SYD, "fresh_salts", lambda m: [ys.randbytes(HM96_SALT) for _ in range(m)])
+
+
 def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
     with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the weights' B salts
-    `salts_b` (a registration's, so two installs compared byte for byte share them); `run` overrides the device run's buffer
-    sizes."""
+    `salts_b` as the entry's kept salts (a registration's, so two installs compared byte for byte share them) and every
+    fresh salt from `seeded_device_salts`; `run` overrides the device run's buffer sizes."""
     import functools
 
     from verity_vllm import protocols as PO
     from verity_vllm.protocols import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(pouw, "pearl_c_weight_roots",
-                        lambda k, ws, scheme: PPDR.weight_roots(k, ws, scheme, weight_salts=salts_b(ws)))
-    monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, weight_salts=salts_b(weights), **run))
+    monkeypatch.setattr(pouw, "_WEIGHT_SALTS", {f"pouw:{SCHEME}": salts_b(weights)})
+    seeded_device_salts(monkeypatch)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
     model = _Model(weights)
     settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
@@ -813,8 +830,8 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 
 
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
-#: y's root and the pass's files and manifest were all waited for in its step
-RETAINED_DIGEST = "87ec23c3532ef5596a14787aaf69d3983a4565cbe3ce55c95b24a6e0cde11485"
+#: y's root and the pass's files and manifest were all waited for in its step, every fresh salt `seeded_device_salts`'
+RETAINED_DIGEST = "6c6a1793d842340db221aa566cfc1ee4883db29e900f53df7d01803381e40052"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
@@ -847,7 +864,7 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
         got[behind] = _retained_files(root)
         modes = {p.stat().st_mode & 0o777 for p in root.rglob("*")}
         assert modes == {0o600, 0o700}, sorted(map(oct, modes))
-    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 2 + 2 * 2 * 2 + 2 * 2)
+    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 3 + 2 * 2 * 3 + 2 * 3)
     assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
 
 
@@ -988,10 +1005,10 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("scheme", KERNEL_SCHEMES)
-def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path):
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_path, monkeypatch):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin` and hash_decode.cuh's host build: each is `MerkleTree`'s root in hm96-sha512
-    (frame-v3-sha512 over values salted by the prover's key).  A decode call's commitment is pd_commit's: each row digest
+    (frame-v3-sha512 over values salted with the salts the run was handed or drew: B's, each call's A's, the tiles').  A decode call's commitment is pd_commit's: each row digest
     `pearl_c.row_digest` of its row, the row seeds the scheme's `row_seeds` with their line keys, seed_A the scheme's, and E_A's
     lines the m₁₆ committed rows' under their own keys and the filler rows' under line_a; its tile leaves (pd_tiles') over
     the zero C~ and U are `pearl_c.leaf`'s."""
@@ -1012,12 +1029,15 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, weight_salts=key)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
+    a_salts = []
     for w, x in calls:
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
         assert names[0] == "pd_commit_851" and names[-1] == "pd_tiles_851", names
         sh, index = run.shapes[(32, weights[w].shape[0], 1024)], len(run.cur.matmuls) - 1
+        got = PPDR._bytes(sh.buf("salts_a")[:HM96_SALT * 32])
+        a_salts.append([got[i:i + HM96_SALT] for i in range(0, len(got), HM96_SALT)])
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
         mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
@@ -1036,7 +1056,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
-        want = commit_rows(activation_binding(salt, index), index, rows(a), h, key, index).commitment.root
+        want = commit_rows(activation_binding(salt, index), index, rows(a), h, a_salts[index]).commitment.root
         assert PPDR._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
@@ -1045,10 +1065,17 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     leaves = rng.integers(0, 256, nb * count, dtype=np.uint8).tobytes()      # no GEMM ran: every tile's leaf is the same
     run.leaves[:nb * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
     kernel.dev.log.clear()
+    drawn, fresh = [], ENDS.fresh_into
+
+    def recorded(dst, n, raw=None):
+        fresh(dst, n, raw)
+        drawn.append(PPDR._bytes(dst[:HM96_SALT * n]))
+    monkeypatch.setattr(ENDS, "fresh_into", recorded)
     out = run.end()
     assert [n for n, *_ in kernel.dev.log][-2] == "s512_frame_leaves"
+    (salts_t,) = drawn
     dt = transcript_domain(Epoch(Workload(tuple(run.cur.matmuls)), roots, salt), count, h)
-    tree = MerkleTree(dt, {i: leaves[nb * i:nb * i + nb] + hm96_salt(key, HM96_TRANSCRIPT, i) for i in range(count)},
+    tree = MerkleTree(dt, {i: leaves[nb * i:nb * i + nb] + salts_t[HM96_SALT * i:HM96_SALT * (i + 1)] for i in range(count)},
                       lambda _: TILE_SCHEMA)
     assert out["transcript_root"] == tree.commitment.root.hex()
 
@@ -4375,8 +4402,8 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     with pytest.raises(ValueError, match="a side lane needs ring >= 2"):
         PPD.schedule_of(Schedule("one-set", frozenset({"tile_hash"}), ring=1), s)
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
-    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "seed_a", "segdig_t", "tree_a",
-                                                     "u")
+    assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "salts_a", "seed_a", "segdig_t",
+                                                     "tree_a", "u")
     assert PPDR.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
 
 
@@ -4386,7 +4413,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     call's side lane runs pd_tree (A's levels, seed_A and line_a, and no padding rows' E_A lines, though m₁₆ = 32 has
     them), then the tile leaves, on the run's side lanes in turn (1, then 3); from a full tile (64) the call's side lane
     runs the tile leaves and the side lane after it pd_tree (tiles on 1, then 3; the tree on 3, then 1); no further
-    stream.  The lanes use the ring's set for the call: A's tree, seed_A, line_a, the keys, C~ and U; E_A's lines are the
+    stream.  The lanes use the ring's set for the call: A's tree and salts, seed_A, line_a, the keys, C~ and U; E_A's lines are the
     shape's own, which only the main lane touches.  The call's keys are uploaded into its set's, and A's root is copied
     to the pass from its set."""
     make, kernel, weights, roots = sm90_run
@@ -4421,7 +4448,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         assert (tp[10], tp[11]) == (ptr(j, "seed_a"), ptr(j, "line_a"))
         assert cp[6] == tp[6] == ptr(j, "keys") and cp[5] == tp[5] == ptr(j, "keys") + nb
         assert by["gemm_pearlc_d"][c][0][2:4] == by["pd_tiles_851"][c][0][:2] == (ptr(j, "c"), ptr(j, "u"))
-    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
+    assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 18
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
         assert PPDR._bytes(keys[:168]) == PPDR.call_keys(run.salt, roots[0], index, 32, run.tree_hash)
@@ -4569,7 +4596,7 @@ def test_deferred_a_runs_sm120s_split_on_the_lanes(device_run, tmp_path):
     kept_run = make(schedule="deferred-a")
     kept_run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    kept_run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
+    kept_run._retained = lambda cur, mm, m, flags, xa, tree, salts, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     kept_run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -4585,7 +4612,7 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     GEMMs, and never A's level 0; from a full tile of rows the side lane after the call's runs A's level 0 over the row
     digests of the call's set, its levels and seed_A, and the call's side lane the tile leaves.  A second eager_forward,
     after a call, changes nothing; the next pass is back on its own schedule, and without whole_eager nothing moves.  A
-    level 0 reads its unit index (its salt nonce) from its own set's keys."""
+    level 0 reads A's salts from its own set's."""
     make, kernel, weights, *_ = device_run
     assert make().whole_eager is None and (r := make()) and (r.eager_forward() or r.schedule.name) == "serial"
     run = make(whole_eager="deferred-a")
@@ -4615,8 +4642,7 @@ def test_an_eager_forward_under_whole_eager_runs_a_prefills_calls_with_as_tree_a
     leaves = [p for n, st, p, i in log if n == "hm_leaves"]
     for c, j in enumerate((0, 1)):
         assert folds[c][1] == leaves[c][0] == ptr(j, "rowdig_a") and leaves[c][1] == ptr(j, "tree_a")
-        keys = sh.keys if j == 0 else sh.sets[j]["keys"]
-        assert leaves[c][5] == keys.data_ptr() + run.nb + 96      # A's unit index, its salt nonce: the set's own keys
+        assert leaves[c][2] == ptr(j, "salts_a")                  # A's salts: the set's own
     assert run.end()["schedule"] == "deferred-a"
     run.begin()
     assert run.schedule.name == "serial" and run._eager_from is None
@@ -4644,7 +4670,7 @@ def test_deferred_a_runs_as_tree_aside_in_a_retained_pass_too_and_writes_no_padd
     run = make()
     run.begin(retain=str(tmp_path / "kept"), run=RUN)
     kept = []
-    run._retained = lambda cur, mm, m, flags, xa, tree, y=None: kept.append(tree.data_ptr())
+    run._retained = lambda cur, mm, m, flags, xa, tree, salts, y=None: kept.append(tree.data_ptr())
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
     pd = [(n, st, p, i) for n, st, p, i in kernel.dev.log if n.startswith("pd_") and not n.endswith("_smem")]
@@ -4733,7 +4759,7 @@ class H100TwinDev(TwinDev):
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("arch", ["sm90", "sm120"])
-def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path, arch):
+def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_lines(tmp_path, arch, monkeypatch):
     """Under ``deferred-a`` (A's commitment split, its tree on the side lane, no padding rows' E_A lines) a retained pass
     commits what the serial one commits, on sm_90a's pipeline and on sm_120's, its trees computed on the host
     (`H100TwinDev` or `TwinDev`: hash_decode.cuh's host build and simt_twin): the records root, the commitment and each
@@ -4752,6 +4778,7 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
+        seeded_device_salts(monkeypatch)
         run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                   *salt_coin(roots), capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
@@ -4775,7 +4802,7 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
 @pytest.mark.parametrize("arch", ["sm90", "sm120"])
-def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch):
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch, monkeypatch):
     """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`, on sm_90a
     over chain "pl"'s), two calls of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree
     under its own set's keys, and the pass commits what the serial one commits (`H100TwinDev` over hash_prefill.cuh's host
@@ -4793,6 +4820,7 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     roots = PPDR.weight_roots(kernel, weights, scheme, weight_salts=salts_b(weights))
     got = {}
     for schedule in ("serial", "deferred-a"):
+        seeded_device_salts(monkeypatch)
         run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, weight_salts=salts_b(weights))
         run.begin(retain=str(tmp_path / schedule), run=RUN)
@@ -4808,11 +4836,11 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
 
 def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm90_run, monkeypatch):
     """A replayed call (`_replay_lanes`) keeps `_lanes`'s events: the main lane waits for the side steps of its set's last
-    call and uploads the slot, then waits for the caller and replays its graph; the side lane after the call's replays
-    A's tree behind the main graph's own event (where A's tree is aside, from a full tile of rows), and the call's side
-    lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
-    tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
-    nothing, and its side lane's end becomes the set's event."""
+    call, uploads the slot and writes the set's A salts fresh, then waits for the caller and replays its graph; the side
+    lane after the call's replays A's tree behind the main graph's own event (where A's tree is aside, from a full tile of
+    rows), and the call's side lane the rest behind the main lane's end, then waits for the tree; below a full tile the
+    call's side lane replays the tree, then the rest, with no event between them; the caller waits for the main lane.  A
+    set's first call waits for nothing, and its side lane's end becomes the set's event."""
     from verity_torch.pouw.pearl_c import host as PPH
     from verity_torch.pouw.pearl_c import lanes_device as PPL
     make, *_ = sm90_run
@@ -4825,9 +4853,11 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
 
     monkeypatch.setattr(PPH, "_event", lambda: "slot")
     monkeypatch.setattr(PPL, "_event", lambda: "done0")
+    monkeypatch.setattr(PPL, "fresh_into", lambda dst, n, raw=None: calls.append(("fresh", dst, n, raw)))
+    monkeypatch.setattr(run, "salts_a", lambda sh, pipe: "salts")
     run.driver = Driver()
     side0, side1 = (types.SimpleNamespace(raw=raw, event=f"side{raw // 2}", tree_event=f"tree{raw // 2}") for raw in (1, 3))
-    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"])
+    main, sh = types.SimpleNamespace(raw=2, event="main"), types.SimpleNamespace(done=[None, "done1"], m16=16)
     up, i = run.uploads, run.uploads.i
 
     def src(k):
@@ -4839,13 +4869,15 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     run._replay_lanes(types.SimpleNamespace(execs=(30, 31, 32), slot_ptr=4096, ev_tree="cut2"), sh, 1, side0, side0, 0, main,
                       b"k" * 200)
     assert calls == [
-        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(0), 200, 2), ("record", "slot", 2), ("fresh", "salts", 16, 2),
+        ("record", "main", 0),
         ("wait", 2, "main"), ("launch", 10, 2), ("record", "side1", 2), ("wait", 1, "cut"), ("launch", 11, 1),
         ("record", "tree1", 1), ("wait", 3, "side1"), ("launch", 12, 3), ("wait", 3, "tree1"), ("record", "done1", 3),
         ("record", "main", 2), ("wait", 0, "main"),
-        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("launch", 20, 0), ("record", "side0", 0),
-        ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
-        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("record", "main", 0),
+        ("copy_in", 8192, src(1), 200, 0), ("record", "slot", 0), ("fresh", "salts", 16, 0), ("launch", 20, 0),
+        ("record", "side0", 0), ("wait", 1, "side0"), ("launch", 22, 1), ("record", "done0", 1),
+        ("wait", 2, "done1"), ("copy_in", 4096, src(2), 200, 2), ("record", "slot", 2), ("fresh", "salts", 16, 2),
+        ("record", "main", 0),
         ("wait", 2, "main"), ("launch", 30, 2), ("record", "side0", 2), ("wait", 1, "cut2"), ("launch", 31, 1),
         ("wait", 1, "side0"), ("launch", 32, 1), ("record", "done1", 1), ("record", "main", 2), ("wait", 0, "main")]
     assert sh.done == ["done0", "done1"] and bytes(up.view[i, :200]) == b"k" * 200
@@ -5103,7 +5135,7 @@ def _due(site, x, weight):
 
 def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path, monkeypatch):
     """e2e's install path (`Stack` + `PearlCExecutor`, the arm from `arm_of`) retains the same manifest and files as the run
-    driven directly, byte for byte."""
+    driven directly, byte for byte, each drawing its fresh salts from `seeded_device_salts`."""
     import dataclasses
 
     from verity_vllm.protocols.linear.api import Stack
@@ -5112,11 +5144,13 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 128), (1, 20)))]
+    seeded_device_salts(monkeypatch)
     direct = make()
     direct.begin(retain=str(tmp_path / "direct"), run=RUN)
     for w, x in xs:
         direct.gemm(w, x, weights[w], None)
     want = direct.end()
+    seeded_device_salts(monkeypatch)
     run = make()
     sites = _stack_sites(weights)
     stack = Stack(sites, PPDR.PearlCExecutor(run))
