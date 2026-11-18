@@ -246,10 +246,10 @@ WINDOW_VERDICT = {"undecided": "pending"}
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 
 
-def hold_placement(env: Mapping[str, str] | None = None) -> bool:
-    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
-    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
-    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
+def hold_placement(env: Mapping[str, str]) -> bool:
+    """``VERITY_HOLD_PLACEMENT=1`` in ``env``, the environment its caller already holds: the holds that rest only on where
+    coins are flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
+    return env.get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
