@@ -311,7 +311,6 @@ theorem sampleCoins_ok_of_steps {key : ChallengerKey} {window label : String} {a
     sampleCoins key window label after coins = .ok ξ := by
   unfold sampleCoins
   simp only [hk, ht, hw, hl, hs, hc, bind, Except.bind, beq_self_eq_true, Bool.false_eq_true, ↓reduceIte]
-  rfl
 
 /-- **`coinsReason` gives no reason where `sampleCoins` reads a stream** that the bytes read are the start of, every
 coin of it read, the evidence's copy of main's history being the caller's. -/
