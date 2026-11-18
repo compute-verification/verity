@@ -2305,19 +2305,19 @@ def test_pouw_credits_no_freed_compute_whatever_its_row_states_and_is_not_claime
     assert all(x in OR.POUW for x in ("OnsiteFreed", "noFoldRound", "eps1-sm120-h1fx1", "credits nothing", "Pearl+"))
 
 
-def test_pouws_verdict_carries_its_rows_stated_source_so_pearlpluss_says_its_coins_were_checked_on_the_served_node_only(
-        tmp_path):
-    """Pearl+'s accepted row of record, whose stated source (`served_verdicts.PEARLPLUS_FROM`) says its coins' signatures
-    were verified on the served node only: the onsite record's PoUW verdict carries that source."""
+def test_a_verdict_carries_its_rows_stated_source_so_pouws_says_what_no_auditor_side_entry_checks(tmp_path):
+    """PoUW's accepted row whose stated source ends with what its declaration says no auditor-side entry checks
+    (`served_verdicts.declared_unchecked`, Pearl+'s coins' signatures): the onsite record's PoUW verdict carries that
+    source."""
+    said = f"{SV.PEARLPLUS_FROM}; coins' signatures checked on the served node only; not checked by the auditor"
     work = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None,
-            "answer_from": SV.PEARLPLUS_FROM}
+            "answer_from": said}
     out = served_out(tmp_path, work=work, coins=None)
     (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {H1_SERVED}; the bandwidth audit's: "
                                       "vy-auditor-2's bw_party, inside PoUS's piece\n" + coins_line(GATE) + "\n")
     assert main([str(out)]) == 0
     v = json.loads((out / "record" / "onsite.json").read_text())["verdicts"]["PoUW"]
-    assert v["verdict"] == "accept" and v["answer_from"] == SV.PEARLPLUS_FROM
-    assert "verified on the served node only: no auditor-side entry verifies them" in v["answer_from"]
+    assert (v["verdict"], v["answer_from"]) == ("accept", said)
 
 
 @pytest.mark.parametrize("work, verdict", [

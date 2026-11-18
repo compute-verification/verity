@@ -412,18 +412,12 @@ MEMBERS_COVER = ("each sampled proof block proved in its own kind's statement ag
                  "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
                  "the coins in the parameters but not signed in the docket")
-#: what no auditor-side entry checks of Pearl+'s coins: its piece verifies their signatures (`pearlplus_coins`,
-#: `pearlplus_draw`), and `pearlplus_of_record` reads its reasons and holds only the key file to the pin
-PEARLPLUS_COINS = ("its coins' signatures (the salt session's and the sample session's) were verified on the served node "
-                   "only: no auditor-side entry verifies them, and the compose checks only that the key file handed to it "
-                   "hashes to the pin")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
-                  "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness; "
-                  f"{PEARLPLUS_COINS}")
+                  "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
-PEARLPLUS_SAID = f"Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks, and {PEARLPLUS_COINS}"
+PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
 WEAKER_TIE = ("a weaker tie, not the tied guarantee: the window's records audit tied to W sampled {design}, not a stratified "
               "rate over a cut whose tables' readers are templates of their own, so its accept shows only that the tables "
               "its sampled proof blocks read hold the served model's own values at W's roots, not that every table W "
@@ -1414,13 +1408,25 @@ def graded_by(row: Mapping[str, Any]) -> str | None:
     return said if isinstance(said, str) and said else None
 
 
+def declared_unchecked(protocol: Any) -> str:
+    """What of its run no auditor-side entry checks, as the scheme declared under ``protocol`` says (its declaration's
+    ``unchecked``), or empty."""
+    from verity.protocols.compose import schemes
+
+    return next((u for n in schemes.DECLARATIONS
+                 if (s := schemes.get(n)).protocol == protocol and (u := getattr(s, "unchecked", ""))), "")
+
+
 def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
     """Row ``key`` saying who ran its checks on ``product``'s path (`RAN_BY`): each premise its development document
-    states (`premises`) at the end of its ``why``, the row's own at the end of its ``answer_from``."""
+    states (`premises`) at the end of its ``why``, the row's own at the end of its ``answer_from``, and then what its
+    protocol's declaration says no auditor-side entry checks (`declared_unchecked`)."""
     said, out = RAN_BY[product], dict(row)
     own = graded_by(row) or (PIECE if row.get("owner") in GRADED_ON_NODE else None)
     if "answer_from" in out and (key in said or own):
         out["answer_from"] = f"{out['answer_from']}; {said[key] if key in said else own + TAIL[product]}"
+    if "answer_from" in out and (unchecked := declared_unchecked(row.get("protocol"))):
+        out["answer_from"] = f"{out['answer_from']}; {unchecked}"
     doc = out.get("development")
     if isinstance(doc, Mapping) and any(isinstance(doc.get(n), Mapping) for n in PREMISES):
         out["development"] = {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {said[n]}"}
@@ -2471,12 +2477,14 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif v == "accept":
             t = terms(r, (subprotocols or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
-            if r.get("answer_from") == PEARLPLUS_FROM:
+            if unchecked := declared_unchecked(r.get("protocol")):
+                s += f", {unchecked}"
+            if str(r.get("answer_from") or "").startswith(PEARLPLUS_FROM):
                 s += f", {PEARLPLUS_SAID}"
                 if weaker := ((r.get("answer") or {}).get("profile") or {}).get("weaker_tie"):
                     s += f", {weaker}"
         else:
-            s = f"{v}: {r.get('reason')}"
+            s = f"{v}: {r.get('reason')}" + (f", {u}" if (u := declared_unchecked(r.get("protocol"))) else "")
         out.append(f"{NAMES[k]}: {s}")
     return "; ".join(out)
 

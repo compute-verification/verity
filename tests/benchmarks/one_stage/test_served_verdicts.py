@@ -2744,7 +2744,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("pending", "accept", {})
     assert (line["record_missing"], rec["composed"]["verdict"], rec["composed"]["answer"]) == ([], "undecided", None)
-    assert line["answers"]["PoUW"] == S.PEARLPLUS_FROM
+    assert line["answers"]["PoUW"].startswith(S.PEARLPLUS_FROM)
     reason = line["reason"]
     assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
@@ -2752,14 +2752,16 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
 
 
 @pytest.mark.parametrize("product", ["remote", "onsite"])
-def test_pearlpluss_row_says_its_coins_signatures_were_verified_on_the_served_node_only(tmp_path, monkeypatch, capsys,
-                                                                                         live, product):
-    """No auditor-side entry verifies Pearl+'s coins' signatures (its piece does, on the served node), so its row of
-    record says so on both products' paths: in its stated source (the record's row and the RECORD line's ``answers``)
-    and in the composed reason."""
+def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_record_on_both_paths(
+        tmp_path, monkeypatch, capsys, live, product):
+    """What a row's protocol's declaration says no auditor-side entry checks (`declared_unchecked`), Pearl+'s coins'
+    signatures here, ends the row's stated source in the report and the RECORD line's ``answers``, and follows its
+    accept in the composed reason, on both products' paths; the row keeps Pearl+'s reason of record."""
+    unchecked = "coins' signatures checked on the served node only; not checked by the auditor"
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "declared_unchecked", lambda p: unchecked if p == S.PEARLPLUS_PROTOCOL else "")
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (tmp_path / "serve").mkdir()
     S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
@@ -2767,11 +2769,14 @@ def test_pearlpluss_row_says_its_coins_signatures_were_verified_on_the_served_no
             "--key-sha512", pin, "--lane", lane])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["work"]
-    said = ("verified on the served node only: no auditor-side entry verifies them, and the compose checks only that "
-            "the key file handed to it hashes to the pin")
     assert line["verdicts"]["PoUW"] == "accept"
-    assert said in row["answer_from"] and said in line["answers"]["PoUW"], (row["answer_from"], line["answers"])
-    assert f"{S.PEARLPLUS_SAID}" in line["reason"] and said in S.PEARLPLUS_SAID, line["reason"]
+    assert row["answer_from"] == line["answers"]["PoUW"] == f"{S.PEARLPLUS_FROM}; {unchecked}"
+    assert f"PoUW: accept, {unchecked}, {S.PEARLPLUS_SAID}" in line["reason"], line["reason"]
+
+
+def test_a_protocol_no_declaration_names_has_nothing_unchecked():
+    """`declared_unchecked` reads the declarations by protocol id: an id none declares says nothing."""
+    assert S.declared_unchecked("verity/no-such-protocol/v0") == "" and S.declared_unchecked(None) == ""
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])
