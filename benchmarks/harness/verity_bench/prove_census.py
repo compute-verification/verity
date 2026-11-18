@@ -239,6 +239,15 @@ def printed(rows: Sequence[Mapping[str, Any]], kind: Callable[[Mapping[str, Any]
     return sorted(out, key=lambda u: (-u["total"], u["block"]))
 
 
+def unrated(rows: Sequence[Mapping[str, Any]], no_rate: Sequence[Mapping[str, Any]]) -> list[tuple[float, dict]]:
+    """The refusal's block types with no rate (`refusal`'s `no_rate`) in the block-type table's runs (`rows`, `runs` by
+    `_block_kind`), each with its summed proof blocks a served token, the most first."""
+
+    kind = {r["block"]: _block_kind(r) for r in rows}
+    found = [(sum(r["per_token"] for r in u["of"]), u) for u in runs(no_rate, lambda r: kind.get(r["block"]))]
+    return sorted(found, key=lambda xu: (-xu[0], xu[1]["block"]))
+
+
 def _block_kind(r: Mapping[str, Any]) -> Hashable:
     return r["k_log"], json.dumps(r["rate"], sort_keys=True), _pattern(r)
 
@@ -332,8 +341,7 @@ def render(doc: Mapping[str, Any]) -> list[str]:
                          f"prover(s) and {c['cores']} cores or more (label each run of its rate: {_label(c['steady'])}), "
                          "each with its proof blocks a served token, a served token being a prompt or a decoded token "
                          "(as GLM-5.3's table counts it), and runs as above:")
-            for x, u in sorted(((sum(r["per_token"] for r in u["of"]), u) for u in runs(why["no_rate"], lambda r: None)),
-                               key=lambda xu: (-xu[0], xu[1]["block"])):
+            for x, u in unrated(c["rows"], why["no_rate"]):
                 n = len(u["of"])
                 lines.append(f"  - `{u['block']}`{'' if n == 1 else f' ({n} block types)'}, "
                              f"{x:.4g} {_plural(x, 'block')} a served token")

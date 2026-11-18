@@ -233,6 +233,8 @@ def test_the_text_groups_runs_exactly():
     assert {(u["block"], u["definitions"]) for u in rows} == {
         (attention("1..8"), 8), (attention("9..11"), 3), (attention(12, bn=192), 1)}
     assert next(u for u in gaps if u["definitions"] == 27)["total"] == 27 * 30
+    no_rate = [{"block": r["block"], "per_token": r["total"] / 2} for r in found["rows"]]
+    assert {u["block"] for _, u in PC.unrated(found["rows"], no_rate)} == {u["block"] for u in rows}
 
 
 def test_a_census_of_another_model_or_with_no_census_file_is_refused(tmp_path):
