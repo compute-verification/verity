@@ -11,12 +11,14 @@ import pytest
 
 from verity.protocols.experimental.dither.prover import dither as D
 from verity.protocols.experimental.dither.prover import pouw_scheme as DS
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import (
     Context, DomainError, Matmul, PoUWScheme, Shape, Tile)
 
 SEEDS = D.seeds(hashlib.sha512(b"call coin").digest(), hashlib.sha512(b"operand-root receipt").digest(), 0)
 #: each named pair at a K of three segments: a first, a middle and a last proof block
-K = {"rtx-pro-6000-pinned": 3072, "rtx-pro-6000-chosen": 2304}
+K = {("rtx-pro-6000", True): 3072, ("rtx-pro-6000", False): 2304}
+PINNED = ("rtx-pro-6000", True)
 TILE = Tile((0, 77, 127), (5, 126))
 
 
@@ -36,19 +38,28 @@ def _tile(s: DS.Dither, k: int):
 
 
 def test_it_is_a_pouw_scheme_at_each_named_pair():
-    s = DS.Dither()
+    s = DS.Dither(*PINNED)
     assert isinstance(s, PoUWScheme) and s.name == "dither"
     assert (s.L, s.lp) == (1024, 128) and dict(s.certificate.parameters) == {"L": 1024, "lp": 128}
-    chosen = DS.Dither("rtx-pro-6000-chosen")
+    chosen = DS.Dither("rtx-pro-6000", False)
     assert (chosen.L, chosen.lp) == (768, 256)
     assert s.certificate.gap is None and s.certificate.eps is None
-    with pytest.raises(ValueError, match="no parameters 'h200'"):
-        DS.Dither("h200")
+    with pytest.raises(ValueError, match="no parameters on 'h200' with B pinned"):
+        DS.Dither("h200", True)
+
+
+@pytest.mark.parametrize(("card", "pinned"), sorted(K))
+def test_the_resource_scheme_on_a_card_resolves_to_it(card, pinned):
+    """PoUW's kernel schemes reach Dither as the resource scheme ``dither`` on a card, as they reach Pearl+'s."""
+    s = schemes.of("dither", card, pinned)
+    assert isinstance(s, DS.Dither) and (s.L, s.lp) == DS.PARAMETERS[card, pinned]
+    with pytest.raises(ValueError, match="no parameters on 'h100'"):
+        schemes.of("dither", "h100", pinned)
 
 
 @pytest.mark.parametrize("parameters", sorted(K))
 def test_check_takes_the_references_domain(parameters):
-    s = DS.Dither(parameters)
+    s = DS.Dither(*parameters)
     s.check(Matmul(0, Shape(256, K[parameters], 384), 0))
     for bad in (Shape(100, K[parameters], 128), Shape(128, K[parameters] + 32, 128), Shape(128, 1 << 17, 128)):
         with pytest.raises(DomainError, match="dither at L = "):
@@ -57,15 +68,15 @@ def test_check_takes_the_references_domain(parameters):
 
 def test_tiles_are_the_value_roots_tiles():
     shape = Shape(256, 3072, 384)
-    sh = DS.Dither().shape(shape)
-    tiles = DS.Dither().tiles(shape)
+    sh = DS.Dither(*PINNED).shape(shape)
+    tiles = DS.Dither(*PINNED).tiles(shape)
     assert len(tiles) == sh.tiles == 6 and all(len(t.rows) == len(t.cols) == D.TILE for t in tiles)
     assert [sh.tile_of(t.rows[0], t.cols[0]) for t in tiles] == [(n, 0) for n in range(6)]
 
 
 @pytest.mark.parametrize("parameters", sorted(K))
 def test_an_honest_tile_passes_every_proof_block(parameters):
-    s, k = DS.Dither(parameters), K[parameters]
+    s, k = DS.Dither(*parameters), K[parameters]
     ctx, A, B, ops, checked = _tile(s, k)
     sh = s.shape(ctx.matmul.shape)
     assert sh.S == 3 and s.admissible(ctx, ops)
@@ -85,7 +96,7 @@ def test_an_honest_tile_passes_every_proof_block(parameters):
 
 @pytest.mark.parametrize("parameters", sorted(K))
 def test_a_tampered_prefix_sum_is_refused(parameters):
-    s, k = DS.Dither(parameters), K[parameters]
+    s, k = DS.Dither(*parameters), K[parameters]
     ctx, A, B, _, checked = _tile(s, k)
     sh = s.shape(ctx.matmul.shape)
     x, y, i, j = 1, 0, TILE.rows[1], TILE.cols[0]
@@ -98,7 +109,7 @@ def test_a_tampered_prefix_sum_is_refused(parameters):
 
 
 def test_a_row_of_the_wrong_length_is_not_an_operand():
-    s = DS.Dither()
+    s = DS.Dither(*PINNED)
     ctx = _ctx(3072)
     row = bytes(3072)
     assert s.encode(ctx, SEEDS, [row, row[:-1], row], [row, row], TILE) is None
@@ -110,7 +121,7 @@ def test_a_row_of_the_wrong_length_is_not_an_operand():
     ("digest", "there is no transcript leaf per tile"),
 ])
 def test_what_dither_has_no_code_for_is_refused(method, missing):
-    s, ctx = DS.Dither(), _ctx(3072)
+    s, ctx = DS.Dither(*PINNED), _ctx(3072)
     args = {"noise": (ctx,), "wref": (ctx.matmul.shape,), "digest": (ctx, SEEDS, [])}[method]
     with pytest.raises(NotImplementedError, match=missing):
         getattr(s, method)(*args)

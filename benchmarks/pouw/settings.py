@@ -83,9 +83,11 @@ REGISTRY = Registry(
                                        "(real.py --f1 sets it for the processes it starts)"),
     S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
-    S("PEARLC_KERNEL", str, None, VALUE, "the kernel directory the arm serves with; unset, the tree's pearl_c_sm120"),
+    S("PEARLC_KERNEL", str, None, VALUE, "the kernel directory the arm serves with; unset, the tree's of its kernel scheme on "
+                                         "the card (bench_arm.kernel_directory)"),
     S("PEARLC_CUBIN", str, None, VALUE, "the cubin the arm loads; unset, the kernel directory's build.sh cubin"),
-    S("PEARLC_SCHEME", str, None, VALUE, "the arm's scheme record; unset, the kernel directory's (bench_arm.KERNEL_SCHEMES)"),
+    S("PEARLC_SCHEME", str, None, VALUE, "the kernel scheme served_pearlplus.sh's Pearl-C period names; unset, "
+                                         "pearl-c-h100-v1-h3"),
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
