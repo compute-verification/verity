@@ -728,11 +728,13 @@ def public_doc(text: str) -> str:
 
 
 def publish(out: Path, private: Path) -> list[str]:
-    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
-    field, Pearl+'s exclusion tiles, its exact credit or its prover's give-up (`public_doc`) held in full, under
-    ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole.
-    Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
+    under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
+    text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
+    give-up (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    import public_files as PF
+
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -744,7 +746,7 @@ def publish(out: Path, private: Path) -> list[str]:
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
-        if data is None or NAMED.search(rel):
+        if data is None or NAMED.search(rel) or PF.listed("OUT/" + rel) is None:
             shutil.move(p, dst)
             held.append(rel)
             continue
