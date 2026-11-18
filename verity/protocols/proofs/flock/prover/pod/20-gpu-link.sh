@@ -8,7 +8,7 @@
 #      the tree's path, so it differs by where the tree sits)
 set -uxo pipefail
 SRC=$(pwd); MODE=${MODE:-all}; GPU=${GPU:-1}
-[ "$GPU" = 1 ] && : "${SM:?set SM to the target's compute capability (90 for sm_90): a GPU build has no default}"
+[ "$GPU" = 1 ] && : "${SM:?set SM to the compute capability of the target, 90 for sm_90: a GPU build has no default}"
 W=${FLOCK_WORK:-/workspace}/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null; free -g | head -2
 read -r Q PER < /sys/fs/cgroup/cpu.max 2>/dev/null || { read -r Q < /sys/fs/cgroup/cpu/cpu.cfs_quota_us && read -r PER < /sys/fs/cgroup/cpu/cpu.cfs_period_us; } 2>/dev/null || { Q=max; PER=100000; }; [ "$Q" = -1 ] && Q=max

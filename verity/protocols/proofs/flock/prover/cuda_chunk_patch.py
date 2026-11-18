@@ -20,6 +20,9 @@ import shutil
 import sys
 
 cuda = os.environ.get("CUDA") or sys.exit("set CUDA to the CUDA toolkit the prover is built with (pod/20-gpu-link.sh passes its own)")
+sm = os.environ.get("SM") or sys.exit("set SM to the target's compute capability (90 for sm_90): the card the prover runs on")
+if not sm.isdigit() or int(sm) < 80:
+    sys.exit(f"SM={sm}: no code for it (ring_switch.cuh's and sha512.cuh's b1 MMA needs 80 or later)")
 root = pathlib.Path(__file__).resolve().parents[5]
 try:
     runpy.run_path(str(root / "verity/protocols/proofs/flock/prover/cuda_live_patch.py"))
@@ -282,9 +285,6 @@ inline void merkle_capped_paths_queue(std::vector<MHash>& out, const uint8_t* d_
     ])
     print("induce_sumcheck.cuh, merkle_open_device.cuh, ligerito_f256.cuh: the host waits only for the values it reads")
 
-sm = os.environ.get("SM") or sys.exit("set SM to the target's compute capability (90 for sm_90): the card the prover runs on")
-if not sm.isdigit() or int(sm) < 80:
-    sys.exit(f"SM={sm}: no code for it (ring_switch.cuh's and sha512.cuh's b1 MMA needs 80 or later)")
 b = pathlib.Path("crates/flock-cuda-ffi/build.rs")
 s = b.read_text()
 s = s.replace("arch=compute_120,code=sm_120", f"arch=compute_{sm},code=sm_{sm}")
