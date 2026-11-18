@@ -16,7 +16,9 @@ The rate is the gate's count: a loop that `expect` says holds N instructions of 
 `iters` times by `warps` warps of each of the blocks (one an SM), over the block's cycles; the median block, then the
 median rep.
 
-  python probe.py build [--out DIR] [--arch SM] [SOURCE...]        # probes/*.cu -> DIR/STEM, SM's SASS only (sm_120a)
+  python probe.py build [--out DIR] [--card NAME] [SOURCE...]      # probes/*.cu -> DIR/STEM, the card's target's SASS only
+  python probe.py arch [--card NAME]                               # the card's target (its card record's `arch`)
+  python probe.py gencode [--card NAME]                            # nvcc's -gencode value for it (`kit.card_gencode`)
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
 """
@@ -37,8 +39,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
 NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
-#: the one SASS target a binary carries; the datacenter probes (`../dc/`) build for sm_90a and sm_100a
-ARCHES = ("sm_120a", "sm_90a", "sm_100a")
 
 
 def _load(name: str, path: Path):
@@ -66,12 +66,30 @@ def nvcc() -> str:
     raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
 
 
-def build(out: Path, sources: list[Path], arch: str = "sm_120a") -> list[Path]:
-    """Each source for `arch`'s SASS. The host side sees the target as PROBE_ARCH (90, 100, 120), so a probe table can
-    declare the counts that target's ptxas lowers to."""
+def _kit():
+    """The harness kit (`verity_bench.kit`), which finds a card and its target from the card files."""
+    root = HERE.parents[2]
+    for path in (root, root / "benchmarks" / "harness", root / "tools" / "config"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    from verity_bench import kit
+
+    return kit
+
+
+def card() -> str:
+    """The card the run opened: the name nvidia-smi gives its GPUs (the lease's, else the host's; `kit.host_stamp`)."""
+    return _kit().host_stamp()["card"]
+
+
+def build(out: Path, sources: list[Path], name: str) -> list[Path]:
+    """Each source for the SASS of the card nvidia-smi names `name`: the target its card record's `arch` names, with
+    nvcc's `-gencode` from that target's architecture file (`kit.card_gencode`). The host side sees the target as
+    PROBE_ARCH (90, 100, 120), so a probe table can declare the counts that target's ptxas lowers to."""
+    kit = _kit()
     out.mkdir(parents=True, exist_ok=True)
-    gencode = f"arch=compute_{arch.removeprefix('sm_')},code={arch}"
-    define = f"-DPROBE_ARCH={arch.removeprefix('sm_').rstrip('a')}"
+    gencode = kit.card_gencode(name)
+    define = f"-DPROBE_ARCH={kit.card_arch(name).removeprefix('sm_').rstrip('af')}"
     built = []
     for src in sources:
         dst = out / src.stem
@@ -223,8 +241,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", type=Path, default=Path("build"))
-    b.add_argument("--arch", choices=ARCHES, default="sm_120a")
+    b.add_argument("--card", help="the name nvidia-smi gives the card to build for (default: the run's card)")
     b.add_argument("sources", nargs="*", type=Path)
+    for name in ("arch", "gencode"):
+        sub.add_parser(name).add_argument("--card", help="the name nvidia-smi gives the card (default: the run's card)")
     g = sub.add_parser("gate")
     g.add_argument("binaries", nargs="+", type=Path)
     g.add_argument("--json", type=Path)
@@ -241,8 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
 
     if a.cmd == "build":
-        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.arch):
+        for out in build(a.out, a.sources or sorted((HERE / "probes").glob("*.cu")), a.card or card()):
             print(out)
+        return 0
+    if a.cmd in ("arch", "gencode"):
+        kit = _kit()
+        print((kit.card_arch if a.cmd == "arch" else kit.card_gencode)(a.card or card()))
         return 0
 
     tables, verdicts = gate_all(a.binaries)

@@ -25,7 +25,8 @@ import pytest
 
 import verity_vllm
 from tests import fake_vllm
-from verity_vllm import config
+from verity import hooks as H
+from verity_vllm import config, messages
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
 from verity_vllm.engine import handle
@@ -102,6 +103,13 @@ def test_a_repo_pinned_under_two_roles_resolves_to_the_downloaded_one(tmp_path):
     assert (pin.case, pin.local_path, pin.world) == ("OLMOE", "/snap", 2)
 
 
+def _answered() -> messages.Exchange:
+    """The exchange `build_engine` answers, as it answers it for an eager engine on one rank."""
+    ex = messages.build()
+    ex.answer(H.Declared("", {"eager": True, "world": 1}))
+    return ex
+
+
 class _FakeVllm:
     llm_engine: SimpleNamespace
 
@@ -110,6 +118,7 @@ class _FakeVllm:
 
     def generate(self, prompts, sampling_params, **kw):
         self.calls.append((prompts, sampling_params, kw))
+        self.in_scope = messages.current()
         return [SimpleNamespace(request_id=str(i), prompt_token_ids=[1, 2],
                                 outputs=[SimpleNamespace(token_ids=[7, 8, 9], finish_reason="length")]) for i, _ in enumerate(prompts)]
 
@@ -125,7 +134,8 @@ def built(monkeypatch):
     def build_engine(checkpoints, **kw):
         seen.update(kw, checkpoints=checkpoints)
         return SimpleNamespace(llm=_FakeVllm(), kwargs={"model": "/snap", "max_num_seqs": kw["max_num_seqs"]}, env_flags={"F": "1"},
-                               execution=kw["execution"], effective={"enforce_eager": True}, build_s=1.5)
+                               execution=kw["execution"], effective={"enforce_eager": True}, build_s=1.5,
+                               exchange=_answered())
 
     monkeypatch.setattr(va, "build_engine", build_engine)
     return seen
@@ -246,6 +256,30 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
     assert not hasattr(model, "decoded")
 
 
+def test_each_llm_files_on_its_own_builds_exchange_and_generates_in_it(built, monkeypatch):
+    """A second LLM in one process, after the first build was answered, files its protocols' requests on its own build's
+    exchange, and each generates with its own in scope."""
+    from verity_vllm import protocols as PO
+    model = SimpleNamespace(name="model")
+    asks = (H.RequireProperty("eager", True, "the decode wrappers are not graph-capturable"),)
+    fake = SimpleNamespace(NAME="pous", schemes=lambda: ("band-chain/d12/v1",), refusals=lambda scheme, ctx: (),
+                           requests=lambda scheme, ctx: asks,
+                           install=lambda scheme, target: PO.Option(name=f"pous:{scheme}", hooks=target.hooks(f"pous:{scheme}")))
+    monkeypatch.setitem(sys.modules, "verity_vllm.protocols.fake_pous", fake)
+    monkeypatch.setitem(PO.ADAPTERS, "pous", "fake_pous")
+    from verity_vllm.engine import vllm_adapter as va
+    stand_in = va.build_engine
+    monkeypatch.setattr(va, "build_engine", lambda *a, **kw: SimpleNamespace(**vars(stand_in(*a, **kw)), model=model))
+    first, second = (L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:band-chain/d12/v1") for _ in range(2))
+    a, b = first._engine.exchange, second._engine.exchange
+    assert a is not b and a.requests == b.requests == [("pous:band-chain/d12/v1", asks[0])]
+    first.generate(["x"])
+    assert first._engine.llm.in_scope is a and messages.current() is b
+    assert first.reinstall() is not None and messages.current() is b
+    first.close()
+    second.close()
+
+
 def test_an_engine_class_fills_its_settings():
     assert L.class_options({"engine_class": "G", "max_model_len": CTX}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS}
@@ -357,7 +391,7 @@ def built_g(monkeypatch):
             scheduler=_Scheduler(effective["max_model_len"]))))
         return SimpleNamespace(llm=llm, kwargs={"max_num_seqs": kw["max_num_seqs"], **args},
                                env_flags=seen.get("env_flags", dict(kw.get("env") or {})), execution=kw["execution"],
-                               effective=effective, build_s=1.0)
+                               effective=effective, build_s=1.0, exchange=_answered())
 
     monkeypatch.setattr(va, "build_engine", build_engine)
     return seen

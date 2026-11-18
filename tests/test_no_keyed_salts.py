@@ -40,6 +40,8 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/pearl_c/host.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/run_device.py": "@compute-accounting",
     "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py": "@compute-accounting",
+    # the step rows run on a card under a fresh OS key a step, expanded there by SHA-512; a change of that kernel can't be
+    # gated until a card holds it to the reference, so these two stay by ruling until then
     "adapters/vllm/verity_vllm/commit/committer/native_rows.cu": "@vllm",
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
@@ -64,7 +66,6 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@kernels",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/zy_commit.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",

@@ -1,7 +1,7 @@
 /-
 What round 2's statement check says: the theorems of `Spot.SecondStage`'s `check` and its parts, that a pass holds the
 interior record, the statements, the headers, the ports and the values to what the module's docstring says
-(`check_ok` and what follows from it), and that where the form is not allowed no run passes (`check_refused`).
+(`check_ok` and what follows from it).
 -/
 module
 
@@ -58,14 +58,6 @@ theorem fold_codes_empty (l : List (String × Json)) :
   · rintro rfl
     rfl
 
-theorem failures_ne_nil (own : Own) (ps : Array Part) (ss : List Json) : failures false own ps ss ≠ [] := by
-  simp only [failures]
-  split
-  · simp
-  · rename_i h
-    intro he
-    simp_all
-
 /-- A design not derived fails a code of its own (`second-links` or `second-wires`). -/
 theorem designFailures_ne_nil {ps : Array Part} {own : Own} (h : ¬designOk ps own = true) :
     designFailures ps own ≠ [] := by
@@ -87,18 +79,6 @@ theorem wiresOk_unlinked {ps : Array Part} {own : Own} (hok : wiresOk ps own = t
     have h1 := Array.all_eq_true_iff_forall_mem.1 hok w hw
     simp only [Bool.and_eq_true] at h1
     exact Option.isNone_iff_eq_none.1 h1.1.2.2
-
-/-- **Off, round 2 never passes**: with the two-stage form refused, every run's check fails. -/
-theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false own stmts).codes ≠ #[] := by
-  simp only [check, Ne, fold_codes_empty]
-  split
-  · simp
-  · split
-    · simp
-    · exact fun he => designFailures_ne_nil ‹_› (List.append_eq_nil_iff.1 he).2
-  · split
-    · simp [failures_ne_nil]
-    · exact fun he => designFailures_ne_nil ‹_› (List.append_eq_nil_iff.1 he).2
 
 /-- **By position**: with no `second-order`, statement `i`, one for part `p` and no earlier statement's, is for the
 part at its position. -/
@@ -170,13 +150,13 @@ theorem interiorOrderOk_sample {own : Own} (h : interiorOrderOk own = true) :
     exact ⟨bs, hb, by simpa using h⟩
   · simp at h
 
-/-- **What a passing check says**: the form is allowed, the interior record names the replay sample in its order
+/-- **What a passing check says**: the interior record names the replay sample in its order
 (`interiorOrderOk_sample`), the interior program's strata make parts, the replay block's Definition makes links, each
 for a part's template, and wires, each between parts' templates, each statement is one for a part's template, no
 earlier statement's, the part at its position (`orderFailures_nil`), and passes every check at its position
 (`stmtCodes_nil`), every part has a statement, and the reads the verifiers report are the statements'. -/
-theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
-    allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
+theorem check_ok {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
+    interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
       wiresOk ps own = true ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
@@ -197,13 +177,9 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
     rw [if_pos hl] at h
     obtain ⟨hl, hw⟩ : linksOk ps own = true ∧ wiresOk ps own = true := by simpa [designOk] using hl
     simp only [failures] at h
-    split at h
-    · simp at h
-    · rename_i hne
-      simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
-      simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
+    · simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
       obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
-      refine ⟨by simpa using hne, interiorFailures_nil hint, ps, hp, hl, hw, ?_, ?_, ?_⟩
+      refine ⟨interiorFailures_nil hint, ps, hp, hl, hw, ?_, ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
         have := hst i hi'
@@ -231,7 +207,7 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · simp at hrep
 
 /-- A passing check has no failure of the interior record's own (`interiorFailures`). -/
-theorem check_ok_interior {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_interior {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     interiorFailures own = [] := by
   simp only [check, fold_codes_empty] at h
   split at h
@@ -245,15 +221,13 @@ theorem check_ok_interior {allow : Bool} {own : Own} {ss : Array Json} (h : (che
     case neg => rw [if_neg hl] at h; exact absurd (List.append_eq_nil_iff.1 h).2 (designFailures_ne_nil hl)
     rw [if_pos hl] at h
     simp only [failures] at h
-    split at h
-    · simp at h
     · simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
       exact h.1
 
 /-- **A passing `second-inputs`**: under a passing check, every value the interior registration registers is one a
 replay block's input may read: one the verifier holds without the prover, or the opened row of a read against a root
 round 1 committed (`inputsFailure`). -/
-theorem check_ok_inputs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_inputs {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     inputsFailure own = none :=
   interiorFailures_inputs (check_ok_interior h)
 
@@ -305,12 +279,12 @@ passing check, the `i`-th statement is for the template of the part at its posit
 blanked is the reference header the auditor's params give that template placed in the run at the template's position
 (`atRun` at `posOf`: its `set` the run's `served/<run>/m<k>`, its `frame_v3.bindings` the verifier's), blanked the same
 (`second-header`). -/
-theorem check_ok_header {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_header {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s r r', Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps[i]?.map (·.template) = some s.template ∧ (s.template, r) ∈ own.refs ∧
       atRun own (byTemplate own.interior) (posOf ps s.template) s.template r = some r' ∧
       jeq (blankRun s.header) (blankRun r') = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := check_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, -, -, hi', hc⟩ := hst i hi
   obtain ⟨r, r', hr, ha, hj⟩ := headerOk_ref (stmtCodes_nil hc).2.2.1
@@ -333,11 +307,11 @@ a link names, the boundary port it names, each slot reading only its cell's repl
 the interior record, each slot reading only its own rows, or a value either registration registers. The session's
 verifier holds each instance's ref at such a port to the row at the position the read gives its unit
 (`Flock.Registered.check`), so no ref there points a sampled proof block at another unit's rows. -/
-theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_refs {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧ ∀ port c, (port, c) ∈ entries (getD s.header "shared_rows") →
         ∃ e, (port, e) ∈ entries (getD s.registered "ports") ∧ readOk own (byTemplate own.interior) p port e = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := check_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, -, -, -, hr, -, -, hrefs, -⟩ := stmtCodes_nil hc
@@ -385,7 +359,7 @@ theorem readOk_wired {own : Own} {named : Bool} {p : Part} {port : String} {e : 
 port a wire names for its template (`wiredRead`), and each of its reads at a port a wire names and no link does is of
 that wire's writer's output port of the interior record, each slot at its unit's writer unit's row in its cell's
 replay block (`readOk_wired`). -/
-theorem check_ok_wired {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_wired {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧
       wiredRead own s.template (entries (getD s.registered "ports")) = true ∧
@@ -395,7 +369,7 @@ theorem check_ok_wired {allow : Bool} {own : Own} {ss : Array Json} (h : (check 
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
           placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := check_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := check_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, -, -, -, hr, -, hwr, -, -⟩ := stmtCodes_nil hc
@@ -460,10 +434,10 @@ statement's registered reads, each port's run fields blanked (`blankReads`: ever
 the rows of a port whose rows the run places, `runPlacesRows`), are those the auditor's params give its template's
 reference statement, blanked the same (`second-values`). The ports it reads registered, the value each reads, and the
 rows at which it reads a value a registration registers are fixed before the run. -/
-theorem check_ok_values {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+theorem check_ok_values {own : Own} {ss : Array Json} (h : (check own (some ss)).codes = #[]) :
     ∀ i < ss.size, ∃ s r, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧ (s.template, r) ∈ own.refReads ∧
       jeq (blankReads own s.template s.registered) (blankReads own s.template r) = true := by
-  obtain ⟨-, -, _ps, -, -, -, hst, -, -⟩ := check_ok h
+  obtain ⟨-, _ps, -, -, -, hst, -, -⟩ := check_ok h
   intro i hi
   obtain ⟨s, p, hs, -, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, -, -, -, -, -, -, -, hv⟩ := stmtCodes_nil hc
@@ -584,8 +558,8 @@ theorem anySampled_false {own : Own} {ps : Array Part} {ss : List Json} (h : any
 /-- **What a passing `checkAny` says**: what `check_ok` says of a passing `check`, each statement passing the checks
 of its own shape at its position: `sampledCodes` where it is of only its part's sampled proof blocks (`sampledOnly`,
 `sampledCodes_nil`), `stmtCodes` otherwise (`stmtCodes_nil`). -/
-theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny allow own (some ss)).codes = #[]) :
-    allow = true ∧ interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
+theorem checkAny_ok {own : Own} {ss : Array Json} (h : (checkAny own (some ss)).codes = #[]) :
+    interiorOrderOk own = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own = true ∧
       wiresOk ps own = true ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
@@ -596,17 +570,17 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
       Record.sameDict (own.reported.getD #[]) (statementReads ss.toList) = true := by
   cases hp : own.parts with
   | none =>
-    have hc : checkAny allow own (some ss) = check allow own (some ss) := by
+    have hc : checkAny own (some ss) = check own (some ss) := by
       unfold checkAny
       simp only [hp]
     rw [hc] at h
-    obtain ⟨-, -, ps, hp', -⟩ := check_ok h
+    obtain ⟨-, ps, hp', -⟩ := check_ok h
     rw [hp] at hp'
     cases hp'
   | some ps =>
     by_cases hb : (designOk ps own && anySampled own ps ss.toList) = true
-    · have hc : checkAny allow own (some ss) =
-          (failuresSampled allow own ps ss.toList).foldl (fun (c : Check) x => c.fail x.1 x.2) {} := by
+    · have hc : checkAny own (some ss) =
+          (failuresSampled own ps ss.toList).foldl (fun (c : Check) x => c.fail x.1 x.2) {} := by
         unfold checkAny
         simp only [hp]
         exact if_pos hb
@@ -614,13 +588,9 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
       have hb' : designOk ps own = true ∧ anySampled own ps ss.toList = true := by simpa using hb
       obtain ⟨hl, hw⟩ : linksOk ps own = true ∧ wiresOk ps own = true := by simpa [designOk] using hb'.1
       simp only [failuresSampled] at h
-      split at h
-      · simp at h
-      · rename_i hne
-        simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
-        simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
+      · simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
         obtain ⟨hint, hst, hord, hcov, hrep, -⟩ := h
-        refine ⟨by simpa using hne, interiorFailures_nil hint, ps, by first | rfl | exact hp, hl, hw, ?_, ?_, ?_⟩
+        refine ⟨interiorFailures_nil hint, ps, by first | rfl | exact hp, hl, hw, ?_, ?_, ?_⟩
         · intro i hi
           have hi' : i < ss.toList.length := by simpa using hi
           have := hst i hi'
@@ -646,17 +616,17 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
           split at hrep
           · assumption
           · simp at hrep
-    · have hc : checkAny allow own (some ss) = check allow own (some ss) := by
+    · have hc : checkAny own (some ss) = check own (some ss) := by
         unfold checkAny
         simp only [hp]
         exact if_neg hb
       rw [hc] at h
-      obtain ⟨ha, hio, ps', hp', hl, hw, hst, hcov, hrep⟩ := check_ok h
+      obtain ⟨hio, ps', hp', hl, hw, hst, hcov, hrep⟩ := check_ok h
       have hpp : ps = ps' := Option.some.inj (hp.symm.trans hp')
       rw [hpp] at hb
       have hd : designOk ps' own = true := by simp [designOk, hl, hw]
       have hn : anySampled own ps' ss.toList = false := by simpa [hd] using hb
-      refine ⟨ha, hio, ps', by first | exact hp' | exact hp.symm.trans hp', hl, hw, fun i hi => ?_, hcov, hrep⟩
+      refine ⟨hio, ps', by first | exact hp' | exact hp.symm.trans hp', hl, hw, fun i hi => ?_, hcov, hrep⟩
       obtain ⟨s, p, hs, hf, hd', hi', hc'⟩ := hst i hi
       have hmem : ss.toList.getD i .null ∈ ss.toList := getD_mem_of_lt _ _ (by simpa using hi)
       have hso := anySampled_false hn hmem hs hf
@@ -664,12 +634,12 @@ theorem checkAny_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (checkAny 
 
 /-- **Every port a header shares rows at is a read the second stage holds**, of a statement of either shape: `check_ok_refs` of
 a passing `checkAny`. -/
-theorem checkAny_ok_refs {allow : Bool} {own : Own} {ss : Array Json}
-    (h : (checkAny allow own (some ss)).codes = #[]) :
+theorem checkAny_ok_refs {own : Own} {ss : Array Json}
+    (h : (checkAny own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧ ∀ port c, (port, c) ∈ entries (getD s.header "shared_rows") →
         ∃ e, (port, e) ∈ entries (getD s.registered "ports") ∧ readOk own (byTemplate own.interior) p port e = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, hr, -, -, hrefs, -⟩ := codes_nil_shared hc
@@ -680,8 +650,8 @@ theorem checkAny_ok_refs {allow : Bool} {own : Own} {ss : Array Json}
 /-- **Every wired port reads its writer unit's value**, of a statement of either shape: `check_ok_wired` of a passing
 `checkAny`. A statement of only its part's sampled proof blocks is held at every slot of its part all the same: a
 read's rows are placed for the part's `Q·n_t` slots (`placedOk`), the slots it holds among them. -/
-theorem checkAny_ok_wired {allow : Bool} {own : Own} {ss : Array Json}
-    (h : (checkAny allow own (some ss)).codes = #[]) :
+theorem checkAny_ok_wired {own : Own} {ss : Array Json}
+    (h : (checkAny own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧
       wiredRead own s.template (entries (getD s.registered "ports")) = true ∧
@@ -691,7 +661,7 @@ theorem checkAny_ok_wired {allow : Bool} {own : Own} {ss : Array Json}
           (portOf (byTemplate own.interior) w.writer w.wport, x) ∈ Record.byPort own.interior ∧
           writerOf own w = some pw ∧ rowsOf own p.template port = some r ∧ pw.n = r.per ∧ sameAt e x = true ∧
           placedOk own.sample.size p e (own.sample.size * r.per) (wiredRow p r) = true := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, hr, -, hwr, -, -⟩ := codes_nil_shared hc
@@ -703,11 +673,11 @@ theorem checkAny_ok_wired {allow : Bool} {own : Own} {ss : Array Json}
 
 /-- **Every statement reads registered what its template's reference statement reads**, of a statement of either
 shape: `check_ok_values` of a passing `checkAny`. -/
-theorem checkAny_ok_values {allow : Bool} {own : Own} {ss : Array Json}
-    (h : (checkAny allow own (some ss)).codes = #[]) :
+theorem checkAny_ok_values {own : Own} {ss : Array Json}
+    (h : (checkAny own (some ss)).codes = #[]) :
     ∀ i < ss.size, ∃ s r, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧ (s.template, r) ∈ own.refReads ∧
       jeq (blankReads own s.template s.registered) (blankReads own s.template r) = true := by
-  obtain ⟨-, -, _ps, -, -, -, hst, -, -⟩ := checkAny_ok h
+  obtain ⟨-, _ps, -, -, -, hst, -, -⟩ := checkAny_ok h
   intro i hi
   obtain ⟨s, p, hs, -, -, -, hc⟩ := hst i hi
   obtain ⟨-, -, -, -, -, -, -, hv⟩ := codes_nil_shared hc
@@ -756,8 +726,8 @@ statement is one (`sampledOnly`), its `units.indices` are its part's slots the s
 sample's order (`sampledSlots`), at least one, its `instances` their count, its session's sample every unit of it
 (`wholeSample`), and its header its template's reference's placed in the run and at those slots. So instance `j` of its
 session is the part's `j`-th sampled slot, and every instance is a checked one. -/
-theorem checkAny_ok_sampled {allow : Bool} {own : Own} {ss : Array Json}
-    (h : (checkAny allow own (some ss)).codes = #[]) :
+theorem checkAny_ok_sampled {own : Own} {ss : Array Json}
+    (h : (checkAny own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧
       (sampledOnly own.sample.size p own.drawn s.header = true →
@@ -770,7 +740,7 @@ theorem checkAny_ok_sampled {allow : Bool} {own : Own} {ss : Array Json}
           atRun own (byTemplate own.interior) (posOf ps s.template) s.template r = some r' ∧
           jeq (blankRun s.header) (blankRun (atSampled r' (sampledSlots own.sample.size p own.drawn)
             (entries (getD s.registered "ports")))) = true) := by
-  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
+  obtain ⟨-, ps, hp, -, -, hst, -, -⟩ := checkAny_ok h
   refine ⟨ps, hp, fun i hi => ?_⟩
   obtain ⟨s, p, hs, hf, -, -, hc⟩ := hst i hi
   refine ⟨s, p, hs, hf, fun hso => ?_⟩
@@ -861,8 +831,8 @@ every unit of the second sample that is a slot of its part has its number at a p
 `instances` (`sampled_slot`). So the statement's instances and the part's sampled slots are one list, in the second
 sample's order: the map from a sampled slot to its instance is its place among the part's sampled slots, where a
 statement of every slot of the part has `u - lo`. -/
-theorem checkAny_ok_slots {allow : Bool} {own : Own} {ss : Array Json}
-    (h : (checkAny allow own (some ss)).codes = #[]) :
+theorem checkAny_ok_slots {own : Own} {ss : Array Json}
+    (h : (checkAny own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
       ps.find? (·.template == s.template) = some p ∧
       (sampledOnly own.sample.size p own.drawn s.header = true →

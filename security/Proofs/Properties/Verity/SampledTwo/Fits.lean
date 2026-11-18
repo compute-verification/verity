@@ -28,7 +28,7 @@ record's first-stage bytes are at most one coin's and its interior's at most `st
 theorem sourcesFit (A : Live₂) (C : CaseOf) : SourcesFit A C := by
   intro o i it hA hi hit
   obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
-  obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
   obtain ⟨hf1, hf2⟩ := VStar.Recursive.SampledTwo.accepted_fits hacc hin
   obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   have hik : inputOfCase k = some i' := by

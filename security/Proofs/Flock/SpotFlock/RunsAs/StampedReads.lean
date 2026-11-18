@@ -191,11 +191,11 @@ theorem verdictsReadSame : VerdictsReadSame := fun _ _ _ _ _ _ _ _ _ h => inputA
 /-- **At the form's accept, each read its last step's record checks leave out is one the second-stage statement
 check held**, given that the interior record the run of record reads is the record the form parsed
 (`RecordReadSame`): `accepted_ownReads_form` with the verdicts' premise discharged. -/
-theorem ownReads_form_of_record (hrec : RecordReadSame) {form : Bool} {p : VStar.Recursive.SampledTwo.Params}
+theorem ownReads_form_of_record (hrec : RecordReadSame) {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
     (hsn : SampledNoneOf p c ξ e bs)
-    (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : VStar.Recursive.SampledTwo.checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
       ∀ opened v root,
         Spot.Record.ownRegistered c₂.record (Spot.Record.sessionRegistered r.out) = some opened →

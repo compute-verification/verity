@@ -74,8 +74,8 @@ private def exReferring (ss : Array Json) (own : Own) : Own :=
 
 /-- Round 2's check of statements `ss`, each one's session checked by the verifier and its template's reference
 statement reading registered what it reads. -/
-private def exCheck (allow : Bool) (own : Own) (ss : Array Json) : Check :=
-  check allow (exVerifying ss (exReferring ss own)) (some ss)
+private def exCheck (own : Own) (ss : Array Json) : Check :=
+  check (exVerifying ss (exReferring ss own)) (some ss)
 
 private def exHonest : Json := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
 
@@ -87,14 +87,13 @@ private def exHonest : Json := exStmt [0, 1, 2, 3, 4, 5] [2, 4]
 #guard setName exRun 2 == "served/run-0/m2"
 
 #guard exOwn.parts == some #[{ template := "Pair_v0", lo := 0, n := 3 }]
-#guard (exCheck false exOwn #[exHonest]).codes == #["two-stage-form"]
-#guard (exCheck true exOwn #[exHonest]).codes.isEmpty
-#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]]).codes == #["second-population"]
-#guard (exCheck true exOwn #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]).codes == #["second-sample"]
-#guard (exCheck true exOwn #[exHonest, exHonest]).codes == #["second-template"]
-#guard (check true exOwn (some #[])).codes == #["second-cover"]
-#guard (check true exOwn none).codes == #["second-statements"]
-#guard (check true { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
+#guard (exCheck exOwn #[exHonest]).codes.isEmpty
+#guard (exCheck exOwn #[exStmt [0, 1, 2, 3, 4, 6] [2, 4]]).codes == #["second-population"]
+#guard (exCheck exOwn #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]).codes == #["second-sample"]
+#guard (exCheck exOwn #[exHonest, exHonest]).codes == #["second-template"]
+#guard (check exOwn (some #[])).codes == #["second-cover"]
+#guard (check exOwn none).codes == #["second-statements"]
+#guard (check { exOwn with parts := parts 4 #[("Pair_v0", #[(0, 6)])] } none).codes == #["second-cells"]
 
 /-- The honest statement, its header naming circuit file `c` by digest. -/
 private def exNaming (c : Nat) : Json :=
@@ -110,21 +109,21 @@ private def exVerdict (j : Json) (accepted : Bool := true) (tables : Option Nat 
     ("public_header_sha512", Json.str ((canonSha512 (getD j "header")).toOption.getD "")),
     ("unit_draw", getD j "draw")] ++ (tables.map fun n => [("session_tables", Lean.toJson n)]).getD [])
 
-#guard (check true exOwn (some #[exHonest])).codes == #["second-verified"]
-#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest)] } (some #[exHonest])).codes.isEmpty
-#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest false)] } (some #[exHonest])).codes ==
+#guard (check exOwn (some #[exHonest])).codes == #["second-verified"]
+#guard (check { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest)] } (some #[exHonest])).codes.isEmpty
+#guard (check { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest false)] } (some #[exHonest])).codes ==
   #["second-verified"]
 #guard (verifiedOf #[("lean", (exVerdict exHonest).setObjVal! "of_record" (.bool false))]).isEmpty
-#guard (check true (exVerifying #[exNaming 7] (exNamed 7)) (some #[exNaming 7])).codes.isEmpty
-#guard (check true (exVerifying #[exNaming 7] (exNamed 8)) (some #[exNaming 8])).codes == #["second-verified"]
-#guard (check true (exVerifying #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]) (some #[exHonest])).codes == #["second-verified"]
-#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := some 2))] }
+#guard (check (exVerifying #[exNaming 7] (exNamed 7)) (some #[exNaming 7])).codes.isEmpty
+#guard (check (exVerifying #[exNaming 7] (exNamed 8)) (some #[exNaming 8])).codes == #["second-verified"]
+#guard (check (exVerifying #[exStmt [0, 1, 2, 3, 4, 5] [1, 4]]) (some #[exHonest])).codes == #["second-verified"]
+#guard (check { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := some 2))] }
   (some #[exHonest])).codes == #["second-tables"]
-#guard (check true { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := none))] }
+#guard (check { exOwn with verified := verifiedOf #[("lean", exVerdict exHonest (tables := none))] }
   (some #[exHonest])).codes == #["second-tables"]
-#guard (check true { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
+#guard (check { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
   ("b", exVerdict exHonest (tables := some 2))] } (some #[exHonest])).codes == #["second-tables"]
-#guard (check true { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
+#guard (check { exOwn with verified := verifiedOf #[("a", exVerdict exHonest),
   ("b", exVerdict (exNaming 9) (tables := some 2))] } (some #[exHonest])).codes.isEmpty
 
 /-- `exStmt`'s honest statement, its header `f` of the honest one. -/
@@ -135,8 +134,8 @@ private def exHeader (f : Json → Json) : Json :=
 /-- Header `h` with its object `k`'s field `f` set to `v`. -/
 private def exIn (k f : String) (v : Json) (h : Json) : Json := h.setObjVal! k ((getD h k).setObjVal! f v)
 
-/-- Round 2's codes, the form allowed, for `exHeader f` alone, its session checked by the verifier. -/
-private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck true own #[exHeader f]).codes
+/-- Round 2's codes for `exHeader f` alone, its session checked by the verifier. -/
+private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck own #[exHeader f]).codes
 
 #guard (exCodes exOwn id).isEmpty
 #guard (exCodes { exOwn with refs := #[("Pair_v0", getD (exHeader id) "header")] } id).isEmpty
@@ -155,11 +154,11 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck t
 #guard exCodes { exOwn with interior := exInterior (exExecutionPhase (.arr #[.bool true, Lean.toJson (3 : Nat)])) } id ==
   #["second-interior-order"]
 #guard exCodes { exOwn with interior := exInterior (exExecutionPhase .null) } id == #["second-interior-order"]
-#guard (exCheck false { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } #[exHeader id]).codes ==
+#guard (exCheck { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } #[exHeader id]).codes ==
   #["second-interior-order"]
-#guard (check true { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } none).codes ==
+#guard (check { exOwn with interior := exInterior (exExecutionPhase (natsJson #[3, 1])) } none).codes ==
   #["second-interior-order", "second-statements"]
-#guard (check true { exOwn with interior := exInterior (exExecutionPhase .null), links := none } none).codes ==
+#guard (check { exOwn with interior := exInterior (exExecutionPhase .null), links := none } none).codes ==
   #["second-interior-order", "second-links"]
 #guard (exCodes exOwn (exIn "units" "blocks" (natsJson #[0]))).isEmpty
 #guard (exCodes { exOwn with refs := #[("Pair_v0", exIn "units" "blocks" (natsJson #[9]) exRef)] } id).isEmpty
@@ -172,7 +171,7 @@ private def exCodes (own : Own) (f : Json → Json) : Array String := (exCheck t
 #guard exCodes exOwn (exIn "frame_v3" "domain_ids" (Json.mkObj [("x", exRoot 2)])) == #["second-roots"]
 #guard exCodes { exOwn with refs := #[] } id == #["second-header"]
 #guard exCodes { exOwn with refs := #[("Other_v0", exRef)] } id == #["second-header"]
-#guard (exCheck false { exOwn with refs := #[] } #[exHeader id]).codes == #["second-header"]
+#guard (exCheck { exOwn with refs := #[] } #[exHeader id]).codes == #["second-header"]
 
 /-- Port `x`'s statement reading `value`'s tree of `leaves` leaves at root `root`, domain `dom`, slot `k` its `reads[k]`. -/
 private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat) : Json :=
@@ -201,23 +200,22 @@ private def exLinkedAt (per : Nat) (runs : Array Run) : Own :=
 `bx` of `held` leaves. -/
 private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat := 4 * per) (leaves : Nat := held) :
     Array String :=
-  (exCheck true (exReported "bx" 5 { exLinkedAt per runs with boundary := exBoundary held })
+  (exCheck (exReported "bx" 5 { exLinkedAt per runs with boundary := exBoundary held })
     #[exReading "bx" 5 6 leaves reads]).codes
 
-#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
-#guard (exCheck true exOwn #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-reported"]
-#guard (exCheck true (exReported "x" 1) #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]]).codes == #["second-read"]
-#guard (exCheck true (exReported "out" 3) #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
-#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
-#guard (exCheck true (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]]).codes == #["second-read"]
-#guard (exCheck true (exReported "bx" 5) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
-#guard (exCheck false (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes ==
-  #["two-stage-form"]
-#guard (exCheck true (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
-#guard (exCheck true exLinked #[exHonest]).codes == #["second-read"]
-#guard (exCheck true { exOwn with links := none } #[exHonest]).codes == #["second-links"]
-#guard (check true { exOwn with links := none } none).codes == #["second-links"]
-#guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+#guard (exCheck (exReported "x" 1) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck exOwn #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-reported"]
+#guard (exCheck (exReported "x" 1) #[exReading "x" 1 2 6 [1, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck (exReported "out" 3) #[exReading "out" 3 4 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
+#guard (exCheck (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 2]]).codes == #["second-read"]
+#guard (exCheck (exReported "bx" 5) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes == #["second-read"]
+#guard (exCheck (exReported "bx" 5 exLinked) #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).codes.isEmpty
+#guard (exCheck (exReported "x" 1 exLinked) #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-read"]
+#guard (exCheck exLinked #[exHonest]).codes == #["second-read"]
+#guard (exCheck { exOwn with links := none } #[exHonest]).codes == #["second-links"]
+#guard (check { exOwn with links := none } none).codes == #["second-links"]
+#guard (check { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
 -- a link's units each read the row their caller's slice names, of the block's rows: here units 0, 1 and 2 rows 0, 1
 -- and 2 of three a block, in blocks 1 and 3; another unit's row, or one past the block's, refused
 #guard (exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11]).isEmpty
@@ -229,12 +227,12 @@ private def exAt (per : Nat) (runs : Array Run) (reads : List Nat) (held : Nat :
 #guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (held := 4) == #["second-read"]
 #guard exAt 3 #[⟨0, 3, 0, 1⟩] [3, 4, 5, 9, 10, 11] (leaves := 16) == #["second-read"]
 -- rows that don't place the part's units, or no rows, make no links
-#guard (check true (exLinkedAt 3 #[⟨0, 2, 0, 1⟩]) none).codes == #["second-links"]
-#guard (check true (exLinkedAt 3 #[⟨0, 3, 0, 1⟩, ⟨3, 1, 0, 0⟩]) none).codes == #["second-links"]
-#guard (check true (exLinkedAt 3 #[⟨1, 3, 0, 1⟩]) none).codes == #["second-links"]
-#guard (check true { exLinked with rows := #[] } none).codes == #["second-links"]
-#guard (check true { exLinked with rows := #[⟨"Pair_v0", "out", 1, #[⟨0, 3, 0, 0⟩]⟩] } none).codes == #["second-links"]
-#guard (check true (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]
+#guard (check (exLinkedAt 3 #[⟨0, 2, 0, 1⟩]) none).codes == #["second-links"]
+#guard (check (exLinkedAt 3 #[⟨0, 3, 0, 1⟩, ⟨3, 1, 0, 0⟩]) none).codes == #["second-links"]
+#guard (check (exLinkedAt 3 #[⟨1, 3, 0, 1⟩]) none).codes == #["second-links"]
+#guard (check { exLinked with rows := #[] } none).codes == #["second-links"]
+#guard (check { exLinked with rows := #[⟨"Pair_v0", "out", 1, #[⟨0, 3, 0, 0⟩]⟩] } none).codes == #["second-links"]
+#guard (check (exReported "x" 1 (exVerifying #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 4]]
   (exReferring #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]] exOwn)))
   (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-verified"]
 
@@ -274,7 +272,7 @@ private def exRegistering : Own :=
 /-- Round 2's codes for statement `j` alone, its session checked by the verifier, the params giving its
 template's reference statement the registered reads of statement `r`. -/
 private def exValues (own : Own) (r j : Json) : Array String :=
-  (check true (exVerifying #[j] (exReferring #[r] own)) (some #[j])).codes
+  (check (exVerifying #[j] (exReferring #[r] own)) (some #[j])).codes
 
 /-- Statement `j`, its port `x`'s registered read's field `k` set to `v`. -/
 private def exReadField (k : String) (v : Json) (j : Json) : Json :=
@@ -294,7 +292,7 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
 #guard jeq (blankReads exOwn "Pair_v0" .null) .null
 -- a port no link names reads a value either registration registers (`second-read`): the one its reference reads, at
 -- the run's root, domain and leaves and the reference's rows
-#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
 #guard (exValues (exReported "w2" 9 exRegistering) (exReading "w2" 1 2 3 [0, 1, 2, 3, 4, 5])
   (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])).isEmpty
 -- the rows at which it reads a registered value, which `second-read` leaves to the run: refused at any but the
@@ -316,17 +314,17 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
   (exReading "w1" 7 8 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
 -- a value only the interior registers (a history table, say), read only at its root, domain and leaves
 -- (`second-read`); and a value neither registers, refused
-#guard (exCheck true (exReported "w2" 1 exRegistering) #[exReading "w2" 1 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w2" 1 exRegistering) #[exReading "w2" 1 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-read"]
-#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 1 6 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w2" 9 exRegistering) #[exReading "w2" 9 1 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-read"]
-#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 3 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 3 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-read"]
-#guard (exCheck true (exReported "w3" 9 exRegistering) #[exReading "w3" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w3" 9 exRegistering) #[exReading "w3" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-read"]
 -- a value the interior registers that the verifier does not hold is no input of a replay block (`second-inputs`),
 -- whatever reads it
-#guard (exCheck true { exReported "w2" 9 exRegistering with supplied := #[] }
+#guard (exCheck { exReported "w2" 9 exRegistering with supplied := #[] }
   #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-inputs"]
 
 /-- `exRegistering` with the boundary registering the interior's values too. -/
@@ -352,25 +350,25 @@ private def exRegisteringBx : Own :=
 #guard (interiorReads exBothRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).isEmpty
 -- a name is one registration's (`namesOk`): the interior registering a value the boundary registers too, or a value of
 -- one of the boundary's ports' names, is refused, whatever the statements read (`second-interior-names`)
-#guard (exCheck true (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-interior-names"]
 #guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering && !namesOk exRegisteringBx
-#guard (exCheck true (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+#guard (exCheck (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-interior-names"]
 -- what a replay block returns is read only at round 1's port (`returnsOk`): the interior registering a value of a name
 -- the block's return has in the boundary record is refused, whatever the statements read and with the form off too
 -- (`second-return`); a value of another name is not, and neither is one where the return has no such name
 #guard returnsOk exRegistering && returnsOk { exRegistering with returns := #["o0"] } &&
   !returnsOk { exRegistering with returns := #["o0", "w2"] } && returnsOk { exOwn with returns := #["w2"] }
-#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["o0"] })
+#guard (exCheck (exReported "w2" 9 { exRegistering with returns := #["o0"] })
   #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
-#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+#guard (exCheck (exReported "w2" 9 { exRegistering with returns := #["w2"] })
   #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
-#guard (exCheck false (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+#guard (exCheck (exReported "w2" 9 { exRegistering with returns := #["w2"] })
   #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
-#guard (exCheck true (exReported "w2" 9 { exRegisteringBx with returns := #["bx"] })
+#guard (exCheck (exReported "w2" 9 { exRegisteringBx with returns := #["bx"] })
   #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-interior-names", "second-return"]
-#guard (check true { exRegistering with returns := #["w1"] } none).codes == #["second-return", "second-statements"]
+#guard (check { exRegistering with returns := #["w1"] } none).codes == #["second-return", "second-statements"]
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
   (.arr #[Json.mkObj [("value", "w2")]])
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null
@@ -382,9 +380,9 @@ private def exRegisteringBx : Own :=
 #guard exValues exOwn (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]) exHonest == #["second-values"]
 #guard exValues (exReported "x" 1) (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])
   (exReadField "row_schema" "hm96-sha512/row/v1" (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])) == #["second-values"]
-#guard (check true (exVerifying #[exHonest] { exOwn with refReads := #[] }) (some #[exHonest])).codes ==
+#guard (check (exVerifying #[exHonest] { exOwn with refReads := #[] }) (some #[exHonest])).codes ==
   #["second-values"]
-#guard (check true (exVerifying #[exHonest] { exOwn with refReads := #[("Other_v0", .null)] })
+#guard (check (exVerifying #[exHonest] { exOwn with refReads := #[("Other_v0", .null)] })
   (some #[exHonest])).codes == #["second-values"]
 
 /-- Port `p`'s read of the interior record's own port `p` at root `root`, domain `dom`, slot `k` reading row `reads[k]`. -/
@@ -409,19 +407,19 @@ private def exShares (shared : List String) (read : List (String × Nat)) : Own 
     reported := some (read.toArray.map fun (v, r) => (v, .str (exRoot r))) }
 
 -- a header sharing rows at `out` and `x` reads both registered, each slot its own row
-#guard (exCheck true (exShares ["out", "x"] [("out", 3), ("x", 1)])
+#guard (exCheck (exShares ["out", "x"] [("out", 3), ("x", 1)])
   #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2])]).codes.isEmpty
-#guard (exCheck true (exShares ["x"] [("x", 1)]) #[exSharing ["x"] (some [exOwnRead "x" 1 2])]).codes.isEmpty
+#guard (exCheck (exShares ["x"] [("x", 1)]) #[exSharing ["x"] (some [exOwnRead "x" 1 2])]).codes.isEmpty
 -- `out` shared and not read registered: its refs are bounded only, so one could name another unit's row
-#guard (exCheck true (exShares ["out", "x"] [("x", 1)]) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
+#guard (exCheck (exShares ["out", "x"] [("x", 1)]) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
   #["second-refs"]
-#guard (exCheck true (exShares ["out", "x"] []) #[exSharing ["out", "x"] none]).codes == #["second-refs"]
+#guard (exCheck (exShares ["out", "x"] []) #[exSharing ["out", "x"] none]).codes == #["second-refs"]
 -- a shared port read at another slot's row, which the session's verifier would hold slot 0's ref to
-#guard (exCheck true (exShares ["out", "x"] [("out", 3), ("x", 1)])
+#guard (exCheck (exShares ["out", "x"] [("out", 3), ("x", 1)])
   #[exSharing ["out", "x"] (some [exOwnRead "out" 3 4, exOwnRead "x" 1 2 [1, 0, 2, 3, 4, 5]])]).codes ==
   #["second-read"]
 -- rows shared where the template's reference shares none
-#guard (exCheck true (exReported "x" 1) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
+#guard (exCheck (exReported "x" 1) #[exSharing ["out", "x"] (some [exOwnRead "x" 1 2])]).codes ==
   #["second-header", "second-refs"]
 -- a session reading registered a port its template's reference statement doesn't, or not one it does
 #guard exValues (exReported "x" 1) (exSharing [] (some [exOwnRead "out" 3 4]))
@@ -439,9 +437,9 @@ private def exTwoParts : Array Part := #[⟨"Pair_v0", 0, 3⟩, ⟨"Triple_v0", 
 #guard (orderFailures exTwoParts [exFor "Triple_v0", exFor "Pair_v0"]).map (·.1) == ["second-order", "second-order"]
 #guard (orderFailures exTwoParts [exFor "Triple_v0"]).map (·.1) == ["second-order"]
 #guard (orderFailures exTwoParts [exFor "Pair_v0", exFor "Pair_v0", exFor "Other_v0", .null]).isEmpty
-#guard (check true { exOwn with parts := some exTwoParts } (some #[exFor "Triple_v0", exFor "Pair_v0"])).codes.contains
+#guard (check { exOwn with parts := some exTwoParts } (some #[exFor "Triple_v0", exFor "Pair_v0"])).codes.contains
   "second-order"
-#guard (exCheck true { exOwn with parts := some exTwoParts, drawn := #[2] } #[exStmt [0, 1, 2, 3, 4, 5] [2]]).codes ==
+#guard (exCheck { exOwn with parts := some exTwoParts, drawn := #[2] } #[exStmt [0, 1, 2, 3, 4, 5] [2]]).codes ==
   #["second-cover"]
 
 private def exArg (p : Bool) (i : Nat) : Flock.Program.Arg :=
@@ -716,31 +714,31 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard exWiredBinding exWired == portBinding exWiredInterior "Pair_v0/out" "hm96-sha512/row/v2" exRun
 #guard exWiredBinding { exWired with wires := some #[] } == none
 
-#guard (check true exWired none).codes == #["second-statements"]
-#guard (check true { exWired with wires := none } none).codes == #["second-wires"]
-#guard (check true { exWired with wires := some #[{ exWire with template := "Other_v0" }] } none).codes ==
+#guard (check exWired none).codes == #["second-statements"]
+#guard (check { exWired with wires := none } none).codes == #["second-wires"]
+#guard (check { exWired with wires := some #[{ exWire with template := "Other_v0" }] } none).codes ==
   #["second-wires"]
-#guard (check true { exWired with wires := some #[{ exWire with writer := "Other_v0" }] } none).codes ==
+#guard (check { exWired with wires := some #[{ exWire with writer := "Other_v0" }] } none).codes ==
   #["second-wires"]
-#guard (check true { exWired with wires := none, links := none } none).codes == #["second-links", "second-wires"]
-#guard (check true { exWired with wires := none } (some #[])).codes == #["second-wires"]
+#guard (check { exWired with wires := none, links := none } none).codes == #["second-links", "second-wires"]
+#guard (check { exWired with wires := none } (some #[])).codes == #["second-wires"]
 -- rows that don't place the reader's units, or its writer's, make no wires
-#guard (check true { exWired with rows := #[] } none).codes == #["second-wires"]
-#guard (check true (exWiredAt 2 1) none).codes == #["second-wires"]
-#guard (check true { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
-#guard (check true (exWiredAt 3 2) none).codes == #["second-statements"]
+#guard (check { exWired with rows := #[] } none).codes == #["second-wires"]
+#guard (check (exWiredAt 2 1) none).codes == #["second-wires"]
+#guard (check { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
+#guard (check (exWiredAt 3 2) none).codes == #["second-statements"]
 -- a wire whose writer's port a link names reads an output the replay block returns, and one whose writer's part is not
 -- before its reader's, or is its reader's own, is out of order: neither makes wires
 #guard wiresOk exTwoParts exWired
 #guard !wiresOk exTwoParts { exWired with links := some #[⟨"Pair_v0", "out", "o0"⟩] }
-#guard (check true { exWired with
+#guard (check { exWired with
     links := some #[⟨"Pair_v0", "out", "o0"⟩]
     rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
 -- nor does a wire whose reader's port a link names too: a session reads that port at the link's entry, not the wire's
 #guard !wiresOk exTwoParts { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] }
-#guard (check true { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] } none).codes == #["second-wires"]
+#guard (check { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts.reverse exWired
-#guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
+#guard (check { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
 
 /-- `own` with its interior registration registering values `vs`. -/
@@ -944,8 +942,8 @@ private def exListing (port : String) (e : Json) : Json :=
 #guard inputsFailure { exOpeningUnkeyed with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 4] } ==
   some "row"
 -- the code is reported beside the others, whatever else fails or passes
-#guard (check true (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
-#guard (exCheck true (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]
-#guard (exCheck true { exHolding #["logits"] with fixed := #["logits"] } #[exHonest]).codes.isEmpty
+#guard (check (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
+#guard (exCheck (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]
+#guard (exCheck { exHolding #["logits"] with fixed := #["logits"] } #[exHonest]).codes.isEmpty
 
 end Spot.SecondStage

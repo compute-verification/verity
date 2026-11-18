@@ -14,7 +14,7 @@ directory its files go to, ``private``, the directory on the node for its files 
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
-  (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
+  (its frontend, through `verity_vllm.messages.attester`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
@@ -121,19 +121,21 @@ class IdleReset:
 
 class ReleaseGate:
     """The scheduler's ``add_request`` in release order: each request's (run, n) from its engine id (``key``), submitted to
-    a `serve_admit.ReleaseOrder` that forwards it to ``add`` once every earlier number of its run has come or passed (an
+    the network attester's release order that forwards it to ``add`` once every earlier number of its run has come or passed (an
     abort of a held one, or ``hold_s`` without it). The order's skip timers fire from `poll`, which the engine core calls
     at each schedule and while it waits on its input with requests held."""
 
     def __init__(self, add: Callable[[Any], Any], abort: Callable[[list[str]], Any], *, hold_s: float = 5.0,
                  key: Callable[[str], tuple[str, int] | None], clock: Callable[[], float] = time.monotonic) -> None:
-        from verity.protocols.resource_accounting.network.prover.admission import RELEASE_HEADER, RUN_HEADER, ReleaseOrder
+        from verity_vllm import messages
 
-        self.headers = (RELEASE_HEADER, RUN_HEADER)
         self.key_of, self.clock = key, clock
         self.timers: list[tuple[float, Callable[[], None]]] = []
-        self.order = ReleaseOrder(lambda adm: add(adm.request), lambda engine_id: abort([engine_id]), hold_s=hold_s,
-                                  schedule=lambda delay, fn: self.timers.append((self.clock() + delay, fn)))
+        self.order = messages.attester().attach(messages.Exchange(), {
+            "admit": {"order": "release-order", "hold_ms": hold_s * 1000}, "submit": lambda adm: add(adm.request),
+            "abort": lambda engine_id: abort([engine_id]),
+            "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
+        self.headers = self.order.headers
 
     def add(self, request: Any) -> None:
         k = self.key_of(request.request_id)
