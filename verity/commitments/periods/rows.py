@@ -785,10 +785,10 @@ def _referenced(m: Member, kind: str, p: str, words: int, n: int, src: Any) -> b
     if isinstance(src, ValueRows):
         v, have = src.value, len(src.value.rows)
         if v.word_bits in (16, 32) and RF.recut(16 * value_words(v), 16 * words) != 1:
-            raise NotImplementedError(
-                f"{m.port(p)}: reads {v.value!r}'s rows of {value_words(v)} 16-bit words as rows of {words}, each registered "
-                "row recut into several of the reader's (refs.recut): commit opening one registered leaf as several rows "
-                "waits on the --registered reads naming a recut row in Lean")
+            raise ValueError(
+                f"recut-rows: {m.port(p)} reads {v.value!r}'s rows of {value_words(v)} 16-bit words as rows of {words}, each "
+                "registered row recut into several of the reader's (refs.recut): opening one leaf as several rows waits on "
+                "the --registered reads naming a recut row")
         why = [reason for reason, bad in (
             (f"{len(src.positions)} rows, not {n}", len(src.positions) != n),
             (f"{v.word_bits}-bit leaves, not 16 or 32", v.word_bits not in (16, 32)),

@@ -59,6 +59,7 @@ SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-l
 def svc(tmp_path) -> H.Host:
     settings = json.loads((HERE / "verifier.json").read_text())
     settings["peers"]["gpu-node"]["figures"] = str(FIGURES_FILE)
+    settings["peers"]["gpu-node"]["figures_sha512"] = FIGURES.sha512()
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
@@ -136,7 +137,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "auditor-host", "--challenger-pin": KEY,
         "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--figures": str(FIGURES_FILE),
-        "--host-bytes": "1843153879040",
+        "--figures-sha512": FIGURES.sha512(), "--host-bytes": "1843153879040",
         "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
     assert "run" in refused(call(svc, PACED, units, token="cd34")) and units.started == [f"vy-verifier@{RUN}.service"]
@@ -155,9 +156,12 @@ def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_par
     assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
-def test_a_run_for_a_peer_naming_no_figures_is_refused_before_anything_starts(svc):
+@pytest.mark.parametrize("key", ["figures", "figures_sha512"])
+def test_a_run_for_a_peer_naming_no_figures_is_refused_before_anything_starts(svc, key):
+    """The figures are the auditor's configuration's: a peer naming no figures file, or no digest the verifier holds
+    that file to, starts nothing."""
     settings = json.loads(svc.config.read_text())
-    del settings["peers"]["gpu-node"]["figures"]
+    del settings["peers"]["gpu-node"][key]
     svc.config.write_text(json.dumps(settings))
     units = Units()
     assert refused(call(svc, PACED, units)).startswith("the peer 'gpu-node' names no figures in /etc/vy/verifier.json")
@@ -209,6 +213,25 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
         1843153879040, 4.4e9, FIGURES.hbm_bytes, None, "127.0.0.1")
     for spec in a.paced or []:
         V.pace_of(spec, 17.0)
+
+
+def test_a_peers_figures_file_that_is_not_the_one_its_digest_pins_is_refused_before_the_verifier_listens(
+        svc, monkeypatch, tmp_path, capsys):
+    """The file at the peer's `figures` path, wherever it lies, is held to the `figures_sha512` root's configuration
+    names: a lenient one (half the squaring ceiling, half S_chip) is an argument error, and nothing listens."""
+    lenient = tmp_path / "lenient.json"
+    lenient.write_text(json.dumps({**FIGURES.to_json(), "gpu_chip_bytes": FIGURES.gpu_chip_bytes // 2,
+                                   "gpu_squarings_per_s": {w: r / 2 for w, r in FIGURES.gpu_squarings_per_s.items()}}))
+    settings = json.loads(svc.config.read_text())
+    settings["peers"]["gpu-node"]["figures"] = str(lenient)
+    svc.config.write_text(json.dumps(settings))
+    rc, out = call(svc, PACED)
+    assert rc == 0, out
+    with pytest.raises(SystemExit) as e:
+        parsed(monkeypatch, json.loads(out)["argv"])
+    assert e.value.code == 2
+    assert f"its SHA-512 is {timing.Figures.of_json(json.loads(lenient.read_text())).sha512()}, not {FIGURES.sha512()}" \
+        in capsys.readouterr().err
 
 
 def test_the_runs_ports_are_not_the_challenger_gates():
