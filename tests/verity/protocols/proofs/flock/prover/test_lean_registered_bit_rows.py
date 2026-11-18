@@ -12,6 +12,7 @@ what `tests/test_registered.py` can't: the executable verifier's own checks of e
 value a unit."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -243,15 +244,16 @@ def _pearl_plus(s, value: str, call: int, flip: bool = False):
     """`value`'s registered rows as Pearl+ commits a call's A rows: their bytes, FP32 words, in `audit.commit_rows`
     under hm96-sha512 and PoUW's rows domain at the call's salts. The tree, and `_write`'s registration of those rows
     opening it with PoUW's own salts and paths (`flip`: the first table row with one word flipped)."""
-    reg, key = s.regs[value], bytes(range(32))
+    reg = s.regs[value]
     data = [b"".join(w.to_bytes(2, "little") for w in r) for r in reg.rows]
-    tree = PA.commit_rows(PA.activation_binding(bytes(range(64)), call), call, data, PA.HM96, salt_key=key, nonce=call)
+    salts = [hashlib.shake_256(f"salt {call} {i}".encode()).digest(PA.HM96_SALT) for i in range(len(data))]
+    tree = PA.commit_rows(PA.activation_binding(bytes(range(64)), call), call, data, PA.HM96, salts=salts)
 
     def statement(positions):
         rows = [reg.rows[p] for p in positions]
         rows[0] = (rows[0][0] ^ 1, *rows[0][1:]) if flip else rows[0]
         paths = [b"".join(tree.open(p).path).hex() for p in positions]
-        return rows, [PA.hm96_salt(key, call, p) for p in positions], {"value": value, "positions": list(positions),
+        return rows, [salts[p] for p in positions], {"value": value, "positions": list(positions),
                                                                        "paths": paths}
     return tree, SimpleNamespace(statement=statement)
 
