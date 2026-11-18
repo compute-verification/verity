@@ -16,6 +16,7 @@ public import Proofs.Flock.RecGeneric.AtFlockReruns
 public import Proofs.Flock.RecGeneric.AtFlockTerms
 public import Proofs.Flock.RecGeneric.AtFlockContract
 public import Proofs.Flock.RecGeneric.AtFlockKS
+public import Proofs.Flock.RecGeneric.AtFlockCommitted
 public import Proofs.Flock.RecGeneric.AtFlockNontrivial
 public import Proofs.Flock.RecGeneric.AtFlockCompiled
 public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
