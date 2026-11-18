@@ -615,26 +615,6 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
-@dataclass(frozen=True)
-class Circuits:
-    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
-    m, k, n)``, one executed call's circuit (None without one)."""
-
-    schemes: Mapping[str, Any]
-    traced_as: Callable[[str, int, int, int], Any]
-
-
-#: the circuits of each scheme's executed computation, by the name a configuration lists it under
-CIRCUITS: dict[str, Circuits] = {}
-
-
-def register_circuits(name: str, circuits: Circuits) -> Circuits:
-    if name in CIRCUITS:
-        raise KeyError(f"circuits named {name!r} are registered already")
-    CIRCUITS[name] = circuits
-    return circuits
-
-
 def order_refusals(listed: Sequence[Scheme]) -> list[str]:
     """Every reason ``listed``, a configuration's schemes in its order, can't attach in that order, from what each
     declares, each as `verity.channel.Refused` prints it; empty: it attaches in its own order, which nothing reorders.
@@ -686,8 +666,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Answers", "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
-           "answering", "credited", "declared", "layout", "order_refusals", "register", "register_circuits", "register_process", "settings",
+           "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]
