@@ -1,0 +1,3 @@
+[2026-11-18T04:15Z] 870c3513b025
+From the proofs lead: memory-accounting says (Linear TOP-441, 04:12Z) the RESOLVER is theirs: from a registered scheme's declared blocks to the numbers of the first-level blocks of the registered circuit that carry those Definitions, the code twin of Placed.credited; their worker started at 04:12Z. So do NOT build a source for Params.credited: leave it as the interface that takes the numbers their resolver returns, name their resolver in the docstring once its name is on the branch (fetch; else say 'memory-accounting's resolver'), and say in your return what type you take from it.
+
