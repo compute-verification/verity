@@ -34,17 +34,19 @@ def main(argv: list[str] | None = None) -> int:
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--data", type=Path, default=DATA, help="the data directory (default: %(default)s)")
     p.add_argument("--device", help=device_help())
-    p.add_argument("--card", help="the device whose model is this card's, by its SKU (calibration/hardware/cards/)")
+    # its own dest: `cover --card sm_NN` names a device
+    p.add_argument("--card", dest="sku", help="the device whose model is this card's, by its SKU "
+                                              "(calibration/hardware/cards/)")
     sub = p.add_subparsers(dest="cmd")
     for m in cmds.values():
         m.add(sub)
     args = p.parse_args(argv)
-    if sum(x is not None for x in (args.device, args.card)) + (args.data != DATA) > 1:
+    if sum(x is not None for x in (args.device, args.sku)) + (args.data != DATA) > 1:
         raise SystemExit("one of --device, --card or --data")
     if args.device is not None:
         args.data = device(args.device)
-    if args.card is not None:
-        args.data = device_of(args.card)
+    if args.sku is not None:
+        args.data = device_of(args.sku)
     if args.cmd is None:
         print(usage())
         return 0
