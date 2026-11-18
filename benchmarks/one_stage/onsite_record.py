@@ -909,8 +909,8 @@ REPROOF = {
     "advice": ("serve dir", "advice/w<K>/",
                "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
                "hiding root"),
-    "weights": ("serve dir", "weights_registration.json, private/weights.key, private/cos_sin_cache.npy",
-                "the weights registration the audit pins, the committer's key their salts come from and the rotary table, "
+    "weights": ("serve dir", "weights_registration.json, weights_registration.salts/, private/cos_sin_cache.npy",
+                "the weights registration the audit pins, the salt file of its salts and the rotary table, "
                 "beside the checkpoint (REPO at REV, public)"),
     "run root": ("serve dir", "windows.jsonl", "the run root the audit holds the registration to"),
     "circuit": ("serve dir", "window-circuit-w<K>-<class><tie>.json",

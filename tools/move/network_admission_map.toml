@@ -1,0 +1,29 @@
+# The network attester's admission on the served node: what `tools/move/layout.py --map
+# tools/move/network_admission_map.toml` moves and rewrites. `network_admission` (the release order, the certified tick,
+# the readers of the release headers and the watermark, and the frontends that feed them) imports nothing of the vLLM
+# adapter's or vLLM's, so it is the network attester's and goes to its package's prover side: the developer's serving
+# process runs it. Its tests stay in the adapter's suite: they drive it through serve-openai and the adapter's hook.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"adapters/vllm/verity_vllm/pipeline/network_admission.py" = "verity/protocols/resource_accounting/network/prover/admission.py"
+
+[modules]
+"verity_vllm.pipeline.network_admission" = "verity.protocols.resource_accounting.network.prover.admission"
+
+[retired]
+paths = ["adapters/vllm/verity_vllm/pipeline/network_admission.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+words = []
+keep = []
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256", "**/*.lock", "uv.lock",
+           "tools/move/**", "tests/tools/move/**", "archive/**", "tools/research/src/research/store/moves.json",
+           "**/lean-audit.json"]
+include = []

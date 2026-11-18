@@ -29,7 +29,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes import ncp
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.resource_accounting.compute.pouw.verifier import identifier as I
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import Epoch, Workload, commit_rows, fresh_salts, weight_binding, weights_root
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import coin_reason
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError, Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -245,7 +245,7 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
-    return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
+    return work, {7: commit_rows(weight_binding(7), -2, rows, salts=fresh_salts(len(rows))).commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():

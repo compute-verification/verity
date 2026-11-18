@@ -10,6 +10,7 @@
 #   a run whose guard nobody reads: the export (guard.py) is nearly all of a run's records, each template's circuit
 #   several times over, and it is what guard_node.py and `guard.py pack` read, so the default keeps it
 set -euo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
@@ -50,8 +51,8 @@ for c in ${TWO_CASES:-honest altered}; do
     --main "$O/main.txt" --out "$W/$c" "${flags[@]}" ${TWO_ARGS:-} > "$O/$c.log" 2>&1 || rc=1
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
-  (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' "${GUARD[@]}" -print0 \
-     | xargs -0 -r -I{} cp --parents {} "$O/$c/")
+  (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' \
+     ! -name index.json ! -path './*/archive/*' ! -path '*-work/*' "${GUARD[@]}" -print0 \
+     | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/$c/")
 done
 exit $rc
