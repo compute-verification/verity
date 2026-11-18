@@ -37,7 +37,7 @@ RULE = S.SamplingDesign("stratified-rate:1/20")
 
 def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
     ports = CS.expected_ports(mine)
-    schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
+    schemas = {t: schema for t, (schema, _n) in mine.trees.items()}
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(ports) if table or p != CS.TABLE_PORT)
     public = (S.Public("population", "structure", "N, the draw's range"),
