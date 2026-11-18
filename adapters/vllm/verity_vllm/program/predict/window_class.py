@@ -241,19 +241,20 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
 
 
 def requests_of(advice: Any, cls: WindowClass) -> tuple[Request, ...]:
-    """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs and
-    at its lane of the class's one boundary: the advice carries no admission bucket, so a class of more boundaries is
-    refused, as are requests past ``cls``'s envelope, carried across windows or served from the prefix cache."""
-    if len(cls.boundaries) != 1:
-        raise Unexpressible(f"{cls}: the advice carries no request's admission bucket, so its requests are anchored at a class "
-                            f"of one boundary, not {len(cls.boundaries)}")
+    """The decoded advice's requests (`steps.advice_of`) in request order (`Request`), each of its prompt and outputs at its
+    anchor (`window_advice.RequestAdvice.anchor`), the requests at one anchor its lanes in request order; refused past
+    ``cls``'s envelope, at a bucket none of its boundaries, carried across windows, served from the prefix cache or
+    preempted."""
     if advice.carried:
         raise Unexpressible(f"{len(advice.carried)} requests carried into the window, which its lowering doesn't take yet")
     for st in advice.steps:
         for r in st.rows:
             if r.cache_hit or r.sources:
                 raise Unexpressible(f"request {r.request}: a prefix-cache hit, which the window's lowering doesn't take yet")
-    return _placed(cls, [(i, q.prompt_len, q.output_len) for i, q in enumerate(advice.requests)], None)
+            if r.preempted:
+                raise Unexpressible(f"request {r.request}: preempted, which the window's lowering doesn't take yet")
+    return _placed(cls, [(i, q.prompt_len, q.output_len) for i, q in enumerate(advice.requests)],
+                   [(q.anchor, None) for q in advice.requests])
 
 
 def _placed(cls: WindowClass, sizes: Sequence[tuple[int, int, int]],

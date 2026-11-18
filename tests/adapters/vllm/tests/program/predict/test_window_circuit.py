@@ -45,6 +45,7 @@ from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline import advice as ADV
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.program.predict import scan_state as SS
@@ -289,7 +290,7 @@ def test_the_registered_compiler_takes_the_advice_alone_to_the_served_circuit():
 
 def test_the_registered_compiler_refuses_advice_past_its_cap_and_anything_but_a_bit_string():
     """The compiler enforces ℓ, the registered cap on the advice's bits, refusing past it by name; it takes nothing but the
-    bit string, and at a class of two boundaries, whose anchors the advice doesn't carry, it refuses by name."""
+    bit string."""
     reg = S._registered()
     advice = S._session(*WINDOW)[0]
     data = S.I1.encode(advice)
@@ -299,8 +300,25 @@ def test_the_registered_compiler_refuses_advice_past_its_cap_and_anything_but_a_
     assert _bytes(WC.WindowCompiler(replace(reg, cap_bits=bits), CLASS, GRAIN)(data)) == _bytes(_circuit(WINDOW))
     with pytest.raises(Unexpressible, match="the advice is a bit string, bytes, not a Advice"):
         WC.WindowCompiler(reg, CLASS, GRAIN)(advice)
-    with pytest.raises(Unexpressible, match="the advice carries no request's admission bucket"):
-        WC.WindowCompiler(reg, SLOTS, GRAIN)(data)
+
+
+def _anchored(window, anchors) -> bytes:
+    advice = S._session(*window)[0]
+    return WA.encode(WA.Advice(tuple(WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish, a)
+                                     for q, a in zip(advice.requests, anchors)), advice.steps, advice.release))
+
+
+def test_the_registered_compiler_places_each_request_at_the_anchor_its_advice_carries():
+    """At a class of two boundaries the compiler reads each request's admission bucket from the advice (version 3,
+    `window_advice.RequestAdvice.anchor`): THREE's circuit at the class of record's slots, its second and third requests
+    at bucket 16, is `window_circuit`'s at those anchors; an anchor no boundary of the class is refused by name."""
+    reg = S._registered()
+    data = _anchored(THREE, (0, 16, 16))
+    assert data[0] == WA.ANCHORS
+    placed = [(0, None), (16, None), (16, None)]
+    assert _bytes(WC.WindowCompiler(reg, SLOTS, GRAIN)(data)) == _bytes(_circuit(THREE, cls=SLOTS, placed=placed))
+    with pytest.raises(Unexpressible, match=r"request 1: anchored at bucket 8, none of its class's boundaries \[0, 16\]"):
+        WC.WindowCompiler(reg, SLOTS, GRAIN)(_anchored(THREE, (0, 8, 16)))
 
 
 @pytest.mark.slow
