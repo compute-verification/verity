@@ -164,6 +164,18 @@ def register(scheme: Scheme) -> Scheme:
     return scheme
 
 
+#: the processes schemes start beside a workload, by name (`verity.hooks.StartBeside`): each called with the readers
+#: its request names
+PROCESSES: dict[str, Callable[..., Any]] = {}
+
+
+def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]:
+    if name in PROCESSES:
+        raise KeyError(f"a process named {name!r} is registered already")
+    PROCESSES[name] = start
+    return start
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -172,5 +184,5 @@ def get(name: str) -> Scheme:
         raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
 
 
-__all__ = ["REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Scheme", "bound", "get",
-           "register", "settings"]
+__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Scheme", "bound",
+           "get", "register", "register_process", "settings"]
