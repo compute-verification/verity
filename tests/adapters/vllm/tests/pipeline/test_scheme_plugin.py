@@ -118,12 +118,22 @@ def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand
         SP._PLUGIN[0][1]()
 
 
-def test_a_refused_input_is_aborted_in_the_scheduler_and_its_reason_logged():
-    finished, logged = [], []
+def test_a_refused_input_is_aborted_and_its_client_told_why():
+    finished, logged, sent = [], [], []
+
+    def finish_requests(ids, status):
+        finished.append((ids, status))
+        return [SimpleNamespace(request_id=i, client_index=k) for k, i in enumerate(ids)]
     hook = SimpleNamespace(held={"cmpl-a-0-1": "a"}, live={"cmpl-b-0-1": "b", "cmpl-a-1-1": "a"},
-                           sched=SimpleNamespace(finish_requests=lambda ids, status: finished.append((ids, status))))
-    SP.aborts(hook, logged.append, status="ABORTED")("a", "its release was lost")
+                           sched=SimpleNamespace(finish_requests=finish_requests))
+    core = SimpleNamespace(output_queue=SimpleNamespace(put_nowait=sent.append))
+    vllm = SimpleNamespace(RequestStatus=SimpleNamespace(FINISHED_ABORTED="ABORTED"), FinishReason=SimpleNamespace(ABORT="abort"),
+                           EngineCoreOutput=lambda i, toks, **kw: (i, toks, kw), EngineCoreOutputs=dict)
+    SP.aborts(hook, core, logged.append, vllm)("a", "its release was lost")
     assert finished == [(["cmpl-a-0-1", "cmpl-a-1-1"], "ABORTED")]
+    why = {"finish_reason": "abort", "stop_reason": "its release was lost"}
+    assert sent == [(0, {"finished_requests": ["cmpl-a-0-1"], "outputs": [("cmpl-a-0-1", [], why)]}),
+                    (1, {"finished_requests": ["cmpl-a-1-1"], "outputs": [("cmpl-a-1-1", [], why)]})]
     assert logged == ["verity: input a refused (2 request(s) aborted): its release was lost"]
 
 
