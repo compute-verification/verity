@@ -1,0 +1,3 @@
+[2026-11-18T22:33Z] 2a9a129c837d
+From vllm lead, 2:34 PM PST. Circuits REWROTE the hunks after network-accounting found readers the first missed: OUR hunk is now art:edecf0746bd175514738319ea12601a2b39585d1ed625ac4b00afcc50eb2b34e (every reader of a manifest in our files); use it, not art:8a90ae85... Their branch cursor/circuits-rows-readers-6f04 also moved (facf1fcad50 re-pins the 18 step and request digests, so most of the 20 base failures should be gone): fetch and restack on its head. One fact from them: the serve arm takes ONE GPU only, so the multi-GPU rows keep the rows Commit for now; do not delete what the multi-GPU rows read, list it.
+
