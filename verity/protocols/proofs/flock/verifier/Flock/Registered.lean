@@ -347,8 +347,8 @@ def wiredReads (c : Circuit) (W : Program.Prog) (indices : Array Nat) (reg : Por
     let some (k, m) := HmLinks.unitAt ns u | throw s!"registered reads: unit {u} is outside the wired Program's units"
     let ps : Array (String × Program.Ty) := (W.defs[body.nodes[k]!.fn]!).params
     let some lo := match reg.param with
-        | some x => (ps.findIdx? fun (n, _) => n == x).map fun i =>
-            (ps.extract 0 i).foldl (fun a (_, t) => a + t.leaves) 0
+        | some x => (ps.findIdx? fun (q : String × Program.Ty) => q.1 == x).map fun i =>
+            (ps.extract 0 i).foldl (fun (a : Nat) (q : String × Program.Ty) => a + Program.Ty.leaves q.2) 0
         | none => link
       | throw s!"registered reads: tree port {reg.name} names no parameter of unit {u}'s template (param) and is no link row"
     let some g := (← Program.operands W W.rootScope body.nodes[k]! m)[lo]?
