@@ -8364,3 +8364,27 @@ def test_a_placements_unchecked_premises_follow_its_trusted_device_by_name(premi
                                         "attester-key-pinned-outside-the-case "
                                         f"{UNCHECKED['attester-key-pinned-outside-the-case']}"]
     assert S.terms({"answer": {"profile": {"placement": {"links": []}}}}, None) == []
+
+
+H1_KEY_REFUSED = ("PREFLIGHT: H1_KEY_SHA512 replaces the challenger key of record (vy-challenger-1's), which under "
+                  "VERITY_HOLD_PLACEMENT=1 only a development run takes: unset H1_KEY_SHA512, DEVELOPMENT=1, or "
+                  "VERITY_HOLD_PLACEMENT unset")
+
+
+@pytest.mark.parametrize("key, development, hold, want", [
+    ("ab" * 64, None, "1", "refused"), ("ab" * 64, "1", "1", "passed"), ("ab" * 64, None, None, "passed"),
+    (re.search(r"^H1_KEY_OF_RECORD=(\w+)", (HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text(),
+               re.M)[1], None, "1", "not by its key")])
+def test_a_run_of_record_refuses_a_challenger_key_other_than_the_one_of_record(tmp_path, key, development, hold, want):
+    """Under VERITY_HOLD_PLACEMENT=1 a run that is not a development run (DEVELOPMENT unset) refuses an H1_KEY_SHA512
+    other than the key of record, by name, before anything runs; a development run or a run with placement not held
+    takes it. The key of record set by name is no refusal of its own (that run's step-3 session is refused after it)."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=development,
+                                     VERITY_HOLD_PLACEMENT=hold, H1_KEY_SHA512=key, PREFLIGHT_ONLY="1",
+                                     PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **NO_V3C)
+    if want == "refused":
+        assert (rc, lines, order) == (3, [H1_KEY_REFUSED], [])
+    elif want == "passed":
+        assert rc == 0 and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert rc == 3 and H1_KEY_REFUSED not in lines and lines[0].startswith("PREFLIGHT: with V3c off"), lines
