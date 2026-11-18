@@ -108,7 +108,7 @@ def Integrity.creditedProblem (p : Integrity) : Option String := Id.run do
   for c in p.credited do
     if first.size ≤ c then
       return some s!"{CREDITED_UNSPLIT}: credited block {c} is not one of level '{first.name}''s {first.size} blocks"
-  if p.credited.toList.dedup.length != p.credited.size then
+  if p.credited.toList.eraseDups.length != p.credited.size then
     return some s!"{CREDITED_UNSPLIT}: a credited block twice"
   for l in p.levels.extract 1 p.levels.size do
     if l.size != 1 then
@@ -137,7 +137,7 @@ def Integrity.toJson (p : Integrity) : Json :=
     ("linked", Json.bool p.linked), ("covered", sorted p.covered), ("levels", Json.arr (p.levels.map Level.toJson)),
     ("delta", Json.str p.delta.toString),
     ("drawn", Json.mkObj (p.drawn.toList.map fun (n, k) => (n, Json.num k)))] ++
-    if p.credited.isEmpty then [] else [("credited", Json.arr ((p.credited.qsort (· < ·)).map fun c => Json.num c))])
+    if p.credited.isEmpty then [] else [("credited", Json.arr ((p.credited.qsort (· < ·)).map fun (c : Nat) => Json.num c))])
 
 /-- `a`, when its JSON is `j` written back: the decoders below accept only what `toJson` writes (keys, sorted lists,
 lowest-terms ratios), so every value has one JSON spelling. -/
@@ -208,11 +208,12 @@ private def workExample : SamplingDesign :=
 #guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 1, work := 3, floor := 1 }]).toJson "draw").isOk
 #guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 3, work := 0, floor := 3 }]).toJson "draw").isOk == false
 
+private def creditedLevel (last : Nat) (ni : Nat × Nat) : Level :=
+  { name := s!"l{ni.2}", query := none, size := ni.1, draw := if ni.2 == last then some (.subset 1) else none }
+
 private def creditedExample (sizes : List Nat) (credited : Array Nat) : Integrity :=
   { programs := #[], prescribed := #[], linked := false, covered := #[],
-    levels := (sizes.zipIdx.map fun (n, i) => ({ name := s!"l{i}", query := none, size := n,
-      draw := if i + 1 == sizes.length then some (.subset 1) else none } : Level)).toArray,
-    delta := ⟨1, 2⟩, drawn := #[], credited }
+    levels := (sizes.zipIdx.map (creditedLevel (sizes.length - 1))).toArray, delta := ⟨1, 2⟩, drawn := #[], credited }
 
 -- A credited block at level one, unsplit by a later level of size 1, is accepted and reads back.
 #guard (creditedExample [8] #[0, 7]).creditedProblem == none
