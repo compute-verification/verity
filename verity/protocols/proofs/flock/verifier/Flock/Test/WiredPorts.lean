@@ -54,35 +54,40 @@ def fileJ (ports : List (String × Json)) : Json := Json.mkObj [("format", Json.
 
 def refused (j : Json) : Bool := (ofJson j).toOption.isNone
 
--- the reader statement's units [8, 16), its row `x` at its parameter leaves from 0
+-- the reader statement's units [8, 16), for `badInstance`
 def units : Array Nat := (Array.range 8).map (· + 8)
-/-- The template of the writer of unit 8's leaf 0, by C. -/
-def wkey : String :=
-  (((HmLinks.writerOf prog ns 8 0).toOption.join.bind (HmLinks.treeLeaf prog ns ·)).map (·.1)).getD ""
+/-- The template of the writer of unit `u`'s leaf 0, by C. -/
+def wkey (u : Nat) : String :=
+  (((HmLinks.writerOf prog ns u 0).toOption.join.bind (HmLinks.treeLeaf prog ns ·)).map (·.1)).getD ""
 
-def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree wkey 0))]) with
+-- unit 19 (a `TSum4` of the root) reads at leaf 0 unit 5's output, a `TCol` of one output field
+def x : Registered.Port := match ofJson (fileJ [("x", portJ (fieldTree (wkey 19) 0))]) with
   | .ok ps => ps.getD 0 default
   | .error _ => default
 
 -- a port states no reads and names no tree: C gives both
-#guard x.readsRel.isEmpty && x.value == fieldTree wkey 0
-#guard refused (fileJ [("x", portJ (fieldTree wkey 0) [("reads", toJson [0])])])
-#guard refused (fileJ [("x", portJ (fieldTree wkey 0)
-  [("tree", Json.mkObj [("template", Json.str wkey), ("field", Json.str "o0")])])])
+#guard x.readsRel.isEmpty && x.value == fieldTree (wkey 19) 0 && wkey 19 != ""
+#guard refused (fileJ [("x", portJ (fieldTree (wkey 19) 0) [("reads", toJson [0])])])
+#guard refused (fileJ [("x", portJ (fieldTree (wkey 19) 0)
+  [("tree", Json.mkObj [("template", Json.str (wkey 19)), ("field", Json.str "o0")])])])
 
 -- every port's reads are derived from the verifier's program: without it every port is refused
 #guard (withPositions default default none (some #[x])).toOption.isNone
-#guard (withPositions default default none none).toOption == some none
+#guard ((withPositions default default none none).toOption.map (·.isNone)) == some true
 
--- unit 8 + i reads writer leaf 7 - i, derived from C
-def resolved? : Option Registered.Port := (treeReads prog units 0 x).toOption
-#guard resolved?.map (fun r => (r.readsRel, r.readsFrom)) == some ((Array.range 8).map fun i => some (7 - i), 8)
+-- unit 19 reads leaf 0 of its writer's tree, derived from C
+#guard ((treeReads prog #[19] 0 x).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 0], 19)
 -- the crossing cheat: the reader's `x` committed under a root of its own is refused by name
-#guard match treeReads prog units 0 { x with value := "r/x" } with
-  | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as r/x, and C wires it from {fieldTree wkey 0}"
+#guard match treeReads prog #[19] 0 { x with value := "r/x" } with
+  | .error e => e.startsWith s!"registered reads: row x of in(S) is committed as r/x, and C wires it from {fieldTree (wkey 19) 0}"
   | .ok _ => false
--- a row whose units read no writer is an ordinary input row, returned unread
-#guard (treeReads prog #[0, 1] 0 x).toOption.map (·.readsRel.isEmpty) == some true
+-- a row whose units read no writer is an ordinary input row, returned unread; one some of whose units do is refused
+#guard (treeReads prog #[0] 0 x).toOption.map (·.readsRel.isEmpty) == some true
+#guard (treeReads prog #[0, 19] 0 x).toOption.isNone
+-- unit 13 reads a `TPair`, of two output fields: a row reads its writer's whole output, one field's tree
+#guard match treeReads prog #[13] 0 x with
+  | .error e => (e.splitOn "of 2 output fields").length == 2
+  | .ok _ => false
 
 def resolved : Registered.Port := { x with readsRel := (Array.range 8).map fun i => some (7 - i), readsFrom := 8 }
 def tabs : Tables := { counts := #[8, 8], starts := #[0, 8], refs := (Array.range 8).flatMap fun i => #[i, i] }
