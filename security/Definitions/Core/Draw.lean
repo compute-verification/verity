@@ -2,6 +2,9 @@ module
 
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Sigma
+public import Mathlib.Data.Fintype.Perm
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Fintype.EquivFin
 public import Definitions.Core.Game
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
@@ -19,7 +22,10 @@ Every area reads these, and defines none of its own:
   own coins, so kinds of block are sampled at different rates by one design; `SamplingDesign.map f D`, `D`'s sample
   read through `f`;
 * `Draw s N`: `s` indices into `N` units, each uniform and independent of the others (`Draw.samplingDesign`, its sampling design);
-* `Draw.Subset N k`: `k` of `N` units, without replacement, each `k`-subset one coin (the `subset:K` sampling design);
+* `Draw.Subset N k`: `k` of `N` units, without replacement, each `k`-subset one coin; `SamplingDesign.subset n k`,
+  its sampling design (the `subset:K` rule), which misses a set of `j` units with probability `C(n − j, k)/C(n, k)`;
+  `SamplingDesign.permPrefix n k`, a uniform permutation's `k`-prefix, which samples as the uniform `k`-subset does
+  (`Proofs.Core.Draw`);
 * `Coins Pub s N`: a window's coins, public randomness `Pub` and an index sample.
 
 The probabilities are the uniform ones over one coin (`Game.prCoin`).
@@ -82,6 +88,25 @@ def Draw.samplingDesign (s N : ℕ) [NeZero N] : SamplingDesign (Fin N) where
 /-- **A subset sample**: `k` of `N` units, without replacement, each `k`-subset one coin (the `subset:K` sampling
 design). -/
 abbrev Draw.Subset (N k : ℕ) : Type := {s : Finset (Fin N) // s.card = k}
+
+namespace SamplingDesign
+
+/-- **The uniform `k`-subset of `n` units**: the coin is a `k`-subset (`Draw.Subset`), sampled as itself. -/
+def subset (n k : ℕ) (hk : k ≤ n) : SamplingDesign (Fin n) where
+  Ω := Draw.Subset n k
+  nonempty := by
+    obtain ⟨S, -, hS⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
+      (by simpa using hk)
+    exact ⟨⟨S, hS⟩⟩
+  draw := Subtype.val
+
+/-- **A uniform permutation's `k`-prefix**: the coin is a permutation of the `n` units, sampling the images of
+`0, …, k − 1`. As far as any property of its sample goes it is the uniform `k`-subset (`prCoin_permPrefix`). -/
+def permPrefix (n k : ℕ) : SamplingDesign (Fin n) where
+  Ω := Equiv.Perm (Fin n)
+  draw π := (Finset.univ.filter fun i : Fin n => i.val < k).image π
+
+end SamplingDesign
 
 /-- **A window's coins**: the public randomness `Pub` the window's checks read, and an index sample of `s` from `N`. -/
 abbrev Coins (Pub : Type) (s N : ℕ) : Type := Pub × Draw s N
