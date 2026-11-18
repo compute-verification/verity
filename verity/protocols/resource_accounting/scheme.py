@@ -19,8 +19,8 @@ Scheme.lean`); `Scheme`, `Block`, `Order`, `Charge` and `Bound` mirror the field
 spelt ``delta``), and a change to either names the other's line in its message. `hooks`, `settings`, `option`,
 `ports` and `requires` are read by the adapter and the runner, by no guarantee, and have no Lean field.
 
-**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))` and is listed in
-`verity.protocols.compose.schemes.DECLARATIONS`, which every reader loads (`load`). Its fields, with the Lean they mirror
+**Declaring a scheme.** One module, ``<protocol>/scheme.py``, calls `register(Scheme(...))`, and each name it registers
+is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every reader gets it (`get`, `load`). Its fields, with the Lean they mirror
 (`Verity.Scheme`):
 
 - ``blocks``: `Block(definition, cost)`, `Block` and `cost`; ``cost`` reads public values logged before the sample's coin.
@@ -239,7 +239,8 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), scheme.delta_scheme)
 
 
-#: the registered schemes, by name: a scheme's package registers it when imported
+#: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through
+#: `verity.protocols.compose.schemes.get`
 SCHEMES: dict[str, Scheme] = {}
 
 
@@ -284,14 +285,6 @@ def register_circuits(name: str, circuits: Circuits) -> Circuits:
     return circuits
 
 
-def get(name: str) -> Scheme:
-    """The scheme registered under ``name``; `KeyError` names the registered ones."""
-    try:
-        return SCHEMES[name]
-    except KeyError:
-        raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
-
-
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
     """`Verity.Scheme.Placed.credited`: the numbers of the first-level proof blocks that ``schemes`` credit, in the
     numbering the integrity profile's ``credited`` takes. ``strata`` are the registered circuit's first-level proof blocks
@@ -318,4 +311,4 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
-           "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]
+           "Port", "Scheme", "bound", "credited", "register", "register_circuits", "register_process", "settings"]

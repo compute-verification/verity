@@ -14,7 +14,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c im
 
 
 def test_found_by_name() -> None:
-    assert S.get("pearl-plus") is PS.PEARL_PLUS
+    assert S.SCHEMES["pearl-plus"] is PS.PEARL_PLUS
     assert {b.definition for b in PS.PEARL_PLUS.blocks} == {PearlPlusTile.id, PearlCTileRead.id}
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
