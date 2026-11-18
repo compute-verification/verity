@@ -105,7 +105,7 @@ __device__ __forceinline__ void pg_load_q(const uint16_t *q, size_t qstride, siz
 }
 
 constexpr int pg_smem() { return MNB * MT * MTS + 2 * MNB * 8; }
-constexpr int pg_rc_smem() { return pg_smem() + RK * 32 * 16; }
+constexpr int pg_rc_smem() { return pg_smem() + RKA * 32 * 16; }
 
 template <bool ENC, bool RC>
 __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restrict__ kv, const uint16_t *__restrict__ q,
@@ -128,7 +128,7 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
       }
     }
     if constexpr (RC)
-      for (int v = threadIdx.x; v < RK * 32; v += MWT)
+      for (int v = threadIdx.x; v < RKA * 32; v += MWT)
         reinterpret_cast<uint4 *>(rct)[v] = kRcA[g][v / 32][v % 32];
     __syncthreads();
     if (w >= MW) {
@@ -159,7 +159,7 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
 #pragma unroll
           for (int l = 0; l < NL; ++l) x[l] = 0u;
         }
-        if constexpr (RC) {
+        if constexpr (RC && HW == 4) {
           int c[4] = {};
           const uint4 *a = reinterpret_cast<const uint4 *>(rct) + lane;
 #pragma unroll
@@ -173,6 +173,16 @@ __global__ void __launch_bounds__(MWT, 2) pg_attn_kernel(const uint8_t *__restri
             const int n = 2 * t4 + (e & 1), pt = t0 + tile * MT + 8 * i + n;
             if (pt < t1 && !(pg.ck && pt == len - 1))
               pg.rc_sk[((pg_slot(pg, btr, pt) * KV_HEADS + g) * 16) + gid + 8 * (e >> 1)] = c[e];
+          }
+          if (cur && !mine && g == 0 && j == 0 && !pg_plain(pg.plain, sl)) atomicExch(pg.used + sl, *pg.epoch);
+        } else if constexpr (RC) {
+          int ck[4] = {}, cv[4] = {};
+          rc_kv8(reinterpret_cast<const uint4 *>(rct) + lane, x, ck, cv);
+          const int i = w - MW, gid = lane >> 2, t4 = lane & 3, pt = t0 + tile * MT + 4 * i + t4;
+          if (pt < t1 && !(pg.ck && pt == len - 1)) {
+            int *o = pg.rc_sk + (pg_slot(pg, btr, pt) * KV_HEADS + g) * 16 + gid;
+            o[0] = ck[0] + cv[1];
+            o[8] = ck[2] + cv[3];
           }
           if (cur && !mine && g == 0 && j == 0 && !pg_plain(pg.plain, sl)) atomicExch(pg.used + sl, *pg.epoch);
         }
@@ -487,17 +497,19 @@ __global__ void __launch_bounds__(128) pg_gather_kernel(const u32 *__restrict__ 
   store_warp(dst, x);
 }
 
-// Receipt-capable gather: one warp per KV head and one CTA per eight token slots. It decodes and copies each word as
-// pg_gather does, and feeds that same encoded word to form 13's IMMA sketch before it leaves registers (a plaintext
-// slot's is not marked used, so it gets no receipt).
+// Receipt-capable gather: one warp per KV head and one CTA per PG_RC_SLOTS token slots (eight at HW = 4, four at
+// HW = 8). It decodes and copies each word as pg_gather does, and feeds that same encoded word to form 13's IMMA sketch
+// before it leaves registers (a plaintext slot's is not marked used, so it gets no receipt).
+constexpr int PG_RC_SLOTS = 32 / HW;
 template <bool ENC>
 __global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
     const u32 *__restrict__ cache, const int *__restrict__ blocks, int nb, int bs, int sb, int sh, int ss,
     u32 *__restrict__ out, u64 store_base, int layers, int layer, int k, int *__restrict__ rc_sk,
     int *__restrict__ used, const int *__restrict__ epoch, const u32 *__restrict__ bj,
     const uint8_t *__restrict__ plain) {
-  const int g = threadIdx.x >> 5, lane = threadIdx.x & 31, t = lane >> 2, j = lane & 3;
-  const u64 q = (u64)blockIdx.x * 8 + t;
+  const int g = threadIdx.x >> 5, lane = threadIdx.x & 31, t = HW == 8 ? lane >> 3 : lane >> 2,
+            j = HW == 8 ? lane & 7 : lane & 3;
+  const u64 q = (u64)blockIdx.x * PG_RC_SLOTS + t;
   u32 x[NL] = {};
   u32 *dst = nullptr;
   if (q < (u64)nb * bs) {
@@ -505,19 +517,29 @@ __global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
     const u64 slot = (u64)b * bs + so;
     const u64 wl = (u64)b * sb + (u64)g * sh + (u64)so * ss + j;
     load(cache + wl * NL, x);
-    int c[4] = {};
+    if constexpr (HW == 8) {
+      int ck[4] = {}, cv[4] = {};
+      rc_kv8(&kRcA[g][0][lane], x, ck, cv);
+      const int gid = lane >> 2, t4 = lane & 3;
+      const u64 su = (u64)b * bs + ((u64)blockIdx.x * PG_RC_SLOTS + t4) % bs;
+      int *o = rc_sk + (su * KV_HEADS + g) * 16 + gid;
+      o[0] = ck[0] + cv[1];
+      o[8] = ck[2] + cv[3];
+    } else {
+      int c[4] = {};
 #pragma unroll
-    for (int kk = 0; kk < RK; ++kk) {
-      const uint4 v = kRcA[g][kk][lane];
-      imma16832(c, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
-    }
-    const int gid = lane >> 2, t4 = lane & 3;
+      for (int kk = 0; kk < RK; ++kk) {
+        const uint4 v = kRcA[g][kk][lane];
+        imma16832(c, v.x, v.y, v.z, v.w, x[2 * kk], x[2 * kk + 1]);
+      }
+      const int gid = lane >> 2, t4 = lane & 3;
 #pragma unroll
-    for (int e = 0; e < 4; ++e) {
-      const int n = 2 * t4 + (e & 1);
-      if (n < 8) {
-        const u64 su = (u64)b * bs + ((u64)blockIdx.x * 8 + n) % bs;
-        rc_sk[((su * KV_HEADS + g) * 16) + gid + 8 * (e >> 1)] = c[e];
+      for (int e = 0; e < 4; ++e) {
+        const int n = 2 * t4 + (e & 1);
+        if (n < 8) {
+          const u64 su = (u64)b * bs + ((u64)blockIdx.x * 8 + n) % bs;
+          rc_sk[((su * KV_HEADS + g) * 16) + gid + 8 * (e >> 1)] = c[e];
+        }
       }
     }
     const bool pt = pg_plain(plain, slot);
@@ -662,7 +684,7 @@ int pg_rc_gate_pass(const uint32_t *bits, const uint8_t *prefix, cudaStream_t s)
     for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];
   }
   kv::sha512_compress(h, w);
-  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RK * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
+  kv::rc_a_kernel<<<kv::KV_HEADS * kv::RKA * 32 / 128, 128, 0, s>>>(reinterpret_cast<const uint8_t *>(bits));
   if (cudaMemcpyToSymbolAsync(kv::kKvMid, h, sizeof h, 0, cudaMemcpyHostToDevice, s) != cudaSuccess) return launched();
   return launched();
 }
@@ -691,6 +713,7 @@ int pg_attn(const void *kv_, int encoded, const uint16_t *q, size_t qstride, flo
       encoded > 1 || (qrow && nrows != batch) || (!ck != !cv) || layers < 1 || layer < 0 || layer >= layers ||
       (rc && (!encoded || !rc_sk || !used || !epoch)) || ((bj || plain) && !encoded))
     return -1;
+  if (rc && !kv::RC3_OK) return -2;
   static bool set = false;
   if (!set) {
     cudaFuncSetAttribute(kv::pg_attn_kernel<true, false>, cudaFuncAttributeMaxDynamicSharedMemorySize, kv::pg_smem());
@@ -804,9 +827,11 @@ int pg_gather(const void *cache, const int *blocks, int nb, int bw, int bs, int 
   if (nb < 0 || bw < 1 || bs < 1 || layers < 1 || layer < 0 || layer >= layers ||
       (unsigned long long)nb * bw >= 1ull << 32 || (encoded && (k < 1 || k > kv::KMAX)) ||
       (rc && (!encoded || !rc_sk || !used || !epoch)) || ((bj || plain) && !encoded)) return -1;
+  if (rc && !kv::RC3_OK) return -2;
   if (!nb) return 0;
   if (rc) {
-    kv::pg_gather_rc_kernel<true><<<(unsigned)(((unsigned long long)nb * bs + 7) / 8), 32 * kv::KV_HEADS, 0, s>>>(
+    kv::pg_gather_rc_kernel<true><<<(unsigned)(((unsigned long long)nb * bs + kv::PG_RC_SLOTS - 1) / kv::PG_RC_SLOTS),
+                                    32 * kv::KV_HEADS, 0, s>>>(
         static_cast<const uint32_t *>(cache), blocks, nb, bs, sb, sh, ss, static_cast<uint32_t *>(out), store_base,
         layers, layer, k, rc_sk, used, epoch, bj, plain);
   } else {
