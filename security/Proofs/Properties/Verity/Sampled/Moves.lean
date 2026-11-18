@@ -384,6 +384,7 @@ theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨pubB, hpub, hr⟩ := ebind_ok hr
     obtain ⟨⟨⟩, hph, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     refine ⟨r, pubB, ?_, hpub, hph, hr, ?_⟩
     · unfold _root_.Spot.OneStageZk.oneSession at h1
       split at h1

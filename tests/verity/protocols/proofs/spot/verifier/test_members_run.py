@@ -311,7 +311,9 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
         return why
     assert refused({"port": M.TABLE_PORT, "root": "00" * 64}) == M.ROW_TABLES
     assert refused({"port": "zzz/out"}) == ("roots: the registration's root zzz/out is no member's: a member's roots "
-                                            "are named <member>/<port>")
+                                            "are named <member>/<port>, and a window's tree of a template's field "
+                                            "<template>/<field>")
+    assert refused({"port": A}).startswith(f"roots: the registration's root {A} is no member's")
     assert refused({"root": "00" * 64}) == "roots: a root of the registration names no port"
     ms = w.params["proofs"]["members"]
     nested = w.params | {"proofs": {"members": {A: ms[A], f"{A}/x": ms[B]}}}
@@ -353,15 +355,15 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
 
 def test_a_wired_port_with_no_tree_under_its_member_reads_its_writers_field_tree():
     """`B`'s port ``x``, wired from template ``a``'s ``out``, has no tree under `B`: its slice holds the record's tree
-    of ``a``'s output field ``out`` (its ``fields``) under ``x`` (`field_roots`, Lean's `OneStageZk.fieldRoots`), at
+    of ``a``'s output field ``out`` (its root ``a/out``) under ``x`` (`field_roots`, Lean's `OneStageZk.fieldRoots`), at
     which `B`'s honest header, naming ``x`` at that root and domain, holds; a header naming another root there is
     refused; and where the record names no tree of the writer's field (no wire, a writer template with no tree, or no
     wiring), the header is refused by name (`unwired_why`, Lean's `UNWIRED_WHY`)."""
     wire = {"reader": "b", "port": "x", "writer": "a", "out": "out", "at": 0, "radix": [3], "base": 0, "step": [0]}
     wiring = {"templates": {}, "cuts": {}, "wires": [wire]}
     ranges = [["a", 0, 2], ["b", 2, 3]]
-    record = RECORD | {"fields": [{"template": "a", "field": "out", "domain": ROOTS[A][1], "leaves": 4,
-                                   "root": ROOTS[A][0]}]}
+    record = RECORD | {"roots": [*RECORD["roots"], {"domain": ROOTS[A][1], "leaves": 4, "port": "a/out",
+                                                    "root": ROOTS[A][0]}]}
     strata = P.strata(PROGRAM, QUERY)
 
     def named(at: str) -> dict:
@@ -374,6 +376,53 @@ def test_a_wired_port_with_no_tree_under_its_member_reads_its_writers_field_tree
     assert M.population_why(UNITS[B], strata, named(B), got[B]) == "public file: not the registration's: roots, domains"
     for w in ({**wiring, "wires": []}, {**wiring, "wires": [{**wire, "writer": "z"}]}, None):
         assert M.population_why(UNITS[B], strata, named(A), M.slices(UNITS, record, w, ranges)[B]) == M.unwired_why("x")
+
+
+def test_a_members_own_output_port_reads_its_templates_field_tree():
+    """A root ``<template>/<field>`` of a member's template is the window's tree of the field, no member's own: a
+    member of the template with no root at that field has the tree in its slice under the field's port
+    (`OneStageZk.ownFieldsOf`), at which a header naming it holds; a member with its own root there keeps its own."""
+    tree = {"domain": "cc" * 64, "leaves": 5, "port": "b/o0", "root": "33" * 64}
+    got = M.slices(UNITS, RECORD | {"roots": [*RECORD["roots"], tree, {**tree, "port": "a/out"}]})
+    assert got[B]["roots"][1] == {"domain": "cc" * 64, "leaves": 5, "port": "o0", "root": "33" * 64}
+    assert got[A] == M.slices(UNITS, RECORD)[A]
+    strata = P.strata(PROGRAM, QUERY)
+    named = header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "o0": "cc" * 64},
+                                "roots": {"out": ROOTS[B][0], "o0": "33" * 64}})
+    assert M.population_why(UNITS[B], strata, named, got[B]) is None
+
+
+def test_a_registered_files_committed_trees_are_its_windows(tmp_path):
+    """A member's registered port that opens a committed tree, a tree port of a writer's field or a value
+    ``committed/<port>``, is held to the record's root of it (`OneStageZk.treePortsHeld`) before any session: a genuine
+    tree of the field at another root (the last window's), the window's root under another domain, another leaf
+    count, another member's own tree, and a tree the record holds no root of are each refused by name."""
+    w = Window(tmp_path)
+    ms = w.params["proofs"]["members"]
+    tree = {"domain": "cc" * 64, "leaves": 4, "port": "a/out", "root": "33" * 64}
+    record = RECORD | {"roots": [*RECORD["roots"], tree]}
+
+    def why(root: str = tree["root"], domain: str = tree["domain"], leaves: int = 4, value: str = "committed/a/out",
+            at: dict | None = {"template": "a", "field": "out"}) -> str | None:
+        port = {"value": value, "root": root, "domain": domain, "leaves": leaves, "reads": []}
+        reg = {"format": "verity/registered-reads/v1", "ports": {"x": port | ({"tree": at} if at else {})}}
+        return w.run(record=record, params=w.params | {"proofs": {"members": {A: ms[A], B: ms[B] | {"registered": reg}}}})[1]
+
+    def other(t: str, what: str) -> str:
+        return (f"registered: member {B}'s port x opens the committed tree {t} at another {what} than the "
+                "registration's: a statement opens its window's registered tree, never another window's or another "
+                "member's")
+    assert "opens the committed tree" not in (why() or "")
+    assert why(root="44" * 64) == other("a/out", "root")
+    assert why(domain="dd" * 64) == other("a/out", "domain")
+    assert why(leaves=5) == other("a/out", "leaf count")
+    assert why(root=ROOTS[A][0], domain=ROOTS[A][1]) == other("a/out", "root")
+    assert why(at={"template": "z", "field": "out"}) == (
+        f"registered: member {B}'s port x opens the committed tree z/out, and the registration holds no root z/out: "
+        "a committed tree a statement opens is one its window registered before any coin")
+    assert "opens the committed tree" not in (why(value=f"committed/{A}/out", root=ROOTS[A][0], domain=ROOTS[A][1],
+                                                  at=None) or "")
+    assert why(value=f"committed/{A}/out", at=None) == other(f"{A}/out", "root")
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):

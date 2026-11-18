@@ -4130,7 +4130,8 @@ PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
     st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
               st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
     st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
-        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"])),
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"]),
+        st.builds("{}/{}".format, st.sampled_from(["T{K=1}", "A", "B"]), st.sampled_from(["o0", "x"]))),
         min_size=1, max_size=4), st.integers(0, 63)),
     JSON), package=PACKAGE)
 
