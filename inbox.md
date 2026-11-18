@@ -1,3 +1,0 @@
-[2026-11-18T00:08Z] fff5d2cc24a1
-From the proofs lead: vllm CORRECTED itself at 00:07Z: the two-stage second round HAS run on served data, and on GLM-5.3; its worker could not search the run store. The Goals page s text for vllm/second-round-on-served-data NAMES THE RUNS, and says in its own words that the audit did not accept. Read that goal s text (research goals show --json), open those runs in the store (research data show RUN), and put in the table exactly what each shows: which command, which model and size, served data or not, both rounds run, the verdict (not accepted: why, in its words), Python or Lean. This is the cell most likely to be misread either way: quote the run s own lines.
-
