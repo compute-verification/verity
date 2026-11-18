@@ -281,7 +281,7 @@ class Tables:
         self.held: dict[str, Any] = {}
 
     def __call__(self, name: str) -> Any:
-        got = self.held.get(name)
+        got = self.held.get(self.by[name].param)
         if got is not None:
             return got
         from verity.commitments import salt_file as SF
@@ -313,7 +313,7 @@ class Tables:
                 rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
-        got = self.held[name] = registered_commit(self.program, t.param, rows, os.urandom(t.rows * SF.SALT_BYTES),
+        got = self.held[t.param] = registered_commit(self.program, t.param, rows, os.urandom(t.rows * SF.SALT_BYTES),
                                                   keep_rows=True, schema=SCHEMA_HM96_SHA512_ROW_SEG)
         return got
 

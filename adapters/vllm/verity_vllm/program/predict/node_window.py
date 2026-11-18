@@ -55,7 +55,7 @@ import hashlib
 import math
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
@@ -577,8 +577,9 @@ class NodeWindow:
         if bad := [f"{tid} {port} {k}" for (tid, port), (k, _) in self.row_fed.items() if b.cuts.get(tid, {}).get(port) != k]:
             raise Unexpressible(f"{self.name}: {len(bad)} row-fed ports' cuts changed after `feed_rows`: " + "; ".join(bad))
         roots, openings = b.merged()
+        tables, openings = _apart(tuple(b.tables.values()), openings)
         wide = {r.param for r in b.reads if dict(b.fns[r.reader].signature()[0])[r.port].homogeneous_width() == 32}
-        reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)),
+        reg = IF.Registered(dict(sorted(b.params.items())), tables, tuple(IF.coalesce(b.reads)),
                             tuple(roots), tuple(openings), formats={p: {"row_schema": IF.SEG, "word_bits": 32} for p in sorted(wide)})
         wires = tuple(IF.coalesce(b.wires))
         starts = {tid: [at for at, _n, _slot, _step in spans] for tid, spans in b.spans.items()}
@@ -639,6 +640,21 @@ class NodeWindow:
 
 def _family(node: Any) -> str:
     return getattr(node.fn, "name", None) or node.fn.id.split("{")[0]
+
+
+def _apart(tables: tuple[IF.Table, ...], openings: Sequence[IF.TableOpening]) -> tuple[tuple[IF.Table, ...], list[IF.TableOpening]]:
+    """Each table's openings after its first, each under a table of its own over the same parameter (``<table>#<k>``): an
+    opening is one root over one run of its reader's units (`population`), and a later step's reads of a column block
+    don't follow its prefill's, which the order keeps rising inside the template."""
+    by, seen, out, more = {t.name: t for t in tables}, Counter(), [], []
+    for o in openings:
+        t, k = by[o.table], seen[o.table]
+        seen[o.table] += 1
+        if k:
+            more.append(IF.Table(f"{t.name}#{k}", t.param, t.offset, t.words, t.rows))
+            o = replace(o, table=more[-1].name)
+        out.append(o)
+    return (*tables, *more), out
 
 
 def _level(n: int) -> int:
