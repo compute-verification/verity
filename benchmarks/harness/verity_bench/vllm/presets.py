@@ -12,7 +12,11 @@ from collections.abc import Mapping
 
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
-VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
+from verity_bench import profiles
+
+_PRODUCTION = profiles.load()
+#: the vLLM commit every spec runs: the serving profiles' (`benchmarks/production.toml`'s ``vllm``)
+VLLM_PIN = _PRODUCTION.vllm
 SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
 #: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run

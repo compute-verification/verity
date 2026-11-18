@@ -32,7 +32,6 @@ revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
 case = "LLAMA32_1B"
 precision = "fp8"
 gpu_count = 1
-vllm_pin = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 
 [preset.engine_settings]
 cuda_graphs = true
