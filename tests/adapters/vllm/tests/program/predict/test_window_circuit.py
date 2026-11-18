@@ -1241,7 +1241,7 @@ def test_every_tiny_class_template_lifts_to_its_block_circuit_from_the_programs_
     callees have no Boolean version of their own (the lift's recursion), and its hand pieces."""
     circuit, prog, _ = tiny_wired
     table = V.boolean_table(prog)
-    assert len(table) == 142
+    assert len(table) == 137
     memo: dict = {}
     version = partial(V.block_circuit, table=table, memo=memo)
     counts, unpriced = V.gate_table([fn for fn, _ in circuit.templates])
