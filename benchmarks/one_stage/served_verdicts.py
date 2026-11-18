@@ -1408,13 +1408,14 @@ def graded_by(row: Mapping[str, Any]) -> str | None:
     return said if isinstance(said, str) and said else None
 
 
-def declared_unchecked(protocol: Any) -> str:
+def declared_unchecked(protocol: Any, said: str = "") -> str:
     """What of its run no auditor-side entry checks, as the scheme declared under ``protocol`` says (its declaration's
-    ``unchecked``), or empty."""
+    ``unchecked``, each sentence alone, `scheme.sentences`), less what ``said`` says already, or empty."""
     from verity.protocols.compose import schemes
 
-    return next((u for n in schemes.DECLARATIONS
-                 if (s := schemes.get(n)).protocol == protocol and (u := getattr(s, "unchecked", ""))), "")
+    declared = next((schemes.S.sentences(s) for n in schemes.DECLARATIONS
+                     if (s := schemes.get(n)).protocol == protocol), ())
+    return "; ".join(w for w in declared if w not in said)
 
 
 def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
@@ -1957,15 +1958,16 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
     accepted = a["verdict"] == "accept"
     verdict, reason = a["verdict"], a["reason"]
     if accepted and a["protocol"] == ONE_STAGE_PROTOCOL and a["public"].get("complete") is not True:
+        unread = None
         try:
             rec = next((_json(f) for f in (out / "window" / "audit.json", out / "audit.json") if f.is_file()), None)
-        except ValueError:
-            rec = None
+        except ValueError as e:
+            rec, unread = None, f"its public `complete` is not true, and its audit record does not parse: {e}"[:600]
         verdicts = rec.get("verdicts") if isinstance(rec, dict) else None
         null = sorted(k for k, v in verdicts.items() if isinstance(v, dict) and v.get("accepted") is None) \
             if isinstance(verdicts, dict) else []
-        verdict, reason = NOT_COMPLETE, ("its accept is not complete: " + (
-            f"its audit record has no verdict of {', '.join(null)}" if null else "its public `complete` is not true"))
+        verdict, reason = NOT_COMPLETE, "its accept is not complete: " + (
+            unread or (f"its audit record has no verdict of {', '.join(null)}" if null else "its public `complete` is not true"))
     return {"protocol": a["protocol"], "owner": owner, "verdict": verdict, "reason": reason,
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
             "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
@@ -2493,7 +2495,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif v == "accept":
             t = terms(r, (subprotocols or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
-            if unchecked := declared_unchecked(r.get("protocol")):
+            if unchecked := declared_unchecked(r.get("protocol"), "; ".join(t)):
                 s += f", {unchecked}"
             if str(r.get("answer_from") or "").startswith(PEARLPLUS_FROM):
                 s += f", {PEARLPLUS_SAID}"

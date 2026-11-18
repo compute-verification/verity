@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Certifier.AttesterScheme
+public import Definitions.ResourceAccounting.Network.AttesterScheme
 public import Proofs.Certifier.Cells
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Core.Scheme

@@ -105,6 +105,20 @@ class Lacks:
 UNDECLARED = Lacks()
 
 
+#: the field that declares a scheme's weight-derived copy beside storage ruled, a sentence, as its readers name it
+BESIDE_STORAGE = "copy_beside_storage_ruled"
+#: what a ruling of a weight-derived copy beside storage does not show, printed with each pair it allows. This list is
+#: Pearl+'s in particular (its third item and the ruling's second sentence are true of Pearl+); when a second keeper is
+#: ruled, its not-shown goes on its own declaration beside its sentence, so the next ruling does not inherit this list.
+BESIDE_STORAGE_NOT_SHOWN = (
+    "that the store, the plain weights and the keeper's buffers fit the node's memory together",
+    "that the two have run attached in one process on a card",
+    "that the keeper wrapped by storage records and commits the same as alone: read, not run",
+    "that the weights are held only as storage's store: beside the keeper they are not, and no memory figure may be read "
+    "as saying so",
+)
+
+
 class Kernels(Protocol):
     """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
     ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
@@ -307,10 +321,14 @@ class Scheme:
     and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
     name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
-    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    against the committed root once at build; ``copy_beside_storage_ruled`` (`BESIDE_STORAGE`), the sentence that rules
+    that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
     it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
-    parameters an application that ties its workload to this scheme states over its settings' defaults.
+    parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
+    what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
+    says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
+    is checked, and the line says nothing for it.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -361,8 +379,10 @@ class Scheme:
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
     kernels: Kernels | Lacks = UNDECLARED
     keeps_weight_copy: bool | Lacks = UNDECLARED
+    copy_beside_storage_ruled: str | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
+    unchecked: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -424,6 +444,8 @@ class Scheme:
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
+        object.__setattr__(self, "unchecked", MappingProxyType(dict(self.unchecked)))
+        sentences(self)
 
     @property
     def unit(self) -> str:
@@ -572,6 +594,15 @@ class Answers:
     key_of: Callable[..., str | None]
 
 
+def sentences(scheme: Scheme) -> tuple[str, ...]:
+    """What a line prints of ``scheme``'s ``unchecked``: each entry's sentence alone, in order, its name only the key a
+    program reads; nothing for an empty mapping. An entry that is not a sentence is refused by the scheme's and its
+    name."""
+    if bad := [n for n, w in scheme.unchecked.items() if not isinstance(w, str) or not w.strip()]:
+        raise ValueError(f"{scheme.name}: unchecked entry {bad[0]!r} is not a sentence")
+    return tuple(scheme.unchecked.values())
+
+
 def answering(scheme: Scheme) -> Answers:
     """``scheme``'s `Answers`, its entry's mapping loaded; refused by name (`declared`) where it lacks one."""
     from importlib import import_module
@@ -666,7 +697,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+__all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
            "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",

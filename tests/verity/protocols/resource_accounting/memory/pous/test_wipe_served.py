@@ -85,6 +85,8 @@ def _ctx(tmp_path, given=None, **launcher):
     (BOUND, {"private": None}, "no private directory was handed to it"),
     (BOUND, {"pins": None}, "no pin was handed to it (ctx['pins'], the application's [[pin]] entries)"),
     (BOUND, {"pins": [PIN | {"protocol": "pous"}]}, "the pins handed to it give the memory-challenger no key for the wipe"),
+    (BOUND, {"wipe_stream": "/exec/wipe_stream"}, "wipe_stream is the streamer of a memory attester on this node; one on "
+                                                  "its own host (host, address, command) builds its own"),
     ({}, {}, "no challenger binding (host, address, command) and run_keys unset")])
 def test_the_attach_refuses_by_name_before_any_session(tmp_path, monkeypatch, settings, launcher, why) -> None:
     monkeypatch.setattr(wipe_run, "subprotocol", lambda *a, **kw: pytest.fail("a session started"))
@@ -160,6 +162,26 @@ def test_the_judge_answers_once_ready_returns_built_unless_its_launcher_hands_it
     monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
     WIPE.attach(None, _ctx(tmp_path, BOUND | {"store": "python"}, **launcher))
     assert seen == [want]
+
+
+@pytest.mark.parametrize("launcher, tools", [
+    ({}, {}), ({"judge": "/lean/wipe-protocol", "wipe_stream": "/exec/wipe_stream"},
+               {"wipe-protocol": "/lean/wipe-protocol", "wipe-stream": "/exec/wipe_stream"})])
+def test_the_period_names_the_judge_and_the_streamer_its_launcher_built(tmp_path, monkeypatch, launcher, tools) -> None:
+    """The launcher's judge and streamer, built where programs run, are `period.json`'s ``tools``, which the memory
+    attester on this node runs (`wipe_run.subprotocol`); without them it builds its own. Neither is a setting, so no
+    application's hash reads them."""
+    seen = []
+
+    def subprotocol(period, node, out, *, side_of, ready):
+        seen.append(json.loads((period / "period.json").read_text())["tools"])
+        (out / "wipe.case.json").write_text("{}")
+        (out / "wipe.json").write_text("{}")
+        return {"verdict": "accept"}
+
+    monkeypatch.setattr(wipe_run, "subprotocol", subprotocol)
+    WIPE.attach(None, _ctx(tmp_path, {"run_keys": True, "store": "python"}, **launcher))
+    assert seen == [tools] and not set(launcher) & set(WIPE.settings)
 
 
 @pytest.mark.parametrize("facts, development", [
