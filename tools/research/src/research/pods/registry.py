@@ -334,6 +334,16 @@ def _same_tables(text: str, entry: dict) -> bool:
     return tables == {k: v for k, v in entry.items() if isinstance(v, dict)}
 
 
+def properties_copy(name: str, entry: dict) -> str | None:
+    """The file `research run` puts in a run's inputs/ as NAME.toml: the machine's name and its `[properties]` table, and no
+    other field of its record (no address, user, pod id or key); None for a record without the table."""
+    props = entry.get("properties")
+    if not isinstance(props, dict):
+        return None
+    return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml_value(name)}\n\n"
+            "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
+
+
 def write_entry(d: Path, name: str, entry: dict) -> Path:
     """Write machine `name`'s whole record. A table equal to the one the file holds keeps its text (comments and layout):
     only the keys above the tables are rendered again."""
