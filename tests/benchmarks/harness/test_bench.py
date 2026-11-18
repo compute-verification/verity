@@ -464,15 +464,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         return (x.float() @ W.float().T).to(torch.bfloat16)
 
     run = Run(exact_y)
-    exact = _pearl_c_gate(run)
+    exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
-    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
@@ -524,7 +524,7 @@ def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found
         assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
         assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
     run = object.__new__(PearlCDeviceRun)
-    monkeypatch.setattr(E, "_pearl_c_gate", lambda r: {"passed": r is run, "provided": True})
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: {"passed": r is run and s == "pearl-plus", "provided": True})
     assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
     h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
     assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}

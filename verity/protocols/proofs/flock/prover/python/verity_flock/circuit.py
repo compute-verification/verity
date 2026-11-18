@@ -66,7 +66,10 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import (
+    FLOCK_CIRCUIT_BINDING, FLOCK_CIRCUIT_BLOCK_COVER, FLOCK_PUBLIC_INPUTS, HM96_SHA512, HM96_SHA512_ROW_V1,
+    PARTITION,
+)
 from verity.commitments.periods.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
@@ -79,7 +82,7 @@ TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 #: The header of a templated statement's template section (:func:`template_section`)
 TMPL_SECTION = "TEMPLATE"
 SCHEME = "frame-v3-sha512/hm96-sha512"
-ROW_SCHEMA = "hm96-sha512/row/v1"
+ROW_SCHEMA = HM96_SHA512_ROW_V1
 INST_FORMAT = "flock-circuit-inputs"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
@@ -96,7 +99,7 @@ OWNER = -1
 #: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
 #: any value.
-LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_bytes": 192,
+LEAF_SCHEME = {"id": HM96_SHA512, "inner": "sha512 column digest", "salt_bytes": 192,
                "salt_source": "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored",
                "key": "default_key, a statement constant for every tree",
                "key_sha512": "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744"
@@ -112,11 +115,11 @@ SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
-PARTITION_RULE = "flock-circuit/unit-cover/v0"
+PARTITION_RULE = FLOCK_CIRCUIT_BLOCK_COVER
 SALT_BYTES, BC_BYTES = 192, 128
 
 
-PARTITION_V1 = "verity/partition/v1"
+PARTITION_V1 = PARTITION
 #: META's bindings: what the statement binds about the circuit, not the circuit. A unit's class (:func:`class_digest`) leaves
 #: them out, so a partition can name the class its digest is bound beside.
 BINDING_KEYS = ("partition", "program_sha512", "program_digests")
@@ -1150,7 +1153,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
             raise ValueError(f"shared read {port}: instance {i} reads table row {int(ref[i])}, not its group's {i // g}")
 
 
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = FLOCK_PUBLIC_INPUTS
 
 
 def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:

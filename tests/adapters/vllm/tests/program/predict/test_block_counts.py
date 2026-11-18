@@ -22,7 +22,7 @@ from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
 from verity.circuits.ops.boolean.versions import gate_table
-from verity.circuits.population import population_program
+from verity.circuits.population import wired_population_program
 from verity.commitments.periods import interface as IF
 
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
@@ -83,8 +83,9 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     fn, m, steps = BC.session(small)
     assert (m, steps, cls.slots, cls.steps, private["total"], private["windows"]) == (2, 3, 2, 3, 2, 1)
     assert cls.definition == PV2.id_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
-    text = codec.canonical_json(codec.encode_program(population_program(fn, m))).decode()
     key = codec.descriptor_id(fn)
+    program, _ = wired_population_program([(fn, m)], {"templates": [[key, m]]})
+    text = codec.canonical_json(codec.encode_program(program)).decode()
     for n, verdict in ((2, "accept"), (1, "refuse")):
         inst = {"program": text, "theta": [], "blocks": [key], "table": dict(pub.table), "c": cls.gates, "k": 10 ** 12,
                 "n": n}

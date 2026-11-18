@@ -220,17 +220,12 @@ CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
-def _canon(x: Any) -> str | None:
-    """`x` under `canonical_json`, or None where it isn't JSON (which then equals nothing)."""
-    try:
-        return canonical_json(x)
-    except (TypeError, ValueError):
-        return None
-
-
 def _same(a: Any, b: Any) -> bool:
-    ca = _canon(a)
-    return ca is not None and ca == _canon(b)
+    """Whether `a` and `b` have one `canonical_json`; a value that isn't JSON equals nothing."""
+    try:
+        return canonical_json(a) == canonical_json(b)
+    except (TypeError, ValueError):
+        return False
 
 
 def _summary(v: Mapping[str, Any]) -> dict[str, Any]:
