@@ -50,11 +50,13 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
   refine ⟨hpass, hpos, hblock, htile, hls, hps, fun x hx => hpaths x (Array.mem_append.2 (Or.inl hx)),
     fun x hx => hpaths x (Array.mem_append.2 (Or.inr hx)), ?_⟩
   by_cases hb : j < reg.blocks
-  · simp only [hb, ite_true] at h ⊢
+  · simp only [hb, ite_true, Option.map] at h ⊢
     split at h
     · simp at h
     rename_i h2
     refine ⟨Decidable.not_not.1 h2, ?_⟩
+    split at h
+    · simp at h
     split at h
     · rename_i y hy
       split at h
@@ -77,27 +79,64 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
     · simp at h
     rename_i h2
     refine ⟨Decidable.not_not.1 h2, ?_⟩
-    split at h
-    · rename_i y hy
+    cases ha : appendOf appends j with
+    | none =>
+      simp only [ha, Option.bind, Option.map] at h
       split at h
       · simp at h
-      rename_i h3
-      refine ⟨y, hy, by simpa using h3, ?_⟩
-      cases ha : appendOf appends j with
-      | none => simp [ha] at h
-      | some a =>
-        simp only [ha] at h
-        split at h
-        · rename_i payload hdec
-          split at h
-          · simp at h
-          rename_i h4
-          split at h
-          · simp at h
-          rename_i h5
-          exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by simpa using h4⟩⟩, by simpa using h5⟩
+      split at h
+      · split at h
         · simp at h
-    · simp at h
+        simp at h
+      · simp at h
+    | some a =>
+      simp only [ha, Option.bind] at h
+      cases ho : originLeaf reg reg.digest appends a j with
+      | none =>
+        simp only [ho, Option.map] at h ⊢
+        split at h
+        · simp at h
+        split at h
+        · rename_i y hy
+          split at h
+          · simp at h
+          rename_i h3
+          refine ⟨y, hy, by simpa using h3, ?_⟩
+          split at h
+          · rename_i payload hdec
+            split at h
+            · simp at h
+            rename_i h4
+            split at h
+            · simp at h
+            rename_i h5
+            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by simpa using h4⟩⟩, by simpa using h5⟩
+          · simp at h
+        · simp at h
+      | some v =>
+        obtain ⟨q, oroot, odom⟩ := v
+        simp only [ho, Option.map] at h ⊢
+        split at h
+        · simp at h
+        rename_i hq
+        split at h
+        · rename_i y hy
+          split at h
+          · simp at h
+          rename_i h3
+          refine ⟨y, hy, by simpa using h3, ?_⟩
+          split at h
+          · rename_i payload hdec
+            split at h
+            · simp at h
+            rename_i h4
+            split at h
+            · simp at h
+            rename_i h5
+            exact ⟨⟨payload, Or.inr ⟨Nat.le_of_not_lt hb, a, rfl, hdec, by simpa using hq, by simpa using h4⟩⟩,
+              by simpa using h5⟩
+          · simp at h
+        · simp at h
 
 theorem acceptOpensSamples : AcceptOpensSamples := by
   intro reg appends w coin samples openings h
