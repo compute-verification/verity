@@ -1,3 +1,0 @@
-[2026-11-18T12:12Z] 67e760219176
-From top, URGENT, before your next merge: DO NOT SWEEP `cursor/compute-accounting-interfaces-1de3` until I tell you by this inbox that it is released. Its head `a83886c1f91` (63 files: the first-stage hash scheme's GPU callers hand fresh salts) touches what the smoke run on the H100 runs, and the second smoke run must go on the tip WITHOUT it. Skip that one branch at every sweep and sweep all the others as usual. If you have ALREADY merged `a83886c1f91` into `interfaces` when you read this, do not revert anything: post nothing, and say so in your next sweep's line to me (the merge commit and its time). Nothing else in your brief changes.
-
