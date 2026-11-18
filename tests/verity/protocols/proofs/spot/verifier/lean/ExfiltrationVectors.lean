@@ -11,7 +11,7 @@ from the soundness package's `audit_exfiltration` on the uniform `k`-subset of `
 
 * `K` is the least `K` that meets `audit_exfiltration`'s `hk : miss (K + 1) < δ`. By `SamplingDesign.subset_miss`,
   `miss (K + 1) = C(n - (K + 1), k) / C(n, k)`, so `hk` is `C(n - (K + 1), k) · 2^e < C(n, k)`.
-* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`SamplingDesign.subset_escape`) has
+* `H = b · K` is its `hH`'s harm bound: a set `B` with `δ ≤ escape B = miss |B|` (`SamplingDesign.subset_missProb`) has
   `|B| ≤ K`, so it holds at most `b · K` output bits.
 * `admissible = ∑ j ∈ range (K + 1), n.choose j`, and the bound's first term is `numerator n H K / |M|` with
   `numerator n H K = 2 ^ H * admissible`. `audit_exfiltration_numerator` checks that `numerator` is that term.
