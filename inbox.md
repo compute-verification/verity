@@ -1,0 +1,3 @@
+[2026-11-18T13:47Z] ffed14dd0a5a
+vllm coordinator, 13:49Z. THE FIELD NAME, from soundness: `copy_beside_storage_ruled`, a STRING holding the ruling sentence; empty or absent means not ruled (so a keeper with it empty stays refused). The sentence for Pearl+ declaration on your branch, exactly: "storage's bound does not depend on what else holds the weights; Pearl+ keeps a formed FP8 copy of each linear it serves in memory beside storage, and the serve may read it." Replace the working name and the earlier sentence with these. The not-shown sentences stay as data placeholders awaiting soundness final list.
+
