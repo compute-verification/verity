@@ -407,19 +407,19 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
 
 def test_the_int8_linears_follow_the_build_of_records_rule():
     """An exact-int8 checkpoint on a target serving its linears int8: each decoder linear is its quantizer `Int8RowQuant_v1{K}`
-    then its product `ScaledMmS8_v3{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
-    row scales [N, 1] as their u16 words, which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
+    then its product `ScaledMmS8_v1{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
+    row scales [N, 1], which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
     stays the bf16 GEMM."""
     r = build_program(_phi(INT8, target=INT8_LINEARS), "step")
     layer = ["Int8RowQuant", "ScaledMmS8", "RoPE", "RoPE", "Attention", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda",
              "Int8RowQuant", "ScaledMmS8", "SiluMul", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda"]
     nodes = r.program.fn.body.nodes
     assert [n.fn.name for n in nodes] == ["Embedding", "RMSNormTriton", *layer, *layer, "Gemm", "TokenSelect"]
-    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v3{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
+    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v1{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
     leaves = weight_leaves(model_shape(INT8))
     assert [(n.split("layers.0.")[-1], t.leaves, sorted(t.width_set())) for n, t in leaves[1:5]] == [
-        ("self_attn.qkv_proj.weight", 128 * 32, [16]), ("self_attn.qkv_proj.weight_scale", 128 * 2, [16]),
-        ("self_attn.o_proj.weight", 64 * 32, [16]), ("self_attn.o_proj.weight_scale", 64 * 2, [16])]
+        ("self_attn.qkv_proj.weight", 128 * 64, [8]), ("self_attn.qkv_proj.weight_scale", 128, [32]),
+        ("self_attn.o_proj.weight", 64 * 64, [8]), ("self_attn.o_proj.weight_scale", 64, [32])]
     assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
 
 
@@ -455,25 +455,26 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
         build_program(as_row(bf16, "float8_e4m3fn"), "step")
 
 
-#: The H200 int8 Llama-3.2-1B rows' traced Builds: each Program digest the row's `build_summary.json` gives (the step at its M and
-#: pos0 8, each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header
-#: names (`program_digest`, and a batch's `component_digests`), or None where the row builds no manifest (its word check refuses the
-#: s8 product, `ScaledMmS8_v3`, as too large).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
+#: The H200 int8 Llama-3.2-1B rows' traced Builds (the same digests
+#: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
+#: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
+#: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
 H200_INT8: dict[str, dict] = {
     "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
-        "step": (1, "741b51791139f9b02cde25531c15e70f26ed16fbc3f9b250f5d856fae7b1cc3bba9749bd93ca3569f3d77376e17aca86470b2ec373ed719a186059abfc1fea17"),
-        "requests": {(256, 31): "904c2ba329046b9f1b0c2bb09ef1eb106e8c17ce84678c56e465c1990f302fa9740177453b8a697c76d3c7bcee930b5968a9802f4a1beb3bead788099abcb4a8"},
-        "workload": "f3564cb065742cd137d921a02750638a01820b5a7decdb28a1d1d7411f0178438c53e96fa3189e96602974cf0e87978b97d26d593de8ad7573e50fd2b00e678a",
-        "manifest": None,
+        "step": (1, "66cc640b4c9736b2b784626f7987f865499ee9b62c0dc47b8b4e666dcc9990e538bc46e18fbd431221031b96dcfc4d608e38af457f6bd044d47afb07b8ca296f"),
+        "requests": {(256, 31): "963a228135f64eb6db7d423209c47f42f544aabfa05d7733f58f5912a7bc3241bb907af6ed69bb89203ae413042971cc0bfb30218ef6f90f2252fc58b0d99c23"},
+        "workload": "3acd044df21073dc7cfa7a999fd531f9e46055221fda040c54a0f6f5a81a980fb4d9ac11c6c7ff6174483f5e9ca0fd4a0b23206dc227ba788f91b262cfee26a4",
+        "manifest": ("6715e143e1ff21ea7baaf14cf496fe8706e2015f641bae337dfe1743787cd215", 12163, ("request LP256_T31",)),
     },
     "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager": {
-        "step": (4, "0bd17857f09caa571a7e4b3b49e9f62a8da642feb9d81a2ab8057e51eb5222afeba9b03435396d5384e1523e8d464078d866cb21b0f8abedc0127172a12e337a"),
-        "requests": {(11, 8): "caab4871f1af2aa5377416fd1565f14c0268109afa93e9d86e1a93d4eed0de3ba32f43068e24142fa8ba78fe1bd5c81530e916d979f1c38d7caba56606fc7f47",
-                     (123, 19): "df05b50bfa2a9dd0975c216a72fdba7c361c65548c8f7ba583c8c83d0cf223e5ed93dc9382a6437fa3eb2eeca209fb6028acf279b44ac5a38d5012f33534340a",
-                     (159, 31): "a9b84a3306adecba8948f9e7e65b3e36f12926cc5f3ac2730bc967f6fccebc2f1023eb28b5e14741eb489559b3341ca5ee733da28d63dc3489b379bd671e0d50",
-                     (256, 1): "89f53c85ad49e7ac9e1a5963535c07c621903d4be75c9c4357d3fbe100b2bd2f9190da0d724f766eabe740029f459e1b3fb616faa16bc842bb6619ed1c43acbb"},
-        "workload": "21f54cde77e3aa4fa1678c6fe0599630ac99523948aeb8468c41b2f077febc3311a7c31809b41aec14e166018e448a22893c5c96b68e8d52707be74a31bd788a",
-        "manifest": None,
+        "step": (4, "b24251993d3ede502ee5933b1688f95d871303f415a8553b152dba32fcce848b136f81238095b8fb8fb5adb168b523ba95c28a228109af54c1269dd150e54f62"),
+        "requests": {(11, 8): "bec8910e13b197706b72c29b9e64808d8c4bb8715e75880bd2ef142db8d74f399b77226af6e0725829ea34ef3adbd3f93063e224144baa75dec6bb64af1734d4",
+                     (123, 19): "5426f0fb0717df5ca97c05aca07dc9b0f7affa808e66c6928b3f9f30843b5f14ba0107b1ab76db8c1dd663d1f5db6dca1debc9363928fac716ddaab5f0e843b7",
+                     (159, 31): "878afca2b9a5f48d77183a3f008c5acd72ce5a0fc7976894c32b245f67079a60df0aff9579bda19ba580f34d5ecb7c954d5a23f4ec775c5ae4118e778d1fb7dd",
+                     (256, 1): "05780e3bd779ed8797e079b98cb00755381dbcbf86ff06b6c571fb4db454e2b1d1991943b4564cbcd09159314da23fa4078d89f24c5f9db72053e0ee8514d1c3"},
+        "workload": "b611b68a180f306936fb81c85d26be81a044a31d0fb70dea09a786a91343cb9f332d71f285d2d047d0897d295f5856aaa1830ce89fba940dcce24072e6b436ec",
+        "manifest": ("4d294fcb0d3ad28eddbd434dfd2773fffc5a379fda7c7796713ce0a71e990e7b", 23230,
+                     ("workload", "request LP11_T8", "request LP123_T19", "request LP159_T31", "request LP256_T1")),
     },
 }
 
@@ -501,7 +502,7 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
         got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r)
     got["workload"] = S.predict_workload(phi, comps)["digest"]
     moved = [k for k in want if got[k] != want[k]]
-    manifest, identities, over = pin["manifest"] or ("", 0, ())
+    manifest, identities, over = pin["manifest"]
     stale = [k for k in over if k in moved]
     assert not moved, "\n".join(
         [f"{row}: predict moved from the row's traced Build (re-trace the row on the H200 and pin the new digests with the predictor's)"]

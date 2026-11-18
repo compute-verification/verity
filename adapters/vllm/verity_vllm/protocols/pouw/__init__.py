@@ -35,13 +35,14 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     Workload,
 )
 
-import verity_torch.pouw  # noqa: F401 -- importing it hands PoUW its tensors and H1's device
+from verity_torch.pouw import hand_in
 from verity import hooks as H
 from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
+hand_in()
 
 __all__ = ["Settings", "challenged", "h1_run", "linear_types", "refusals", "requests"]
 
