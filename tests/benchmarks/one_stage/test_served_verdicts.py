@@ -3510,6 +3510,7 @@ FAKE_RECORDS_AUDIT = '''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+# takes --min-free-gb and --keep-circuits
 if a[0] == "warm":
     open(os.environ["ORDER"] + ".warm", "w").write(json.dumps(a))
     if os.environ.get("FAIL_WARM"):
@@ -3962,7 +3963,7 @@ def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_tak
     assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
     assert json.loads((tmp_path / "order.warm").read_text()) == [
         "warm", "--window", str(vw / "window"), "--sampling-design", TIED_RULE if tied else RULE,
-        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs, "--mem-gb", "290"]
+        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs, "--mem-gb", "290", "--min-free-gb", "100"]
     assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
     assert limits.count(limit) == 1, limits
     assert f'V3C-WARM class {W63K4} (records_audit.py warm exit 0, {jobs} at a time): WARM ' \

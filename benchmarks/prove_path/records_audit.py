@@ -100,15 +100,19 @@ cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*``
 the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit given no cache says so at
 once and runs the warm itself into its ``--out``'s ``compose-cache``, ``--jobs`` at a time (`compose_first`); either way
 each template's line is printed as it finishes and kept in ``--out``'s ``composed.jsonl``. An audit's time quoted with the cache
-quotes the warm's beside it.
+quotes the warm's beside it. A compose keeps only its record (META, pin, class, size, seconds, peak), its text hashed as it
+is rendered, and the audit composes in full after its sample only the sampled members' templates, each held to its record's
+pin; ``--keep-circuits`` keeps every circuit's text in the cache. Neither starts a compose, and the warm stops, where the
+cache's file system would have less than ``--min-free-gb`` free.
 
     records_audit.py audit --window DIR --sampling-design L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR] [--jobs N] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
+        [--compose-cache DIR] [--jobs N] [--keep-circuits] [--min-free-gb G] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER] \\
         [--lean-workers N] [--audit-mem-gb G] [--negative-workers N]
     records_audit.py warm --window DIR --sampling-design L [--template-sets DIR] --compose-cache DIR [--jobs N] [--mem-gb G]
+        [--keep-circuits] [--min-free-gb G]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
@@ -1215,7 +1219,7 @@ def warm(a: argparse.Namespace) -> int:
     mine, _doc, sets = verifier_window(Path(a.window), a.sampling_design, Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     print(f"WARMING {len(A5.warm_todo(sets, mine))} templates, {a.jobs} at a time", flush=True)
-    got = A5.warm(a, sets, mine, a.jobs, a.mem_gb, compose_rows(None))
+    got = A5.warm(a, sets, mine, a.jobs, a.mem_gb, compose_rows(None), min_free_gib=a.min_free_gb)
     print("WARM " + json.dumps({"templates": len(got), "kept": sum(bool(g["kept"]) for g in got), "verifier_window_s": window_s,
                                 "seconds": round(time.time() - t0, 1)}, sort_keys=True), flush=True)
     return 0
@@ -1234,7 +1238,7 @@ def compose_first(a: argparse.Namespace, sets: dict, mine: Any, out: Path) -> No
         print(f"COMPOSE composing {n} templates {how}: no compose cache was given; run the warm first, or pass --jobs",
               flush=True)
     (out / COMPOSED).unlink(missing_ok=True)
-    A5.warm(a, sets, mine, a.jobs, a.audit_mem_gb, compose_rows(out / COMPOSED))
+    A5.warm(a, sets, mine, a.jobs, a.audit_mem_gb, compose_rows(out / COMPOSED), min_free_gib=a.min_free_gb)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1316,6 +1320,10 @@ def main(argv: list[str] | None = None) -> int:
                    "into the audit's own compose-cache)")
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once before the coins, each in a forked "
                    "process, within --audit-mem-gb (a5.warm)")
+    p.add_argument("--keep-circuits", action="store_true", help="keep each composed circuit's text in the cache, not only "
+                   "its record (a5.own_composed)")
+    p.add_argument("--min-free-gb", type=float, default=A5.WARM_MIN_FREE_GIB, help="GiB the composing leaves free on the "
+                   "cache's file system: none starts, and the composing stops, under it (a5.warm)")
     p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
     p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
     p.add_argument("--sampling-design", required=True, help="the window's rule, as its audit takes it")
@@ -1325,6 +1333,10 @@ def main(argv: list[str] | None = None) -> int:
                    "machine's memory takes (a5.warm)")
     p.add_argument("--mem-gb", type=float, default=None, help="GiB the composes running at once may hold, by the peaks an "
                    "earlier warm measured (a5.warm; default no bound)")
+    p.add_argument("--keep-circuits", action="store_true", help="keep each composed circuit's text in the cache, not only "
+                   "its record (a5.own_composed)")
+    p.add_argument("--min-free-gb", type=float, default=A5.WARM_MIN_FREE_GIB, help="GiB the composing leaves free on the "
+                   "cache's file system: none starts, and the composing stops, under it (a5.warm)")
     p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
                        "alone, a listed one's from its members and the registered reads and window ingress it declares; the "
                        "run figure, and beside it, where the record declares window ingress, the window figure with its premise")

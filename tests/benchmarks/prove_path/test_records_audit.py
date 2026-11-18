@@ -1673,8 +1673,9 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
 
     seen = {}
 
-    def warm(a, sets, mine, jobs=1, mem_gib=None, done=None):
-        seen.update(cache=a.compose_cache, jobs=jobs, mem=mem_gib, members=[m.template for m in mine.members],
+    def warm(a, sets, mine, jobs=1, mem_gib=None, done=None, min_free_gib=None):
+        seen.update(cache=a.compose_cache, jobs=jobs, mem=mem_gib, free=min_free_gib, keep=a.keep_circuits,
+                    members=[m.template for m in mine.members],
                     inputs={t: c.inputs for t, (c, _fn) in sets.items()})
         row = {"template": TID, "seconds": 1.0, "kept": False, "pin": "ab", "k_log": 3, "peak_gib": 2.5, "n": 1, "of": 1}
         done(row)
@@ -1684,7 +1685,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     cache = str(tmp_path / "cache")
     assert RA.main(["warm", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--compose-cache", cache,
                     "--jobs", "2", "--mem-gb", "40"]) == 0
-    assert seen == {"cache": cache, "jobs": 2, "mem": 40.0, "members": [TID, TID],
+    assert seen == {"cache": cache, "jobs": 2, "mem": 40.0, "free": A5.WARM_MIN_FREE_GIB, "keep": False, "members": [TID, TID],
                     "inputs": {TID: ["unit/window", written.doc["statements"][TID]]}}
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "WARMING 1 templates, 2 at a time"
@@ -1719,8 +1720,8 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         assert said[:-1] == told and said[-1].startswith("COMPOSED "), said
         assert [json.loads(x)["template"] for x in (tmp_path / "out" / RA.COMPOSED).read_text().splitlines()] == [TID]
     with pytest.raises(Opened):
-        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100"])
-    assert (seen["jobs"], seen["mem"]) == (4, 100.0)
+        RA.main([*args, "--jobs", "4", "--audit-mem-gb", "100", "--keep-circuits", "--min-free-gb", "50"])
+    assert (seen["jobs"], seen["mem"], seen["keep"], seen["free"]) == (4, 100.0, True, 50.0)
     with pytest.raises(SystemExit):
         RA.main([*args, "--gpus", "0,0"])
 

@@ -48,7 +48,7 @@ def test_the_longest_measured_go_first_and_each_row_is_handed_on_as_it_finishes(
     assert [(r["template"], r["n"], r["of"]) for r in seen] == [("new", 1, 3), ("long", 2, 3), ("short", 3, 3)]
     assert got == seen
     assert json.loads((tmp_path / A5.WARM_SECONDS).read_text()) == {
-        t: {"seconds": float(len(t)), "peak_gib": 1.0} for t in ("short", "long", "new")}
+        t: {"seconds": float(len(t)), "peak_gib": 1.0, "bytes": None} for t in ("short", "long", "new")}
 
 
 def test_a_template_the_cache_held_keeps_its_measured_seconds(tmp_path, monkeypatch):
@@ -75,3 +75,37 @@ def test_no_compose_starts_past_the_memory_bound_by_earlier_peaks(tmp_path, monk
     starts = [json.loads(x) for x in (tmp_path / "starts.jsonl").read_text().splitlines()]
     assert not any({"big1", "big2"} <= set(s) for s in starts), starts
     assert all(s == ["huge"] for s in starts if "huge" in s), starts
+
+
+def _free(monkeypatch, gib: float) -> None:
+    monkeypatch.setattr(A5.shutil, "disk_usage", lambda p: SimpleNamespace(free=int(gib * 2**30)))
+
+
+def test_a_warm_under_its_free_space_floor_starts_nothing_and_says_so(tmp_path, monkeypatch):
+    """With less free than ``min_free_gib`` on the cache's file system, no compose starts and the refusal names the
+    free space, the floor and the templates still to go."""
+    monkeypatch.setattr(A5, "_warm_one", lambda t: (_ for _ in ()).throw(AssertionError("composed under the floor")))
+    _free(monkeypatch, 40)
+    try:
+        A5.warm(SimpleNamespace(compose_cache=str(tmp_path)), *_window(["a", "b"]), min_free_gib=50)
+    except RuntimeError as e:
+        assert "2 of 2 templates to go" in str(e) and "40.0 GiB free and the floor is 50 GiB" in str(e)
+    else:
+        raise AssertionError("a warm under its floor started")
+
+
+def test_a_warm_keeping_circuits_refuses_when_what_earlier_warms_measured_would_cross_the_floor(tmp_path, monkeypatch):
+    """Keeping circuits, the floor counts the bytes earlier warms measured for the templates to come, and the refusal says
+    the projected total; keeping records alone, the same free space passes."""
+    monkeypatch.setattr(A5, "_warm_one", _compose)
+    (tmp_path / A5.WARM_SECONDS).write_text(json.dumps({"a": {"seconds": 1, "bytes": 60 * 2**30},
+                                                        "b": {"seconds": 1, "bytes": 30 * 2**30}}))
+    _free(monkeypatch, 120)
+    try:
+        A5.warm(SimpleNamespace(compose_cache=str(tmp_path), keep_circuits=True), *_window(["a", "b"]), min_free_gib=50)
+    except RuntimeError as e:
+        assert "take 90.0 GiB more (by earlier warms), 90.0 GiB in all" in str(e)
+    else:
+        raise AssertionError("a warm keeping circuits past its floor started")
+    got = A5.warm(SimpleNamespace(compose_cache=str(tmp_path)), *_window(["a", "b"]), min_free_gib=50)
+    assert sorted(r["template"] for r in got) == ["a", "b"]

@@ -89,7 +89,7 @@ SETS = {t: toy(width) for t, width in W["templates"].items()}
 MINE = SimpleNamespace(members=[SimpleNamespace(template=t) for t in W["templates"]], partition_digest=W["partition"],
                        partition={"program": W["program"]})
 CACHE = SimpleNamespace(compose_cache=sys.argv[sys.argv.index("--compose-cache") + 1] if "--compose-cache" in sys.argv
-                        else None)
+                        else None, keep_circuits="--keep-circuits" in sys.argv)
 '''
 WARM = '''    got = a5.warm(CACHE, SETS, MINE, int(a[a.index("--jobs") + 1]))
     print("WARM " + json.dumps({"templates": len(got), "kept": sum(g["kept"] is True for g in got)}, sort_keys=True))
@@ -118,7 +118,7 @@ def _run(root: Path, templates: dict, binding: dict, kept: Path | None) -> Simpl
     V3C-WARM line counts, and each template's circuit as its audit took it (its pin, whether the cache held it, its
     bytes and file)."""
     window = json.dumps({**binding, "templates": templates})
-    rc, lines, order, _limits = SV._v3c(root, records_audit=KEPT_AUDIT, V3C_WARM_JOBS="2", TOY_WINDOW=window,
+    rc, lines, order, _limits = SV._v3c(root, records_audit=KEPT_AUDIT, V3C_WARM_JOBS="2", V3C_KEEP_CIRCUITS="1", TOY_WINDOW=window,
                                        ONE_STAGE=str(HERE.parents[2] / "benchmarks" / "one_stage"), V3C_COMPOSE_CACHE=str(kept) if kept else None)
     assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
     vw = root / "serve" / f"v3c-w7-{SV.VTAG}"
@@ -201,7 +201,7 @@ def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_di
     for name, given, chain in (("unset", None, SV.CHAIN), ("empty", "", SV.CHAIN), ("set", str(kept), SV.CHAIN),
                                ("late", None, HELD_CHAIN)):
         root = tmp_path / name
-        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_COMPOSE_CACHE=given, CERTIFIER_CHAIN_CMD=chain)
+        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_KEEP_CIRCUITS="1", V3C_COMPOSE_CACHE=given, CERTIFIER_CHAIN_CMD=chain)
         assert rc == 0, lines
         heads = [x.split(" ")[0] for x in lines]
         assert name != "late" or heads.index("CERTIFIER-CHAIN") > heads.index("V3C-PERIOD"), lines
@@ -211,7 +211,7 @@ def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_di
     argv, order, _limits, _lines, _chain = got["unset"]
     own = f"ROOT/serve/v3c-w7-{SV.VTAG}/compose-cache"
     assert argv["warm"] == ["warm", "--window", f"ROOT/serve/v3c-w7-{SV.VTAG}/window", "--sampling-design", SV.RULE,
-                            "--compose-cache", own, "--jobs", "3", "--mem-gb", "290"]
+                            "--compose-cache", own, "--jobs", "3", "--mem-gb", "290", "--min-free-gb", "100", "--keep-circuits"]
     assert argv["audit"][argv["audit"].index("--compose-cache") + 1] == own and argv["audit"].count(own) == 1
     assert order.index("warm") < order.index("audit")
     assert got["empty"] == got["unset"] == got["late"]

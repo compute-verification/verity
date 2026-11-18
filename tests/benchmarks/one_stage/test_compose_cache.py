@@ -80,8 +80,9 @@ def test_a_kept_circuit_taken_with_another_binding_is_the_circuit_composed_bound
     assert calls == [B1]
     fresh = _compose(B2)(tmp_path / "fresh" / "circuit.txt")
     assert (tmp_path / "r1" / "circuit.txt").read_bytes() == (tmp_path / "fresh" / "circuit.txt").read_bytes()
+    assert later.pop("bytes") == (tmp_path / "r1" / "circuit.txt").stat().st_size
     assert later == fresh and later["pin"] != first["pin"] and later["class_sha512"] == first["class_sha512"]
-    assert again == first and (tmp_path / "r2" / "circuit.txt").samefile(cache / "toy" / "circuit.txt")
+    assert again == first and first["bytes"] == (tmp_path / "r0" / "circuit.txt").stat().st_size and (tmp_path / "r2" / "circuit.txt").samefile(cache / "toy" / "circuit.txt")
     assert first["meta"] == CC.head(tmp_path / "r0" / "circuit.txt") and later["meta"] == CC.head(tmp_path / "r1" / "circuit.txt")
 
 
@@ -176,8 +177,8 @@ def test_a_window_warmed_before_its_audit_stages_from_the_cache_reading_no_circu
     sets = {t: (_own(), TOY) for t in ("Toy{N=1}", "Toy{N=2}")}
     mine = SimpleNamespace(members=[SimpleNamespace(template=t) for t in ("Toy{N=1}", "Toy{N=2}", "Toy{N=1}")],
                            partition_digest=B1["partition"], partition={"program": B1["program"]})
-    a = SimpleNamespace(compose_cache=str(tmp_path / "cache"))
-    got = a5.warm(a, sets, mine, jobs=2)
+    a = SimpleNamespace(compose_cache=str(tmp_path / "cache"), keep_circuits=True)
+    got = sorted(a5.warm(a, sets, mine, jobs=2), key=lambda g: g["template"])
     assert [g["template"] for g in got] == ["Toy{N=1}", "Toy{N=2}"] and all(g["kept"] is False for g in got)
     assert [g["kept"] for g in a5.warm(a, sets, mine, jobs=1)] == [True, True]
     calls: list = []
@@ -268,3 +269,58 @@ def test_a_compose_that_fails_keeps_nothing(tmp_path):
     with pytest.raises(RuntimeError, match="compose failed"):
         CC.cached(tmp_path / "cache", "toy", tmp_path / "r0" / "circuit.txt", B1, boom)
     assert sorted(p.name for p in (tmp_path / "cache").iterdir()) == ["toy.lock"]
+
+
+@pytest.mark.slow
+def test_a_compose_kept_as_its_record_writes_no_circuit_and_has_the_kept_composes_pin_meta_and_size(tmp_path):
+    """Without ``keep`` the entry holds ``made.json`` alone (``"text": False``): the pin, META and size the compose kept
+    whole gives, the circuit never written; a second caller takes the record without composing, and a cache that holds the
+    circuit for the binding serves it whole."""
+    calls: list = []
+    rec = CC.cached(tmp_path / "rec", "toy", tmp_path / "r0" / "circuit.txt", B1, _compose(B1, calls), keep=False)
+    again = CC.cached(tmp_path / "rec", "toy", tmp_path / "r1" / "circuit.txt", B1, _compose(B1, calls), keep=False)
+    whole = CC.cached(tmp_path / "whole", "toy", tmp_path / "w" / "circuit.txt", B1, _compose(B1))
+    assert calls == [B1] and rec == again and rec["text"] is False
+    assert not list((tmp_path / "rec").rglob("circuit.txt")) and not (tmp_path / "r0" / "circuit.txt").exists()
+    assert (rec["pin"], rec["meta"], rec["bytes"]) == (whole["pin"], whole["meta"], (tmp_path / "w" / "circuit.txt").stat().st_size)
+    assert CC.entry_of(tmp_path / "whole", "toy", B1, keep=False) == tmp_path / "whole" / "toy"
+
+
+
+@pytest.mark.slow
+def test_a_window_warmed_as_records_stages_from_them_and_composes_only_a_sampled_members_circuit(tmp_path):
+    """Warmed without ``keep_circuits``, staging takes each template's META, pin and class from its record with no circuit
+    on disk; the sampled member's circuit, composed after the sample (`stage`'s ``make``), is the record's pin, and one whose
+    fresh compose hashes otherwise is refused by name before anything is staged."""
+    sets = {t: (_own(), TOY) for t in ("Toy{N=1}", "Toy{N=2}")}
+    mine = SimpleNamespace(members=[SimpleNamespace(template=t) for t in sets], partition_digest=B1["partition"],
+                           partition={"program": B1["program"]})
+    a = SimpleNamespace(compose_cache=str(tmp_path / "cache"))
+    a5.warm(a, sets, mine, jobs=2)
+    assert not list((tmp_path / "cache").rglob("circuit.txt"))
+    calls: list = []
+    out = tmp_path / "audit" / "m0" / "circuit.txt"
+    made, kept = a5.own_composed(a, _own(calls), TOY, "Toy{N=1}", out, B1["partition"], B1["program"])
+    assert calls == [] and kept is True and made["text"] is False and not out.exists()
+    read: set[Path] = set()
+    circ = a5.circuit_of(out, made, read)
+    assert read == set()
+    fresh, _ = a5.own_composed(SimpleNamespace(), _own(), TOY, "Toy{N=1}", out, B1["partition"], B1["program"])
+    assert fresh["pin"] == made["pin"]
+    a5.held(out, circ, read)
+    out.unlink()
+    mm = {"m": SimpleNamespace(template="Toy{N=1}"), "st": {"dir": tmp_path / "st"}, "circuit": out, "k": 0,
+          "pin": made["pin"], "make": lambda: ({"pin": "e" * 128}, None)}
+    with pytest.raises(RuntimeError, match=f"member 0's template Toy{{N=1}}, composed after the sample: its circuit's SHA-512 is e+, not {made['pin']}"):
+        a5.stage(tmp_path / "served", mm, ({}, {}))
+
+
+def test_a_record_is_refused_where_its_composer_bypasses_compose_to(tmp_path):
+    """A composer that writes its circuit other than through `circuit.compose_to` hashes nothing, and its record is refused
+    by name, keeping nothing."""
+    def compose(out: Path) -> dict:
+        out.write_text("not a circuit\n")
+        return {"pin": "0" * 128}
+    with pytest.raises(RuntimeError, match="--keep-circuits"):
+        CC.cached(tmp_path, "toy", None, B1, compose, keep=False)
+    assert not any(p.name.startswith("toy.") and p.is_dir() for p in tmp_path.iterdir())
