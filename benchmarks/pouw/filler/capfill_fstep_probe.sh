@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The whole decode step co-resident with a 1-block pump on every SM, its
 # linears through flin's FLIN_FIT tiles (a CTA fits beside the pump block: ≤ 32 K registers, ≤ 41 KB of shared memory)
-# and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: dgate on the fit build,
+# and lm_head too (FLIN_LM=1), attention dcap's (it already fits). Gates: dgate on the fit build,
 # fgate (every fitted tile bit for bit, every row) on the CP_FGATE builds. Then flin alone at each fitted M (CP_FLIN
 # builds), and fstep co (FILL_SMS -1, FW = AFW = 0: the step beside the pump at the lowest priority) for each CP_RUNS
 # entry, against the cuBLASLt step alone on the whole GPU; the control (c1) is the same co step with flin's default
