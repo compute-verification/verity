@@ -40,7 +40,8 @@ import functools
 import operator
 
 from verity.circuits import boolean as BL
-from verity.circuits.types import Array
+from verity.circuits import population
+from verity.circuits.types import Array, Value
 
 from .. import prims as P
 from .. import scalar as S
@@ -56,8 +57,8 @@ from verity.circuits.boolean.trace import definition
 __all__ = ["BitAnd", "BitNot", "BitOr", "Bf16GtStrict", "Bf16ToF32", "E4m3ToF32", "F32Add", "F32BitsShl23", "F32Div", "F32Eq",
            "F32Fabs", "F32Fma", "F32Fmaxf", "F32Fminf", "F32IsFinite", "F32Mul", "F32Neg", "F32Sat", "F32ToE2m1Sat", "F32ToE4m3Sat",
            "F32ToS8RniSat", "I32Eq", "I32Le", "SelectBf16", "SelectF32", "SelectI32", "U32Hi16", "bf16_gt_strict",
-           "bf16_key", "const_word", "e4m3_to_f32", "f32_eq", "f32_key", "f32_sat", "f32_to_e2m1_sat", "f32_to_s8_rni_sat", "gt_u",
-           "i32_le", "select"]
+           "bf16_key", "bit_of_bits", "const_word", "e4m3_to_f32", "f32_eq", "f32_key", "f32_sat", "f32_to_e2m1_sat", "f32_to_s8_rni_sat", "gt_u",
+           "i32_le", "select", "word_of_bits"]
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
@@ -290,4 +291,27 @@ def const_word(w: int, bits: int):
         d = _CONSTS[(w, bits)] = definition(word.name, 2, lambda C, _b=bits, _w=w: const_bits(_b, _w), (), Array(w, BIT),
                                             word=word,
                                             doc=f"{word.id} on bits: the constant {w}-bit encoding 0x{bits:0{w // 4}x}, LSB first")
+    return d
+
+
+_WIRING: dict[str, object] = {}
+
+
+def bit_of_bits(w: int, i: int):
+    """`BitOf{W}x{I}_v2`: `population.bit_of(w, i)` on bits, the word's wire I; no gate."""
+    word = population.bit_of(w, i)
+    d = _WIRING.get(word.id)
+    if d is None:
+        d = _WIRING[word.id] = definition(word.name, 2, lambda C, x, _i=i: [x[_i]], (("word", BL.bit_type(Value(w))),), BIT,
+                                          word=word, doc=f"{word.id} on bits: the word's wire {i}, no gate")
+    return d
+
+
+def word_of_bits(w: int):
+    """`WordOf{W}_v2`: `population.word_of(w)` on bits, its W bits as the word's W wires; no gate."""
+    word = population.word_of(w)
+    d = _WIRING.get(word.id)
+    if d is None:
+        d = _WIRING[word.id] = definition(word.name, 2, lambda C, b: list(b), (("bits", Array(w, BIT)),),
+                                          BL.bit_type(Value(w)), word=word, doc=f"{word.id} on bits: its {w} bits as the word's wires, no gate")
     return d

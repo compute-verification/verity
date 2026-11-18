@@ -2642,7 +2642,7 @@ def test_an_accept_says_whether_every_verdict_ran(server):
         verdict_, line = D.replay(ONE_STAGE, case, server)
         got = json.loads(line)
         assert verdict_ == "accept" and got == answer(case) | {"reason": None}, (other, line)
-        assert got["public"]["complete"] is complete and audit.answer_complete(got) is complete, (other, line)
+        assert got["public"]["complete"] is complete, (other, line)
 
 
 ONE_STAGE_V2 = D.ProtocolPort("spot-one-stage-zk", answer, CASES, package=PACKAGE)

@@ -401,8 +401,8 @@ in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by defaul
 - **The attestations aren't a Spec item.** The verifier receives them in the clear from the network attester, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
-  its verdict `"decided_by": "clear"`), which is never zero-knowledge.
+- **A run that proves nothing** (a rehearsal, the simulator) has no outcome of record, so `TransferBlocks.network_verdict`
+  rejects its link, every window it didn't prove refused.
 
 `TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/resource_accounting/network/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
