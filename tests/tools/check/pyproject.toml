@@ -28,6 +28,7 @@ untraced = [
     "test_declaration.py",
     "test_deferred_run.py",
     "test_guard.py",
+    "test_landing_gates.py",
     "test_lean_audit.py",
     "test_lean_changed.py",
     "test_lean_prebuild.py",
@@ -111,7 +112,7 @@ paths = ["tests/benchmarks/one_stage/test_served_cases.py", "tests/benchmarks/on
 
 # `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
 [[tool.verity.tests.reads]]
-tests = ["test_check.py", "test_declaration.py", "test_deferred_run.py", "test_lean_slot.py", "test_live.py",
-         "test_record_pool.py", "test_records.py", "test_settings.py", "test_shard_plan.py", "test_shards.py",
+tests = ["test_check.py", "test_declaration.py", "test_deferred_run.py", "test_landing_gates.py", "test_lean_slot.py",
+         "test_live.py", "test_record_pool.py", "test_records.py", "test_settings.py", "test_shard_plan.py", "test_shards.py",
          "test_verdicts.py"]
 paths = ["tools/verity/circuit_check/src/circuit_check/cli.py"]

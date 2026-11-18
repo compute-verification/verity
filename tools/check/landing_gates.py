@@ -1,7 +1,7 @@
 """`landing_gates`: the check's landing-gates step, every gate drive.toml lists in `landing_gates` at BASE run on the
 candidate's own change.
 
-    python3 tools/check/landing_gates.py BASE OUT
+    python3 tools/check/landing_gates.py BASE OUT [FACTS_TO]
 
 Each gate runs as BASE has it, as `python3 GATE BASE COMMIT --json` (exit 0 passes, 1 fails with `{"failures": [{"why", "fix"}]}`),
 where COMMIT is made here: HEAD's tree, with each lock the run's lean-audit regenerated (OUT's `lean-audit/audit.json`) written
@@ -10,9 +10,9 @@ its date judges the candidate's whole change from that merge base, whatever merg
 gate passes, 1 when one fails or can't judge, each named with its lines.
 
 The run audits the packages whose facts unread_gate reads before this step (`check.gate_audits`), and the facts that audit wrote
-(OUT's `lean-audit/unread/K.jsonl.gz`) go first into the gate's cache under their keys, where it reads first: a node with no
-kept pass of them (a cold cache, or `--no-cache`, which keeps none) judges on them, and the store, which has no remote on a
-check node, isn't needed.
+(OUT's `lean-audit/unread/K.jsonl.gz`) go first into FACTS_TO, the gate's cache, under their keys, where it reads first: a
+node with no kept pass of them (a cold cache, or `--no-cache`, which keeps none) judges on them, and the store, which has no
+remote on a check node, isn't needed.
 """
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ KEY = "landing_gates"
 GATE_TIMEOUT_S = 900
 FIX_LINES = 8
 FACTS = Path("lean-audit") / "unread"
-GATE_CACHE = "unread-gate"
 IDENTITY = {"GIT_AUTHOR_NAME": "check", "GIT_AUTHOR_EMAIL": "check@verity.invalid", "GIT_COMMITTER_NAME": "check",
             "GIT_COMMITTER_EMAIL": "check@verity.invalid"}
 
@@ -58,15 +57,10 @@ def regenerated(out: Path, repo: Path = ROOT) -> dict[str, Path]:
     return {f"{pkg}/lean-audit.json": repo / f for pkg, f in (json.loads(p.read_text()).get("regenerated") or {}).items()}
 
 
-def cache_dir() -> Path:
-    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
-
-
-def seed_facts(out: Path) -> list[str]:
+def seed_facts(out: Path, dst: Path | None) -> list[str]:
     src = out / FACTS
-    if not src.is_dir():
+    if dst is None or not src.is_dir():
         return []
-    dst = cache_dir() / GATE_CACHE
     dst.mkdir(parents=True, exist_ok=True)
     got = []
     for f in sorted(src.glob("*.jsonl.gz")):
@@ -105,10 +99,10 @@ def run_gate(base: str, commit: str, path: str, repo: Path = ROOT) -> tuple[int 
     return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
-def judge(base: str, head: str, out: Path, repo: Path = ROOT) -> list[str]:
+def judge(base: str, head: str, out: Path, repo: Path = ROOT, facts_to: Path | None = None) -> list[str]:
     commit, mb = change(base, head, regenerated(out, repo), repo)
-    if seeded := seed_facts(out):
-        print(f"landing-gates: the facts of {len(seeded)} audited package(s) handed to the gates ({cache_dir() / GATE_CACHE})")
+    if seeded := seed_facts(out, facts_to):
+        print(f"landing-gates: the facts of {len(seeded)} audited package(s) handed to the gates ({facts_to})")
     said = []
     for path in gates(base, repo):
         rc, text = run_gate(base, commit, path, repo)
@@ -130,8 +124,9 @@ def judge(base: str, head: str, out: Path, repo: Path = ROOT) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    base, out = (argv if argv is not None else sys.argv[1:])[:2]
-    said = judge(git("rev-parse", f"{base}^{{commit}}"), git("rev-parse", "HEAD"), Path(out))
+    base, out, *facts_to = (argv if argv is not None else sys.argv[1:])[:3]
+    said = judge(git("rev-parse", f"{base}^{{commit}}"), git("rev-parse", "HEAD"), Path(out),
+                 facts_to=Path(facts_to[0]) if facts_to else None)
     for line in said:
         print(f"landing-gates: {line}")
     return 1 if said else 0

@@ -164,6 +164,7 @@ def test_a_cold_node_judges_on_the_facts_its_own_audit_wrote(tmp_path, monkeypat
     repo.main = repo.git("rev-parse", "HEAD")
     repo.commit({"b.txt": "fine\n"})
     monkeypatch.setitem(ENV, "CHECK_CACHE", str(tmp_path / "cold"))
+    monkeypatch.setattr(CHECK, "cache_dir", lambda: tmp_path / "cold")
     rc, said = _step(repo, tmp_path / "out", monkeypatch)
     assert rc == 1 and "can't judge" in said, said
     (tmp_path / "out" / "lean-audit" / "unread").mkdir(parents=True)

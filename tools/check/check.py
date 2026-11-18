@@ -2146,8 +2146,14 @@ def added_lines(out: Path) -> list[str] | str:
     return ["bash", "-c", script, "added-lines", base, ADDED_LINES, sys.executable]
 
 
+#: unread_gate's cache under the check's (`unread_gate.gate`), where it reads a package's facts first and landing-gates puts
+#: those the run's audit wrote
+UNREAD_GATE_CACHE = "unread-gate"
+
+
 def landing_gates(out: Path) -> list[str] | str:
-    """landing-gates' command: `landing_gates.py BASE OUT`, BASE being the commit in the run's `BASE_FILE` (`--record --on` sends
+    """landing-gates' command: `landing_gates.py BASE OUT FACTS_TO`, FACTS_TO unread_gate's cache (`UNREAD_GATE_CACHE`), BASE
+    being the commit in the run's `BASE_FILE` (`--record --on` sends
     it), else origin/main; skipped where BASE names no commit here or its drive.toml lists no `landing_gates`."""
     sent = out / "inputs" / BASE_FILE
     named = sent.read_text().strip() if sent.is_file() else "origin/main"
@@ -2159,7 +2165,8 @@ def landing_gates(out: Path) -> list[str] | str:
         return f"failed: {e}"
     if not listed:
         return f"skipped: drive.toml at {named} lists no landing_gates"
-    return [sys.executable, str(ROOT / "tools" / "check" / "landing_gates.py"), base, str(out)]
+    return [sys.executable, str(ROOT / "tools" / "check" / "landing_gates.py"), base, str(out),
+            str(cache_dir() / UNREAD_GATE_CACHE)]
 
 
 def gate_audits() -> list[str]:
