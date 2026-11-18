@@ -149,7 +149,10 @@ its Cursor agent id), has no hold label, is marked ready at its head by that own
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
 there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR
 the loop certifies. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
-(`lock_drops`). `research queue status` says what each PR waits for.
+(`lock_drops`). `research queue status` says what each PR waits for, and, from the loop's state file (`state.json` beside its
+decision log on the control pod, rewritten each tick and read there read-only), its place in the loop: its candidate, that
+candidate's base, on main's chain at its place (`position`) or built apart or staged, when it was built, and what it waits on
+(`--json`: `loop`).
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local workload runs in its run directory unless `--cwd`

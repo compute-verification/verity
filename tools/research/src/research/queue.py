@@ -1582,9 +1582,10 @@ class Entry:
     after: tuple[int, ...] = ()           # open PRs whose current or an older head its head contains (`Queue.entries`)
     older: tuple[int, ...] = ()           # those of `after` whose current head it doesn't contain
     held: dict[int, str] = field(default_factory=dict)  # each of `after`: its head this head contains, current or the newest older
-    position: int | None = None           # 1-based, on `next`
+    position: int | None = None           # 1-based, on `next`; with the verified queue's loop, on main's chain (`loop_places`)
     commit: str | None = None
     idle_since: float | None = None       # stale (`research.stale`): idle since then
+    loop: dict | None = None              # its place in the verified queue's loop (`loop_places`), when its state was read
 
     def contains(self, n: int) -> str:
         """How a reason names ``n``, one of `after`."""
@@ -1721,6 +1722,9 @@ def queue_commit(commit: str, parents: str, body: str) -> Member | None:
 
 
 class Queue:
+    #: the verified queue's loop's state file as `status` read it, or why it couldn't (`loop_state`)
+    loop_read: tuple[dict | None, str] = (None, "")
+
     def __init__(self, workdir: Path, *, remote: str, github, ready: Callable[[int, str], bool],
                  store=None, shadow: bool = False, rules: Rules | None = None, log: Callable[[str], None] = print,
                  auth: tuple[str, ...] = (),
@@ -3061,7 +3065,8 @@ class Queue:
 
     def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None,
                fetched: Callable[[], Callable[[list[PR]], dict[int, float]] | None] | None = None,
-               loop: bool = False, reviews: Callable[[int, str], list] | None = None) -> dict[int, Entry]:
+               loop: bool = False, reviews: Callable[[int, str], list] | None = None,
+               places: Callable[[], tuple[dict | None, str]] | None = None) -> dict[int, Entry]:
         """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
         PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
         returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
@@ -3069,7 +3074,11 @@ class Queue:
         `main` landed, one holding a held PR's head waiting for it (`held_below`; a reviewer's hold read from ``reviews``, the
         `reviewed` labels of a PR's head), a move PR that conflicts with `main` refused as any PR is, and so is a head whose
         own change names what a move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
-        member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
+        member's place on it, a head on `checked` landed there, and the refusals of the last sync.  With ``loop`` and
+        ``places`` (`loop_state`: the loop's state file, or why it can't be read, kept as `loop_read`), each PR the loop holds
+        has its place there (`Entry.loop`, `loop_places`: its candidate, that candidate's base, on main's chain at
+        `Entry.position` or apart or staged, when it was built, and what it waits on), and a PR admitted at its head that the
+        loop doesn't take waits on a land verdict."""
         self._clone()
         state = self.load_state()
         open_prs = self.listed = self.github.open_prs()
@@ -3144,6 +3153,16 @@ class Queue:
                 e.why = ("admitted: the verified queue merges it into a candidate on `main` once it has a land verdict"
                          + (", or on its mark alone once its move is certified on `main`, as drive.toml allows" if e.pr.move else
                             ", or on its mark alone when it is low-risk"))
+        if loop and places is not None:
+            doc, err = self.loop_read = places()
+            at = {} if doc is None else loop_places(doc)
+            for n, e in entries.items():
+                if (p := at.get(n)) is not None:
+                    e.loop, e.position = p, p["place"]
+                elif doc is not None and e.state == "ready":
+                    e.loop = {"candidate": None, "base": None, "where": None, "place": None, "built": None, "head": None,
+                              "verdict": None, "waits_on": "a land verdict",
+                              "detail": "the loop doesn't take it at this head: no land verdict by a non-owner, and not low-risk"}
         return entries
 
     def conflicts_with(self, main: str, heads: Iterable[str]) -> dict[str, list[str]]:
@@ -3742,7 +3761,28 @@ def _render(entries: dict[int, Entry]) -> str:
     for e in rows:
         where = f"{e.position:>3}" if e.position else "  -"
         lines.append(f"{where}  #{e.pr.number:<5} {e.pr.head[:8]}  {e.state:<8} {(e.pr.owner or '-')[:24]:<24} {e.why}")
+        if e.loop:
+            lines.append(f"       loop: {loop_line(e.loop, e.pr.head)}")
     return "\n".join(lines) or "no open PRs"
+
+
+def loop_line(p: dict, head: str) -> str:
+    """A PR's place in the verified queue's loop (`loop_places`), in words."""
+    where = {"chain": f"main's chain, place {p['place']}" if p.get("place") else "main's chain", "apart": "built apart",
+             "staged": "staged off main's chain"}.get(p.get("where") or "", "")
+    at = (f"riding {p['candidate'][:12]}" if p.get("where") == "riding" else
+          f"in {p['candidate'][:12]} on {str(p.get('base'))[:12]} ({where})" if p.get("candidate") else "in no candidate")
+    older = f" at its older head {p['head'][:12]}" if p.get("head") and p["head"] != head else ""
+    built = f", built {p['built']}" if p.get("built") else ""
+    return f"{at}{older}{built}: waits on {p['waits_on']}" + (f" ({p['detail']})" if p.get("detail") else "")
+
+
+def loop_header(read: tuple[dict | None, str]) -> str:
+    """Which reading of the verified queue's loop `status` shows (`Queue.loop_read`)."""
+    doc, err = read
+    if doc is None:
+        return f"the verified queue's loop: its state can't be read ({err}), so no PR shows its place there" if err else ""
+    return f"the verified queue's loop at tick {doc.get('tick')}, {doc.get('at')}, `main` {str(doc.get('main'))[:12]}:"
 
 
 #: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
@@ -6144,6 +6184,87 @@ def loop_staged() -> tuple[list[dict], str]:
     return (list((got or {}).get("candidates") or []), err) if got is not None else ([], err or "no answer")
 
 
+#: the live loop's state file (`vqueue_loop.Loop.keep`, rewritten each tick), as one JSON line
+LOOP_STATE_SCRIPT = r'''
+import json, sys
+print(json.dumps(json.load(open(sys.argv[1] + "/state.json"))))
+'''
+
+
+def loop_state() -> tuple[dict | None, str]:
+    """(The live loop's state file as its last tick wrote it, read on the control pod read-only, as `loop_staged` reads its
+    log; why that read failed, else "")."""
+    from .queue_table import CONTROL, LIVE, _remote
+
+    got, err = _remote(CONTROL, LOOP_STATE_SCRIPT, LIVE, timeout=60)
+    if not isinstance(got, dict):
+        return None, err or "no answer"
+    if "ready" not in got:
+        return None, f"its state file of tick {got.get('tick')} holds no PR's place: the loop runs code older than this reader"
+    return got, ""
+
+
+def loop_places(doc: dict) -> dict[int, dict]:
+    """Each PR's place in the verified queue's loop as its state file (`vqueue_loop.Loop.keep`) says, by number: the
+    candidate holding it (``candidate``, its ``base``, ``where`` it is: on main's chain at ``place`` 1 for the lowest, built
+    apart, or staged off the chain, and when it was ``built``), or none; the ``head`` the loop holds it at; and what it
+    ``waits_on`` (a quick tier, a whole check, a staged Lean batch's records run, a Commit onto main's chain's top, the
+    candidates below it, a leave's cause such as a Lean-input hold, a land verdict), with the loop's own words in
+    ``detail``."""
+    from .vqueue import PASS, PENDING
+
+    cands, main = doc.get("candidates") or {}, doc.get("main")
+    plain, waits = set(doc.get("plain") or ()), [str(w) for w in doc.get("waits") or ()]
+    chain = {c["base"]: sha for sha, c in cands.items() if c.get("base") and not c.get("apart") and not c.get("staged")}
+    place, on = {}, main
+    while on in chain and chain[on] not in place:
+        place[chain[on]] = len(place) + 1
+        on = chain[on]
+
+    def waits_on(sha: str, c: dict) -> tuple[str, str]:
+        state, records, note = c.get("mine"), c.get("records"), str(c.get("note") or "")
+        named = [w for w in waits if sha[:12] in w]
+        if c.get("staged"):
+            if records != PASS:
+                return "a staged Lean batch's records run", f"records run {records or 'not launched'}"
+            return "a staged Lean batch: a Commit onto main's chain's top", "; ".join(named or waits)
+        if records not in (None, PASS):
+            return "its records run", f"records run {records}" + (f"; {note}" if note else "")
+        gate = "a quick tier" if set(c.get("members") or ()) <= plain else "a whole check"
+        if c.get("apart"):
+            if state == PASS:
+                return "a Commit onto main's chain's top", "; ".join(waits)
+            return ("a whole check, built apart", note) if state == PENDING else (f"its {state} verdict's drop or rerun", note)
+        if state == PENDING:
+            return gate, note
+        if state == PASS:
+            return ("the candidates below it on main's chain", note) if place.get(sha, 1) > 1 else ("the move of `main`", note)
+        return f"its {state} verdict's drop or rerun", note
+
+    out: dict[int, dict] = {}
+    rank = {"chain": 0, "apart": 1, "staged": 2}
+    for sha, c in cands.items():
+        where = "staged" if c.get("staged") else "apart" if c.get("apart") else "chain"
+        why, detail = waits_on(sha, c)
+        for n, head in zip(c.get("members") or (), c.get("heads") or ()):
+            if n in out and rank[out[n]["where"]] <= rank[where]:
+                continue
+            out[n] = {"candidate": sha, "base": c.get("base"), "where": where, "place": place.get(sha), "built": c.get("built"),
+                      "head": head, "verdict": c.get("mine"), "waits_on": why, "detail": detail}
+    for n, r in (doc.get("riding") or {}).items():
+        out.setdefault(int(n), {"candidate": r.get("in"), "base": None, "where": "riding", "place": None, "built": None,
+                                "head": r.get("head"), "verdict": None, "waits_on": f"the candidate {str(r.get('in'))[:12]}, "
+                                "which holds its head without it as a member", "detail": ""})
+    for n, r in (doc.get("left") or {}).items():
+        out.setdefault(int(n), {"candidate": None, "base": None, "where": None, "place": None, "built": None,
+                                "head": r.get("head"), "verdict": None, "waits_on": str(r.get("cause") or ""),
+                                "detail": str(r.get("why") or "")})
+    for n, head in doc.get("ready") or ():
+        out.setdefault(int(n), {"candidate": None, "base": None, "where": None, "place": None, "built": None, "head": head,
+                                "verdict": None, "waits_on": "the loop's next build", "detail": ""})
+    return out
+
+
 def ejection(store, pr: PR) -> str | None:
     """Why ``pr``'s current head was ejected, when the newest `ready` label on it is `research queue eject`'s `false` (its reason in
     `ref`), pulled from the store's remote first; else None, and None when that pull fails: this saves a revert, and the after-landing
@@ -7163,18 +7284,22 @@ def main(argv: list[str]) -> int:
 
             # under --json, stdout is one JSON document a program parses: what the reading says goes to stderr
             with contextlib.redirect_stdout(sys.stderr) if a.json else contextlib.nullcontext():
-                entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
+                entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews, places=loop_state)
                 teams = q.issue_teams()
+            doc, _ = q.loop_read
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
                                    "issue": named_issue(e.pr.body, teams),
                                    "stale": e.idle_since is not None,
                                    "idle_since": None if e.idle_since is None else
-                                   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since))}
+                                   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since)),
+                                   "loop": e.loop and {**e.loop, "tick": doc.get("tick"), "at": doc.get("at")}}
                                   for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
+                if doc is None and q.loop_read[1]:
+                    print(f"research queue status: {loop_header(q.loop_read)}", file=sys.stderr)
             else:
-                print(_render(entries) + _unnamed(q.listed, teams))
+                print("\n".join(filter(None, [loop_header(q.loop_read), _render(entries) + _unnamed(q.listed, teams)])))
             return 0
         if a.command == "review":
             if a.pr is None and here and signed_at(Path(here), main_ref) == "on":

@@ -144,6 +144,14 @@ def world(tmp_path: Path) -> World:
     return World(tmp_path)
 
 
+@pytest.fixture(autouse=True)
+def _no_control_pod(monkeypatch):
+    """`research queue status` reads the live loop's state on the control pod (`loop_state`): here it reads none."""
+    import research.queue as Qm
+
+    monkeypatch.setattr(Qm, "loop_state", lambda: (None, ""))
+
+
 def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless_or_unmarked_prs_wait(world):
     world.gh.put(3, world.change({"c.txt": "c3\n"}))
     world.gh.put(1, world.change({"a.txt": "a1\n"}))
@@ -2128,6 +2136,77 @@ def test_status_json_writes_one_json_document_on_stdout_and_the_queues_notices_o
     got = capsys.readouterr()
     assert [e["pr"] for e in json.loads(got.out)] == [1, 2]
     assert "#2's pull ref can't be fetched" in got.err and "#2's pull ref isn't at its API head" in got.err
+
+
+def _loop_doc(main: str, heads: dict[int, str]) -> dict:
+    """A state file of the verified queue's loop (`vqueue_loop.Loop.keep`): #1 on main's chain at place 1 (plain, held at an
+    older head), #2 above it (passed), #3 built apart (passed, behind a staged batch's drain), #4 in a staged Lean batch
+    whose records run is pending, #5 left out beside that batch, #6 marked and admitted but not in the loop's `ready`."""
+    one, two, apart, staged = "1" * 40, "2" * 40, "a" * 40, "s" * 40
+    drain = (f"the staged batch {staged[:12]} goes onto main's chain's top once the quick tier of every candidate on it has "
+             f"passed ({one[:12]} pending)")
+
+    def cand(base, members, mine, **kw):
+        return {"mine": mine, "graph2": None, "lacks": [], "note": "", "beside": None, "records": None, "base": base,
+                "members": members, "heads": [heads[n] for n in members], "apart": False, "staged": False, "repairs": None,
+                "built": "2026-11-18T17:00:00Z", "enqueued": None, **kw}
+
+    return {"at": "2026-11-18T18:00:00Z", "tick": 3290, "main": main, "origin_main": main,
+            "candidates": {one: cand(main, [1], "pending", heads=["0" * 40]), two: cand(one, [2], "pass"),
+                           apart: cand(main, [3], "pass", apart=True, built="2026-11-18T16:12:00Z"),
+                           staged: cand(two, [4], "pending", staged=True, records="pending")},
+            "ready": [[n, heads[n]] for n in (1, 2, 3, 4, 5)], "plain": [1], "waits": [drain],
+            "left": {"5": {"head": heads[5], "cause": "Lean input beside a staged batch",
+                           "why": "it changes a Lean input, and a Lean batch is staged"}},
+            "riding": {}, "ignored": {}, "disagree": []}
+
+
+def test_status_shows_each_prs_place_in_the_loop_from_its_state_file_in_text_and_json(world, monkeypatch, capsys):
+    """`research queue status` reads the verified queue's loop's state file (`loop_state`) and shows, for each PR it holds,
+    its candidate, that candidate's base, on main's chain at its place (`position`) or built apart or staged, when it was
+    built and what it waits on: a quick tier, the candidates below it, a Commit onto the chain's top behind a staged batch's
+    drain (the loop's own words), a staged batch's records run, a Lean-input hold, a land verdict; `--json` carries the same
+    under `loop`.  An unreadable state file says why and shows no place."""
+    import research.queue as Qm
+
+    main = _git(world.origin, "rev-parse", "main")
+    heads = {n: world.change({f"{n}.txt": "x\n"}) for n in range(1, 7)}
+    for n, h in heads.items():
+        world.gh.put(n, h)
+    doc = _loop_doc(main, heads)
+    q = world.queue()
+    got = q.status(loop=True, places=lambda: (doc, ""))
+    view = {n: (got[n].position, got[n].loop["where"], (got[n].loop["candidate"] or "")[:1], got[n].loop["waits_on"])
+            for n in heads}
+    assert view == {1: (1, "chain", "1", "a quick tier"),
+                    2: (2, "chain", "2", "the candidates below it on main's chain"),
+                    3: (None, "apart", "a", "a Commit onto main's chain's top"),
+                    4: (None, "staged", "s", "a staged Lean batch's records run"),
+                    5: (None, None, "", "Lean input beside a staged batch"),
+                    6: (None, None, "", "a land verdict")}, view
+    assert got[3].loop["detail"] == doc["waits"][0] and got[3].loop["base"] == main
+    text = Qm._render(got)
+    assert (f"loop: in {'a' * 12} on {main[:12]} (built apart), built 2026-11-18T16:12:00Z: waits on a Commit onto main's "
+            f"chain's top (the staged batch {'s' * 12} goes onto") in text, text
+    assert f"loop: in {'1' * 12} on {main[:12]} (main's chain, place 1) at its older head {'0' * 12}" in text, text
+    assert "loop: in no candidate: waits on Lean input beside a staged batch (it changes a Lean input" in text, text
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(Qm, "loop_state", lambda: (doc, ""))
+    argv = ["queue", "status", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin),
+            "--repo", "o/verity", "--store", str(world.tmp / "queue-store"), "--marked-after", "2026-10-01T00:00:00Z"]
+    assert research_main([*argv, "--json"]) == 0
+    rows = {e["pr"]: e for e in json.loads(capsys.readouterr().out)}
+    assert rows[2]["position"] == 2 and rows[3]["loop"] == {**got[3].loop, "tick": 3290, "at": "2026-11-18T18:00:00Z"}
+    assert research_main(argv) == 0
+    assert capsys.readouterr().out.startswith(f"the verified queue's loop at tick 3290, 2026-11-18T18:00:00Z, `main` {main[:12]}:")
+    monkeypatch.setattr(Qm, "loop_state", lambda: (None, "no answer in 60 s"))
+    assert research_main([*argv, "--json"]) == 0
+    out = capsys.readouterr()
+    assert all(e["loop"] is None for e in json.loads(out.out)) and "its state can't be read (no answer in 60 s)" in out.err
 
 
 def test_the_status_command_says_when_a_move_lands_on_its_mark_and_refuses_one_that_conflicts_with_main(world):
