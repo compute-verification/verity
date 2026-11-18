@@ -1177,6 +1177,17 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == decide(replace(s, depth=2)) == []
 
 
+def test_a_pr_that_conflicts_with_the_staged_batch_s_members_waits_while_it_is_staged_and_is_built_once_it_is_on_the_chain():
+    """A PR a build left out for conflicting with the staged batch's members (`Ready.staged_conflict`) is taken into no batch
+    beside that batch, the others built meanwhile, saying why; once the batch is on the chain it is built in rank order,
+    where a conflict is one with members below it, as any."""
+    under = replace(pr(2), staged_conflict=True)
+    s = snap(waiting("c1", MAIN, 1), ready=[lean(1), under, pr(3)], depth=3, records=True)
+    assert decide(s) == [Build((3,), MAIN, 3)]
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "conflicts with staged batch")]
+    assert decide(replace(s, candidates=(cand("c1", MAIN, 1),))) == [Build((2, 3), "c1", 2)]
+
+
 @pytest.mark.parametrize("files", [("tools/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
                          ids=["check's code", "a Python file of a Lake package"])
 def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_once_that_batch_is_on_the_chain(files):

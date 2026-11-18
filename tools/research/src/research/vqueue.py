@@ -139,6 +139,9 @@ class Ready:
                                    # holds at most one, last (`_moves_last`), and one on a candidate holding one takes only
                                    # the PRs that cross it (`_crossing`)
     scripts: bool = False          # it changes `tools/move/`'s scripts (`queue.MOVE_SCRIPTS`): no move is built on or beside it
+    staged_conflict: bool = False  # a build left it out at this head for conflicting with the staged batch's members, which go
+                                   # onto main's chain's top above it (`vqueue_loop.World._under_staged`): no batch beside
+                                   # that batch takes it (`_pool`)
     crosses: frozenset[str] = frozenset()  # the heads of the move PRs, ready or in flight, whose maps retire nothing its own
                                    # change names (`queue.crossed`): a batch on a candidate holding such a move, at such a
                                    # head, or in the tick that advances to one, may take it (`_crossing`)
@@ -646,9 +649,9 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: bool) -> list[Ready]:
     the one this tick commits, which may be staged again while they are built on `main`), no Lean PR and no PR
     changing a Lean input (`Ready.lean_input`): one Lean batch is staged at a time, and no batch built beside it changes the
     Lean inputs (`vqueue_slim.lean_key`) of the chain's top it goes onto, so its records carry there rather than its records
-    run starting again (`Commit`)."""
+    run starting again (`Commit`), nor a PR that conflicts with the staged batch's members (`Ready.staged_conflict`)."""
     return sorted((r for r in ready.values() if r.number not in busy and not r.conflict
-                   and not (staged and (r.lean or r.lean_input))), key=lambda r: (r.rank, r.number))
+                   and not (staged and (r.lean or r.lean_input or r.staged_conflict))), key=lambda r: (r.rank, r.number))
 
 
 #: why a ready PR that doesn't cross a move (`_crossing`) waits, as a `Leave`'s (cause, why)
@@ -706,6 +709,10 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
     aside = ("set aside", "set aside after its check kept erring: it goes behind the PRs waiting")
     if r.conflict:
         return "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes"
+    if r.staged_conflict and kept:
+        return "conflicts with staged batch", ("it conflicts with the staged Lean batch's members, which go onto main's chain's "
+                                               "top above it: no batch beside it takes it until that staged batch is on "
+                                               "main's chain or the PR's head moves")
     if o is not None and _unsaid_holds(o, r.number):
         return "base's word", (f"a fail above the lowest suspects it: it waits for {o.base[:12]}'s check, which says whose "
                                "failure it was")
