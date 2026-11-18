@@ -11,9 +11,9 @@ import random
 import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import dsa_topk_mask as M
-
 from verity_torch import dsa_table as DT
+
+from verity_vllm.definitions.registry import dsa_topk_mask as M
 
 
 def _members(rng: random.Random, T: int, N: int, TOPK: int) -> tuple[list[int], list[int]]:

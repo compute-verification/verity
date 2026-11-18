@@ -3,6 +3,9 @@
 // ``tc_dot`` steps over K-tiles, optional split-K with an FP32 reduction of the
 // partial chains, and the bias / output-rounding epilogue.  OpenMP over outputs.
 //
+// Defined on finite inputs only: it has no NaN or infinity rules, so its callers hand every input with a non-finite word to the
+// registered primitives (`silicon/total`'s rules), as the GEMM twin does, or decline it, as the attention twin does.
+//
 // Derived from gpu/tensor-core-semantics/ref_chain.cpp (same group_sum, same Term).
 //
 // Build: g++ -O2 -std=c++17 -fopenmp -fPIC -shared -o libtc_model.so tc_model.cpp

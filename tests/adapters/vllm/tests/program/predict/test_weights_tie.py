@@ -17,6 +17,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.commitments.gates import sha512_stream as SS
+from verity.commitments.gates.sha512 import IV
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
+from verity.protocols.proofs.spot.verifier import service as SV
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
+    registered as H1R,
+)
+
 from tests.check.test_weights_of_record import write_safetensors
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import GRAIN, KEY, _checkpoint
@@ -25,17 +38,6 @@ from verity_vllm.pipeline import cli
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as H1R
-
-from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.circuits.codec import descriptor_id
-from verity.commitments.gates import sha512_stream as SS
-from verity.commitments.gates.sha512 import IV
-from verity.commitments.periods import interface as IF
-from verity.commitments.periods import rows as CS
 
 DESIGN, CAP = D.parse_design("work:613"), 16
 EMBED = "model.embed_tokens.weight"

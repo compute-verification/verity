@@ -30,6 +30,9 @@ Twins (twin_id -> the registered body it reproduces, and how it computes it):
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
                                                       non-finite operands and rows with a non-finite intermediate (flags)
 
+`tc_model.cpp`'s step, which `fa2_model.cpp` includes, is defined on finite inputs only: the words with a non-finite operand are
+computed by the registered primitives, through the GEMM twin's fallback or the attention twin's refusal.
+
 Equivalence evidence is machine-checked by `--check` against the gate evaluator and written as `verity-gen/twins/v1` JSON.
 """
 from __future__ import annotations
@@ -43,12 +46,19 @@ from functools import partial
 from typing import Any, Callable
 
 import numpy as np
-
-from verity.circuits.evaluation import self_check
 from verity.circuits.defs import SpecializedDefinition, bind
-from verity_vllm.definitions.numerics.kernel_registry import Declined, covers, instance, register
-from verity_vllm.definitions.registry import b1, prims as P
-from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as CNR, prims_twins
+from verity.circuits.evaluation import self_check
+
+from verity_vllm.definitions.numerics import cuda_rmsnorm_rows as CNR
+from verity_vllm.definitions.numerics import prims_twins
+from verity_vllm.definitions.numerics.kernel_registry import (
+    Declined,
+    covers,
+    instance,
+    register,
+)
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
 
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64

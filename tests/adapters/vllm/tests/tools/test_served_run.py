@@ -331,6 +331,7 @@ def test_settings_refuse_a_model_no_row_places(tmp_path):
 def settings_tree(tmp_path: Path, mode: int = 0o600, sets: str = ADDRESS) -> Path:
     tree = make_tree(tmp_path)
     shutil.copy(HERE / "workload_env.sh", tree / SERVED_RUN / "workload_env.sh")
+    shutil.copy(HERE / "pin_card.sh", tree / SERVED_RUN / "pin_card.sh")
     (tree / "adapters/vllm/manifests").mkdir(parents=True)
     (tree / "adapters/vllm/manifests/checkpoints-int8.json").write_text('{"checkpoints": []}')
     placement = tree / SERVED_RUN / "placement.toml"
@@ -362,6 +363,49 @@ def test_a_command_starts_only_under_the_nodes_env_files(tmp_path, mode, sets, r
     assert (got.returncode, got.stdout) == (1, "") and refusal in got.stderr and ADDRESS not in got.stderr
 
 
+def node_lease(tmp_path: Path) -> str:
+    """A PATH whose gpu-lease prints the arguments it was given, as the node's would be leased."""
+    (bin_ := tmp_path / "node-bin").mkdir(exist_ok=True)
+    (lease := bin_ / "gpu-lease").write_text('#!/usr/bin/env bash\necho "lease $*"\n')
+    lease.chmod(0o755)
+    return f"{bin_}:{os.environ['PATH']}"
+
+
+def leased(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
+    cmd = 'gpu-lease 1 --wait --max-min 60 -- serve; gpu-lease status; echo "port ${PORT:-none}"'
+    return run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "bash", "-c", cmd,
+               PATH=node_lease(tmp_path), **env)
+
+
+def test_a_command_under_the_settings_leases_the_card_card_names_and_any_card_without_it(tmp_path):
+    settings_tree(tmp_path)
+    got = leased(tmp_path, CARD="6")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines() == ["lease 1 --on 6 --wait --max-min 60 -- serve", "lease status", "port none"]
+    got = leased(tmp_path)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines() == ["lease 1 --wait --max-min 60 -- serve", "lease status", "port none"]
+
+
+def test_two_commands_with_their_own_card_and_port_lease_disjoint_cards_on_disjoint_ports(tmp_path):
+    settings_tree(tmp_path)
+    got = [leased(tmp_path, CARD=card, PORT=port) for card, port in (("5", "18190"), ("6", "18290"))]
+    assert [g.returncode for g in got] == [0, 0], [g.stderr for g in got]
+    assert [g.stdout.splitlines()[0] for g in got] == [f"lease 1 --on {c} --wait --max-min 60 -- serve" for c in "56"]
+    assert [g.stdout.splitlines()[-1] for g in got] == ["port 18190", "port 18290"]
+
+
+def test_a_card_with_no_gpu_lease_on_the_node_runs_nothing(tmp_path):
+    settings_tree(tmp_path)
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    for tool in ("bash", "python3", "mktemp", "mkdir", "chmod", "git", "dirname", "env"):
+        if found := shutil.which(tool):
+            (bare / tool).symlink_to(found)
+    got = run(tmp_path, "settings", f"some/{PLACEMENT['row'][:14]}", "--", "echo", "ran", CARD="6", PATH=str(bare))
+    assert (got.returncode, got.stdout) == (2, "") and "CARD=6 is held under gpu-lease, which this node lacks" in got.stderr
+
+
 @pytest.mark.parametrize("demo", ["remote", "onsite_network"])
 def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_path, demo):
     path = HERE.parents[3] / "applications" / f"{demo}.toml"
@@ -376,7 +420,8 @@ def test_the_bindings_bind_every_party_of_the_demo_by_the_env_files_names(tmp_pa
     assert not re.search(r"\d+\.\d+\.\d+\.\d+", got.stdout)
 
 
-@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh"])
+@pytest.mark.parametrize("script", ["window.sh", "compose.sh", "setup.sh", "workload_env.sh", "copy.sh", "audit.sh", "handoff.sh",
+                                    "pin_card.sh"])
 def test_the_runs_scripts_parse(script):
     assert subprocess.run(["bash", "-n", str(HERE / script)], capture_output=True, check=False).returncode == 0
 
