@@ -99,7 +99,7 @@ def attach(exchange: messages.Exchange, vllm_config: Any, names: list[str], cfg:
                                   f"tensor_parallel_size {shape[0]} × pipeline_parallel_size {shape[1]} × "
                                   f"data_parallel_size {shape[2]} under distributed_executor_backend {shape[3]!r}")
     gate = challenger_gate(cfg.get("gate"))
-    got = M.attach_listed(exchange, [(schemes.get(n), cfg.get(n) or {}) for n in names], gate=gate, private=cfg["private"],
+    got = M.attach_listed(exchange, [(schemes.get(n), cfg.get(n)) for n in names], gate=gate, private=cfg["private"],
                           process=H.ENGINE, feed=cfg["feed"])
     if fixed := sorted({r.ranges for _, r in exchange.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1:
@@ -321,7 +321,7 @@ class Front:
             self.ex = messages.current()
             self.ex.refuse = self.refuse
             for n in names:
-                self.ex.attach(schemes.get(n), cfg.get(n) or {}, process=H.FRONT, feed=cfg["feed"])
+                self.ex.attach(schemes.get(n), cfg.get(n), process=H.FRONT, feed=cfg["feed"])
         self.inside: dict[str, Any] = {}           # input -> done once a scheme refuses it, while the server has it
 
     def refuse(self, input: str, why: str) -> None:

@@ -51,8 +51,10 @@ the re-key of the whole registered run of class w mod L (from w = 1), the re-key
 w − L, w − 2L, …, and F fresh slots of at most 512 blocks. Each append names its slot and joins its slot's window.
 A plan holds a registered block only while t < L, and an appended block only L windows after the window its payload was
 first committed in. The ledger credits a refresh session's appended blocks on its schedule check alone, with no
-stacking verdict and no carrier, and reports the most any pass held in probation beside γ. Append coins are taken in the order appends arrive, and an empty slot takes none. So the
-guarantee's coin of a slot is the coin of the append that fills it, which the Lean statement takes as a coupling,
-rather than a coin the challenger keys by slot.
+stacking verdict and no carrier, and reports the most any pass held in probation beside γ. An append's coin is taken by its slot: slots strictly
+increase, the append takes the append family's coin at its slot, so a coin answers at most one append, and an empty
+slot's coin never leaves (`audit.AuditRun.append`; `CoinBySlot`). A re-key's origin is always a first commitment (a
+registered run or a fresh append, never another re-key), and its payloads are leaves of that origin's root (`OriginsOnRota`, `checkOpening`). Off, an append's coin is the next
+one: the i-th append takes append coin i.
 
 Why the Lean verifier decides alone is in `session/verifier.py`, and replaying a recorded session in its `--transcript`.
