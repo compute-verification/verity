@@ -14,8 +14,8 @@
 # (probes/, scalar/: rows.jsonl, gate.json, times.jsonl) with nvidia-smi sampled every 200 ms (env/smi.csv); then
 # analyze.py (analysis.json, verdict.json).
 # Exit: 0 all done, 1 build or gate refused, 4 a dgemm gate not exact (probes still ran), 2 wrong device or no nvcc.
-# DC_BUILD_ONLY=1 stops after the build and SASS gate and leases no GPU; on a node with none, DC_CARD names the card to
-# build for (the name nvidia-smi gives it). DC_JBREAK=1 (sm90jb) is the stress of the H200 rows (probes/sm90_jbreak.cu):
+# DC_BUILD_ONLY=1 stops after the build and SASS gate and leases no GPU; on a node with none, DC_SKU names the card file
+# to build for (calibration/hardware/cards/SKU.toml). DC_JBREAK=1 (sm90jb) is the stress of the H200 rows (probes/sm90_jbreak.cu):
 # probes only, no dgemm. DC_ONLY=REGEX times only
 # the probes it matches and skips dgemm and fp8acc; DC_PASSED_ONLY=1 times what passes when some probes are refused.
 set -uo pipefail
@@ -26,7 +26,7 @@ export PYTHONDONTWRITEBYTECODE=1
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "run.sh: no nvcc (CUDA 13.0 has sm_90a and sm_100a)" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
-CARD=(${DC_CARD:+--card "$DC_CARD"})
+CARD=(${DC_SKU:+--sku "$DC_SKU"})
 ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
 case "$ARCH" in
   sm_90a) FAM=sm90; SRC=sm90_wgmma; GATES=("128 256 256 7" "256 512 1024 11" "192 384 2048 13") ;;
