@@ -1,6 +1,7 @@
 // The scalar pipes alone, the facets of the TS model's polytope that hold no MMA (TENSOR's M3 INT32-pipe
 // assignment of LOP3, IMAD and LEA.HI; M4d's lanes a SM). One source for every family: build with
-// ../opcode_probe/probe.py build --arch sm_90a | sm_100a | sm_120a; gated and poisoned as every opcode probe (probe.cuh).
+// ../opcode_probe/probe.py build on an sm_90a, sm_100a or sm_120a card; gated and poisoned as every opcode probe
+// (probe.cuh).
 //   s_<lane>            1024 threads (8 warps a SMSP), 64 ops of one lane an iteration (duo: 32 words, 3 ops each; a
 //                       memory lane, lde, atome, redg, atoms or lds128: 32 accesses, LDS.128's 8)
 //   p_<x>_<y>           the same with x and y alternating (independent chains): a pair rate above both alone rates
