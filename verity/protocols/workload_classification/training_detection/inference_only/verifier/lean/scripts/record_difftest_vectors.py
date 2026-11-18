@@ -1857,8 +1857,9 @@ def _break(rng, made: dict, how: str) -> bool:
             found = [(r, types.index(types[nodes[r[0]]["args"][r[1]]["type"]][2])) for r in runs
                      if types[nodes[r[0]]["args"][r[1]]["type"]][2] in types]
         elif how == "row-computed":
-            found = [(r, k) for r in runs for k in range(r[0])
-                     if nodes[k]["args"] and _leaves(types[nodes[k]["out"]])[:r[3]] == _leaves(types[nodes[r[2]]["out"]])]
+            found = [(r, k) for r in runs for k in range(r[0]) if nodes[k]["args"] and r[3] % 2 == 0
+                     and len(set(_leaves(types[nodes[r[2]]["out"]])[:r[3]])) == 1
+                     and _leaves(types[nodes[k]["out"]])[:r[3]] == _leaves(types[nodes[r[2]]["out"]])[:r[3]]]
         else:
             found = [r for r in runs if r[3] >= {"row-aliased": 2, "row-strided": 3}.get(how, 0)]
         if not found:
@@ -1878,7 +1879,7 @@ def _break(rng, made: dict, how: str) -> bool:
             elif how == "row-broadcast":
                 _share(nodes, nodes[k], j, other)
             elif how == "row-computed":
-                arg["refs"] = {"affine": ["n", other, 0, count]}
+                arg["refs"] = {"grid": [count // 2, [["n", at, 0, 1, []], ["n", other, 0, 1, []]]]}
             elif how == "row-explicit":
                 arg["refs"] = {"explicit": [["n", at, leaf] for leaf in range(count)]}
             else:
