@@ -32,7 +32,8 @@ $R "$S flock verity"            # these suites (a package name, a directory, or 
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
 python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD   # here, in a second, before the pre-mark run: the no-growth lints on your change
-$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # the pre-mark run; the mark's tier runs it on the head merged onto main
+$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD)"   # the pre-mark run, under --quick unless --slow; the mark's tier runs it on the head merged onto main
+$R "$S --jobs 1 --why-serial TEXT"   # serially, only with its reason: by default as many test processes as the CPUs and memory allow
 $R "$S --fresh"                 # ignore the cache, Lake's artifact cache too: what the suites test is compiled
 uv run tools/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
@@ -99,9 +100,9 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 
 - **A test over about 5 s gets `@pytest.mark.slow`**, which `--quick` and `-m "not slow"` skip and `check` runs; the
   runner lists slower tests without the mark. A suite's quick tier should finish in about a minute: make slow tests
-  smaller before marking more. The pre-mark run (`--changed REV --quick`, also the tier `research queue ready` runs before a
-  mark) keeps the slow tests of each test module the change adds or modifies, or that imports one or a changed helper by
-  name; those of the code under test run in `check`.
+  smaller before marking more. The pre-mark run (`--changed REV`, under `--quick` unless `--slow`, also the tier `research
+  queue ready` runs before a mark) keeps the slow tests of each test module the change adds or modifies, or that imports
+  one or a changed helper by name; those of the code under test run in `check`.
 - **Minutes-long or machine-bound checks are opt-in**, skipping unless a variable asks (`VERITY_POUS_SLOW`,
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`, which `check`, the quick tier and `suites.py` inside a
   `research run` set). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason how long it takes. A test that leaves

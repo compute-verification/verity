@@ -1040,8 +1040,8 @@ def _run_shipped(root: Path, tmp_path: Path) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"),
                RESEARCH_PUBLIC_URL="", VERITY_TEST_CACHE=str(tmp_path / "cache"), VERITY_SKIP_STORE="1")
-    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--fresh", "--jobs", "1"], cwd=root, env=env,
-                          capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--fresh", "--jobs", "1",
+                           "--why-serial", "a test's tiny tree"], cwd=root, env=env, capture_output=True, text=True)
 
 
 def test_a_shipped_tree_with_no_store_runs_the_suites_its_tracked_fixtures_feed(tmp_path):
@@ -1109,8 +1109,9 @@ def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None
                VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1",
                CHECK_SLOT_MEM_GB="1000")                         # the slot's memory, not the cgroup of the machine the test runs on
     env.update(extra or {})
-    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
-                          cwd=root, env=env, capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1",
+                           "--why-serial", "a test's tiny tree", "--logs", str(tmp_path / "logs"), *args], cwd=root, env=env,
+                          capture_output=True, text=True)
 
 
 def _env_workspace(root: Path, members: dict[str, str]) -> None:
@@ -1500,6 +1501,83 @@ def test_the_quick_tier_runs_the_slow_tests_the_change_reaches_and_keys_each_mod
     assert _reused(tmp_path) == [f"tests/test_{m}.py::test_{t}" for m in "ac" for t in ("quick", "slow")]
 
 
+def _slow_tree(root: Path) -> str:
+    """A committed tree of one suite, `pkg`: `test_a` and `test_b`, each with a quick test and a failing test marked slow."""
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+                                                 'markers = ["slow: slow"]\n')
+    for m in "ab":
+        (root / "pkg" / "tests" / f"test_{m}.py").write_text(
+            "import pytest\n\ndef test_quick():\n    pass\n\n@pytest.mark.slow\ndef test_slow():\n    assert False\n")
+    _git(root, "init", "-q")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    return _git(root, "rev-parse", "HEAD")
+
+
+def test_changed_takes_the_quick_tier_unless_slow_is_asked(tmp_path, monkeypatch, capsys):
+    """`--changed` alone is `--changed --quick`: it says so, naming `--slow`, and the test modules the change reaches run whole
+    (`taken_whole`); `--slow` keeps every slow test, and neither `--quick --slow` nor `--slow` without `--changed` is taken."""
+    base = _slow_tree(tmp_path)
+    (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_quick():\n    pass\n")
+    S = _suites(monkeypatch, tmp_path)
+    assert S.main(["--list", "--changed", base]) == 0
+    out = capsys.readouterr().out
+    assert "suites: --changed runs the quick tier" in out and "--slow keeps them all" in out, out
+    assert "pkg: 1 test modules the change reaches run whole, slow tests included: pkg/tests/test_a.py" in out, out
+    for asked in (["--slow"], ["--quick"]):
+        assert S.main(["--list", "--changed", base, *asked]) == 0
+        out = capsys.readouterr().out
+        assert "quick tier" not in out and ("run whole" in out) == (asked == ["--quick"]), out
+    for argv, why in ((["--quick", "--slow"], "--slow keeps the tests marked slow and --quick leaves them out: drop one"),
+                      (["--slow"], "--slow is for --changed: a run without --changed keeps the tests marked slow already, so "
+                                   "drop --slow")):
+        with pytest.raises(SystemExit) as e:
+            S.main(["--list", "--changed", base, *argv] if "--quick" in argv else ["--list", *argv])
+        assert e.value.code == 2 and why in capsys.readouterr().err
+
+
+def test_changed_runs_no_slow_test_the_change_does_not_reach_unless_slow(tmp_path):
+    """End to end: `test_b`'s failing slow test, which the change to `test_a` doesn't reach, stays out of `--changed` and fails
+    `--changed --slow`."""
+    import json
+    import shutil
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    shutil.rmtree(root / "pkg")
+    base = _slow_tree(root)
+    (tests / "test_a.py").write_text("def test_quick():\n    pass\n")
+    out = tmp_path / "out.json"
+    p = _run_suite(root, tmp_path, "--changed", base, "--json", str(out))
+    assert p.returncode == 0 and "suites: --changed runs the quick tier" in p.stdout, p.stdout + p.stderr
+    [r] = json.loads(out.read_text())
+    assert (r["status"], r["counts"]["passed"]) == ("passed", 2), r
+    p = _run_suite(root, tmp_path, "--changed", base, "--slow", "--json", str(out))
+    [r] = json.loads(out.read_text())
+    assert p.returncode == 1 and "quick tier" not in p.stdout and r["failed_tests"] == ["tests/test_b.py::test_slow"], p.stdout
+
+
+def test_jobs_1_needs_its_reason(tmp_path, monkeypatch, capsys):
+    """`--jobs 1` (or `-j 1`) without `--why-serial` is refused, naming the flag and the default; with it the run says why once.
+    Other `--jobs` take no reason, and a reason without `--jobs 1` is refused."""
+    _slow_tree(tmp_path)
+    S = _suites(monkeypatch, tmp_path)
+    for jobs in (["--jobs", "1"], ["-j", "1"], ["-j1"], ["--jobs=1"]):
+        with pytest.raises(SystemExit) as e:
+            S.main(["--list", *jobs])
+        err = capsys.readouterr().err
+        assert e.value.code == 2 and "give its reason with --why-serial TEXT, or omit --jobs" in err, err
+        assert "runs as many test processes as the CPUs and memory allow" in err, err
+        assert S.main(["--list", *jobs, "--why-serial", "bisecting an order dependence"]) == 0
+        assert capsys.readouterr().out.count("suites: --jobs 1: bisecting an order dependence\n") == 1
+    assert S.main(["--list", "--jobs", "2"]) == 0 and "--jobs 1" not in capsys.readouterr().out
+    with pytest.raises(SystemExit) as e:
+        S.main(["--list", "--jobs", "2", "--why-serial", "no"])
+    assert e.value.code == 2 and "--why-serial is the reason for --jobs 1: pass --jobs 1 or drop it" in capsys.readouterr().err
+
+
 def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(tmp_path):
     """A layout change moves a suite whole: its kept passes, the suite's and each test's, answer for it where it lands."""
     import json
@@ -1696,7 +1774,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     (tmp := tmp_path / "tmp").mkdir()
     env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", TMPDIR=str(tmp))
-    p = subprocess.Popen([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
+    p = subprocess.Popen([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1",
+                          "--why-serial", "a test's tiny tree", "--logs", str(tmp_path / "logs")],
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"

@@ -36,7 +36,8 @@ SUITES_PY = "tools/check/suites.py"
 #: names it (one from before the option refuses it, so that tree's run reserves its budget whole)
 SLOT_PY, BUDGET_OPT = "tools/check/slot.py", "--budget-gb"
 #: suites.py's options that take a value
-VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s", "--explain"}
+VALUED = {"--changed", "--skip", "--jobs", "-j", "--why-serial", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s",
+          "--explain"}
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
 SUITE_TIMEOUT_S = 3600
 SYNC_S = 600

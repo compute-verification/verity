@@ -479,13 +479,15 @@ def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_shar
             ([*run, "--changed", "big"], None, 4, 64, 32),           # a's workers may reach 16 GB each
             ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32, 16),   # its --jobs is the processes it runs
             ([*run], None, 4, 64, 32),                               # every suite
-            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16, 16)):   # 4.5 GB: never under the kind's own 16
+            ([*run, "--changed", "small", "--jobs", "1", "--why-serial", "a bisect"], None, 1, 16, 16)):   # 4.5 GB: never under 16
         shape = suite_size.size(repo, cmd, cpus)
         assert (got := shape["mem_gb"]) == gb, (cmd, cpus)
         assert got // suite_size.TEST_PROCESS_GB >= workers, "suites.py's default --jobs gives it a process for each CPU it asked"
         assert shape["reserve_gb"] == reserved, (cmd, cpus)
     named = suite_size.size(repo, [*run, "a"], None)
     assert named["mem_gb"] == 64 and "reserve_gb" not in named, "named suites: their workers at their worker_gb, reserved whole"
+    assert suite_size.selection([*run, "a", "-j", "1", "--why-serial", "b", "--changed", "r", "--slow"]) == (["a"], 1, "r"), \
+        "--why-serial's value is no suite"
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):

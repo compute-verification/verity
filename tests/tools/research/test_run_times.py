@@ -152,6 +152,8 @@ def test_a_command_is_read_for_its_kind_its_pool_and_whom_it_is_for():
     assert run_records.kind([*POOLED, "sh", "-c", 'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" --lean Security']) == "quick suites"
     assert run_records.kind(["gpu-lease", "1", "--wait", "--mem-gb", "0", "--", "python3", "bench.py"]) == "GPU jobs"
     assert run_records.kind([*POOLED, "uv", "run", "tools/check/suites.py", "verity/core"]) == "other", "not the quick tier"
+    assert run_records.kind([*POOLED, "uv", "run", "tools/check/suites.py", "--changed", "abc"]) == "quick suites", "--changed is quick"
+    assert run_records.kind([*POOLED, "uv", "run", "tools/check/suites.py", "--changed", "abc", "--slow"]) == "other"
     assert [run_records.pool(c) for c in (QUICK, SHARD, DIRECT)] == ["research", "check", "-"]
     assert (run_records.asked_by(QUICK), run_records.asked_by(DIRECT), run_records.asked_by(["x", "--by"])) == ("proofs", None, None)
 

@@ -121,7 +121,8 @@ def _run(root: Path, tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
                RESEARCH_FIXTURES_URL="", VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1",
                CHECK_SLOT_MEM_GB="1000")
     return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1",
-                           "--logs", str(tmp_path / "logs"), *args], cwd=root, env=env, capture_output=True, text=True)
+                           "--why-serial", "a test's tiny tree", "--logs", str(tmp_path / "logs"), *args], cwd=root, env=env,
+                          capture_output=True, text=True)
 
 
 def _ran(rows: list[dict]) -> int:

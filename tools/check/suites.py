@@ -4,8 +4,9 @@
     uv run tools/check/suites.py verity flock        only these suites (a package name, a directory, or a unique part of one;
                                                             `tests` is the repository's own)
     uv run tools/check/suites.py --quick             without the tests marked `slow`
-    uv run tools/check/suites.py --changed REV       only the suites the change from REV touches (`touched`); under
-                                                            --quick, the test modules it reaches keep their slow tests (`taken_whole`)
+    uv run tools/check/suites.py --changed REV       only the suites the change from REV touches (`touched`), under --quick
+                                                            (`--slow` keeps the slow tests): the test modules it reaches keep
+                                                            their slow tests (`taken_whole`)
     uv run tools/check/suites.py --fresh             run even where a pass is cached
     uv run tools/check/suites.py --lend-from COMMIT  leave out each suite with no pass here whose key in COMMIT's tree
                                                             is its key here: the check of COMMIT answers for it (`lent_by`)
@@ -2678,7 +2679,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("suites", nargs="*", help="suites to run (default: all)")
     ap.add_argument("--quick", action="store_true", help="deselect the tests marked slow, but with --changed those of the test "
                     "modules the change reaches (`taken_whole`)")
-    ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`)")
+    ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`), "
+                    "under --quick unless --slow")
+    ap.add_argument("--slow", action="store_true", help="with --changed, keep the tests marked slow (a run without --changed keeps "
+                    "them anyway)")
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
     ap.add_argument("--lend-from", metavar="COMMIT", help="leave out each suite with no pass here whose key in COMMIT's tree is "
                     "its key here (`lent_by`), reported as `lent`: the check of COMMIT answers for it. Only for a check whose "
@@ -2695,9 +2699,10 @@ def main(argv: list[str] | None = None) -> int:
                          "and fail it as timed out (`check` passes this)")
     ap.add_argument("--list", action="store_true", help="list the suites, their inputs, and whether a pass is cached")
     ap.add_argument("--skip", action="append", default=[], metavar="SUITE", help="leave this suite out (repeatable)")
-    ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
+    ap.add_argument("--jobs", "-j", type=int, default=None,
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
-                         f"at most one per {TEST_PROCESS_GB} GB of available memory)")
+                         f"at most one per {TEST_PROCESS_GB} GB of available memory); 1 only with --why-serial")
+    ap.add_argument("--why-serial", metavar="TEXT", help="why this run takes --jobs 1, kept in its log")
     ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
                     help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
                          f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
@@ -2735,6 +2740,18 @@ def main(argv: list[str] | None = None) -> int:
                  "the same key, and reuses its verdict")
     if a.allowances and (a.quick or a.changed):
         ap.error("--allowances takes neither --quick nor --changed: it is for a check's whole run of each suite")
+    if a.slow and a.quick:
+        ap.error("--slow keeps the tests marked slow and --quick leaves them out: drop one")
+    if a.slow and not a.changed:
+        ap.error("--slow is for --changed: a run without --changed keeps the tests marked slow already, so drop --slow")
+    implied = bool(a.changed and not a.slow and not a.quick)
+    a.quick = a.quick or implied
+    if a.jobs == 1 and not a.why_serial:
+        ap.error("--jobs 1 runs every test serially, often for hours: give its reason with --why-serial TEXT, or omit --jobs, whose "
+                 f"default runs as many test processes as the CPUs and memory allow (here {default_jobs()})")
+    if a.why_serial and a.jobs != 1:
+        ap.error("--why-serial is the reason for --jobs 1: pass --jobs 1 or drop it")
+    a.jobs = default_jobs() if a.jobs is None else a.jobs
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
@@ -2772,6 +2789,11 @@ def main(argv: list[str] | None = None) -> int:
         chosen = touched(chosen, pkgs, base, tree, locked())
         since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != rev else "")
         print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
+        if implied:
+            print("suites: --changed runs the quick tier (the tests marked slow only in the test modules the change reaches); "
+                  "--slow keeps them all")
+    if a.why_serial:
+        print(f"suites: --jobs 1: {a.why_serial}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
     if build_lean:

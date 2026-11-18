@@ -2200,7 +2200,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     lend = out / "inputs" / LEND_FILE
     # the run's base (`BASE_FILE`), where the verified queue reads the allowances: the tests they name run as expected failures
     base = out / "inputs" / BASE_FILE
-    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
+    tail = ["--timeouts", "--jobs", str(a), *(["--why-serial", "the step's share of the cores is one"] if a == 1 else []),
+            *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else []),
             *(["--lend-from", lend.read_text().strip()] if cache and lend.is_file() else []),
             *(["--allowances", base.read_text().strip()] if base.is_file() else [])]

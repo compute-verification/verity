@@ -40,8 +40,8 @@ def _repo(root: Path) -> Path:
 def _suites(tree: Path, cache: Path, *args: str) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(VERITY_TEST_CACHE=str(cache), PYTHONDONTWRITEBYTECODE="1")
-    return subprocess.run([sys.executable, str(tree / "tools" / "check" / "suites.py"), "--jobs", "1", *args], cwd=tree, env=env,
-                          capture_output=True, text=True)
+    return subprocess.run([sys.executable, str(tree / "tools" / "check" / "suites.py"), "--jobs", "1",
+                           "--why-serial", "a test's tiny tree", *args], cwd=tree, env=env, capture_output=True, text=True)
 
 
 def _keys(tree: Path, cache: Path) -> dict[str, str]:
