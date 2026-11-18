@@ -17,7 +17,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
-# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity_vllm.definitions.registry`, which imports
+# PoUW's words among them) and the Definitions' integer, gather and cast primitives (`verity_vllm.definitions.registry`, which imports
 # their twins in `verity_vllm.definitions.numerics`; both read `verity_vllm.definitions.evidence` and its `evidence.json`).
 # `demo.py`'s registry walk reads `verity.circuits.ops.boolean.versions` too.
 # The key-binding test reads PoUB, on the commitments, the randomness, the profile and the kernels' plans.
@@ -27,22 +27,14 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/resource_accounting/memory/poub/verifier", "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/challenger.py", "verity/protocols/proofs/spot/verifier/challenger/remote.py",
-          "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
-          "verity/protocols/resource_accounting/compute/pouw/prover/__init__.py", "verity/protocols/resource_accounting/compute/pouw/prover/circuit",
-          # PoUW's prover circuit registers its circuits on the declaration at import (`register_circuits`), which reads
-          # the hooks, and names the ncp-v2 family from the one kernel table
-          "verity/protocols/resource_accounting/scheme.py",
-          # read only because importing `pouw.prover.circuit.words` runs its package's `__init__`, which registers PoUW's
-          # circuits from the kernel schemes' table; they go when the word primitives move out of that package
-          "verity/hooks.py", "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
           "adapters/vllm/verity_vllm/__init__.py",  # `verity_vllm.definitions`' package: importing it runs this first
           "adapters/vllm/verity_vllm/definitions/__init__.py",
           "adapters/vllm/verity_vllm/definitions/registry",
           "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",
           "adapters/vllm/verity_vllm/definitions/evidence.json", "verity/circuits/ops/boolean/versions.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
-          "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/compute/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
-          "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/compute/pouw/__init__.py",
+          "verity/protocols/proofs/__init__.py", "verity/protocols/resource_accounting/__init__.py", "verity/protocols/resource_accounting/memory/__init__.py",
+          "verity/protocols/resource_accounting/memory/poub/__init__.py",
           "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/verifier/challenger/__init__.py", "benchmarks/property_redteam",
           "calibration/hardware/cards",

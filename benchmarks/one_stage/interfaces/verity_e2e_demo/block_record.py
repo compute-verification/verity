@@ -28,8 +28,8 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   every subprotocol but `BY_NAME`'s carries, is each Lean premise its scheme's guarantee is stated under, by name
   (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. ``unbounded``, beside a
   declared one whose scheme `bound` refuses at what its answer's profile gives, is that refusal's sentence (``why``)
-  and the terms it lacks by name (``terms``); its verdict stays its answer's unless `UNDECIDED_WHEN_UNBOUNDED` names
-  it. ``refused``, beside a subprotocol whose piece refused to run (its runner row's verdict `REFUSED`, the
+  and the terms it lacks by name (``terms``): its verdict stays its answer's, and it holds at no δ, its ``at`` giving
+  that sentence as why, so `compose` lists it under ``not_established``. ``refused``, beside a subprotocol whose piece refused to run (its runner row's verdict `REFUSED`, the
   node's state: no card, a busy card), is the refusal's sentence: its answer is undecided with that reason, its
   quantity's value null, its error 1, so it is never accepted, never dropped and holds at no δ. A subprotocol whose ``server``
   is not the block's is carried but not composed.
@@ -109,9 +109,6 @@ SUBPROTOCOLS = tuple(RUNNER_KEYS)
 #: the subprotocols no declared scheme reads (`Scheme.reader`): the sampled proofs, undeclared, and the work row, H1's,
 #: whose scheme names no quantity; each is read here by name, and a test holds the list to only shrink
 BY_NAME = ("integrity", "pouw")
-#: the subprotocols whose verdict is undecided, with its sentence as the reason, where `S.bound` refuses their row;
-#: certifier's (network's) never without network's yes
-UNDECIDED_WHEN_UNBOUNDED: tuple[str, ...] = ()
 #: a runner row's verdict for a piece that refused to run, with its sentence as ``reason``
 REFUSED = "refused"
 #: why a row whose declaration bounds it reads unbounded when its answer's profile gives no bound's inputs
@@ -235,11 +232,14 @@ def _scheme(subprotocol: str) -> S.Scheme:
                      f"declare its scheme there, with its reader")
 
 
-def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction) -> dict[str, Any]:
-    """The subprotocol's certificate at each δ of `DELTAS` (module docstring)."""
+def at_deltas(subprotocol: str, quantity: Mapping[str, Any], error: Fraction, unbounded: str | None = None) -> dict[str, Any]:
+    """The subprotocol's certificate at each δ of `DELTAS` (module docstring); none holds for a row its scheme's
+    `bound` refuses, whose sentence ``unbounded`` is."""
     out: dict[str, Any] = {}
     for d in DELTAS:
-        if subprotocol == "integrity" and "members" in quantity:
+        if unbounded is not None:
+            out[str(d)] = {"holds": False, "why": unbounded}
+        elif subprotocol == "integrity" and "members" in quantity:
             m = quantity["members"]
             out[str(d)] = {"holds": False, "why": f"the sample reached {m['sampled']} of {m['registered']} members, so "
                            f"no bound over the workload's {quantity['of']} proof blocks holds; "
@@ -277,11 +277,9 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
     declared = {} if name in BY_NAME else {"premises": _premises(_scheme(name)), **_bound(_scheme(name), profile)}
-    if name in UNDECIDED_WHEN_UNBOUNDED and "unbounded" in declared:
-        answer |= {"verdict": "undecided", "reason": declared["unbounded"]["why"]}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
-            "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
+            "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error, declared.get("unbounded", {}).get("why")),
             "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
         | declared
 
@@ -438,8 +436,8 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
         key = f"subprotocol:{name}"
         if lg["source"] not in ("real", "fixture"):
             bad[key] = "its source is neither real nor fixture"
-        if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
-            bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"]), lg.get("unbounded", {}).get("why")):
+            bad[key] = "its certificates at the deltas are not its quantity's at its error, or hold though its bound is refused"
         m = lg["quantity"].get("members") or {}
         if (lg["quantity"]["value"] is None) != ("refused" in lg or (
                 name == "integrity" and m.get("sampled", 0) < m.get("registered", 0))):
