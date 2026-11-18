@@ -52,8 +52,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   its own requests of it), or None where the launcher holds none; ``private``, the scheme's own directory
   (``<launcher's private>/<scheme's name>``), outside every run output, where it keeps what never leaves the node across
   a server's lives, or None where the launcher holds none; and what the launcher passes: ``process``, ``feed``
-  (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
-  ``log``, ``clock`` and ``schedule``. The adapter's exchange attaches it (``Exchange.attach``), files those of
+  (`verity.hooks.FRONT`), for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
+  ``log``, ``clock`` and ``schedule``, and for Pearl+ reserving a session an epoch ``ledger``, the gate's ledger as lines. The adapter's exchange attaches it (``Exchange.attach``), files those of
   ``requests(ctx)`` that ``attach`` did not, and declares it with its settings under its name (`verity.hooks.Declared`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
