@@ -16,7 +16,7 @@ On every one of those inputs it agrees with the output rows of the template `Low
 
 @[expose] public section
 
-namespace Proofs.Properties.Flock.EvalBool
+namespace FlockSoundness.EvalBool
 
 open Flock Flock.Test.Lower
 
@@ -47,4 +47,4 @@ def evalWord (P : Program.Prog) (id : String) (n x y : Nat) : Option Nat :=
       | _, _ => false
   | _, _ => false
 
-end Proofs.Properties.Flock.EvalBool
+end FlockSoundness.EvalBool
