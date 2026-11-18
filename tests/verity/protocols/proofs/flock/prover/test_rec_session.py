@@ -21,6 +21,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.commitments import registered_value as RV
 from verity.commitments import domains as DM
@@ -53,7 +54,7 @@ _UNIT = bind(CompositeDefinition("RecSessionTestUnit", 0, (), lambda S: ((("x", 
 
 def _private(n: int = 3):
     """A private circuit's program and query: ``n`` instances of a toy unit."""
-    return P.population_program(_UNIT, n), P.template_instance_query(_UNIT)
+    return PN.population_program(_UNIT, n), P.template_instance_query(_UNIT)
 
 
 def _partition():

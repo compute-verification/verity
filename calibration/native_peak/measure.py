@@ -325,9 +325,9 @@ def measure_size(n: int, dtype: str, device: str, warmup: int, reps: int, sustai
 HERE = Path(__file__).resolve().parent
 
 
-def nvcc_bin() -> str | None:
+def nvcc_bin() -> str:
     """nvcc on PATH, else the machine's toolkit at 13.0 (`verity_bench.kit.toolkit`: $CUDA_HOME, else the run's machine's
-    record); None where neither has one."""
+    record); FileNotFoundError, saying why, where neither has one."""
     if found := shutil.which("nvcc"):
         return found
     harness = str(HERE.parents[1] / "benchmarks" / "harness")
@@ -337,17 +337,17 @@ def nvcc_bin() -> str | None:
 
     try:
         nvcc = Path(kit.toolkit("13.0")) / "bin" / "nvcc"
-    except SystemExit:
-        return None
-    return str(nvcc) if nvcc.is_file() else None
+    except SystemExit as e:
+        raise FileNotFoundError(f"nvcc not on PATH, and no toolkit at 13.0: {e}") from e
+    if not nvcc.is_file():
+        raise FileNotFoundError(f"nvcc not on PATH, and the toolkit at 13.0 has no {nvcc}")
+    return str(nvcc)
 
 
 def build_nvfp4(out: Path) -> tuple[Path, str]:
     """nvcc the microbenchmark for sm_120a (compute_120a PTX named explicitly, as the probe does: ptxas refuses `.block_scale`
     on plain sm_120); returns (path of the .so, nvcc version line)."""
     nvcc = nvcc_bin()
-    if nvcc is None:
-        raise FileNotFoundError("nvcc not found (PATH, or the machine's toolkit at 13.0)")
     so = out / f"lib{Path(NVFP4_SOURCE).stem}_{NVFP4_ARCH}.so"
     ver = subprocess.run([nvcc, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc, "-O2", f"-gencode=arch=compute_{NVFP4_ARCH[3:]},code={NVFP4_ARCH}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
@@ -358,8 +358,7 @@ def build_nvfp4(out: Path) -> tuple[Path, str]:
 def nvfp4_sass(so: Path) -> dict:
     """`cuobjdump -sass` on the microbenchmark: the MMA opcodes and their static count in the loop body (NSETS x NACC = 32 in
     the unrolled body + nothing else that is an MMA).  The same opcode name the probe records (OMMA.16864.F32.E2M1.E2M1.UE4M3)."""
-    nvcc = nvcc_bin()
-    cuobjdump = str(Path(nvcc).parent / "cuobjdump") if nvcc else shutil.which("cuobjdump")
+    cuobjdump = str(Path(nvcc_bin()).parent / "cuobjdump")
     if not cuobjdump or not Path(cuobjdump).is_file():
         return {"sass": "not captured", "opcodes": [], "mma_count": 0, "error": "cuobjdump not found"}
     text = subprocess.run([cuobjdump, "-sass", str(so)], capture_output=True, text=True, check=True).stdout
@@ -739,8 +738,11 @@ def main(argv: list[str] | None = None) -> int:
         major, minor = torch.cuda.get_device_capability(idx)
         if (major, minor) != (12, 0):
             skipped = f"the sm_120 mma.sync kind::mxf4nvf4 instruction needs cc 12.0; this card is sm_{major}{minor} ({envd['device']})"
-        elif nvcc_bin() is None:
-            skipped = "nvcc not found (PATH, or the machine's toolkit at 13.0): cannot build mma_peak_fp4.cu"
+        else:
+            try:
+                nvcc_bin()
+            except FileNotFoundError as e:
+                skipped = f"cannot build mma_peak_fp4.cu: {e}"
 
     files: list[str] = []
     results: list[dict] = []

@@ -26,6 +26,7 @@ from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 
 from verity_vllm.commit import index as IX
 from verity_vllm.commit import row_tables as RTB
@@ -271,7 +272,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
             assert REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, bytes(64), pos, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, root, pos ^ 1, bc, path, REG.SCHEMA_SEG)
-            assert not REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA)
+            assert not REG.verify_read(dom, root, pos, bc, path, RV.SCHEMA)
     with pytest.raises(ValueError, match="do not hold"):
         TB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key}, registered=REG)
     # a chunk whose x string is the only copy of a table row and is not that row: step 0's root, against the recorded one

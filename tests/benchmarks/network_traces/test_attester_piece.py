@@ -437,7 +437,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_attester_missing(case, tmp_
     assert {"no kept run": "no network attester run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError",
             "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
-            "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
+            "foreign answer": "the protocol 'other', not verity/certifier/v0"}[case] in why
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
