@@ -131,7 +131,6 @@
   "benchmarks/one_stage/served_verdicts.sh": 1,
   "benchmarks/pous/served_piece.py": 4,
   "benchmarks/pous/streamed_wipe/demo.sh": 2,
-  "benchmarks/pouw/pearl_c_vllm/served_passes.py": 4,
   "benchmarks/serve_tax/serve_tax.py": 11,
   "benchmarks/slowdown/slowdown/envelopes.py": 3,
   "benchmarks/spot_figures/cards.py": 2,
