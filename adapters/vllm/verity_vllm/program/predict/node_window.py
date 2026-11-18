@@ -77,6 +77,7 @@ from .window_builder import (
     _step,
     _word,
     check_provable,
+    weight_run,
     inference,
 )
 
@@ -327,10 +328,7 @@ class NodeWindow:
 
     def weight(self, refs: Refs, words: int) -> int:
         """The first word of the one run of the weights record ``refs`` read, ``words`` long."""
-        segs = self.segments(refs)
-        if len(segs) != 1 or segs[0][:2] != ("p", WEIGHTS) or segs[0][3] - segs[0][2] != words:
-            raise Unexpressible(f"{self.name}: a weight read of {segs}, not one run of {words} weight words")
-        return segs[0][2]
+        return weight_run(self.name, self.segments(refs), words)
 
     def label(self, refs: Refs, words: int) -> str:
         """The label of the one weight ``refs`` read, ``words`` long."""
