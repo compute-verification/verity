@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordUnits
 public import Proofs.Properties.InferenceOnly.RecordDeclared
+public import Proofs.Properties.InferenceOnly.RecordTemplates
 
 /-!
 # Shared runs held: the proof
@@ -515,12 +516,116 @@ theorem sharedOf_arg {P : Prog} {sh : List Shared} (h : sharedOf P = some sh) {k
       some sh := h
   refine shared_fold P _ _ _ _ _ h' k j _ ?_ q hq i base inner b hr hc ?_
   · refine List.mem_flatMap.2 ⟨((P.defs[P.root]!).body.nodes[k]!, k),
-      List.mem_zipIdx_iff_getElem?.2 (by simp [getElem!_pos (P.defs[P.root]!).body.nodes k hk, hk]), ?_⟩
+      List.mem_zipIdx_iff_getElem?.2 (by simp [hk]), ?_⟩
     simp only [hu, Bool.false_eq_true, ↓reduceIte]
     exact List.mem_map.2 ⟨((((P.defs[P.root]!).body.nodes[k]!).args[j]!), j),
-      List.mem_zipIdx_iff_getElem?.2 (by simp [getElem!_pos ((P.defs[P.root]!).body.nodes[k]!).args j hj, hj]), rfl⟩
+      List.mem_zipIdx_iff_getElem?.2 (by simp [hj]), rfl⟩
   · show ((partRun P q).map ((sharedRuns P).contains ·.1)).getD false = true
     rw [hr]
     exact hc
+
+/-- **What a row's plan reads**: its range, by the argument's node, its template and port, by the argument's index,
+and its first unit (`u0_eq`) and count, the row one of the port's cuts. -/
+theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
+    {ds : List Decl} {s : Shared} {c : Nat} {tid port : String} {u0 n : Nat} {p : String} {g : List (Nat × Int)}
+    {gb o : Int} (h : sharedPlan P rs ts W ds s c = some (tid, port, u0, n, p, g, gb, o)) :
+    ∃ r t ty, rs.find? (·.node == s.node) = some r ∧ ts.find? (·.tid == r.template) = some t ∧
+      (P.defs[t.defn]!).params[s.arg]? = some (port, ty) ∧ tid = r.template ∧
+      u0 = (Spot.RecordText.rangesAt rs r.template).foldl (fun a q => if q.first < r.first then a + q.count else a) 0 ∧
+      n = r.count ∧ c < W.cutsOf r.template port := by
+  cases hr : rs.find? (·.node == s.node) with
+  | none => simp [sharedPlan, hr] at h
+  | some r =>
+    cases ht : ts.find? (·.tid == r.template) with
+    | none => simp [sharedPlan, hr, ht] at h
+    | some t =>
+      cases hp : (P.defs[t.defn]!).params[s.arg]? with
+      | none => simp [sharedPlan, hr, ht, hp] at h
+      | some pp =>
+        obtain ⟨port', ty⟩ := pp
+        simp only [sharedPlan, hr, ht, hp, bind, Option.bind] at h
+        refine ⟨r, t, ty, by first | rfl | exact hr, by first | rfl | exact ht, ?_⟩
+        cases hw : t.rows.lookup port' with
+        | none => simp [hw] at h
+        | some wv =>
+          simp only [hw] at h
+          generalize (Option.map (fun nd => Flock.Program.inputWidth? (P.defs[nd.fn]!).key)
+            (P.defs[P.root]!).body.nodes[s.input]?).join = wo at h
+          cases wo with
+          | none => simp at h
+          | some wn =>
+            simp only at h
+            split at h
+            · simp at h
+            · rename_i hif
+              split at h <;> try (simp at h; done)
+              cases hfl : (‹Decl›).fill <;> simp only [hfl] at h <;> try (simp at h; done)
+              split at h <;> try (simp at h; done)
+              simp only [Option.some.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl, rfl, rfl, -⟩ := h
+              refine ⟨hp, rfl, rfl, rfl, ?_⟩
+              simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not] at hif
+              simp_all
+
+/-- **What a held row says**: its plan, `heldFrom` over the members' units, and its mark. -/
+theorem row_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
+    {ds : List Decl} {theta : String → Bool} {s : Shared} {c : Nat} {m : Nat × String × Int}
+    (h : sharedRow P rs ts W ds theta s c = some (some m)) :
+    ∃ tid port u0 n p g gb o, sharedPlan P rs ts W ds s c = some (tid, port, u0, n, p, g, gb, o) ∧
+      heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0 = some true ∧ m = (s.input, p, o) := by
+  unfold sharedRow at h
+  split at h
+  · simp at h
+  · rename_i tid port u0 n p g gb o hplan
+    cases hh : heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0 with
+    | none => simp [hh] at h
+    | some b =>
+      cases b
+      · simp [hh] at h
+      · simp only [hh, Option.map_some, ↓reduceIte, Option.some.injEq] at h
+        exact ⟨tid, port, u0, n, p, g, gb, o, hplan, hh, h.symm⟩
+
+theorem find_tid {ts : List Spot.RecordText.Tmpl} (hnd : (ts.map (·.tid)).Nodup) {t : Spot.RecordText.Tmpl}
+    (ht : t ∈ ts) : ts.find? (·.tid == t.tid) = some t := by
+  induction ts with
+  | nil => cases ht
+  | cons a l ih =>
+    rw [List.map_cons, List.nodup_cons] at hnd
+    rw [List.find?_cons]
+    rcases List.mem_cons.1 ht with rfl | ht'
+    · simp
+    · have hne : (a.tid == t.tid) = false := by
+        rw [beq_eq_false_iff_ne]
+        intro he
+        exact hnd.1 (he ▸ List.mem_map.2 ⟨t, ht', rfl⟩)
+      rw [hne]
+      exact ih hnd.2 ht'
+
+/-- **The range of a node is the one of it**, the root's ranges being of distinct nodes. -/
+theorem find_node {d : Desc} {ts : Array String} {rs : Array TRange}
+    (h : Flock.TemplateQuery.evaluate d ts = .ok rs) {i : Nat} (hi : i < rs.size) :
+    rs.find? (·.node == rs[i].node) = some rs[i] := by
+  rw [Array.find?_eq_some_iff_getElem]
+  refine ⟨by simp, i, hi, rfl, fun j hj => ?_⟩
+  have hne : ¬ rs[j].node = rs[i].node := fun he => by
+    have := evaluate_node_inj h (Nat.lt_trans hj hi) hi he
+    omega
+  simpa using hne
+
+/-- **A unit's template is its Definition's**: on a record `read` accepts, the template of a unit of `tid` that the
+check finds by its id has the unit's Definition. -/
+theorem unit_defn {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) {rs : Array TRange}
+    (hrs : Flock.TemplateQuery.evaluate (Desc.ofProg c.f.P) (c.W.templates.map (·.1)).toArray = .ok rs)
+    {tid : String} {u : Nat} {sc : Flock.Program.Scope} (hu : Properties.Record.UnitAt c.f.P rs tid u sc) :
+    ∃ t, c.f.ts.find? (·.tid == tid) = some t ∧ t.defn = sc.d := by
+  obtain ⟨f, pin, hf, hc⟩ := read_front h
+  obtain ⟨hcf, -, -⟩ := finish_shared hc
+  have hts : Spot.RecordText.templatesOf c.f.P c.f.doc = .ok c.f.ts := by
+    rw [hcf]
+    exact front_text hf
+  obtain ⟨t, ht, htid, -, hd, -⟩ := Properties.Record.SecurityProofs.unit_tmpl (Properties.Record.SecurityProofs.readProg_of_read h) hts hrs hu
+  refine ⟨t, ?_, hd⟩
+  rw [← htid]
+  exact find_tid (Properties.Record.SecurityProofs.tmpls_named hts).1 ht
 
 end InferenceOnlyVerifier.Record.SecurityProofs
