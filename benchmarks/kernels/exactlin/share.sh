@@ -3,9 +3,11 @@
 # of SHARE_ARMS (exact-fused,exact) in its own process under nsys, its capture exported to SQLite and split by
 # `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.  The leased half runs on
 # the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound;
-# env/numa.json says which).
+# env/numa.json says which).  CUDA 13.0 (and its nsys, unless NSYS) is CUDA where given, else the machine's record's
+# (benchmarks/kernels/machine.py: MACHINE, MACHINES_D), refused before the lease; FlashInfer's architecture list is the
+# leased card's record's `arch`.
 # On an RTX PRO 6000 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO MACHINE=NAME bash benchmarks/kernels/exactlin/share.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
 ROOT=${SHARE_ROOT:-$PWD}
@@ -13,30 +15,30 @@ if [ "${1:-}" != --leased ]; then
   TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
   S=$(mktemp -d "$TMP/exactlin-share.XXXXXX"); trap 'rm -rf "$S"' EXIT
   git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
+  TOOLKIT=13.0   # the CUDA the pinned-vLLM environment runs with, whose nsys traces it
+  CUDA=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit "$TOOLKIT") || exit 2
   [ -f "$ROOT/benchmarks/hash/dither/sbench.py" ] || { echo "share.sh: no benchmarks/hash/dither/sbench.py under $ROOT (SHARE_ROOT)" >&2; exit 2; }
-  NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
-  [ -x "$NSYS" ] || NSYS=$(command -v nsys || ls -d /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda*/bin/nsys 2>/dev/null | tail -1)
-  [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
+  NSYS=${NSYS:-$CUDA/bin/nsys}
+  [ -x "$NSYS" ] || { echo "share.sh: no nsys at $NSYS (NSYS, else the CUDA toolkit $TOOLKIT's bin)" >&2; exit 3; }
   echo "share: nsys $NSYS; asking for one GPU at $(date -u +%H:%M:%SZ)"
   pre=(); [ "${SHARE_PREEMPTIBLE:-0}" = 1 ] && pre=(--preemptible)   # a preempted trace is lost whole
   numa=(python3 "$(cd "$(dirname "$0")/../numabind" && pwd)/numabind.py" "$OUT/env/numa.json")
-  NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- "${numa[@]}" \
+  CUDA=$CUDA NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- "${numa[@]}" \
     bash "$ROOT/benchmarks/kernels/exactlin/share.sh" --leased
   rc=$?
   echo "share: exited $rc at $(date -u +%H:%M:%SZ)"
   exit "$rc"
 fi
-S=${SHARE_S:?}; NSYS=${NSYS:?}
-CUDA=${CUDA:-/usr/local/cuda-13.0}
+S=${SHARE_S:?}; NSYS=${NSYS:?}; CUDA=${CUDA:?}
 PY=${PY:-$(. "$ROOT/benchmarks/harness/env.sh" && echo "$VENV/bin/python3")} || exit 2
-CC=$(nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=compute_cap --format=csv,noheader | head -1)
-case $CC in
-  12.0) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;
-  9.0) export FLASHINFER_CUDA_ARCH_LIST=9.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
-  10.0) export FLASHINFER_CUDA_ARCH_LIST=10.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
-  *) echo "share.sh: compute capability $CC" >&2; exit 2 ;;
+ARCH=$(python3 "$ROOT/benchmarks/kernels/machine.py" arch "$(nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=name --format=csv,noheader | head -1)") || exit 2
+case $ARCH in
+  sm_120a) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;
+  sm_90a) export FLASHINFER_CUDA_ARCH_LIST=9.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
+  sm_100a) export FLASHINFER_CUDA_ARCH_LIST=10.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
+  *) echo "share.sh: no FlashInfer architecture list for the card's arch $ARCH" >&2; exit 2 ;;
 esac
-echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
+echo "arch $ARCH cuda $CUDA python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH

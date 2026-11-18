@@ -7,8 +7,10 @@
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place; SERVED_KGATE=1|0
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
+# CUDA 13.0 is CUDA where given, else the machine's record's, and FlashInfer's architecture list the card record's `arch`
+# (benchmarks/kernels/machine.py: MACHINE, MACHINES_D), each refused before the lease.
 # On an H200 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO MACHINE=NAME bash benchmarks/kernels/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
@@ -16,16 +18,17 @@ TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDI
 S=$(mktemp -d "$TMP/exactlin-served.XXXXXX"); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
-CUDA=${CUDA:-/usr/local/cuda-13.0}
+TOOLKIT=13.0   # the CUDA the pinned-vLLM environment runs with
+CUDA=$(python3 benchmarks/kernels/machine.py toolkit "$TOOLKIT") || exit 2
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
-CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
-case $CC in
-  12.0) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;
-  9.0) export FLASHINFER_CUDA_ARCH_LIST=9.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
-  10.0) export FLASHINFER_CUDA_ARCH_LIST=10.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
-  *) echo "served.sh: compute capability $CC" >&2; exit 2 ;;
+ARCH=$(python3 benchmarks/kernels/machine.py arch "$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)") || exit 2
+case $ARCH in
+  sm_120a) export FLASHINFER_CUDA_ARCH_LIST=12.0f ;;
+  sm_90a) export FLASHINFER_CUDA_ARCH_LIST=9.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
+  sm_100a) export FLASHINFER_CUDA_ARCH_LIST=10.0a VLLM_USE_FLASHINFER_SAMPLER=0 ;;
+  *) echo "served.sh: no FlashInfer architecture list for the card's arch $ARCH" >&2; exit 2 ;;
 esac
-echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
+echo "arch $ARCH cuda $CUDA python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
