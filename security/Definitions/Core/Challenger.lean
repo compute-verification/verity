@@ -8,8 +8,11 @@ commitments they sample are recorded, and logs every coin it releases. A challen
 another auditor device: onsite, the network attester's machine runs one; for remote, it is an auditor device. The
 verifier reads coins only from a challenger's log, and uses no randomness of its own.
 
-* `Challenger.Entry R C`: one entry of a challenger's log, a commitment `r : R` it recorded or a coin `c : C` it
-  released;
+* `Challenger.Reading k`: a reading of the auditor's device registered under key `k`, its raw monotonic clock's count
+  in nanoseconds; `Reading.elapsed a b`, the difference of two readings of that one device, and `Reading.tick`, a
+  reading counted in a registered period;
+* `Challenger.Entry R C`: one entry of a challenger's log, a commitment `r : R` it recorded, a coin `c : C` it
+  released, or a reading of one of the auditor's devices;
 * `Challenger.Log R C`: its log, oldest entry first;
 * `Log.coins`: the coins the log released, in order;
 * `Log.before l i`: the log before its coin `i`, everything it recorded and released before releasing coin `i` (the
@@ -23,9 +26,13 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
 * `Log.RecordsInOrder l root`, `Log.JoinsAt l root j`: the roots `root t` recorded in the order of `t`, and the coin
   `j t` each joins at, which then never decreases in `t` (`Proofs.Core.Challenger`);
 * `Family`: a family of coins, a label and a count, its coins `(label, j)` for `j < count` (`Family.Holds`);
+* `Log.Between l e a b`: entry `e` lies in the log between the readings `a` and `b` of one device;
 * `DerivedBefore log v i`: a value derived from the log's prefix, a function of the log before coin `i` on every run.
 
-A scheme's times are its own: the log orders entries and holds no time.
+A time is a reading on an entry of one of the auditor's devices, and a statement reads only the difference of two
+readings of one device (`Reading.elapsed`): never a time of day, and never two devices' readings against each other.
+A prover's entry has no time; it has a bracket (`Log.Between`). How a device's clock runs against real time is the
+named premise `Assumptions.ClockWithin`.
 
 A run of a challenger that flips `n` coins, coin `i` of a finite type `C i`, is weighed by its flips
 `ω : (i : Fin n) → C i`, each sequence of flips equally likely (`Game.prCoin`), as `Game.coin` weighs a live coin. Its log
@@ -52,10 +59,31 @@ namespace Verity
 
 namespace Challenger
 
-/-- **An entry of a challenger's log**: a commitment it recorded, or a coin it released. -/
+/-- **A reading of the auditor's device registered under key `k`** (`Site.Loc.key`): the count of its raw monotonic
+clock in nanoseconds, in an entry that device signs. The key is in the type, so readings of two devices are never one
+type and are never compared. -/
+structure Reading (k : String) where
+  ns : Nat
+  deriving DecidableEq
+
+namespace Reading
+
+variable {k : String}
+
+/-- **Elapsed**: reading `b` less reading `a`, in nanoseconds of the one device's clock. -/
+def elapsed (a b : Reading k) : Int := (b.ns : Int) - a.ns
+
+/-- **A tick**: reading `t` counted in a registered period of `period` nanoseconds. -/
+def tick (period : Nat) (t : Reading k) : Nat := t.ns / period
+
+end Reading
+
+/-- **An entry of a challenger's log**: a commitment it recorded, a coin it released, or a reading `t` of the auditor's
+device registered under key `k`. -/
 inductive Entry (R C : Type) where
   | recorded (r : R)
   | released (c : C)
+  | read (k : String) (t : Reading k)
 
 /-- **A challenger's log**: its entries, oldest first. -/
 abbrev Log (R C : Type) : Type := List (Entry R C)
@@ -69,6 +97,7 @@ def coins : Log R C → List C
   | [] => []
   | .recorded _ :: l => coins l
   | .released c :: l => c :: coins l
+  | .read _ _ :: l => coins l
 
 /-- **The log before its coin `i`**: every entry before the release of coin `i` (counting from 0), the commitments it
 recorded and the coins it released before it; the whole log when it released fewer than `i + 1` coins. -/
@@ -77,6 +106,13 @@ def before : Log R C → Nat → Log R C
   | .recorded r :: l, i => .recorded r :: before l i
   | .released _ :: _, 0 => []
   | .released c :: l, i + 1 => .released c :: before l i
+  | .read k t :: l, i => .read k t :: before l i
+
+/-- **Between two readings of one device**: the log holds entry `e` after the reading `a` and before the reading `b` of
+the device under key `k`, so `e` came no sooner than `a` and no later than `b` on that device's clock, `a.elapsed b`
+apart. The tightest such bracket is the last reading before `e` and the first after it. -/
+def Between {k : String} (l : Log R C) (e : Entry R C) (a b : Reading k) : Prop :=
+  List.Sublist [Entry.read k a, e, Entry.read k b] l
 
 /-- **Recorded before coin `i`**: the log records the commitment `r` before it releases its coin `i`. -/
 def RecordedBefore (l : Log R C) (r : R) (i : Nat) : Prop :=
