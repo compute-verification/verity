@@ -70,7 +70,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
 
     def stream(spec: S.Spec, coins=None, sampler=None) -> S.Stream:
         return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock(),
-                        sampler=sampler)
+                        sampler=sampler, program=program)
 
     def register(coins, i, window_root):
         rec = CS.registration(c, {"row": 101 + i}, registrar=DK)
