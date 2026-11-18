@@ -79,7 +79,7 @@ under ``--admit tick`` is null, with why in its ``no_slice`` and once in ``serve
 ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_loop.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
@@ -143,9 +143,9 @@ from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h
                                    serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
-                                               records_mirror, served_statics, user_of)
-from verity_vllm.pipeline.serve_loop import EngineLoop
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, records_mirror,
+                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -260,6 +260,11 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
                                                "(serve_h1.config_of, serve_pearl.config_of)")
+    pearl_users: str | None = option("--pearl-users", default=None, metavar="REGEX",
+                                     help=f"with --protocols {SPL.ENTRY}: the arm opens on a window only at its first step "
+                                          "whose requests' users all match REGEX, the tied workload's; any other window "
+                                          "(the network attester's front's) serves no Pearl+ epoch and reserves no salt "
+                                          "session (serve_pearl)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
@@ -606,6 +611,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
+    if opts.pearl_users is not None and opts.protocols != SPL.ENTRY:
+        raise UsageError(f"--pearl-users is {SPL.ENTRY}'s, and --protocols is {opts.protocols}")
     if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:

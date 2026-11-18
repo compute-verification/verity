@@ -35,6 +35,7 @@ from __future__ import annotations
 import dataclasses
 import gc
 import json
+import re
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -116,6 +117,10 @@ def refusal(opts: Any) -> str | None:
         return ("--challenger-gate, --challenger-peer and --challenger-lane go together under Pearl+: the gate's command, "
                 "this machine's name in the auditor device's peers, and the lane whose gate key the command holds, whose open "
                 "period each window's salt-only session joins")
+    try:
+        re.compile(getattr(opts, "pearl_users", None) or "")
+    except re.error as e:
+        return f"--pearl-users {opts.pearl_users!r}: not a regular expression ({e})"
     if opts.precision != PRECISION:
         return (f"--protocols {ENTRY} serves the BF16 checkpoint's linears as Pearl+'s FP8 product: it needs --precision "
                 f"{PRECISION}, not {opts.precision}")
@@ -164,10 +169,11 @@ class PearlWindows:
 
     def __init__(self, model: Any, runner: Any, com: Any, *, out: Path, config: Mapping[str, Any], run_id: str = "local",
                  coins: Callable[[int], Mapping[str, Any]] | None = None,
-                 clock: Callable[[], float] = time.perf_counter) -> None:
+                 clock: Callable[[], float] = time.perf_counter, users: str | None = None) -> None:
         from verity_vllm.protocols import pouw
 
         self.model, self.runner, self.com, self.out, self.run_id = model, runner, com, Path(out).resolve(), str(run_id)
+        self.users = None if users is None else re.compile(users)
         self.config = {"pouw": dict(config.get("pouw", {}))}
         self.coins, self.given = coins or in_process, coins is not None
         self.clock = clock
@@ -305,7 +311,7 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> PearlWindows | None:
     g = opts.gate
     coins = live(g.challenger_gate, g.challenger_peer, g.challenger_lane) if g.challenger_gate else None
     arm = PearlWindows(llm.model, model_runner(llm.vllm), com, out=out, config=config_of(opts.protocols_config),
-                       run_id=opts.run_id, coins=coins)
+                       run_id=opts.run_id, coins=coins, users=getattr(opts, "pearl_users", None))
     arm.ready()
     return arm
 
