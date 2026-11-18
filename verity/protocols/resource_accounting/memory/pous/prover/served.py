@@ -13,8 +13,8 @@ weight store (`weight_store`), and the adapter's hooks emit the events and answe
   (`weight_store.commit`) before any salt exists, the salt from the auditor's coin flipped after it
   (`weight_store.salt_from`, `weight_store.salt`), ``C*`` encoded on the weights' device (`weight_store.encode`), and a
   `ReleaseValue` for each weight of ``W``, whose ``restore`` decodes it from ``C*``;
-* ``blocks``: a `ComputeBlockWith` whose kernel decodes a due block's registered weight (`BlockDue.weights["weight"]`)
-  from ``C*`` into a fresh buffer and hands it inward, so the blocks inside it read what PoUS stores. It is filed after
+* ``blocks``: a kernel (`verity.hooks.Kernel`, filed with ``exchange.compute_with``) that decodes a due block's
+  registered weight (`BlockDue.weights["weight"]`) from ``C*`` into a fresh buffer and hands it inward, so the blocks inside it read what PoUS stores. It is filed after
   PoUW's (an executor's), so it runs outside it.
 
 It is the report (`verity.protocols.resource_accounting.scheme`) of its run: ``commitment`` (``W``'s, the salt, ``C*``'s root), ``record``, ``summary``,
@@ -110,7 +110,7 @@ class Served:
         _ATTACHED[exchange] = self
         exchange.subscribe(NAME, "declared", self.declared)
         exchange.subscribe(NAME, "memory", self.registered)
-        exchange.request(NAME, H.ComputeBlockWith(self.kernel))
+        exchange.compute_with(NAME, self.kernel)
 
     def own(self, event: Any, kind: type) -> bool:
         """Whether ``event`` is ``kind``, the one its handler reads; another event of the hook is not, and anything that

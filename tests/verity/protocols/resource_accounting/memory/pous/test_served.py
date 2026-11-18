@@ -26,12 +26,16 @@ class Exchange:
     def __init__(self) -> None:
         self.subscribers: dict[str, list] = {h: [] for h in H.HOOKS}
         self.requests: list[tuple[str, H.Request]] = []
+        self.kernels: list[tuple[str, H.Kernel]] = []
 
     def subscribe(self, name, hook, fn):
         self.subscribers[hook].append(fn)
 
     def request(self, name, request):
         self.requests.append((name, request))
+
+    def compute_with(self, name, kernel):
+        self.kernels.append((name, kernel))
 
     def emit(self, event):
         for fn in self.subscribers[event.hook]:
@@ -83,7 +87,7 @@ def test_what_the_setup_holds_and_its_prover_are_the_stores(run):
 
 def test_the_kernel_hands_inward_the_weight_decoded_from_c_star_and_leaves_other_blocks_alone(run):
     s, ex, plain = run
-    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    [(_, kernel)] = ex.kernels
     due = H.BlockDue("b", 1, {"n": 3, "k": 24}, "int8", {"x": None}, weights={"weight": "b.weight"})
     assert same(kernel(due, lambda given: given["weight"]), plain["b.weight"])
     other = H.BlockDue("lm_head", 2, {"n": 1, "k": 1}, "int8", {"x": None}, weights={"weight": "lm_head.weight"})
@@ -105,7 +109,7 @@ def test_no_weight_outlives_its_call_and_no_registered_tensor_is_kept_alive(monk
     ex.emit(H.MemoryChanged("registered", values=(("a.weight", w),), operands={"a.weight": 0}))
     del w
     assert registered() is None and POUS.keeps_weight_copy is False
-    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    [(_, kernel)] = ex.kernels
     handed: list = []
     due = H.BlockDue("a", 0, {"n": 6, "k": 40}, "int8", {"x": None}, weights={"weight": "a.weight"})
     assert kernel(due, lambda given: handed.append(weakref.ref(given["weight"]))) is None
@@ -165,14 +169,14 @@ def test_the_scheme_requires_eager_attaches_through_the_exchange_and_is_refused_
     ex = Exchange()
     got = POUS.attach(ex, CTX)
     assert isinstance(got, served.Served) and got.scheme == POUS.option.partition(":")[2]
-    assert [h for h, fns in ex.subscribers.items() if fns] == ["declared", "memory"] and ex.filed(H.ComputeBlockWith)
+    assert [h for h, fns in ex.subscribers.items() if fns] == ["declared", "memory"] and ex.kernels
     with pytest.raises(ValueError, match="help"):
         S.bound(POUS, Fraction(1, 100), 0, {c.name: 0 for c in POUS.charges})
 
 
 def test_a_released_weight_pous_holds_no_name_for_is_refused_by_name(run):
     s, ex, _ = run
-    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    [(_, kernel)] = ex.kernels
     tied = H.BlockDue("c", 3, {"n": 1, "k": 1}, "int8", {"weight": torch.empty(0)}, weights={"weight": "c.weight"})
     with pytest.raises(RuntimeError, match="c.weight is released, and PoUS holds no weight by that name"):
         kernel(tied, lambda given: given)
@@ -201,7 +205,7 @@ def decoded_bits(monkeypatch, point, weights):
     ex.emit(H.MemoryChanged("registered", values=tuple(weights.items()), operands={n: i for i, n in enumerate(weights)}))
     pb = s.store.params.payload_bytes
     assert all(0 < (t.numel() * t.element_size()) % pb for t in plain.values())        # each ends inside its last block
-    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    [(_, kernel)] = ex.kernels
     released = ex.filed(H.ReleaseValue)
     assert [r.value for r in released] == list(plain)
     for r in released:
