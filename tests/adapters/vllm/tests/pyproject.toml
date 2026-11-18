@@ -93,6 +93,7 @@ inputs_only = true
 inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
           "applications/remote.toml", "applications/onsite_network.toml",
+          "benchmarks/one_stage/served_verdicts.sh",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/resource_accounting/memory/poub/verifier/lean/lakefile.toml",
