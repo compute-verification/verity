@@ -96,21 +96,21 @@ reps() {
 }
 
 if [ "${1:-}" = reps ]; then reps; exit $?; fi
-echo "$PRIV" > "$OUT/private.txt"
 for v in FIXED WINDOW_STEPS; do
   [[ -z ${!v} || ${!v} =~ ^[1-9][0-9]*$ ]] || { echo "PREFLIGHT: $v is a positive integer or unset" | tee -a "$OUT/stock.txt"; exit 3; }
 done
 [ -z "$FIXED" ] || [ -n "$WINDOW_STEPS" ] \
   || { echo "PREFLIGHT: FIXED needs WINDOW_STEPS, each request's max_tokens" | tee -a "$OUT/stock.txt"; exit 3; }
-{ id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } | tee "$OUT/machine.txt"
+{ id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } > "$PRIV/machine.txt" 2>&1
+git -C "$TREE" rev-parse HEAD 2>/dev/null | tee "$OUT/machine.txt"
 for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
 mkdir -p "$ROOT/cache"
 (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
-  > "$OUT/predict_row.json" 2> "$OUT/predict_row.err"
+  > "$PRIV/predict_row.json" 2> "$PRIV/predict_row.err"
 rc=$?
 [ "$rc" = 0 ] && [ -f "$PRED/predicted.json" ] || {
-  echo "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$OUT/predict_row.err" | tail -2 | cut -c1-600)" \
+  echo "PREDICT-ROW $ROW_ID refused (exit $rc): $(grep -v '^\[predict\]' "$PRIV/predict_row.err" | tail -2 | cut -c1-600)" \
     | tee -a "$OUT/stock.txt"; exit 3; }
 export OUT
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-bench-31-stock} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-64}" \
