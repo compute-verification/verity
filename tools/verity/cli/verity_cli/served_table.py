@@ -299,10 +299,10 @@ def configuration(commit: str, demo: str = "onsite_full",
 
 # --- the pieces ------------------------------------------------------------------------------------------------------
 
-Hooks = Callable[[Mapping[str, Any], Mapping[str, Any], Mapping[str, str]], dict[str, str]]
+Hooks = Callable[[Mapping[str, Any], Mapping[str, Any], Mapping[str, str], list[str]], dict[str, str]]
 
 
-def _none(cfg: Mapping[str, Any], params: Mapping[str, Any], bound: Mapping[str, str]) -> dict[str, str]:
+def _none(cfg: Mapping[str, Any], params: Mapping[str, Any], bound: Mapping[str, str], pinned: list[str]) -> dict[str, str]:
     return {}
 
 
@@ -360,10 +360,11 @@ def held(piece: Piece, role: Role) -> Held:
 
 @dataclass(frozen=True)
 class Piece:
-    """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound)`` gives the runner's
-    variables for it from the configuration, the component's checked parameters and the bindings of the party it
+    """One party's piece of the served window (module docstring): ``hooks(cfg, params, bound, pinned)`` gives the
+    runner's variables for it from the configuration, the component's checked parameters, the bindings of the party it
     reaches (``bound``: each of ``binds``, a ``<party.component.key>`` placeholder while unbound, and each bound one of
-    ``optional``). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
+    ``optional``) and that party's key pinned for this component (``pinned``: the configuration's one pin, or none,
+    and none while the piece's ``development`` binding is unbound). A ``runtime`` piece's ``session`` is the protocol it is a party of. A piece with a ``development``
     binding left unbound starts the party it reaches on its own machine, under a key and coins made for the run, in a
     development run (`coins_on`), and takes none of its other bindings; one that ``follows`` a listed component's piece
     of the same party is unbound exactly when that piece is, since its attester signs under that one's key. The
@@ -424,7 +425,8 @@ class Piece:
         bound = {**{k: f"<{self.key(k)}>" for k in self.binds},
                  **{k: str(v) for k, v in mine.items() if k in self.binds or k in self.optional}}
         params = cfg["params"].get(MANIFESTS[self.component].id, {}) if self.component in MANIFESTS else {}
-        return self.hooks(cfg, params, bound)
+        dev = not self.development or self.development in mine
+        return self.hooks(cfg, params, bound, _pinned(cfg, self.reaches or self.party, self.component) if dev else [])
 
     def describe(self, cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, Any]:
         """What `verity run --dry-run` prints of it; `verity_cli.run` refuses ``no-piece`` while ``missing`` names a
@@ -449,7 +451,7 @@ class Piece:
                               "carries_coins": c.carries_coins} for c in m.channels if role in (c.sender, c.receiver)]}
 
 
-def _serve(cfg, params, bound):
+def _serve(cfg, params, bound, pinned):
     w = cfg["workload"]["params"]
     return {"REPO": w["model"], "REV": w["revision"], "PRECISION": w["precision"], "SLOTS": str(w["slots"]),
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
@@ -460,7 +462,7 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
        "main-file": "MAIN_FILE"}
 
 
-def _spot_challenger(cfg, params, bound):
+def _spot_challenger(cfg, params, bound, pinned):
     """The window's values committed under hiding leaves and sealed, its registration before the sample, and the sampled
     proof blocks proved in Flock --zk; the sample on the live challenger when its gate is bound, else on the challenger
     party's loopback host's coins where ``loopback`` is bound, else on a local development session's, simulated either
@@ -472,7 +474,7 @@ def _spot_challenger(cfg, params, bound):
     return {**hooks, "DEVELOPMENT": "1"} if machine_settings.hold_placement() else hooks
 
 
-def _pouw(cfg, params, bound):
+def _pouw(cfg, params, bound, pinned):
     """H1 on the serving engine (--protocols pouw:...), its coins the gate's; served_verdicts.py pouw checks them
     against the gate's session under its key."""
     return {"H1_GATE": bound["gate"], "H1_PEER": bound["peer"], "H1_KEY_SHA512": bound["key-sha512"],
@@ -489,14 +491,12 @@ WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
 _WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
 
 
-def _wipe(cfg, params, bound):
+def _wipe(cfg, params, bound, pinned):
     """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh). The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
     another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
     if "address" not in bound:
         return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
-    pin = next((p["key-sha512"] for p in cfg.get("pin", [])
-                if (p["party"], p["protocol"]) == (MEMORY_ATTESTER, "wipe")), "")
-    return {"WIPE_CMD": f'WIPE_KEY_SHA512={pin} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
+    return {"WIPE_CMD": f'WIPE_KEY_SHA512={"".join(pinned)} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
             **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
 
 
@@ -512,25 +512,23 @@ def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
     return [p["key-sha512"] for p in cfg.get("pin", []) if (p["party"], p["protocol"]) == (party, protocol)][:1]
 
 
-def _pous_piece(cfg, params, bound):
+def _pous_piece(cfg, params, bound, pinned):
     """PoUS's prover after the workload (POUS_CMD, served_piece.sh): the memory attester's timed reads answered from
     the served weights held as P2's C* on the card, with the memory attester on the workload's machine in a development
     run. The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
     trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
-    pin = _pinned(cfg, MEMORY_ATTESTER, "pous") if "address" in bound else []
-    words = [*(["--trusted-sha512", *pin] if pin else []), *([] if "address" in bound else [RUN_KEYS]),
+    words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
              "--rounds", str(params["challenges"]),
              *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
     return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
             **({} if "address" in bound else DEVELOPMENT)}
 
 
-def _bandwidth_piece(cfg, params, bound):
+def _bandwidth_piece(cfg, params, bound, pinned):
     """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
     pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
     case. Unbound, PoUS's `RUN_KEYS` starts the bandwidth party too, under PoUS's key made for the run."""
-    pin = _pinned(cfg, BANDWIDTH_VERIFIER, P2.COMPONENT) if "host" in bound else []
-    words = [*(["--bw-trusted-sha512", *pin] if pin else []),
+    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
              *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
     return {**({"POUS_ARGS": shlex.join(words)} if words else DEVELOPMENT),
             "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
@@ -539,7 +537,7 @@ def _bandwidth_piece(cfg, params, bound):
 _PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
 
 
-def _pearlplus(cfg, params, bound):
+def _pearlplus(cfg, params, bound, pinned):
     """Pearl+ on the workload's engine (POUW=pearlplus, PEARLPLUS_TIE=1): each engine step's passes retained under the
     gate's salts, Pearl+'s window record tied to the execution phase, then its verdict and the Lean verifier
     (served_pearlplus.sh). With no gate bound the gate variables are set empty, since unset served_verdicts.sh takes the lane's gate: Pearl+'s
@@ -657,7 +655,7 @@ SCAN_CLASS = "8,32,4,4,16"
 FRONT_TOKENS = 4
 
 
-def _attester_piece(cfg, params, bound):
+def _attester_piece(cfg, params, bound, pinned):
     """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
     runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
     check on V3c's period.json (CERTIFIER_PERIOD_CMD). Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets
@@ -696,7 +694,7 @@ SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on
               writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
                       "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 class Launcher(NamedTuple):
-    """A declared piece's entry (`Launch`): ``hooks(cfg, params, bound)``, the runner's variables for it, whose
+    """A declared piece's entry (`Launch`): ``hooks(cfg, params, bound, pinned)``, the runner's variables for it, whose
     docstring says what the piece does, and the scripts it runs."""
 
     hooks: Hooks
@@ -936,7 +934,7 @@ def composite(env: Mapping[str, str]) -> dict[str, str]:
     caller that runs a composer there, or its default under ``VERITY_HOLD_PLACEMENT=1``), where onsite's composite, which
     reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses to start. ``env``
     is what the runner gets before it; a caller that names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` keeps what it named."""
-    off = env.get("COMPOSE_OFF_NODE", "1" if env.get("VERITY_HOLD_PLACEMENT") == "1" else "0")
+    off = env.get("COMPOSE_OFF_NODE", "1" if machine_settings.hold_placement(env) else "0")
     return {} if "COMPOSITE" in env or off == "0" else {"COMPOSITE": ""}
 
 

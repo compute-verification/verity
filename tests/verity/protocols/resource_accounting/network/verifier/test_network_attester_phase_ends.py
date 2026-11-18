@@ -622,7 +622,7 @@ def test_the_word_that_no_head_comes_is_signed_for_its_execution_phase_link_sess
                           "doesn't verify")):
         with pytest.raises(ValueError, match=why):
             CR.check_no_head(changed, key, signers.SESSION, TWO, LINK, 3)
-    rows, head = CR.attest(issuer, LINK, 3, ((),) * CR.strides_of(TWO), TWO)
+    rows, head = signers.attest_connection_rows(issuer, LINK, 3, ((),) * CR.strides_of(TWO), TWO)
     registration = CR.registration(rows.head, head, TWO)
     CR.check_registration(registration, key, signers.SESSION, TWO, LINK, 3)
     with pytest.raises(ValueError, match="doesn't sign that"):

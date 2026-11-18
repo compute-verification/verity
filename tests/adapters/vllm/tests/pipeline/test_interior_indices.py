@@ -100,7 +100,7 @@ def _first(links=LINKS):
     boundary registered and its first stage sampled (spans 0 and 2)."""
     names: dict[str, tuple[str, str]] = {}
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(MEMBERS, CELLS, "00", [0], links=links))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {t: (schema, phase) for t, (schema, _n) in w.trees.items()}
     supplied = tuple(v for v, _per, _leaf in IR.span_values(links))
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: served, on test values"),
@@ -283,7 +283,7 @@ def test_an_interior_salts_its_own_ports_fresh_and_leaves_a_linked_ports_to_its_
     for x in LINKS:
         k = [m.template for m in w.members].index(x.template)
         ref = one.committed.given[w.members[k].port(x.port)]
-        assert ref.value.entry() == entries[1][x.value]
+        assert ref.value.entry() == entries[0][x.value]
     stream, reg, first = _first(OPERANDS)
     it = _interior(reg, first, [_spans(s) for s in first.units], links=OPERANDS)
     assert IR.register(stream, first, it, registered=IR.link_words(OPERANDS),
