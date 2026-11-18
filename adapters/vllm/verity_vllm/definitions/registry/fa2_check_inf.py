@@ -49,9 +49,20 @@ def AttnBlockV5(B, S, q, k, v, m_prev, l_prev, o_prev):
 
 
 def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2, *, read_pads_only=False):
-    D, NVIS, FIRST, BN, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.BN, S.DOT, S.CHECK
-    if FIRST and not CHECK:
+    D, NVIS, FIRST, BN, DOT = S.D, S.NVIS, S.FIRST, S.BN, S.DOT
+    if FIRST and not S.CHECK:
         raise ValueError("AttnBlock_v5: the first iteration runs Check_inf (FIRST needs CHECK)")
+    m_new, lanes, scores_scale, pb = _softmax_step(B, S, q, k, m_prev, l_prev, scale_log2)
+    zero16 = B.call(ZERO16) if (NVIS % 16 if read_pads_only else NVIS < BN) else None
+    o = [B.call(ZERO32) for _ in range(D)] if FIRST else [B.call(P.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
+    o = _pv_steps(B, D, DOT, pb, v, o, zero16, min(-(-NVIS // 16), BN // 16))
+    return tuple_of(m_new, array_of(lanes), array_of(o))
+
+
+def _softmax_step(B, S, q, k, m_prev, l_prev, scale_log2):
+    """A block's steps A to B5 on its NVIS keys: (the running max, the four lane sums, the rescale factor, None at FIRST, and P
+    as bf16, a word a key)."""
+    D, NVIS, FIRST, DOT, CHECK = S.D, S.NVIS, S.FIRST, S.DOT, S.CHECK
     dot = bind(DotBf16V2, K=D, DOT=DOT)
     s = [B.call(dot, q, k[c]) for c in range(NVIS)]  # A: S = Q K^T, chained k-steps, acc 0 per block
     bmax = s[0]
@@ -76,21 +87,23 @@ def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2, *, read_
         for c in cols[1:]:
             acc = B.call(P.F32AddFtz, acc, p[c])
         lanes.append(acc)
-    # B5 + C: P -> bf16, O = (O * scale) + P V in BN/16 ascending k-steps of 16 keys
-    pb = [B.call(P.F2fpBf16, x) for x in p]
-    zero16 = B.call(ZERO16) if (NVIS % 16 if read_pads_only else NVIS < BN) else None
-    o = [B.call(ZERO32) for _ in range(D)] if FIRST else [B.call(P.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
-    for ks in range(BN // 16):
+    pb = [B.call(P.F2fpBf16, x) for x in p]  # B5: P -> bf16
+    return m_new, lanes, None if FIRST else scores_scale, pb
+
+
+def _pv_steps(B, D, DOT, pb, v, o, zero16, steps):
+    """C: O += P V in ``steps`` ascending k-steps of 16 keys from the accumulator ``o``, P's words past its keys ``zero16``
+    (a k-step past the keys is all masked: P = 0 exactly, no accumulator change, so it is not run)."""
+    NVIS = len(pb)
+    for ks in range(steps):
         k0 = 16 * ks
-        if k0 >= NVIS:
-            break  # all-masked k-step: P = 0 exactly, no accumulator change
         prow = _Coll(A16, concat([(pb[k0 + j] if k0 + j < NVIS else zero16).refs for j in range(16)]))
         vblk = v[k0:k0 + 16]
         vt_refs = strided_view(vblk, 0, 16, 1, D, 16 * D) if isinstance(vblk.refs, Affine) else \
             Explicit(tuple(vblk.refs[j * D + d] for d in range(D) for j in range(16)))
         vt = _Coll(Array(D, A16), vt_refs)
         o = list(B.batch(DOT, array_of(o), prow, vt, axes=(0, None, 0)))
-    return tuple_of(m_new, array_of(lanes), array_of(o))
+    return o
 
 
 @composite("AttentionHead", 5, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
