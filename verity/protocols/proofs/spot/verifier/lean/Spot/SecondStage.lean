@@ -30,9 +30,12 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     and `registered`, whose reads `second-read` holds), or the params give its template none.
     Placed in the run, the reference's `set` is the session's input set, `served/<run>/m<k>` (`setName`: `<run>` the
     interior record's `window.run`, `k` its template's position among the parts, `posOf`), and its
-    `frame_v3.bindings` are each of its `frame_v3.schemas` ports' bindings in the run (`portBinding`: the window-domain
-    rule over the interior record's program, partition and that port's leaves, a port a wire names its writer's output
-    port's, `heldPort`): the verifier computes both, so the prover chooses neither. For a statement of only its part's
+    `frame_v3.bindings` are each of its `frame_v3.schemas` ports' bindings at its one placing (`placings`,
+    `placedBinding`): its own tree's or, where a wire names it, its writer's output tree's under the window-domain rule
+    over the interior record's program, partition and that tree's leaves (`portBinding`), or, where a link names it to
+    read a value the interior registration registers, the binding that value's tree was committed under, recomputed from
+    the held registration and held to its entry's domain (`registeredBinding`): the verifier computes both, so the
+    prover chooses neither. For a statement of only its part's
     sampled proof blocks the reference is also placed at those slots (`atSampled`): its `range` and `units.classes`
     theirs, and each port of its `shared_rows` the rows the statement's registered reads give them;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
@@ -84,7 +87,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   parameter is, at each caller, one field of one instance of another template's caller reads that template's output
   port `o<f>` for field `f`, its writer's, and the interior commits that value once, at its writer's port (no copy
   tree). So a wired port reads its writer's output value: `second-read` holds it to that port at its writer's rows, and
-  `atRun` binds it by that port (`heldPort`). A body that reads a node any other way, an argument gathering several
+  `atRun` binds it by that port (`placings`). A body that reads a node any other way, an argument gathering several
   nodes' outputs among them, makes no wires.
 * **The rows** (`Rows`) of each port a link or a wire names are the verifier's own too (`replayRows`): unit `j` of a
   replay block reads the row its caller names, a link's the row of the parameter its slice is, a wire's its writer's
@@ -142,7 +145,9 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   `second-cover` for each part no statement is for (every part has one, sampled by the second sample or not), and
   `second-reported` when the `{value: root}` the verifiers report the sessions read (`Record.sessionRegistered`)
   is not the statements' (`statementReads`), and `second-table-rows` for each registered read that lists `table_rows`:
-  a read whose key is wired lists none (`KEY_ROWS_WHY`), and round 2 reads none yet (`tableRowsWhy`). A passing check (`check_ok`) holds the interior record to the replay
+  a read whose key is wired lists none (`KEY_ROWS_WHY`), and round 2 reads none yet (`tableRowsWhy`); last,
+  `second-place-none` and `second-place-two` for each port of a part's template's reference header that none, or more
+  than one, of the three rules places (`placings`, `placingFailures`). A passing check (`check_ok`) holds the interior record to the replay
   sample in its order (`interiorOrderOk_sample`), the statements to the parts, one each by position, every header to
   its template's reference placed in the run but for the run's fields (`check_ok_header`), every port a header shares
   rows at to a registered read (`check_ok_refs`), every statement's registered reads to its template's reference
@@ -159,10 +164,12 @@ public import Flock.FV3
 public import Flock.Program
 public import Spot.Bits
 public import Spot.Record
+public import Spot.Registered
 public import Spot.Schedule
 meta import Flock.FV3
 meta import Flock.Program
 meta import Spot.Record
+meta import Spot.Registered
 meta import Spot.Schedule
 
 @[expose] public section
@@ -221,6 +228,15 @@ it, and no executable reads the field from its input; only the development execu
 (`Spot.WiredKeyDevMain`) holds it on, for development plays, never an accept of record. It turns on only once the
 statement that a sampled reader unit's key is its writer unit's committed output row is proved. -/
 def WIRED_KEY : Bool := false
+
+def PLACE_NONE_WHY : String :=
+  "a port of a template's reference header is placed by none of the three rules: its own tree of the interior " ++
+    "record, its writer's tree where a wire names it, a value the interior registration registers where a link names it"
+
+def PLACE_TWO_WHY : String :=
+  "a port of a template's reference header is placed by more than one of the three rules: its own tree of the " ++
+    "interior record, its writer's tree where a wire names it, a value the interior registration registers where a " ++
+    "link names it"
 
 def KEY_WIRES_WHY : String :=
   "a read's key is wired, but not by exactly one wire"
@@ -439,6 +455,14 @@ def widthsOf? : Json → Option (Array Width)
     pure (Width.mk t p (← nat? (getD w "reads")) (← nat? (getD w "writes")))
   | _ => none
 
+/-- The terms the interior registration's own entries are computed under (`Docket.ownEntries`, the registration
+check's `R7-registered`): its Program's digest, its window's open root, and the values held across windows, whose
+domain leaves that root out (`Docket.fixedOf`). -/
+structure Held where
+  program : String
+  window : Option String
+  fixed : Array String
+
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
 registrations' records, the second sample's units, the design's links (`replayLinks`, none when the replay block's
 Definition makes none), the `{value: root}` the verifiers report the sessions read
@@ -453,7 +477,8 @@ of those it pinned or holds to an earlier record (`fixed`: `Docket.Verifier.pinn
 templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
 registered tables the auditor's params pin before any coin (`tables`: `Docket.Verifier.tables`),
 `(parameter, entry)` each, the entry the tables' registration names; the words of the rows each wire joins
-(`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise. -/
+(`replayWidths`); the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise; and the
+terms the interior registration's own entries were held to (`Held`), none for none, which binds no registered value. -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -474,6 +499,7 @@ structure Own where
   tables : Array (String × Json) := #[]
   widths : Array Width := #[]
   wiredKey : Bool := WIRED_KEY
+  held : Option Held := none
 
 /-- `second_stage.supplied_of`: the verifier's supplied values from their JSON, `{value: [[source, ...], ...]}`, a
 row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` each, a row its `(kind, name)` sources;
@@ -849,12 +875,26 @@ def keyFailure (own : Own) (t : String) : Option String :=
     else none
   | _ => some KEY_WIRES_WHY
 
-/-- The interior record's port that holds template `t`'s session port `p`: at a port a wire names, its writer's output
-port, the one tree the interior commits that value in; else its own (`portOf`). -/
-def heldPort (own : Own) (named : Bool) (t p : String) : String :=
-  match wireOf own t p with
-  | some w => portOf named w.writer w.wport
-  | none => portOf named t p
+/-- Value `v`'s entry among registration `rec`'s registered values. -/
+def registeredEntry (rec : Json) (v : String) : Option Json :=
+  (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
+
+/-- One rule that places a session port's binding (`placings`): its own tree of the interior record, its writer's tree
+there, or a value the interior registration registers, at its entry. -/
+inductive Placing where
+  | own (port : String)
+  | writer (port : String)
+  | registered (entry : Json)
+
+/-- **The rules that place** template `t`'s session port `p`, by the interior record and the design alone: its own
+port of the record, its writer's output port where a wire names it, and the interior registration's entry of the value
+a link names it to read. A port is placed where exactly one holds (`placingFailures`). -/
+def placings (own : Own) (named : Bool) (t p : String) : List Placing :=
+  (if (Record.byPort own.interior).any (·.1 == portOf named t p) then [.own (portOf named t p)] else []) ++
+    (match wireOf own t p with | some w => [.writer (portOf named w.writer w.wport)] | none => []) ++
+    match (linkOf own t p).bind fun x => registeredEntry own.interior x.value with
+    | some e => [.registered e]
+    | none => []
 
 /-- **The run's fields** of a statement's header, each a path of keys: the only ones a header may differ from its
 template's reference placed in the run in, which other checks hold instead: `instances` and `units.indices`
@@ -931,16 +971,43 @@ def portBinding (rec : Json) (port schema run : String) : Option String := do
     ("schema", .str schema), ("leaves", Lean.toJson leaves), ("run", .str run)])).toOption
   pure (Flock.hexOf (Flock.FV3.Sha512.taggedSha512 WINDOW_DOMAIN m.toUTF8))
 
+/-- **The binding a registered value's tree was committed under**, for the interior registration's entry `e`, from
+the held registration `held`: `Flock.Registered.bindingWith` over its Program's digest, the value's name, words, leaves
+and word bits, and its window's open root but for a value held across windows (`Held.fixed`); none unless that
+domain's id is the entry's `domain`, or where nothing is held. -/
+def registeredBinding (held : Option Held) (e : Json) : Option String := do
+  let h ← held
+  let .str v := getD e "value" | none
+  let words ← nat? (getD e "words")
+  let leaves ← nat? (getD e "leaves")
+  let b ← match getD e Registered.WIDTH_KEY with
+    | .null => some Registered.WORD_BITS
+    | j => nat? j
+  let extra := if h.fixed.contains v then [] else (h.window.map fun r => (Registered.WINDOW_KEY, Json.str r)).toList
+  let d ← (Flock.Registered.domainWith h.program v words leaves b extra).toOption
+  if !jsonStrIs (getD e "domain") (Flock.hexOf d) then none
+  pure (Flock.hexOf (← (Flock.Registered.bindingWith h.program v words leaves b extra).toOption))
+
+/-- The binding of template `t`'s session port `p` of row schema `schema` in run `run`, at its one placing
+(`placings`): an interior record's port's (`portBinding`) or a registered value's (`registeredBinding`); none where the
+port has none or two. -/
+def placedBinding (own : Own) (named : Bool) (t p schema run : String) : Option String :=
+  match placings own named t p with
+  | [.own q] => portBinding own.interior q schema run
+  | [.writer q] => portBinding own.interior q schema run
+  | [.registered e] => registeredBinding own.held e
+  | _ => none
+
 /-- Template `t`'s reference header `r` placed in the run, for the session of the `k`-th part: its `set`
-the run's input set (`setName`) and its `frame_v3.bindings` the binding of each port of its `frame_v3.schemas`
-(`portBinding`, the interior record's port that holds it, `heldPort`: a wired port's its writer's), which the verifier
-computes, so the prover chooses neither. None when the interior record names no run, or a port the verifier can't
-bind. -/
+the run's input set (`setName`) and its `frame_v3.bindings` the binding of each port of its `frame_v3.schemas` at its
+one placing (`placedBinding`): its own tree's, its writer's tree's, or the binding the registered value it reads was
+committed under, which the verifier computes, so the prover chooses neither. None when the interior record names no
+run, or a port the verifier can't bind. -/
 def atRun (own : Own) (named : Bool) (k : Nat) (t : String) (r : Json) : Option Json := do
   let run ← runOf own.interior
   let bs ← (entries (getD (getD r "frame_v3") "schemas")).mapM fun (p, s) => do
     let .str s := s | none
-    pure (p, Json.str (← portBinding own.interior (heldPort own named t p) s run))
+    pure (p, Json.str (← placedBinding own named t p s run))
   pure (putAt (Json.mkObj bs.toList) (putAt (.str (setName run k)) r ["set"]) ["frame_v3", "bindings"])
 
 /-- Header `h` of a statement for the `k`-th part is template `t`'s reference header placed in the run (`atRun`) but for
@@ -1046,9 +1113,6 @@ def wholeSample (m : Nat) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson m), ("k", Lean.toJson m),
     ("units", natsJson (Array.range m))]
 
-/-- Value `v`'s entry among registration `rec`'s registered values. -/
-def registeredEntry (rec : Json) (v : String) : Option Json :=
-  (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
 
 /-- Entry `e` names a leaf count of at most `MAX_LEAVES`. -/
 def leavesOk (e : Json) : Bool := match nat? (getD e "leaves") with
@@ -1512,11 +1576,30 @@ def interiorFailures (own : Own) : List (String × Json) :=
     | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str (inputsWhy own v))])]
     | none => []
 
+/-- For each template of the parts `ps` in their order, once, and each port of its reference header's
+`frame_v3.schemas` in key order, `second-place-none` where no rule places it and `second-place-two` where more than one
+does (`placings`), naming the template and the port. -/
+def placingFailures (own : Own) (ps : Array Part) : List (String × Json) :=
+  let named := byTemplate own.interior
+  let ts := ps.toList.map (·.template)
+  (List.range ts.length).flatMap fun i =>
+    let t := ts.getD i ""
+    if (ts.take i).contains t then [] else
+    match refOf own t with
+    | none => []
+    | some r => (entries (getD (getD r "frame_v3") "schemas")).toList.filterMap fun (port, _) =>
+      let detail (why : String) := Json.mkObj [("template", .str t), ("port", .str port), ("why", .str why)]
+      match (placings own named t port).length with
+      | 0 => some ("second-place-none", detail PLACE_NONE_WHY)
+      | 1 => none
+      | _ => some ("second-place-two", detail PLACE_TWO_WHY)
+
 /-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, the
 `table_rows` they list last (`tableRowsFailures`). -/
 def failures (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   interiorFailures own ++ (List.range ss.length).flatMap (stmtFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss ++
+    placingFailures own ps
 
 /-- The design is derived over parts `ps`: its links (`linksOk`) and its wires (`wiresOk`). -/
 def designOk (ps : Array Part) (own : Own) : Bool := linksOk ps own && wiresOk ps own
@@ -1572,7 +1655,8 @@ def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : L
 /-- `failures` over `sampledFailures`. -/
 def failuresSampled (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
   interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
-    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss ++ tableRowsFailures own ss ++
+    placingFailures own ps
 
 /-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
 of its part. Where the design is derived and one is of only its part's sampled proof blocks (`anySampled`), the same

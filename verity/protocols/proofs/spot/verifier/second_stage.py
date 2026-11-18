@@ -43,12 +43,14 @@ Each statement's header is held to the reference header the auditor's params giv
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
 in the run (`at_run`): its ``set`` the session's input set, ``served/<run>/m<k>`` (`set_name`, ``<run>`` the interior
 record's ``window.run`` and ``k`` its template's position among the parts, its member's in the interior window), and its
-``frame_v3.bindings`` each of its ``frame_v3.schemas`` ports' bindings in the run (`port_binding`, the window-domain rule
-over the interior record's program, partition and that port's leaves), both of which the verifier computes, so the
-prover chooses neither. The two are the same with the run's fields blanked (`blank_run`, `RUN_FIELDS`): ``instances``
-and ``units.indices``, which ``second-population`` holds, ``units.blocks``, the indices cut into blocks, which the
-session's verifier holds to them, ``frame_v3.roots`` and ``frame_v3.domain_ids``, which ``second-roots`` holds, and
-``registered``, whose reads ``second-read`` holds (``second-header``).
+``frame_v3.bindings`` each of its ``frame_v3.schemas`` ports' bindings at its one placing (`placings`): its own tree's or
+its writer's tree's under the window-domain rule over the interior record's program, partition and that tree's leaves
+(`port_binding`), or the binding the registered value a link names it to read was committed under, recomputed from the
+held registration (`registered_binding`); a port none or two rules place is refused (``second-place-none``,
+``second-place-two``, `placing_failures`). The verifier computes both, so the prover chooses neither. The two are the
+same with the run's fields blanked (`blank_run`, `RUN_FIELDS`): ``instances`` and ``units.indices``, which
+``second-population`` holds, ``units.blocks``, the indices cut into blocks, which the session's verifier holds to them,
+``frame_v3.roots`` and ``frame_v3.domain_ids``, which ``second-roots`` holds, and ``registered``, whose reads ``second-read`` holds (``second-header``).
 
 A header that shares rows (``shared_rows``: tables whose rows its instances read by the refs in its public file's body)
 shares them only at ports its statement reads registered (``second-refs``, `_refs_ok`): there the session's verifier

@@ -3,6 +3,7 @@ module
 public import Spot.SecondStage
 public import Spot.SecondStagePass
 meta import Spot.SecondStage
+meta import Spot.Registered
 
 /-!
 **Round 2's examples**: `SecondStage`'s checks run, at elaboration, on small records, statements and replay blocks
@@ -707,12 +708,86 @@ private def exWiredBinding (own : Own) : Option String := do
   let .str b := getD (getD (getD r "frame_v3") "bindings") "x" | none
   pure b
 
--- a wired port is bound by its writer's port, which holds it
-#guard heldPort exWired true "Triple_v0" "x" == "Pair_v0/out"
-#guard heldPort exWired true "Triple_v0" "out" == "Triple_v0/out"
+-- a wired port is bound by its writer's port, which holds it; any other at its own
+#guard match placings exWired true "Triple_v0" "x" with | [.writer q] => q == "Pair_v0/out" | _ => false
+#guard match placings exWired true "Triple_v0" "out" with | [.own q] => q == "Triple_v0/out" | _ => false
 #guard (exWiredBinding exWired).isSome
 #guard exWiredBinding exWired == portBinding exWiredInterior "Pair_v0/out" "hm96-sha512/row/v2" exRun
 #guard exWiredBinding { exWired with wires := some #[] } == none
+
+
+/-- The held registration of the interior: its Program `program-0`, its window's open root `exRoot 7`. -/
+private def exHeld : Held := { program := "program-0", window := some (exRoot 7), fixed := #[] }
+
+private def exExtra (w : Option String) : List (String × Json) := (w.map fun r => (Registered.WINDOW_KEY, Json.str r)).toList
+
+/-- `logits`, six leaves of four words, as a registration of Program `p` under window `w` names it. -/
+private def exLogits (p : String) (w : Option String) : Json :=
+  Json.mkObj [("value", "logits"), ("root", exRoot 8), ("leaves", Lean.toJson (6 : Nat)), ("words", Lean.toJson (4 : Nat)),
+    ("domain", ((Flock.Registered.domainWith p "logits" 4 6 16 (exExtra w)).toOption.map fun d => Json.str (Flock.hexOf d)).getD .null)]
+
+/-- The binding `logits` is committed under by a registration of Program `p` under window `w`. -/
+private def exLogitsBinding (p : String) (w : Option String) : Option String :=
+  (Flock.Registered.bindingWith p "logits" 4 6 16 (exExtra w)).toOption.map Flock.hexOf
+
+/-- `exOwn` with `Pair_v0`'s `x` linked to read `logits`, which the interior registers as `entries` give it and holds
+under `exHeld`, and no tree of `x` of its own. -/
+private def exReg (entries : List Json) (held : Option Held := some exHeld) : Own :=
+  { exOwn with interior := (exRec 6 [("out", 3, 4)] (exExecutionPhase (natsJson #[1, 3]))).setObjVal! "registered"
+      (Json.arr entries.toArray), links := some #[⟨"Pair_v0", "x", "logits"⟩], held }
+
+private def exV2 : String := "hm96-sha512/row/v2"
+
+private def exParts1 : Array Part := #[⟨"Pair_v0", 0, 3⟩]
+
+-- a registered value's port is bound by the binding its tree was committed under, from the held registration
+#guard (placings (exReg [exLogits "program-0" (some (exRoot 7))]) false "Pair_v0" "x").length == 1
+#guard (exLogitsBinding "program-0" (some (exRoot 7))).isSome
+#guard placedBinding (exReg [exLogits "program-0" (some (exRoot 7))]) false "Pair_v0" "x" exV2 exRun ==
+  exLogitsBinding "program-0" (some (exRoot 7))
+#guard (placingFailures (exReg [exLogits "program-0" (some (exRoot 7))]) exParts1).isEmpty
+-- never a binding recomputed from the reader's record
+#guard placedBinding (exReg [exLogits "program-0" (some (exRoot 7))]) false "Pair_v0" "x" exV2 exRun !=
+  portBinding exInterior "x" exV2 exRun
+-- a value held across windows: its domain leaves the window's root out
+#guard placedBinding (exReg [exLogits "program-0" none] (some { exHeld with fixed := #["logits"] })) false "Pair_v0" "x"
+  exV2 exRun == exLogitsBinding "program-0" none
+-- cheat: the same name and leaves registered by another Program: refused
+#guard placedBinding (exReg [exLogits "program-1" (some (exRoot 7))]) false "Pair_v0" "x" exV2 exRun == none
+-- cheat: the same value registered by another window of the same Program, under another open root: refused
+#guard placedBinding (exReg [exLogits "program-0" (some (exRoot 9))]) false "Pair_v0" "x" exV2 exRun == none
+#guard exLogitsBinding "program-0" (some (exRoot 9)) != exLogitsBinding "program-0" (some (exRoot 7))
+-- cheat: a held registration under another open root binds none of this window's values
+#guard placedBinding (exReg [exLogits "program-0" (some (exRoot 7))] (some { exHeld with window := some (exRoot 9) }))
+  false "Pair_v0" "x" exV2 exRun == none
+-- nothing held: no registered value is bound
+#guard placedBinding (exReg [exLogits "program-0" (some (exRoot 7))] none) false "Pair_v0" "x" exV2 exRun == none
+-- a port both its own tree and a registered value's: two placings, refused by name
+#guard (placingFailures { exReg [exLogits "program-0" (some (exRoot 7))] with
+    interior := (exInterior).setObjVal! "registered" (Json.arr #[exLogits "program-0" (some (exRoot 7))]) }
+  exParts1).map (·.1) == ["second-place-two"]
+-- a port no rule places: refused by name
+#guard (placingFailures { exReg [] with links := some #[] } exParts1).map (·.1) == ["second-place-none"]
+#guard (placingFailures (exReg []) exParts1).map (·.1) == ["second-place-none"]
+
+/-- `exWired` with `Triple_v0`'s reference header naming `x`, `x` also linked to read `logits`, which the interior
+registers. -/
+private def exWiredReg : Own :=
+  { exWired with
+    interior := exWiredInterior.setObjVal! "registered" (Json.arr #[exLogits "program-0" (some (exRoot 7))]),
+    links := some #[⟨"Triple_v0", "x", "logits"⟩], held := some exHeld,
+    refs := exOwn.refs.push ("Triple_v0", Json.mkObj [("frame_v3", Json.mkObj [("schemas",
+      Json.mkObj [("x", .str exV2)])])]) }
+
+-- cheat: a port both wired and registered in the record: two placings, refused by name
+#guard (placingFailures exWiredReg exTwoParts).map (·.1) == ["second-place-two"]
+#guard placedBinding exWiredReg true "Triple_v0" "x" exV2 exRun == none
+-- cheat: a wired port presented as registered: its binding is its writer's tree's, never the registration's
+#guard placedBinding { exWiredReg with links := some #[] } true "Triple_v0" "x" exV2 exRun ==
+  portBinding exWiredInterior "Pair_v0/out" exV2 exRun
+#guard placedBinding { exWiredReg with links := some #[] } true "Triple_v0" "x" exV2 exRun !=
+  exLogitsBinding "program-0" (some (exRoot 7))
+#guard (placingFailures { exWiredReg with links := some #[] } exTwoParts).isEmpty
 
 #guard (check exWired none).codes == #["second-statements"]
 #guard (check { exWired with wires := none } none).codes == #["second-wires"]
