@@ -276,6 +276,16 @@ class Reports(Protocol):
     def record(self) -> Mapping[str, Any]: ...
 
 
+class Commits(Reports, Protocol):
+    """`Reports` from a scheme that commits while the workload runs: ``commitment``, what it commits to, the run's
+    record hashes under its scheme's name (``summary`` is kept beside it, unhashed); ``close`` releases what it holds
+    once the last step ended, and is idempotent. Both stay readable after ``close``."""
+
+    def commitment(self) -> Mapping[str, Any]: ...
+
+    def close(self) -> None: ...
+
+
 class Front(Protocol):
     """A scheme's frontend, which the workload's server hands each request: ``key`` names a request by its headers
     (None: not one the scheme orders), ``submit`` and ``abort`` forward one, and ``passed`` says the one ``key`` named
@@ -372,7 +382,7 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
-           "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "Commits", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

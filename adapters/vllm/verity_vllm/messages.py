@@ -52,6 +52,8 @@ class Exchange:
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
+        #: what each attached scheme's ``attach`` returned, by its name: its `H.Reports` or `H.Commits` for the run's record
+        self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
         self.key = f"build-{next(_KEYS)}"
 
@@ -66,6 +68,8 @@ class Exchange:
             if (scheme.name, r) not in self.requests:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
+        if got is not None:
+            self.reports[scheme.name] = got
         return got
 
     @property
