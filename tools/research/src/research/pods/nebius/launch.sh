@@ -25,9 +25,10 @@
 # and network_ssd_io_m3 in multiples of 93 GiB) and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
 # (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour limit of
-# the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000, which needs
-# NEBIUS_CARD, the stem of the GPU's card file in calibration/hardware/cards/: the memory lock is its clock.memory, the graphics
-# lock is GPU_LOCK_MHZ below, refused above its clock.sm.
+# the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000: its GPU is
+# the entry of tools/config's GPU registry (gpus.toml) whose nebius_platforms lists it, and that entry's `card` its card file
+# (calibration/hardware/cards/<card>.toml), whose clock.memory is the memory lock; the graphics lock is GPU_LOCK_MHZ below,
+# refused above the card's clock.sm.
 # Billing starts when the VM is Running and is per second; --yes is required for anything that starts it.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -59,19 +60,26 @@ GPU_LOCK_MHZ=2100
 lock_clocks=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0)
 clocks=""
 if [ "$lock_clocks" = 1 ]; then
-  clocks=$(python3 - "$src/../../../calibration/hardware/cards" "${NEBIUS_CARD:-}" "$GPU_LOCK_MHZ" <<'PY'
+  clocks=$(python3 - "$src/../../.." "$PLATFORM_PREFIX" "$GPU_LOCK_MHZ" <<'PY'
 import os, sys, tomllib
-cards, card, gpu = sys.argv[1], sys.argv[2], int(sys.argv[3])
+root, platform, gpu = os.path.normpath(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+registry = os.path.join(root, "tools/config/verity_config/registry/gpus.toml")
+with open(registry, "rb") as f:
+    entries = [g for g in tomllib.load(f)["gpu"] if platform in g.get("nebius_platforms", [])]
+if len(entries) != 1:
+    sys.exit(f"launch.sh: {platform} locks its GPUs' clocks, and {len(entries)} entries of {registry} list it in "
+             "nebius_platforms: list it in its GPU's entry alone")
+card = entries[0].get("card", "")
 if not card:
-    sys.exit("launch.sh: NEBIUS_CARD is unset, and this platform locks its GPUs' clocks: set it to the stem of the GPU's card file"
-             " in calibration/hardware/cards/, whose clock.memory is the memory lock")
-path = os.path.normpath(os.path.join(cards, f"{card}.toml"))
+    sys.exit(f"launch.sh: {platform} locks its GPUs' clocks, and its GPU's entry in {registry} ({entries[0]['id']}) names no "
+             "card: set its `card` to the stem of the GPU's card file in calibration/hardware/cards/")
+path = os.path.join(root, "calibration/hardware/cards", f"{card}.toml")
 try:
     with open(path, "rb") as f:
         clock = tomllib.load(f)["clock"]
     sm, memory = clock["sm"]["value"], clock["memory"]["value"]
 except (OSError, KeyError) as e:
-    sys.exit(f"launch.sh: NEBIUS_CARD={card}: {path} has no clock.sm and clock.memory to lock the GPUs to ({e!r})")
+    sys.exit(f"launch.sh: {entries[0]['id']}'s card {card}: {path} has no clock.sm and clock.memory to lock the GPUs to ({e!r})")
 if gpu > sm:
     sys.exit(f"launch.sh: GPU_LOCK_MHZ={gpu} is above {card}'s clock.sm, {sm} MHz: lower it beneath the card's ceiling")
 print(f"VY_GPU_CLOCK_MHZ={gpu}\nVY_MEM_CLOCK_MHZ={memory}")

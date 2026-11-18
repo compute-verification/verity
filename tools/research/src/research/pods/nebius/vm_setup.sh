@@ -19,7 +19,7 @@ log() { echo "vy-setup: $*"; }
 # VY_LOCK_CLOCKS absent locks nothing: launch.sh always writes it, so only a hand run lacks it, and that run has no clocks to lock.
 LOCK_CLOCKS=${VY_LOCK_CLOCKS:-0}
 if [ "$LOCK_CLOCKS" != 0 ] && { [ -z "${VY_GPU_CLOCK_MHZ:-}" ] || [ -z "${VY_MEM_CLOCK_MHZ:-}" ]; }; then
-  log "refused: VY_LOCK_CLOCKS=$LOCK_CLOCKS and VY_GPU_CLOCK_MHZ='${VY_GPU_CLOCK_MHZ:-}', VY_MEM_CLOCK_MHZ='${VY_MEM_CLOCK_MHZ:-}' in /etc/vy/vy.env: set both (launch.sh writes them, the memory clock from the card file NEBIUS_CARD names), or VY_LOCK_CLOCKS=0" >&2
+  log "refused: VY_LOCK_CLOCKS=$LOCK_CLOCKS and VY_GPU_CLOCK_MHZ='${VY_GPU_CLOCK_MHZ:-}', VY_MEM_CLOCK_MHZ='${VY_MEM_CLOCK_MHZ:-}' in /etc/vy/vy.env: set both (launch.sh writes them, the memory clock from the platform's card file), or VY_LOCK_CLOCKS=0" >&2
   exit 2
 fi
 

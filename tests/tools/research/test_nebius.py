@@ -873,12 +873,13 @@ def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(["bash", str(NEBIUS / "launch.sh"), *args], env={**base, **env}, capture_output=True, text=True)
 
 
-CARD = "rtx-pro-6000-server"  # the card file of the default platform's GPU, which locks its clocks
+ROOT = NEBIUS.parents[5]
+GPU_REGISTRY = ROOT / "tools" / "config" / "verity_config" / "registry" / "gpus.toml"
 
 
 def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     pub = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIdummy research@test"
-    r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub, NEBIUS_CARD=CARD)
+    r = launch("--dry-run", NEBIUS_SSH_PUBKEY=pub)
     assert r.returncode == 0, r.stderr
     ud, spec = r.stdout.split("# instance create request (ids are placeholders)\n")
     assert ud.splitlines()[1] == "#cloud-config" and f"      - {pub}" in ud and "PRIVATE KEY" not in r.stdout
@@ -907,9 +908,11 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
 
 
-def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither():
-    """The memory lock is the card file's clock.memory; locking without a card file is refused before anything is created."""
-    clock = tomllib.loads((NEBIUS / "../../../../../../calibration/hardware/cards" / f"{CARD}.toml").read_text())["clock"]
+def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither(tmp_path):
+    """The memory lock is the clock.memory of the card file the GPU registry's entry for the platform names; a locking
+    platform whose entry names no card is refused before anything is created."""
+    (entry,) = [g for g in tomllib.loads(GPU_REGISTRY.read_text())["gpu"] if "gpu-rtx6000" in g["nebius_platforms"]]
+    clock = tomllib.loads((ROOT / "calibration" / "hardware" / "cards" / f"{entry['card']}.toml").read_text())["clock"]
 
     def settings(**env: str) -> list[str]:
         r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", **env)
@@ -919,10 +922,19 @@ def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_g
 
     gpu = int(re.search(r"^GPU_LOCK_MHZ=(\d+)$", (NEBIUS / "launch.sh").read_text(), re.M)[1])
     assert gpu <= clock["sm"]["value"]
-    assert settings(NEBIUS_CARD=CARD) == ["VY_LOCK_CLOCKS=1", f"VY_GPU_CLOCK_MHZ={gpu}", f"VY_MEM_CLOCK_MHZ={clock['memory']['value']}"]
+    assert settings() == ["VY_LOCK_CLOCKS=1", f"VY_GPU_CLOCK_MHZ={gpu}", f"VY_MEM_CLOCK_MHZ={clock['memory']['value']}"]
     assert settings(NEBIUS_PLATFORM_PREFIX="gpu-h100-sxm") == ["VY_LOCK_CLOCKS=0"]
-    r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy")
-    assert r.returncode == 2 and "NEBIUS_CARD is unset" in r.stderr and not r.stdout
+    copy = tmp_path / NEBIUS.relative_to(ROOT)
+    copy.mkdir(parents=True)
+    for name in ("launch.sh", "common.sh"):
+        shutil.copy(NEBIUS / name, copy / name)
+    registry = tmp_path / GPU_REGISTRY.relative_to(ROOT)
+    registry.parent.mkdir(parents=True)
+    registry.write_text(re.sub(r"^card = .*\n", "", GPU_REGISTRY.read_text(), flags=re.M))
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "RUNPOD_"))}
+    r = subprocess.run(["bash", str(copy / "launch.sh"), "--dry-run"], env={**base, "NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy"},
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and f"({entry['id']}) names no card" in r.stderr and not r.stdout, r.stderr
 
 
 def test_the_first_boot_refuses_to_lock_with_a_clock_unset_before_writing_anything(tmp_path):
@@ -952,7 +964,7 @@ def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nod
     entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
     src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
     for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
-        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name, NEBIUS_CARD=CARD)
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
         assert r.returncode == 0, r.stderr
         ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
         assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name
@@ -1056,7 +1068,7 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "pass --yes" in r.stderr
     r = launch("--yes")
     assert r.returncode == 1 and "--max-hours H" in r.stderr
-    r = launch("--yes", "--max-hours", "4", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_BIN="/bin/true", NEBIUS_CARD=CARD)
+    r = launch("--yes", "--max-hours", "4", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_BIN="/bin/true")
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
