@@ -1807,24 +1807,16 @@ class _Drawn:
                 "paths": [paths[i] for i in np.searchsorted(at, positions)]}
 
 
-#: why a wired Program's root batch is refused as no range of its order (`unit_ranges`)
-WIDTH_AT_ROOT = ("a root batch of a template no record names: the wired builder adds no node of its own, and a read at "
-                 "another width is the registered leaves recut (`refs.recut`)")
-
-
 class Units:
     """A wired Program's batches of its templates (`Circuit.program`), each the next of its ``ranges`` (`ranges_of`), in
     root order: ``ranges``, each ``(descriptor id, first unit of the partition, first own
-    unit, units)``. Refused (ValueError, `WIDTH_AT_ROOT`) where a root batch is not the next of the order's ranges."""
+    unit, units)``. Refused (ValueError) where a root batch is not the next of the order's ranges."""
 
     def __init__(self, program: Any, query: Mapping[str, Any], ranges: Sequence[tuple[str, int, int]]) -> None:
         want = list(ranges)
         got = CS.template_partition(program, query).ranges
         if [(t, n) for _k, t, _g, n in got] != [(t, n) for t, _a, n in want]:
-            names = {t for t, _a, _n in want}
-            extra = sorted({t for _k, t, _g, _n in got} - names)
-            raise ValueError(f"the wired Program's {len(got)} root batches are not its order's {len(want)} ranges"
-                             + (f": {', '.join(extra)} is {WIDTH_AT_ROOT}" if extra else ""))
+            raise ValueError(f"the wired Program's {len(got)} root batches are not its order's {len(want)} ranges")
         self.ranges = tuple((t, g, a, n) for (_k, t, g, _n), (_t, a, n) in zip(got, want))
         rs: dict[str, list[tuple[int, int]]] = {}
         for t, g, a, _n in self.ranges:
