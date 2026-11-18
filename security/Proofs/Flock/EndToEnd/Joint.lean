@@ -7,6 +7,6 @@ public import Proofs.Spot.Sampling.StratifiedProj
 `Flock.SecurityProofs.JointStratified : Flock.Guarantees.JointStratified` and
 `Flock.SecurityProofs.JointStratifiedPooled : Flock.Guarantees.JointStratifiedPooled` (`Joint/Bound.lean`), stated in
 `Joint/Statement.lean`. The stratified sampling design one stratum at a time, for a consumer that samples one stratum by itself:
-`SamplingDesign.stratified_proj_escape` (`Soundness/Audit/StratifiedProj.lean`). -/
+`SamplingDesign.stratified_proj_missProb` (`Soundness/Audit/StratifiedProj.lean`). -/
 
 @[expose] public section

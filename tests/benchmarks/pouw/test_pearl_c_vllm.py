@@ -2343,8 +2343,8 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
@@ -2406,7 +2406,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
@@ -3122,7 +3122,7 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
     is asked."""
     from verity_vllm.protocols import pouw
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate = "ssh -i KEY -o BatchMode=yes research@gate"

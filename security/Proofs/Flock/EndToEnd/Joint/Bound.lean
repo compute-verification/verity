@@ -48,14 +48,14 @@ namespace BlockRec
 variable {W : ℕ → StratifiedBlock}
 
 /-- The run's escapes, multiplied, are at most `exp(−Σ spend)`. -/
-theorem escape_prod_le (l : List (BlockRec W)) :
+theorem missProb_prod_le (l : List (BlockRec W)) :
     (l.map BlockRec.missProb).prod ≤ ENNReal.ofReal (Real.exp (-(l.map BlockRec.spend).sum)) := by
   induction l with
   | nil => simp
   | cons r l ih =>
       rw [List.map_cons, List.prod_cons, List.map_cons, List.sum_cons, neg_add, Real.exp_add,
         ENNReal.ofReal_mul (Real.exp_pos _).le]
-      exact mul_le_mul' (SamplingDesign.stratified_escape_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.incorrect) ih
+      exact mul_le_mul' (SamplingDesign.stratified_missProb_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.incorrect) ih
 
 end BlockRec
 
@@ -83,7 +83,7 @@ theorem harm_le_maxHarm (h : (t : ℕ) → Fin (W t).n → ℕ) {δ : ℝ} {l : 
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ) {l : List (BlockRec W)}
     (hl : ENNReal.ofReal δ ≤ (l.map BlockRec.missProb).prod) : Within W δ ands bits l := by
   refine ⟨hl, ?_, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩
-  have h1 := hl.trans (BlockRec.escape_prod_le l)
+  have h1 := hl.trans (BlockRec.missProb_prod_le l)
   rw [ENNReal.ofReal_le_ofReal_iff (Real.exp_pos _).le] at h1
   have h2 := Real.log_le_log hδ h1
   rw [Real.log_exp] at h2
@@ -146,7 +146,7 @@ theorem JointStratifiedPooled : Flock.Guarantees.JointStratifiedPooled := by
   have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlock.record W) (fun r => ¬ r.sampledWrong)
     BlockRec.missProb (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.missProb ((W t).incorrectSet τ),
-      ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ _), fun _ => rfl,
+      ne_top_of_le_ne_top ENNReal.one_ne_top (Verity.SamplingDesign.missProb_le_one _ _), fun _ => rfl,
       (W t).sampleMiss_le (hA3 t hτ.1) ((W t).incorrectSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ Stratified.Within W δ ands bits l) (Stratified.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨

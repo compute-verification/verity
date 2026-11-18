@@ -13,9 +13,6 @@ directory its files go to, ``private``, the directory on the node for its files 
 - ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
   for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
   cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
-- ``release_order``: `ReleaseGate`, the requests added to the scheduler in the network attester's release order
-  (its frontend, through `verity_vllm.messages.attester`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
-  numbers them, standing in for the network attester's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``,
@@ -59,8 +56,6 @@ from pathlib import Path
 from typing import Any
 
 ENV = "VERITY_SERVETAX"
-#: how long the engine core waits on its input queue at a time while the release gate holds requests and nothing runs
-POLL_S = 0.01
 #: how long a scheduler holds no request before `IdleReset` empties the prefix cache for the next. A client's passes
 #: are further apart than this (`serve_tax.IDLE_S`); a scheduler that sits empty this long inside a pass is emptied
 #: there too, which the record of the resets shows
@@ -115,61 +110,6 @@ class IdleReset:
 
     def step(self) -> None:
         self.busy_at = self.clock()
-
-
-class ReleaseGate:
-    """The scheduler's ``add_request`` in release order: each request's (run, n) from its engine id (``key``), submitted to
-    the network attester's release order that forwards it to ``add`` once every earlier number of its run has come or passed (an
-    abort of a held one, or ``hold_s`` without it). The order's skip timers fire from `poll`, which the engine core calls
-    at each schedule and while it waits on its input with requests held."""
-
-    def __init__(self, add: Callable[[Any], Any], abort: Callable[[list[str]], Any], *, hold_s: float = 5.0,
-                 key: Callable[[str], tuple[str, int] | None], clock: Callable[[], float] = time.monotonic) -> None:
-        from verity_vllm import messages
-
-        self.key_of, self.clock = key, clock
-        self.timers: list[tuple[float, Callable[[], None]]] = []
-        self.order = messages.providing("admission").attach(messages.Exchange(), {
-            "settings": {"order": "release-order", "hold_ms": round(hold_s * 1000)}, "submit": lambda adm: add(adm.request),
-            "abort": lambda engine_id: abort([engine_id]),
-            "schedule": lambda delay, fn: self.timers.append((self.clock() + delay, fn))}).front
-        self.headers = self.order.headers
-
-    def add(self, request: Any) -> None:
-        k = self.key_of(request.request_id)
-        release = None
-        if k is not None:
-            release = self.order.key({self.headers[0]: str(k[1]), self.headers[1]: k[0]})
-        self.order.submit(_Admission(request, request.request_id, release))
-
-    def finished(self, ids: str | Iterable[str] | None) -> list[str] | None:
-        """Of the requests the engine core finishes from outside (aborts), those not held here, for the scheduler."""
-        if ids is None:
-            return None
-        ids = [ids] if isinstance(ids, str) else list(ids)
-        held = {adm.engine_id for adm in self.order.held.values()}
-        for rid in ids:
-            if rid in held:
-                self.order.abort(rid)
-        return [rid for rid in ids if rid not in held]
-
-    def poll(self) -> None:
-        now = self.clock()
-        due = [t for t in self.timers if t[0] <= now]
-        if due:
-            self.timers = [t for t in self.timers if t[0] > now]
-            for _, fn in due:
-                fn()
-
-    def held(self) -> bool:
-        return bool(self.order.held)
-
-
-class _Admission:
-    __slots__ = ("request", "engine_id", "release")
-
-    def __init__(self, request: Any, engine_id: str, release: tuple[str, int] | None) -> None:
-        self.request, self.engine_id, self.release = request, engine_id, release
 
 
 #: vLLM's OpenAI server's engine request id around the client's X-Request-Id: ``cmpl-{X-Request-Id}-{choice}-{8 hex}``
@@ -627,8 +567,7 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
     """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the served ids, each request's
-    hold to its length and the idle reset, the tokens' commit and the boundary commitment, then the release gate
-    (outside them, so that they see a request when the gate adds it)."""
+    hold to its length and the idle reset, the tokens' commit and the boundary commitment."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -727,38 +666,10 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
         kept = Path(cfg["private"]) if cfg.get("private") else out
-        released = release_key if cfg.get("release_order") else None
-        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, released, public=_public(cfg))
+        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, public=_public(cfg))
                     .install(sched, hooks))
-    if cfg.get("release_order"):
-        add, finish = sched.add_request, sched.finish_requests
-        gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
-
-        def gated_add(orig):
-            return lambda request, *a, **kw: gate.add(request)
-
-        def gated_schedule(orig):
-            def wrapped(*a, **kw):
-                gate.poll()
-                return orig(*a, **kw)
-            return wrapped
-
-        def gated_finish(orig):
-            return lambda request_ids, finished_status: orig(gate.finished(request_ids), finished_status)
-
-        hooks.wrap(sched, "add_request", gated_add)
-        hooks.wrap(sched, "schedule", gated_schedule)
-        hooks.wrap(sched, "finish_requests", gated_finish)
-        hooks.patch(sched, "_verity_release", gate)
-        done.append(gate)
     done.append(hooks)
     return done
-
-
-def _aborted() -> Any:
-    from vllm.v1.request import RequestStatus
-
-    return RequestStatus.FINISHED_ABORTED
 
 
 def _init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., None]:
@@ -768,23 +679,6 @@ def _init(init: Callable[..., None], cfg: Mapping[str, Any]) -> Callable[..., No
     return __init__
 
 
-def _input(orig: Callable[[Any], None]) -> Callable[[Any], None]:
-    """`EngineCoreProc._process_input_queue` while the release gate holds requests and nothing runs: wait on the input
-    queue ``POLL_S`` at a time, firing the gate's skip timers between, instead of blocking until the next request."""
-    def _process_input_queue(self: Any) -> None:
-        gate = getattr(self.scheduler, "_verity_release", None)
-        while gate is not None and gate.held() and not self.has_work() and self.is_running():
-            try:
-                req = self.input_queue.get(timeout=POLL_S)
-            except queue.Empty:
-                gate.poll()
-                continue
-            self._handle_client_request(*req)
-            gate.poll()
-        return orig(self)
-    return _process_input_queue
-
-
 def register() -> None:
     """Install `config`'s changes on every V1 scheduler this process builds. Idempotent."""
     cfg = config()
@@ -792,12 +686,9 @@ def register() -> None:
         return
     from verity_vllm.engine.hooks import Hooks
     from vllm.v1.core.sched.scheduler import Scheduler
-    from vllm.v1.engine.core import EngineCoreProc
 
     hooks = Hooks(tag="serve-tax")
     hooks.wrap(Scheduler, "__init__", lambda init: _init(init, cfg))
-    if cfg.get("release_order"):
-        hooks.wrap(EngineCoreProc, "_process_input_queue", _input)
     if (cfg.get("boundary_rows") or {}).get("tables"):
         from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 

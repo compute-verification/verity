@@ -36,7 +36,7 @@ theorem meetsTarget_subset_self {n : ℕ} (w : Fin n → ℝ) {C δ : ℝ} (hC :
     · exact h
   have hc := hne.card_pos
   have hcn : B.card ≤ n := by simpa using Finset.card_le_univ B
-  rw [Verity.SamplingDesign.subset_escape, Nat.choose_eq_zero_of_lt (by omega)]
+  rw [Verity.SamplingDesign.subset_missProb, Nat.choose_eq_zero_of_lt (by omega)]
   simpa using hδ
 
 theorem sum_fin100 (a b : ℝ) : ∑ u : Fin 100, (if u.val < 50 then a else b) = 50 * a + 50 * b := by
