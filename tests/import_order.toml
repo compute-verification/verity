@@ -653,6 +653,15 @@ loaded_by = [
 
 [[place]]
 paths = [
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
+]
+loads = [
+    "verity/commitments",
+    "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/resource_accounting/memory/poub/verifier",
 ]
 loads = [
