@@ -37,7 +37,7 @@ VERSION_KEYS = ("version", "changed", "was")
 SITE_TAKES_VERSIONS = True
 #: whether the site's reader takes `runs` on a row: until it does, the site refuses a row that carries it and the door doesn't
 #: list it, so the rerun loop never runs it; set True once it takes it
-SITE_TAKES_RUNS = False
+SITE_TAKES_RUNS = True
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
