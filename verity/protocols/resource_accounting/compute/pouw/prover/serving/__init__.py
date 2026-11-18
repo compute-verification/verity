@@ -47,7 +47,6 @@ _LAZY = {
     "H1Run": (f"{_SERVING}.h1", "H1Run"),
     "PearlCKernel": (f"{_SERVING}.pearl_c.kernel", "Kernel"),
     "PearlC": (f"{_PROVER}.schemes.pearl_c", "PearlC"),
-    "H100": (f"{_PROVER}.schemes.pearl_c_device", "H100"),
     "reserve_salt": (f"{_SERVING}.coins.window", "reserve_salt"),
     "gate_of": (f"{_SERVING}.coins.window", "gate_of"),
     "served_passes": (f"{_SERVING}.pearl_c.window", "served_passes"),
