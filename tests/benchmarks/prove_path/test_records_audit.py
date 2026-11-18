@@ -402,14 +402,12 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.protocols.resource_accounting.compute.pouw.verifier import operands as OP
-
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
     a, b = (RV.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
-    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
-            "registered": OP.block("test/model", {"b": b})}
+    pouw = {"context": RUN, "kind": "served", "public": {}, "activations": {"program": "test/h1", "values": {"a": a.entry()}},
+            "registered": {"program": "test/model", "values": {"b": b.entry()}}}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
     assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
     assert RA.registration_roots({"window": w}) == RA.window_roots(w)
