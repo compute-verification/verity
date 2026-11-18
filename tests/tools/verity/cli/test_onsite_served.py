@@ -853,10 +853,9 @@ def written(*components: str, composed: bool = False) -> str:
 
 
 #: what Pearl+'s row says on every line until its coin sessions' signature pin is in Lean
-COINS_UNCHECKED = ("coins-signatures-checked-by-the-auditor coins' signatures checked on the served node only; not "
-                   "checked by the auditor")
+COINS_UNCHECKED = "coins' signatures checked on the served node only; not checked by the auditor"
 #: what storage's, the wipe's and the bandwidth audit's rows say on every line: the memory attester's one table
-ATTESTER_UNCHECKED = "; ".join(f"{n} {w}" for n, w in mc.UNCHECKED.items())
+ATTESTER_UNCHECKED = "; ".join(mc.UNCHECKED.values())
 #: each row's end on every line, by component
 UNCHECKED_ENDS = {"pearl-plus": COINS_UNCHECKED, **dict.fromkeys(("pous", "wipe", "bandwidth"), ATTESTER_UNCHECKED)}
 #: the components of the rows `published` writes by default
@@ -908,6 +907,18 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
     assert {c: s for c, s in line["answer_from"].items() if c in UNCHECKED_ENDS} == {
         c: f"{T.AS_WRITTEN} (its piece files in {k}/); {UNCHECKED_ENDS[c]}"
         for k, c in NAMES.items() if c in UNCHECKED_ENDS and k in ("work", "space", "wipe", *rows)}
+
+
+def test_an_empty_declared_mapping_says_nothing_and_an_entry_not_a_sentence_is_refused_by_name(monkeypatch) -> None:
+    pearl, get = T.schemes.get("pearl-plus"), T.schemes.get
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(T.schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert T.unchecked(["pearl-plus"], {"pearl-plus": T.AS_WRITTEN}) == {"pearl-plus": T.AS_WRITTEN}
+    assert T.unchecked(["pearl-plus"], {}) == {}
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": 3})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        T.unchecked(["pearl-plus"], {})
 
 
 def test_an_entry_the_launchers_record_says_already_is_said_once_on_the_line() -> None:

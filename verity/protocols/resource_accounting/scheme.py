@@ -445,6 +445,7 @@ class Scheme:
         object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
         object.__setattr__(self, "unchecked", MappingProxyType(dict(self.unchecked)))
+        sentences(self)
 
     @property
     def unit(self) -> str:
@@ -591,6 +592,15 @@ class Answers:
     request: Callable[..., Mapping[str, Any]]
     session: Mapping[str, Any]
     key_of: Callable[..., str | None]
+
+
+def sentences(scheme: Scheme) -> tuple[str, ...]:
+    """What a line prints of ``scheme``'s ``unchecked``: each entry's sentence alone, in order, its name only the key a
+    program reads; nothing for an empty mapping. An entry that is not a sentence is refused by the scheme's and its
+    name."""
+    if bad := [n for n, w in scheme.unchecked.items() if not isinstance(w, str) or not w.strip()]:
+        raise ValueError(f"{scheme.name}: unchecked entry {bad[0]!r} is not a sentence")
+    return tuple(scheme.unchecked.values())
 
 
 def answering(scheme: Scheme) -> Answers:
