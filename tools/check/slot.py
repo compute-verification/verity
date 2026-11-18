@@ -64,6 +64,13 @@ holds no share idle. A line whose share= isn't a whole number of GB from 1 to it
 only=trains, starts no check, and the wait and `--status` say so with the fix. A slot.py from before the key reads the line
 as a whole slot of its mem=, which waits for and reserves what its run asks.
 
+A run may name its own booking and cores in the environment, as a candidate's quick tier does (research's `queue.QUICK_ASK`):
+RUN_BOOK_ENV=GiB books it, on a whole slot with mem=, as that line's book= would, never more than the line books and never
+less than its ask (`booked`), and RUN_CORES_ENV=N takes, of the slots it could start in, one of the fewest cores that has at
+least N (`fitting`), so it holds a slot of N cores where the machine lists one and the smallest larger one where it doesn't.
+A machine with no slot of N cores for it exits NOT_STARTED at once. CMD inherits neither, and a slot.py from before the keys
+ignores them.
+
 A slot with peaks=N (`r0 8-19 mem=15 peaks=8`) counts what live lane runs reserve and haven't reached as many runs together
 reach it (`reserved_gb`): the N largest whole, room for N of them to reach their reservations at the same moment, and each
 of the others at PEAK_SHARE. Counted whole, a pool of many runs that each hold a small part of what they reserved keeps its
@@ -192,6 +199,10 @@ SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: `shard_ask_gib`, through `research run --env`): a slot whose mem= is smaller waits for and reserves
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
+#: the GiB a run books on a whole slot (the module docstring): its own book=, the lower of it and the line's
+RUN_BOOK_ENV = "CHECK_RUN_BOOK_GB"
+#: the cores a run needs: it takes the slot of the fewest cores with at least that many (`fitting`)
+RUN_CORES_ENV = "CHECK_RUN_CORES"
 #: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: about what a
 #: lane run holds of its reservation, averaged over the time it holds its slot. To measure it again, over a day of pool runs:
 #: the GiB-hours the runs held (each run's cgroup memory less its page cache, sampled in its resources.jsonl) over the
@@ -509,7 +520,7 @@ class Poll:
 
 
 def booked(slot: dict) -> int | None:
-    """The GiB `slot` waits for and reserves: its mem=, or on a line with book= the larger of book and what the run asks
+    """The GiB `slot` waits for and reserves: its mem=, or with a book= (its line's, or the run's own: `booking`) the larger of book and what the run asks
     (RUN_MEM_ENV, which `asking` raised mem= to: a run never reserves less than it asks); on a share of a slot, its share=,
     whatever the run it takes asks (`takes`)."""
     if slot.get("share"):
@@ -825,10 +836,33 @@ def asked_gb() -> float:
 
 def min_mem_gb() -> int | None:
     """MIN_MEM_ENV's GB, or None; SystemExit on a value that isn't a whole number above 0."""
-    v = os.environ.get(MIN_MEM_ENV, "")
+    return _whole(MIN_MEM_ENV, " of GB")
+
+
+def _whole(name: str, unit: str = "") -> int | None:
+    """The whole number above 0 the environment's ``name`` holds, or None; SystemExit on any other value."""
+    v = os.environ.get(name, "")
     if v and not re.fullmatch(r"[1-9]\d{0,5}", v):
-        sys.exit(f"slot: {MIN_MEM_ENV}={v!r} is not a whole number of GB above 0")
+        sys.exit(f"slot: {name}={v!r} is not a whole number{unit} above 0")
     return int(v) if v else None
+
+
+def booking(slots: list[dict]) -> list[dict]:
+    """``slots`` as this waiter's run books them: with RUN_BOOK_ENV, each whole slot with mem= books the lower of its own
+    booking and that, as its book= (`booked`, which keeps the run's ask over it); unchanged without it, and a share of a slot
+    or a line `parse` refused as it is."""
+    if (book := _whole(RUN_BOOK_ENV)) is None:
+        return slots
+    return [{**s, "book": min(s.get("book") or s["mem"], book)} if s.get("mem") and not (s.get("share") or s.get("refused"))
+            else s for s in slots]
+
+
+def fitting(slots: list[dict]) -> list[dict]:
+    """The slots this waiter's run fits by the cores it needs (RUN_CORES_ENV): those with at least that many, the fewest
+    first and in the file's order among equals; all of ``slots``, as they are, without it."""
+    if (n := _whole(RUN_CORES_ENV)) is None:
+        return slots
+    return sorted((s for s in slots if len(cpulist(s["cpus"])) >= n), key=lambda s: len(cpulist(s["cpus"])))
 
 
 def holds(slot: dict, min_mem: int | None) -> bool:
@@ -1352,6 +1386,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     priority, by, wait_max, run_max, pair, rank, budget, after = options(opts)
     min_mem = min_mem_gb()
+    cores = _whole(RUN_CORES_ENV)
+    _whole(RUN_BOOK_ENV)
     if not cmd:
         sys.exit(USAGE)
     named = os.environ.get("CHECK_SLOTS")           # a pool's slots, named in the machine's own check slots' place
@@ -1404,6 +1440,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               f"run that asks at most its mem=, and this one {asks}. Run it on a machine with a whole slot (a line without "
               f"share=: `check.py --slots` lists them); exit {NOT_STARTED}", file=sys.stderr, flush=True)
         return NOT_STARTED
+    if cores and not fitting([s for s in slots if priority or not s["trains"]]):
+        have = ", ".join(f"{s['name']} ({len(cpulist(s['cpus']))} cores)" for s in slots if priority or not s["trains"])
+        print(f"slot: not started: this run needs a slot of at least {cores} cores ({RUN_CORES_ENV}), and {SLOTS} has {have}. "
+              f"Run it on a machine with one (`check.py --slots` lists them), or unset {RUN_CORES_ENV}; exit {NOT_STARTED}",
+              file=sys.stderr, flush=True)
+        return NOT_STARTED
     if after and (rc := hold_off(pair, after, asker(by, pair), research_run_dir(), now, sleep)) is not None:
         return rc
     me = asker(by, pair)
@@ -1434,7 +1476,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         poll = Poll()                                               # this try's reading of the machine's memory, and no other's
         n = ahead(ticket, free_gb=lambda: poll.memory_gb() - poll.reserved_gb(**lane_peaks(slots)),
                   passed=lambda name: passed_gb(name, SLOTS.parent))
-        mine = [s for s in slots if (priority or not s["trains"]) and holds(s, min_mem) and takes(s)]
+        mine = fitting(booking([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem) and takes(s)]))
         got = take(passing(ticket, slots, mine, poll, now(), priority) if n else mine, SLOTS.parent, now(), priority, poll)
         if got and run_max is not None and (short := short_of(run_max, run_dir, mono)):
             os.close(got[1])                                        # before a twin claim, which its twins would take as started
@@ -1451,7 +1493,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             break
         why = f"{n} check(s) ahead in line" if n else \
             "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now(), priority, poll) or held_why(s, priority, min_mem)}"
-                                                   for s in slots) + ")"
+                                                   for s in booking(slots)) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
             for ln in status(slots, SLOTS.parent, now(), before=ticket.name, poll=poll):
@@ -1475,7 +1517,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, BOOK_ENV, SCOPE_ENV, MIN_MEM_ENV)}
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("LEASE_DIR", SLOT_MEM_ENV, BOOK_ENV, SCOPE_ENV, MIN_MEM_ENV, RUN_CORES_ENV, RUN_BOOK_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(plan)} if (plan := max(slot.get("mem") or 0, budget or 0)) else {}),

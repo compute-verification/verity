@@ -3,6 +3,7 @@ writes (`measured`), from the benchmark results `proof_layers` reads."""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from typing import Any
@@ -82,13 +83,13 @@ def document(results: Sequence[Result]) -> dict[str, Any]:
     return {"schema": SCHEMA, "audit": False, "results": [{"title": LAYERS[r.layer], **asdict(r)} for r in results]}
 
 
-def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict[str, Any]]:
+def measured(results: Sequence[Result], metrics: Mapping[str, str], batch: str | None = None) -> list[dict[str, Any]]:
     """The writer's measurements: under each of `metrics`' ids (each naming one of `FIGURES`), one a layer of `MEMBERS`,
     in its order, its member the model and card the outputs state and its layer's words; none where no output states
-    them, and outputs that state two are refused. A layer's value is its figure a proof block, or for ``build_s`` its
+    them or no card record holds the card's name (the layer's note says so), and outputs that state two are refused. A layer's value is its figure a proof block, or for ``build_s`` its
     build step's wall where its output states whether the build reused a cache, only where its Lean verdict is an
     accept; else the value is None, with why. Recursion's benchmark result is no member: its seconds are a
-    whole recursive run's."""
+    whole recursive run's. ``batch``: a batch study's request steps, which every member ends in (`batch_word`)."""
 
     if bad := sorted(set(metrics.values()) - set(FIGURES)):
         raise ValueError(f"metric ids name {bad}, not one of {sorted(FIGURES)}")
@@ -109,10 +110,30 @@ def measured(results: Sequence[Result], metrics: Mapping[str, str]) -> list[dict
                 "its steps.txt states no build cache: line, so not whether the build reused a cache" if build else
                 f"{r.workload.split(':')[0]}: its figures are a statement's, not a proof block's" if r.statements else
                 f"its output gives no {figure} a proof block" if r.per_block else "its output gives no figure a proof block")
-            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": serves[0] + words, "why": why,
+            out.append({"name": name, "value": value, "unit": FIGURES[figure], "member": serves[0] + words + batch_word(batch),
+                        "why": why,
                         "inputs": [r.given] if r.given else [],
                         "extra": {"layer": LAYERS[layer], "status": r.status, "format": r.format, "workload": r.workload,
                                   "lean": r.lean, "ran_with": r.ran_with, "detail": r.detail, "proof": r.proof,
-                                  "prover_batch": r.prover_batch,
+                                  "prover_batch": r.prover_batch, "prover_device": prover_device(r.device),
                                   **({"build_cache": r.build_cache} if build else {})}})
     return out
+
+
+def batch_word(batch: str | None) -> str:
+    """A batch study's member's last word: ``-b<HI>`` for request steps 1 to HI, ``-b<LO>-<HI>`` from another; none
+    for the own batch."""
+
+    if not batch:
+        return ""
+    m = re.fullmatch(r"(\d+)-(\d+)", batch)
+    if not m or int(m[1]) >= int(m[2]):
+        raise ValueError(f"batch {batch!r}: LO-HI request steps, LO below HI, as A5_STEPS gives them")
+    return f"-b{m[2]}" if m[1] == "1" else f"-b{m[1]}-{m[2]}"
+
+
+def prover_device(device: str) -> str:
+    """The device a point's prover ran on, from the table's device column: ``processors`` where its output states the CPU,
+    else the column's own words. A member's card is the one the workload was served on, not this."""
+
+    return "processors" if device.startswith("CPU") else device

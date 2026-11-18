@@ -221,8 +221,9 @@ def main() -> None:
 
 def record(res: dict, out_dir: Path) -> None:
     from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
     w = kit.writer(out_dir)
-    card = "-".join(res["device"].lower().split()).removeprefix("nvidia-")
+    card = kit.card_short(res["device"], directory=CARD_FILES)
     sizes = (res["forms"].get(SERVED_FORM) or {}).get("sizes") or {}
     for rb in sorted(sizes, key=lambda rb: (int(rb) == step_rows.ROW_BYTES, int(rb))):
         e = sizes[rb]

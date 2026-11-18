@@ -14,4 +14,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/c
           "adapters/vllm/verity_vllm/definitions/registry/__init__.py",
           "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.py",
           "adapters/vllm/verity_vllm/definitions/registry/prims.py",
-          "verity/circuits/ops", "verity/circuits/silicon", "benchmarks/dsa_topk"]
+          "verity/circuits/ops", "verity/circuits/silicon", "benchmarks/dsa_topk",
+          "benchmarks/prod_repro/priced.py"]
