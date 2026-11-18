@@ -53,6 +53,8 @@ likewise its guest's CPUID.
 
 A GPU card's `driver` lists the product strings a driver reports for it, so the harness kit (`verity_bench.kit`'s
 `card_short`, `card_arch`) finds the one card a device's reported name is; it refuses a name no card or two cards hold.
+Its `short` is the card's name in a member, a row id or a flag (`h200`, `rtx-pro-6000`): lower case letters, digits and
+hyphens, no two GPU cards the same; `verity.device`'s `gpu_card_called` finds the card a short names.
 
 ## The architecture files
 
