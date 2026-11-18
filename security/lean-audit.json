@@ -3264,27 +3264,33 @@
   },
   "ResourceAccounting.Assumptions.SeasonedRebuilds": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   },
   "ResourceAccounting.RateSketch.ChoosesBefore": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   },
   "ResourceAccounting.RateSketch.LifetimeCappedAll": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   },
   "ResourceAccounting.RateSketch.Seasoned": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   },
   "ResourceAccounting.RateSketch.JoinsInOrder": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   },
   "ResourceAccounting.RateSketch.OriginsFixed": {
    "owner": "@proofs",
-   "due": "2026-12-04"
+   "due": "2026-12-04",
+   "issue": "PRF-640"
   }
  },
  "ids": {
@@ -26962,6 +26968,12 @@
    },
    "type_hash": "129a15e5ba38cbf426e8bf108ce5b819f0ed273352179a99b553e2155d002754",
    "unfolded_hash": "34781449a0a3c8f0ab53885fda423f5d6673b49c72fd1be9fc56713f08f055c2"
+  },
+  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": {
+   "owner": "@proofs"
+  },
+  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -27811,7 +27823,8 @@
    "Slowdown.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
    "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, on any card whose device memory fills a segment or more, the 96 GiB device among them, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryAttester.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed's game (a store per pass made by the append-coin rule, RateSketch.coinStore) for pass devices that rebuild at most X bits at every store (RateSketch.RebuildsWithin), with no carrier term and no C, under the named assumptions KeyBinding, SketchRank and SketchHashBudget: the session's own order of appends and coins, per session, for one scheme; a re-key's payload is its origin's, by reference, and a stored form that does not encode its committed payload is paid in the sampling term; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code.",
-   "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed with its rebuild bound given by ResourceAccounting.Assumptions.SeasonedRebuilds under refresh's conditions on the session's own layout, per session (RateSketch.LifetimeCappedAll, RateSketch.Seasoned at the declared origins, RateSketch.JoinsInOrder, RateSketch.OriginsFixed, RateSketch.ChoosesBefore): for one scheme, which payloads may be credited the layout's, a parameter, and a registered block born before the session against this session's coins only; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code."
+   "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": "frozen (no-function,hash): It is ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed with its rebuild bound given by ResourceAccounting.Assumptions.SeasonedRebuilds under refresh's conditions on the session's own layout, per session (RateSketch.LifetimeCappedAll, RateSketch.Seasoned at the declared origins, RateSketch.JoinsInOrder, RateSketch.OriginsFixed, RateSketch.ChoosesBefore): for one scheme, which payloads may be credited the layout's, a parameter, and a registered block born before the session against this session's coins only; abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code.",
+   "ResourceAccounting.Guarantees.RefreshedCircuitRequirement": "unstated: RegisteredCircuitRequirement under refresh (SeasonedRebuilds in place of CircuitCarriers, with LifetimeCappedAll, Seasoned, JoinsInOrder, OriginsFixed and ChoosesBefore, and no carrier term); stated first, and its theorem ResourceAccounting.SecurityProofs.RefreshedCircuitRequirement is not proved yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
