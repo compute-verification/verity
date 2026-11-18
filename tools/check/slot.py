@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`python3 tools/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] [--budget-gb GB] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
+"""`python3 tools/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] [--end UTC] [--only-slot NAME] [--budget-gb GB] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
 instead of spreading over every core the checks share (two unslotted checks on the same cores overload them both).
@@ -106,6 +106,12 @@ saying so), so a run's caller gives it its wait and SECONDS (`research run --poo
 --timeout). `research queue ready --on` sends both, so a check that times out waiting in a line is reported as never started,
 not as failed.
 
+`--end UTC` (`2026-11-19T05:00:00Z`; `research run --end`): a booked period's end. A waiter leaves the line (NOT_STARTED,
+naming the end) the moment less than its --run-max is left before it, and once it takes a slot CMD's limit is the lesser of
+--run-max and the time left. `--only-slot NAME` (`research run --slot`): only the slot SLOTS names NAME is taken, and the
+waiter waits for it alone; a SLOTS with no such line exits NOT_STARTED at once, naming the slots it has, and so does a wait
+during which the line goes from SLOTS.
+
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
 sets it (`research run --env`) for a check that runs pytest, lean-suites, circuit-check, the Rust build or a Lean build or
@@ -211,7 +217,7 @@ RUN_CORES_ENV = "CHECK_RUN_CORES"
 #: then holding slots there is at least what those runs' summed memory then rose by
 PEAK_SHARE = 0.25
 USAGE = ("usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME] [--twin-after SECONDS]] [--wait-max SECONDS] "
-         "[--run-max SECONDS] [--budget-gb GB] -- CMD...")
+         "[--run-max SECONDS] [--end UTC] [--only-slot NAME] [--budget-gb GB] -- CMD...")
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
 #: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
@@ -779,15 +785,16 @@ def _read(p: Path) -> dict:
 
 
 def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None, int | None, int | None,
-                                      float | None]:
+                                      float | None, datetime | None, str | None]:
     """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0), --twin PAIR[@HOME], --rank N (with
-    --priority), --budget-gb GB (> 0; in GiB, as a slot's mem= is) and --twin-after SECONDS (> 0, with --twin PAIR@HOME) from
-    the arguments before `--`; SystemExit with the usage on anything else."""
+    --priority), --budget-gb GB (> 0; in GiB, as a slot's mem= is), --twin-after SECONDS (> 0, with --twin PAIR@HOME), --end
+    UTC (`end_time`) and --only-slot NAME from the arguments before `--`; SystemExit with the usage on anything else."""
     priority, vals, i = False, {}, 0
     while i < len(opts):
         if opts[i] == "--priority":
             priority, i = True, i + 1
-        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin", "--twin-after", "--rank", "--budget-gb") and i + 1 < len(opts):
+        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin", "--twin-after", "--rank", "--budget-gb", "--end",
+                         "--only-slot") and i + 1 < len(opts):
             vals[opts[i]], i = opts[i + 1], i + 2
         else:
             sys.exit(USAGE)
@@ -816,8 +823,53 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
             sys.exit(bad)
         if not 0 < budget < float("inf"):
             sys.exit(bad)
+    only = vals.get("--only-slot")
+    if only is not None and not re.fullmatch(r"[A-Za-z0-9_-]+", only):
+        sys.exit(f"slot: --only-slot {only!r} is not a slot's name (letters, digits, '_', '-'); {USAGE}")
+    try:
+        end = end_time(vals["--end"]) if "--end" in vals else None
+    except ValueError as e:
+        sys.exit(f"slot: {e}; {USAGE}")
     return (priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank),
-            None if budget is None else gib(budget), secs["--twin-after"])
+            None if budget is None else gib(budget), secs["--twin-after"], end, only)
+
+
+def end_time(text: str) -> datetime:
+    """``text``, an ISO time in UTC ending in Z (`2026-11-19T05:00:00Z`, `2026-11-19T05:00Z`), as an aware datetime; ValueError
+    on anything else, a time without Z or with another offset included."""
+    if not text.endswith("Z"):
+        raise ValueError(f"--end {text!r} is not a UTC time ending in Z (2026-11-19T05:00:00Z)")
+    try:
+        t = datetime.fromisoformat(text[:-1])
+    except ValueError:
+        raise ValueError(f"--end {text!r} is not an ISO time (2026-11-19T05:00:00Z)") from None
+    if t.tzinfo is not None:
+        raise ValueError(f"--end {text!r} names an offset before its Z; give the time in UTC (2026-11-19T05:00:00Z)")
+    return t.replace(tzinfo=timezone.utc)
+
+
+def end_slack(end: datetime | None, run_max: float | None, now: datetime) -> float:
+    """The seconds a waiter may still wait and start with its ``run_max`` before a booked period's ``end``; infinite without
+    an end."""
+    return float("inf") if end is None else (end - now).total_seconds() - (run_max or 0)
+
+
+def end_short(end: datetime | None, run_max: float | None, now: datetime, waiting: bool = False) -> str | None:
+    """Why a waiter can't start before a booked period's ``end``: less than ``run_max`` is left before it (no time at all,
+    without one), or, ``waiting`` after a try that found no slot, no more than that, so no later try could start. None where
+    it can, or without an end."""
+    if end is None:
+        return None
+    left, slack = (end - now).total_seconds(), end_slack(end, run_max, now)
+    if left > 0 and (slack > 0 or (slack == 0 and not waiting)):
+        return None
+    need = f"less than --run-max {run_max:g} s" if run_max else "no time"
+    return f"the booking ends at {end:%Y-%m-%dT%H:%M:%SZ} (--end), {max(left, 0):.0f} s from now: {need} is left before it"
+
+
+def only_named(slots: list[dict], only: str | None) -> list[dict]:
+    """``slots`` but those not named ``only`` (--only-slot); all of them without it."""
+    return slots if only is None else [s for s in slots if s["name"] == only]
 
 
 def run_id() -> str | None:
@@ -1384,7 +1436,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
-    priority, by, wait_max, run_max, pair, rank, budget, after = options(opts)
+    priority, by, wait_max, run_max, pair, rank, budget, after, end, only = options(opts)
     min_mem = min_mem_gb()
     cores = _whole(RUN_CORES_ENV)
     _whole(RUN_BOOK_ENV)
@@ -1412,6 +1464,14 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if (held := os.environ.get("CHECK_SLOT")) and any(s["name"] == held for s in listed) and locked(SLOTS.parent / f"check-{held}.lock"):
         print(f"slot: already in check slot {held}; running CMD in it", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
+    if only and not only_named(listed, only):
+        print(f"slot: not started: --only-slot {only}: {SLOTS} has no slot of that name, only "
+              f"{', '.join(s['name'] for s in listed)}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
+    if why := end_short(end, run_max, now()):
+        print(f"slot: not started: {why}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
+    listed = only_named(listed, only)
     slots = usable(listed)
     if len(slots) < len(listed):
         out = ", ".join(f"{s['name']} ({s['cpus']})" for s in listed if s not in slots)
@@ -1467,7 +1527,10 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if pair:
         print(f"slot: twin {pair}: runs only if it takes a slot before its twins do", file=sys.stderr, flush=True)
     while True:
-        slots = asking(usable(reread(slots)) or slots)
+        fresh = reread(slots)
+        if only and not only_named(fresh, only):
+            return gone(f"--only-slot {only}: {SLOTS} no longer has a slot of that name")
+        slots = asking(usable(only_named(fresh, only)) or slots)
         if pair and ("@" not in pair or peeked is None or (now() - peeked).total_seconds() >= TWIN_PEEK_S):
             state, info = twin("peek", pair, me)
             peeked = now()
@@ -1478,7 +1541,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
                   passed=lambda name: passed_gb(name, SLOTS.parent))
         mine = fitting(booking([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem) and takes(s)]))
         got = take(passing(ticket, slots, mine, poll, now(), priority) if n else mine, SLOTS.parent, now(), priority, poll)
-        if got and run_max is not None and (short := short_of(run_max, run_dir, mono)):
+        if got and ((run_max is not None and (short := short_of(run_max, run_dir, mono)))
+                    or (short := end_short(end, run_max, now()))):
             os.close(got[1])                                        # before a twin claim, which its twins would take as started
             return gone(short)
         if got and pair:
@@ -1504,7 +1568,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             return gone(f"no check slot within --wait-max {wait_max:g} s ({why})")
         if run_max is not None and (short := short_of(run_max, run_dir, mono)):
             return gone(f"{short} ({why})")
-        sleep(POLL_S)
+        if short := end_short(end, run_max, now(), waiting=True):
+            return gone(f"{short} ({why})")
+        sleep(min(POLL_S, end_slack(end, run_max, now())))
     ticket.unlink()
     os.close(tfd)
     slot, fd = got
@@ -1529,6 +1595,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if said := reserve(slot, now(), priority):
         print(said, file=sys.stderr, flush=True)
+    if end is not None:
+        run_max = min(run_max or float("inf"), (end - now()).total_seconds())
     if run_max is not None:
         print(limit_run(run_max, slot["name"], run_dir, mono), file=sys.stderr, flush=True)
     if slot.get("scope") and (why := scope_refusal()):

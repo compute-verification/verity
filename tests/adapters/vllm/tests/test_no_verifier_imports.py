@@ -81,19 +81,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "network-accounting": {
         # Needs: network attestation's release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/pipeline/advice_code/window_code.py": ("resource_accounting.network.verifier.arith_encode.CW",),
-        "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
-        "verity_vllm/pipeline/serve_commit.py": ("resource_accounting.network.verifier.charge_chain",),
         "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
-        # The compiler's (`verity_vllm/compiler/`): the replay step's and chain's circuits and row forms, the charge's
-        # book and code (`charge_chain`, `arith_encode`) and the IO tie's routing, until network attestation's workload side
-        # offers them.
-        "verity_vllm/compiler/compile_slice.py": (
-            "resource_accounting.network.verifier.arith_encode", "resource_accounting.network.verifier.charge_chain",
-        ),
-        "verity_vllm/compiler/compile_slice_v7.py": ("resource_accounting.network.verifier.charge_chain",),
-        "verity_vllm/compiler/served_tie.py": ("resource_accounting.network.verifier.io_tie",),
-        "verity_vllm/protocols/poub/binder.py": ("resource_accounting.memory.poub.verifier.audit.Tiles",),
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),

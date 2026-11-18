@@ -42,7 +42,7 @@ Two kinds of committed run:
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
-        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
+        [--serving-rows-tables REGISTRATION] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
@@ -940,8 +940,8 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
 
 def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
     """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
-    ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
-    return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
+    ``--serving-rows-tables`` (``{rank}`` in its path its rank's), its salts the salt file beside it; None without one."""
+    return {"registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
 
 def checkpoint_of(a: argparse.Namespace) -> Any:
@@ -1380,8 +1380,8 @@ def committer_key(path: Path) -> bytes:
 
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
-    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, sampled under ``--key``
-    (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
+    circuit lowers under, `registered_of_serve`): each weight committed under fresh OS salts, kept in the salt file beside
+    ``--out`` (`salt_file.beside`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
     (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
     (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are
     within the analytic table's bound; with no such file it stays unrooted. Written to ``--out``: what the server's
@@ -1396,11 +1396,12 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
 
     from verity_vllm.pipeline.advice import registered_weights
+    from verity.commitments import salt_file as SF
     from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
 
     serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
-    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
+    doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), SF.beside(a.out),
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
                                tables={"cos_sin": np.load(cos_sin)} if cos_sin.is_file() else None)
     roots = registered_weights(doc, serve)
@@ -1788,7 +1789,6 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
                          "for the attester's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
                          "imports neither the attester nor a benchmark: run benchmarks/one_stage/window_commit.py")
     S.SamplingDesign(a.sampling_design)
-    key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
     registered, cls = compiler.inner.registered, window_class_of(a.window_class)
@@ -1841,7 +1841,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         raise ValueError(f"{a.registration} registers {reg.repo}@{reg.revision}'s weights, not the served "
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
-    values = {**WW.weight_values(registered, served, key, keep_rows=True),
+    values = {**WW.weight_values(registered, served, a.registration, keep_rows=True),
               SS.SCAN_STATE: WRS.standin_state(population, cls, rows, window=run) if state is None
               else state}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
@@ -1972,7 +1972,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
     p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
                    "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
-    p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
     p.add_argument("--checkpoint-dir", help="the checkpoint the registered weights a window's rows read are composed from, each "
                    "held to its committed tensor root (default none: only the tensors the bundle carries open)")
     p = sub.choices["audit"]

@@ -74,6 +74,28 @@ In the one-stage form, v2's verdicts are its own run of `verity-verify-proof ver
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
+## Levels
+
+SPOT is one protocol with levels (`levels.py`): each level is a partition into blocks with its sampling design. One
+level is the audit over one partition and its sampling design. Two levels sample outer blocks first (the boundary docket, under the
+two-level rule with its grain and count), then inner blocks inside each sampled outer block (the interior). More levels
+are refused by name (`levels-not-built`). `recursive` is not a level: it is how many blocks' proofs are compressed, and
+it stays refused by name.
+
+- **The verdict's count is the auditor's.** It is read off the shape of the case's parameters, fixed before any coin
+  (`levels.of_params`). A case's `levels` (a JSON integer; a string is refused) and its `form` (`one-stage` or `two-stage`, which the Lean
+  dispatcher reads today) must name that shape. A case that names neither reads as one level, and a mismatch is
+  refused with both values named.
+- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field (from
+  `levels.record_field`, its one writer) holds the count. A record without the field is of one level. A record of the
+  boundary commitment's format (`verity-vllm/boundary-rows/v1`) is of two by that format, and one whose `levels` is
+  another count is refused (`levels-format-mismatch`). A record that served another
+  count than the parameters check is refused (`levels-record-mismatch`).
+- **Each level's partition and sampling design** are the integrity profile's `levels`, coarse to fine
+  (`profile.IntegrityProfile.to_json`). Their length is the count.
+- **A command that can't run the count it is given refuses it** (`levels-no-path`) rather than running another:
+  `a5.py` runs one level, `two_stage.py` two.
+
 ## Outline
 
 **The one-stage audit** is the audit protocol in use. One round goes like this:
@@ -280,7 +302,7 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
 `spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
-refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet (a two-stage outcome's completeness) raises
 `NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
 
 | Verdict | Entry | Lean of record | Twin |
@@ -546,8 +568,8 @@ is true, so an answer without the field (one written before it, a reject, an und
 outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
 goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
 is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
-`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
-Python side the run is held to.
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) is its twin `check_twin` held to the codes the Lean's
+run gave (`DISAGREE` where they differ).
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

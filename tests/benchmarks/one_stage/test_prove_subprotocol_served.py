@@ -146,7 +146,7 @@ def test_a_served_members_reads_reach_its_stager(monkeypatch, tmp_path, reads):
     m, info = L.served_member("rope:1b:8", 0, reads=reads)
     assert (m.reads, info["reads"]) == (reads, reads)
     with pytest.raises(Built):
-        L.stage(m, 0, {"partition": "p", "program": "q"}, tmp_path, b"k" * 32, {})
+        L.stage(m, 0, {"partition": "p", "program": "q"}, tmp_path, {})
     assert seen["reads"] == reads
 
 

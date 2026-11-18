@@ -74,14 +74,55 @@ Vectors: `types` (type, leaves, the widths in leaf order).
 ## 3. Reference sequences
 
 A reference `(s, i, j)` names leaf j of a collection in the enclosing body: s = `"p"` is parameter i of the body, s = `"n"`
-is the output of node i. A reference sequence is an ordered list of references, repeats kept, in one of four forms:
+is the output of node i. A reference sequence is an ordered list of references, repeats kept: a concatenation of parts, each
+part a grid.
 
-| form | JSON | reference k, for 0 ≤ k < count |
+**The grid.** A grid has a run length L ≥ 1, a period count T ≥ 1, a count N and g ≥ 1 lanes. Lane j names one collection
+(s_j, i_j) and carries a base b_j, an inner stride e_j and levels ((r_1, d_1), …, (r_m, d_m)), innermost first, m ≥ 0,
+every radix r ≥ 2 and r_1 ⋯ r_m = T (the empty product is 1). Bases and steps are integers; radices, L, T and N naturals.
+Reference k, for 0 ≤ k < N, is
+
+    t = k div (g · L),   j = (k div L) mod g,   o = k mod L
+    (s_j, i_j, b_j + Σ_{d=1..m} digit_d(t) · d_d + o · e_j)
+
+with digit_d(t) = (t div (r_1 ⋯ r_{d−1})) mod r_d for d < m and digit_m(t) = t div (r_1 ⋯ r_{m−1}). The count is
+N = g · L · T, but for one case, which may stop short of its last period: g = 1 and m ≤ 1, with L · (T − 1) < N ≤ L · T.
+A grid with N = 0 is the empty sequence.
+
+**Cover.** A sequence's parts lie end to end: part q holds references [S_q, S_q + N_q) with S_q the sum of the earlier
+parts' counts, and the counts sum to the sequence's length. Inside a grid, (t, j, o) ↦ k is a bijection from
+[0, T) × [0, g) × [0, L) onto [0, N) when N = g · L · T, and from its first N references otherwise: the g lanes are one
+group, sharing the reader stride g · L, at slot offsets 0, L, …, (g − 1) · L, each L · T references. Nothing about cover is
+checked across parts but the sum.
+
+**Bounds.** The leaves lane j reaches lie in [lo_j, hi_j], lo_j = b_j + Σ_d (r_d − 1) · min(d_d, 0) + (L − 1) · min(e_j, 0)
+and hi_j = b_j + Σ_d (r_d − 1) · max(d_d, 0) + (L − 1) · max(e_j, 0), and when N = g · L · T both are reached, since every
+digit combination occurs. A grid that stops short (g = 1, m = 1, N < L · T) reaches the extremes of its five corners
+(t, o) ∈ {(0, 0), (0, min(L, N) − 1), (q, 0), (q, (N − 1) mod L), (q − 1, L − 1) if q ≥ 1}, q = (N − 1) div L. Every lane's
+extremes lie in [0, leaves(s_j, i_j)) (§4.6), checked in O(m) a lane, never by walking.
+
+**Spellings.** A part is written in one of four forms, each the grid in its last column; a concatenation joins parts:
+
+| form | JSON | the grid |
 |---|---|---|
-| affine | `{"affine": [s, i, base, count]}` | `(s, i, base + k)` |
-| strided | `{"strided": [s, i, base, inner, outer_stride, inner_stride, count]}`, inner ≥ 1 | `(s, i, base + (k div inner) · outer_stride + (k mod inner) · inner_stride)` |
-| explicit | `{"explicit": [[s, i, j], ...]}` | the k-th triple |
-| concat | `{"concat": [seq, ...]}` | the parts' references, in order |
+| affine | `{"affine": [s, i, base, count]}` | L = count, T = 1, N = count, one lane (s, i, base, 1, ()) |
+| strided | `{"strided": [s, i, base, inner, outer_stride, inner_stride, count]}`, inner ≥ 1 | L = inner, T = max(1, ⌈count / inner⌉), N = count, one lane (s, i, base, inner_stride, ((T, outer_stride))), no level when T = 1 |
+| explicit | `{"explicit": [[s, i, j], ...]}` | L = 1, T = 1, N = g, one lane (s, i, j, 0, ()) per triple |
+| grid | `{"grid": [L, [[s, i, base, e, [[r, d], ...]], ...]]}` | as written: T = r_1 ⋯ r_m, N = g · L · T |
+| concat | `{"concat": [seq, ...]}` | the parts, in order |
+
+Affine, strided and explicit are read as written. A `grid` is written only where none of them spells the part, and a reader
+refuses a `grid` that one of them spells (`refs.spell`, the one function that chooses a part's form): after merging, while
+any merge applies,
+
+- two consecutive levels k, k + 1 with d_{k+1} = r_k · d_k into one level (r_k · r_{k+1}, d_k);
+- with one lane, its first level into the run when d_1 = L · e (run L · r_1);
+- all g ≥ 2 lanes into one when they name one collection and share e and levels, and b_j = b_0 + j · c for every j, with
+  c = L · e, or with L = 1 and any c (one lane of run g · L and inner stride e, or c when L = 1),
+
+the grid is refused when it has one lane and at most one level (strided spells it) or when L · T = 1 (explicit spells it).
+A writer spells a grid by the same function: `strided` (or `affine`, when T = 1 and e = 1) for one lane and at most one
+level, `explicit` for L · T = 1, `grid` otherwise.
 
 A strided sequence with both strides 0 is one leaf referenced `count` times: one produced value broadcast, which is how
 writers normalize `[z] * n`. A zero `inner_stride` alone repeats each leaf of a row `inner` times. A sequence passed as a typed
@@ -188,7 +229,7 @@ the node being read (for `ret`, any node).
 
 Writers (`codec._BodyEncoder`) take a body's sequences in order (node 0's arguments in order, node 1's, …, then `ret`):
 
-1. A sequence that is not a concatenation (affine, strided, explicit) is written as itself.
+1. A sequence that is not a concatenation (affine, strided, explicit, grid) is written as itself.
 2. A concatenation is flattened into its parts p1..pN (nested concatenations spliced, depth first).
 3. For m = N, N − 1, …, max(2, N − 8) (`ALIAS_WINDOW` = 8): if p1..pm is exactly the part list recorded for an argument
    (k, a) of an earlier node (k below the node being written; for `ret`, any node), write `{"alias": [k, a]}` followed by
@@ -229,7 +270,8 @@ have):
   whose `n_xs` is not below its number of arguments;
 - a table index outside its table, negative indices included;
 - a reference that names no leaf: a space other than `p` and `n`, a parameter or node that does not exist, a leaf outside its
-  collection (a node's is its declared `out`; for a strided sequence, the extremes of its pattern), or a non-integer field;
+  collection (a node's is its declared `out`; for a strided or grid part, its lanes' bounds, §3), or a non-integer field;
+- a `grid` that an older form spells, or whose radix is below 2, or whose run or lanes are empty (§3);
 - an alias that does not name an argument of an earlier node;
 - a sequence whose length is not its type's leaf count;
 - a node whose arguments do not type-check against its callee as in §4.4, or whose declared `out` is not the type §4.4
