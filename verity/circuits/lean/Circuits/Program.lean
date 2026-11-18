@@ -309,39 +309,61 @@ def Seq.get (s : Seq) (k : Nat) : Ref := Id.run do
 def Seq.toArray (s : Seq) : Array Ref :=
   s.parts.foldl (fun acc q => (Array.range q.count).foldl (fun acc k => acc.push (q.get k)) acc) #[]
 
+/-- The least leaf position or step a grid states. -/
+def gridLow : Int := -(2 ^ 62 : Nat)
+
+/-- A lane's level `[radix, step]`; `shape` is the refusal. -/
+def gridLevel (shape : String) (x : Json) : V (Nat × Int) := match x with
+  | .arr #[r, d] => match natJ? r, intJ? d with
+    | some r, some d => if r < 2 || d < gridLow then throw shape else pure (r, d)
+    | _, _ => throw shape
+  | _ => throw shape
+
+/-- A lane's space, `"p"` or `"n"`; `shape` is the refusal. -/
+def gridSpace (shape : String) (s : Json) : V Bool := match s with
+  | .str "p" => pure true
+  | .str "n" => pure false
+  | _ => throw shape
+
+/-- A lane `[space, index, base, inner_stride, [[radix, step], ...]]`; `shape` is the refusal. -/
+def gridLane (shape : String) (l : Json) : V Lane := match l with
+  | .arr #[sp, i, b, e, .arr lv] => do
+    let p ← gridSpace shape sp
+    match natJ? i, intJ? b, intJ? e with
+    | some i, some b, some e =>
+      if b < gridLow || e < gridLow then throw shape
+      else do
+        let levels ← lv.mapM (gridLevel shape)
+        pure { p, i, b, e, lv := levels.toList }
+    | _, _, _ => throw shape
+  | _ => throw shape
+
+/-- Whether lane `l`'s extremes over runs of `run` lie inside its parameter or node. -/
+def Lane.fits (leaves : Bool → Nat → Option Nat) (run : Nat) (l : Lane) : Bool :=
+  match leaves l.p l.i with
+  | some n => 0 ≤ (l.bounds run).1 && (l.bounds run).2 < n
+  | none => false
+
+/-- The checks on a grid's parsed lanes; `j` and `g` only name the refusals. -/
+def gridChecks (j g : Json) (run : Nat) (lanes : Array Lane) (leaves : Bool → Nat → Option Nat) : V (Array Part) :=
+  if lanes.any (·.periods != lanes[0]!.periods) then
+    throw s!"grid-shape: grid {g.compress}: its lanes' radices multiply to different period counts"
+  else if !gridNeeded run lanes then
+    throw s!"grid-spelled: grid {g.compress}: an affine, strided or explicit part spells it"
+  else if !lanes.all (·.fits leaves run) then
+    throw s!"grid-overrun: references {j.compress} reach outside a lane's parameter or node"
+  else pure #[.grid run lanes]
+
 /-- A `grid` part `g` of references `j` (PROTOCOL.md §3), checked as `refs.Grid` checks it: its shape (`grid-shape`),
 that no affine, strided or explicit part spells it (`grid-spelled`), and every lane's extremes inside its parameter or
 node (`grid-overrun`), by arithmetic a lane. -/
 def parseGrid (j g : Json) (leaves : Bool → Nat → Option Nat) : V (Array Part) := do
   let shape := s!"grid-shape: grid {g.compress} is not [run, [[space, index, base, inner_stride, [[radix, step], ...]], ...]]"
-  let low : Int := -(2 ^ 62 : Nat)
   let .arr #[run, .arr ls] := g | throw shape
   let some run := natJ? run | throw shape
   if run == 0 || ls.isEmpty then throw shape
-  let lanes ← ls.mapM fun l => do
-    let .arr #[sp, i, b, e, .arr lv] := l | throw shape
-    let p ← match sp with
-      | .str "p" => pure true
-      | .str "n" => pure false
-      | _ => throw shape
-    let (some i, some b, some e) := (natJ? i, intJ? b, intJ? e) | throw shape
-    if b < low || e < low then throw shape
-    let levels ← lv.mapM fun x => do
-      let .arr #[r, d] := x | throw shape
-      let (some r, some d) := (natJ? r, intJ? d) | throw shape
-      if r < 2 || d < low then throw shape
-      pure (r, d)
-    pure ({ p, i, b, e, lv := levels.toList } : Lane)
-  if lanes.any (·.periods != lanes[0]!.periods) then
-    throw s!"grid-shape: grid {g.compress}: its lanes' radices multiply to different period counts"
-  if !gridNeeded run lanes then throw s!"grid-spelled: grid {g.compress}: an affine, strided or explicit part spells it"
-  for l in lanes do
-    let (lo, hi) := l.bounds run
-    let ok := match leaves l.p l.i with
-      | some n => 0 ≤ lo && hi < n
-      | none => false
-    if !ok then throw s!"grid-overrun: references {j.compress} reach outside a lane's parameter or node"
-  return #[.grid run lanes]
+  let lanes ← ls.mapM (gridLane shape)
+  gridChecks j g run lanes leaves
 
 /-- A sequence's JSON parts, checked as `codec._checked_refs` checks them: every reference names a leaf of a parameter of the
 body (`p`) or of a node's declared output (`n`); a strided sequence by the extremes of its pattern. `leaves p i` is that
@@ -400,8 +422,9 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
         | none => throw s!"references {j.compress} name no leaf of a parameter or a node"
       | _ => throw s!"references {j.compress} name no leaf of a parameter or a node"
     return #[.explicit rs]
-  if let .ok g := j.getObjVal? "grid" then return ← parseGrid j g leaves
-  throw s!"references {j.compress}: not affine, strided, explicit, grid, concat or alias"
+  match j.getObjVal? "grid" with
+  | .ok g => parseGrid j g leaves
+  | .error _ => throw s!"references {j.compress}: not affine, strided, explicit, grid, concat or alias"
 
 def parseParts (j : Json) (leaves : Bool → Nat → Option Nat) (args : Nat → Nat → Option Seq) : V (Array Part) :=
   parsePartsIn Steps.FUEL j leaves args

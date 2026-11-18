@@ -183,7 +183,13 @@ theorem parsePartsIn_inner_step (leaves : Bool → Nat → Option Nat) (args : N
               simp only [Array.mem_singleton] at hq
               subst hq
               trivial
-            · exact absurd h (by intro h; injection h)
+            · split at h
+              · obtain ⟨run, lanes, rfl, hp, hf⟩ := Walk.parseGrid_ok h
+                intro q hq
+                simp only [Array.mem_singleton] at hq
+                subst hq
+                trivial
+              · exact absurd h (by intro h; injection h)
 
 /-- **Every parsed strided part repeats a pattern of positive length**, given every part of an argument an alias may
 name does. -/

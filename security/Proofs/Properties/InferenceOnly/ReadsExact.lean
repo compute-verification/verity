@@ -1753,7 +1753,13 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
               simp only [Array.mem_singleton] at hq
               subst hq
               trivial
-            · exact absurd h (by intro h; injection h)
+            · split at h
+              · obtain ⟨run, lanes, rfl, hp, hf⟩ := Walk.parseGrid_ok h
+                intro q hq
+                simp only [Array.mem_singleton] at hq
+                subst hq
+                trivial
+              · exact absurd h (by intro h; injection h)
 
 /-- **No position of a parsed strided part is negative**, given none of an argument an alias may name is: its corners'
 least is within its collection (`parsePartsIn`'s `within`), so `Desc.ofPart`'s piece names its references
