@@ -6,11 +6,12 @@ attester signed.
                                         S = 4 + N(1 + P + H), the signature's bytes (`lms.Params.signature_bytes`)
     PousSessionDigest_v1{K, HEAD, LIMIT} (head: B<HEAD + HEAD mod 2>, ctx: B<106>, r0 ... rT−1: B<184>)
                                         -> (ok: Array<1>, m: B<64>, r0 ... rT−1: B<184>), T = ⌈K/2⌉
-    PousRound_v1{N, SLOT}               (row: B<N>, records: B<184>, j: B<4>, i: B<8>) -> Array<1>
+    PousRound_v2{N, SLOT}               (row: W<N/2>, records: B<184>, ji: B<12>) -> Array<1>
 
 B<n> is n bytes, ``Array<n, Array<8, Value<1>>>`` (`octets`), each byte's bits least significant first, so a row's bits
 are in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (a ``sha512/row/v2`` row's order,
-`verity.commitments.rowleaf.bit_row`); an integer (j, i) is its bytes little-endian, so its bits least significant first.
+`verity.commitments.rowleaf.bit_row`). W<n> is n 16-bit words, ``Array<n, Value<16>>``, each word two bytes
+little-endian, as a registered table's row is (`interface.py`'s leaf widths).
 Flock stages a Definition as one ``hm96-sha512/row/v2`` row per parameter and one per output
 (`verity.commitments.periods.interface.unit_rows`), whole u16 words of one element width, so each parameter here is one
 row, holding the bytes as the memory attester writes them.
@@ -29,13 +30,14 @@ scheme, ``lms-sha512/n64-w1-h20/v0`` (`lms.DEPLOYED`), it is ``PousSessionSig_v1
 **The round's unit.** The records are registered two a row, ⌈k/2⌉ rows of 184 bytes (92 u16 words): record j is bytes
 92(j mod 2) to 92(j mod 2) + 91 of row ⌊j/2⌋, the last row zero past the last record when k is odd.  A record is
 `memory_attester.Round.value`'s 92 bytes, ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers
-big-endian, ``H(block)`` the answer's ``sha512/row/v2`` digest.  `PousRound_v1{N, SLOT}` reads the store's N-byte row
-``row``, the records row ``records`` holding record j at slot SLOT = j mod 2, and the public j and i (the round and the
-index the memory attester drew for it, a u32 and a u64), and is 1 iff record j's j is ``j``, its index is ``i`` and its
-``H(block)`` is ``row``'s ``sha512/row/v2`` digest (``PousRowDigest_v1{N}``): one ``PousEqual_v1{608}`` over the digest,
-j and i against the record's fields.  These are the per-round checks of `memory_attester.verdict` but the time: the
-record names round j, its index is round j's coin, and its digest is that of the block at the index.  R_even and R_odd
-are ``PousRound_v1{2056, 0}`` and ``PousRound_v1{2056, 1}``, two Programs.
+big-endian, ``H(block)`` the answer's ``sha512/row/v2`` digest.  `PousRound_v2{N, SLOT}` reads the store's N-byte row
+``row`` as N/2 words (the row the store table's opening at the round's index returns, `gates.embedding`'s ``h``), the
+records row ``records`` holding record j at slot SLOT = j mod 2, and ``ji``, the 12 bytes ``u32 j ‖ u64 i`` big-endian
+(the round and the index the memory attester drew for it, as the record writes them), and is 1 iff record j's first 12
+bytes are ``ji`` and its ``H(block)`` is ``row``'s ``sha512/row/v2`` digest (``PousRowDigest_v1{N}``): one
+``PousEqual_v1{608}`` over the digest and ``ji`` against the record's.  These are the per-round checks of
+`memory_attester.verdict` but the time: the record names round j, its index is round j's coin, and its digest is that of
+the block at the index.  R_even and R_odd are ``PousRound_v2{2056, 0}`` and ``PousRound_v2{2056, 1}``, two Programs.
 
 **The signed digest's unit.** `PousSessionDigest_v1{K, HEAD, LIMIT}` reads the signed header (``head``, HEAD bytes and a
 zero byte when HEAD is odd), the signed context (``ctx``, `signed_context`: what `lms.memory_attester_message` hashes
@@ -56,7 +58,8 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
-from verity.circuits.types import Array, Tuple
+from verity.circuits.population import WordBits
+from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.crypto import lms as R
 from verity.commitments.gates import frame_v3 as F
 from verity.commitments.gates.lms import DIGEST, IDENT, _check as _lms_params, _group, _value, _words, _Wires, verifier
@@ -68,7 +71,7 @@ from .circuit import _check, bits
 from .verdict_circuit import PousVerdict, verdict_value
 
 __all__ = ["CTX_BYTES", "RECORD_BYTES", "RECORDS_PER_ROW", "SESSION_BYTES", "SESSION_TAG", "PousRound", "PousSessionDigest",
-           "PousSessionMessage", "PousSessionSig", "head_bytes", "octets", "records_rows", "round_ok", "session_digest",
+           "PousSessionMessage", "PousSessionSig", "head_bytes", "octets", "records_rows", "round_ji", "round_ok", "session_digest",
            "session_sig_ok", "signed_context"]
 
 #: a round record's bytes (`memory_attester.Round.value`), and the records a registered row holds
@@ -123,29 +126,27 @@ PousSessionSig = CompositeDefinition(
 
 def _round_sig(S):
     _check("PousRound", N=S.N)
-    if S.SLOT not in range(RECORDS_PER_ROW):
-        raise ValueError(f"PousRound's SLOT is a record's place in its row, below {RECORDS_PER_ROW}, not {S.SLOT!r}")
-    return (("row", octets(S.N)), ("records", octets(RECORD_BYTES * RECORDS_PER_ROW)), ("j", octets(4)),
-            ("i", octets(8))), bits(1)
+    if S.N % 2 or S.SLOT not in range(RECORDS_PER_ROW):
+        raise ValueError(f"PousRound's N is a row's bytes, whole 16-bit words, and its SLOT a record's place in its row, "
+                         f"below {RECORDS_PER_ROW}, not N={S.N!r}, SLOT={S.SLOT!r}")
+    return (("row", Array(S.N // 2, Value(16))), ("records", octets(RECORD_BYTES * RECORDS_PER_ROW)),
+            ("ji", octets(_INDEX[1]))), bits(1)
 
 
-def _round_body(B, S, row, records, j, i):
+def _round_body(B, S, row, records, ji):
     X = _Wires
     rec = _group(X.refs(records), 8)[RECORD_BYTES * S.SLOT:RECORD_BYTES * (S.SLOT + 1)]
-
-    def integer(lo, hi):
-        return [rec[hi - 1 - t // 8][t % 8] for t in range(8 * (hi - lo))]
-
-    digest = B.call(bind(PousRowDigest, N=S.N), X.coll(bits(8 * S.N), X.refs(row)))
-    held = [x for b in rec[_DIGEST[0]:_DIGEST[1]] for x in b] + integer(*_J) + integer(*_INDEX)
-    return B.call(bind(PousEqual, N=608), X.coll(bits(608), X.refs(digest) + X.refs(j) + X.refs(i)),
-                  X.coll(bits(608), held))
+    words = B.batch(bind(WordBits, W=16), row, axes=(0,))
+    digest = B.call(bind(PousRowDigest, N=S.N), X.coll(bits(8 * S.N), X.refs(words)))
+    held = [x for b in rec[_DIGEST[0]:_DIGEST[1]] + rec[_J[0]:_INDEX[1]] for x in b]
+    return B.call(bind(PousEqual, N=608), X.coll(bits(608), X.refs(digest) + X.refs(ji)), X.coll(bits(608), held))
 
 
 PousRound = CompositeDefinition(
-    "PousRound", 1, ("N", "SLOT"), _round_sig, _round_body, conformance="exact-model-tested",
-    doc="1 iff record SLOT of the records row (two 92-byte memory_attester.Round.value records) names round j and index i "
-        "and holds the N-byte row's sha512/row/v2 digest: R_even at SLOT 0, R_odd at SLOT 1")
+    "PousRound", 2, ("N", "SLOT"), _round_sig, _round_body, conformance="exact-model-tested",
+    doc="1 iff record SLOT of the records row (two 92-byte memory_attester.Round.value records) begins with ji, u32 j || "
+        "u64 i big-endian, and holds the sha512/row/v2 digest of the N-byte row, its N/2 words little-endian: R_even at "
+        "SLOT 0, R_odd at SLOT 1")
 
 
 def signed_context(I: bytes, session: bytes) -> bytes:
@@ -239,13 +240,20 @@ def session_sig_ok(N: int, W: int, H: int, key: bytes, m: bytes, sig: bytes) -> 
     return int(R.verify(p, key, m, R.Signature.decode(p, sig)))
 
 
-def round_ok(N: int, SLOT: int, row: bytes, records: bytes, j: int, i: int) -> int:
-    """`PousRound_v1{N, SLOT}`'s output on its rows: record SLOT names round j and index i and holds row's digest."""
-    if len(row) != N or len(records) != RECORD_BYTES * RECORDS_PER_ROW or SLOT not in range(RECORDS_PER_ROW):
-        raise ValueError(f"the rows are an {N}-byte row and a {RECORD_BYTES * RECORDS_PER_ROW}-byte records row")
+def round_ji(j: int, i: int) -> bytes:
+    """The ``ji`` row of round j at index i: ``u32 j ‖ u64 i`` big-endian, the record's first 12 bytes."""
+    return j.to_bytes(4, "big") + i.to_bytes(8, "big")
+
+
+def round_ok(N: int, SLOT: int, row: bytes, records: bytes, ji: bytes) -> int:
+    """`PousRound_v2{N, SLOT}`'s output on its rows (``row`` as its N bytes): record SLOT begins with ``ji`` and holds
+    row's digest."""
+    if (len(row) != N or len(records) != RECORD_BYTES * RECORDS_PER_ROW or SLOT not in range(RECORDS_PER_ROW)
+            or len(ji) != _INDEX[1]):
+        raise ValueError(f"the rows are an {N}-byte row, a {RECORD_BYTES * RECORDS_PER_ROW}-byte records row and a "
+                         f"{_INDEX[1]}-byte ji")
     rec = records[RECORD_BYTES * SLOT:RECORD_BYTES * (SLOT + 1)]
-    return int(int.from_bytes(rec[slice(*_J)], "big") == j and int.from_bytes(rec[slice(*_INDEX)], "big") == i
-               and rec[slice(*_DIGEST)] == sha512_row_v2_digest(row, 8 * N))
+    return int(rec[:_INDEX[1]] == ji and rec[slice(*_DIGEST)] == sha512_row_v2_digest(row, 8 * N))
 
 
 def session_digest(K: int, HEAD: int, LIMIT: int, head: bytes, ctx: bytes, rows: Sequence[bytes]
