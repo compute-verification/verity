@@ -187,6 +187,11 @@ class ServingNode(device.GpuBackend):
         return super().calibrate()
 
 
+def prover_engines(exports: list[dict]) -> list[dict]:
+    """prover.json's `engines`: each engine's export as --engines-dir has it, without its IPC handle (`keep`)."""
+    return [keep.export_kept(e) for e in exports]
+
+
 def phases(summaries: list[dict]) -> dict:
     """The node's serving by phase: tokens a second summed over the engines, and their step times' medians."""
     out = {}
@@ -255,7 +260,7 @@ def main() -> int:
                               sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                               trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
                               host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas)
-        out["engines"] = [keep.export_kept(e) for e in exports]
+        out["engines"] = prover_engines(exports)
         out["layout"] = backend.layout()
         host_, port = a.connect.rsplit(":", 1)
         conn = wire.connect(host_, int(port))
