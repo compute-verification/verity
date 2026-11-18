@@ -223,7 +223,7 @@ def Wired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires
 /-- Leaf `l'` of the writer's field that the reader row `r` is wired to, at the wire's offset, is Program gate `g'`,
 at bits `[lo', hi')`. -/
 def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row) (l' g' lo' hi' : ℕ) : Prop :=
-  ∃ wt wu off sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, off) ∧ 0 ≤ wu ∧
+  ∃ wt wu o off sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, o, off) ∧ 0 ≤ wu ∧
     UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' off l' g' lo' hi'
 
 /-- **Every unit's rows are its own input gates or its writers' outputs**: a leaf of a reader row is an input gate or
