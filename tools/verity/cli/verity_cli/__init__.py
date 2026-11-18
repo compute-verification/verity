@@ -201,7 +201,8 @@ def _lean_here(file: str, siblings: bool = False) -> int:
         args = opts + (sib.lean_args(pkg, plan, work) if plan else [])
         print(f"verity lean try: lake env lean {''.join(o + ' ' for o in opts)}{probe.COPIES / at}, {rel} with the axiom "
               f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
-        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show))
+        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy, show: lean(copy, args, show),
+                                  home=os.path.dirname(rel))
         if rc == 0 and plan:
             rc, output, lines = sib.check(
                 plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg),

@@ -2021,10 +2021,10 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
                 at = os.path.relpath(SIBLINGS.source(plan, work), tree / pkg / PROBE.COPIES) if checked else rel
                 if rc == 0:
-                    step, (rc, said, text) = "lean", PROBE.probe(
+                    step, (rc, said, text) = f"{step} exit 0, then lean on its copy", PROBE.probe(
                         tree / pkg, at, (ROOT / file).read_text(),
                         lambda copy, show: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy],
-                                                 echo=show))
+                                                 echo=show), home=os.path.dirname(rel))
                 log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
