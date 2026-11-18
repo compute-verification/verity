@@ -29,17 +29,18 @@ _STATICS = {k: "structure" for k in (
 #: (`KINDS`); a mapping names a record's nested fields. A field not named, and a file not here, stays in the serve dir: the
 #: requests and their users, counts, sizes, timings, paths, hosts, error text and whole dumped dictionaries among them.
 #: ``seed_coin`` (flipped in-process by every stored run) and ``binding_map_digest`` (unsalted) stay out until soundness
-#: rules on them. ``served_rows``' G and n_bits are the statics' (a row is G = P steps, each step's bits at R, W and A,
-#: idle steps zero), not the window's.
+#: rules on them. Out by soundness's ruling: a window's ``step_roots``, because their number is the window's steps;
+#: ``passed``, because it is the serving node's own check of its Commit and readback, not the protocol's output; ``run_id``,
+#: because ``--run-id`` is a launcher's free string the mirror holds to no fixed form. ``served_rows``' G and n_bits are
+#: the statics' (a row is G = P steps, each step's bits at R, W and A, idle steps zero), not the window's.
 PUBLIC: dict[str, dict[str, Any]] = {
     "serve.json": {"precision": "structure", "protocol": "structure", "default_seed": "structure", "scheme": "structure",
                    "window_steps": "structure", "window_requests": "structure", "window_gb": "structure",
                    "served_rows_statics": _STATICS, "seal_off_loop": "structure", "seal_hold_gb": "structure",
                    "target": _TARGET, "model": "structure", "revision": "structure", "weights": {"root": "commitment"}},
-    "windows.jsonl": {"window": "structure", "run_id": "structure", "run_root": "commitment", "step_roots": "commitment",
-                      "served_rows": {"binding": "commitment", "root": "commitment", "G": "structure", "n_bits": "structure"},
-                      "passed": "output"},
-    "seals.jsonl": {"window": "structure", "run_id": "structure", "run_root": "commitment", "commit_scheme": "structure"},
+    "windows.jsonl": {"window": "structure", "run_root": "commitment",
+                      "served_rows": {"binding": "commitment", "root": "commitment", "G": "structure", "n_bits": "structure"}},
+    "seals.jsonl": {"window": "structure", "run_root": "commitment", "commit_scheme": "structure"},
 }
 
 #: the records mirrored into the run's $OUT, each as `PUBLIC` projects it
