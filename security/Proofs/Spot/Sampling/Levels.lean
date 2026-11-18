@@ -42,6 +42,7 @@ theorem auditBound_of_misses (L : Levels G) {U Run : Type} (D : SamplingDesign U
     (h : AuditBound D pr accepts incorrect ε) :
     AuditBound L.design pr accepts (fun r => (incorrect r).image blk) ε := by
   intro δ
+  show pr (fun r => accepts r ∧ L.design.missProb ((incorrect r).image blk) ≤ δ) ≤ δ + ε
   have he : (fun r => accepts r ∧ L.design.missProb ((incorrect r).image blk) ≤ δ) =
       fun r => accepts r ∧ D.missProb (incorrect r) ≤ δ := by
     funext r
