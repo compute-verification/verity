@@ -1187,9 +1187,9 @@ def _bit_row_toy(bits: list[int], d: Path, edit=None, n: int = 4, seg: frozenset
     (d / "circuit.txt").write_text(text)
     if salts is not None:
         meta = json.loads(text.split("\n", 2)[1][5:])
-        salts = {nm: salts.get(nm) or FC.stage_salts(iset, 0, n, [p], b"k" * 32)[nm] for nm, p in
+        salts = {nm: salts.get(nm) or FC.stage_salts(0, n, [p])[nm] for nm, p in
                  ((p.name, p) for p in FC._meta_ports(meta))}
-    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs={"out": got.astype(np.uint16)}, salts=salts)
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", rows=rows, outs={"out": got.astype(np.uint16)}, salts=salts)
     return text
 
 
@@ -1245,10 +1245,10 @@ def _seg_writer_toy(out_words: list[int], d: Path, n: int = 4, seg: bool = True)
     outs = {nm: got[:, at[i]:at[i + 1]] for i, nm in enumerate(names)}
     salts = {"a0": [hashlib.shake_256(b"row-seg-pair\0" + got[i].tobytes()).digest(192) for i in range(n)]}
     meta = json.loads(text.split("\n", 2)[1][5:])
-    salts["p0"] = FC.stage_salts(iset, 0, n, FC._meta_ports(meta)[:1], b"k" * 32)["p0"]
+    salts["p0"] = FC.stage_salts(0, n, FC._meta_ports(meta)[:1])["p0"]
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
-    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", b"k" * 32, rows=rows, outs=outs, salts=salts)
+    FC.write(text, iset, 0, n, d / "inst.bin", d / "pub.bin", rows=rows, outs=outs, salts=salts)
     return text, got, salts["a0"]
 
 

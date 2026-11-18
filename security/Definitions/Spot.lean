@@ -14,6 +14,7 @@ public import Definitions.Spot.Sampling.Analysis
 public import Definitions.Spot.Sampling.Harm
 public import Definitions.Spot.Sampling.Partitioning
 public import Definitions.Spot.Sampling.Layer
+public import Definitions.Spot.Sampling.Scheme
 public import Definitions.Spot.Limits
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power

@@ -53,9 +53,10 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 /-- **Reads by path open at the writer's leaf**, at composite `k`: on every play SPOT's verdict at `k` accepts, for
 every case of the policy (`PolicyCase`) and every wiring its record names (`RecordWiring`), each reader unit `u`'s
 wired row `row` reads, under the root the record names for its writer's output field (`fieldRoot`), a registered
-place the writer unit `Circuits.Wire.leafAt` gives writes. It is `FlockProofs.Registered.check_ok` extended to wired
-ports, lifted to the record: `Flock.Registered.check` holds every link row to a wired port (`checkLinked`) and opens it
-at `Port.readAt`'s closed form, the writer's leaf, under its registered root. -/
+place the writer unit `Circuits.Wire.leafAt` gives writes. It is `FlockProofs.Registered.check_ok` extended to tree
+ports, lifted to the record: `Flock.Registered.check` holds every link row to a tree port (`checkLinked`) and opens it at
+its writer's leaf in the writer template's tree, which the verifier's program gives (`Registered.withTrees`,
+`HmLinks.treeLeaf`), under its registered root. -/
 def ReadsByPath (k : Verity.Registration.Composite) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (o : Exchange), V.Verdict k .sampled o →
     ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →

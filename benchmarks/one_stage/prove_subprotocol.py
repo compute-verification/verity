@@ -187,7 +187,7 @@ class OutsideShape(ValueError):
         super().__init__(msg)
         self.k_log, self.per_block = k_log, per_block
 
-def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], set_name: str) -> dict:
+def _stage_forged(st, m: Member, d: Path, indices: list[int], set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of the first output word of each instance in ``m.forge`` flipped before the set is
     committed (`forged_proofs.stage_case`): its rows and ``b || c`` agree with the outputs it commits, so only the proof
     can refuse it."""
@@ -209,9 +209,9 @@ def _stage_forged(st, m: Member, d: Path, salt_key: bytes, indices: list[int], s
         outs["o0"][i, 0] ^= 1
     tables = m.stage_kw.get("tables")
     table_rows = None if tables is None else {p.name: len(tables[p.name]) if p.name in tables else n for p in st.ports}
-    salts = {**FC.stage_salts(iset, 0, n, st.ports, salt_key, table_rows), **(m.stage_kw.get("salts") or {})}
+    salts = {**FC.stage_salts(0, n, st.ports, table_rows), **(m.stage_kw.get("salts") or {})}
     d.mkdir(parents=True, exist_ok=True)
-    FC.write(st.text, iset, 0, n, d / "inst.bin", d / "pub.bin", salt_key,
+    FC.write(st.text, iset, 0, n, d / "inst.bin", d / "pub.bin",
              rows={r: np.asarray(m.values[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts,
              public_words={}, digests=(st.pin, st.class_sha512), indices=indices, share_rows=tables is not None,
              tables=tables, refs=m.stage_kw.get("refs"), registered=m.stage_kw.get("registered"), meta=st.meta)
@@ -236,9 +236,9 @@ def _stager(m: Member, sd: Path, bound: dict, layout: str | None) -> tuple[Any, 
     return CS.UnitStager(m.defn, f"unit/{m.name}", m.rows, m.out_rows, reads=m.reads, **kw), why
 
 
-def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: dict, tools: Tools | None = None) -> dict:
+def stage(m: Member, base: int, bound: dict, out: Path, files: dict, tools: Tools | None = None) -> dict:
     """Member ``m``'s statement, bound to the partition (``bound``) at global units ``base ..``: its circuit lowered
-    once, its rows committed under salts from ``salt_key``; with ``tools.structural``, the templated statement where
+    once, its rows committed under fresh salts; with ``tools.structural``, the templated statement where
     `struct_lower` lowers its Definition, its unit placed by ``tools.tmpl_unit`` (`a0.templated`). Returns a0's statement
     dict (``dir``, ``pin``, the header, ``form``: its statement, its layout or why it is flat ...)."""
     from verity_flock import ir_lower as IL
@@ -266,9 +266,9 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     set_name = f"{st.iset.name}-{m.name}"
     indices = list(range(base, base + m.n))
     if m.forge:
-        got = _stage_forged(st, m, d, salt_key, indices, set_name)
+        got = _stage_forged(st, m, d, indices, set_name)
     else:
-        got = st.stage(m.values, d, salt_key, indices=indices, set_name=set_name, **m.stage_kw)
+        got = st.stage(m.values, d, indices=indices, set_name=set_name, **m.stage_kw)
     (d / "inst.bin").rename(d / f"inst-{m.n}.bin")
     (d / "pub.bin").rename(d / f"pub-{m.n}.bin")
     (d / "tables").mkdir(exist_ok=True)
@@ -412,13 +412,12 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                            "program": bound["program"], "firewall": tools.zk_server is not None, "members": {},
                            "_out": str(out)}
 
-    salt_key = os.urandom(32)
     staged, by_name = [], {}
     for m in members:
         tid = P.template_id(m.defn)
         if tid not in bases or bases[tid][1] != m.n:
             raise ValueError(f"{m.name}: template {tid} has no range of {m.n} units in the program ({bases.get(tid)})")
-        s = stage(m, bases[tid][0], bound, out, salt_key, files, tools)
+        s = stage(m, bases[tid][0], bound, out, files, tools)
         staged.append(s)
         by_name[m.name] = (bases[tid][0], m.n)
         subprotocol["members"][m.name] = {"template": tid, "n": m.n, "base": s["base"], "ands": s["ands"], "unit_nnz": s["unit_nnz"],

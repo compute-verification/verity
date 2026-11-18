@@ -26,6 +26,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     activation_binding,
     commit_rows,
+    fresh_salts,
     transcript_domain,
     weights_root,
 )
@@ -82,12 +83,14 @@ def like(y: np.ndarray, x: Any) -> Any:
 # --- the run -----------------------------------------------------------------------------------------------------------------
 
 class NcpRun:
-    """One install's workload: the units served so far, their activation roots and the transcript's leaves."""
+    """One install's workload: the units served so far, their activation roots and the transcript's leaves. Each unit's
+    activation rows are committed under fresh salts (`audit.fresh_salts`), kept with its retained rows. ``salt_key`` is
+    unread (the vLLM option still passes one)."""
 
     def __init__(self, scheme: Any, entry: str, settings: NcpSettings, weight_roots: dict[int, bytes], salt: bytes,
-                 salt_key: bytes) -> None:
+                 salt_key: bytes | None = None) -> None:
         self.scheme, self.entry, self.settings = scheme, entry, settings
-        self.weight_roots, self.salt, self.salt_key = weight_roots, salt, salt_key
+        self.weight_roots, self.salt = weight_roots, salt
         self.units: list[Matmul] = []
         self.roots_a: list[bytes] = []
         self.leaves: list[bytes] = []
@@ -122,7 +125,8 @@ class NcpRun:
         rows = [a[i].tobytes() for i in range(mp)]
         u = Matmul(len(self.units), Shape(mp, k, n), w)
         self.scheme.check(u)
-        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows, HM96, self.salt_key, u.index).commitment.root
+        salts = fresh_salts(len(rows))
+        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows, HM96, salts).commitment.root
         ctx = UnitContext(self.salt, u, root_a, self.weight_roots[w])
         tiles = ncp_tiles(self.scheme, ctx, self.scheme.noise(ctx), a, ops)
         z = np.empty((mp, n), np.int64)
@@ -132,7 +136,7 @@ class NcpRun:
             z[tile.rows[0]:tile.rows[-1] + 1, tile.cols[0]:tile.cols[-1] + 1] = block
         self.units.append(u)
         self.roots_a.append(root_a)
-        self.retained.append((u.index, rows))
+        self.retained.append((u.index, rows, salts))
         self.details.update(units=len(self.units), tiles=len(self.leaves), padded_rows=self.details["padded_rows"] + mp - m)
         y = (s[:, None] * t[None, :]).astype(np.float32) * z[:m].astype(np.float32)
         out = like(y.reshape(*lead, n), x)
@@ -153,7 +157,7 @@ class NcpRun:
                      for u, r in zip(self.units, self.roots_a)]
             (d / "pouw-transcript.json").write_text(json.dumps(
                 {"entry": self.entry, "commitment": self.commits, "units": units, "leaves": [x.hex() for x in self.leaves],
-                 "retained": [i for i, _ in self.retained]}, indent=1) + "\n")
+                 "retained": [i for i, *_ in self.retained]}, indent=1) + "\n")
 
 
 def f32_bits(v: np.ndarray) -> np.ndarray:

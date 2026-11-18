@@ -16,8 +16,8 @@ and opens coin `(label, i)` once, after the root the verifier recorded for it. T
 `after` binds an opening to that root but can't show the coin was released after it: the release order is a trust
 assumption on the auditor-trusted challenger (`trusted-device`), not something this checks.
 `liveReason` is `live_reason`, the check of one opening; `orderReason` is `order_reason`, the check of a family's
-openings against the roots the verifier recorded, in order: coin `i` opened after root `i`, each once, none before its
-root is recorded, and every recorded root's coin opened. Both give Python's reasons in Python's words and order, `none`
+openings against the roots the verifier recorded, in order: the `i`th opening after the `i`th root, each coin the one
+its opening names and opened once, none before its root is recorded, and every recorded root's coin opened. Both give Python's reasons in Python's words and order, `none`
 when the coins check, and throw where Python raises (`CoinError`): a coin or a family the layout doesn't hold.
 
 `LiveCommitment.ofJson` and `LiveOpening.ofJson` read the JSON forms as `from_json` reads them, refusing what it refuses
@@ -202,7 +202,9 @@ def liveReason (c : LiveCommitment) (o : LiveOpening) (label : String) (index : 
   if o.after != after then return some "coin was not opened after what the verifier recorded"
   return none
 
-/-- `order_reason` (module docstring): `roots` the family's roots in the order the verifier recorded them. -/
+/-- `order_reason` (module docstring): `roots` the family's roots in the order the verifier recorded them, and
+`openings` the coin opened after each, in that order. A coin is the one its opening names, any of the family's not
+opened before. -/
 def orderReason (c : LiveCommitment) (label : String) (roots : List ByteArray) (openings : List LiveOpening) :
     V (Option String) := do
   let some count := c.family label | throw s!"the epoch's coins have no {label} family"
@@ -213,11 +215,11 @@ def orderReason (c : LiveCommitment) (label : String) (roots : List ByteArray) (
     if seen.contains (o.label, o.index) then
       return some s!"the epoch's {o.label} coin {o.index} is opened twice: a retry never redraws"
     seen := (o.label, o.index) :: seen
-    let some root := roots[i]? | return some s!"{label} coin {i} was opened before its root was recorded"
-    match ← liveReason c o label i root with
-    | some why => return some s!"{label} coin {i}: {why}"
+    let some root := roots[i]? | return some s!"{label} coin {o.index} was opened with no root recorded before it"
+    match ← liveReason c o label o.index root with
+    | some why => return some s!"{label} coin {o.index}: {why}"
     | none => pure ()
-  if openings.length < roots.length then return some s!"{label} coin {openings.length} was never opened"
+  if openings.length < roots.length then return some s!"{label} root {openings.length} has no coin opened after it"
   return none
 
 /-! The difftest's pieces. -/

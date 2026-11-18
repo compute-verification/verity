@@ -65,6 +65,7 @@ from types import MappingProxyType
 from typing import Any, Sequence
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import of_family
+from verity.protocols.resource_accounting.scheme import Circuits, register_circuits
 
 #: the schemes that have a circuit here, each with the permutation P it pins: the kernel schemes' ``ncp-v2`` family
 SCHEMES = MappingProxyType({k.name: k.parameters["perm"] for k in of_family("ncp-v2")})
@@ -204,5 +205,7 @@ def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
     return Traced(scheme, shape, ncp2.linear(shape, kind), partition.query(shape, kind), m * n, ncp2.weight(shape, kind),
                   partition.weight_query(shape, kind))
 
+
+register_circuits("pouw", Circuits(SCHEMES, traced_as))
 
 __all__ = ["LINKED", "SCHEMES", "Traced", "traced_as"]

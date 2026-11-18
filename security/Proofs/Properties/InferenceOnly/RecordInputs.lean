@@ -292,26 +292,24 @@ theorem finish_case {f : Front} {pin : String → Option String} {c : Case} (h :
   split at h
   · cases h
   · split at h
-    · cases h
-    · split at h
-      · rename_i wired hwired
+    · rename_i wired hwired
+      split at h
+      · cases h
+      · rename_i hwhole
         split at h
         · cases h
-        · rename_i hwhole
+        · split at h
+          · cases h
           split at h
           · cases h
           · split at h
             · cases h
-            split at h
-            · cases h
-            · split at h
-              · cases h
-              · rename_i pins hpins
-                cases h
-                refine ⟨?_, ?_, hpins, rfl, rfl, rfl⟩
-                · exact hwired
-                · exact Option.not_isSome_iff_eq_none.1 hwhole
-      · cases h
+            · rename_i pins hpins
+              cases h
+              refine ⟨?_, ?_, hpins, rfl, rfl, rfl⟩
+              · exact hwired
+              · exact Option.not_isSome_iff_eq_none.1 hwhole
+    · cases h
 
 /-- **The summary the check holds is `Spot.Wires.check`'s of the wiring it holds**, on a record `read` accepts. -/
 theorem wired_of_read {j tr : Json} {c : Case} (h : read j tr = .ok c) : Spot.Wires.check c.W = .ok c.wired := by

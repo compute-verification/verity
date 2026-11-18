@@ -8,16 +8,19 @@ the engine core's gate (`engine.core_gate.Gate`): `register` adds it to the engi
 gate ``admission``) for every engine core that process builds, and serve-openai's engine loop, which steps an in-process
 engine itself, asks its `Hook.ready` before each step.
 
-An input is a request, by its key (``key`` reads it from vLLM's request id), and an output a token. What each vLLM point
+An input is a request, by its key (``key`` reads it from vLLM's request id: on a scheduler in this process
+(`install`), the id the engine was given (`engine_driver.external_id`); on an engine core behind vLLM's own server
+(`register`), the client's X-Request-Id (`request_key`)), and an output a token. What each vLLM point
 emits, and what it asks:
 
-- ``add_request``: `InputArrived`, with the request's count of prompt ids; the request goes into the scheduler once every
+- ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line and headers the server
+  gave for it (`Hook.arrive`); the request goes into the scheduler once every
   gate a scheme filed (`StartOnBoundary`) starts it (`Exchange.start`), and one still held when it is finished from
   outside never reaches the scheduler, which is never handed its id;
 - before each step, on each pass of the engine core's input loop: every gate is asked (`Exchange.ready`, with the
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
-- ``schedule()``: `StepBegan` for a step that scheduled a token, with its requests, its tokens less draft tokens and the
-  requests left waiting;
+- ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
+  for a step that scheduled none) and the requests left waiting;
 - ``update_from_output``: `OutputReleased` for each new token, refused while a scheme holds its request's release at that
   step (`HoldRelease`), `OutputsComplete` for each request that finished, then `StepEnded`;
 - ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
@@ -27,12 +30,13 @@ from __future__ import annotations
 import collections
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from verity import hooks as H
 from verity_vllm import messages
 from verity_vllm.engine import scheduler_step
+from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.engine.runner_step import Rank
 
 __all__ = ["POLL_S", "Hook", "WindowGroups", "install", "non_draft_tokens", "register", "request_key"]
@@ -66,21 +70,23 @@ class Hook(scheduler_step.Part):
     rank = Rank.ADMIT
     poll_s = POLL_S
 
-    def __init__(self, sched: Any, exchange: messages.Exchange, key: Callable[[str], str] = request_key) -> None:
+    def __init__(self, sched: Any, exchange: messages.Exchange, key: Callable[[str], str]) -> None:
         self.sched, self.ex, self.key = sched, exchange, key
-        self.step = 0                                       # the next step that schedules a token
+        self.step = 0                                       # the next call of the scheduler's schedule
         self.began: collections.deque[int] = collections.deque()    # steps scheduled whose outputs haven't come
         self.held: dict[str, str] = {}                      # vLLM's request id -> its input, until a gate starts it
         self.live: dict[str, str] = {}                      # vLLM's request id -> its input, in the scheduler
         self.sent: dict[str, int] = {}                      # vLLM's request id -> its tokens released so far
+        self.heads: dict[str, tuple[str, Mapping[str, str]]] = {}   # input -> its first line and headers, until added
         self._removal: scheduler_step.Removal | None = None
 
     def around_add_request(self, call: Callable[..., Any], request: Any, *a: Any, **kw: Any) -> Any:
         rid = request.request_id
         input_ = self.held[rid] = self.key(rid)
+        first_line, headers = self.heads.pop(input_, ("", {}))
         if self.ex.wants("steps"):
             n = int(getattr(request, "num_prompt_tokens", 0) or len(getattr(request, "prompt_token_ids", None) or ()))
-            self.ex.emit(H.InputArrived(input_, n, self.step))
+            self.ex.emit(H.InputArrived(input_, n, self.step, headers, first_line))
 
         def start() -> None:
             if self.held.pop(rid, None) is not None:
@@ -91,17 +97,16 @@ class Hook(scheduler_step.Part):
 
     def around_schedule(self, call: Callable[..., Any], *a: Any, **kw: Any) -> Any:
         out = call(*a, **kw)
-        if out.total_num_scheduled_tokens > 0:
-            tokens, _ = non_draft_tokens(out)
-            inputs = tuple(self.key(r) for r in getattr(out, "num_scheduled_tokens", None) or ())
-            self.ex.emit(H.StepBegan(self.step, inputs, tokens, _waiting(self.sched)))
-            self.began.append(self.step)
-            self.step += 1
+        tokens, _ = non_draft_tokens(out)
+        inputs = tuple(self.key(r) for r in getattr(out, "num_scheduled_tokens", None) or ())
+        self.ex.emit(H.StepBegan(self.step, inputs, tokens, _waiting(self.sched)))
+        self.began.append(self.step)
+        self.step += 1
         return out
 
     def around_update_from_output(self, call: Callable[..., Any], scheduler_output: Any, model_runner_output: Any,
                                   *a: Any, **kw: Any) -> Any:
-        step = self.began.popleft() if self.began else self.step - 1
+        step = self.began.popleft()
         outs = call(scheduler_output, model_runner_output, *a, **kw)
         wants = self.ex.wants("steps")
         for batch in (outs or {}).values():
@@ -149,6 +154,11 @@ class Hook(scheduler_step.Part):
                 self.ex.emit(H.OutputsComplete(input_, self.step))
         return call(rest, finished_status, *a, **kw)
 
+    def arrive(self, input: str, first_line: str, headers: Mapping[str, str]) -> None:
+        """The first line and headers (names lower-cased) input ``input`` came with, for its `InputArrived`: the
+        server's, called before the input reaches the scheduler."""
+        self.heads[input] = (first_line, headers)
+
     # --- the engine core's gate (`core_gate.Gate`) ----------------------------------------------------------------------
 
     def ready(self, scheduler: Any = None, /) -> bool:
@@ -168,10 +178,12 @@ class Hook(scheduler_step.Part):
             self._removal = None
 
 
-def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable[[str], str] = request_key) -> Hook:
+def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable[[str], str] = external_id) -> Hook:
     """Put the admission and release hook on ``sched`` (a vLLM V1 scheduler) for ``exchange`` (this process's by default)
-    until it is uninstalled. Where a scheme filed a gate, refused for a scheduler policy other than FCFS, whose waiting
-    queue is the order the gates start requests in, and for one of several data-parallel engines."""
+    until it is uninstalled; the one already on it where there is one, so a scheduler's steps have one emitter, and
+    refused where that one is another exchange's or reads inputs by another ``key``. Where a scheme filed a gate,
+    refused for a scheduler policy other than FCFS, whose waiting queue is the order the gates start requests in, and
+    for one of several data-parallel engines."""
     ex = exchange or messages.current()
     if any(isinstance(r, H.StartOnBoundary) for _, r in ex.requests):
         policy = getattr(getattr(sched, "scheduler_config", None), "policy", None)
@@ -182,6 +194,12 @@ def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable
         if dp != 1:
             raise RuntimeError(f"a gate on starting inputs orders one engine's admissions; this one is one of {dp} "
                                f"data-parallel engines")
+    on = [p for p in scheduler_step.parts(sched) if isinstance(p, Hook)]
+    if on:
+        if on[0].ex is not ex or on[0].key is not key:
+            raise RuntimeError("this scheduler has the admission hook already, for another exchange or input key: its "
+                               "steps have one emitter, so install it once with both")
+        return on[0]
     hook = Hook(sched, ex, key)
     hook._removal = scheduler_step.add(sched, hook)
     return hook

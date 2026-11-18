@@ -168,7 +168,7 @@ def test_w_is_refused_for_rounds_it_cant_register(tmp_path, monkeypatch):
     for call, why in cases:
         with pytest.raises(ValueError, match=why.replace("(", r"\(").replace(")", r"\)")):
             call()
-    monkeypatch.setattr(PPD, "scheme_of", lambda name: SimpleNamespace(commitment_hash="sha256"))
+    monkeypatch.setattr(PPD.schemes, "get", lambda name: SimpleNamespace(commitment_hash="sha256"))
     with pytest.raises(ValueError, match=f"commits sha256 rows, and W registers {HM96} rows"):
         PWR.write(out, passes, [3])
     assert not out.exists()

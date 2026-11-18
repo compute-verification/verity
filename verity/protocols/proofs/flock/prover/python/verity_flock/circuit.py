@@ -1083,18 +1083,11 @@ def statement(ports: list[Port], input_set, lo: int, hi: int, rows: dict, salts:
             "row_key_sha512": hashlib.sha512(inst.default_key).hexdigest()}, bcs
 
 
-def stage_salts(input_set, lo: int, hi: int, ports: list[Port], key: bytes | None, tables: dict | None = None) -> dict[str, list[bytes]]:
-    """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's): fresh from the
-    OS generator, or (``key``) SHAKE-256 of the key, the set and the row, so a benchmark's verifier pod can stage its own public
-    file. A key makes the salts known to whoever holds it; the verifier's checking process never reads them either way (its file
-    has none). A serving committer samples its own."""
+def stage_salts(lo: int, hi: int, ports: list[Port], tables: dict | None = None) -> dict[str, list[bytes]]:
+    """Every row's salt (instances [lo, hi); ``tables``, a shared-row file's ``{port: R_p}``: every table row's), fresh from the
+    OS generator. A caller that needs given salts (a public benchmark's, a registration's) hands them to :func:`write` as data."""
     rows = {p.name: range(tables[p.name]) if tables else range(lo, hi) for p in ports}
-    if key is None:
-        return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
-    tag = b"verity/flock-circuit/stage-salt/v1\0" + key + bytes.fromhex(input_set.content_digest)
-    kind = b"table\0" if tables else b""
-    return {p.name: [hashlib.shake_256(tag + p.name.encode() + b"\0" + kind + i.to_bytes(8, "big")).digest(SALT_BYTES) for i in rows[p.name]]
-            for p in ports}
+    return {p.name: [os.urandom(SALT_BYTES) for _ in rows[p.name]] for p in ports}
 
 
 def share(rows: dict) -> tuple[dict, dict]:
@@ -1185,7 +1178,7 @@ def public_file(head: dict, public: bytes) -> bytes:
     return line.encode() + b"\n" + public
 
 
-def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
+def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
           public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
@@ -1285,7 +1278,7 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
         refs.update({p.name: np.arange(n) for p in orows})
     check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
     if salts is None:
-        salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
+        salts = stage_salts(lo, hi, ports, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
         raise ValueError("salts: one 192-byte salt per row")
     fv, bcs = statement(ports, input_set, lo, hi, rows, salts)
@@ -1327,18 +1320,18 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     return head
 
 
-def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salt_key: bytes | None = None,
+def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: bool = False, salts: dict | None = None,
           indices: list | None = None, partition: str | None = None, program: str | None = None, share_rows: bool = False,
           public_inputs: dict | None = None, identifier: dict | None = None, leaf_scheme: dict | None = None) -> Path:
     """``<out_dir>/circuit.txt`` (the composite circuit), the prover's ``<out_dir>/inst-<n>.bin`` and the verifier's own
     ``pub-<n>.bin`` from the same salts (``share_rows``: shared-row files, :func:`write`); returns the prover's path, or
-    (``public_only``: a verifier staging its own public file, which needs the prover's ``salt_key``) writes and returns only
-    ``pub-<n>.bin``. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
+    (``public_only``: a verifier staging its own public file, which needs the prover's ``salts``, public in a benchmark) writes
+    and returns only ``pub-<n>.bin``. ``salts``: every row's (:func:`write`), else fresh. ``public_inputs`` (:func:`compose`): also the verifier's ``public-inputs-<n>.bin``, from the set's words, which
     stand in for the verifier's own recomputation (a caller that holds the derivation writes it with
     :func:`write_public_inputs`). ``identifier``: both files' header ``identifier`` (:func:`write`). ``leaf_scheme``
     (:func:`compose`): the proof's own Merkle leaves."""
-    if public_only and salt_key is None:
-        raise ValueError("a verifier stages its own public file only from the prover's staging salt key (salts are otherwise fresh)")
+    if public_only and salts is None:
+        raise ValueError("a verifier stages its own public file only from the prover's salts (salts are otherwise fresh)")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     statics = set_statics(input_set)
@@ -1351,7 +1344,8 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
             (out / "circuit-forged.txt").write_text(compose(low, input_set.subcircuit, forged=True, partition=partition, program=program,
                                                             statics=statics, public_inputs=public_inputs, leaf_scheme=leaf_scheme))
     inst, pub = out / f"inst-{hi - lo}.bin", out / f"pub-{hi - lo}.bin"
-    write(text, input_set, lo, hi, None if public_only else inst, pub, salt_key, indices, share_rows=share_rows, identifier=identifier)
+    write(text, input_set, lo, hi, None if public_only else inst, pub, indices, share_rows=share_rows, identifier=identifier,
+          salts=salts)
     if public_inputs:
         write_public_inputs(text, {nm: input_set.port(nm, lo, hi) for nm in public_inputs}, hi - lo, out / f"public-inputs-{hi - lo}.bin")
     return pub if public_only else inst

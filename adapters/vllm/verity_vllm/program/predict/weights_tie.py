@@ -32,14 +32,14 @@ that compresses before its last block), a shard of no tensor, bytes between or a
 parameter holds, a checkpoint not of record or of another model, and a template whose port would read a table's rows and
 another parameter's.
 
-    verity-vllm weights-tie commit --phi PHI --checkpoint-dir X [--manifest M] --key-file K --registration-out REG \\
+    verity-vllm weights-tie commit --phi PHI --checkpoint-dir X [--manifest M] --registration-out REG \\
         --out DIR [--design work:N] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
     verity-vllm weights-tie verify --phi PHI --checkpoint-dir X [--manifest M] --registration REG --out DIR [--design ...] \\
         [--cap ...] [--run-id ...] [--grain ...]
     verity-vllm weights-tie pins --phi PHI --checkpoint-dir X [--manifest M] --registration REG --summary SUMMARY --out PINS \\
         [--design ...] [--cap ...] [--run-id ...] [--grain ...]
 
-``commit``: the committer's registration (its key in ``--key-file``, made 0600 when absent and never printed) and its tie
+``commit``: the committer's registration (its salts in the salt file beside ``REG``, `salt_file.beside`) and its tie
 window, written by core's registrar. ``--served-dir``: a committer serving another checkpoint's words as X's (the refused
 arm), its registration committing them; ``--forge-digest``: its last units' digests forged to X's. ``verify``: the verifier's
 tie of X (``DIR/tie.json``: its circuit's SHA-512, run root and units) and the records audit's ``--registered`` file
@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -338,20 +339,21 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
                {p: dict(e) for p, e in sorted(entries.items())}, WW._unrooted(rec, of, entries), tuple(chains), run_id)
 
 
-def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *,
+def commit(registered: Any, salts_to: str | Path, checkpoint_dir: str, checkpoints_manifest: str | None = None, *,
            design: dict[str, Any] | None = None, cap: int, run_id: str = "", served: dict[str, np.ndarray] | None = None, grain: Grain = _GRAIN,
            kv_cache_dtype: str = "auto", forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.Window]:
-    """The committer's weights registration of X under its 32-byte ``key`` (`records.weights_registration`: each rooted
-    weight parameter's `window_weights.weight_value`, the roots `weights_registration` registers) and its tie window of X,
+    """The committer's weights registration of X (`records.weights_registration`: each rooted weight parameter's
+    `window_weights.weight_value` under fresh OS salts, which go to the salt file ``salts_to``) and its tie window of X,
     every unit recorded, under the given sampling design (default the tie's own, `Tie.design`): -> (the registration,
     the tie, the window, to close and write). ``served``: the words it serves
     by field (`window_weights.record_words`' form; default X's own), which the registration commits, so a committer serving
     another checkpoint's words as X's (the refused arm) registers their roots; ``forge_digest``: its last units' digests X's."""
     t = tie(registered, checkpoint_dir, checkpoints_manifest, run_id=run_id, grain=grain, kv_cache_dtype=kv_cache_dtype)
     words = served if served is not None else WW.record_words(registered, checkpoint_dir, checkpoints_manifest, kv_cache_dtype)
-    values = {p: v for p, v in WW.weight_values(registered, words, key, grain, keep_rows=True).items() if p in t.entries}
+    values = {p: v for p, v in WW.weight_values(registered, words, None, grain, keep_rows=True).items() if p in t.entries}
     if missing := sorted(set(t.entries) - set(values)):
         raise ValueError(f"no words served for {missing}")
+    SF.write(salts_to, {p: WW.value_salts(v) for p, v in values.items()})
     registration = WeightsRegistration(program=t.program, repo=t.model["repo"], revision=t.model["revision"], grain=t.grain,
                                        values={p: v.entry() for p, v in values.items()}, unrooted=t.unrooted).dump()
     win = t.window(design or t.design(), cap, values)
@@ -407,16 +409,6 @@ def _registered(phi: str, default_seed: int) -> Any:
     return Registered.of(Phi.from_json(json.loads(Path(phi).read_text())), default_seed)
 
 
-def _key(path: str) -> bytes:
-    """The committer's 32-byte key from ``path``, sampled fresh and written 0600 when the file is absent."""
-    p = Path(path)
-    if not p.exists():
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(os.urandom(32))
-    return p.read_bytes()
-
-
 @dataclass(frozen=True, kw_only=True)
 class Checkpoint:
     """X, the registered φ and the tie's window."""
@@ -434,7 +426,6 @@ class Checkpoint:
 class CommitOptions:
     """The committer's weights registration of X and its tie window, every unit recorded."""
     x: Checkpoint = group(Checkpoint)
-    key_file: str = option("--key-file", help="the committer's 32-byte key, made at random and written 0600 when absent")
     registration_out: str = option("--registration-out")
     out: str = option("--out", help="the tie window's directory")
     served_dir: str | None = option("--served-dir", default=None, help="serve this checkpoint's words as X's (the refused arm)")
@@ -474,7 +465,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     registered, design = _registered(x.phi, x.default_seed), D.parse_design(x.design) if x.design else None
     if isinstance(a, CommitOptions):
         served = WW.record_words(registered, a.served_dir, a.served_manifest) if a.served_dir else None
-        registration, t, win = commit(registered, _key(a.key_file), x.checkpoint_dir, manifest, design=design, cap=x.cap,
+        registration, t, win = commit(registered, SF.beside(a.registration_out), x.checkpoint_dir, manifest, design=design, cap=x.cap,
                                       run_id=x.run_id, served=served, grain=grain, forge_digest=a.forge_digest)
         bad = win.mismatches(kernel="auto")
         Path(a.registration_out).write_text(json.dumps(registration, indent=1, sort_keys=True) + "\n")
