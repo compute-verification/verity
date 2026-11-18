@@ -203,13 +203,14 @@ SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
 #: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
-#: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
+#: and how its negatives came out, and the scan's tied form as the report reads it (`chain_record.tied_form`).
+#: Everything else stays in the kept run: the scan's answers (its registration and
 #: each execution phase's answer and row registrations, the period check's evidence less its attestations: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
 #: opening time and its advice's bits), of which only a padded count may be public, report.md and the report's other
 #: keys (the attested I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
 #: and response lengths, the tie's prompt lengths and releases, the network attester's check of its witness).
-PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
+PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused", "tied_form",
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"

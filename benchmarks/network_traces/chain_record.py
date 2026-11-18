@@ -39,7 +39,8 @@
   no block record's attester entry, and its ``block`` says why (`block_entry`): with ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``attester.answer.json``, its case
   ``attester.case.json`` beside it or ``--period-case``) held to its case's commitment (`period_binding`), the
-  reason is `ROWS_FORM`.
+  reason is `ROWS_FORM`. Its ``tied_form`` (`tied_form`) says how far the scan's summary and that answer show the
+  scan's slot entries to be a tied compute audit's.
 * **The network attester path** (``--job``'s ``path``, `NETWORK_ATTESTER`): every step reads an active network attester's own
   run (the gate's ``warden-rehearse``, or `network_attester_serve.py`'s directory; `network_attester_chain`) and no attester rehearsal's,
   whose input is refused by name (`network_attester_chain.PROXY`). ``certs --warden-run`` reruns the network attester's own
@@ -78,23 +79,30 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
 ADVICE = "advice"  # a rehearsal's profile whose egress counts derive from the endpoint's advice
+#: the `tie` step's statement: it holds no id's value
+INGRESS_TIE = "the ingress tie (IoTieRequest): prompt lengths and arrival order"
+#: what the rehearsal's endpoint step runs of the I/O tie: no real Commit's id is read
+IO_TIE_PROTOTYPE = "the I/O tie's prototype (`io_tie`'s reference, on stand-ins)"
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
-    "endpoint": "at the auditor, on the endpoint's records and the run's certified I/O: each Commit window's advice "
-                "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
-                "reference, network-e2e's stand-ins for the network certifier's rows and the Commit's port) on the honest run",
+    "endpoint": "in the clear, where the endpoint step runs (network-e2e's --no-prove run), on the endpoint's records "
+                "and the run's certified I/O: each Commit window's advice opened to its registered root and rebuilt "
+                f"from the certified I/O, and {IO_TIE_PROTOTYPE} on the honest run (the stand-ins: network-e2e's for "
+                "the network certifier's rows and the Commit's port); no real Commit's id is read",
     "n2": "at the verifier: the registration records, the sample, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the network attester's salt (n2_zk's RECEIVED, scanned for every piece)",
-    "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
-            "(IoTieRequest) stays in the clear, outside the proofs",
+    "scan": f"at the verifier: each unit's o0 output opened from the salts the prover sends; {INGRESS_TIE}, proved "
+            "in a step of its own (`tie`) on the network attester path, run on no other",
     "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
-    "warden_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
+    "warden_certificates": "in the clear, in the chain's job (chain_record.py certs), on the network certifier's "
+                           "witness: the network certifier's own offline check "
                            "(network_attester_serve.check: each record's certificate and its rows' registration under the "
                            "network certifier's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
-    "warden_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_attester_chain.io, off "
+    "warden_endpoint": "in the clear, where the endpoint step runs (chain_record.py endpoint, in the chain's job), on "
+                       "the endpoint's records and the network certifier's certified I/O (network_attester_chain.io, off "
                        "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
     "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
@@ -102,7 +110,7 @@ CLEAR = {
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
            "lengths and the network certifier's release) and its o0 verdict bit; never a cell or its salt (n2_tie_zk's RECEIVED, "
-           "scanned for every piece)",
+           "scanned for every piece). It holds each request's prompt length and arrival order, not the ids' values",
 }
 #: the network attester-only path (``--job``'s ``path``): the records are the attester rehearsal's alone
 ATTESTER_ONLY = "certifier-only"
@@ -121,23 +129,25 @@ RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance 
 STUBBED = (
     "the records come from the certifier-only path (a rehearsal's proxy in front of the endpoint), not the "
     "network certifier's own cells as one device, so there are no network attester rows and the scan isn't run",
-    "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
+    f"{IO_TIE_PROTOTYPE} alone runs, in the clear, where the endpoint step runs: nothing ties the egress ids to a "
+    "real Commit",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: the network attester path (``--job``'s ``path``): every step reads an active network attester's own run
 #: (`network_attester_chain`)
 NETWORK_ATTESTER = "warden"
 #: what a report on the network attester path stands on that isn't the chain's own
 NETWORK_ATTESTER_STUBBED = (
-    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear at the auditor, "
-    "and the output tie to the Commit's port isn't proved",
+    "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear, where the "
+    "endpoint step runs, and no output tie runs: the I/O tie's egress half, each egress id to the Commit's port, is not "
+    "run on this path",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
 #: an endpoint report's ``at`` when its step ran on the served node (`served_session.py endpoint`)
 SERVED_NODE = "the served node"
 #: `NETWORK_ATTESTER_STUBBED` when the endpoint's report is the served node's
 NETWORK_ATTESTER_SERVED_STUBBED = (
     "the endpoint's advice is bound to the network certifier's certified I/O and rebuilt from it in the clear on the served node, "
-    "the prover's, so the chain's endpoint step is the prover's report of that check, and the output tie to the "
-    "Commit's port isn't proved", NETWORK_ATTESTER_STUBBED[1])
+    "the prover's, so the chain's endpoint step is the prover's report of that check, and no output tie runs: the I/O "
+    "tie's egress half, each egress id to the Commit's port, is not run on this path", NETWORK_ATTESTER_STUBBED[1])
 #: the rehearsal's strategies its own check accepts: token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's kinds of round whose window is accepted (scan_zk.ROUNDS), one a round an execution phase: the toy
@@ -356,7 +366,7 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
     units = len(honest) * int(link.get("T") or 0)
     why = ("dry: nothing proved" if not tie else (why or "n2_tie_zk's ok is not true") if t.get("ok") is not True
            else None if honest and all(honest) and forged and not all(forged)
-           else f"the tie's verdicts aren't honest's all tied and forged's refused: {tie}")
+           else f"{INGRESS_TIE}; its verdicts aren't honest's all accepted and forged's refused: {tie}")
     return {"verdict": "dry" if not tie else "refused" if why else "accepted", "why": why, "ok": t.get("ok"),
             "warden_run": t.get("warden_run"), "class": t.get("class"), "unit": link.get("unit"), "tie": tie,
             "negatives": {"forged": bool(forged) and not all(forged)},
@@ -715,7 +725,12 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #incorrectSets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
-                "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
+                f"the ids' values: {INGRESS_TIE}, holds none of them, and {IO_TIE_PROTOTYPE} ties none to a real "
+                "Commit; only the scan with a tied compute audit is built to tie them, in both directions (the "
+                "attested prompt ids into the scan state its Programs read, their output ids to the attested egress "
+                "rows), when run in its tied form: sampled, under the period check's progTied and stateTied and "
+                "trusted-device (Verity.Assumptions.TrustedDevice), and this record doesn't hold that this run's scan "
+                "had that form",
                 "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
                 "live",
                 "hdata (the network certifiers' arrivals are the framed egress of the network attester's observations) and Carries "
@@ -916,17 +931,44 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str) -> dict:
     return {"written": False, "why": why or ROWS_FORM}
 
 
-def period_block(a, verdict: str) -> dict:
-    """`block_entry` on the report's ``--period-answer`` and its case (``--period-case``, by default ``X.case.json``
-    beside ``X.answer.json``)."""
+def period_pair(a) -> tuple[dict | None, dict | None, str | None]:
+    """The report's ``--period-answer`` and its case (``--period-case``, by default ``X.case.json`` beside
+    ``X.answer.json``), or why they can't be read."""
     pa = getattr(a, "period_answer", None)
     if pa and not Path(pa).is_file():
-        return {"written": False, "why": f"--period-answer {pa}: not a file"}
+        return None, None, f"--period-answer {pa}: not a file"
     pc = getattr(a, "period_case", None) or (str(pa).removesuffix(".answer.json") + ".case.json" if pa else None)
     if pa and not Path(pc).is_file():
-        return {"written": False, "why": f"no case at {pc} (--period-case): what the answer commits to can't be held "
-                                         "to the chain"}
-    return block_entry(_json(pa), _json(pc), verdict)
+        return None, None, f"no case at {pc} (--period-case): what the answer commits to can't be held to the chain"
+    return _json(pa), _json(pc), None
+
+
+def period_block(a, verdict: str) -> dict:
+    """`block_entry` on `period_pair`'s answer and case."""
+    answer, case, why = period_pair(a)
+    return {"written": False, "why": why} if why else block_entry(answer, case, verdict)
+
+
+#: the report's ``tied_form``: whether the scan's slot entries are a tied compute audit's, as far as what the report
+#: reads shows it (`tied_form`)
+TIED_FORM = {"not run": "not run",
+             "untied": "not registered, the entries are the prover's word",
+             "unchecked": "registered, not checked here",
+             "answered": "registered, and a period answer accepts its case (progTied, stateTied), which this record "
+                         "doesn't hold to this scan"}
+
+
+def tied_form(scan: dict, answer: dict | None, case: dict | None) -> str:
+    """`TIED_FORM`'s value for the scan step ``scan`` and the period ``answer`` on ``case``, computed from them alone:
+    registered where the scan's honest round's registration names tied values (``rests_on_period_check``), answered
+    where the period check accepted its own case (`period_binding`), which `ROWS_FORM` leaves unheld to this scan."""
+    if not scan.get("rounds"):
+        return TIED_FORM["not run"]
+    if not scan.get("rests_on_period_check"):
+        return TIED_FORM["untied"]
+    if answer and answer.get("verdict") == "accept" and case and period_binding(answer, case) is None:
+        return TIED_FORM["answered"]
+    return TIED_FORM["unchecked"]
 
 
 def report(a) -> dict:
@@ -985,7 +1027,7 @@ def report(a) -> dict:
            | {k: f"stand-in: {steps[k]['stand_in']}" for k in ("n2", "scan") if steps[k].get("stand_in")})
     return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
             "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust, endpoint),
-            "negatives_refused": negatives, "steps": steps,
+            "negatives_refused": negatives, "tied_form": tied_form(scan, *period_pair(a)[:2]), "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
             "block": period_block(a, verdict), "why": why or None}
 
@@ -1003,16 +1045,20 @@ def markdown(r: dict) -> str:
     for k in shown:
         e = s[k].get("eps_at_delta") or {}
         eps = (f"{e['law']}, {e['drawn']} of {e['units']}: incorrect ≤ {e['incorrect_at_delta']}" if e else "")
-        lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
+        lines.append(f"| {INGRESS_TIE if k == 'tie' else k} | {s[k].get('verdict')} | {eps} | "
+                     f"{s[k].get('in_the_clear', '')} |")
     notes = [f"- {k}: {s[k][f]}" for k in ("endpoint", "tie", "n2", "scan") if k in s for f in ("why", "stand_in")
              if s[k].get(f)]
     ep = s["endpoint"]
     if ep.get("advice"):
-        notes.append(f"- endpoint: advice {ep['advice']}; " + (f"I/O tie on honest {ep['tie']}" if "tie" in ep else
-                                                                f"certified I/O {ep.get('io')}"))
+        notes.append(f"- endpoint: advice {ep['advice']}; " + (f"{IO_TIE_PROTOTYPE} on honest {ep['tie']}" if "tie" in ep
+                                                                else f"certified I/O {ep.get('io')}"))
     if s.get("tie", {}).get("tie"):
-        notes.append(f"- tie: execution phases tied by member {s['tie']['tie']}")
-    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", "", "## D1", ""]
+        notes.append(f"- tie: {INGRESS_TIE}; each execution phase accepted, by member {s['tie']['tie']}")
+    refusers = [f"{k}: refused by {INGRESS_TIE if k == 'tie/forged' else IO_TIE_PROTOTYPE}"
+                for k in r["negatives_refused"] if k.startswith("tie/")]
+    lines += ["", *notes, "", f"Negatives refused: {r['negatives_refused']}", *refusers, "",
+              f"Tied form: {r['tied_form']}", "", "## D1", ""]
     d = r["d1"]
     lines += [f"- {d['theorem']}; {d['sum']}", f"- windows {d['windows']}, all accepted {d['all_accepted']}",
               f"- Σ ε_w = {d['sum_eps']}"]
