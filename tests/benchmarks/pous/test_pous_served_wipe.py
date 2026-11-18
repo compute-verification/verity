@@ -209,6 +209,18 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert _stamps(d) == ["start", "the wipe exit 0", "exit 0"]
 
 
+def test_a_case_that_cant_reach_the_private_dir_leaves_none_in_dir(node, tmp_path) -> None:
+    """The case holds the signed session: where the serve dir's private/wipe can't be made, DIR, the window's output that
+    leaves the node, keeps no copy of it."""
+    d = tmp_path / "pieces" / "wipe"
+    (tmp_path / "pieces" / "serve-run").mkdir(parents=True)
+    (tmp_path / "pieces" / "serve-run" / "private").write_text("not a directory\n")
+    judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
+    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
+    assert "WIPE CASE: the case didn't move to" in r.stdout and "removed from DIR" in r.stdout, r.stdout + r.stderr
+    assert not (d / "wipe.case.json").exists()
+
+
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     """Without the serve's lease it waits for a card of its own (`gpu-lease 1 --wait` as memory-accounting) and wipes
     that one. A Lean judge built already (WIPE_PROTOCOL_EXE) goes to demo.sh as `--wipe-protocol`, nothing built here."""

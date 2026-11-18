@@ -38,12 +38,10 @@ land = "review"
 # merges a head (`Preflight._fetch`). A mark's preflight and `research queue status` judge a head's merges of an old `next`
 # against it, so a head that merged `main` is marked
 land_into = "main"
-# these three keys and `executor_enqueue` are parsed (`DriveFlags`) and read by no other code: the loop's `--gate` checks each
-# candidate (graph2's task check with a run beside it, or the whole check as `--shards` shards)
+# parsed (`DriveFlags`): the loop's `--gate` checks each candidate (graph2's task check with a run beside it, or the whole
+# check as `--shards` shards)
 after_landing_no_cache = false
 after_landing_shards = 3
-executor = "shadow"
-# executor_enqueue = ["CMD", "ARG"]
 # parsed (`DriveFlags`) and read by no other code
 verdict_first = true
 # the verdict carry (`research.carry`): a PR marked ready at its head with no land verdict there takes its newest verdict at an
@@ -53,17 +51,13 @@ verdict_first = true
 # `would carry #N's land from OLD to NEW (why)` or `would not carry ...` and writes nothing; "on", it counts the PR as
 # reviewed and writes nothing
 verdict_carry = "on"
-# these three keys are parsed (`DriveFlags`) and read by no other code
-bottom_ring = ["@ci"]
-bottom_wait_min = 30
+# how many restacks `Queue.sync` runs at once (`DriveFlags.restack_jobs`)
 restack_jobs = 3
 # the low-risk lane: the verified queue takes a ready PR on its ready mark alone (no land verdict) when it isn't held and
 # its change, against its merge base with `main`, touches nothing `lowrisk_excludes` names, or it is a move's PR, whatever
 # it touches, whose map, from `main`, is certified rerun on its batch's tip; with `signed_verdicts` true, no move changing
-# `SIGNED_GUARDS` (`World.ready`). false: no PR is taken without a land verdict, its own or one the verdict carry carries. `lowrisk_per_tick` is parsed
-# (`DriveFlags`) and read by no other code
+# `SIGNED_GUARDS` (`World.ready`). false: no PR is taken without a land verdict, its own or one the verdict carry carries
 lowrisk_lane = true
-lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), one file by its path from the root (a
 # `/` before its end), or a file name glob (no `/`: any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
@@ -152,5 +146,3 @@ stale_days = 3
 stale_close_days = 7
 # open PRs the stale rule never judges, each kept open by its owner with a reason
 stale_keep = []
-# parsed (`DriveFlags`) and read by no other code
-close_unlandable = "log"
