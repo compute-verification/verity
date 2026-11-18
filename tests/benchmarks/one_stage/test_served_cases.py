@@ -1034,6 +1034,28 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
         assert "parts" in refused[0]["reason"], (n, refused)
 
 
+def test_pearl_plus_s_case_held_to_the_registration_record_r_itself_commits_to_r_and_refuses_another(tmp_path, capsys):
+    """Parts whose passes are held to the window's registration record R itself (`verify_run.tie` over R) make a case whose
+    commitment's window holds R, the record the commitment names; parts holding another record whose window carries
+    ``pearl_b`` (an R, not the one named) are refused naming both digests."""
+    serve, v1, _ = tied_serve(tmp_path / "serve")
+    rec = json.loads(bytes.fromhex(v1["commitment"]))
+    _piece, parts = pearlplus_parts(serve, rec)
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []) and cases[-1]["protocol"] == SC.PEARL_PLUS, out
+    case = json.loads((serve / "private" / "pouw-pearl-plus" / "case.json").read_text())
+    got = json.loads(bytes.fromhex(case["commitment"]))
+    assert got["record"] == R.digest(rec) and got["window"]["record"] == rec
+    other = {**rec, "window": {**rec["window"], "pearl_b": [{"value": "pearl-b/0"}]}}
+    (serve / SC.PEARL_PLUS_PIECE / "parts.json").write_text(json.dumps({**parts, "window": {**parts["window"],
+                                                                                            "record": other}}))
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [r["protocol"] for r in refused] == [SC.PEARL_PLUS], refused
+    assert f"a registration record {R.digest(other)[:16]}…, not the record {R.digest(rec)[:16]}…" in refused[0]["reason"]
+
+
 def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_path, capsys):
     """``--period`` names the period case beside ``--audit``; with neither it nor a serve dir holding one, no period case
     is made, and a v1 case that isn't one refuses the period with every other."""
