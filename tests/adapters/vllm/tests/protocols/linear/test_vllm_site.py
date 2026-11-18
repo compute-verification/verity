@@ -97,7 +97,7 @@ def test_attach_patches_each_quant_method_once_through_hooks_and_sets_nothing_on
         assert len(h.entries) == 2 and [dict(vars(layer)) for _, layer in sites] == before
         layers = [layer for _, layer in sites]
         assert layers[0].quant_method.apply(layers[0], "x") == ("stock", "qkv", "x", None)       # no kernel: vLLM's own
-        seen = []
+        seen: list[H.BlockDue] = []
         messages.current().subscribe("s", "blocks", seen.append)
         messages.current().request("pouw:test", H.ComputeBlockWith(stack))
         assert layers[0].quant_method.apply(layers[0], "x") == ("stock", "qkv", "x", None)       # inactive: vLLM's own
