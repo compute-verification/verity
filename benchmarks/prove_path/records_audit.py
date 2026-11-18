@@ -201,7 +201,7 @@ from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
-from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
+from verity.commitments.periods import history as HW, interface as IF, wiring as WI  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -382,14 +382,18 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     gates no step lists as ingress, less the inputs the docket fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
-    (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
+    (``wired``, each a `wiring.Wired` counted by its port, which a5's wiring check holds; any other entry is refused by
+    name, ValueError, so a member of unknown wiring is never counted as zero). A record that declares no input lists no steps and registers no input (a
     row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
     ports are reported, not subtracted. A record that declares its registered reads or its window's ingress (vLLM's
     served windows) is counted by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
-        tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
+        if bad := [w for w in m.wired if not isinstance(w, WI.Wired)]:
+            raise ValueError(f"leak count: member {m.key}'s wired entries {bad!r} are no `wiring.Wired`: its ports' bits are "
+                             "not counted")
+        tables, wires = dict(m.tables), {w.port for w in m.wired}
         for p, words in m.rows:
             n = 16 * int(words) * int(tables.get(p, m.n))
             inputs += n
@@ -1166,8 +1170,11 @@ def audit(a: argparse.Namespace) -> int:
                                     "timing", "outputs", "negative_workers", "plain", "arm", "coin_trees")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
-    row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
-                   if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
+    try:
+        row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
+                       if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
+    except ValueError as e:
+        row["leak"] = {"bound": "refused", "refused": str(e)}
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads), "own": {**ties, **untied}}
     if tied.get("log"):
@@ -1202,7 +1209,7 @@ def audit(a: argparse.Namespace) -> int:
             row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
             print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
     row["ok"] = row["ok"] and not row["coins_session"]["error"]
-    row["ok"] = row["ok"] and (acts is None or acts["ok"])
+    row["ok"] = row["ok"] and (acts is None or acts["ok"]) and row["leak"]["bound"] != "refused"
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
@@ -1211,7 +1218,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "activations": None if acts is None else acts["ok"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
-                                                                          "bound", "unpinned", "untied", "window")
+                                                                          "bound", "unpinned", "untied", "window", "refused")
                                               if k in row["leak"]},
                                      **({"forged": row["forged"]} if "forged" in row else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1

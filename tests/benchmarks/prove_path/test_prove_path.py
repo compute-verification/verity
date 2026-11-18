@@ -754,9 +754,11 @@ def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_
     advice's charge, and `charge_terms` then states no c: the leak bound c + λ_δ + β_δ + n·log2 D is stated only within
     the charge. The whole window, its port wired, is within it."""
     import records_audit as RA
+    from verity.commitments.periods import wiring as WI
 
     writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
-    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
+    reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2,
+                       wired=(WI.Wired("x", "W", "o0", at=0, radix=(2,), base=0, step=(1,)),))
     advice = 16 * 2 * (4 + 2)
     whole, partial = (RA.leak_count(w, (), advice) for w in ([writer, reader], [replace(reader, base=0, wired=())]))
     assert (whole["other_inputs"], whole["bound"]) == (advice, "within the charge")

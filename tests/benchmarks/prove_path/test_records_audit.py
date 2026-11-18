@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -55,7 +56,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import gemm as BG
-from verity.commitments.periods import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS, wiring as WI
 
 
 def fixed(w, seed: int = 0) -> dict[str, bytes]:
@@ -310,9 +311,18 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert RA.leak_count(silu, (), 1687)["other_inputs"] == 2_097_152 and RA.leak_count(silu, (), 1687)["bound"] == "vacuous"
     m0, m1 = mine.members
     x = 16 * dict(m0.rows)["x"]
-    got = RA.leak_count([replace(m0, wired=(("x", "o0", (0, 1, 2, 3)),)), replace(m1, tables=(("x", 3),))], [f"{TID}/wrow"], 0)
+    wire = WI.Wired("x", TID, "o0", at=0, radix=(4,), base=0, step=(1,))
+    got = RA.leak_count([replace(m0, wired=(wire,)), replace(m1, tables=(("x", 3),))], [f"{TID}/wrow"], 0)
     assert (got["wired"], got["inputs"]) == (4 * x, 5 * per_unit + 2 * x)
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
+
+
+def test_the_leak_count_refuses_by_name_a_wired_entry_that_is_no_wire(written):
+    """A member's wired entry that is no `wiring.Wired` is refused, naming the member, never counted as zero bits."""
+    mine, _doc = IF.of_records(written.dir, RND.parse_design(SAMPLING_DESIGN), IF.resolve)
+    m0 = mine.members[0]
+    with pytest.raises(ValueError, match=f"member {re.escape(m0.key)}'s wired entries .* no `wiring.Wired`"):
+        RA.leak_count([replace(m0, wired=(("x", "o0", (0, 1, 2, 3)),))], (), 0)
 
 
 def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
