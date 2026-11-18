@@ -83,16 +83,33 @@ def route_bound(by_family: dict[str, int]) -> dict[str, int]:
     return {f: n for f, n in sorted(by_family.items()) if f in ids}
 
 
-def route_departures(engine: dict[str, Any] | None) -> list[str]:
-    """Each way a serving process's facts of record (`engine_facts_of_record`) are not `ROUTE_CONDITIONS`, by name: a fact recorded
-    otherwise, or not recorded (a fact the process could not read is recorded as 'unavailable: <why>', which no condition is);
-    [] when it ran under them."""
+def route_pin_of(device: Any) -> tuple[str, dict[str, Any] | None]:
+    """The route pin a Program built for `device` binds, (its record, its conditions): the scan's (`cublas_routes.json`) for the
+    scan's device and for a Build that names none, else that device's pin's own `conditions`, measured where its routes were
+    (`verity-vllm device-pin probe`); None for a device with no pin or a pin without them."""
+    if not isinstance(device, str) or device == ROUTE_CONDITIONS["device"]:
+        return CUBLAS_ROUTES["run_record"], ROUTE_CONDITIONS
+    try:
+        pin = device_pin(device)
+    except KeyError:
+        return f"no device pin of {device!r}", None
+    return str(pin.get("evidence", {}).get("cublas", f"device_pins/{device.replace(' ', '_')}.json")), pin.get("conditions")
+
+
+def route_departures(engine: dict[str, Any] | None, device: str | None = None) -> list[str]:
+    """Each way a serving process's facts of record (`engine_facts_of_record`) are not the route conditions of the device its
+    Program was built for (`route_pin_of(device)`, the scan's when the Build names none), by name: a fact recorded otherwise
+    (a process on another device than the Build's among them), or not recorded (a fact the process could not read is recorded
+    as 'unavailable: <why>', which no condition is); [] when it ran under them."""
     seen = (engine or {}).get("cublas")
     if not isinstance(seen, dict):
         return [f"no cuBLAS facts recorded (engine_of_record.cublas; the pin's: {ROUTE_CONDITIONS})"]
+    record, conditions = route_pin_of(device)
+    if conditions is None:
+        return [f"the Program was built for {device!r}, on which no route pin is measured ({record}): run `verity-vllm device-pin probe` there"]
     env = seen.get("env") if isinstance(seen.get("env"), dict) else {}
-    pairs = [(k, seen.get(k, KeyError), w) for k, w in ROUTE_CONDITIONS.items() if k != "env"]
-    pairs += [(v, env.get(v, KeyError), w) for v, w in ROUTE_CONDITIONS["env"].items()]
+    pairs = [(k, seen.get(k, KeyError), w) for k, w in conditions.items() if k != "env"]
+    pairs += [(v, env.get(v, KeyError), w) for v, w in conditions["env"].items()]
     return [f"{k} not recorded (pin: {w!r})" if got is KeyError else f"{k} {got!r} (pin: {w!r})" for k, got, w in pairs if got != w]
 
 
@@ -120,29 +137,22 @@ def device_pin(device: str) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
-@cache
-def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
-    """The one pinned device of compute capability `cc`."""
-    pins = [json.loads(p.read_text()) for p in sorted(DEVICE_PINS.glob("*.json"))]
-    got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
-    if len(got) != 1:
-        raise KeyError(f"{len(got)} device pins of compute capability {cc} in {DEVICE_PINS.name}/; one is required")
-    return got[0]
+def pinned_routes(device: str | None = None) -> dict[str, dict[str, Any]]:
+    """`device`'s bf16-output cuBLAS route at each probed (M, K, N), "M,K,N" -> {"kernel": "nosplit"} or {"kernel": "splitk",
+    "SPLIT_K": s}: `torch.mm(x, w.t())`, which an unbiased `aten.linear` and the served wrapper's extern mm both run.  Without a
+    device, the scan's device's (`ROUTE_CONDITIONS`)."""
+    return device_pin(device if device is not None else ROUTE_CONDITIONS["device"])["cublas"]
 
 
-def pinned_routes() -> dict[str, dict[str, Any]]:
-    """The cc 9.0 device's bf16-output cuBLAS route at each probed (M, K, N), "M,K,N" -> {"kernel": "nosplit"} or {"kernel": "splitk",
-    "SPLIT_K": s}: `torch.mm(x, w.t())`, which an unbiased `aten.linear` and the served wrapper's extern mm both run."""
-    return capability_pin((9, 0))["cublas"]
-
-
-def default_cublas_route(phase: str, M: int, K: int, N: int) -> tuple[str, dict[str, int]] | None:
-    """The captured default cuBLAS route, else (a linear) the cc 9.0 device pin's, distinguishing a known non-split launch from a
-    shape/M with no record."""
-    run = _route_run(phase, M, K, N)
+def default_cublas_route(phase: str, M: int, K: int, N: int, device: str | None = None) -> tuple[str, dict[str, int]] | None:
+    """The captured default cuBLAS route, else (a linear) the device pin's (`pinned_routes`), distinguishing a known non-split launch
+    from a shape/M with no record.  The captured routes are the scan's device's (`ROUTE_CONDITIONS`): another named device reads its
+    own pin only, and one with no pin is refused (KeyError naming the file), whatever the phase."""
+    pinned = pinned_routes(device)
+    run = _route_run(phase, M, K, N) if device in (None, ROUTE_CONDITIONS["device"]) else None
     if run is not None:
         return ("splitk", {"SPLIT_K": run[2]}) if run[2] is not None else ("non_split", {})
-    if phase == "linear" and (r := pinned_routes().get(f"{M},{K},{N}")) is not None:
+    if phase == "linear" and (r := pinned.get(f"{M},{K},{N}")) is not None:
         return ("splitk", {"SPLIT_K": r["SPLIT_K"]}) if r["kernel"] == "splitk" else ("non_split", {})
     return None
 

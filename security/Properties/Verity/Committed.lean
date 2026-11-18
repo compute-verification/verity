@@ -1,7 +1,6 @@
 module
 
 public import Properties.Verity.Game
-public import Properties.Verity.GateARow
 public import Properties.Spot.Wires
 public import Spot.FilePart
 public import Spot.RecordText
@@ -13,12 +12,12 @@ public import VStarRecursive.Sampled
 
 The game's clause for the inference-only policy (`Verity.Vocab.Holds` at `.inferenceOnly`) is on the Program the
 policy's compiled check judges, and is proved of the case as sent. It says nothing of the committed files until two
-statements hold, each a named `Prop` here, stated and not proved. Remote's soundness (`Verity.RemoteSoundness`) takes
-both as hypotheses.
+statements hold. Remote's soundness (`Verity.RemoteSoundness`) takes the one not proved as a hypothesis.
 
-`GateARow`, `Γ`'s unit: in the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`) every unit has one
-gate for each of its file's rows. The policy's `Γ` counts rows of the committed circuit a block, and PoUW's claim
-counts that circuit's gates (`Verity.Vocab.computed`), so with it the two count one thing.
+`Flock.Bridge.GateARow`, `Γ`'s unit, proved (`Flock.Bridge.gateARow`): in the game's circuit of a committed file
+(`Flock.Bridge.circuitOfFile`) every unit has one gate for each of its file's rows. The policy's `Γ` counts rows of the
+committed circuit a block, and PoUW's claim counts that circuit's gates (`Verity.Vocab.computed`), so with it the two
+count one thing.
 
 `Vocab.WiresSound`, the wires: on an accepted play the wiring the policy's record names is the wiring the committed
 units are held to. The committed circuit's units each commit their own rows, and nothing in it joins a unit's input

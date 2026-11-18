@@ -36,8 +36,8 @@ def table_param(label: str, words: int) -> str:
 @dataclass(frozen=True)
 class Grain:
     """The units' size (Llama-3.2-1B's by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
-    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v1{2048, 32}`,
-    `ScaledMmS8_v1{8192, 8}`), no unit holds more than ``rows`` rows in and out (Flock's
+    // K output columns: `Gemm_v2{2048, 16}`, `Gemm_v2{8192, 4}`; an s8 one twice the columns: `ScaledMmS8_v3{2048, 32}`,
+    `ScaledMmS8_v3{8192, 8}`), no unit holds more than ``rows`` rows in and out (Flock's
     composer gives each row a unit reads or writes an hm96 slot, so a unit fits its 2^27-bit block with at most 256), a
     token select is units of ``select`` logits (2,672: 48 units at V = 128,256, each 167 groups of 16), and a fused norm
     cut at its residual add is parts of ``norm`` elements (256: 8 parts at N = 2,048, each x 64 rows of a `Gemm_v2{8192, 4}`)."""

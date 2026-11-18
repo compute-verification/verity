@@ -53,14 +53,21 @@ import math
 import struct
 
 import numpy as np
-
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.ops import gemm as GEMM
 from verity.circuits.ops import prims as CP
 from verity.circuits.ops import s8 as S8
-from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, I32Add, I32Le, SelectI32
+from verity.circuits.ops.scalar import (
+    F32Fabs,
+    F32Fmaxf,
+    F32Fminf,
+    I32Add,
+    I32Le,
+    SelectI32,
+)
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tables as T
@@ -300,6 +307,12 @@ def scaled_mm(K: int, N: int):
     """`ScaledMmS8_v1{K, N, DOT=BlackwellS8ImmaDot32_v1}` (`verity.circuits.ops.gemm`): one quantized token row against the N
     weight rows, `ScaledMmS8Coordinate_v1` per output, each a `Q_word` unit (`verity.circuits.cut.separable`)."""
     return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
+
+
+def scaled_mm_words(K: int, N: int):
+    """`ScaledMmS8_v3{K, N, DOT=BlackwellS8ImmaDot32_v1}`: `scaled_mm` with W's rows and scales the u16 words a class circuit's
+    unit reads them as."""
+    return bind(GEMM.ScaledMmS8V3, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 
 @composite("Int8Linear", 1, ["K", "N"],
