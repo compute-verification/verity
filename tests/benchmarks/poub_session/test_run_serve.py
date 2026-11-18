@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_bench.kit import free_port
+from verity_bench.kit import MACHINE_PROPERTIES, free_port
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -195,17 +195,35 @@ def gone(pid: int) -> bool:
     return not Path(f"/proc/{pid}").exists()
 
 
-class Node:
-    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``),
-    its programs (``bin``, on the PATH) and what the stubs wrote (``stub``); `run` runs `run.sh` on it."""
+def machine_record(path: Path, toolkits: list[dict[str, str]]) -> None:
+    """The run's copy of a machine record whose `[properties]` list `toolkits` (``{ directory, version }``, the first
+    the default) and leave every other property unread."""
+    def kit(t: dict[str, str], more: str = "") -> str:
+        return f'{{ directory = "{t["directory"]}", version = "{t["version"]}"{more} }}'
 
-    def __init__(self, tmp: Path, venv: str = "venv312", toolkits: tuple[str, ...] = ("cuda-12.9", "cuda-13.0", "cuda")):
+    others = ", ".join(map(kit, toolkits[1:]))
+    first = kit(toolkits[0], f', loader = "lib64", others = [{others}]') if toolkits else '"none"'
+    values = {k: '"unread"' for k in MACHINE_PROPERTIES} | {"toolkit": first}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[properties]\n" + "".join(f'{k} = {{ value = {v}, read = "stub" }}\n' for k, v in values.items()))
+
+
+class Node:
+    """A node of stubs under ``tmp``: its workspace (``ws``, the vLLM venv at ``venv``), its CUDA toolkits (``cuda``,
+    each at the version its machine record lists it), its programs (``bin``, on the PATH) and what the stubs wrote
+    (``stub``); `run` runs `run.sh` on it."""
+
+    def __init__(self, tmp: Path, venv: str = "venv312",
+                 toolkits: dict[str, str] | None = None):
         self.tmp, self.ws, self.stub, self.bin = tmp, tmp / "ws", tmp / "stub", tmp / "bin"
         self.out = tmp / "run" / "out"
-        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits)):
+        toolkits = {"12.9": "cuda-12.9", "13.0": "cuda-13.0"} if toolkits is None else toolkits
+        for d in (self.stub, tmp / "scratch", tmp / "home", *(tmp / "cuda" / t for t in toolkits.values())):
             d.mkdir(parents=True)
-        for t in toolkits:
+        for t in toolkits.values():
             program(tmp / "cuda" / t / "bin" / "nvcc", NVCC)
+        machine_record(tmp / "run" / "inputs" / "node.toml",
+                       [{"directory": str(tmp / "cuda" / t), "version": v} for v, t in toolkits.items()])
         (self.stub / "verifier.py").write_text(VERIFIER)
         (self.stub / "prover.py").write_text(PROVER)
         self.venv(venv)
@@ -223,7 +241,7 @@ class Node:
 
     def run(self, **env: str | None) -> subprocess.CompletedProcess:
         base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
-                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
+                "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "RESEARCH_MACHINE": "node",
                 "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
                 "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0",
                 "NODE_KIND": "rtx-pro-6000-server-x8"}
@@ -621,18 +639,16 @@ def test_the_vllm_venv_is_the_first_there(tmp_path):
 
 
 @pytest.mark.parametrize("toolkits, torch, home", [
-    (("cuda-12.9", "cuda-13.0", "cuda"), "12.9", "cuda-12.9"),     # the toolkit of the CUDA the prover's torch is built for
-    (("cuda-12", "cuda-13.0", "cuda"), "12.9", "cuda-12"),         # else one of its major version
-    (("cuda-12.9", "cuda"), None, "cuda"),                         # a venv with no torch to ask
-    (("cuda-12.9",), "13.0", None),
-    (("cuda-13.0", "cuda-13"), "12.9", 13),                        # only another major version's: torch's JIT won't see
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, "12.9", "cuda-12.9"),  # the machine's toolkit at the CUDA torch is built for
+    ({"12.9": "cuda-12.9", "13.0": "cuda-13.0"}, None, "cuda-13.0"),    # a venv with no torch to ask: 13.0
+    ({"12.9": "cuda-12.9"}, "13.0", None),                              # the machine lists none at that version
+    ({"12.9": "cuda-13.0"}, "12.9", 13),         # a record whose 12.9 is another major version's: torch's JIT won't see
 ])
-def test_cuda_home_is_a_toolkit_the_node_has(tmp_path, toolkits, torch, home):
+def test_cuda_home_is_the_machines_toolkit_at_torchs_version(tmp_path, toolkits, torch, home):
     node = Node(tmp_path, toolkits=toolkits)
     p = node.both("row", STUB_TORCH_CUDA=torch)
     if home is None:
-        return refused(node, p, f"refused: no CUDA toolkit: CUDA_HOME is not set, and none of {tmp_path}/cuda/cuda-13 "
-                                f"{tmp_path}/cuda/cuda-13.0 {tmp_path}/cuda/cuda is a directory")
+        return refused(node, p, "refused: no CUDA toolkit 13.0: CUDA_HOME is not set, and the machine's record lists none")
     if home == 13:
         return refused(node, p, f"refused: the vLLM venv's torch is built for CUDA 12, and {tmp_path}/cuda/cuda-13.0's "
                                 "nvcc is CUDA 13: install a CUDA 12 toolkit and state CUDA_HOME")
