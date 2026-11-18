@@ -396,6 +396,10 @@ def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of
     assert ok.pieces["prover"].development == "address"
     for pieces, why in (({"challenger": S.Launch()}, "declared developer-side parties' \\['prover'\\], not 'challenger'"),
                         ({"prover": S.Launch(development="host")}, "development binding 'host' is one of its binds"),
-                        ({"prover": S.Launch(reaches="prover")}, "reaches a declared auditor party, not 'prover'")):
+                        ({"prover": S.Launch(reaches="prover")}, "reaches a declared auditor party, not 'prover'"),
+                        ({"prover": S.Launch(optional=("address",), starts=("address", "host"))},
+                         "start writes is among its binds or optional, not \\['host'\\]"),
+                        ({"prover": S.Launch(optional=("address", "host"), starts=("address",), starts_optional=("host",))},
+                         "start may leave out is among what it writes, not \\['host'\\]")):
         with pytest.raises(ValueError, match=why):
             _toy(parties=parties, pieces=pieces)

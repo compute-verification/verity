@@ -503,6 +503,7 @@ PEARL_PLUS = register(Scheme(
     under="400 × the MACs spent: the prover's cost in the cost model, priced at a credited MAC's honest cost (TT_OUT's T "
           "at g₀ = 1/400)",
     settings=SETTINGS,
+    tie={"class": "4,27,2", "tie-uniform": True},
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
@@ -518,7 +519,9 @@ PEARL_PLUS = register(Scheme(
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
-    pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"))},
+    pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"), development="gate",
+                              starts=("gate", "peer", "lane", "key-sha512", "main-file"),
+                              starts_optional=("lane", "main-file"))},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),

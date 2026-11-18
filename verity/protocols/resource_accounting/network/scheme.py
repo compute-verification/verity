@@ -148,7 +148,7 @@ NETWORK_ATTESTER = register(Scheme(
     colocated=(("challenger", "network-attester"),),
     needs=frozenset({"windows", "ingress-relay"}),
     depends=("sampled-proofs",),
-    pieces={"workers": S.Launch(binds=("gate", "peer"))},
+    pieces={"workers": S.Launch(binds=("gate", "peer"), starts=("gate", "peer"))},
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),

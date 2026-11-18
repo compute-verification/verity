@@ -242,13 +242,17 @@ class Term:
 class Launch:
     """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
     the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
-    the one of them whose absence makes it a development run that starts the party it reaches on its own machine; and
-    ``reaches``, that party, said only where no declared channel joins it to one auditor party."""
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
+    bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
     development: str = ""
     reaches: str = ""
+    starts: tuple[str, ...] = ()
+    starts_optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -303,7 +307,8 @@ class Scheme:
     name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
     against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
-    it (`Launch`), a `Lacks` where it launches nothing.
+    it (`Launch`), a `Lacks` where it launches nothing. ``tie``, the parameters an application that ties its workload
+    to this scheme states over its settings' defaults.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -321,6 +326,7 @@ class Scheme:
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
     check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
+    tie: Mapping[str, Any] = field(default_factory=dict)
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -403,8 +409,15 @@ class Scheme:
                                      "binds or optional")
                 if p.reaches and principal.get(p.reaches) != "auditor":
                     raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+                if extra := sorted(set(p.starts) - {*p.binds, *p.optional}):
+                    raise ValueError(f"{self.name}: what {party}'s start writes is among its binds or optional, "
+                                     f"not {extra}")
+                if extra := sorted(set(p.starts_optional) - set(p.starts)):
+                    raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
+                                     f"not {extra}")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
+        object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
     @property
