@@ -331,7 +331,7 @@ def fieldStart (ret : Program.Ty) (j : Nat) : Option Nat :=
 
 /-- Port `p`'s first parameter leaf: the leaf of the unit's input map (`leavesIn`) at the port's first input word. -/
 def portLeaf (c : Circuit) (p : Nat) : Option Nat :=
-  let w := (c.ports.extract 0 p).foldl (· + ·.words) 0
+  let w : Nat := (c.ports.extract 0 p).foldl (· + ·.words) 0
   (c.leavesIn.getD 0 #[]).findIdx? (· == (w : Int))
 
 /-- Tree port `reg`'s reads derived from the wired Program `W`: each unit `u` of `indices` reads, at port `p`'s first
