@@ -104,7 +104,6 @@ time of each pass at every shape with no row failed and with every row failed, e
 each case through the indexer's own entry points (`plugin.json`). `log_cost.py` needs no device: it times what keeping
 the counters adds to a call on the host, a wrapper's time a call over stand-in ops with the record kept and without.
 
-`replay.sh` replays a served replay-ladder window with the plugin in every engine process (its header has the command).
 The tests (`tests/`) hold the definition, the torch reference, the wrappers' dispatch on stand-in ops, the kept counters
 (one write a call, and a killed process's counts in its file), and the kernels in Triton's interpreter where Triton is
 importable.
