@@ -211,7 +211,7 @@ def test_a_deepgemm_row_s_coordinates_beside_them_read_its_committed_q_and_s_unw
     ends = [2, 18, 34, 2 + WN, 50, 66, 2 + 2 * WN]
     assert [(m.name, m.base, m.n, bool(m.wired)) for m in coords] == [
         (f"{TG}/c{j}", a, b - a, a < 2 + WN) for j, (a, b) in enumerate(zip(ends, ends[1:]))]
-    assert all(m.wired == (("in0", "o0", (0,) * m.n), ("in1", "o1", (0,) * m.n)) for m in coords if m.wired)
+    assert all(CH.writer_units(ms, m) == (("in0", "o0", (0,) * m.n), ("in1", "o1", (0,) * m.n)) for m in coords if m.wired)
     got = SRW.read_all(ms, rows, x["store"], None)
     for m, (g, _e) in zip(ms, got):
         if m.template == TG:
@@ -233,7 +233,7 @@ def test_the_wires_hold_on_the_window_s_commitment(served, kinds, tmpls):
     x = served(kinds, n=WN)
     caps = {**{t: 1 for t in tmpls[:-1]}, TG: 16}
     w, rows = SRW.population({"r0": {}}, {"templates": tmpls, "law": "subset:2", "chunk_cap": caps}, "ab" * 64)
-    assert w.members == tuple(wired(tmpls, caps)[0])
+    assert w.members == tuple(CH.shared_tables(wired(tmpls, caps)[0]))
     doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows)))
     assert IF.input_count(doc)["wired"] == kinds.count("fi") * WN * (8 * K + 32 * KG)
     got = SRW.read_all(w.members, rows, x["store"], None)

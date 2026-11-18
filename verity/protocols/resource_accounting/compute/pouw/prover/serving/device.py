@@ -58,12 +58,14 @@ _COMMIT: list[Any] = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [c
 
 @dataclass
 class Toolchain:
-    """What the builds use: a C++ compiler and nvcc (None: the first on the path), the CUDA arch (89, the RTX 4090) and the
-    directory the libraries are built into. A command line sets it once with `configure`."""
+    """What the builds use: a C++ compiler and nvcc (None: the first on the path), the target the CUDA builds are for and
+    the directory the libraries are built into. The target is the ``arch`` of the run machine's card (``sm_90a``; its card
+    file under calibration/hardware/cards, `verity.device.load_card`), which the caller reads and sets once with
+    `configure`; unset, a CUDA build is refused."""
 
     cxx: str | None = None
     nvcc: str | None = None
-    arch: str = "89"
+    arch: str | None = None
     build_dir: Path = field(default_factory=lambda: Path.home() / ".cache" / "verity" / "pouw_cuda")
 
 
@@ -100,7 +102,13 @@ def _need(tool: str | None, what: str) -> str:
 
 
 def cuda_flags() -> tuple[str, ...]:
-    return (*NVCC_FLAGS, f"-gencode=arch=compute_{TOOLCHAIN.arch},code=sm_{TOOLCHAIN.arch}")
+    arch = TOOLCHAIN.arch
+    if arch is None:
+        raise RuntimeError("no CUDA target: `configure(arch=...)` with the arch of the run machine's card "
+                           "(`verity.device.load_card`)")
+    if not arch.startswith("sm_"):
+        raise ValueError(f"CUDA target {arch!r} is not a card's arch (sm_ and its capability's digits, as sm_90a)")
+    return (*NVCC_FLAGS, f"-gencode=arch=compute_{arch[3:]},code={arch}")
 
 
 def source_digest(sources: Sequence[str] = SOURCES, flags: Sequence[str] = (), tool: str | None = None) -> str:
@@ -145,7 +153,7 @@ def host() -> ctypes.CDLL:
 
 @cache
 def device() -> ctypes.CDLL:
-    """`ncp2_kernels.cu` built with nvcc for ``$VERITY_POUW_CUDA_ARCH`` (default 89, the RTX 4090)."""
+    """`ncp2_kernels.cu` built with nvcc for `TOOLCHAIN`'s target, the run machine's card's arch."""
     dll = _build(_need(nvcc(), "nvcc"), CUDA_SOURCES, cuda_flags(), "libncp2_cuda.so")
     _bind_hash_commit(dll)
     fp, dp = ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_double)
