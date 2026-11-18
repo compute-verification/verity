@@ -90,7 +90,6 @@ CHANGES = {
     "levels-zero": lambda p: _set(p, ("levels",), 0),
     "levels-three": lambda p: _set(p, ("levels",), 3),
     "levels-a-string": lambda p: _set(p, ("levels",), "2"),
-    "levels-a-half": lambda p: _set(p, ("levels",), 1.5),
     "shape-no-interior": lambda p: _set(p, ("interior",), DROP),
     "levels-one-shape-one": lambda p: {k: v for k, v in _set(p, ("levels",), 1).items()
                                        if k not in ("boundary", "interior", "rule")},

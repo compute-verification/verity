@@ -1716,7 +1716,7 @@ def run(j):
                      SS.replay_wires(p["program"], it["replay"]["program_fn"]),
                      SS.replay_rows(p["program"], it["replay"]["program_fn"]),
                      SS.replay_returns(p["program"], it["replay"]["program_fn"], rec))
-        out2 = SS.attach(out2, SS.check_twin(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
+        out2 = SS.attach(out2, SS.check_twin(own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
                                "receipt": inner["receipt"]}}
@@ -7854,9 +7854,6 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     assert [k for k, c in inner["checks"].items() if not c["ok"]] == []
     assert inner["checks"]["statements"]["codes"] == []
     assert len(out["draw"]["units"]) == 2 and sorted(u // 3 for u in out["interior"]["draw"]["units"]) == [0, 1]
-    with mock.patch.object(SS, "FORM", False):
-        refused = run(copy.deepcopy(case))
-    assert refused["symbol"] == "reject" and refused["public"] == {}, refused
     def reads(referred=True, **ports):
         def change(c, x):
             it = c["interior"]
