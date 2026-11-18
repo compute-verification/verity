@@ -201,7 +201,7 @@ A spec-level reference for network attestation's timing channel:
   hiding-commitment registration, a row each block of G steps (G = P unless given: an execution phase's row, the slice's
   ``srv`` row; at G < P block j is the slice's ``srv{j}``, `verity_vllm.compiler.compile_slice.CompileSliceRowGroups_v1`).
   `leaf_ok` checks a proof block's row b‖c against its registered leaf, as the slice's design holds the advice's ``adv``
-  row, and `reads_port` is the same read as the Lean verifier's registered reads take it. No session of the compile slice
+  row. No session of the compile slice
   runs, only its tests call `leaf_ok`, and nothing ties the rows to what the server ran, so they are the prover's word;
 - the served rows' tie, in vLLM's compiler (`verity_vllm.compiler.served_tie`): `ServedRowsTie_v2`, a Boolean Definition
   with `check` its reference, states that an execution phase's served rows are the positions its steps' Commit holds (the

@@ -27,8 +27,8 @@ and 1,021,302 ANDs, as at G = 54 = P.
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
   order, which is the order of the step's rows in advice v0. The verifier is to hold its own copy, compiled from the
   advice; today it compiles none and holds none.
-- ``srb``: the block's served rows, G steps of R slots of (valid, request, kind, start, n). It is a registered port:
-  `verity_vllm.compiler.served_rows.reads_port` is the verifier's own ``--registered`` port at the registration's root,
+- ``srb``: the block's served rows, G steps of R slots of (valid, request, kind, start, n). It is to be a registered port:
+  the verifier's own ``--registered`` port at the registration's root,
   proof block u reading leaf w·(P / G) + j. Lean refuses a statement whose ``srb`` table row doesn't climb its path to
   that root at that leaf.
 

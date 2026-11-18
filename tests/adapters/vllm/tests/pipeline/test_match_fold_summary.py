@@ -174,13 +174,13 @@ def test_a_declared_moe_construction_folds_under_the_profile_s_hook_and_is_refus
         MF.fold_summary_result(tmp_path / "no-log-is-read.jsonl.gz", "plain", moe_construction="padded")
 
 
-def test_the_programs_options_reach_the_profile_and_a_pouw_run_folds_pouw_s_calls_first(tmp_path, profiles, folded):
+def test_the_programs_options_reach_the_profile_and_a_pouw_run_folds_under_the_profile_as_it_is(tmp_path, profiles, folded):
     calls = folded(_result())
     profiles("stand_in", PROFILE=_profile(Linear()))
     construction = TargetProfile.SAMPLER_CONSTRUCTIONS[0]
     doc, _ = MF.fold_summary_result(_log(tmp_path, notes={"protocols": ["pouw:duo"]}), "stand_in", sampler_construction=construction, registered_values=True)
     assert (doc["sampler_construction"], doc["registered_values"], doc["moe_scope_pattern"]) == (construction, True, None)
-    assert calls[-1]["profile"].registered_values is True and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["PouwLinear", "Linear"]
+    assert calls[-1]["profile"].registered_values is True and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["Linear"]
     MF.fold_summary_result(_log(tmp_path, notes={"protocols": ["other:x"]}), "stand_in")
     assert calls[-1]["profile"].registered_values is False and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["Linear"]
     with pytest.raises(Refused, match=r"^sampler construction 'no-such' is not one of \["):
