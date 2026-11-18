@@ -143,22 +143,22 @@ def test_a_per_member_accept_that_missed_a_member_says_the_cite_does_not_cover_i
             assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
 
 
-def test_a_two_stage_accept_says_the_cite_does_not_cover_it_and_its_form_is_not_yet_proved(tmp_path):
+def test_a_two_level_accept_says_the_cite_does_not_cover_it_and_two_levels_are_not_yet_proved(tmp_path):
     product = next(iter(C.CITES))
     tree = git_tree(tmp_path / "tree", [C.CITES[product]])
-    for form in ("one-stage", "two-stage"):
-        d, cases = tmp_path / form, []
+    for levels in (1, 2):
+        d, cases = tmp_path / f"levels-{levels}", []
         for n, id in enumerate(C.COMPONENTS[product]):
-            p = put(d / f"p{n}", id, {"form": form} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
+            p = put(d / f"p{n}", id, {"levels": levels} if id == SAMPLED else {}, bytes([n]), b"{}", bytes([n]) * 64,
                     verdict="accept")
             cases += ["--cases", str(p)]
         assert C.main([product, *cases, *outs(d, tree=tree), "--exe", lean(d, {"verdict": "accept"}, 0)]) == 0
         ran = json.loads((d / "public" / "composite.json").read_bytes())["ran"]
         lines = (d / "public" / "verdicts.txt").read_text().splitlines()
         assert ran["cites"] == C.CITES[product]
-        said = f"NOT_COVERED {SAMPLED} two-stage form: {C.CITES[product]} does not cover it, its form is not yet proved"
-        if form == "two-stage":
-            assert ran["not_covered"] == {"id": SAMPLED, "form": "two-stage"} and said in lines
+        said = f"NOT_COVERED {SAMPLED} 2 levels: {C.CITES[product]} does not cover it, two levels are not yet proved"
+        if levels == 2:
+            assert ran["not_covered"] == {"id": SAMPLED, "levels": 2} and said in lines
         else:
             assert "not_covered" not in ran and not any(ln.startswith("NOT_COVERED") for ln in lines)
 

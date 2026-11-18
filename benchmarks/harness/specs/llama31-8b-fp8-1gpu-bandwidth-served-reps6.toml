@@ -29,12 +29,12 @@ control = "none"
 [env]
 VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
 
-# A node-local checkpoint bound by its `model_digest` (a point refuses files that hash otherwise). The KV pin holds
-# on both paths, a local checkpoint's and a revision-pinned one's (`kv_cache_memory_bytes`, `engine.engine_args`).
+# A node-local checkpoint pinned by its content (`checkpoints-local.json`; its build refuses files that hash otherwise).
 [preset]
 id = "llama31-8b-fp8-1gpu-bandwidth-served-reps6"
 model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
-model_digest = "98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
+revision = "sha256:98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
+case = "LLAMA31_8B_INSTRUCT_LOCAL"
 precision = "fp8"
 gpu_count = 1
 
@@ -47,6 +47,7 @@ block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
 # Every isolated (`blocks`) engine of one arm group gets the same exact KV pool (llama31-8b-fp8-1gpu's).
 block_kv_cache_memory_bytes = 60129542144
+batch_invariant = false
 
 [admission]
 max_minutes = 120
