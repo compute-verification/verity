@@ -345,7 +345,8 @@ def servedRanges : Array Flock.TemplateQuery.TRange :=
 #guard let o := Spot.RecordText.orderOf servedRanges
   o.length == 137000 && o.getLast? == some ("t1000999", 272, 2)
 
-/-- The served shape's templates as the record text reads them. -/
+/-- The served shape's templates as the record text reads them. `inputsOf`'s sweep holds a port's 17 rows of one unit
+range live at once, so it compares each declaration with at most 17 others. -/
 def bigTmpls : List Spot.RecordText.Tmpl :=
   big.templates.map fun (tid, t) =>
     { tid, defn := 0, units := t.units, outs := t.outs,
@@ -353,7 +354,7 @@ def bigTmpls : List Spot.RecordText.Tmpl :=
 
 #guard match Spot.RecordText.inputsOf bigTmpls big (Lean.Json.mkObj []) with
   | .ok x => x.decls.length == big.wires.length && x.decls.all (·.bits == 64) &&
-    sweepWork [] ((x.decls.map (·.w)).mergeSort before) 0 ≤ 4 * big.wires.length
+    sweepWork [] ((x.decls.map (·.w)).mergeSort before) 0 ≤ 18 * big.wires.length
   | .error _ => false
 
 /-- Declarations of `randomWires`' wires, each filling a wire. -/
