@@ -189,15 +189,34 @@ def test_phases_out_of_order_are_refused_and_an_unclosed_one_is_finished_at_rele
         on.step(H.PhaseOpened(0, 0))
 
 
-def test_a_second_challenger_epoch_is_refused_by_name_until_a_session_a_phase(monkeypatch, tmp_path) -> None:
-    _gated(monkeypatch)
+def test_each_phase_opens_a_salt_session_of_its_own(monkeypatch, tmp_path) -> None:
+    gate, reserved = _gated(monkeypatch), []
     monkeypatch.setattr(SV, "finish_window", lambda run, session: run.finish(), raising=False)
-    on = PS.Attached({**CTX, "private": str(tmp_path)})
+    monkeypatch.setattr(SV, "reserve_salt", lambda call, ledger, lane, peer, epoch: reserved.append(
+        (call, ledger(), lane, peer, epoch)) or ({"session": f"s-r{epoch}"}, {"period": 7}), raising=False)
+    ledger = lambda: ["line"]  # noqa: E731
+    on = PS.Attached({**CTX, "settings": {**CTX["settings"], "lane": "compute", "peer": "node-1"}, "ledger": ledger,
+                      "private": str(tmp_path)})
     on.weights = {0: W0}
-    on.step(H.PhaseOpened(0, 0))
-    on.step(H.PhaseClosed(0, 0, b""))
-    with pytest.raises(NotImplementedError, match="pearl-plus piece 2"):
-        on.step(H.PhaseOpened(1, 1))
+    for p in (0, 1, 2):
+        on.step(H.PhaseOpened(p, p))
+        on.step(H.PhaseClosed(p, p, b""))
+    w = SV.weights_root({0: bytes([0]) * 64})
+    assert gate.roots == [PSALT.epoch_open_root(w, k) for k in (0, 1, 2)]
+    assert reserved == [(_gate, ["line"], "compute", "node-1", 1), (_gate, ["line"], "compute", "node-1", 2)]
+    phases = on.commitment()["phases"]
+    assert [phases[p]["reserved"] for p in "012"] == [{"session": SESSION, "period": None},
+                                                     {"session": {"session": "s-r1"}, "period": {"period": 7}},
+                                                     {"session": {"session": "s-r2"}, "period": {"period": 7}}]
+    assert [phases[p]["commitment"]["session"]["session"] for p in "012"] == ["s-1", "s-r1", "s-r2"]
+    gate.roots.clear()
+    one = PS.Attached({**CTX, "private": str(tmp_path / "one")})
+    (tmp_path / "one").mkdir()
+    one.weights = {0: W0}
+    one.step(H.PhaseOpened(0, 0))
+    one.step(H.PhaseClosed(0, 0, b""))
+    with pytest.raises(ValueError, match="salt epoch 1 needs a session of its own.*give 'lane' and 'peer'"):
+        one.step(H.PhaseOpened(1, 1))
 
 
 def test_a_step_that_computed_without_steps_computed_is_refused(monkeypatch) -> None:
@@ -226,6 +245,9 @@ def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> 
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": CTX["settings"]})
     with pytest.raises(ValueError, match=r"its launcher passes ctx\['private'\].*must survive a restart"):
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": CTX["settings"], "gate": _gate})
+    with pytest.raises(ValueError, match=r"with a 'lane', its launcher passes ctx\['ledger'\]"):
+        PS.PEARL_PLUS.attach(_Exchange(), {**CTX, "settings": {"challenger": "127.0.0.1:1", "lane": "l", "peer": "p",
+                                                               "kernel": "k.so"}})
     PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process", "kernel": "k.so"}})
     with pytest.raises(ValueError, match="no 'kernel' among its settings"):
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process"}})
@@ -344,7 +366,9 @@ def test_its_settings_are_declared_and_checked() -> None:
                            ({"coins": "beacon"}, "coins is 'in-process'"),
                            ({"coins": "in-process", **CTX["settings"]}, "coins and challenger are both set"),
                            ({"challenger": "nowhere", "session": SESSION}, "challenger is the auditor device's"),
-                           ({"challenger": "127.0.0.1:1"}, "challenger and session go together"),
+                           ({"challenger": "127.0.0.1:1"}, "a challenger needs a session"),
+                           ({**CTX["settings"], "lane": "compute"}, "lane and peer go together"),
+                           ({"session": SESSION}, "session, lane and peer are a challenger's"),
                            ({"challenger": "127.0.0.1:1", "session": {"id": 1}}, "session is the gate's reserve answer")):
         with pytest.raises(ValueError, match=f"pearl-plus: {refused}"):
             S.settings(PS.PEARL_PLUS, given)

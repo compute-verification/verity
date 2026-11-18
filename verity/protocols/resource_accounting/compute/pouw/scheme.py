@@ -41,10 +41,12 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: Its settings (`Scheme.settings`), each a default of its type: ``kernel`` the kernel's library (required on a served
 #: run), ``cubin`` its cubin, ``schedule`` the schedule each pass runs under (`serving.SCHEDULES`),
 #: ``transcript_dir`` where passes are retained, the salt's source, ``coins`` (``in-process``: a challenger held in this
-#: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT) with ``session`` (the gate's reserve
-#: answer, which the launcher's ``ctx["gate"]``, the gate in its own words, opens), and ``tie-uniform``
+#: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
+#: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
+#: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`); and
+#: ``tie-uniform``
 SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}}
+                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": ""}
 COINS = ("", "in-process")
 
 
@@ -60,8 +62,12 @@ def check_settings(own: Mapping[str, Any]) -> str | None:
     host, sep, port = own["challenger"].rpartition(":")
     if own["challenger"] and not (sep and host and port.isdecimal()):
         return f"challenger is the auditor device's challenger as HOST:PORT, not {own['challenger']!r}"
-    if bool(own["challenger"]) != bool(own["session"]):
-        return "challenger and session go together: the session is the gate's reserve answer for that challenger"
+    if bool(own["lane"]) != bool(own["peer"]):
+        return "lane and peer go together: the lane whose gate key reserves, and this machine's name in the auditor's peers"
+    if (own["session"] or own["lane"]) and not own["challenger"]:
+        return "session, lane and peer are a challenger's: they reserve or name its sessions"
+    if own["challenger"] and not (own["session"] or own["lane"]):
+        return "a challenger needs a session (the gate's reserve answer) or lane and peer to reserve each epoch's"
     if own["session"] and not isinstance(own["session"].get("session"), str):
         return f"session is the gate's reserve answer, {{'session': SESSION_ID, ...}}, not {own['session']!r}"
     return None
@@ -137,6 +143,7 @@ class Attached:
         self.own: Mapping[str, Any] = settings(PEARL_PLUS, ctx.get("settings") or {})
         self.gate: Any = ctx.get("gate")
         self.private: Any = ctx.get("private")
+        self.ledger: Any = ctx.get("ledger")
         if not self.own["coins"] and not self.own["challenger"]:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
@@ -147,6 +154,9 @@ class Attached:
             raise ValueError("pearl-plus: with a 'challenger', its launcher passes ctx['private'], the scheme's private "
                              "directory: the salt epoch's number must survive a restart, or a later server would open a "
                              "session on a root already used")
+        if self.own["lane"] and not callable(self.ledger):
+            raise ValueError("pearl-plus: with a 'lane', its launcher passes ctx['ledger'], the gate's ledger as lines "
+                             "(commit_coins.ChallengerGate.ledger): each epoch's reserve joins the lane's open period")
         if not self.own["kernel"]:
             raise ValueError("pearl-plus: no 'kernel' among its settings (ctx['settings']): its run computes on the device, through "
                              "the kernel's library")
@@ -154,6 +164,7 @@ class Attached:
         self.weights: dict[int, H.Handle] | None = None
         self.run: Any = None
         self.session: Any = None
+        self.reserved: dict[str, Any] | None = None
         self.epochs = 0
         self.phase: int | None = None
         self.phased = False
@@ -281,16 +292,35 @@ class Attached:
             run.finish()
         else:
             SV.finish_window(run, session)
-        out = {"commitment": dict(run.commits), "summary": dict(run.details)}
+        out = {"commitment": dict(run.commits), "summary": dict(run.details), **({"reserved": self.reserved}
+                                                                                   if self.reserved else {})}
+        self.reserved = None
         del run
         gc.collect()
         return out
 
+    def reserve(self, k: int) -> dict[str, Any]:
+        """Salt epoch ``k``'s session, reserved before it opens, since a reserve opens once: the first epoch's the
+        ``session`` setting, if given; every other one reserved at the gate under ``lane`` as ``peer``, joining the
+        lane's open period (`serving.reserve_salt`, epoch ``k``). The reserve answer and its period go in the epoch's
+        record."""
+        from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+
+        if self.epochs == 1 and self.own["session"]:
+            reserved, period = dict(self.own["session"]), None
+        elif self.own["lane"]:
+            reserved, period = SV.reserve_salt(self.gate, self.ledger, self.own["lane"], self.own["peer"], k)
+        else:
+            raise ValueError(f"pearl-plus: salt epoch {k} needs a session of its own, and the 'session' setting was the "
+                             "first epoch's (a reserve opens once): give 'lane' and 'peer' to reserve one an epoch")
+        self.reserved = {"session": reserved, "period": period}
+        return reserved
+
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
         """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
-        ``transcript_dir``, and ``coins`` or ``challenger`` with its ``session``, which the launcher's gate opens):
-        their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one session
-        an epoch, closed at its `close`, on an epoch number first spent in ``ctx["private"]``, `spend_epoch`; else
+        ``transcript_dir``, and ``coins`` or ``challenger``, whose session `reserve` gives and the launcher's gate
+        opens): their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one
+        session an epoch, closed at its `close`, on an epoch number first spent in ``ctx["private"]``, `spend_epoch`; else
         the in-process coins of this process's epoch count), and the run's pass limit, retained passes and ``registration``,
         what it claims of the weights it serves."""
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
@@ -298,19 +328,16 @@ class Attached:
 
         device, name, weights = pearl_c_device(), OPTION.partition(":")[2], dict(weights)
         self.epochs += 1
-        if own["challenger"] and self.epochs > 1:
-            raise NotImplementedError("pearl-plus piece 2 (compute-accounting): a salt session a phase; the one "
-                                      "'session' setting is a reserve answer, and a reserve opens once")
         if bad := SV.pearl_c_refusals(name, {w: tuple(t.shape) for w, t in weights.items()}):
             raise ValueError(f"pearl-plus: its weights are refused before any commitment: {'; '.join(bad)}")
         kernel = SV.PearlCKernel.load(own["kernel"], own["cubin"] or None)
         roots = device.weight_roots(kernel, weights, name)
         k, carried = None, None
         if own["challenger"]:
-            given = SimpleNamespace(challenger=own["challenger"], session=dict(own["session"]),
-                                    gate=SV.gate_of(self.gate))
+            k = spend_epoch(self.private)
+            given = SimpleNamespace(challenger=own["challenger"], session=self.reserve(k), gate=SV.gate_of(self.gate))
             self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
-                                                                          epoch=spend_epoch(self.private))
+                                                                          epoch=k)
         else:
             held = SV.in_process_coins(self.epochs - 1)
             coins, opening = held.commitment, held.open("salt", SV.weights_root(roots))
