@@ -582,7 +582,7 @@ def main (args : List String) : IO UInt32 := do
     let r := dir / s!"ref-{t}.reads.json"
     unless (← r.pathExists) do
       throw (IO.userError s!"{r}: no reference reads; an export from before they left the reference statements \
-        (python3 benchmarks/two_stage/guard.py refs {dir})")
+        (python3 benchmarks/one_stage/guard.py refs {dir})")
     reads := reads.push (← ok r.toString (Json.parse (← IO.FS.readFile r)))
   say s!"read: x {x.length} B, m1 {m₁.length} B, m2 {m₂.length} B, {refs.size} references, {(← IO.monoMsNow) - t0} ms"
   let t1 ← IO.monoMsNow
