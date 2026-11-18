@@ -44,8 +44,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 
-from verity_vllm.pipeline import window_chain as WC  # noqa: E402
+import window_chain as WC  # noqa: E402
 from verity_vllm.pipeline.advice_code import format as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
