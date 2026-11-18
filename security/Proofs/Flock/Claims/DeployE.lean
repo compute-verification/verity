@@ -81,20 +81,20 @@ namespace FlockDeploy
 open Flock
 
 /-- **The element-level decision at a session**: the element-level verdict over `OC` on its tables, then the checks. -/
-def decisionAtE (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+def decisionAtE (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     Claims.OCV Unit := do
   verifyWithME Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs
   monadLift (checks false s spec x link c₁ mids f)
 
 /-- **The element-level decision**: the statement's setup over `OC`, then the element-level decision at its session. -/
-def decisionE (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
+def decisionE (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : Final) : Claims.OCV Unit := do
   let (spec, sts) ← setupM Claims.Hashes.oc s.read
   decisionAtE s spec sts x link c₁ mids f
 
 /-- **The element-level verifier's step**: `next false`'s, with the element-level decision. -/
-def nextE (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
+def nextE (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match act false x as cs with
   | .rej => .ret .rej
   | .coin c => .ret (.msg c.bytes)
@@ -105,8 +105,8 @@ def VE : Claims.Verifier Coin where
   k := (V false).k
   next := nextE
 
-theorem decisionAtE_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
-    (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin))
+theorem decisionAtE_eval (H : Hash.Msg → Hash.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt)
+    (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin))
     (f : Final) :
     ((decisionAtE s spec sts x link c₁ mids f).run.eval H).1 =
       (do verifyWithE (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
@@ -119,8 +119,8 @@ theorem decisionAtE_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessi
   subst he
   cases verifyWithE (Claims.hOf H) spec (tabsOf sts) f.record f.proofs <;> rfl
 
-theorem decisionE_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) :
+theorem decisionE_eval (H : Hash.Msg → Hash.Msg) (s : Ins) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : Final) :
     ((decisionE s x link c₁ mids f).run.eval H).1 =
       (do let (spec, sts) ← setupWith (Claims.hOf H) s.read
           verifyWithE (Claims.hOf H) spec (tabsOf sts) f.record f.proofs
@@ -139,9 +139,9 @@ theorem decisionE_eval (H : Claims.Msg → Claims.Msg) (s : Ins) (x : Claims.Msg
 
 /-- **The element-level decision against `H`**: it accepts exactly when the setup with `hOf H` is `.ok`, and at its
 session the element-level verdict with `hOf H` and the custody checks are `.ok`. -/
-theorem nextE_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextE_decide (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : Final} (h : act false x as cs = .decide s spec sts link c₁ mids f) :
     ((nextE x as cs).eval H).1 = .acc ↔
       ∃ spec' sts', setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         verifyWithE (Claims.hOf H) spec' (tabsOf sts') f.record f.proofs = .ok () ∧
@@ -162,7 +162,7 @@ theorem nextE_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List
 
 /-- **The element-level verifier accepts wherever the deployed plain verifier does**: at every oracle, on the same
 messages and coins. -/
-theorem nextE_acc_of_next (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin)
+theorem nextE_acc_of_next (H : Hash.Msg → Hash.Msg) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin)
     (h : ((next false x as cs).eval H).1 = .acc) : ((nextE x as cs).eval H).1 = .acc := by
   cases ha : act false x as cs with
   | rej => rw [next_rej H ha] at h; simp at h
@@ -172,8 +172,8 @@ theorem nextE_acc_of_next (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (as :
     exact (nextE_decide H ha).2 ⟨spec', sts', hs, verifyWithE_of_verifyWith _ _ _ _ _ hv, hc⟩
 
 /-- **Where the deployed plain verifier answers, the element-level one answers alike**, with the same (empty) log. -/
-theorem nextE_eval_of_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {m : Claims.Msg} (h : ((next false x as cs).eval H).1 = .msg m) :
+theorem nextE_eval_of_msg (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
+    {m : Hash.Msg} (h : ((next false x as cs).eval H).1 = .msg m) :
     (nextE x as cs).eval H = (next false x as cs).eval H := by
   cases ha : act false x as cs with
   | rej => rw [next_rej H ha] at h; simp at h
@@ -182,9 +182,9 @@ theorem nextE_eval_of_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as :
     simp only [next, ha, outOf, Claims.OC.eval_bind, Claims.OC.eval] at h
     split at h <;> simp at h
 
-theorem stepWith_out_VE {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
-    (cs : List Claims.Msg → List Coin) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
+theorem stepWith_out_VE {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
+    (cs : List Hash.Msg → List Coin) :
+    ∀ (n : ℕ) (hist : List (Hash.Msg × Hash.Msg)) (as : List Hash.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω (fun as => next false x as (cs as)) n hist as t).out = .acc →
         (Claims.stepWith H P x ω (fun as => nextE x as (cs as)) n hist as t).out = .acc := by
   intro n
@@ -216,7 +216,7 @@ theorem stepWith_out_VE {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.
 
 /-- **The element-level verifier accepts every run the deployed plain verifier accepts**: at every oracle, prover,
 statement, tape and coins (the two verifiers take the same rounds). -/
-theorem run_out_VE {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem run_out_VE {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     (r : Fin ((V false).k x) → Coin) (h : (Claims.run H P (V false) x ω r).out = .acc) :
     (Claims.run H P VE x ω r).out = .acc :=
   stepWith_out_VE H P x ω (fun as => (List.range as.length).map (Claims.coinSeq r)) _ [] [] _ h

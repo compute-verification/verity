@@ -200,7 +200,7 @@ theorem prCoin_prod {C D : Type} [Fintype C] [Fintype D] (p : C × D → Prop) :
 /-- **The nested sampling design's missProb, in `ℝ≥0∞`.** Each replay block `i` contributes its Bernoulli factor (`SamplingDesign.bernFactor`)
 at the missProb, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
 other replay blocks'. -/
-theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
+theorem nested_missProb (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
     (nested R N k a b hk).missProb B =
       ∏ i, SamplingDesign.bernFactor a b
         ((Verity.SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
@@ -252,7 +252,7 @@ theorem NestedEscape : Guarantees.NestedEscape := by
       ((Verity.SamplingDesign.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
       1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
     intro i
-    rw [Verity.SamplingDesign.subset_escape]
+    rw [Verity.SamplingDesign.subset_missProb]
     have hE : (((N - (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card).choose k : ℕ) : ℝ≥0∞) /
         ((N.choose k : ℕ) : ℝ≥0∞) ≠ ⊤ :=
       ENNReal.div_ne_top (ENNReal.natCast_ne_top _) (by exact_mod_cast (Nat.choose_pos hk).ne')
@@ -266,7 +266,7 @@ theorem NestedEscape : Guarantees.NestedEscape := by
     ring
   have hprod : ((nested R N k a b hk).missProb B).toReal =
       ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ)) := by
-    rw [nested_escape R N k a b hk hab B, ENNReal.toReal_prod]
+    rw [nested_missProb R N k a b hk hab B, ENNReal.toReal_prod]
     exact Finset.prod_congr rfl fun i _ => hfac i
   refine ⟨hprod, fun hlt => ?_⟩
   rw [hprod]

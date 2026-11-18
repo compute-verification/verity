@@ -225,7 +225,7 @@ round**, at a statement whose tables `st j` are Flock ZK's, when each table's pa
 pads' domain and each table puts at most one event at a round: `2·k < 8·N₀/e + 2`, round `0`'s weights are at most
 every table's but `2`, and every table's at most its weight but `4·len/e` (`cZW_sum_le_tableWeight`). -/
 theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
+    (x : Hash.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (h25 : ∀ j < (tables true x).length, 25 ≤ (st j).m) (h35 : ∀ j < (tables true x).length, (st j).m ≤ 35)
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)

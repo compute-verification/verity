@@ -103,8 +103,8 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
     {P : Spot.Sampling.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
     {κ₀ : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Option Bool} {κ : Fin C.N → Option Bool} (hκ : HEq κ₀ κ)
     (hcon : ∀ g, Verity.parsedConsts (some r) g = κ₀ g)
-    {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool} {roots : List Claims.Msg} {val : ℕ → Option Bool}
-    (hval : ∀ p b, val p = some b → ∃ d : Claims.Msg, Cm.Opens H roots ⟨p, b, d⟩ = true) {F : Finset ℕ}
+    {H : Hash.Msg → Hash.Msg} {Cm : CommitmentScheme Bool} {roots : List Hash.Msg} {val : ℕ → Option Bool}
+    (hval : ∀ p b, val p = some b → ∃ d : Hash.Msg, Cm.Opens H roots ⟨p, b, d⟩ = true) {F : Finset ℕ}
     (hgame : ∀ opens : (g : Fin (Verity.Circuit.ofAudit C).N) → BitVec ((Verity.Circuit.ofAudit C).w g) → Prop,
       (∀ g b, κ g = some b → opens g (BitVec.ofBool b)) →
       (∀ g b, κ g = none → val (Flock.Bridge.posOf C g) = some b → opens g (BitVec.ofBool b)) →
@@ -112,7 +112,7 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
         (Verity.Circuit.ofBits (Flock.Bridge.openedOf C κ val))).image Fin.val ⊆ F)
     (op : (g : Fin (Flock.Bridge.Parsed.circuit o).N) → BitVec ((Flock.Bridge.Parsed.circuit o).w g) → Prop)
     (hopen : ∀ (h : (Flock.Bridge.Parsed.circuit o).N = C.N) (g : Fin (Flock.Bridge.Parsed.circuit o).N) (b : Bool)
-      (d : Claims.Msg), Verity.parsedConsts o g = none →
+      (d : Hash.Msg), Verity.parsedConsts o g = none →
         Cm.Opens H roots ⟨Flock.Bridge.posOf C (Fin.cast h g), b, d⟩ = true →
           ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD 0 = b → op g v)
     (hconst : ∀ g b, Verity.parsedConsts o g = some b → ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g),

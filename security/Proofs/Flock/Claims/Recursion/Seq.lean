@@ -108,7 +108,7 @@ open Claims.ZKMal (Layout ZKmalAt SeqTape iterSimG iterProver)
 variable (IV : Claims.Verifier Coin) (b : Brings)
 
 /-- The rounds before the V\* sessions: the inner session's and the staging round. -/
-def kPre (x : Claims.Msg) : ℕ := IV.k (xIOf x) + kS x
+def kPre (x : Hash.Msg) : ℕ := IV.k (xIOf x) + kS x
 
 /-- **The first part's prover**: the reference prover's before the V\* sessions, on a tape `pre` reads as the inner
 prover's tape and the staging salts. -/
@@ -120,8 +120,8 @@ noncomputable def preP {T : Type} (pre : T → b.ref.TI × (ℕ → Salt)) (w : 
 
 /-- **Before the V\* sessions, the reference prover is `preP`** on a tape whose inner prover's tape and staging salts
 are `refP`'s. -/
-theorem refP_pre {T : Type} (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims.Flock.Wit) (x : Claims.Msg)
-    (hist : List (Claims.Msg × Claims.Msg)) (ω : Tape b) (t : T) (hω : pre t = (ω.1, ω.2.1))
+theorem refP_pre {T : Type} (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims.Flock.Wit) (x : Hash.Msg)
+    (hist : List (Hash.Msg × Hash.Msg)) (ω : Tape b) (t : T) (hω : pre t = (ω.1, ω.2.1))
     (h : hist.length < kPre IV x) : (refP IV b w).next x hist ω = (preP IV b pre w).next x hist t := by
   unfold kPre at h
   by_cases h1 : hist.length < IV.k (xIOf x)
@@ -130,18 +130,18 @@ theorem refP_pre {T : Type} (pre : T → b.ref.TI × (ℕ → Salt)) (w : Claims
 
 /-- The V\* sessions' witnesses as the record's reference prover reads them (`RefParts.wit`): off the inner witness,
 the inner prover's tape and the inner rounds; no staging salt. -/
-def refWit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit :=
+def refWit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit :=
   fun w p h s => b.ref.wit w p.1 h s
 
 /-- **Session `s`'s V\* statement** at a history that starts it: the one the rounds before the sessions stage. -/
-noncomputable def xsOf (x : Claims.Msg) (s : ℕ) (h : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
+noncomputable def xsOf (x : Hash.Msg) (s : ℕ) (h : List (Hash.Msg × Hash.Msg)) : Hash.Msg :=
   (vstar b.st x (asRounds (h.take (kPre IV x)))).getD s []
 
 /-- **The masked run's parts**: the first part, then session `s` of `(nums x s).rounds + 1` rounds (its `Hello`
 first) at the V\* statement `xsOf` reads, with the witness `wit` reads off the inner witness, the first part's tape
 (through `pre`) and the inner rounds. -/
 noncomputable def lay {T : Type} (pre : T → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) :
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit) :
     Layout Claims.Flock.Wit Claims.Flock.Wit T where
   k₀ := kPre IV
   n x s := (nums b.st x s).rounds + 1
@@ -156,22 +156,22 @@ noncomputable def parts (T : Type) : Layout Claims.Flock.Wit Claims.Flock.Wit T 
   ws _ _ _ _ _ := ⟨[]⟩
 
 theorem lay_start {T : Type} (pre : T → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit) :
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit) :
     (lay IV b pre wit).start = (parts IV b T).start :=
   Layout.start_congr rfl rfl
 
 /-- **The masked reference prover**: `preP`, then each of the `nS x` V\* sessions the session prover `PS` on slot
 `s`'s tape, at its V\* statement and witness. -/
 noncomputable def refPM {T TS : Type} (pre : T → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover TS) (w : Claims.Flock.Wit) : Claims.Prover (T × (ℕ → TS)) :=
   ⟨fun x hist ω => ((lay IV b pre wit).prover (preP IV b pre) PS (nS x) w).next x hist ω⟩
 
 /-- **The masked run's rounds**: the first part's, then each V\* session's and its `Hello`. -/
-noncomputable def kM (x : Claims.Msg) : ℕ :=
+noncomputable def kM (x : Hash.Msg) : ℕ :=
   kPre IV x + ((List.range (nS x)).map fun s => (nums b.st x s).rounds + 1).sum
 
-theorem parts_start (T : Type) (x : Claims.Msg) :
+theorem parts_start (T : Type) (x : Hash.Msg) :
     ∀ m, (parts IV b T).start x m = kPre IV x + ((List.range m).map fun s => (nums b.st x s).rounds + 1).sum
   | 0 => by simp [Layout.start, parts]
   | m + 1 => by
@@ -179,7 +179,7 @@ theorem parts_start (T : Type) (x : Claims.Msg) :
       simp [parts, add_assoc]
 
 /-- **The masked run's rounds are the compiled verifier's and one `Hello` per V\* session.** -/
-theorem kM_eq (x : Claims.Msg) : kM IV b x = (V IV b.st).k x + nS x := by
+theorem kM_eq (x : Hash.Msg) : kM IV b x = (V IV b.st).k x + nS x := by
   have e : ∀ m, ((List.range m).map fun s => (nums b.st x s).rounds + 1).sum =
       ((List.range m).map fun s => (nums b.st x s).rounds).sum + m := by
     intro m
@@ -190,7 +190,7 @@ theorem kM_eq (x : Claims.Msg) : kM IV b x = (V IV b.st).k x + nS x := by
   omega
 
 /-- The sessions start after the first part, at least one round in. -/
-theorem parts_start_pos (T : Type) (x : Claims.Msg) (j : ℕ) : 0 < (parts IV b T).start x j := by
+theorem parts_start_pos (T : Type) (x : Hash.Msg) (j : ℕ) : 0 < (parts IV b T).start x j := by
   rw [parts_start]
   simp [kPre, kS]
 
@@ -198,7 +198,7 @@ theorem parts_start_pos (T : Type) (x : Claims.Msg) (j : ℕ) : 0 < (parts IV b 
 (`Recursion.goesOn`) holds, session `s`'s outer simulator `SO x s` at the V\* statement its simulated history stages,
 on coins of its own. -/
 noncomputable def simM (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (S₀ : Claims.Simulator) (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) : Claims.Simulator where
+    (S₀ : Claims.Simulator) (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) : Claims.Simulator where
   C x := (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀ (fun j x => (SO x j).C)
     (fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) (nS x)).C x
   prog x := (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (parts IV b (T₀.N × T₀.Ω))) S₀ (fun j x => (SO x j).C)
@@ -209,16 +209,16 @@ noncomputable def simM (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonempty N
 history that starts it (`hS`), and there the witness `wit` gives is in the sessions' relation `RF` (`hW`), the masked
 reference prover on the flat tape is `ZKmalAt` at `simM` with `ε₀ + Σ_{s < nS x} eB s` and `nS x · g`, at the masked
 run's rounds `kM x`. -/
-theorem zkAt (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+theorem zkAt (H : Hash.Msg → Hash.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (RA RF : Claims.Rel Claims.Flock.Wit) (S₀ : Claims.Simulator)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (ε₀ g : ℝ) (eB : ℕ → ℝ)
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (x : Hash.Msg) (ε₀ g : ℝ) (eB : ℕ → ℝ)
     (h₀ : ZKmalAt H (kPre IV x) (preP IV b pre) (RA x) x (S₀.C x) (S₀.prog x) ε₀ 0)
-    (hS : ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+    (hS : ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
       ZKmalAt H ((nums b.st x j).rounds + 1) PS (RF (xsOf IV b x j u)) (xsOf IV b x j u) (SO x j).C
         ((SO x j).prog (xsOf IV b x j u)) (eB j) g)
-    (hW : ∀ w, RA x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Claims.Msg × Claims.Msg)),
+    (hW : ∀ w, RA x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Hash.Msg × Hash.Msg)),
       u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
         RF (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j))
     (he0 : ∀ j < nS x, 0 ≤ eB j) (hg : 0 ≤ g) :
@@ -246,16 +246,16 @@ theorem zkAt (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [Nonem
 
 /-- **The recursion's zero knowledge by sequential composition, on statement-indexed tapes**: `zkAt` at every
 statement, with `nS x` sessions on `x`'s tape (`ZKmalRx`). -/
-theorem zkmalRx (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
+theorem zkmalRx (H : Hash.Msg → Hash.Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (T₀ : SeqTape) (pre : T₀.N × T₀.Ω → b.ref.TI × (ℕ → Salt))
-    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
+    (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Hash.Msg × Hash.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (RA RF : Claims.Rel Claims.Flock.Wit) (S₀ : Claims.Simulator)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (ε₀ g : Claims.Msg → ℝ) (eB : ℕ → Claims.Msg → ℝ)
+    (SO : Hash.Msg → ℕ → Claims.Recursion.OSim) (ε₀ g : Hash.Msg → ℝ) (eB : ℕ → Hash.Msg → ℝ)
     (h₀ : ∀ x, ZKmalAt H (kPre IV x) (preP IV b pre) (RA x) x (S₀.C x) (S₀.prog x) (ε₀ x) 0)
-    (hS : ∀ x, ∀ j < nS x, ∀ u : List (Claims.Msg × Claims.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
+    (hS : ∀ x, ∀ j < nS x, ∀ u : List (Hash.Msg × Hash.Msg), u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
       ZKmalAt H ((nums b.st x j).rounds + 1) PS (RF (xsOf IV b x j u)) (xsOf IV b x j u) (SO x j).C
         ((SO x j).prog (xsOf IV b x j u)) (eB j x) (g x))
-    (hW : ∀ x w, RA x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Claims.Msg × Claims.Msg)),
+    (hW : ∀ x w, RA x w → ∀ j < nS x, ∀ (t₀ : T₀.N × T₀.Ω) (u : List (Hash.Msg × Hash.Msg)),
       u.length = (parts IV b (T₀.N × T₀.Ω)).start x j →
         RF (xsOf IV b x j u) (wit w (pre t₀) (u.take (IV.k (xIOf x))) j))
     (he0 : ∀ j x, 0 ≤ eB j x) (hg : ∀ x, 0 ≤ g x) :

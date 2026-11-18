@@ -201,7 +201,7 @@ def rel0 : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp 
   last _ := 0
 
 /-- Frames that refuse. -/
-def src0 : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+def src0 : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
     _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray) :=
   fun _ _ _ _ => .error ""
 
@@ -239,7 +239,7 @@ set_option synthInstance.maxHeartbeats 1000000
 values), the ZK server sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
 fixture's, in the claims' relation at the deployed masked parser at every context, its simulator's coins its own. -/
 theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
-    ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
+    ∃ (y : Hash.Msg) (w : Claims.Flock.Wit),
       Claims.ZKServer.Loop.finS.Tables ∧
       Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
       Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
@@ -256,7 +256,7 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
         (fun u : (Unit × Unit) × (Fin nhS → ZkView.Salt) =>
           OuterZK.wctxAt (ZkServerHonest.honestMsgs sched honD () () ()) u.1.1 u.1.2 u.2) ∧
       ∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-        (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+        (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
           _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ),
         (OuterZK.LoopSessions.atWorker 1 (fun (_ : ℕ) (_ : Unit × (Fin nhS → ByteArray)) => y)
           (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit nhS) => w)).Sized (OuterZK.loopSim L₀ src t)
@@ -271,7 +271,7 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
 real view never finishes and the simulated one always does, so an event of not finishing has probability `1` against a
 bound of `0`. -/
 theorem RecursiveZKLoop_nontrivial :
-    ∃ (cut : Unit → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool)
+    ∃ (cut : Unit → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) → Bool)
       (stop : (((Unit × Unit) × (Fin 0 → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef rel0 src0).swP Claims.ZKServer.Loop.finS.honestVals).Nonce
         ((OuterZK.loopRef rel0 src0).swP Claims.ZKServer.Loop.finS.honestVals).Rand 0) × Unit → Unit)
@@ -303,7 +303,7 @@ values); the honest worker's requests, as a worker of the adaptive zk_server, fi
 are all of them; one statement of V*, the honest fixture's, in the claims' relation at the deployed masked parser at
 every context, its simulator's coins its own; and the deployed release reading no stop. -/
 theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
-    ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
+    ∃ (y : Hash.Msg) (w : Claims.Flock.Wit),
       Claims.ZKServer.Loop.finS.Tables ∧
       Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
       Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
@@ -320,7 +320,7 @@ theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
             adaptFinished sched (wAny u.1.1 u.1.2) nA (Flock.Guarantees.saltsOf u.2) = true} =>
           Flock.Guarantees.anyCtx sched wAny nA 0 u.1.1.1 u.1.1.2 u.1.2) ∧
       (∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
-        (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+        (src : Hash.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
           _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ),
         (OuterZK.LoopSessions.atWorker 1
           (fun (_ : ℕ) (_ : Unit × (Fin (Flock.Guarantees.fwHoles sched) → ByteArray)) => y)
@@ -339,7 +339,7 @@ request, no hole and no statement of V*, the real view never finishes. Released 
 finished, it reads `(true, false)` with probability `1`; the simulated view, cut before its end, is released at the
 stop `false` unfinished, and at its end finished, so it never reads `(true, false)`, against a bound of `0`. -/
 theorem RecursiveZKLoopAnySum_nontrivial :
-    ∃ (cut : Bool → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool × Bool)
+    ∃ (cut : Bool → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Hash.Msg × Claims.Out) → Bool × Bool)
       (s₀ : Bool)
       (stop : (((Unit × Unit) × (Fin (Flock.Guarantees.fwHoles sched0 + 0) → Fin 192 → Fin 256)) ×
         Claims.Sampling.unitTape.at 0

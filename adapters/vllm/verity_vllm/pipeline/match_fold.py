@@ -41,7 +41,6 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     from verity_vllm.check.fold_compare import load_profile
     from verity_vllm.observe.events import Root, RunHeader
     from verity_vllm.observe.fold.fold import fold, summarize
-    from verity_vllm.observe.fold.patterns.pouw import with_protocols
     from verity_vllm.observe.fold.patterns.sampling import with_sampler_construction
     from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import MoEFusedExperts
     from verity_vllm.observe.log import read_log
@@ -58,7 +57,7 @@ def fold_summary_result(log_path: str | Path, profile_name: str, *, with_program
     profile = replace(with_sampler_construction(profile, sampler_construction), registered_values=registered_values)
     events = list(read_log(log_path))
     header = next((e for e in events if isinstance(e, RunHeader)), None)
-    result = fold(events, with_protocols(profile, header), strict=None, with_program=with_program)   # PoUW's calls: `patterns.pouw`
+    result = fold(events, profile, strict=None, with_program=with_program)
     summ = summarize(result)
     scope_pattern = next((type(pt).__name__ for pt in profile.patterns if isinstance(pt, MoEFusedExperts)), None)
     # roots, classified as resolve_log does (the profile's `root_class`, else `weight_field`)

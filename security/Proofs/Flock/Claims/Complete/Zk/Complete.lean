@@ -67,7 +67,7 @@ open Flock FlockDeploy
 
 /-- **Flock's masked verifier is complete** for the honest masked prover at the record's error, `δcZk H`, from named
 premises. -/
-theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_zk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (h64 : Claims.Out64 H) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hX : RsExtrasZk H rel) (hLg : LigeritoZk H rel) (hIn : Inner H rel)
     (hMR : MaskRank.MaskRankBound) :
@@ -112,7 +112,7 @@ theorem complete_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → R
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover at the record's
 error, `δcZk H`, from named premises. -/
-theorem complete_zk_relation (H : Claims.Msg → Claims.Msg) 
+theorem complete_zk_relation (H : Hash.Msg → Hash.Msg) 
     (hR : JsonRT.RepShapedZk H Readable.relation) (hPR : JsonRT.ProverRunsZk H Readable.relation)
     (hLg : LigeritoZk H Readable.relation) (hIn : Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) := fun h64 =>

@@ -38,6 +38,7 @@ Run from the tree's root: PYTHONPATH=. python3 tests/adapters/vllm/tests/remotet
 """
 import hashlib
 
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as C
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -60,7 +61,7 @@ def entry(program, value, leaves, words=1):
 h1_a, h1_ids = entry(H1, f"{PREFIX}a/{K}@0", rows), entry(H1, f"{PREFIX}ids@0", 8)
 entries = [h1_a, h1_ids]
 
-h1_commit = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "program": H1, "window": {"kind": "served", "refused": []},
+h1_commit = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": H1, "window": {"kind": "served", "refused": []},
              "registered": [{**h1_a, "value": C.commit_rows(0, K)}, {**h1_ids, "value": C.commit_ids(0)}]}
 table = "cd" * 64
 rounds = [{"request_table": table, "requests": C.requests_root(bytes.fromhex(table), bytes.fromhex(h1_ids["root"])).hex()}]

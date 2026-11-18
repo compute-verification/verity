@@ -605,11 +605,31 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : sampleCoins k
     · cases h
     · rename_i v hv
       split at h
-      · split at h
-        · rename_i hl
-          exact ⟨v.1, v.2, hv, jsonStrIs_eq hl, h⟩
-        · cases h
       · cases h
+      · split at h
+        · split at h
+          · rename_i hl
+            exact ⟨v.1, v.2, hv, jsonStrIs_eq hl, h⟩
+          · cases h
+        · cases h
+  · cases h
+
+/-- **`sampleCoins` accepts no log that commits a root**: the log `trustedChallengePhaseOf` reads holds no committed
+entry. -/
+theorem drawCoins_uncommitted {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
+    ∃ c log, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+        (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, log) ∧
+      log.any (·.kind == .committed) = false := by
+  unfold sampleCoins at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · split at h
+    · cases h
+    · rename_i v hv
+      split at h
+      · cases h
+      · rename_i hc
+        exact ⟨v.1, v.2, hv, Bool.eq_false_iff.2 hc⟩
   · cases h
 
 /-- What `coinsReason` reads when it gives no reason: the stream `sampleCoins` reads from the same evidence under `key`,

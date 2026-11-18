@@ -132,7 +132,7 @@ theorem zk_avoid (rel : Readable.Parsed → Readable.Relation) (W : ℕ → List
   Gen.zk_avoid (S := S₀) (rel := rel) (W := W) (p := p)
 
 /-- **Table `j`'s witness lanes are a width**, at every nonempty word of the statement. -/
-theorem zk_width (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
+theorem zk_width (x : Hash.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
     ∃ w, 0 < w ∧ ∀ u : List 𝔽, u.length = w → wideJ true x j u := by
   cases hh : (tables true x)[j]? with
   | none => simp [wordLenJ, hh] at h
@@ -151,7 +151,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **Table `j`'s witness lanes are a width**, at every nonempty word of the statement. -/
-theorem zk_width (x : Claims.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
+theorem zk_width (x : Hash.Msg) (j : ℕ) (h : 0 < wordLenJ true x j) :
     ∃ w, 0 < w ∧ ∀ u : List 𝔽, u.length = w → wideJ true x j u := by
   cases hh : (tables true x)[j]? with
   | none => simp [wordLenJ, hh] at h

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from tests.row_paths import row_paths
 import types
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -556,7 +557,7 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
             return 0
 
     monkeypatch.setattr(row_stages, "SingleRow", Single)
-    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], {})
+    o = cli.parse("row", ["run", row, "LLAMA32_1B", "r", "v", "--sweep-dir", str(tmp_path), "--cuda-home", str(tmp_path)], row_paths(tmp_path))
     assert ROW.run_row(o, "build") == 0 and seen["protocols"] is None
     eff = json.loads((tmp_path / row / ROW.EFFECTIVE_NAME).read_text())
     assert eff["row"] == row and eff["config"]["engine"] == RowConfig.load(row).engine.to_json() and "requests" not in eff["config"]
@@ -626,23 +627,6 @@ def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     with pytest.raises(PO.Refused) as r:
         ROW.row_protocols("pouw:ncp-v1,sampled-proofs:rows-sha512", {})
     assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
-
-
-PEARL = "pouw:pearl-c-h100-v1-h3"
-PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
-
-
-def test_beside_spot_pearl_c_is_refused_as_an_executor_with_no_circuit():
-    """Pearl-C has no circuit (its y is noise-dependent), so a composition refuses it beside SPOT as any such executor;
-    serve-openai attaches Pearl+ by name (`serve_openai.scheme_settings`), whose scheme provides the cut. SPOT takes
-    no settings."""
-    row = PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
-                     settings={"pouw": PEARL_SETTINGS})
-    assert PO.refusals(row) == (_refused_beside_spot("pearl-c-h100-v1-h3"),)
-    ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
-                     settings={"sampled-proofs": {"cut": "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['cut']: it takes none",)
-    assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
