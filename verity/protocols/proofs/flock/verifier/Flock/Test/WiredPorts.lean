@@ -42,7 +42,9 @@ def refused (j : Json) : Bool := (ofJson j).toOption.isNone
   x8.readAt u == if u < 8 then some none else if u < 16 then some (some (15 - u)) else none
 #guard (List.range 20).all fun u => x8.readAt u == x8.reads[u]?
 -- from a later population unit: `readsFrom` shifts the reader's units
-#guard ({ x8 with readsFrom := 3 }).readAt 11 == some none && ({ x8 with readsFrom := 3 }).readAt 19 == some (some 4)
+def x8at3 : Registered.Port := { x8 with readsFrom := 3 }
+#guard x8at3.readAt 10 == some none && x8at3.readAt 11 == some (some 7) && x8at3.readAt 18 == some (some 0) &&
+  x8at3.readAt 19 == none
 
 -- a wired port's reads are its wire's: its own reads, a cut row, or a malformed wire are refused
 #guard refused (fileJ [("x", portJ [some 0] (some (wireJ 8)))])
@@ -60,7 +62,9 @@ def units : Array Nat := (Array.range 8).map (· + 8)
 def inP : Flock.Port := { name := "x", words := 4, chunks := 1, nb := 0 }
 def outP : Flock.Port := { name := "out", words := 4, chunks := 1, nb := 0 }
 def linked : Circuit :=
-  { (default : Circuit) with ports := #[inP, outP], outRowPorts := #[1],
+  { (default : Circuit) with
+    ports := #[inP, outP]
+    outRowPorts := #[1]
     metaJ := Json.mkObj [("links", Json.arr #[Json.mkObj [("port", Json.str "x"), ("leaves", toJson [0, 4])]])] }
 def ok? (r : V Unit) : Bool := r.toOption.isSome
 #guard ok? (HmLinks.parse linked >>= fun _ => pure ())
