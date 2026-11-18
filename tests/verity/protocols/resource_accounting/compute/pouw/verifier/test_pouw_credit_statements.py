@@ -13,7 +13,7 @@ verifier the files the prover proved against. `spot/tests/test_proofs.py` holds 
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
 to `h1window.table_reads_file` byte for byte.
 
-The verdict acted on is the Lean's (`verifier.of_record`): `Credit.window`'s and `Credit.periodCredit`'s on the outcomes
+The verdict acted on is the Lean's (`verifier.of_record`): `Credit.executionPhase`'s and `Credit.periodCredit`'s on the outcomes
 the statement runs gave, and the challenger's salt check's (`core_check.salt_of_record`, on the salt difftest's cases),
 each equal to its Python twin's on honest and refused evidence, and a refusal wherever the two differ or the Lean gives
 no answer."""
@@ -650,7 +650,7 @@ def _disagree(refused, fn: str) -> bool:
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_honest_windows_credit_is_the_leans_on_its_outcomes(seed, tmp_path, verifier, asked):
-    """The window's verdict is the Lean `Credit.window`'s on the outcomes the statement runs gave, its Python twin's the
+    """The window's verdict is the Lean `Credit.executionPhase`'s on the outcomes the statement runs gave, its Python twin's the
     same."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements) == (_credited(d), None)

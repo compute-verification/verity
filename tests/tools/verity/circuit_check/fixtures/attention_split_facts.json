@@ -650,7 +650,7 @@
   },
   "DsaIndexerKRow_v2{D=32,ROPE=16,EPS=1e-06}": {
    "descriptor_id": "DsaIndexerKRow_v2{D=32,ROPE=16,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
-   "digest": "59fb4823dd21abd6eff9258c2ff6f96e8bf78df80c65e9b4079ea82ff958841521c007f8fd8f24997c2af51854a090791ec2381c2284f1bcf6eaadf71e80bb1a"
+   "digest": "080b76c93d28bc131de616eb124739d883b664c6772154236c04f276e33cf484f4d7035c482c1a0cbf6cbef0e3d4db6f83171efed868164e5a91f4b90fd431e5"
   },
   "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}": {
    "descriptor_id": "DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}",
@@ -658,7 +658,7 @@
   },
   "DsaIndexerQHead_v2{D=32,ROPE=16,NH=32}": {
    "descriptor_id": "DsaIndexerQHead_v2{D=32,ROPE=16,NH=32}",
-   "digest": "0c87dda12ad8181a5ce08310850654e44a4d2b265b983a6b4d6b61eb6e64967fb19a12cbda4bd8c8e0f8a4a86e99d2889deec6a2dfb687dae9a519e2b9aab083"
+   "digest": "6c09b8c8f0443bb45f715251a236bb2f3bd5c8ed3c0b344f7265364ed0f9d14af9e356723b123e9bc2d569bb392ad4570b6c3bd3534409b29ddc57acf77ae972"
   },
   "DsaIndexerQ_v1{H=32,D=128,ROPE=64}": {
    "descriptor_id": "DsaIndexerQ_v1{H=32,D=128,ROPE=64}",
@@ -666,7 +666,7 @@
   },
   "DsaIndexerQ_v2{H=2,D=32,ROPE=16}": {
    "descriptor_id": "DsaIndexerQ_v2{H=2,D=32,ROPE=16}",
-   "digest": "c5813ee9353d952fa2aec6c7fe88d6142f0099b84da07da0541868823cb9d0ed5ba59018b10c6daa1c010e1f22366350f7f71dfd72f902d7e917656dfaff6b3f"
+   "digest": "5017b85d7277e43bb7a0993ba1b99115301bc38b8f4df0ab5ff3a0b9aefb36fc4bfbd81e2a590d0febe35df2dc0d9a2ed4007506ff81258e47d0a929e490081c"
   },
   "DsaMqaLogit_v1{H=32,D=128}": {
    "descriptor_id": "DsaMqaLogit_v1{H=32,D=128}",
@@ -674,7 +674,7 @@
   },
   "DsaMqaLogit_v2{H=8,D=32}": {
    "descriptor_id": "DsaMqaLogit_v2{H=8,D=32}",
-   "digest": "119f1ed2d02d0ff5bb42e22f8c25bc55f7215aa0b5b356346e6b48e25b9e382e7b73d51a5396f93286ae676484e9c2aa240599e7de22351f66e6e79ca1ab33ca"
+   "digest": "b0eb8e48a79603f47fa0d38ef0befe46d6e414a06a9d78edac781ac63b550ca6da813a9081f70bc7ce5049973e243d05df871a61231c714c70eaf8f2c5923f1f"
   },
   "DsaTopKShortRow_v1{TOPK=2048}": {
    "descriptor_id": "DsaTopKShortRow_v1{TOPK=2048}",
@@ -682,7 +682,7 @@
   },
   "DsaTopKShortRow_v2{TOPK=16}": {
    "descriptor_id": "DsaTopKShortRow_v2{TOPK=16}",
-   "digest": "550fc83dbed47af79beb32ba6f2b6a5f047d3573b8ec98c7ae86460025024fdaa266727775b1235d8c306242c8c80d69e080b124c64da280f9e7436bb0d0d9bf"
+   "digest": "c025f6eced8861256d851f24e74d84ab546a9cd6ee315245045a656f1da6412f1a3a97d885f6e02a2b7757dac84d2f624d5867f1c90e3ba174c46fcc14ef6651"
   },
   "DsaUe8m0Quant_v1{N=128}": {
    "descriptor_id": "DsaUe8m0Quant_v1{N=128}",
@@ -690,7 +690,7 @@
   },
   "DsaUe8m0Quant_v2{N=4}": {
    "descriptor_id": "DsaUe8m0Quant_v2{N=4}",
-   "digest": "7898208853f523c4b2a2ac9c2348c9e71f2f93bf8e8822973ed7557dfcba84c87be75c2c2f23404e70c658d5f4b4d9831ec16d3be6742471bd41897c62fa2fae"
+   "digest": "fa5b960cc69edf0fa612537f11d190959ce9f72a1fa0a99c02a6a13d51fbf8562e8ba8cdf9aad0616f9c1f6d33379757add30e5ce2ea0d3cb4be13657bb22309"
   },
   "DsaUe8m0Scale_v1": {
    "descriptor_id": "DsaUe8m0Scale_v1",
@@ -698,7 +698,7 @@
   },
   "DsaUe8m0Scale_v2": {
    "descriptor_id": "DsaUe8m0Scale_v2",
-   "digest": "47cf93f893366636ab330707ada25f95a30e0776b92749761601339b663fd91417207ab6d053a214fb948b610e5db88f5cf3d2b5401dde266c6a7105d063d025"
+   "digest": "a5b1d9ba80e0da3472a083996e2a6bcc989382bac682e1effb5f26b1a502ac2d701fc570d54b00322945909d8fc2a739fff4dbeb268f2198c4a0877488a11137"
   },
   "F32CeilFtz_v1": {
    "descriptor_id": "F32CeilFtz_v1",
@@ -706,11 +706,11 @@
   },
   "F32CeilFtz_v2": {
    "descriptor_id": "F32CeilFtz_v2",
-   "digest": "dfcdf4e6309f5c04dcb9024dc2811a1d28fa2af17c1bfcdc628184966a183a65f617705facaee0ab4a52a13cf7c0fe30de698bc2aa4c913481b653813dc81a3e"
+   "digest": "5c5ce440244f605db1b6f50279bb24c9669a183d662cd36f98056eac3d4d56fff796504ba18b687458f9d8971c59a0e01e1e9bebb47cdee6828cee78f8f55bec"
   },
   "F32MulConst_v1{K=1031798784}": {
    "descriptor_id": "F32MulConst_v1{K=1031798784}",
-   "digest": "98d2b8fd84ac642566f2889109fc06b830b069db07b872ba3da64ed8aeaefb6161a0aa99fdf4b015f7f99c6bc419468ad9312ed906d158b765d5c284fabfb55d"
+   "digest": "4466f5e8eff0602e73c2dc16d6f2d0593391bff38e474348427fe581b9951c26a7318c2ed8dd71c66fd980ee2d1e2fade7df338b75d22db373e8f4a821895298"
   },
   "Fa3InvSum_v1": {
    "descriptor_id": "Fa3InvSum_v1",
@@ -718,7 +718,7 @@
   },
   "Fa3InvSum_v2": {
    "descriptor_id": "Fa3InvSum_v2",
-   "digest": "632b8218f5f11abb1ea7f75f91fe29faed3ad84d6ce175c247f828fd24d9a248fb8783a942e446ca552cea74603b5a4bb6bd483f3808644b8df361582243b4e6"
+   "digest": "3ff0fb03e9b37549165470d640dca23dc459d3f46eb1e3e5ffa0d451f76c79b4ca73b32509abc615a0877438a260fb1bdbd82f4daad53cf0ccf83120363a337a"
   },
   "FinalHopper_v1{C={e2f2f43eb046}}": {
    "descriptor_id": "FinalHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":16,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":64,\"H\":32,\"I\":32,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":2,\"QKV\":64,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":64,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}}}",
@@ -754,11 +754,11 @@
   },
   "I32Sub_v2": {
    "descriptor_id": "I32Sub_v2",
-   "digest": "583b2a9dece9414519343bf4504611a9668eedb40abc1bb3aa24249ca24b10293cd3551309b617d5859e9fab652044992b76e8d624430d2288bf3a3f4eb708c0"
+   "digest": "f0d93718cf304167ed21d661b1adec6a259c4237db03afe8d4785df36ac9a2b44e895edb125242775ece837c0d538dd06bfb3460fc16e7b69600acbc28a6245c"
   },
   "I32ToF32_v2": {
    "descriptor_id": "I32ToF32_v2",
-   "digest": "800b84e77d5b303e1b048b873aa1e1167c3c7b8261da1b9fe47ed6a65dcd3433b104b51f510340e1ca544e5fbba0a7476c3e0193ef5f82f0a8b69b8d7fcde344"
+   "digest": "d7da3c568a62516602fb345973dd113555f29964b1b7365de8e5f6814aaee9ed103ebf2bc5b6e3db70334b3ba8f5721bc128482d3ac5ff8734ac044536aaf976"
   },
   "LayerPostHopper_v1{C={e2f2f43eb046}}": {
    "descriptor_id": "LayerPostHopper_v1{C={\"dict\":{\"BIAS\":true,\"D\":16,\"EPS\":{\"f64\":\"0x1.4f8b588e368f1p-17\"},\"GU\":64,\"H\":32,\"I\":32,\"KVH\":1,\"MAX_POS\":8,\"NH\":2,\"NL\":2,\"QKV\":64,\"ROPE_THETA\":{\"f64\":\"0x1.3880000000000p+13\"},\"V\":64,\"model\":\"tiny\",\"profile\":{\"dict\":{}},\"revision\":null,\"tie_word_embeddings\":true}}}",
@@ -778,7 +778,7 @@
   },
   "MoeSharedCombineElement_v1{RSF=1072064102}": {
    "descriptor_id": "MoeSharedCombineElement_v1{RSF=1072064102}",
-   "digest": "228c4e1f438aa58bab32cb7fdbd50bd10acea5dfd7e115ab2a24e09e89b6ce555d3523a1308ba0dcc5076079e4a33e3a1770b76c4ea8838aed6116408e652403"
+   "digest": "ff066da9b58ea28c03a1be9324776daaee65dba3967dab9b9fd62efd272591d22f7741be25810b050a54353d8be16dfe1fa4266ec57d1670dae7a1fd94813de8"
   },
   "MoeSharedCombine_v1{H=8,RSF=1072064102}": {
    "descriptor_id": "MoeSharedCombine_v1{H=8,RSF=1072064102}",
@@ -798,7 +798,7 @@
   },
   "SparseMlaBlock_v2{DR=16,DV=16,NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "descriptor_id": "SparseMlaBlock_v2{DR=16,DV=16,NVIS=5,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-   "digest": "d96d0ad4e953206f996b788eab3d81b2610857e9171a51c330c375671b454052d782e5c35c01ed6d65d476e8e27892d48810e1666517a73dccbaf8cafd97cf6e"
+   "digest": "f93753d9c549abea945fc0006dd353b7c747430435010109194109a6c07d3bda8f72746511dac52be36955f5a95663621cb3d930cac23a8f9fd8aa38751c6f15"
   },
   "SparseMlaHead_v1{T=65,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}": {
    "descriptor_id": "SparseMlaHead_v1{T=65,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -806,7 +806,7 @@
   },
   "SparseMlaHead_v2{T=5,DR=16,DV=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,SCALE=0.0625}": {
    "descriptor_id": "SparseMlaHead_v2{T=5,DR=16,DV=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-   "digest": "7f24110bfb5ab0ea48e6d0d301fbaef4fb85f0e12a49f5be6b8719c8d3f2e23c27666d80820ebd1737bb5ccfab1be1555779a1290acb5d6eed6135a4c719d042"
+   "digest": "be057a022b5cb98b0e3c3b96422d2e348f79698cc5f900b1006a8bdaeb72ee057644728240254f609f9441f9e1b1fad8fd65aff500848c02211b0d21d4bf3bec"
   },
   "SparseMla_v1{T=65,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}": {
    "descriptor_id": "SparseMla_v1{T=65,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -814,11 +814,11 @@
   },
   "SparseMla_v2{T=5,NH=2,DR=16,DV=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,SCALE=0.0625}": {
    "descriptor_id": "SparseMla_v2{T=5,NH=2,DR=16,DV=16,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},INV={\"fn\":\"Fa3InvSum_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-   "digest": "c387c4c420816dd41827c117120b6ca21af5a2145fd978dd034fcaf85fd05375b78c6ef1650ad7bb76c522696a9227b87371ae2a70c40a7e658d14900fa9e937"
+   "digest": "2efbe2b5576b00d9d46efc6aba29e18d1c9f5f75f29a7964b575cd3e045b0ed97b5885f48b73e212bb40693aa2776aeb6f85f1aacb90095fd3fd29aefdf45f4c"
   },
   "TritonExpSub_v1": {
    "descriptor_id": "TritonExpSub_v1",
-   "digest": "421f95f795ee8a1cb3fc76adff69810b7e37bfdc822312e8f10dbdacdc6bfdd8765d7a92dac150be1316582d07338ede081f3d92639dc76649d5b941bb4229bb"
+   "digest": "3f13c70f8a335035cd35c9e49531963dd09c9d147b01a5c818e8dc3522237418ebae94cde5579d4f970db0fca731de586625c9925d4abb970bebff3e7f15d775"
   },
   "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "TritonMlaBlock_v1{DL=16,DR=16,NVIS=2,BN=32,SCALE=1031798784,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
@@ -834,11 +834,11 @@
   },
   "TritonMlaGate_v1": {
    "descriptor_id": "TritonMlaGate_v1",
-   "digest": "c09e229ca78bfc4e106b42fe89911ccbb81db1981c4bf0f074e29a37d9e5a804ef6ad8f00895a0602332bdba281589c9079653e1df0db1e1e2e82841a9535d80"
+   "digest": "5367a5d8e00364cdbfc5637fdeb8127054a28bdd1401f39489c84f54d10a28bbf68c2063d95972ee4d2eb49c5d7367d0ac1c2bcd08b1aa5dc920d19a3dfc40b5"
   },
   "TritonMlaOut_v1": {
    "descriptor_id": "TritonMlaOut_v1",
-   "digest": "a3eae81f7ac078f029fc8483d45e6a08959c2a9e2a4f77bfcf7c060d2df9bdaab51aea4833353b2f5ac7e7de402869a4ca11b268ba702d33d74df4b7ee47f4ab"
+   "digest": "c37f00589e701c796f68bfe19834979871ca1ba02d1dd28e93aa125e15264c125e9718565d00ed07dab1e0acd58f30dfc1758f6584b47044b89e11cc5e600bb2"
   },
   "TritonMlaScore_v1{K=32,SCALE=1031798784,DOT=HopperBF16WgmmaDot16_v2}": {
    "descriptor_id": "TritonMlaScore_v1{K=32,SCALE=1031798784,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
@@ -850,7 +850,7 @@
   },
   "U32And_v2": {
    "descriptor_id": "U32And_v2",
-   "digest": "fe9970483f663de6d24dfdd46e99ed43fded944ee6e6a110a7f717167e47b00f05e074ec4776423635e8de2223a0b51197eb594d336ef61ecc5579472bf62392"
+   "digest": "35feaac92788c16846c6a320e93baf0de8194110f1371e58f7a3da97419f0b2b09bcd11f73584088c113bf4231dacb914b6cf9eaf96ff426f3ade1fa04f1045b"
   }
  },
  "family": {
