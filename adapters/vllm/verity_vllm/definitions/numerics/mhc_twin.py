@@ -422,17 +422,17 @@ def hc_head(residual, fn, scale, base, TH: int, EPS: float, HC_EPS: float) -> np
 
 # --- the served split counts --------------------------------------------------------------------------------------------------
 
-def compute_num_split(block_k: int, k: int, grid: int, sms: int = 132) -> int:
-    """vLLM's `compute_num_split` (mhc/tilelang_kernels.py:19) on a device of ``sms`` SMs (the H200's 132)."""
+def compute_num_split(block_k: int, k: int, grid: int, sms: int) -> int:
+    """vLLM's `compute_num_split` (mhc/tilelang_kernels.py:19) on a device of ``sms`` SMs (its card's `sm.count`)."""
     return max(min(sms // grid, -(-k // block_k) // 4), 1)
 
 
-def tf32_num_split(T: int, K: int, sms: int = 132) -> int:
+def tf32_num_split(T: int, K: int, sms: int) -> int:
     """The split count `tf32_hc_prenorm_gemm` runs at T tokens over K (block 64 x 64): `compute_num_split(64, K, cdiv(T, 64))`."""
     return compute_num_split(64, K, -(-T // 64), sms)
 
 
-def tf32_split_schedule(K: int, sms: int = 132, envelope: int = 1024) -> list[tuple[int, int]]:
+def tf32_split_schedule(K: int, sms: int, envelope: int = 1024) -> list[tuple[int, int]]:
     """`tf32_hc_prenorm_gemm`'s split-count regimes up to ``envelope`` tokens: each (first token count, NS) where NS changes.
 
     `tf32_num_split` reads T only through the 64-row M grid, so NS moves only at a grid edge and every regime starts at

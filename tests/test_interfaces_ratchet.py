@@ -4,7 +4,7 @@ Each ratchet computes its offenders from the tracked tree and fails on one its l
 of offending lines grew; an entry that is no longer an offender fails nothing, so a cleanup lands without touching the
 list. The lists are written only by this file: ``--prune`` drops stale entries and lowers counts, adding nothing (the
 integrator runs it at each merge sweep), ``--init`` rewrites them from the tree (top's alone), ``--report`` prints each
-ratchet's count. Tests (``tests/``, any ``/tests/``), ``archive/`` and ``fixtures/`` are never offenders.
+ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``, any ``/tests/``), ``archive/`` and ``fixtures/`` are never offenders.
 
 - ``scheme_name_tables``: a Python or shell file outside `verity/protocols/compose/schemes.py` and every ``scheme.py``
   that compares against a scheme's name (``DECLARATIONS``' keys and the old ``pouw``, ``certifier``,
@@ -56,6 +56,13 @@ SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
 NOT_SCHEMES = {"benchmarks/ppl/steps.py": {"dither"}, "calibration/pouw/theory/checked_strip.py": {"dither"},
                "benchmarks/hash/dither/dbw.py": {"dither"}, "verity/device.py": {"bandwidth"},
                "calibration/pouw/dc/pipe.py": {"bandwidth"}}
+#: {ratchet: {file: why it stays}}: a second path kept by a ruling. It is still held from growing, and ``--report`` counts
+#: it apart, so nobody finds it again as a table to remove.
+KEPT = {"scheme_name_tables": {
+    "verity/protocols/proofs/spot/verifier/parties.py":
+        "the sampled proofs' verifier files each case under its protocol id itself (`SUBPROTOCOLS`, `ids_of`): which "
+        "id the composite check is told is decided on the verifier's side, never handed in by a caller, and the "
+        "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"}}
 CUDA = "/usr/local/cuda"
 #: the machine record's reader and the toolkit fetcher it points at: where a toolkit's directory is written down
 KIT = ("benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py",
@@ -477,6 +484,14 @@ def test_a_list_only_shrinks() -> None:
     assert dump(out).endswith("}\n") and dump(out) == dump(json.loads(dump(out)))
 
 
+def test_a_kept_second_path_is_a_listed_file_with_its_reason() -> None:
+    held = listed()
+    for ratchet, files in KEPT.items():
+        for path, why in files.items():
+            assert path in held.get(ratchet, {}) and why, (f"{path} is kept in {ratchet} by a ruling and is no longer "
+                                                           "on its list: drop it from KEPT")
+
+
 def main(argv: list[str]) -> int:
     if argv not in (["--init"], ["--prune"], ["--report"]):
         print(f"usage: {ME} --init|--prune|--report", file=sys.stderr)
@@ -484,7 +499,9 @@ def main(argv: list[str]) -> int:
     now = tree().counts()
     if argv == ["--report"]:
         for r in RATCHETS:
-            print(r, ", ".join(f"{k} {n}" for k, n in sorted(now[r].items())) if r == "lean_old_names" else len(now[r]))
+            kept = sorted(set(KEPT.get(r, {})) & set(now[r]))
+            print(r, ", ".join(f"{k} {n}" for k, n in sorted(now[r].items())) if r == "lean_old_names" else len(now[r]),
+                  f"(kept by ruling: {', '.join(kept)})" if kept else "")
         return 0
     if argv == ["--init"]:
         LIST.write_text(dump(now))
