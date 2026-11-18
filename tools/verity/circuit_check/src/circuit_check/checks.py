@@ -432,17 +432,19 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     return rec, None, ref
 
 
-def _lowered(t: Any, opts: Options, lower_whole: bool) -> bool:
+def _lowered(t: Any, opts: Options, lower_whole: bool, pins: dict | None = None) -> bool:
     """Whether a lowering takes ``t``'s correspondence vectors, so `floored` adds random ones to them: the Flock lowering of it
-    whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean) or its structural lowering.  A lowering
-    takes every input; a kernel declines what is outside its domain, so it takes its floor from its own sampler (`_sampled`)."""
+    whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean) or its structural lowering (under
+    `struct_budget`, its family's from ``pins`` where given).  A lowering takes every input; a kernel declines what is outside
+    its domain, so it takes its floor from its own sampler (`_sampled`)."""
     if isinstance(t, ScalarReference):
         return False
     if isinstance(t, PrimitiveDefinition):
         from verity_flock import ir_lower as IL
 
         return bool(t.params) and (t.id in IL.PIECES or t.id.startswith("TopPMaskWordx"))
-    return (lower_whole and (t.gates <= opts.lower_max_gates or is_boolean(t))) or t.gates <= opts.struct_max_gates
+    struct = opts.struct_max_gates if pins is None else struct_budget(t, opts, pins)[0]
+    return (lower_whole and (t.gates <= opts.lower_max_gates or is_boolean(t))) or t.gates <= struct
 
 
 def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
@@ -470,7 +472,8 @@ def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
                f"vectors, {sc.outside} outside the reference's domain", via=f"kernel:{name}")
 
 
-def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = True) -> tuple[dict, list[np.ndarray] | None, list]:
+def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = True,
+                   pins: dict | None = None) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
     Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
     `_wide_correspondence`), or has a parameter over the input budget that is neither: a failure, but for a Boolean composite
@@ -501,7 +504,7 @@ def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = Tr
         F.warn("correspondence", "unchecked", t.id, 1, why, operands=over)
         return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": [], "unchecked": why}, None, []
     n, edge = _n_vectors(t, opts), edge_count(params)
-    n, edge = floored(t, n, edge, opts) if _lowered(t, opts, lower_whole) else (n, min(n, edge))
+    n, edge = floored(t, n, edge, opts) if _lowered(t, opts, lower_whole, pins) else (n, min(n, edge))
     arrays = vectors(params, n, opts.seed, edge)
     ref, raised = reference_outputs(t, params, arrays)
     rec: dict[str, Any] = {"vectors": n, "edge_vectors": edge, "reference_raised": len(raised), "realizations": []}
@@ -1360,7 +1363,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     entry: dict[str, Any] = {"definition": t.id, "form": kind, "conformance": conformance_of(t),
                              "gates": None if kind == "reference" else _gates(t)}
     with spent("correspondence"):
-        corr, arrays, ref = correspondence(t, opts, F, lower_whole=lower_whole)
+        corr, arrays, ref = correspondence(t, opts, F, lower_whole=lower_whole, pins=pins)
     params, _ = signature_of(t)
     with spent("lowering"):
         if arrays is None:

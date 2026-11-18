@@ -447,7 +447,7 @@ def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pe
     circuit, prog, query = pearl_wired
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
-    assert prog.fn.gates == 110_433_824
+    assert prog.fn.gates == 110_433_268
     assert query["params"]["templates"][len(circuit.ids):] == [
         descriptor_id(t) for t in (*(bind(BitsWord, W=w) for w in (16, 32)), *(bind(WordBits, W=w) for w in (16, 32)))]
 

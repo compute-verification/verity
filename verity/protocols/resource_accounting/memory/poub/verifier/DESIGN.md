@@ -153,7 +153,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   (`audit.AuditRun.scheduled`, `audit.GammaTerms.steering`). Of record in `lean/Poub/Schedule.lean`.
 - `store.py`: the store a pinned BF16 checkpoint lays out, which the prover registers. It reads and checks the pin
   (`read_pin`, `pin_of`, `check`), lays out the arena of a checkpoint's weights in vLLM's module order and the store
-  of arenas and host filler (`arena`, `Store`), and salts the payload leaves under the verifier's key (`store_salt`).
+  of arenas and host filler (`arena`, `Store`), and salts the payload leaves under the prover's own key from the operating system (`store_salt`, on a card) or fresh bytes a block.
   `benchmarks/poub_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` over a week, a month and a year of a deployment's sessions, at
