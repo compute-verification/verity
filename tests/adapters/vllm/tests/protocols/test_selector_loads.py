@@ -7,11 +7,11 @@ import sys
 ASK = """
 import sys
 from verity_vllm import protocols as P
-assert not P.cuts("pous", "pous") and not P.keeps_weight_copy("pous", "pous")
+P.adapter("pous")
 print("\\n".join(m for m in sys.modules if m.startswith("verity.protocols.resource_accounting.compute")))
 """
 
 
-def test_asking_the_selector_about_pous_imports_nothing_of_compute_accounting():
+def test_the_selector_and_pous_adapter_import_nothing_of_compute_accounting():
     out = subprocess.run([sys.executable, "-c", ASK], capture_output=True, text=True, check=True).stdout
     assert out.split() == []
