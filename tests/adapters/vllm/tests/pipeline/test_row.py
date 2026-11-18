@@ -97,12 +97,9 @@ def test_a_row_without_a_cuda_toolkit_is_refused_by_name(tmp_path, capsys):
     assert "--cuda-home" in capsys.readouterr().err
 
 
-def test_machine_paths_come_from_the_environment_and_flags_and_are_refused_by_name_without(tmp_path, capsys):
-    o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf", "NORM_TAP_SO": "/n.so"})
-    assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == "/n.so" and o.env.sweep_dir == str(tmp_path)
-    with pytest.raises(SystemExit):
-        _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf", "NORM_TAP_SO": ""})
-    assert "--norm-tap-so" in capsys.readouterr().err
+def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
+    o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf"})
+    assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == cli.MACHINE["RunEnv.norm_tap_so"] and o.env.sweep_dir == str(tmp_path)
     assert _opts(tmp_path, "--hf-home", "/flag/hf", environ={"HF_HOME": "/elsewhere/hf"}).env.hf_home == "/flag/hf"
     assert o.env.environ["HF_HOME"] == "/elsewhere/hf"
 
