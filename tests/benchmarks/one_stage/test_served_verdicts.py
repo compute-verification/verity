@@ -7009,14 +7009,14 @@ def _script(path: Path, body: str) -> None:
     path.chmod(0o755)
 
 
-FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+FRONT = '"$PY" benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
 
 
 IDS = "--protocol ids --id-payload 503"
 #: the runner's refusal of a front in front of an endpoint that is off the id form
 OFF_IDS = ("PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under "
            f"SERVE_ARGS='{IDS}'")
-SESSION_CLOSE = '"$PY" benchmarks/network_traces/attester_piece.py close "$1" "$2"'
+SESSION_CLOSE = '"$PY" benchmarks/network_traces/attester_front.py close "$1" "$2"'
 
 
 @pytest.mark.parametrize("load, front, takes, serve_args, line", [
@@ -7032,8 +7032,8 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
         tmp_path, load, front, takes, serve_args, line):
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
-    (tree / "benchmarks" / "network_traces" / "attester_piece.py").write_text(
-        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_piece.py front PORT [{takes}]')\n")
+    (tree / "benchmarks" / "network_traces" / "attester_front.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_front.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
@@ -7047,8 +7047,8 @@ SESSION = {"LOAD": "session", "CERTIFIER_FRONT": FRONT + " --session --client-po
            "LOAD_CMD": "the-callers-load", "CERTIFIER_CLOSE": SESSION_CLOSE, "SERVE_ARGS": IDS}
 SESSION_TAKES = "--gate --warmup --bucket-ms --session --client-port --windows"
 NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens "
-              "(attester_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
-              "(attester_piece.py close), and {} is unset")
+              "(attester_front.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes "
+              "(attester_front.py close), and {} is unset")
 
 
 @pytest.mark.parametrize("env, takes, line", [
@@ -7077,8 +7077,8 @@ def test_the_preflight_takes_a_session_only_whole_and_none_of_it_under_another_l
     passes ``--session`` are each refused, so no run of another load starts a relay session."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
-    (tree / "benchmarks" / "network_traces" / "attester_piece.py").write_text(
-        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_piece.py front PORT [{takes}]')\n")
+    (tree / "benchmarks" / "network_traces" / "attester_front.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: attester_front.py front PORT [{takes}]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     rc = subprocess.run(["bash", str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.sh"), "front-flags"], cwd=tree, check=False,
                         env={"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent),
@@ -8118,10 +8118,10 @@ def _serve_calls(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str], l
               f"    : > {tmp_path}/up; echo > {tmp_path}/ready; read _ < {tmp_path}/hold ;;\n"
               "  *serve_load.py*) echo '4/4 ok'; exit 0 ;;\n"
               "  *weights-registration*) exit 1 ;;\n"
-              "  *'attester_piece.py front '*' --session '*)\n"
+              "  *'attester_front.py front '*' --session '*)\n"
               "    [ -z \"$FRONT_REFUSES\" ] || exit 2\n"
               f"    mkdir -p {session} && echo '{{}}' > {session}/relay.json ;;\n"
-              f"  *'attester_piece.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
+              f"  *'attester_front.py close '*) [ -f {session}/relay.json ] || exit 2; : > {session}/fetch.tar.gz ;;\n"
               "  *) exit 0 ;;\n"
               "esac")
     for path, body in ((venv / "python", python), (bin_ / "sleep", f"[ -e {tmp_path}/up ] || read _ < {tmp_path}/ready")):
@@ -8166,8 +8166,8 @@ SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 1819
               f"--prompt-range 16:24 --release {RELEASE_RUN} --seed 1 --out TMP/serve/load.jsonl")
 VARIED_LOAD = SERVE_LOAD.format(load="--varied 4 --rate 1000 --max-tokens 4")
 FIXED_LOAD = SERVE_LOAD.format(load="--fixed 4 --window-steps 256")
-REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" --gate local'
-FRONT_CALL = "benchmarks/network_traces/attester_piece.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
+REHEARSAL_FRONT = '"$PY" benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" --gate local'
+FRONT_CALL = "benchmarks/network_traces/attester_front.py front 18190 TMP/serve TMP/serve/private/certifier-front --gate local"
 FRONT_LINE = "TMP/tree/benchmarks/one_stage/served_verdicts.py front-line TMP/serve/private/certifier-front/session.json"
 SAID_UP = ["SERVE SERVE-OPENAI listening",
            "NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free "
@@ -8217,13 +8217,13 @@ def test_under_every_other_load_the_serve_step_starts_nothing_of_a_session(tmp_p
                                                "CERTIFIER_CLOSE": _notes(tmp_path, "a session's close")})
     assert rc == 0 and calls == [SERVE_OPENAI, WEIGHTS_REGISTRATION, *issued], (rc, calls)
     assert lines == SAID_UP + said + SAID_STOPPED
-    assert not [c for c in calls if "--session" in c or "attester_piece.py close" in c or "a session's" in c]
-    assert sum("attester_piece.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
+    assert not [c for c in calls if "--session" in c or "attester_front.py close" in c or "a session's" in c]
+    assert sum("attester_front.py" in c for c in calls) == ("CERTIFIER_FRONT" in env)
 
 
 SESSION_FRONT = REHEARSAL_FRONT + " --session --client-port 18191 --windows 8"
 SESSION_FRONT_CALL = FRONT_CALL + " --session --client-port 18191 --windows 8"
-CLOSE_CALL = "benchmarks/network_traces/attester_piece.py close TMP/serve TMP/serve/private/certifier-front"
+CLOSE_CALL = "benchmarks/network_traces/attester_front.py close TMP/serve TMP/serve/private/certifier-front"
 CALLERS_LOAD = "the caller's load: TMP/serve/private/certifier/run-1/relay.json TMP/serve"
 SAID_SENT = ("REQUESTS (exit {rc}): the caller's load, sent through the network certifier's relay session (the serve "
              "dir's load.log, on the node)")

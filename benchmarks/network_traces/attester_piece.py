@@ -7,8 +7,6 @@ run the front (`attester_front.py`, its ``CERTIFIER_FRONT``) kept under the serv
         [--chain-cmd CMD] [CR_K=V ...]
     python attester_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE] [--rows EXE]
 
-``front``, ``relay``, ``close`` and ``unit`` are `attester_front.py`'s, which `main` hands them to.
-
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when ``network-rows check`` accepted the network attester's records, the chain accepted and
   ``network-period check`` accepted the period, whose answer it then is.
@@ -876,15 +874,7 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-#: the verbs `attester_front.py` answers
-FRONT_VERBS = ("front", "relay", "close", "unit")
-
-
 def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] and argv[0] in FRONT_VERBS:
-        import attester_front
-        return attester_front.main(argv)
     a = parser().parse_args(argv)
     if a.cmd == "piece":
         return piece(a)

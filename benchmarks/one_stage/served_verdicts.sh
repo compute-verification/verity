@@ -28,16 +28,16 @@
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the network attester's verdict, and the run goes on with the window it sealed.
 #     With LOAD=session the load is the caller's own, through a relay session of the network attester's, and the run
-#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `attester_piece.py front`, opens the session and
+#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `attester_front.py front`, opens the session and
 #     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
 #     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
 #     session's relay.json, in the serve dir's private/), its output the serve dir's load.log; and CERTIFIER_CLOSE
-#     (`attester_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
+#     (`attester_front.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
 #     (default 180m), waits for the session's end and keeps and publishes its fetch as a rehearsal's front does. The
 #     CERTIFIER-FRONT line is then the close's, and the step's exit the load's; a front that opened no session runs no
 #     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
 #     `--session` under any other LOAD, are refused before the lease.
-#     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `attester_piece.py front`
+#     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `attester_front.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the network attester's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
@@ -1441,7 +1441,7 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
   if [ "$LOAD" = session ]; then
     for v in CERTIFIER_FRONT LOAD_CMD CERTIFIER_CLOSE; do
       [ -n "${!v:-}" ] \
-        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (attester_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (attester_piece.py close), and $v is unset"; return 3; }
+        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (attester_front.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (attester_front.py close), and $v is unset"; return 3; }
     done
     [ -n "$session" ] \
       || { say "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no --session, so its front would send a group of its own"; return 3; }
@@ -1452,12 +1452,12 @@ front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three comman
     [ -z "$session" ] \
       || { say "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is $LOAD, which sends none through it: LOAD=session, or a front without --session"; return 3; }
   fi
-  case ${CERTIFIER_FRONT:-} in *"attester_piece.py front"*) ;; *) return 0 ;; esac
+  case ${CERTIFIER_FRONT:-} in *"attester_front.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the network attester front sends id-form requests, which serve-openai answers only under" \
         "SERVE_ARGS='--protocol ids --id-payload 503'"; return 3 ;; esac
   local help f script
-  script=$(grep -oE "[^[:space:]\"']*attester_piece\.py front" <<< "$CERTIFIER_FRONT" | head -1)
+  script=$(grep -oE "[^[:space:]\"']*attester_front\.py front" <<< "$CERTIFIER_FRONT" | head -1)
   help=$(cd "$TREE" && "$PY" "${script% front}" front --help 2>&1) \
     || { rc=$?; say "PREFLIGHT: this tree's attester front doesn't start $(failed "$rc" - <<< "$help")"; return 3; }
   for f in $(grep -oE -- '--[a-z][a-z0-9-]*' <<< "$CERTIFIER_FRONT" | sort -u); do

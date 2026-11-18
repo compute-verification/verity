@@ -60,7 +60,7 @@ UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p n
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
-    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
+    "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                        "--gate user@gate-1 --peer peer-1 --tokens 2",
     "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
     "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
@@ -378,7 +378,7 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
     cfg = R.load(CONFIG, REG)
     side, device = REG.parties["network-attester"][NC.WORKERS], REG.parties["network-attester"][NC.NETWORK_ATTESTER]
     assert (side.runs, side.scripts, side.reaches, side.binds, side.optional) == (
-        T.SERVED_WINDOW, (T.ATTESTER_PIECE,), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
+        T.SERVED_WINDOW, (T.ATTESTER_PIECE, T.ATTESTER_FRONT), NC.NETWORK_ATTESTER, ("gate", "peer"), ())
     assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
     assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
@@ -392,14 +392,14 @@ def test_the_attesters_script_is_its_developer_sides_and_no_gate_piece_names_one
     plan = {x["party"]: {e["component"]: e for e in x["entries"]} for x in got["plan"]}
     mine, its = plan[NC.WORKERS]["network-attester"], plan[NC.NETWORK_ATTESTER]["network-attester"]
     assert rc == 0 and (mine["runs"], mine["reaches"], mine["scripts"]) == (T.SERVED_WINDOW, NC.NETWORK_ATTESTER,
-                                                                            [T.ATTESTER_PIECE])
+                                                                            [T.ATTESTER_PIECE, T.ATTESTER_FRONT])
     assert (its["runs"], its["reaches"], its["scripts"], its["hooks"], its["unbound"]) == (T.GATE, NC.NETWORK_ATTESTER,
                                                                                          [], {}, [])
 
 
 #: the network attester's piece without Pearl+'s tie: split around V3c at network attestation's scan class
 SPLIT = {"SERVE_ARGS": T.ID_FORM,
-         "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
+         "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" "$3" '
                             "--gate user@gate-1 --peer peer-1",
          "CERTIFIER_CHAIN_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py chain "$@"',
          "CERTIFIER_PERIOD_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py period "$@"',
@@ -473,7 +473,7 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
     assert written == {"network-attester": {"gate": "local", "peer": T.PROVER_NODE}}
     R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
     assert side.variables(cfg, T.bindings_of(tmp_path)) == {
-        **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
+        **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_front.py front "$1" "$2" '
                                           f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 2'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
