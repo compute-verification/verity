@@ -29,9 +29,9 @@ that finds it held does nothing and says so. Then:
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks): such a
                 number's owner is rung once for each declaration of it;
               - it has a machine. A CONTROL row runs on the pod itself, and nowhere else, and only when the pod's list
-                (`--control-rows`) holds each of its rows' ids with its command, character for character; else it is
-                UNLISTED, said with the entry infra writes there, and its owners and infra are rung once for each
-                declaration of it. A command that asks for GPUs
+                (`--control-rows`) holds each of its rows' ids with its command, character for character, and with the
+                same keys; else it is UNLISTED, said with the entry infra writes there, and its owners and infra are rung
+                once for each declaration of it. A command that asks for GPUs
                 (`--gpus`), names a machine that is no CPU node (`research.auto.CPU_NODE`), or names `NODE` without a pool
                 runs only on a machine the plan (`--plan`) lists
                 for one of its numbers now, the machine it names when it names one, and that none of this loop's launches is
@@ -54,7 +54,8 @@ that finds it held does nothing and says so. Then:
               the slot's memory rule admits it), then its workload, with the pod's site, Slack and Linear keys left out of
               its environment. A CONTROL row's is `research run --id RUN --project verity --source . [--timeout CONTROL_S]`,
               then its allowed options, then its workload: a local run on the pod, which the pass waits for, with the pod's
-              site and Slack keys left out of its environment and the Linear app's (CONTROL_KEEPS) kept. The loop names
+              keys left out of its environment but those its rows' entries name. A launch still going LAUNCH_S after it
+              began is ended with SIGKILL to its process group and, for a run here, to its workload's. The loop names
               the run: the record holds the launch and its run id before it starts (its numbers, command, declaration,
               machine and time). A launch that prints no run line (it failed, or its timeout killed it, or it ran here) is
               judged by that run's own record: a run that registered and reached its machine is in flight, and never
@@ -63,7 +64,7 @@ that finds it held does nothing and says so. Then:
               (`research.runs`) before it judges; one whose run can't be read stays in flight.
     ring      a launch that fails rings its numbers' owners (the handle before each id's slash) once, with its run id and
               its reason line (`research msg ring-run`): at the first failure of a cause, and when SAME_CAUSE of them hold
-              it. A number whose last SLOT_WAITS launches running each waited out its pool's line rings them once, at the
+              it. A CONTROL run's ring says how it ended and nothing it printed, which stays on the pod. A number whose last SLOT_WAITS launches running each waited out its pool's line rings them once, at the
               last of them, and again only after a launch of it that didn't. A ring that fails is tried again next pass,
               RING_TRIES times in all.
 
@@ -87,6 +88,13 @@ missing or unreadable file lists no row, and the pass says so), one table a row:
     [[row]]
     id = "OWNER/NAME"
     command = "..."                    # the row's `command`, character for character
+    keys = ["NAME", ...]               # the pod's keys its launch keeps, of ENTRY_KEYS; none when absent
+
+It holds names and never a key's value, which stays in the pod's environment files; no row that runs on a machine, which it
+doesn't govern; and no exception to any other bound: a listed row passes all of them, or isn't launched. The list compares
+the command's string. What that string runs is main's tip as the loop fetches it: the row's script, what it imports, the
+lockfile `uv run` installs from, and `research` itself. So anything that lands on main runs on the control pod with the kept
+keys, the list unchanged. That is the same trust main already has on the pod; the list does not bound it.
 
 usage (the watchers' `metrics-rerun` loop on the control pod, infra/control/watchers.toml; research importable, the store's
 key, a site key with events:read in $JOBS_TOKEN, and $SLACK_BOT_TOKEN for its rings):
@@ -107,6 +115,7 @@ import math
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -176,8 +185,6 @@ CONTROL = "control"                                     # `runs = "control"`: on
 #: what a run on the pod never takes: `research run` with no `--on` runs where it is launched, and refuses these
 NOT_LOCAL = ("--on", "--pool", "--cpus", "--mem-gb", "--gpus", "--store-read")
 CONTROL_S = LAUNCH_S // 2                               # a CONTROL run's longest, its --timeout: the pass waits for it
-#: the pod's keys a CONTROL run keeps, which LEFT_OUT drops from every other: the Linear app's, which the reads of Linear take
-CONTROL_KEEPS = frozenset({"LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"})
 UNLISTED = "control-unlisted"                           # a CONTROL row the pod's own list doesn't hold with its command
 INFRA = "infra"                                         # who writes the pod's list, rung beside an unlisted row's owner
 KEEP = 400                                              # launches the record keeps, beside those it always keeps
@@ -185,7 +192,9 @@ URL = "https://github.com/compute-verification/verity.git"
 HELPER = "!/data/infra/gh_app_token.sh git"             # hands git the App's token when git asks: never in a config or an argument
 GIT_S = 1800
 SITE_KEY = "JOBS_TOKEN"                                 # the door's key, which no launch needs
-LEFT_OUT = re.compile(rf"^(?:{SITE_KEY}|SLACK_.*|LINEAR_.*)$")   # the pod's keys a launch's environment holds none of, but CONTROL_KEEPS on the pod
+LEFT_OUT = re.compile(rf"^(?:{SITE_KEY}|SLACK_.*|LINEAR_.*)$")   # the pod's keys a launch's environment holds none of, but those its row's entries name
+#: the only names of the pod's keys an entry of its list may give a CONTROL row's launch: the Linear app's
+ENTRY_KEYS = frozenset({"LINEAR_CLIENT_ID", "LINEAR_CLIENT_SECRET"})
 #: why a declared number is or isn't launched, as the record's `numbers` and `classify` say
 REASONS = {
     "launched": "launched at this pass",
@@ -264,6 +273,7 @@ class Decision:
     per: tuple[tuple[str, str], ...] = ()
     because: str = ""                                   # what `classify` found, for a ring
     rings: bool = False                                 # a placeholder the owner is rung for: its command runs on a CPU node
+    keys: frozenset[str] = frozenset()                  # the pod's keys its launch keeps: a CONTROL row's, as its entries name
 
 
 @dataclass(frozen=True)
@@ -276,6 +286,7 @@ class Verdict:
     wrapped: bool = True
     machine: str | None = None                          # a runnable command's machine; None for one the plan places
     held: tuple[str, ...] = ()                          # the placeholders it holds
+    keys: frozenset[str] = frozenset()                  # a runnable CONTROL row's keys, as its entries in the pod's list name
 
 
 class Refused(ValueError):
@@ -376,43 +387,67 @@ def planned(opts: list[tuple[str, str | None]]) -> bool:
             or named not in (None, "auto", OWNERS) and not CPU_NODE.fullmatch(named))
 
 
-def control_list(path: Path | None, say: Callable[[str], None]) -> dict[str, str]:
-    """The pod's list of the CONTROL rows it runs (`--control-rows`), id to command; a list that is missing or unreadable lists
+@dataclass(frozen=True)
+class Entry:
+    """A row of the pod's list: the command it may run, character for character, and the names of the pod's keys (of
+    ENTRY_KEYS) its launch keeps."""
+    command: str
+    keys: frozenset[str] = frozenset()
+
+
+def control_list(path: Path | None, say: Callable[[str], None]) -> dict[str, Entry]:
+    """The pod's list of the CONTROL rows it runs (`--control-rows`), id to entry; a list that is missing or unreadable lists
     none, which is said."""
     if path is None or not path.exists():
         say(f"the control pod's list of rows {path or '(no --control-rows)'} is missing, so no row runs on the control pod")
         return {}
     try:
-        out: dict[str, str] = {}
+        out: dict[str, Entry] = {}
         for r in tomllib.loads(path.read_text(encoding="utf-8")).get("row", []):
-            if not isinstance(r, dict) or set(r) != {"id", "command"} or not all(isinstance(v, str) for v in r.values()):
-                raise ValueError(f"{r!r} is no [[row]] of an id and a command, both strings")
-            if out.setdefault(r["id"], r["command"]) != r["command"]:
-                raise ValueError(f"it lists {r['id']} twice, with two commands")
+            if (not isinstance(r, dict) or not {"id", "command"} <= set(r) <= {"id", "command", "keys"}
+                    or not all(isinstance(r[k], str) for k in ("id", "command"))):
+                raise ValueError(f"{r!r} is no [[row]] of an id and a command, both strings, and its keys")
+            keys = r.get("keys", [])
+            if not isinstance(keys, list) or len(set(map(str, keys))) != len(keys):
+                raise ValueError(f"{r['id']}'s keys {keys!r} are no list of distinct names")
+            if bad := [k for k in keys if k not in ENTRY_KEYS]:
+                raise ValueError(f"{r['id']}'s keys name {', '.join(map(repr, bad))}, which is not a name an entry may give "
+                                 f"(ENTRY_KEYS: {', '.join(sorted(ENTRY_KEYS))})")
+            if out.setdefault(r["id"], e := Entry(r["command"], frozenset(keys))) != e:
+                raise ValueError(f"it lists {r['id']} twice, differently")
         return out
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError, TypeError) as e:
         say(f"the control pod's list of rows {path} is unreadable ({type(e).__name__}: {e}), so no row runs on the control pod")
         return {}
 
 
-def off_list(job: Job, listed: dict[str, str], path: Path | None) -> str:
+def off_list(job: Job, listed: dict[str, Entry], path: Path | None) -> str:
     """Why CONTROL `job` runs nowhere, with the fix: each row the pod's list doesn't hold with the job's command, character
     for character, and the entry infra writes for it there, the list named by its file's name so the line's length does not
-    turn on where the file sits. '' when the list holds every row."""
-    off = [i for i in job.ids if listed.get(i) != job.command]
+    turn on where the file sits; or, when it holds them all, that their entries name different keys, since one launch
+    measures them all. '' when the list holds every row, each with the same keys."""
+    name = path.name if path else "(no --control-rows)"
+    off = [i for i in job.ids if i not in listed or listed[i].command != job.command]
     if not off:
-        return ""
+        if len({listed[i].keys for i in job.ids}) == 1:
+            return ""
+        keys = "; ".join(f"{i}'s {sorted(listed[i].keys)}" for i in job.ids)
+        return (f"it says {RUNS} = {CONTROL!r}, and the control pod's list {name} holds each of its rows, but their entries name "
+                f"different keys ({keys}), and one launch measures them all, so it runs nowhere until infra gives each the same")
     whose = "; ".join(f"{i}'s {'id is missing' if i not in listed else 'command differs from its entry'}" for i in off)
     ids = ", ".join(f"id = {json.dumps(i)}" for i in off)
     entries = (f"a [[row]] with {ids}" if len(off) == 1 else f"a [[row]] for each of {ids}") + f", command = {json.dumps(job.command)}"
-    return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {path.name if path else '(no --control-rows)'} doesn't hold it ({whose}), "
+    if keys := next((listed[i].keys for i in job.ids if i not in off), None):    # a listed row of the same launch: the same keys
+        entries += f", keys = {json.dumps(sorted(keys))}"
+    return (f"it says {RUNS} = {CONTROL!r}, but the control pod's list {name} doesn't hold it ({whose}), "
             f"so it runs nowhere until infra adds there, on the pod, {entries}")
 
 
-def classify(job: Job, cfg: Settings, listed: dict[str, str] | None) -> Verdict:
+def classify(job: Job, cfg: Settings, listed: dict[str, Entry] | None) -> Verdict:
     """What the loop can do with `job` whatever the door, the record and the plan say: `runnable` (on `machine`, in `--pool`,
     once due; CONTROL, the pod itself, for a CONTROL row that `listed`, the pod's list, holds), `plan` (only on a machine the
-    plan lists), or why it never launches it, each a reason of REASONS. `listed` None (no list read) holds every row."""
+    plan lists), or why it never launches it, each a reason of REASONS. `listed` None (no list read) holds every row, with no
+    keys; a CONTROL row's `keys` are what its entries name."""
     if job.command is None or (SCRIPT.findall(job.command) or [""])[0].startswith(LOOPS):
         return Verdict("loop", REASONS["loop"])
     if bad := next((r for r in job.rows if every_s(r) is None), None):
@@ -442,7 +477,8 @@ def classify(job: Job, cfg: Settings, listed: dict[str, str] | None) -> Verdict:
     if place == CONTROL:
         if listed is not None and (off := off_list(job, listed, cfg.control_rows)):
             return Verdict(UNLISTED, off, **shape)
-        return Verdict("runnable", REASONS["runnable"], **shape, machine=CONTROL)
+        return Verdict("runnable", REASONS["runnable"], **shape, machine=CONTROL,
+                       keys=listed[job.ids[0]].keys if listed is not None else frozenset())
     named = get(opts, "--on")
     if planned(opts):
         return Verdict("plan", "asks for GPUs" if get(opts, "--gpus") else f"names its machine ({named})", **shape)
@@ -628,7 +664,7 @@ def in_flight(record: list[dict]) -> int:
     return sum(e.get("state") not in OVER for e in record)
 
 
-def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], listed: dict[str, str], cfg: Settings,
+def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], listed: dict[str, Entry], cfg: Settings,
            now: float, held_since: str | None = None) -> list[Decision]:
     """What a pass does with each job, with its reason of REASONS (`listed`: the pod's list of CONTROL rows): a job that is
     due, or that the door doesn't list, is said; a fresh one and a loop's are not."""
@@ -689,7 +725,7 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], li
             continue
         launched += 1
         busy.add(machine)
-        out.append(Decision(job, True, why, machine, argv_for(list(v.opts), list(v.work), v.wrapped, machine, pool)))
+        out.append(Decision(job, True, why, machine, argv_for(list(v.opts), list(v.work), v.wrapped, machine, pool), keys=v.keys))
     return out
 
 
@@ -773,11 +809,12 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
         rid = fx.new_id(now)
         argv = [*d.argv[:2], "--id", rid, *d.argv[2:]]
         e = {"metrics": d.job.ids, "command": d.job.command, "declared": d.job.declared, "where": d.job.where,
-             "machine": d.machine, "argv": argv, "commit": commit, "at": iso(now), "run": rid, "state": "launching"}
+             "machine": d.machine, "argv": argv, "commit": commit, "at": iso(now), "run": rid, "state": "launching",
+             **({"keys": sorted(d.keys)} if d.keys else {})}
         record.append(e)
         save(state)                                      # before the launch: a restart during it must not launch it again
         try:
-            rc, said_ = fx.launch(argv)
+            rc, said_ = fx.launch(argv, d.keys)
         except (OSError, subprocess.SubprocessError) as x:
             rc, said_ = None, f"{type(x).__name__}: {x}"
         for i in d.job.ids:
@@ -855,7 +892,11 @@ def ring_failures(record: list[dict], fx, now: float, say: Callable[[str], None]
         then = (f"held: it ended this way {k} times running, so it is launched again once its rows in "
                 f"{e.get('where') or 'its metrics.toml'} change, or {span(HOLD_S)} after" if k >= SAME_CAUSE else
                 f"it is launched again after {span(RETRY_S)}, or its every if shorter")
-        text = f"metrics-rerun: {', '.join(e['metrics'])} {e['state']} ({e.get('why') or cause(e)}); {then}"
+        if e.get("machine") == CONTROL:                  # what a run here printed may hold what only the pod reads: it stays here
+            text = (f"metrics-rerun: {', '.join(e['metrics'])} {e['state']} ({cause(e)}); its output is on the control pod, in "
+                    f"run {e.get('run')}'s directory and the pass's log; {then}")
+        else:
+            text = f"metrics-rerun: {', '.join(e['metrics'])} {e['state']} ({e.get('why') or cause(e)}); {then}"
         rc = e["state"] if e["state"] == "unlaunched" or e.get("rc") is None else str(e["rc"])   # an unlaunched rc is its launcher's
         ring(fx, e, e.get("run") or "-", rc, e["metrics"], text, now, say, dry_run)
 
@@ -888,9 +929,9 @@ def log(msg: str) -> None:
     print(f"{iso(time.time())} {msg}", flush=True)
 
 
-def environment(env: dict[str, str], here: bool) -> dict[str, str]:
-    """A launch's environment: `env` without the pod's keys (LEFT_OUT), but for a run on the pod, which keeps CONTROL_KEEPS."""
-    return {k: v for k, v in env.items() if not LEFT_OUT.match(k) or (here and k in CONTROL_KEEPS)}
+def environment(env: dict[str, str], keys: frozenset[str]) -> dict[str, str]:
+    """A launch's environment: `env` without the pod's keys (LEFT_OUT) but those `keys` names, a CONTROL row's entries' own."""
+    return {k: v for k, v in env.items() if not LEFT_OUT.match(k) or k in keys}
 
 
 class Pod:
@@ -949,20 +990,50 @@ class Pod:
         return {"state": s["state"], "rc": s["rc"], "started": started, "class": s.get("class"), "why": s.get("why"),
                 "waited": slot_timeout(s), "here": here}
 
-    def launch(self, argv: list[str]) -> tuple[int | None, str]:
-        """`argv`, a `research run`, in the clone with the clone's own research and without the pod's keys (LEFT_OUT) but, for
-        a run here (no `--on`), the Linear app's (CONTROL_KEEPS): (its exit code, its output)."""
+    def launch(self, argv: list[str], keys: frozenset[str] = frozenset()) -> tuple[int | None, str]:
+        """`argv`, a `research run`, in the clone with the clone's own research and without the pod's keys (LEFT_OUT) but those
+        `keys` names, a run here's only: (its exit code, its output). A launch still going LAUNCH_S after it began is ended
+        with its whole process group and, for a run here, the workload's, which `research run` starts in a group of its own:
+        (None, what it printed)."""
         assert argv[:2] == ["research", "run"], argv
-        env = environment(os.environ, here="--on" not in argv[:argv.index("--")])
+        here = "--on" not in argv[:argv.index("--")]
+        if keys and not here:
+            raise ValueError(f"a launch on a machine keeps none of the pod's keys, not {sorted(keys)}")
+        env = environment(os.environ, keys)
         env["PYTHONPATH"] = str(self.cfg.tree / "tools" / "research" / "src")
+        p = subprocess.Popen([sys.executable, "-m", "research", *argv[1:]], cwd=self.cfg.tree, env=env, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL, start_new_session=True)
         try:
-            r = subprocess.run([sys.executable, "-m", "research", *argv[1:]], cwd=self.cfg.tree, env=env, capture_output=True,
-                               text=True, stdin=subprocess.DEVNULL, timeout=LAUNCH_S)
-        except subprocess.TimeoutExpired as e:
-            return None, (e.stdout or b"").decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
-        for ln in (r.stdout + r.stderr).splitlines():
+            out, err = p.communicate(timeout=LAUNCH_S)
+        except subprocess.TimeoutExpired:
+            run = argv[argv.index("--id") + 1] if "--id" in argv else None
+            groups = [p.pid, *([g] if here and run and (g := self.workload_group(run)) else [])]
+            self.log(f"launch of run {run} still going after {LAUNCH_S} s: SIGKILL to process group(s) {groups}")
+            for g in groups:
+                try:
+                    os.killpg(g, signal.SIGKILL)
+                except ProcessLookupError:
+                    self.log(f"process group {g} had already ended")
+            out, err = p.communicate()
+            return None, out + err
+        for ln in (out + err).splitlines():
             self.log(f"  {ln}")
-        return r.returncode, r.stdout + r.stderr
+        return p.returncode, out + err
+
+    def workload_group(self, run: str) -> int | None:
+        """The process group of run `run`'s workload here while its record says it hasn't ended (status.json's `pgid`), else
+        None, said."""
+        from research import runs
+
+        try:
+            st = json.loads((runs.runs_root() / run / "status.json").read_text())
+        except (OSError, ValueError) as e:
+            self.log(f"run {run}'s status.json not read ({type(e).__name__}: {e}), so its workload's group is not ended")
+            return None
+        if st.get("state") in ENDED or not isinstance(st.get("pgid"), int):
+            self.log(f"run {run}'s workload has no live group ({st.get('state')}, pgid {st.get('pgid')})")
+            return None
+        return st["pgid"]
 
     def ring(self, run: str, rc: str, owner: str, text: str) -> None:
         """`owner`'s inbox rung with `text` (`research msg ring-run`, which rings a run once however often called), with the
