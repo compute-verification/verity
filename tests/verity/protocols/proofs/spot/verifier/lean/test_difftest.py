@@ -96,6 +96,7 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+from holes import waits_on
 from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
@@ -2753,6 +2754,7 @@ def _challenger_sample(rng: random.Random, s: Setup, sampling_design: dict, rec:
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
+@waits_on("restrict")
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`Spot.OneStageZk`, `one_stage.proofs.verdicts_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
@@ -2873,6 +2875,7 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     return rec, ch, base, params
 
 
+@waits_on("restrict")
 def test_v2_refuses_a_population_out_of_order(server, server_v2):
     """v2 refuses a docket whose program's proof blocks, read stratum by stratum, are not its population's units
     in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
@@ -2974,6 +2977,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tm
         PF.members_v2([ms[0], ms[0]])
 
 
+@waits_on("restrict")
 def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
     (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
@@ -3026,6 +3030,7 @@ def test_link_points_refuses_a_sampling_design_none_of_whose_samples_ends():
             LP.refused(sampling_design, 10, [([[0, 10]], 1)])
 
 
+@waits_on("restrict")
 def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
@@ -6443,6 +6448,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
+@waits_on("restrict")
 def test_a_piece_agrees(pieces, port, examples):
     stats = D.run(port, examples=examples, server=pieces)
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
