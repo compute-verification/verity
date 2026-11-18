@@ -132,8 +132,8 @@ class CarryWorld(World):
 
     def launched(self, sha: str, rec: dict) -> None:
         """``sha``'s check launched: its shards' runs, and the invariant: it reruns no task whose key a pass of a run it
-        replaces holds, of each run whose record was uploaded within `CARRY_WAIT_S` of its cancel, and it waited no longer
-        than that past the last cancel and a tick of the loop."""
+        replaces holds, of each run whose record was uploaded within `CARRY_WAIT_S` of its cancel, and it launched at its
+        build or no later than that past the last cancel and a tick of the loop."""
         built, after = self.after[sha]
         ids = rec["ids"]
         assert len(ids) == SHARDS and "wait" not in rec, rec
@@ -141,7 +141,7 @@ class CarryWorld(World):
         named = self.named[ids[0]]
         assert all(self.named[i] == named for i in ids), f"seed {self.seed}: {sha}'s shards name different runs"
         listed = {k for r in named if (up := self.upload.get(r)) is not None and up <= self.clock for k in self.passes[r]}
-        assert self.clock <= max(after.values(), default=built) + BOUND + POLL_S, (
+        assert self.clock <= max(built, max(after.values(), default=built) + BOUND + POLL_S), (
             f"seed {self.seed}: {sha} launched {self.clock - built:.0f} s after its build, past its bound")
         for rid, at in sorted(after.items()):
             if (up := self.upload.get(rid)) is None or up > at + BOUND:
