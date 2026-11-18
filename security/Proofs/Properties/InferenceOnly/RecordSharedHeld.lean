@@ -628,6 +628,54 @@ theorem unit_defn {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) {rs : Ar
   rw [← htid]
   exact find_tid (Properties.Record.SecurityProofs.tmpls_named hts).1 ht
 
+/-- The parts `rowRuns` reads: every part of an argument of a root node that is no input node, but an edge's. -/
+def rowParts (P : Prog) : List Part :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let units := nodes.toList.filter fun n => !InferenceOnlyVerifier.Desc.isInputNode P n
+  let edge := fun (q : Part) => match q with
+    | .affine false i _ _ | .strided false i _ _ _ _ _ =>
+      (nodes[i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | .explicit it => it.any fun r => !r.p &&
+      (nodes[r.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | .grid _ lanes => lanes.all fun l => !l.p &&
+      (nodes[l.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | _ => false
+  units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+
+theorem rowRuns_runsOf {P : Prog} {R : Runs} (h : rowRuns P = some R) : runsOf P (rowParts P) = some R := by
+  unfold rowRuns at h
+  dsimp only at h
+  split at h
+  · exact h
+  · cases h
+
+/-- **A shared run is a run of some leaf of a part `runsOf` reads.** -/
+theorem runsOf_shared {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P parts = some R)
+    {x : Nat × Nat × Nat} (hx : x ∈ R.shared) : 0 < x.2.2 ∧ ∃ q ∈ parts, ∃ b, partRun P q = some (x, b) := by
+  unfold runsOf at h
+  dsimp only at h
+  split at h
+  · cases h
+    have hin : ∀ r ∈ ((parts.filterMap (partRun P)).filter fun r => r.1.2.2 > 0).mergeSort runOrd,
+        0 < r.1.2.2 ∧ ∃ q ∈ parts, partRun P q = some r := by
+      intro r hr
+      obtain ⟨hrf, hpos⟩ := List.mem_filter.1 (List.mem_mergeSort.1 hr)
+      obtain ⟨q, hq, hpq⟩ := List.mem_filterMap.1 hrf
+      exact ⟨by simpa using hpos, q, hq, hpq⟩
+    simp only [List.mem_append, List.mem_filterMap] at hx
+    rcases hx with ⟨r, hr, hre⟩ | ⟨⟨a, b'⟩, hab, hre⟩
+    · split at hre
+      · cases hre
+        obtain ⟨hpos, q, hq, hpq⟩ := hin r hr
+        exact ⟨hpos, q, hq, r.2, hpq⟩
+      · cases hre
+    · split at hre
+      · cases hre
+        obtain ⟨hpos, q, hq, hpq⟩ := hin a (List.of_mem_zip hab).1
+        exact ⟨hpos, q, hq, a.2, hpq⟩
+      · cases hre
+  · cases h
+
 /-- **A unit's parameter leaf in a shared run is read by a part of its argument over that run.** A leaf of member `m`
 of a unit node `k`, parameter `i`, that lies in a shared run `x` of `rowRuns`: the node has that argument, and one of
 its parts is a run of `x` (`partRun`), strided parts and parts read more than once included. Open: the leaf lemma of
