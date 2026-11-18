@@ -47,7 +47,8 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   session; every coin is the challenger's `COIN_BYTES` (`coinRefusal`); then the log replayed from the session's first
   state (`P2Session.init`), each coin read at its first `Codec.COIN_BYTES`. Each refusal is named. The replay rejects
   when an entry is a request the process would have answered with an error, and with the failure that rejected the
-  session; it is undecided while a window is unverified; it accepts once every window is.
+  session; it is undecided while a window is unverified; it accepts once every window is and each drew exactly
+  `min(s, U_t)` of its receipts (`P2Session.drawsRefusal`).
 
 On acceptance it publishes `{"eps", "q_bytes", "span_ns"}`: the credited reads (`P2Session.credit`, the answer's),
 their span, and the error they hold at, ε = δ + S/2^64 for S the samples, `Poub.Protocol.certify`'s terms (not
@@ -270,7 +271,10 @@ def checkAt (lp : Lms.Params) (p : Params) (c : Commitment) (e : Evidence) : Cor
           | none => ""
         .reject s!"the session was rejected: {f.failure.name} at window {f.window}{sample}"
       | none, none => .undecided "the session has a window not yet verified"
-      | none, some sm => let (pub, prof) := certify c.held sm; .accept pub prof
+      | none, some sm =>
+        match P2Session.drawsRefusal sm s.params.samples with
+        | some why => .reject why
+        | none => let (pub, prof) := certify c.held sm; .accept pub prof
 
 def check : Params → Commitment → Evidence → Core.Outcome Public Json := checkAt Lms.deployed
 
