@@ -30,6 +30,11 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
 
 @pytest.fixture(autouse=True)
 def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    from verity.protocols.compose import schemes
+
+    # every declaration is imported into the real registry first: a module first imported under the empty one would
+    # register there, and stay loaded with its scheme gone from the real one for the rest of the process
+    schemes.load()
     monkeypatch.setattr(S, "SCHEMES", {})
 
 
