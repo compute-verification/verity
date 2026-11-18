@@ -5,8 +5,8 @@ public import Definitions.Core.Draw
 /-!
 # The sampling layer's theorem, stated
 
-**Takes** a sampling design `L` over the units `Fin n` (a partition's proof blocks; one level's design, or the design a
-levels sample induces on the units), the session the argument system runs on each sample after the registration
+**Takes** a sampling design `L` over the units `Fin n` (one partition's proof blocks; a `Verity.Levels` design draws
+blocks as gate sets, `Finset C.Computed`, and is not of this form), the session the argument system runs on each sample after the registration
 `Reg`, and that session's analysis: transcripts, the incorrect set of each, the committed transcript, and per sampled
 unit the failure probabilities `ks` (accepts, extraction fails) and `link` (extraction disagrees with the committed
 transcript), covering acceptance at each sampled incorrect unit. **Gives** `Pr[accept ∧ E(X, S)] ≤

@@ -131,6 +131,7 @@ from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pc8
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
@@ -1357,9 +1358,9 @@ def cmd_params(a) -> int:
 
 def cmd_commit(a) -> int:
     pass_dir = Path(a.pass_dir)
-    PD, man, sha, calls = _pass(pass_dir)
+    _, man, sha, calls = _pass(pass_dir)
     params = _json(a.params)
-    scheme = PD.scheme_of(man["scheme"])
+    scheme = pouw_schemes.get(man["scheme"])
     if tuple(scheme.tile) != (Wd.TILE, Wd.TILE):
         raise SystemExit(f"{man['scheme']}: its tiles are {scheme.tile}, not the window's 64 x 64 pass tiles")
     source = os.urandom(32)

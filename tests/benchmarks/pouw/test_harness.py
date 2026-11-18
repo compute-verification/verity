@@ -767,13 +767,24 @@ def test_no_ternary_sum_reaches_the_sentinels():
 
 
 def test_every_shapes_operand_sets_pass_twice_the_l2():
+    from verity.device import load_card, number
+
+    l2 = int(number(load_card("rtx-pro-6000-server", directory=I.CARD_FILES)["store"]["l2"]))
     fams = list(B.FAMILIES.values())
     for s in SH.all_shapes():
-        plan = H.shape_plan(s, fams, (), H.L2_SM120)
-        assert plan["sets"] * plan["weight_bytes_min"] >= 2 * H.L2_SM120 or plan["sets"] == S.MAX_SETS
+        plan = H.shape_plan(s, fams, (), l2)
+        assert plan["sets"] * plan["weight_bytes_min"] >= 2 * l2 or plan["sets"] == S.MAX_SETS
         assert plan["burst"] >= max(plan["sets"], S.MIN_BURST)
         assert plan["memory_bytes"] < 60 << 30
-    assert H.shape_plan(SHAPE, [B.FAMILIES["nvfp4"]], (), H.L2_SM120)["sets"] == 8
+    assert H.shape_plan(SHAPE, [B.FAMILIES["nvfp4"]], (), l2)["sets"] == 8
+
+
+def test_the_plan_is_a_cards():
+    """`--plan SKU` reads the card's L2 from its file; no card is assumed."""
+    args = H.parse(["--plan", "rtx-pro-6000-server"])
+    assert args.plan == "rtx-pro-6000-server" and H.print_plan(args) == H.EXIT_OK
+    with pytest.raises(SystemExit, match="^--plan h100: "):
+        H.print_plan(H.parse(["--plan", "h100"]))
 
 
 def test_the_shapes_hold_both_panel_headlines_once():
