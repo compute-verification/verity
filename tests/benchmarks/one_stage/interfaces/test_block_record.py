@@ -213,7 +213,9 @@ def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_re
                                              Fraction(1, 4), "quantity.eps")
     assert set(R.BY_NAME) <= {"integrity", "pouw"}
     assert R._premises(R._scheme("bandwidth")) == ["ResourceAccounting.Remote.Run.Counted"]
-    assert R._premises(R._scheme("pous")) == [] and "owner's to name" in R._premises(R._scheme("certifier"))
+    assert R._premises(R._scheme("pous")) == []
+    assert R._premises(R._scheme("certifier")) == ["NetTiming.Attester.Phase.ChargeHolds",
+                                                   "NetTiming.Attester.RowsCommitted"]
     with pytest.raises(ValueError, match="not a subprotocol"):
         R._quantity("attester", row)
 
