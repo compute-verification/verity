@@ -7,7 +7,9 @@
 #     --timeout 40m --env GPU_LEASE_WHO=<you> -- bash calibration/pouw/theory/cpw_routes.sh
 #
 # The build and the count run outside the lease; the device part runs under one gpu-lease (device.txt, env/gpu.csv).
-# Exit: 0 done, 1 build failed, 2 no nvcc, 3 a route not bit-exact.
+# The card's record's `arch` is the target, its architecture file nvcc's -gencode (probe.py arch, gencode); another
+# card than an sm_120a one is refused before anything is built.
+# Exit: 0 done, 1 build failed, 2 no nvcc or another card, 3 a route not bit-exact.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,8 +18,12 @@ mkdir -p "$OUT/sass" "$OUT/env" "$OUT/bin"
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "cpw_routes.sh: no nvcc (CUDA 13.0)" >&2; exit 2; }
 "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
+PROBE="$HERE/../opcode_probe/probe.py"
+ARCH=$(python3 "$PROBE" arch) || exit 2
+[ "$ARCH" = sm_120a ] || { echo "cpw_routes.sh: the card's target is $ARCH, and cpw_routes.cu has forms for sm_120a only: nothing built" >&2; exit 2; }
+GENCODE=$(python3 "$PROBE" gencode) || exit 2
 BIN="$OUT/bin/cpw_routes"
-"$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v "$HERE/cpw_routes.cu" -o "$BIN" \
+"$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v "$HERE/cpw_routes.cu" -o "$BIN" \
   >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
 sha256sum "$BIN" >"$OUT/bin/cpw_routes.sha256"
 "$(dirname "$NVCC")/cuobjdump" -sass "$BIN" >"$OUT/sass/cpw_routes.sass" 2>&1
