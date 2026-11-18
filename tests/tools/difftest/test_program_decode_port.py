@@ -37,21 +37,10 @@ DECODE = D.Port("program-difftest", "decode", reference, st.sampled_from([{"desc
 server = D.server_fixture(DECODE)
 
 
-#: refusals Python's registry makes with no `E_` code: an id it holds no primitive under. Lean holds no registry, so it reads
-#: the id as a word primitive, and the map gives that primitive no body (`E_BODY_MISSING`): both refuse
-REGISTRY_ONLY = {"reject: an Input id with a leading zero", "reject: an Input id with a trailing newline"}
-
-
 @pytest.mark.parametrize("name", [n for n, _, _ in CASES])
 def test_decode_agrees(server, name):
     text = next(t for n, t, _ in CASES if n == name)
-    if name not in REGISTRY_ONLY:
-        assert D.replay(DECODE, {"descriptor": text}, server)[0] == "output"
-        return
-    python = reference({"descriptor": text})
-    lean = server.call("decode", {"descriptor": text})
-    assert python == {"ok": False, "error": None}, python
-    assert lean == ("output", D.canonical({"ok": False, "error": "E_BODY_MISSING"})), lean
+    assert D.replay(DECODE, {"descriptor": text}, server)[0] == "output"
 
 
 def test_cases_reach_accepts_and_every_body_refusal():
