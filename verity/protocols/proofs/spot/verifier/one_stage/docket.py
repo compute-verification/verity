@@ -141,6 +141,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
@@ -249,7 +250,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None,
-          verdicts: Mapping[str, bool] | None = None, wired: Program | None = None) -> Verdict:
+          verdicts: Mapping[str, bool] | None = None, wired: Program | None = None,
+          wired_record: Mapping[str, Any] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -261,10 +263,10 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     that format (`registered_entries`), and a supplied one's it commits in it (`registered.supplied_root`); ValueError without `registered`, or in another form.  `binding`: the stream and prover the verifier registers this record for
     (`{"stream", "prover"}`, `_binding`), which the caller's check holds the window to name and a window salt binds.  `partition`: the
     verifier's own partition object when it isn't the canonical one (a record made before the canonical envelope); its
-    program must still be `program`'s, and the population is `query`'s.  `wired`: the wired Program `program` is the cut
-    of: R2 holds the record's program to its digest and the partition's to `program`'s, and the pool chain reads either
-    (`Docket.Verifier.chains`); whether `program` is its cut is the Lean's alone (`Cut.check`), whose refusal the
-    verifier reads as a disagreement.  R1 holds the registered sampling design to the verifier's own
+    program must still be `program`'s, and the population is `query`'s.  `wired`, `wired_record`: the wired Program and its
+    circuit record: R2 holds the record's program to the wired Program's digest, the record's `window.circuit` to the
+    record's text (`circuit_bound`) and `program` to the wired Program's cut under it (`wired_holds`), all `R2-program`,
+    and the partition's program to `program`'s; the pool chain reads the record's program alone.  R1 holds the registered sampling design to the verifier's own
     sampling design expanded over its program and query (`draw.derive`): for `stratified`, the strata by template descriptor id and
     each stratum's k by the rule; for `work`, also its own `work_table`.  R7 holds the registered values to the verifier's
     own (`registered_entries`), a pinned value to its pinned root, and a value an earlier record of the log registered
@@ -355,6 +357,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     part = dict(partition) if partition is not None else P.partition(program, query)
     if part["program"] != P.program_digest(program):
         c.fail("R2-program", {"partition": part["program"], "verifier": P.program_digest(program)})
+    elif wired is not None and not wired_holds(rec, program, wired, wired_record or {}):
+        c.fail("R2-program", {"wired": P.program_digest(wired), "verifier": "not cut to the program under its record, "
+                              "or the record is not the window's circuit"})
     try:
         part_digest = P.digest(part)
     except ValueError as e:
@@ -768,16 +773,40 @@ def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]])
     return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
 
 
+def circuit_bound(rec: Mapping[str, Any], record: Mapping[str, Any]) -> bool:
+    """Whether the record's `window.circuit` is the SHA-512 of the circuit record's text (`Docket.circuitBound`)."""
+    body = json.dumps(record, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    w = rec.get("window")
+    return isinstance(w, Mapping) and w.get("circuit") == hashlib.sha512(body).hexdigest()
+
+
+def wired_holds(rec: Mapping[str, Any], program: Program, wired: Program, record: Mapping[str, Any]) -> bool:
+    """R2's wired facts (`Docket.Verifier.cutHolds`): the window's circuit is ``record`` and ``wired`` cuts to ``program``
+    under it (`population.cut_wires`, the cut `Cut.checkWith` holds it to)."""
+    from verity.circuits.population import cut_wires
+    if not circuit_bound(rec, record):
+        return False
+    try:
+        cut = cut_wires(wired, record)[0]
+    except ValueError:
+        return False
+    return P.program_digest(cut) == P.program_digest(program)
+
+
+def record_program(program: Program, wired: Program | None) -> str:
+    """The program digest R2 holds the record's to (`Docket.Verifier.recordDigest`)."""
+    return P.program_digest(wired if wired is not None else program)
+
+
 def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program,
                 wired: Program | None = None) -> bool:
     """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
     public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
-    record, registered its program, or the wired Program `program` is the cut of (`Docket.Verifier.chains`). Otherwise
-    it opens the empty pool."""
+    record, registered the record's program (`record_program`, `Docket.Verifier.chains`). Otherwise it opens the empty
+    pool, which the caller's check refuses unless one of the first two holds (`R6-pool-program`)."""
     last = log[-1] if log else None
-    names = {P.program_digest(program)} | ({P.program_digest(wired)} if wired is not None else set())
     return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
-            and last.get("program") in names)
+            and last.get("program") == record_program(program, wired))
 
 
 def pool_values(pool: Mapping[str, Any] | None, program: Program, supplied: Any, outputs: Any, schemas: Any,

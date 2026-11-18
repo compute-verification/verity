@@ -276,13 +276,6 @@ private def withField (o : Option Json) (k : String) (x : Json) : Option Json :=
   | some (.obj kvs) => some (.obj (kvs.insert k x))
   | some j => some j
 
-/-- The program digest `poolValues` chains at: `Docket.Verifier.chains`'s, the one the previous record named. -/
-private def chainedProgram (pool : Option Docket.Pool) (program : Program) (wired : Option Program) (log : Array Json) :
-    String :=
-  match pool, wired with
-  | some p, some w => if p.chains log (Flock.hexOf w.sha512) then Flock.hexOf w.sha512 else Flock.hexOf program.sha512
-  | _, _ => Flock.hexOf program.sha512
-
 /-- The parameters' supplied values, output values and row formats with the pool's `pin` among them
 (`registration.pool_values`): the previous record's `pout`, reused, in `pout`'s row format, when the window carries the
 previous window's pool (`Docket.Pool.chains`, at `program`, the program's digest as R2 reads it), else filled from
@@ -335,8 +328,9 @@ def paramsParsed (j : Json) : V Params := do
     | some w => do
       exactly (← obj w "wired") #["program", "record"] "wired"
       let wp ← Program.parse (← Flock.canon (← obj (getD w "program") "wired program")).toUTF8
-      Cut.checkWith (← obj (getD w "record") "wired record") wp program query
-      pure (some wp)
+      let record ← obj (getD w "record") "wired record"
+      Cut.checkWith record wp program query
+      pure (some (wp, record))
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"
@@ -376,8 +370,9 @@ def paramsParsed (j : Json) : V Params := do
   let pool ← match getD j "pool" with
     | .null => pure none
     | pj => some <$> poolOf pj registered given (field? j "row_schemas")
-  let (suppliedJ, outputsJ, schemasJ) := poolValues pool (chainedProgram pool program wired log) log
-    (field? j "supplied") (field? j "outputs") (field? j "row_schemas")
+  let recordDigest := wired.elim (Flock.hexOf program.sha512) fun (w, _) => Flock.hexOf w.sha512
+  let (suppliedJ, outputsJ, schemasJ) := poolValues pool recordDigest log (field? j "supplied")
+    (field? j "outputs") (field? j "row_schemas")
   let (suppliedJ, tables) ← match field? j "history" with
     | none => pure (suppliedJ, (#[] : Array (String × ByteArray × ByteArray)))
     | some h => do

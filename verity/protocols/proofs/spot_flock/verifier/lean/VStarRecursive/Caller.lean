@@ -11,7 +11,8 @@ SPOT's check (`Spot.Docket.check`) reads none of. The record names its day's one
 `R2-undeclared`, `R2-declared-twice`, `R2-declared`); its window names the stream and the prover the verifier is bound
 to (`binding`; `R6-stream`, `R6-prover`), the seed salt the verifier read from the challenger's log (`seedSalt`;
 `R6-seed-salt`), the pool's reset, week and spent mark, at most one reset a week (`pool`; `R6-pool-reset`,
-`R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), and the registration log's compiler and advice within its
+`R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), the pool chained at the record's
+program unless reset (`R6-pool-program`), and the registration log's compiler and advice within its
 length (`compiler`; `R6-compiler`, `R6-advice-length`); and, when the verifier expects values registered, the record's
 entry for the pool's `pin` is the pool its window opens (`R7-pool-chain`), and no output value reads a port of a record
 the verifier's verdict log names refused (`verdicts`; `Docket.portsAccepted`, `R7-output-refused`).
@@ -93,6 +94,15 @@ def poolChained (rec : Json) (v : Verifier) : Bool :=
     | some e, some (d, r) => jeq (getD e "domain") (Json.str d) && jeq (getD e "root") (Json.str r)
     | _, _ => false
 
+/-- The pool chains at the record's program alone (`registration._pool_program`): with a pool that serving didn't
+reset and the verifier didn't refuse, the log's last record names the record's program (`Docket.Verifier.recordDigest`);
+`R6-pool-program` otherwise, rather than an empty pool. -/
+def poolProgramOk (v : Verifier) : Bool :=
+  match v.pool with
+  | some p => p.reset || p.refused v.log ||
+    (match v.log.back? with | some e => jeq (getD e "program") (Json.str v.recordDigest) | none => true)
+  | none => true
+
 /-- **The caller's check**: its codes, in the order `Spot.Docket.check` once added them; empty when the record
 keeps the caller's facts against `v`. -/
 def check (rec : Json) (v : Verifier) : Array String :=
@@ -101,6 +111,7 @@ def check (rec : Json) (v : Verifier) : Array String :=
   let c := bindingMarks w v.binding c
   let c := kept (jeq (getD w "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   let c := poolMarks w v.pool v.log c
+  let c := kept (poolProgramOk v) c "R6-pool-program"
   let c := compilerMarks w v.compiler c
   let c := kept (!v.v2 || poolChained rec v) c "R7-pool-chain"
   kept (!v.v2 || Docket.portsAccepted v) c "R7-output-refused"

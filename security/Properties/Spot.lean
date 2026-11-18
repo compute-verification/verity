@@ -88,13 +88,23 @@ def DeclaredDay (rec : Json) (v : Docket.Verifier) : Prop :=
   | none => True
   | some (day, ds) => ∃ p, Docket.declaredOf day ds = [p] ∧ jeq (getD rec "program") (.str p)
 
-/-- R2: the verifier's partition names its program's SHA-512, and the record names the same program; the record's query
-is the SHA-512 of the partition's canonical query (whenever that query has a canonical form); the partition has a digest,
-which the record names; and the record's population is the number of units the verifier's query derives from its own
-program. -/
+/-- R2's program clause. Without a wired Program, the record names the partition's program. With one and its circuit
+record, the record names the wired Program's digest, which the declarations read; the record's `window.circuit` is the
+SHA-512 of that circuit record's text (`Docket.circuitBound`); and the wired Program cuts to the verifier's `program`
+under that record (`Cut.checkWith` accepts). -/
+def WiredProgram (rec : Json) (v : Docket.Verifier) : Prop :=
+  match v.wired with
+  | none => jeq (getD rec "program") (getD (partitionOf v) "program")
+  | some (w, circuit) => jeq (getD rec "program") (.str (Flock.hexOf w.sha512)) ∧
+      Docket.circuitBound rec circuit ∧ Spot.Cut.checkWith circuit w v.program v.query = .ok ()
+
+/-- R2: the verifier's partition names its program's SHA-512, and the record names its program (`WiredProgram`); the
+record's query is the SHA-512 of the partition's canonical query (whenever that query has a canonical form); the
+partition has a digest, which the record names; and the record's population is the number of units the verifier's query
+derives from its own program. -/
 def R2 (rec : Json) (v : Docket.Verifier) : Prop :=
   jeq (getD (partitionOf v) "program") (.str (Flock.hexOf v.program.sha512)) ∧
-  jeq (getD rec "program") (getD (partitionOf v) "program") ∧
+  WiredProgram rec v ∧
   (∀ q, Docket.queryDigest (getD (partitionOf v) "query") = .ok q → jeq (getD rec "query") (.str q)) ∧
   (∃ d, Partition.digest (partitionOf v) = some d ∧ jeq (getD rec "partition") (.str d)) ∧
   (∃ n, Partition.units v.program v.query = .ok n ∧ jeq (getD rec "population") (Lean.toJson n))
@@ -182,6 +192,15 @@ def RunPoolSpent (rec : Json) (v : Docket.Verifier) : Prop :=
 (`Docket.Pool.spentBefore`). -/
 def PoolResetOnce (v : Docket.Verifier) : Prop :=
   (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
+
+/-- The pool chains at the record's program alone: with a pool that serving didn't reset and the verifier didn't refuse
+(`Docket.Pool.refused`), the log's last record names the record's program (`Docket.Verifier.recordDigest`, the wired
+Program's digest when the verifier has one). -/
+def PoolProgram (v : Docket.Verifier) : Prop :=
+  (match v.pool with
+    | some p => p.reset || p.refused v.log ||
+      (match v.log.back? with | some e => jeq (getD e "program") (.str v.recordDigest) | none => true)
+    | none => true) = true
 
 /-- The record's window names the registration log's compiler by its digest and advice of at most its public length ℓ in
 bits, and neither a compiler nor advice where the log registers none (`Docket.Verifier.compiler`); anything when
@@ -355,7 +374,7 @@ def CallerHeld (rec : Json) (v : Docket.Verifier) : Prop :=
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v ∧ OutputPortsAccepted v)
+  PoolProgram v ∧ RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v ∧ OutputPortsAccepted v)
 
 /-! ## The sample: the registered sampling design over the registered population -/
 
