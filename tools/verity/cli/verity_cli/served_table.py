@@ -661,10 +661,22 @@ def bindings_of(state: Path) -> dict[str, Any]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+def launched(name: str) -> Mapping[str, Piece]:
+    """The pieces of the component ``name`` by party (`PARTIES`), refused (``unknown-protocol``) by name where no scheme
+    declares it and `UNDECLARED` doesn't hold it, or where this table has no pieces for it."""
+    if name not in schemes.DECLARATIONS and name not in UNDECLARED:
+        raise Refused("unknown-protocol", f"{name} is no declared scheme (verity.protocols.compose.schemes) and no "
+                                          "row of served_table.UNDECLARED: declare it, or list a declared one")
+    if name not in PARTIES:
+        raise Refused("unknown-protocol", f"{name} is declared, but served_table.PARTIES has no pieces for it: "
+                                          "add its pieces, keyed by its declared name, or list another")
+    return PARTIES[name]
+
+
 def pieces(cfg: Mapping[str, Any], party: str) -> list[Piece]:
     """``party``'s pieces under ``cfg``: the workload's, then each listed component's."""
     out = [SERVE] if party == WORKERS else []
-    return out + [PARTIES[c][party] for c in cfg["protocols"] if party in PARTIES.get(c, {})]
+    return out + [launched(c)[party] for c in cfg["protocols"] if party in launched(c)]
 
 
 #: the runner's variables that are flags, serve-openai's and served_piece.py's, which each piece adds its own to
@@ -678,7 +690,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
     bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
     out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
-    for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
+    for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]:
         for k, v in p.variables(cfg, bindings).items():
             out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
     return out
@@ -686,7 +698,7 @@ def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, 
 
 def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
     """Every listed piece's unbound bindings, each once: a runtime session's two sides read one ``address``."""
-    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]
+    return list(dict.fromkeys(k for p in [SERVE, *(x for c in cfg["protocols"] for x in launched(c).values())]
                               for k in p.unbound(bindings)))
 
 
@@ -903,7 +915,7 @@ def coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, s
     ``development`` binding: the attester's where it is bound, else the piece's own."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[x.reaches] if x.development in x._bindings(bindings) else at[x.party] for c in cfg["protocols"]
-            for x in PARTIES.get(c, {}).values() if x.development}
+            for x in launched(c).values() if x.development}
 
 
 def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
@@ -911,7 +923,7 @@ def gate_coins_on(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[s
     optional: the challenger's where its gate is bound, else the workload's."""
     at = {p["name"]: p["machine"] for p in cfg["party"]}
     return {c: at[CHALLENGER] if "gate" in x._bindings(bindings) else at[WORKERS] for c in cfg["protocols"]
-            if (x := PARTIES.get(c, {}).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
+            if (x := launched(c).get(WORKERS)) and x.reaches == CHALLENGER and "gate" in x.optional}
 
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
@@ -969,6 +981,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 
 __all__ = ["HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "REGISTRATION_GOAL", "SERVED",
-           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "listed", "live", "onsite_check", "pending", "pieces",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "launched", "listed", "live", "onsite_check", "pending", "pieces",
            "placement", "prepare", "registration", "remote_check", "request_bound", "served_window", "unbound",
            "variables"]

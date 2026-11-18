@@ -40,3 +40,13 @@ def test_the_bandwidth_audit_without_storage_is_refused_by_name() -> None:
     without = [n for n in K.COMPOSITES[T.ONSITE] if n != "pous"]
     with pytest.raises(Refused, match="bandwidth requires pous, which protocols doesn't list"):
         K.new(T.SERVED_WINDOW, without, REG.components, REG.workloads, "0" * 40)
+
+
+@pytest.mark.parametrize(("name", "why"), [("nonesuch", "nonesuch is no declared scheme"),
+                                           ("dither", "dither is declared, but served_table.PARTIES has no pieces")])
+def test_the_launch_data_refuses_a_name_it_has_no_pieces_for_by_name(name: str, why: str) -> None:
+    cfg = R.load(R.ROOT / "applications" / "onsite_full.toml", REG)
+    cfg["protocols"] = [*cfg["protocols"], name]
+    for read in (lambda: T.pieces(cfg, T.WORKERS), lambda: T.variables(cfg, {}), lambda: T.unbound(cfg, {})):
+        with pytest.raises(Refused, match=why):
+            read()
