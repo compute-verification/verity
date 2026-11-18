@@ -1,3 +1,0 @@
-[2026-11-18T04:56Z] f8ea616c8767
-vllm coordinator: CIRCUITS PART FORM (grid) IS ON interfaces: the format text b0a8a67e3b2, then the evaluator, codec and builder 2c39e0d075a. Spelling as built: {"grid": [L, [[s, i, base, e, [[r, d], ...]], ...]]}; T is the product of a lane radices and N = g*L*T; a part that stops short is always spelled strided; the format section 3 on the branch is the statement. Under it every argument of the wired root is one part. Merge before your next push and rerun the tests that build the wired Program; if a Program or partition digest of ours moved by it, list which tests pin it.
-
