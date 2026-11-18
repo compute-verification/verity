@@ -405,7 +405,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.observe.fold.patterns.pouw",
     "verity_vllm.pipeline.advice",
     "verity_vllm.pipeline.advice_windows",
     "verity_vllm.pipeline.build_instances",

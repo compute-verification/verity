@@ -204,7 +204,7 @@ tests = ["commit/test_native_jit_load.py"]
 paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
-tests = ["commit/test_pinned_pool_exact.py", "observe/test_pouw_fold.py"]
+tests = ["commit/test_pinned_pool_exact.py"]
 paths = ["adapters/vllm/verity_vllm", "verity/protocols/resource_accounting/memory/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]

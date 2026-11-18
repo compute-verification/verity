@@ -59,9 +59,10 @@ from verity_torch.pouw.pearl_c import grouped as PG
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
 
-HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
-#: the least (n, k) of a linear the host schemes' domain takes
-SHAPE = (1600, 1088)
+PEARL = "pearl-c-sm120-v1-h3"
+ON = {"device": "cuda", "kernel": "k"}
+#: an (n, k) inside Pearl-C's kernels
+SHAPE = (128, 1024)
 
 
 def _serve(scheme: str, world: int = 1, **settings) -> Context:
@@ -74,35 +75,22 @@ def test_settings_refuse_a_transcript_directory_that_is_no_string(given):
     said = "pouw setting 'transcript_dir' is a path string"
     with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
         P.Settings.of({"transcript_dir": given})
-    assert P.refusals(HOST[0], _serve(HOST[0], transcript_dir=given)) == (said,)
+    assert P.refusals(PEARL, _serve(PEARL, transcript_dir=given, **ON)) == (said,)
 
 
 def test_settings_take_a_path_string_and_none_for_no_transcript_directory():
     assert P.Settings.of({"transcript_dir": "/t"}).transcript_dir == "/t"
     assert P.Settings.of({"transcript_dir": None}).transcript_dir is None
     assert P.Settings.of({}).transcript_dir is None
-    assert P.refusals(HOST[0], _serve(HOST[0], transcript_dir="/t")) == ()
+    assert P.refusals(PEARL, _serve(PEARL, transcript_dir="/t", **ON)) == ()
 
 
-@pytest.mark.parametrize("scheme", HOST)
-def test_a_tensor_parallel_world_is_refused(scheme):
-    tp = _serve(scheme, world=2)
-    assert P.refusals(scheme, _serve(scheme)) == () == P.refusals(scheme, tp)
+def test_a_tensor_parallel_world_is_refused():
+    scheme = PEARL
+    tp = _serve(scheme, world=2, **ON)
+    assert P.refusals(scheme, _serve(scheme, **ON)) == () == P.refusals(scheme, tp)
     assert [r.why for _, r in H.unmet([(scheme, r) for r in P.requests(scheme, tp)], tp.properties())] == [
         "PoUW's units and transcript are per rank, which is not wired"]
-
-
-def test_a_forward_anchor_is_refused_under_an_executor_that_counts_its_own_forwards():
-    """``start_forward`` places the circuit-backed executor's first pass.  The host's other executors count their forwards
-    from 0, so an anchor past 0 is refused there, and an anchor of 0 is none."""
-    circuits = ", ".join(P.NCP_CIRCUIT_SCHEMES)
-    for scheme in ("ncp-v1", "ncp-v1-shift24"):
-        assert P.refusals(scheme, _serve(scheme, start_forward=0)) == ()
-        said = (f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
-                f"({circuits}); this executor counts its own from 0")
-        assert P.refusals(scheme, _serve(scheme, start_forward=3)) == (said,)
-    assert "ncp-v2" in P.NCP_CIRCUIT_SCHEMES
-    assert P.refusals("ncp-v2", _serve("ncp-v2", start_forward=3)) == ()
 
 
 def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(monkeypatch):
@@ -117,8 +105,6 @@ def test_a_schedule_pearl_cs_path_cannot_run_is_refused_under_the_schemes_name(m
         said = (f"{scheme}: side-gemm: gemm can't leave the main lane under h3: a later step of the call reads what it "
                 "writes; side-gemm: this path runs only a_tree, tile_hash on a side lane, not gemm")
         assert P.refusals(scheme, _serve(scheme, device="cuda", kernel="k", schedule="side-gemm")) == (said,)
-    assert P.refusals("ncp-v1", _serve("ncp-v1", schedule="side-gemm")) == (
-        "ncp-v1: the pouw setting 'schedule' is Pearl-C's; this executor runs serially",)
 
 
 def test_a_pearl_c_scheme_is_built_only_for_a_name_this_path_runs_and_only_under_that_name():
@@ -151,10 +137,10 @@ def _model(*layers: object) -> SimpleNamespace:
     return SimpleNamespace(model=SimpleNamespace(modules=lambda: iter(layers)))
 
 
-@pytest.mark.parametrize("scheme", HOST)
-def test_a_model_with_no_linear_layer_and_layers_that_share_a_quant_method_are_refused(monkeypatch, scheme):
+def test_a_model_with_no_linear_layer_and_layers_that_share_a_quant_method_are_refused(monkeypatch):
     """An executor replaces each layer's own ``quant_method.apply``.  Two layers on one method would be one site, so every
     layer after the first on a method is refused by its ordinal; layers each on their own are taken with their (n, k)."""
+    scheme = PEARL
     monkeypatch.setattr(P, "linear_types", lambda: (Linear,))
     with pytest.raises(ValueError, match=f"^pouw:{scheme}: the model has no linear layer to execute$"):
         P._layers(scheme, _model())

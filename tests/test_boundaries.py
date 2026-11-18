@@ -1060,7 +1060,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py",
 )
 
 

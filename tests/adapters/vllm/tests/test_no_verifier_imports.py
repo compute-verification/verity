@@ -80,10 +80,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
         ),
     },
-    "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
-        "verity_vllm/protocols/pouw/pouw_circuit.py": ("resource_accounting.compute.pouw.verifier.protocol.DomainError",),
-    },
     "memory-accounting": {
         # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
         # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
