@@ -1,7 +1,7 @@
 """PoUS's prover over a served model's weights: ``W`` (the weight tensors a serving system hands in) in the store's
 frozen layout, the commitment to it, ``C* = P2-Enc(W, salt)`` encoded and held on the weights' device, the decode of any
-tensor from ``C*`` at use, and each period's audit of what is held. A serving system's adapter finds the tensors and
-attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
+tensor from ``C*`` at use, and each period's audit of what is held. PoUS's scheme attaches it to a served run
+(`served`): the run registers its weights and computes each block with the weight decoded from ``C*``.
 
 * **W** is each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero past its end, and ``W``
   zero to whole segments of the point's ``2^16`` blocks (`layout_of`, `TensorLayout.of_ranges`; the store's
