@@ -725,8 +725,7 @@ class ProverSide:
         for j, ((i, items), got) in enumerate(zip(passes, fields)):
             for (k, p), f in zip(items, got):
                 out[k] = audit.Opening(i, p, f[0], f[1], f[2], tuple(f[3]), f[4], tuple(f[5]), b"",
-                                       f[6] if len(f) > 6 else b"",
-                                       **({} if len(f) < 8 or f[7] is None else {"origin_position": f[7]}))
+                                       f[6] if len(f) > 6 else b"", f[7] if len(f) > 7 else None)
             fields[j] = None
         del fields
         parts = [out[k:k + OPENINGS_PART] for k in range(0, len(out), OPENINGS_PART)] or [[]]
