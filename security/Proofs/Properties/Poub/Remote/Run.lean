@@ -74,13 +74,14 @@ structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Arr
     ∃ m, m ≤ appends.size ∧ ws[t].heads[i] = chainOf (appends.extract 0 m) ∧
       ∀ p, p < ws[t].plans[i]!.length → ws[t].plans[i]!.block p < R.blocks + ((appends.toList.take m).map (·.count)).sum
   receipts : ∀ t (ht : t < ws.size), ws[t].receipts < RECEIPT_LIMIT
+  origins : ∀ k (hk : k < appends.size) m, appends[k].origin = .rekey m → ∃ k', ∃ hk' : k' < k, appends[k'].slot = m
 
 def Inv (s : State) : Prop :=
   InvOn s.params s.reg s.appendCoins s.windows s.filling s.step s.extent s.appends s.appends.size s.head
 
 theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
     Inv (State.init params reg coins appendCoins notBeforeNs) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
     simp [State.init, STEP_LIMIT, chainOf]
 
 /-! ## Window updates -/
@@ -105,7 +106,7 @@ theorem invOn_same {P R AC ws filling stp extent appends sampledN head} {ws' : A
   have e : ∀ t (h' : t < ws'.size), Keeps P ws[t] ws'[t] := fun t h' => hw t (by omega) h'
   refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.sampledN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_, h.origins⟩
   · obtain ⟨e1, e2, e3, e4, -⟩ := e t ht
     rw [e1, e2, e3, e4]; exact h.sizes t (by omega)
   · obtain ⟨e1, -, -, -, e5, -⟩ := e t ht
@@ -178,7 +179,7 @@ theorem invOn_push {P R AC ws filling stp extent appends sampledN head} (h : Inv
     intro t ht hl; simp [Array.getElem_push, hl]
   refine ⟨fun t ht => ?_, fun t ht hdr => ?_, fun t ht hvr => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, h.limit, h.nonneg,
     fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.sampledN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_, h.origins⟩
   · by_cases hl : t < ws.size
     · simp only [k t ht hl]; exact h.sizes t hl
     · simp only [g t ht hl, hr, hp, hs, hh]; simp
@@ -232,7 +233,8 @@ theorem extract_push_le (as : Array Append) (a : Append) (m : Nat) (hm : m ≤ a
 /-- An append: the store's next `n` indices, the coin of its slot, at or past its index, the chain extended. -/
 theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     (h : InvOn P R AC ws filling stp extent appends sampledN head) (n : Nat) (root coin : ByteArray)
-    (origin : _root_.Poub.Origin) (slot : Nat) (hc : AC[slot]? = some coin) (hs : appends.size ≤ slot) :
+    (origin : _root_.Poub.Origin) (slot : Nat) (hc : AC[slot]? = some coin) (hs : appends.size ≤ slot)
+    (ho : ∀ m, origin = .rekey m → ∃ k', ∃ hk' : k' < appends.size, appends[k'].slot = m) :
     InvOn P R AC ws filling stp (extent + n) (appends.push ⟨extent, n, root, coin, origin, slot⟩)
       (appends.push ⟨extent, n, root, coin, origin, slot⟩).size (some (appendHead head extent n root)) := by
   have hlt : slot < AC.size := by
@@ -243,7 +245,8 @@ theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     rw [getElem!_pos AC slot hlt]; rw [Array.getElem?_eq_getElem hlt] at hc; exact Option.some.inj hc
   refine ⟨h.sizes, h.few, h.drawn, h.beyond, h.below, h.limit, h.nonneg, h.inc,
     fun t ht i hi => readsDistinct_mono (h.reads t ht i hi) (by omega), by have := h.store; omega,
-    ⟨rfl, by simp; omega⟩, fun k hk => ?_, ?_, fun k hk => ?_, ?_, fun t ht i hi => ?_, h.receipts⟩
+    ⟨rfl, by simp; omega⟩, fun k hk => ?_, ?_, fun k hk => ?_, ?_, fun t ht i hi => ?_, h.receipts,
+    fun k hk m hm => ?_⟩
   · rw [Array.getElem_push]
     split
     · exact h.coins k (by assumption)
@@ -271,6 +274,47 @@ theorem invOn_append {P R AC ws filling stp extent appends sampledN head}
     simp only [Array.toList_push]
     rw [List.take_append_of_le_length (by simp; omega)]
     exact hr
+  · by_cases hl : k < appends.size
+    · obtain ⟨k', hk', hs⟩ := h.origins k hl m (by rwa [Array.getElem_push_lt hl] at hm)
+      exact ⟨k', hk', by rw [Array.getElem_push_lt (by omega)]; exact hs⟩
+    · have hk' : k = appends.size := by simp only [Array.size_push] at hk; omega
+      subst hk'
+      rw [Array.getElem_push_eq] at hm
+      obtain ⟨k', hk', hs⟩ := ho m hm
+      exact ⟨k', hk', by rw [Array.getElem_push_lt hk']; exact hs⟩
+
+/-- With refresh, `append` takes a re-key only of a slot an append already holds (`State.slotOk`); without, only fresh
+appends. -/
+theorem append_held {s : State} {A e : Bool} {count : Nat} {origin : _root_.Poub.Origin} {slot : Option Nat}
+    (h1 : ¬((A || (!s.params.refresh && (origin != .fresh || slot.isSome))) || e) = true)
+    (h2 : ¬(s.params.refresh && !(slot.any fun k => s.slotOk k count origin)) = true) :
+    ∀ m, origin = .rekey m → ∃ k', ∃ hk' : k' < s.appends.size, s.appends[k'].slot = m := by
+  intro m hm
+  subst hm
+  cases hr : s.params.refresh
+  · have hne : (Origin.rekey m != Origin.fresh) = true := rfl
+    simp [hr, hne] at h1
+  · rw [hr] at h2
+    cases slot with
+    | none => simp at h2
+    | some k =>
+      have h3 : s.slotOk k count (.rekey m) = true := by simpa using h2
+      unfold State.slotOk at h3
+      rw [Bool.and_eq_true] at h3
+      obtain ⟨-, h3⟩ := h3
+      split at h3
+      all_goals first
+        | (simp at h3; done)
+        | (cases ‹Origin.rekey m = _›; done)
+        | skip
+      cases ‹Origin.rekey m = _›
+      rw [Bool.and_eq_true, beq_iff_eq] at h3
+      obtain ⟨rfl, h4⟩ := h3
+      obtain ⟨b, hf, -⟩ := (Option.any_eq_true _ _).1 h4
+      obtain ⟨i, hi, hb⟩ := Array.getElem_of_mem (Array.mem_of_find?_eq_some hf)
+      have hs := Array.find?_some hf
+      rw [beq_iff_eq] at hs
+      exact ⟨i, hi, by rw [hb]; exact hs⟩
 
 /-! ## The events -/
 
@@ -341,7 +385,7 @@ theorem inv_append {s : State} {root : ByteArray} {count : Int} {origin : _root_
   all_goals first
     | exact ⟨h, rfl, rfl, rfl⟩
     | exact ⟨inv_fail h _ _ _, rfl, rfl, rfl⟩
-    | exact ⟨invOn_append h _ _ _ _ _ (by assumption) (append_room h ‹_› ‹_›), rfl, rfl, rfl⟩
+    | exact ⟨invOn_append h _ _ _ _ _ (by assumption) (append_room h ‹_› ‹_›) (append_held ‹_› ‹_›), rfl, rfl, rfl⟩
 
 theorem inv_sample {s : State} (h : Inv s) (u : Nat) (d : Array (Nat × Nat)) (now : Nat)
     (hm : ∀ hu : u < s.windows.size, s.params.minPasses ≤ s.windows[u].roots.size) :
@@ -393,7 +437,7 @@ theorem invOn_add {P R AC ws filling stp extent appends sampledN head} {below no
   have hsz : (ws.modify filling (addPass root plan post st head below now pr)).size = ws.size := Array.size_modify
   refine ⟨fun t ht => ?_, fun t ht hd => ?_, fun t ht hv => ?_, fun t ht hf => ?_, fun t ht i hi => ?_, hlim,
     by have := h.nonneg; omega, fun t₁ t₂ h₁ h₂ i₁ i₂ hi₁ hi₂ hlt => ?_, fun t ht i hi => ?_, h.store, h.sampledN, h.coins, h.extentSum, h.firsts,
-    h.chain, fun t ht i hi => ?_, fun t ht => ?_⟩
+    h.chain, fun t ht i hi => ?_, fun t ht => ?_, h.origins⟩
   · rw [get t ht]
     have := h.sizes t (by omega)
     split

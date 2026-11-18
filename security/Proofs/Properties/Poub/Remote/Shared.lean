@@ -865,7 +865,7 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
       checkOpening reg reg.digest (s.appends ++ more) (s.record t) (receipterOf reg (s.record t) i) i p o =
       checkOpening reg reg.digest s.appends (s.record t) (receipterOf reg (s.record t) i) i p o := by
     intro i p o hi hp
-    apply checkOpening_congr
+    refine checkOpening_congr _ _ _ _ _ _ _ _ _ ?_ fun a ha => originLeaf_extend _ _ _ _ _ _ (appendOf_held hI₁ ha)
     apply appendOf_extend
     · rw [← happ]; exact firsts_mono hI
     · intro k hk hk'

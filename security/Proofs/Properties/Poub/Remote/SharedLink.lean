@@ -611,7 +611,7 @@ theorem checkWindow_grow {s s' : State} (hI : Inv s) (hI' : Inv s') (hin : Sampl
   rw [List.mem_range] at hk
   obtain ⟨hi, hp⟩ := sample_in_record hI hin ht hd hk
   unfold rejectAt
-  rw [checkOpening_congr]
+  rw [checkOpening_congr _ _ _ _ _ _ _ _ _ ?_ fun a ha => originLeaf_extend _ _ _ _ _ _ (appendOf_held hI ha)]
   apply appendOf_extend
   · rw [← happ]; exact firsts_mono hI'
   · intro k' hk' hk''
