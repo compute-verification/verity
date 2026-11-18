@@ -1,7 +1,9 @@
 """The control pod's reruns of the declared numbers (infra/control/metrics_rerun.py): a number older than its `every` is launched
-as a `research run` on a machine, at most `--max` a pass; never one whose last launch is in flight or passed less than its
-`every` ago, whatever the door says; a failed launch rings its owners and is tried again within the hour, and is held after
-three that ended alike until its declaration changes; a placeholder's owner is rung once; the stop file stops every launch,
+as a `research run` on a machine, at most `--max` a pass and none while `--max-in-flight` are in flight; never one whose last
+launch is in flight or passed less than its `every` ago, whatever the door says; a failed launch rings its owners and is tried
+again within the hour, and is held after three that ended alike until its declaration changes, while a run that waited out
+its pool's line is launched again unrung and uncounted; a placeholder's owner is rung once; the record is synced before its
+rename; the stop file stops every launch,
 read again before each; a dry run launches nothing; a CPU command (no `--on`, `auto`, a CPU node, a pool's `NODE`) runs in
 the loop's pool up to a CPU machine's size, and one asking for GPUs or naming another machine only on a machine the plan
 lists for it now; never `auto` or a small-disk machine; a row's options outside the allowed set are refused; the record
@@ -737,6 +739,9 @@ def test_the_checked_in_loop_parses_and_launches_nowhere_it_must_not():
     cfg, ns = R.parse(lp.argv[3:])
     assert not ns.dry_run and not ns.once and cfg.max >= 1 and ns.every == 900, "the row declares its interval"
     assert cfg.stop.parent == cfg.state.parent == Path("/data/watchers")
+    assert "--max-in-flight" in lp.argv and cfg.max_in_flight == 4, "the row declares its limit on runs in flight"
+    args = ["--tree", "t", "--state", "s", "--stop", "x", "--plan", "p", "--pool", "research", "--every", "900", "--on", "m"]
+    assert R.parse(args)[0].max_in_flight == 4
 
 
 PRICED = "research run --on auto --store-read --source . --cwd source -- uv run python benchmarks/serving_cost/run.py --capture CAPTURE"
@@ -828,3 +833,88 @@ def test_the_loop_rings_with_the_relays_slack_key():
     _, loops = W.load(CONTROL / "watchers.toml")
     (lp,) = [lp for lp in loops if lp.name == "metrics-rerun"]
     assert "/root/.config/verity/relay.env" in lp.env_files
+
+
+def flying(n):
+    """`n` launches of the loop's, of numbers no file declares, queued or running on the loop's machine."""
+    return [{"metrics": [f"other/n{k}"], "run": run_id(90 + k), "at": "2026-11-14T11:50:00Z", "state": "running",
+             "machine": "vy-nebius-cpu-12"} for k in range(n)]
+
+
+def test_no_launch_past_max_in_flight_counting_this_passes_and_the_pass_says_how_many_it_held(tmp_path):
+    """With three of its runs queued or running and a limit of four, a pass launches one of two due numbers and holds the other
+    back for the limit, whatever --max allows; once one of the three ends, the next pass launches it."""
+    files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto -- bash benchmarks/b{n}/run.sh")] for n in range(2)}
+    cfg = setup(tmp_path, files, max=2)
+    pod = Pod(states={run_id(90 + k): RUNNING for k in range(3)})
+    state, _ = run(cfg, pod, {"launches": flying(3)})
+    assert len(pod.launched) == 1
+    assert any("3 in flight (--max-in-flight 4), 1 held back for it; by reason:" in ln for ln in pod.lines)
+    assert ("skip benchmarks/n1: benchmarks/n1 has no reading; but 4 of this loop's launches are in flight, its "
+            "--max-in-flight 4") in pod.lines
+    assert state["numbers"]["benchmarks/n1"]["reason"] == "limit"
+    pod.states[run_id(90)] = ("done", 0, True)
+    run(cfg, pod, state, now=NOW + 900)
+    assert len(pod.launched) == 2 and pod.launched[1][-1] == "benchmarks/b1/run.sh"
+
+
+def test_a_pass_launches_nothing_while_its_limit_is_in_flight(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]}, max_in_flight=2)
+    pod = Pod(states={run_id(90 + k): ("queued", None, False) for k in range(2)})
+    run(cfg, pod, {"launches": flying(2)})
+    assert pod.launched == [] and any("2 in flight (--max-in-flight 2), 1 held back for it" in ln for ln in pod.lines)
+
+
+def test_a_slot_timeout_is_launched_again_unrung_and_never_held_and_named_as_congestion(tmp_path):
+    """A run whose pool had no slot for it within the wait never started: it rings no one, counts toward no hold however often
+    it happens, and is launched again at the pass that sees it end, which names it on one congestion line."""
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1d")]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    for n in range(1, 5):
+        pod.states[run_id(n)] = ("failed", 75, False, {"waited": True})
+        run(cfg, pod, state, now=NOW + n * 4 * 3600)
+    assert len(pod.launched) == 5 and pod.rang == []
+    assert [e["state"] for e in state["launches"]] == ["waited"] * 4 + ["submitted"]
+    assert all("cause" not in e and "rung" not in e for e in state["launches"])
+    (line,) = [ln for ln in pod.lines if ln.startswith("congestion:") and run_id(4) in ln]
+    assert line == ("congestion: 1 run(s) had no slot within their pool's wait and never started, each launched again on a "
+                    f"later pass, with no ring and no count toward a hold: {run_id(4)} (compute-accounting/share) on "
+                    "vy-nebius-cpu-12")
+
+
+def test_slot_timeouts_between_failures_neither_count_nor_break_their_streak(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    ends = [("failed", 1, True), ("failed", 75, False, {"waited": True})] * 2 + [("failed", 1, True)]
+    for n, end in enumerate(ends, start=1):
+        pod.states[run_id(n)] = end
+        run(cfg, pod, state, now=NOW + n * 7200 - 3600)      # sees it end: a slot timeout is launched again here
+        run(cfg, pod, state, now=NOW + n * 7200)             # a failure, an hour on
+    assert len(pod.launched) == 5, "the third failure holds it"
+    assert [r[0] for r in pod.rang] == [run_id(1), run_id(5)] and "held: it ended this way 3 times" in pod.rang[1][3]
+    assert state["numbers"]["compute-accounting/share"]["reason"] == "failing"
+
+
+def test_a_slot_timeout_is_told_from_a_workloads_own_exit_75_by_its_slot_record():
+    left = {"state": "left", "since": "2026-11-14T08:00:00Z", "left": "2026-11-14T12:00:00Z",
+            "why": "no check slot within --wait-max 14400 s (2 check(s) ahead in line)"}
+    assert R.slot_timeout({"rc": 75, "slot": left})
+    assert not R.slot_timeout({"rc": 75, "slot": {"state": "held", "slot": "s1"}}), "it took a slot: the workload exited 75"
+    assert not R.slot_timeout({"rc": 75, "slot": None}), "no pool: the workload exited 75"
+    assert not R.slot_timeout({"rc": 75, "slot": {**left, "why": "its twin took a slot first (claimed)"}})
+    assert not R.slot_timeout({"rc": 1, "slot": left})
+
+
+def test_the_slot_wait_line_is_the_one_slot_py_writes():
+    assert f'gone(f"{R.SLOT_WAIT} {{wait_max:g}} s' in (ROOT / "tools/check/slot.py").read_text(encoding="utf-8")
+
+
+def test_the_record_is_on_disk_before_its_rename(tmp_path, monkeypatch):
+    events = []
+    monkeypatch.setattr(R.os, "fsync", lambda fd: events.append("fsync"))
+    real = R.Path.replace
+    monkeypatch.setattr(R.Path, "replace", lambda self, to: (events.append("replace"), real(self, to))[1])
+    R.save_state(tmp_path / "state.json", {"launches": []})
+    assert events == ["fsync", "replace"] and json.loads((tmp_path / "state.json").read_text()) == {"launches": []}

@@ -240,7 +240,9 @@ machine, or naming `NODE` without a pool goes only to a machine `/data/watchers/
 now (the machine it names, when it names one) and that no launch of the loop's is in flight on (waiting for its slot or
 running), and without one it is skipped and said. The plan is the lead's, one `[[free]]` table a machine, with `machine`,
 `from` and `until` (TOML date-times, UTC) and `metrics`, the ids it is free for: a row naming none is free for none, and
-said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`; never a number whose last launch
+said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`, and nothing while
+`--max-in-flight` of the loop's launches are in flight (launching, queued or running; the pass's line says how many, and how
+many it held back for it); never a number whose last launch
 of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
 says; never a loop's own number (a row whose command's script is under `infra/control/`); never a parked number (a row
 whose `goal` is `top/parked`, rerun only by hand), and said; never a command that takes a value only its owner fills in
@@ -251,7 +253,9 @@ it is. A launch that fails (its run ended non-zero, never registered, never reac
 its slot) rings its numbers' owners, the handle before each id's slash, with its run id and reason line (`research msg
 ring-run`, with `relay.env`'s Slack key), and is launched again an hour later, or after its `every` if that is shorter;
 after three failures in a row that ended alike under its rows as they are, it is rung once more and held seven days or
-until its rows change. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
+until its rows change. A run whose pool had no slot for it within its wait (slot.py left the line at `--wait-max` and exited
+75 before running the command) is no failure: it rings no one, counts toward no hold, is launched again at a later pass, and
+the pass names it on one `congestion:` line. The record's `numbers` holds each declared number's reason at the last pass (one of `REASONS`), and
 `python3 infra/control/metrics_rerun.py classify --tree DIR` prints what the loop could ever do with each number of a
 checkout, with the count of each reason. Each pass holds
 `metrics-rerun.json.lock`, so a dry run and the live loop never share the clone; one that finds it held does nothing and

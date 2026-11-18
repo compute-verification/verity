@@ -148,14 +148,15 @@ env = { RESEARCH_STORE = "/root/watchers-labels-pack-store" }
 
 # each number a metrics.toml on main declares, launched again as a `research run` once its newest reading is older than its
 # `every` (metrics_rerun.py): a pass every --every seconds, from its own clone of main on the pod's own disk, at most --max
-# launches a pass, a CPU command in --pool on the CPU node it names else on --on, a command asking for GPUs or naming another
-# machine only on a machine the lead's plan ({dir}/gpu-plan.toml) lists for it; nothing while {dir}/metrics-rerun.stop
-# exists. It reads the door with the site key in {dir}/metrics-rerun.env (JOBS_TOKEN, events:read), and rings a failed
+# launches a pass and none while --max-in-flight of its runs are queued or running, a CPU command in --pool on the CPU node it
+# names else on --on, a command asking for GPUs or naming another machine only on a machine the lead's plan
+# ({dir}/gpu-plan.toml) lists for it; nothing while {dir}/metrics-rerun.stop exists. It reads the door with the site key in {dir}/metrics-rerun.env (JOBS_TOKEN, events:read), and rings a failed
 # launch's or a placeholder's owners with relay.env's Slack key (`research msg ring-run`)
 [[loop]]
 name = "metrics-rerun"
 argv = ["python3.12", "-s", "{src}/infra/control/metrics_rerun.py", "--tree", "/root/fast/metrics-rerun-tree",
         "--state", "{dir}/metrics-rerun.json", "--stop", "{dir}/metrics-rerun.stop", "--plan", "{dir}/gpu-plan.toml",
-        "--on", "vy-nebius-cpu-12", "--pool", "research", "--every", "900", "--max", "2"]
+        "--on", "vy-nebius-cpu-12", "--pool", "research", "--every", "900", "--max", "2",
+        "--max-in-flight", "4"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env", "{dir}/metrics-rerun.env"]
 env = { RESEARCH_STORE = "/root/watchers-metrics-rerun-store", RESEARCH_LANE = "infra" }
