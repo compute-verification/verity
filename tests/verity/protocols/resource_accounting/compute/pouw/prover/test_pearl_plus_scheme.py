@@ -26,6 +26,12 @@ def test_found_by_name() -> None:
     assert PS.PEARL_PLUS.option == f"pouw:{PearlC().name}"
 
 
+def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
+    from verity.protocols.compose import schemes
+
+    assert [s.name for s in schemes.load().values() if "cut" in s.provides] == ["pearl-plus"]
+
+
 def test_bound_reads_its_term_at_the_parameters_given() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
     with pytest.raises(ValueError, match=r"Pouw.PearlC.δPearlC is evaluated at \['q', 'N'\], and \['N'\] were not given"):

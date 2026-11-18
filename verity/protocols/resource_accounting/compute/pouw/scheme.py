@@ -10,7 +10,8 @@ On a served run (`attach`) it computes every linear block with its device run (`
 workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
 (``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
 arrives (`Attached.step`); outside an epoch a block is the workload's own. It ends the run's pass once each step's blocks
-are issued (``steps``, `StepComputed`). Its settings are
+are issued (``steps``, `StepComputed`). It provides the ``cut`` (`Scheme.provides`): a phase's circuit is cut at the
+linears it computes, whose calls commit their A rows and y. Its settings are
 `SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
 record states.
 """
@@ -402,6 +403,7 @@ PEARL_PLUS = register(Scheme(
     check_settings=check_settings,
     option=OPTION,
     hooks=("blocks", "declared", "memory", "steps"),
+    provides=("cut",),
     requires={"one-labelling": "its own pass manifests, tied to the window record's pearl-a/, pearl-y/ and pearl-b/ values",
               "log-order": "its own coin sessions: the salt's opened on the weights' root, the sample's on the run's "
                            "commitment",
