@@ -1,4 +1,4 @@
-"""The quarantine `AllReduceSumBf16{N,R}` definition and the collective linkage tool
+"""The two-rank all-reduce `b1_tp2.AllReduce2` and the collective linkage tool
 (`tests.engine.collectives.collective_link`) on the TP2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
 
 from __future__ import annotations
@@ -9,8 +9,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.circuits.codec import decode_program, encode_program, program_digest
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
@@ -23,7 +22,6 @@ from tests.engine.collectives.collective_record import (
     SCHEMA_SHARD,
     validate_launch,
 )
-from tests.properties.quarantine_lint import lint
 from verity_vllm.definitions.registry import b1_tp2
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.observe.events import (
@@ -36,8 +34,6 @@ from verity_vllm.observe.events import (
     TritonLaunch,
     ViewDesc,
 )
-from verity_vllm.program.quarantine import collective as QC
-from verity_vllm.program.quarantine.collective import allreduce as A
 
 REPO = (Path(__file__).resolve().parents[6] / "adapters" / "vllm")
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"
@@ -107,48 +103,21 @@ def _v(a, shape=(32, 1536), dtype="bfloat16", off=0):
 
 # --- the definition -----------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("N,R", [(8, 2), (1, 2)])
-def test_allreduce_definition_shape_gates_and_identity(N, R):
-    sp = A.all_reduce_sum_bf16(N, R)
-    assert sp.id == f"AllReduceSumBf16_v1{{N={N},R={R}}}"
-    params, ret = sp.signature()
-    assert [n for n, _ in params] == [f"x{r}" for r in range(R)]
-    assert all(t.leaves == N for _, t in params) and ret.leaves == N
-    # R-1 hops per element, 4 gates per hop (widen, widen, add, narrow)
-    assert sp.gates == 4 * N * (R - 1)
-    assert A.SEMANTIC_ID == "tp2/AllReduceSumBf16@v1"
-    assert sp.defn.conformance.startswith("quarantine") and A.AllReduceSumBf16Elem.conformance.startswith("quarantine")
-    assert "R=2 only" in A.AllReduceSumBf16Elem.conformance and "difftest pending" in A.AllReduceSumBf16Elem.conformance
-    assert set(QC.ALL_DEFINITIONS) == {A.AllReduceSumBf16Elem, A.AllReduceSumBf16}
-
-
-def test_allreduce_rejects_fewer_than_two_ranks():
-    with pytest.raises(ValueError):
-        _ = A.all_reduce_sum_bf16(4, 1).body
-
-
-@pytest.mark.parametrize("R", [3, 4])
-def test_allreduce_refuses_more_than_two_ranks(R):
-    """More than two ranks is `b1_tp2.all_reduce` (the hop order of `b1_tp2.allreduce_order`), never a chain of this family."""
-    with pytest.raises(ValueError, match="allreduce_order"):
-        _ = A.all_reduce_sum_bf16(4, R).body
-    with pytest.raises(ValueError, match="allreduce_order"):
-        A.all_reduce_sum_bf16_words([[0]] * R)
+def _allreduce2(words: list[list[int]]) -> list[int]:
+    return _eval(Program(bind(b1_tp2.AllReduce2, N=len(words[0]))), [words[0] + words[1]])
 
 
 def test_r2_equals_allreduce2_bf16add_and_the_exact_single_rounding():
-    """For two ranks the body is one commutative bf16 add: bit-equal to `b1_tp2.AllReduce2`, to `P.Bf16Add` on non-NaN words, and to
+    """For two ranks the body is one commutative bf16 add: bit-equal to `P.Bf16Add` on non-NaN words, and to
     RN-even of the EXACT sum (no double rounding through the f32 intermediate); symmetric in the two operands."""
     rng = np.random.default_rng(20260917)
     N = 512
     x0 = _bf16_words(rng.standard_normal(N) * rng.choice([1e-3, 1.0, 64.0, 2.0 ** 20], N))
     x1 = _bf16_words(rng.standard_normal(N) * rng.choice([1e-3, 1.0, 64.0, 2.0 ** 20], N))
-    out = _eval(Program(A.all_reduce_sum_bf16(N, 2)), [x0, x1])
-    assert out == A.all_reduce_sum_bf16_words([x0, x1])
-    assert out == _eval(Program(bind(b1_tp2.AllReduce2, N=N)), [x0 + x1])
+    out = _allreduce2([x0, x1])
     assert out == [P.Bf16Add.evaluate(a, b) for a, b in zip(x0, x1)]
     assert out == [_exact_bf16_sum(a, b) for a, b in zip(x0, x1)]
-    assert out == _eval(Program(A.all_reduce_sum_bf16(N, 2)), [x1, x0])
+    assert out == _allreduce2([x1, x0])
 
 
 @pytest.mark.parametrize("a,b", [
@@ -162,13 +131,13 @@ def test_r2_equals_allreduce2_bf16add_and_the_exact_single_rounding():
 ])
 def test_r2_single_rounding_edge_cases(a, b):
     wa, wb = _bf16_words([a])[0], _bf16_words([b])[0]
-    got = A.all_reduce_sum_bf16_words([[wa], [wb]])[0]
+    got = _allreduce2([[wa], [wb]])[0]
     assert got == _exact_bf16_sum(wa, wb) == P.Bf16Add.evaluate(wa, wb)
 
 
 def test_r3_per_hop_rounding_and_order_dependence_exist():
     """Why R > 2 needs a stated order: NCCL reduces in bf16 hop by hop, so (i) it differs from one f32 accumulation rounded once and
-    (ii) it depends on the rank order.  Both effects are exhibited on small bf16 triples.  This family refuses R = 3; the three-rank
+    (ii) it depends on the rank order.  Both effects are exhibited on small bf16 triples.  The three-rank
     all-reduce is `b1_tp2.all_reduce(3, N)`, whose chain follows `allreduce_order(3)` and not the ascending order."""
     words = _bf16_words([1.0, 1.0 + 2.0 ** -7, 2.0 ** -8, 3 * 2.0 ** -9, 2.0 ** -9, -2.0 ** -8, 0.75, 1.5])
 
@@ -192,8 +161,6 @@ def test_r3_per_hop_rounding_and_order_dependence_exist():
     assert differs_from_f32_once is not None, "per-hop bf16 rounding never differed from a single f32 accumulation"
     assert order_dependent is not None, "the hop order never mattered"
     a, b, c = order_dependent
-    with pytest.raises(ValueError):
-        Program(A.all_reduce_sum_bf16(1, 3))
     assert _eval(Program(b1_tp2.all_reduce(3, 1)), [[a, b, c]]) == [hop([a, b, c], measured)] != [hop([a, b, c])]
 
 
@@ -206,27 +173,8 @@ def test_r2_equals_the_wave1_body_checker_formula():
     a = ta.f32_to_bf16_rne((rng.standard_normal(N) * rng.choice([0.01, 1.0, 300.0], N)).astype(np.float32))
     b = ta.f32_to_bf16_rne((rng.standard_normal(N) * rng.choice([0.01, 1.0, 300.0], N)).astype(np.float32))
     wave1 = ta.f32_to_bf16_rne(ta.bf16_to_f32(a) + ta.bf16_to_f32(b))
-    ours = A.all_reduce_sum_bf16_words([[int(x) for x in a], [int(x) for x in b]])
+    ours = _allreduce2([[int(x) for x in a], [int(x) for x in b]])
     assert ours == [int(x) for x in wave1]
-
-
-def test_descriptor_round_trip_and_registry():
-    prog = Program(A.all_reduce_sum_bf16(6, 2))
-    desc = encode_program(prog)
-    ids = set(desc["definitions"])
-    assert any(i.startswith("Root[AllReduceSumBf16_v1{N=6,R=2}]") for i in ids), ids
-    assert "AllReduceSumBf16Elem_v1{R=2}" in ids and {"Bf16ToF32_v1", "F32Add_v1", "F2fpBf16_v1"} <= ids
-    D = decode_program(json.loads(json.dumps(desc)), REGISTRY)
-    assert program_digest(D) == program_digest(prog)
-    assert "AllReduceSumBf16_v1" in REGISTRY and "AllReduceSumBf16Elem_v1" in REGISTRY
-
-
-def test_quarantine_lint_passes_for_the_collective_package():
-    rep = lint(Path(QC.__file__).parents[1])
-    mine = [f for f in rep["files"] if "/collective/" in f["file"]]
-    assert {Path(f["file"]).name for f in mine} >= {"allreduce.py", "__init__.py"}
-    assert all(f["status"] == "pass" for f in mine), [(f["file"], f["problems"]) for f in mine]
-    assert not [d for d in rep["duplicate_semantic_ids"] if d.startswith("tp2/")]
 
 
 # --- the linkage tool: synthetic ranks ------------------------------------------------------------------------------------
@@ -302,8 +250,8 @@ def test_extract_and_link_two_synthetic_ranks_with_instances():
     assert link["schema"] == SCHEMA_LINK and link["ranks"] == [0, 1] and link["world_size"] == 2
     assert link["n_links"] == 2 and link["by_status"] == {"linked": 2} and link["by_kind"] == {"all_reduce": 1, "all_gather": 1}
     l0, l1 = link["links"]
-    assert l0["key"] == {"communicator": "tp:0", "step": 0, "k": 0} and l0["definition"]["id"] == "AllReduceSumBf16_v1{N=32,R=2}"
-    assert l0["definition"]["conformance"].startswith("quarantine")
+    assert l0["key"] == {"communicator": "tp:0", "step": 0, "k": 0} and l0["definition"]["id"] == "AllReduce2_v1{N=32}"
+    assert l0["definition"]["conformance"] == "exact-model-tested"
     assert set(l0["required_writes"]) == {"0", "1"} and l0["required_writes"]["1"]["alloc"] == 101
     assert l0["ranks"]["0"]["producer"]["event"] == 11 and l0["ranks"]["0"]["producer_instance"] == [
         {"node": 3, "spec": "Gemm_v1{K=4,N=8}", "row": 0, "rows": 4, "pattern": "gemm.matmul_kernel_persistent", "event": 11, "step": 0}]
@@ -382,14 +330,14 @@ def test_evidence_link_joins_every_collective_on_both_ranks(evidence_link):
     for step in (0, 3):
         ks = [(ln["key"]["k"], ln["kind"]) for ln in link["links"] if ln["key"]["step"] == step and ln["key"]["communicator"] == "tp:0"]
         assert ks == [(k, "all_reduce") for k in range(57)] + [(57, "all_gather")]
-    # every all-reduce: N = rows x 1536 (32 prompt rows at step 0, 1 decode row at step 3), bf16, sum, the quarantine definition, and a
+    # every all-reduce: N = rows x 1536 (32 prompt rows at step 0, 1 decode row at step 3), bf16, sum, `AllReduce2`, and a
     # required (today unjournaled) write of the result on BOTH ranks with identical geometry
     for ln in link["links"]:
         if ln["kind"] != "all_reduce":
             continue
         rows = 32 if ln["key"]["step"] == 0 else 1
         assert ln["count"] == rows * 1536 and ln["dtype"] == "bfloat16" and ln["reduce_op"] == "sum"
-        assert ln["definition"]["id"] == f"AllReduceSumBf16_v1{{N={rows * 1536},R=2}}"
+        assert ln["definition"]["id"] == f"AllReduce2_v1{{N={rows * 1536}}}"
         assert set(ln["required_writes"]) == {"0", "1"}
         assert ln["required_writes"]["0"]["shape"] == [rows, 1536] == ln["required_writes"]["1"]["shape"]
         assert ln["ranks"]["0"]["result"]["alloc"] == ln["ranks"]["1"]["result"]["alloc"]
@@ -471,7 +419,7 @@ def test_evidence_body_summary_shapes_match_the_links(evidence_link):
         ln = step0[ex["ordinal"]]
         assert ln["module"] == ex["module"] and ln["ranks"]["0"]["operand"]["shape"] == ex["shape_in"] and ln["ranks"]["0"]["result"]["shape"] == ex["shape_out"]
         assert ex["body"].startswith("bf16(sum_r f32(shard_r))") and ex["out_sha_equal_across_ranks"] is True
-        assert ln["definition"]["id"] == "AllReduceSumBf16_v1{N=49152,R=2}"
+        assert ln["definition"]["id"] == "AllReduce2_v1{N=49152}"
 
 
 def test_cli_round_trip(tmp_path):

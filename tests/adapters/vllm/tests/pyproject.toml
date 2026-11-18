@@ -210,10 +210,6 @@ tests = ["commit/test_pinned_pool_exact.py"]
 paths = ["adapters/vllm/verity_vllm", "verity/protocols/resource_accounting/memory/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
-tests = ["engine/collectives/test_tp_collective.py", "properties/test_quarantine_lint.py"]
-paths = ["adapters/vllm/verity_vllm/program/quarantine"]
-
-[[tool.verity.tests.reads]]
 tests = ["engine/test_gen_llama.py", "engine/test_gen_ov_easy.py"]
 paths = ["adapters/vllm/verity_vllm/observe/fold", "adapters/vllm/verity_vllm/pipeline"]
 

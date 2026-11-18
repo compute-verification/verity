@@ -1,4 +1,4 @@
-"""P8: model and target facts live only in ``verity_vllm/program/quarantine/`` and the engine profile: the model facts in
+"""P8: model and target facts live only in the engine profile: the model facts in
 ``engine/profiles/``, and the κ profile that pins them for a (vLLM, torch, Triton, GPU) tuple in ``observe/fold/profiles/``.
 
 The rule's literal scan: a string literal in code (docstrings excepted) naming a model
@@ -17,7 +17,7 @@ from . import _ratchet as R
 
 NAME = "p08_facts"
 RULE = "P8 (model and target facts live in their two homes)"
-HOMES = ("verity_vllm/program/quarantine/", "verity_vllm/engine/profiles/", "verity_vllm/observe/fold/profiles/")
+HOMES = ("verity_vllm/engine/profiles/", "verity_vllm/observe/fold/profiles/")
 MODEL = re.compile(r"(?i)(?<![a-z0-9])(llama|qwen|gemma|olmoe|olmo|mixtral|mistral|smollm|deepseek|phi-?[0-9]|pythia|"
                    r"gpt-?neox|gpt2|granite|falcon|starcoder|opt-[0-9])")
 LAYER_CLASS = re.compile(r"\b((?:QKV|Row|Column|MergedColumn|Replicated|ReplicatedLinear|VocabParallel|Parallel)"
@@ -60,7 +60,7 @@ def scan() -> tuple[R.Violation, ...]:
 
 def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
-                    "Read model and target facts from verity_vllm/program/quarantine/ or the engine profile, "
+                    "Read model and target facts from the engine profile, "
                     "not from a literal.")
 
 
