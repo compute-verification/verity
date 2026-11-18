@@ -90,11 +90,14 @@ def _release(driver: str) -> tuple[int, ...]:
     return tuple(int(p) if p.isdecimal() else -1 for p in driver.split("."))
 
 
+#: the oldest driver the harness, built with CUDA 12.9 (native/build.sh), runs on, per build target
+MIN_DRIVER = {"sm_120a": "575", "sm_90a": "550"}
+
+
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     """Refuses the run unless the device is the card file (calibration/hardware/cards/) whose `driver` holds `name`, the
     name the device gives: its `arch`'s architecture file's (calibration/hardware/architectures/) compute capability, its
-    `sm.count` SMs, and a driver no older than the oldest `driver_min` of that architecture's toolkit gates. The build
-    target is the card's `arch`."""
+    `sm.count` SMs, and a driver no older than `MIN_DRIVER`'s for its `arch`. The build target is the card's `arch`."""
     # here: loading the harness needs the standard library alone
     from verity.device import gpu_card_reporting, load_architecture, number, skus
 
@@ -105,7 +108,10 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
         raise IdentityError(f"not the card: {e.args[0]} (the GPU card files: "
                             f"{', '.join(skus('gpu', directory=CARD_FILES))})") from None
     arch, want_capability = card["arch"], architecture["capability"]
-    min_driver = min((gate["driver_min"] for gate in architecture["toolkit"]), key=_release)
+    if arch not in MIN_DRIVER:
+        raise IdentityError(f"not the card: {name} ({card['sku']}) builds for {arch}, and identity.MIN_DRIVER has no "
+                            f"oldest driver for {arch}: add it")
+    min_driver = MIN_DRIVER[arch]
     want_sms = int(number(card["sm"]["count"]))
     problems = []
     if capability != want_capability:

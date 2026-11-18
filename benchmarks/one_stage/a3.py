@@ -36,7 +36,8 @@ import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
@@ -117,7 +118,7 @@ def main() -> int:
         m["base"] = base
 
     # one docket, before the sample
-    sampling_design = D.parse_design(f"subset:{a.k}")
+    sampling_design = RND.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
         mine = a0.stand_in_ports(m["st"]["name"], m["st"]["content_digest"], m["st"]["meta"], m["n"])

@@ -54,7 +54,8 @@ from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
@@ -215,7 +216,7 @@ def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = No
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*IF.listed_program(defs, ()), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), design or RND.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -860,7 +861,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     a tree of its own and wired to nothing, one values unit on other keys than its block's scores unit (`other_keys`).  It
     commits, and its registration is refused on the ports the verifier derives, which hold no tree of a unit's key rows
     (``R3-ports``); the window's own registers on them."""
-    s, design = Served(row(HALF)), D.parse_design("stratified:1")
+    s, design = Served(row(HALF)), RND.parse_design("stratified:1")
     w = window(s, UNITS, UNITS_CHUNK, design)
     at, keyed = WI.bases(w.members), {m.key for m in w.members if is_keys(m.template)}
     copies = replace(w, members=tuple(replace(m, wired=tuple(x for x in m.wired if WI.writers(w.members, x[2], at)[0][0].key

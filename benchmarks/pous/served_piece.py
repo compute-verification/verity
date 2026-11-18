@@ -118,6 +118,7 @@ from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.scheme import POUS
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
@@ -160,8 +161,9 @@ BINDING_TAG = b"verity/pous/served-window/v1"
 #: what `sessions` keeps in the private directory beside the run's record and the table until `answers` has answered:
 #: ``C*`` as setup sent it, its blocks end to end, and the summary so far
 STORE, HELD = "cstar.bin", "held.json"
-#: the period's challenges: the 320-read window's (`ObligationWide320`); an accepted run certifies at `1% + 2^-128`
-ROUNDS = P2.CERT_K_WIDE320
+#: the period's challenges: PoUS's declared `challenges`, the 320-read window's (`ObligationWide320`); an accepted run
+#: certifies at `1% + 2^-128`
+ROUNDS = POUS.settings["challenges"]
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}
 
