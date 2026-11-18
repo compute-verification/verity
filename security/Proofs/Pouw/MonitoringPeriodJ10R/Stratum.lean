@@ -183,7 +183,7 @@ theorem tileStratumAcceptProb_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k :
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (B : Finset (Fin nB))
     (hc : (B.filter (σ · = sT)).card + k sT ≤ tileCount σ sT) :
     ENNReal.ofReal (prob fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
-      ENNReal.ofReal (Real.exp (-FlockSoundness.Audit.SamplingDesign.stratumRisk σ k sT (B.filter (σ · = sT)).card)) := by
+      ENNReal.ofReal (Real.exp (-Spot.Sampling.SamplingDesign.stratumRisk σ k sT (B.filter (σ · = sT)).card)) := by
   rw [tileStratumAcceptProb_eq_proj]
   exact Spot.Sampling.SamplingDesign.stratified_proj_escape_eq_exp σ k hk sT B hc
 
