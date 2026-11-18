@@ -32,7 +32,7 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Inst
 
-open Model Audit Compose Placed
+open Model Spot.Sampling Compose Placed
 
 /-! ## Keys and gates -/
 

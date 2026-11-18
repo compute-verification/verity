@@ -91,13 +91,12 @@ def test_chunks_are_cut_again_at_the_reads_ends(served):
     assert doc["registered"] == served(PARTITION)[2]["registered"]
 
 
-def values_and_rows(window, doc, key=bytes(range(32))):
-    """The committer's weights committed under ``key`` (`window_weights.weight_value`, rows held), and each member's rows as
+def values_and_rows(window, doc):
+    """The committer's weights committed under fresh salts (`window_weights.weight_value`, rows held), and each member's rows as
     `serving_rows.read_all` reads them: ``in0`` the activations, ``in1`` the weight row each unit reads."""
     rng, reg = np.random.default_rng(5), IF.declarations(doc)[2]
     words = {f: rng.integers(0, 1 << 16, c, dtype=np.uint16) for f, c, _s, _b in FIELDS}
-    values = {p: WW.weight_value("cd" * 64, p, words[p.split("/", 1)[1].rpartition("@")[0]], key, WW.WEIGHTS_NONCE + i,
-                                 keep_rows=True) for i, p in enumerate(reg.params)}
+    values = {p: WW.weight_value("cd" * 64, p, words[p.split("/", 1)[1].rpartition("@")[0]], keep_rows=True) for p in reg.params}
     data = []
     for m in window.members:
         (r,) = [r for r in reg.reads if r.at <= m.base < r.at + r.reader_units]
@@ -137,7 +136,7 @@ def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_ro
     reg = IF.declarations(doc)[2]
     ranges = IF.ranges_of(doc["templates"], None)
     assert WT.by_reference(window, reg, data, None, ranges) == (data, {}, {}, {})
-    other, _ = values_and_rows(window, doc, key=bytes(32))
+    other, _ = values_and_rows(window, doc)
     data[1]["rows"]["in1"] = data[1]["rows"]["in1"] ^ np.uint16(1)
     with pytest.raises(ValueError, match=re.escape(f"{T}/c1 in1: the rows its units read aren't 'weights/model.layers.1.mlp.gate.weight@32'")):
         WT.by_reference(window, reg, data, values, ranges)

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.EndToEnd.Joint.MT.Statement
-public import Proofs.Flock.Soundness.Audit.HarmBound
+public import Proofs.Spot.Sampling.HarmBound
 public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -39,7 +39,7 @@ import Proofs.Core.Game.Poly
 
 namespace Flock.Guarantees.StratifiedBlockMT
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.HiddenDec
   FlockSoundness.Discharge.ZkSession

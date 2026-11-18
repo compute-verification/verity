@@ -832,9 +832,8 @@ def member(model: str, card: str, mode: str) -> str:
     """The measurement's member: the model's name, the card's `short` in its card record (`kit.card_short`, refused
     unless one record names the card) and the mode, so `llama-3.2-1b-h200-plaintext`."""
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
-    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card, directory=CARD_FILES)}-{mode}"
+    return f"{model.rsplit('/', 1)[-1].lower()}-{kit.card_short(card)}-{mode}"
 
 
 def record_metric(out: Path, summary: dict, meta: dict) -> dict:

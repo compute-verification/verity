@@ -74,8 +74,6 @@ SUPPORTED: dict[str, Supported] = {
 ENGINE_ARGS = ("max_num_batched_tokens", "long_prefill_token_threshold", "max_model_len", "gpu_memory_utilization",
                "kv_cache_memory_bytes", "enable_chunked_prefill", "enable_prefix_caching", "async_scheduling", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
-#: Explicit overrides that can select kernels outside a protocol option's Build.
-KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
 #: The keyword arguments ``generate`` accepts beside the prompts and sampling parameters.
 GENERATE_SUPPORTED = ("use_tqdm",)
 
@@ -116,7 +114,7 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     execution = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
     fixed, most = EC.options(name, execution), EC.max_num_seqs(name)
     bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
-    bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in KERNEL_PROFILE_OVERRIDES
+    bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in served.KERNEL_PROFILE_OVERRIDES
             if k not in fixed and options.get(k) is not None]
     if options.get("max_num_seqs", most) > most:
         bad.append(f"max_num_seqs={options['max_num_seqs']}, over the class's {most}")
@@ -139,20 +137,9 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
             raise ValueError("verity_vllm.LLM: protocols_config without protocols")
         return None
     ctx = PO.Context(stage="serve", enabled=enabled, world=opts["tensor_parallel_size"], enforce_eager=opts["enforce_eager"],
-                     settings=PO.load_settings(opts["protocols_config"]))
+                     settings=PO.load_settings(opts["protocols_config"]), kernels=served.kernels(explicit))
     ctx = dataclasses.replace(ctx, filled=PO.engine_fills(ctx))
-    overrides = tuple(k for k in KERNEL_PROFILE_OVERRIDES if explicit and explicit.get(k) is not None)
-    bad = []
-    for entry in enabled:
-        try:
-            needs_build = PO.requires_build(entry, ctx)
-        except PO.Refused:
-            continue
-        if needs_build and overrides:
-            bad.append(f"{entry}: engine overrides {', '.join(overrides)} can change the served kernels and no longer match its "
-                       "Build; use the pinned engine profile")
-    bad.extend(PO.refusals(ctx))
-    if bad:
+    if bad := PO.refusals(ctx):
         raise PO.refused(bad)
     return ctx
 
@@ -249,7 +236,7 @@ class LLM:
         options = class_options(options)
         opts = resolve_options(options)
         self.options = opts
-        self.engine_overrides = {k: options[k] for k in KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
+        self.engine_overrides = {k: options[k] for k in served.KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
         if opts["engine_class"] is not None:
             EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)

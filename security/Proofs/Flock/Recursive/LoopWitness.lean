@@ -5,7 +5,7 @@ public import Proofs.Flock.Recursive.ZkServerAccepts
 public import Proofs.Flock.Recursive.ZkServerFixed
 public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.SessionLoop.TablesSide
-public import Proofs.Flock.Soundness.Audit.OneStage
+public import Proofs.Spot.Sampling.OneStage
 import all Init.Control.Except
 import all Init.Data.Array.Basic
 import all Init.Data.Int.Repr
@@ -292,7 +292,7 @@ theorem RecursiveZKLoop_nontrivial :
             (fun x => (fun (_ : Unit) (_ : Fin 0 → ByteArray) => ()) x.1 x.2.1) +
         ((0 : ℕ) : ℝ≥0∞) * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) := by
   refine ⟨fun _ v => v.2.1.2, fun _ => (), fun b => b = false, ?_⟩
-  refine not_le_of (FlockSoundness.Audit.prCoin_eq_one_of fun _ => rfl)
+  refine not_le_of (Spot.Sampling.prCoin_eq_one_of fun _ => rfl)
     (le_antisymm ((FlockSoundness.Game.prCoin_mono fun _ hc => nomatch hc).trans
       FlockSoundness.Game.prCoin_false.le) zero_le) ?_ (by simp)
   refine ENNReal.iSup_eq_zero.2 fun _ => ?_
@@ -363,7 +363,7 @@ theorem RecursiveZKLoopAnySum_nontrivial :
             (fun x => (fun (_ : Unit) (_ : Fin (Flock.Guarantees.fwHoles sched0) → ByteArray) => ()) x.1 x.2.1) +
         (Flock.Guarantees.fwHoles sched0 : ℝ≥0∞) * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) := by
   refine ⟨fun c v => (c, v.2.1.2), false, fun _ => true, fun p => p.1 = true ∧ p.2 = false, ?_⟩
-  refine not_le_of (FlockSoundness.Audit.prCoin_eq_one_of fun _ => ⟨rfl, rfl⟩)
+  refine not_le_of (Spot.Sampling.prCoin_eq_one_of fun _ => ⟨rfl, rfl⟩)
     (le_antisymm ((FlockSoundness.Game.prCoin_mono fun c hc => ?_).trans FlockSoundness.Game.prCoin_false.le)
       zero_le) ?_ (by rw [fwHoles_sched0]; simp)
   · rcases c with ⟨k | c', x⟩

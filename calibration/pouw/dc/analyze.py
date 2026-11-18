@@ -333,7 +333,8 @@ HONEST = {"sm90": ("wg_s8_n256_a1", "wg_s8_n256_a0"), "sm100": ("tc_i8_m128_n256
 
 def record(where: Path, out: dict, failed: str | None) -> int:
     """Writes the run's validation and, when `failed` is None, `METRIC`: the most slots a SM a clock any timed tensor form
-    with data writes, over the honest form's. Returns 1 when `failed`."""
+    with data writes, over the honest form's, its member the card's `short`, or no value where no card record names the
+    run's card. Returns 1 when `failed`."""
     from verity_bench import kit
 
     w = kit.writer(where)
@@ -341,16 +342,22 @@ def record(where: Path, out: dict, failed: str | None) -> int:
                  failed or f"{len(out['forms'])} forms timed")
     if failed:
         return 1
+    try:
+        member = kit.card_short(w.stamp["card"])
+    except SystemExit as refused:
+        w.measurement(METRIC, None, "times honest", mark="measured", why=str(refused), extra={"family": out["family"]})
+        return 0
     forms, names = out["forms"], HONEST[out["family"]]
     honest = next((forms[n] for n in names if n in forms), None)
     best = max((f for f in forms.values() if f.get("slots") and not f.get("zero_data")), key=lambda f: f["slots"],
                default=None)
     extra = {"family": out["family"], "form": best and best["form"], "honest_form": honest and honest["form"]}
     if honest and best and honest.get("slots"):
-        w.measurement(METRIC, best["slots"] / honest["slots"], "times honest", mark="measured", extra=extra)
+        w.measurement(METRIC, best["slots"] / honest["slots"], "times honest", mark="measured", member=member,
+                      extra=extra)
     else:
         w.measurement(METRIC, None, "times honest", mark="measured", why=f"the run timed none of {', '.join(names)}",
-                      extra=extra)
+                      member=member, extra=extra)
     return 0
 
 

@@ -945,7 +945,7 @@ charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `ref
 `reference_window`, `security/Definitions/Certifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
 because it is not advice: the compile slice, its charge included, is proved on every advised execution phase and never sampled,
 so `en` is pinned by that slice's scan, and the carry across execution phases is chained from the book's priors
-(`charge_chain.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
+(`charge_rows.check_chain`). That the circuits compute the Lean definitions (`ChargeCount_v1`'s `AdviceV1.window`,
 `ChargeCount_v2`'s `WindowCharge.window`) is held by tests: circuit-check holds each circuit to its Python reference,
 and the Lean is held to those references by the charge difftests: the network attester's program's `NetworkAttester.AdviceV1`
 and `NetworkAttester.WindowCharge`, proved equal to the definitions (`CodeChargesV1`, `CodeChargesWhole`), give what
@@ -1064,7 +1064,7 @@ The notation is for one audit of W execution phases:
 
 and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
 of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + ε_bind + δ_in is the error of
-`audit_influence` (`security/Proofs/Flock/Soundness/Audit/Influence.lean`).
+`audit_influence` (`security/Proofs/Spot/Sampling/Influence.lean`).
 
 **Why it holds.**
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of
@@ -1629,7 +1629,7 @@ AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` r
 
 ## The replay at the served shape
 
-In [protocol/served-shape.md](protocol/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
+In the adapter's [served-shape.md](../../../../../adapters/vllm/verity_vllm/compiler/served-shape.md): a served execution phase as the slice's input (vLLM 8eb1's w212), and
 the replay's cost at served shapes and its split into proof blocks.
 
 ## Tests

@@ -49,7 +49,7 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
 namespace FlockVBridge.Family
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 
 local notation "𝔽" => FlockLevel3.GF128

@@ -21,6 +21,7 @@ def test_found_by_name() -> None:
 
 def test_bound_refuses_a_charge_it_does_not_state() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
-    assert S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names).uncredited == 0
+    with pytest.raises(ValueError, match="pearl-plus: its delta_scheme .* is not said"):
+        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names)
     with pytest.raises(ValueError, match="charges are"):
         S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0})
