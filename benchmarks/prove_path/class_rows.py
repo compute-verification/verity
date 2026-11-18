@@ -102,7 +102,7 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit
+    from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, check_provable, class_circuit
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
@@ -132,6 +132,7 @@ def main(argv=None) -> int:
             built, program = WC.class_program(reg, cls), WC.class_program
             WC.class_program = lambda r, c: built if c == cls else program(r, c)
             circuit = class_circuit(reg, cls)
+            check_provable(circuit)
     t1 = time.perf_counter()
     doc = census(circuit, IF)
     doc["class"] = {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions}

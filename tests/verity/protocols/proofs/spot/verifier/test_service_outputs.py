@@ -12,6 +12,7 @@ from collections.abc import Mapping
 
 import pytest
 
+from verity.circuits import population as PN
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -91,7 +92,7 @@ def _record(program: Program, query, sizes: Mapping[str, int], sampling_design, 
 
 
 def _window(row: int, previous: str | None, registered=()) -> tuple[dict, dict]:
-    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
+    return _record(PN.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
 
 
 def _left(rec: Mapping, port: str = "next") -> dict:
@@ -147,7 +148,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
     cand, ports = _window(3, prev, [_left(w0)])
 
     def check(log: list) -> V.Verdict:
-        return V.check(cand, P.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
+        return V.check(cand, PN.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
                        {"state": 2}, window_root=FC.WINDOW["root"], outputs=out)
 
     assert stream._earlier(cand) == [stream.log[-1]] and check(stream._earlier(cand)).codes[0] == "R7-output"
@@ -247,13 +248,13 @@ def _two_stage(spec: S.Spec):
     interior's record and ports registering the entries it is given."""
     stream = _stream(spec, replay=BLOCK)
     m = Q * N_RHO
-    boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
+    boundary, bports = _record(PN.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
                                {"law": "subset", "k": Q}, 0, None)
     reg = stream.register(boundary, bports)
     first = stream.select(reg)
 
     def interior(registered):
-        return _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
+        return _record(PN.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
                        0, reg.digest, registered, interior=True, replay_sample=D.proved(first.draw))
     return stream, boundary, reg, first, {"state": {"record": reg.digest, "port": "carry"}}, interior
 

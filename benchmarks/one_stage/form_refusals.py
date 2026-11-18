@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ports import free_port  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
@@ -94,7 +95,7 @@ def main() -> int:
     TG.load_registries()
     cases: dict[str, dict] = {}
     for name, (fn, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
-        program = P.mixed_population_program([(fn, FP.N)])
+        program = PN.mixed_population_program([(fn, FP.N)])
         part = P.partition(program, P.template_instances_query([fn]))
         d = work / name
         stage = d / "stage"

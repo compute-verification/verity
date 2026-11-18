@@ -6,6 +6,7 @@ from verity.circuits import codec
 from verity.circuits.refs import Affine, Explicit, Grid, Strided, grid_ref, lane_bounds, refs_from_json, spell
 
 KEYS = {"grid": [64, [["n", 2091, 0, 1, [[4, 0], [32, 64]]]]]}
+UNTIED = {"grid": [2048, [["n", 108, 0, 1, [[192, 0], [4, 2048]]]]]}
 
 
 def test_the_attention_keys_argument_is_four_members_a_rope_row_then_the_next():
@@ -16,6 +17,14 @@ def test_the_attention_keys_argument_is_four_members_a_rope_row_then_the_next():
     assert codec._checked_refs(g, lambda s, i: 2048) is g
     with pytest.raises(ValueError, match="grid-overrun"):
         codec._checked_refs(g, lambda s, i: 2047)
+
+
+def test_the_untied_keys_argument_is_one_run_of_a_lane_read_192_times_then_the_next():
+    g = refs_from_json(UNTIED)
+    assert (g.run, g.periods, g.count) == (2048, 768, 1572864) and lane_bounds(g.run, g.lanes[0]) == (0, 8191)
+    assert codec._checked_refs(g, lambda s, i: 8192) is g
+    with pytest.raises(ValueError, match="grid-overrun"):
+        codec._checked_refs(g, lambda s, i: 8191)
 
 
 def test_reference_k_is_its_lane_its_periods_digits_and_its_offset():
