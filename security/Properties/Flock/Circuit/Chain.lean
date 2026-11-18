@@ -23,7 +23,9 @@ tree):
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
   local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
   Definition C's Boolean map names for it (`BooleanAgrees`).
-* `BlockCorrect`: those rows, agreeing with a trace of C at the ports, make block `u` correct.
+* `PortsBind`: C's trace and the statement's port columns, opened at the same positions (`Partition.pos`), agree at
+  the committed ports (`PortsAgree`), or two openings of one leaf collide.
+* `BlockCorrect`: those rows, agreeing with a trace of C at the committed ports, make block `u` correct.
 * `DescEqPartOf`: the inference-only check's three counts (gates per block, fresh input bits per block, all gates) are
   `partOf`'s, at the blocks of its owners and the gates of θ.
 -/
@@ -39,9 +41,6 @@ def portBits {P : Prog} (X : (ofProgram P).Trace) (ports : Array Spot.BlockFront
   ports.toList.flatMap fun p =>
     if h : p.gate < (ofProgram P).N then List.ofFn fun i : Fin ((ofProgram P).w ⟨p.gate, h⟩) => (X ⟨p.gate, h⟩).getLsbD i
     else List.replicate p.width false
-
-/-- The total width of `ports`. -/
-def portWidth (ports : Array Spot.BlockFront.Port) : ℕ := ports.foldl (· + ·.width) 0
 
 /-- Block `u` of `partOf P blocks` holds exactly the computed gates the front's ranges hold. -/
 def BlockIs (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (fr : Spot.BlockFront.Front) : Prop :=
@@ -92,9 +91,51 @@ def BlockEval : Prop :=
     ∀ X : (ofProgram P).Trace,
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
 
+/-- The first bit of port `j` of `ports`: the widths of the ports before it. -/
+def portOff (ports : Array Spot.BlockFront.Port) (j : ℕ) : ℕ := ((ports.toList.take j).map (·.width)).sum
+
+/-- The `w`-bit word whose bit `i` is column `col (off + i)` of `z`. -/
+def wordAt (z : ℕ → Bool) (col : ℕ → ℕ) (off w : ℕ) : BitVec w := Verity.ofBits fun i : Fin w => z (col (off + i.val))
+
+/-- **The block's committed ports agree with the template's columns**: at each input port in in(S), C's value is the
+word on its input port bits, and at each output port in out(S) the word on its output port bits, for S block `u`'s
+gates. The ports outside in(S) and out(S) (a parameter leaf S does not read, a return leaf only S reads) are not
+committed, and nothing here reads them. -/
+def PortsAgree (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (fr : Spot.BlockFront.Front)
+    (t : Tmpl.Tmpl) (z : ℕ → Bool) (X : (ofProgram P).Trace) : Prop :=
+  (∀ j (hj : j < fr.ins.size) (g : Fin (ofProgram P).N), g.val = fr.ins[j].gate →
+      g ∈ (ofProgram P).into ((partOf P blocks).gates u.castSucc) →
+      X g = wordAt z (Flock.Lower.inBit t) (portOff fr.ins j) ((ofProgram P).w g)) ∧
+    ∀ j (hj : j < fr.outs.size) (g : Fin (ofProgram P).N), g.val = fr.outs[j].gate →
+      g ∈ (ofProgram P).exits ((partOf P blocks).gates u.castSucc) →
+      X g = wordAt z (Flock.Lower.outBit t) (portOff fr.outs j) ((ofProgram P).w g)
+
+/-- **`PortsBind`, step 5: the ports bind.** Block `u`'s trace `X` opens at each gate of in(S) and out(S) at its position
+`pos L g` under the window's roots `c` (`Partition.Rblk`'s first half), and the statement's port columns open at the
+same positions to the words on its port bits (openings `π'`). Then they agree (`PortsAgree`), or two openings of one
+leaf to different values collide under `H`. The encoding `enc` is injective. -/
+def PortsBind : Prop :=
+  ∀ {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Verity.Digest) (P : Prog)
+    (enc : (g : Fin (ofProgram P).N) → BitVec ((ofProgram P).w g) → α), (∀ g a b, enc g a = enc g b → a = b) →
+    ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size) (L : Verity.Layout (ofProgram P)) (c : Verity.Root → Sc.Com)
+      (X : (ofProgram P).Trace) (π π' : Fin (ofProgram P).N → Sc.Op) (fr : Spot.BlockFront.Front) (t : Tmpl.Tmpl)
+      (z : ℕ → Bool),
+    let S := (partOf P blocks).gates u.castSucc
+    (∀ g ∈ (ofProgram P).into S ∪ (ofProgram P).exits S,
+      ∃ p, (partOf P blocks).pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g (X g)) (π g)) →
+    (∀ j (hj : j < fr.ins.size) (g : Fin (ofProgram P).N), g.val = fr.ins[j].gate → g ∈ (ofProgram P).into S →
+      ∃ p, (partOf P blocks).pos L g = some p ∧
+        Sc.Opens H (c p.1) p.2 (enc g (wordAt z (Flock.Lower.inBit t) (portOff fr.ins j) _)) (π' g)) →
+    (∀ j (hj : j < fr.outs.size) (g : Fin (ofProgram P).N), g.val = fr.outs[j].gate → g ∈ (ofProgram P).exits S →
+      ∃ p, (partOf P blocks).pos L g = some p ∧
+        Sc.Opens H (c p.1) p.2 (enc g (wordAt z (Flock.Lower.outBit t) (portOff fr.outs j) _)) (π' g)) →
+    PortsAgree P blocks u fr t z X ∨
+      ∃ g p v v', (partOf P blocks).pos L g = some p ∧
+        Hash.CollisionIn H (Sc.hashed H (c p.1) p.2 v (π g) ++ Sc.hashed H (c p.1) p.2 v' (π' g))
+
 /-- **`BlockCorrect`, (J): the block is correct.** Rows of the net `lower`'s template of the block's Program unrolls to,
-satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at
-the input and output port bits, make block `u` correct in C. -/
+satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at the committed ports
+(`PortsAgree`, what `PortsBind` concludes), make block `u` correct in C. -/
 def BlockCorrect : Prop :=
   ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog)
     (t : Tmpl.Tmpl) (nt : Net),
@@ -103,10 +144,7 @@ def BlockCorrect : Prop :=
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
     BooleanAgrees P boolean →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
-    ∀ X : (ofProgram P).Trace,
-      (∀ i < portWidth fr.ins, (portBits X fr.ins).getD i false = z (Flock.Lower.inBit t i)) →
-      (∀ k < portWidth fr.outs, (portBits X fr.outs).getD k false = z (Flock.Lower.outBit t k)) →
-      (partOf P blocks).Correct X u.castSucc
+    ∀ X : (ofProgram P).Trace, PortsAgree P blocks u fr t z X → (partOf P blocks).Correct X u.castSucc
 
 /-- The blocks of the owners `own` (one a root node): block `u`'s ranges are its root nodes' gates. -/
 def ownerRanges (P : Prog) (own : Array (Option ℕ)) : Array (Array (ℕ × ℕ)) :=
