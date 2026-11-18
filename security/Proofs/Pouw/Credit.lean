@@ -103,9 +103,9 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
         prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
           (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
           ∃ D, Flock.Draw.subset S[s].k S[s].size (SamplingDesign.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
-    _ ≤ ∏ s : Fin S.size, (SamplingDesign.subset S[s].size S[s].k (hk s)).missProb (localOf S B s) :=
+    _ ≤ ∏ s : Fin S.size, (Verity.SamplingDesign.subset S[s].size S[s].k (hk s)).missProb (localOf S B s) :=
         Finset.prod_le_prod fun s _ => SamplingDesign.subset_exec_escape_le _ _ _ (hk s) _
-    _ = _ := Finset.prod_congr rfl fun s _ => SamplingDesign.subset_escape (hk s) _
+    _ = _ := Finset.prod_congr rfl fun s _ => Verity.SamplingDesign.subset_escape (hk s) _
 
 /-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
