@@ -41,7 +41,9 @@ def requests(ctx: Any) -> tuple[H.RequireProperty, ...]:
 
 class Attached:
     """Pearl+ on one served run's exchange: the run's declaration (``declared``), its linear weights (``memory``), each
-    step's end (``steps``), and every linear block computed by the device run (`kernel`)."""
+    step's end (``steps``), and every linear block computed by the device run (`kernel`). Its reports
+    (`verity.hooks.Reports`) are the run's: ``record`` its commitment, which the composition's record carries, and
+    ``summary`` its details; `release` finishes the run once serving ends."""
 
     def __init__(self, ctx: Any) -> None:
         self.ctx = ctx
@@ -80,6 +82,21 @@ class Attached:
             raise RuntimeError(f"pearl-plus: block {due.block} is due before the run registered its linear weights")
         return self.run.gemm(due.key, due.inputs["x"], due.inputs["weight"], due.inputs.get("bias"))
 
+    def record(self) -> Mapping[str, Any]:
+        return {"entry": OPTION, "commitment": dict(self.run.commits) if self.run is not None else None}
+
+    def summary(self) -> Mapping[str, Any]:
+        return dict(self.run.details) if self.run is not None else {}
+
+    def release(self) -> None:
+        if self.run is None:
+            return
+        if self.session is None:
+            self.run.finish()
+        else:
+            from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+            SV.finish_window(self.run, self.session)
+
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
         """The device run over ``weights``: their roots committed before any salt, the salt coin opened on their root
         (the challenger's session with ``challenger``, else ``coins``), and the run's pass limit and retained passes."""
@@ -108,12 +125,13 @@ class Attached:
         return run
 
 
-def attach(exchange: Any, ctx: Any) -> None:
+def attach(exchange: Any, ctx: Any) -> Attached:
     on = Attached(ctx)
     exchange.subscribe(PEARL_PLUS.name, "declared", on.declare)
     exchange.subscribe(PEARL_PLUS.name, "memory", on.registered)
     exchange.subscribe(PEARL_PLUS.name, "steps", on.step)
     exchange.request(PEARL_PLUS.name, H.ComputeBlockWith(on.kernel))
+    return on
 
 
 PEARL_PLUS = register(Scheme(

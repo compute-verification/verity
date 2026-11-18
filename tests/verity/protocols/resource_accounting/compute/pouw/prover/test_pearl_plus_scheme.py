@@ -70,7 +70,8 @@ def _attached(monkeypatch) -> tuple[_Exchange, _Run]:
     ex, run = _Exchange(), _Run()
     monkeypatch.setattr(PS.Attached, "inputs", lambda self, event: ({3: "w"}, {}))
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
-    PS.PEARL_PLUS.attach(ex, {})
+    on = PS.PEARL_PLUS.attach(ex, {})
+    assert on.record() == {"entry": PS.OPTION, "commitment": None}
     ex.emit(H.RegisteredValues((("model.layers.0.qkv.weight", "w"),), linear=frozenset({"model.layers.0.qkv.weight"})))
     return ex, run
 
@@ -165,3 +166,17 @@ def test_tie_uniform_is_its_one_setting() -> None:
 def test_requests_eager_one_rank_and_steps_in_turn() -> None:
     assert H.unmet([("pearl-plus", r) for r in PS.PEARL_PLUS.requests({})],
                    {"eager": True, "world": 1, "async_steps": False}) == []
+
+
+def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
+    ex, run, finished = _Exchange(), _Run(), []
+    run.commits, run.finish = {"salt_opening": "o"}, lambda: finished.append(True)
+    monkeypatch.setattr(PS.Attached, "inputs", lambda self, event: ({3: "w"}, {}))
+    monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
+    on = PS.PEARL_PLUS.attach(ex, {})
+    ex.emit(H.RegisteredValues((("w", "w"),), linear=frozenset({"w"})))
+    reports: H.Reports = on
+    assert reports.record() == {"entry": PS.OPTION, "commitment": {"salt_opening": "o"}}
+    assert reports.summary() == {"max_step_tokens": 64}
+    on.release()
+    assert finished == [True]
