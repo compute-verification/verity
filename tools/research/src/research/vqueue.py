@@ -682,7 +682,8 @@ def _left(s: Snapshot, r: Ready, newest: dict[int, Outcome], ready: dict[int, Re
         return "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes"
     if r.staged_conflict and kept:
         return "conflicts with staged batch", ("it conflicts with the staged Lean batch's members, which go onto main's chain's "
-                                               "top above it: no batch beside it takes it until its head changes")
+                                               "top above it: no batch beside it takes it until that staged batch is on "
+                                               "main's chain or the PR's head moves")
     if o is not None and _unsaid_holds(o, r.number):
         return "base's word", (f"a fail above the lowest suspects it: it waits for {o.base[:12]}'s check, which says whose "
                                "failure it was")
