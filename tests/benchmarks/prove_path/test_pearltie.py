@@ -225,8 +225,7 @@ def make_toy() -> SimpleNamespace:
     state = WRS.state_value(program_digest(low.circuit.program()[0]), CLASS,
                             SR.standin_rows(CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)]), window=RUN)
     values = {**WW.weight_values(reg, fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
-    slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
-             for row, _ in WRS.scan_slots(low, state.rows)]
+    slots = WT.unserved_slots(low, state.rows, lambda label, lo, hi: fields[label][lo:hi], cut=low.cut)
     rows, c = WRS.Rows(low, slots, values), low.circuit
     pearl = {}
     for s in range(CLASS.outputs):

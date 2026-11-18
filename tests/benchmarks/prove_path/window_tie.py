@@ -1,16 +1,37 @@
-"""A window's tie to an earlier docket W, and the resolver the window's record is read with, for test_pearltie and
-test_remotetie, from the verifier's side alone: no file of the window's audit (`spot/prover/audit/`) and no
+"""A window's tie to an earlier docket W, the resolver the window's record is read with and its toy's slots, for
+test_pearltie and test_remotetie, from the verifier's side alone: no file of the window's audit (`spot/prover/audit/`) and no
 `verity_flock`. The prover's `tests/test_records_audit.py` holds both to `records_audit`'s `tie_of` and
 `catalog_resolve`."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from verity.commitments import docket_digest as DD
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.network.verifier import blocks as NB
+
+
+@dataclass(frozen=True)
+class _Unserved:
+    """A request of ``LP`` prompt ids the engine computed none of, at ``positions``: every node of its slot its row
+    kernel's."""
+    LP: int
+    positions: int
+
+    def __call__(self, *_: Any) -> None:
+        return None
+
+
+def unserved_slots(low: Any, state: Sequence[Any], weights: Any, cut: Any = frozenset()) -> list[Any]:
+    """Each of ``low``'s Programs' `window_rows.Slot` of its lane's row of ``state`` (`window_rows.scan_slots`), every node
+    computed (`_Unserved`)."""
+    from verity_vllm.program.predict import window_rows as WRS
+
+    return [WRS.Slot(P.fn, P.cls, row, weights, _Unserved(row[1], P.positions), cut=cut)
+            for P, (row, _) in zip(low.programs, WRS.scan_slots(low, state))]
 
 
 def catalog_resolve(tid: str) -> Any:
