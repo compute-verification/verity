@@ -287,10 +287,10 @@ def session_node(name: str | None, slot: str | int, *, kind: str | None = None, 
 
 
 def datasheet_bandwidth(name: str, *, directory: Path | None = None) -> int:
-    """``memory.datasheet_bandwidth`` of the card record `card_short` finds for ``name``, bytes a second: the data sheet's
-    stated memory bandwidth; refused by name where the record has none."""
+    """``memory.datasheet_bandwidth`` of `card_record`'s record for ``name``, bytes a second: the data sheet's stated
+    memory bandwidth; refused by name where the record has none."""
     directory = directory or cards_directory()
-    card = _card_named(name, directory)
+    card = card_record(name, directory=directory)
     entry = card.get("memory", {}).get("datasheet_bandwidth")
     if entry is None:
         raise SystemExit(f"the card record {card['sku']} ({directory}/{card['sku']}.toml) has no "
