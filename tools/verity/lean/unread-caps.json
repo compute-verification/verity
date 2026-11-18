@@ -5,10 +5,6 @@
    "modules": 1,
    "declarations": 19
   },
-  "Definitions/Core": {
-   "modules": 1,
-   "declarations": 8
-  },
   "Definitions/Pouw": {
    "modules": 21,
    "declarations": 89
@@ -18,8 +14,8 @@
    "declarations": 34
   },
   "Proofs/Core": {
-   "modules": 4,
-   "declarations": 24
+   "modules": 3,
+   "declarations": 18
   },
   "Proofs/Flock": {
    "modules": 226,
