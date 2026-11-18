@@ -32,7 +32,7 @@ VERSIONS_AT = "benchmarks/harness/verity_bench/kit_report.py"
 VERSION_KEYS = ("version", "changed", "was")
 #: whether the site's reader (infra's) takes `VERSION_KEYS`: the site refuses a metric with a key its reader doesn't
 #: take, so until it does no row may carry one; set True once it takes them
-SITE_TAKES_VERSIONS = False
+SITE_TAKES_VERSIONS = True
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")

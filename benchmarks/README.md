@@ -233,10 +233,9 @@ version. Whether anything else, the axis among it, changed what the number means
 row's former ids, so an id is renamed without breaking its line: the registry's reader (`research.metrics.registry`)
 resolves each to the row.
 
-Two parts are not true yet. The site's reader (infra's) doesn't take `version`, `changed` or `was`, and the site refuses
-a metric with a key it doesn't take, so no row may carry any of the three until it does: the registry's test refuses
-one, and `SITE_TAKES_VERSIONS` there flips once it takes them. A reading sent from a loop through `research.metrics`
-carries no version: the sender (infra's) doesn't take one.
+The site's reader (infra's) takes `version`, `changed` and `was` on a row and `version` on a measurement
+(`SITE_TAKES_VERSIONS` in the registry's test). One part is not true yet: a reading sent from a loop through
+`research.metrics` carries no version, since the sender (infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
