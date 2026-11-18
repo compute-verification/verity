@@ -1,7 +1,7 @@
 """The Commit's PoUB session on its vLLM engine (`CommitSession`, ``--remote-verifier HOST:PORT``,
 `config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`:
 `StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine by the store binder
-(`verity_vllm.protocols.poub.binder`), the session in lockstep with the Commit's instrumented run.
+(`verity.protocols.resource_accounting.memory.poub.prover.binder`), the session in lockstep with the Commit's instrumented run.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier import codec as r
 
 from verity_vllm import messages
 from verity_vllm.engine.handle import core_in_process, engine_of
-from verity_vllm.protocols.poub.binder import Binder
+from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
 from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
 __all__ = ["CommitSession"]

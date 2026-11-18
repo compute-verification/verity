@@ -342,7 +342,7 @@ theorem getD_default {α : Type} [Inhabited α] (a : Array α) (i : Nat) : a.get
 end Conss
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model FlockSoundness.Audit
+open FlockSoundness.Discharge.Recursion FlockSoundness.Refine FlockSoundness.Model Spot.Sampling
 open Flock FlockLevel3 FlockVBridge.Compiled FlockVBridge.InnerAccepts FlockVBridge.Stages
 open Flock.RecAlgebra (verifierRows decoded valOf symbolic Lin Key Messages run_stages)
 open FlockVBridge.AccChain (levelLanes)

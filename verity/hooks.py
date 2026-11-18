@@ -240,10 +240,10 @@ class StartOnBoundary:
 
 
 class Route(Protocol):
-    """A scheme's answer to a request on its route: called with the request body as it streams in, it returns the
-    status and the text to answer with."""
+    """A scheme's answer to a request on its route: called, on a thread of its own, with the request's first line, its
+    headers (names lower-cased) and its body as it streams in, it returns the status and the text to answer with."""
 
-    def __call__(self, body: Iterable[bytes]) -> tuple[int, str]: ...
+    def __call__(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]: ...
 
 
 @dataclass(frozen=True)
@@ -260,6 +260,10 @@ class RefuseInput:
 
     input: str
     why: str
+
+
+class Broken(Exception):
+    """Why a reader of the workload's (`StartBeside`'s readers) ends before its stream does."""
 
 
 @dataclass(frozen=True)
@@ -299,7 +303,7 @@ type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBou
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
-           "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "Broken", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

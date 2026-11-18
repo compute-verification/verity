@@ -26,8 +26,6 @@ from verity_difftest import Reject
 from verity_difftest import canonical
 from verity_difftest import protocol as P
 
-PROTOCOL = "verity/sampled-proofs/two-stage/v1"
-TWO_STAGE = "two-stage"
 ONE_DEFINITION = ("the boundary program's proof blocks under its query are not one stratum: the two-stage form's replay "
                   "blocks are one Definition's, so a share of them by count is a share by weight")
 ONE_KEY = "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
@@ -51,14 +49,14 @@ def _get(j: Any, k: str) -> Any:
 
 
 def split(j: Any, what: str) -> dict:
-    """`SampledTwo.split`: an object naming the form ``two-stage``, without its ``form``."""
+    """`SampledTwo.split`: an object whose ``levels`` is 2, without it."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
-    if not isinstance(j.get("form"), str):
-        raise Reject(f"the {what} names no form")
-    if j["form"] != TWO_STAGE:
-        raise Reject(f"the {what} name the form {j['form']}, not \"{TWO_STAGE}\"")
-    return {k: v for k, v in j.items() if k != "form"}
+    if "levels" not in j:
+        raise Reject(f"levels-mismatch: the {what} name no levels, not 2")
+    if not (type(j["levels"]) is int and j["levels"] == 2):
+        raise Reject(f"levels-mismatch: the {what}' levels is {canonical(j['levels'])}, not 2")
+    return {k: v for k, v in j.items() if k != "levels"}
 
 
 def _delegated(decode, *args) -> Any:

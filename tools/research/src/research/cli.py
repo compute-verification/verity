@@ -294,6 +294,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "machine's own slot.py, `main`'s as installed there, and by its source's only where the machine has none")
     ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
                     help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
+    ap.add_argument("--slot", default=None, metavar="NAME",
+                    help="with --pool: take the slot NAME of the pool's slots file and no other, waiting for it alone; refused at "
+                         "launch where the machine's slots file has no such line")
+    ap.add_argument("--end", default=None, metavar="UTC",
+                    help="with --on MACHINE and --timeout: a booked period's end, an ISO time in UTC ending in Z "
+                         "(2026-11-19T05:00:00Z). Refused at launch unless --timeout fits before it; a --pool run gives up its "
+                         "wait (exit 75, naming the end) the moment less than its --timeout is left, and once started its bound "
+                         "is the lesser of --timeout and the time left")
     ap.add_argument("--stay", action="store_true",
                     help="with --on MACHINE: this machine and no other. Without it, a run in MACHINE's research pool that "
                          "asks no GPUs carries a pair and leaves an asker, which moves it to another machine's research pool "
@@ -434,6 +442,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         print("research run: --stay is for --on MACHINE, a machine named by its name: `--on auto` and the queue choose one",
               file=sys.stderr)
         return 2
+    if ns.slot and not ns.pool:
+        print("research run: --slot NAME is a slot of a pool: give the pool with --pool POOL (and its machine with --on MACHINE)",
+              file=sys.stderr)
+        return 2
+    if ns.end and (ns.queue or ns.on in (None, "auto")):
+        print("research run: --end is a booked period's end on a machine you name (--on MACHINE): the queue and `--on auto` "
+              "choose when and where a run starts", file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -446,11 +462,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
 def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
     """What a run sent by name to the pool `--on auto` spills to (`--on MACHINE --pool research`) asks of `auto`, for its
     launch's asker to ask it again (research.asker): a slot of any size, as slot.py gives it one on MACHINE, its --mem-gb and
-    its Lean pool. None for a run that stays: one whose launch says `--stay`, one that asks GPUs (`auto` reads none), and
-    one in any other pool (`auto` reads none)."""
+    its Lean pool. None for a run that stays: one whose launch says `--stay`, one that asks GPUs (`auto` reads none), one
+    that names its slot (`--slot`, the machine's), and one in any other pool (`auto` reads none)."""
     from . import auto
 
-    if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus:
+    if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus or ns.slot:
         return None
     return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env)}
 
@@ -519,6 +535,25 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
     if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
+    end_left = None
+    if ns.end and not ns.claimed:
+        from .pods.nebius import slot_only  # noqa: PLC0415
+
+        try:
+            end_left = slot_only.end_left(ns.end, wall_clock())
+            bound = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
+        except ValueError as e:
+            print(f"research run: {e}", file=sys.stderr)
+            return 2
+        fits = f"at most {max(math.floor(end_left), 0)} s" if end_left >= 1 else "none: give a later --end"
+        if bound is None:
+            print(f"research run: --end {ns.end} bounds a run by its --timeout, which it must fit before the end: give "
+                  f"--timeout ({fits})", file=sys.stderr)
+            return 2
+        if bound > end_left:
+            print(f"research run: refused: --timeout {bound:g} s does not fit before --end {ns.end}, "
+                  f"{max(end_left, 0):.0f} s from now: give a --timeout of {fits}, or a later --end", file=sys.stderr)
+            return 2
     if ns.pool:
         from .pods.nebius import slot_only  # noqa: PLC0415
 
@@ -534,12 +569,16 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         try:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
+            if end_left is not None:
+                # slot.py leaves the line by the end itself; this keeps the runner's own timeout (wait plus bound) inside it
+                wait_s = max(min(wait_s, end_left - timeout), 1)
             if asks := getattr(ns, "asks", None) or _named_asks(ns, command):
                 # a run that may move carries a pair, its own id, so its late twin can take it from this line (research.asker)
                 _take_run_dir(ns, R.runs_root(ns.runs_dir))
                 ns.asks = asks
                 asks["wait_s"] = wait_s
-            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
+            command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None, end=ns.end,
+                                        slot=ns.slot)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
                 from . import suite_size  # noqa: PLC0415
 
@@ -550,7 +589,9 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         if timeout:
             harness_opts = [*harness_opts, "--timeout", f"{wait_s + timeout:g}"]
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
-                  f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
+                  f"up to {wait_s / 60:g} min for {f'slot {ns.slot}' if ns.slot else 'one'} (--pool-wait"
+                  f"{f'; less, once under its --timeout is left before --end {ns.end}' if ns.end else ''}), then exits 75 "
+                  "without running", file=sys.stderr)
             if ns.custody_ttl is None and ns.custody_r2 is not False and (ttl := _pool_custody_ttl(wait_s + timeout)):
                 ns.custody_ttl = ttl
                 print(f"research run: --pool {ns.pool}: its custody key lives {ttl}, past the wait for a slot and the run after it "
@@ -818,6 +859,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
 
 #: The longest custody key ``research run`` mints on request; the default stays 6 h.
 CUSTODY_TTL_LIMIT_S = 24 * 3600
+#: the clock `--end` is measured against (tests replace it)
+wall_clock = time.time
 
 
 def _harness_timeout(harness_opts: list[str]) -> float | None:
