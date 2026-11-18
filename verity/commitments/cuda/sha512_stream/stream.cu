@@ -1,5 +1,6 @@
 // The fill kernel (stream.cuh), launched on the caller's stream; built by engine.device_lib with nvcc. sxs_fill returns 0,
-// a refusal (stream.cuh's REFUSED_*, below 0) before any launch, or the CUDA error of its launch.
+// a refusal (stream.cuh's REFUSED_*, below 0) before any launch, or the CUDA error of its launch. A stream that is
+// capturing a graph is refused: a replay would write the captured counters again.
 #include <cuda_runtime.h>
 
 #include "stream.cuh"
@@ -34,6 +35,9 @@ int sxs_fill(void* stream, const uint8_t* head, uint32_t len, uint64_t first, ui
   Head h;
   if (head_of(head, len, h)) return REFUSED_HEAD;
   if (!range_ok(first, leaves)) return REFUSED_RANGE;
+  cudaStreamCaptureStatus capture;
+  if (cudaStreamIsCapturing((cudaStream_t)stream, &capture) != cudaSuccess) return (int)cudaGetLastError();
+  if (capture != cudaStreamCaptureStatusNone) return REFUSED_CAPTURE;
   if (leaves == 0) return 0;
   const u64 n = LEAF_BLOCKS * leaves, blocks = (n + THREADS - 1) / THREADS;
   fill<<<(unsigned)(blocks < GRID_MAX ? blocks : GRID_MAX), THREADS, 0, (cudaStream_t)stream>>>(

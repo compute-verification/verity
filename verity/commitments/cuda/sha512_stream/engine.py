@@ -7,7 +7,8 @@ them: leaf i's 192 bytes are the stream's blocks 3i .. 3i + 2 at one index under
 ``out`` is ``(leaves, 192)`` uint8 and contiguous: a numpy array for the host twin, or on a CUDA device any tensor with
 ``data_ptr()`` (verity imports no tensor runtime), written on the caller's ``stream`` without synchronizing. The host
 builds the block's head once a call from the module's own framing; the kernel takes the head's bytes and holds no framing
-of its own. A head over ``HEAD_MAX`` bytes (an index whose frames pass 43 bytes) is refused, never truncated. The device
+of its own. A head over ``HEAD_MAX`` bytes (an index whose frames pass 43 bytes) is refused, never truncated, and so is a
+fill on a stream capturing a graph, whose replays would write the same salts again. The device
 library's target is the caller's (``arch``, such as ``90a``, its card file's): this package can't load ``verity.device``.
 
 Builds are cached by a hash of the sources, flags and compiler version under the caller's ``build`` directory; nvcc and
@@ -42,7 +43,8 @@ LEAF_BYTES = 192
 LEAVES_MAX = ((1 << 64) - 1) // 3
 #: stream.cuh's REFUSED_*, by the status the library returns
 REFUSALS = {-1: ("REFUSED_HEAD", f"the head is over {HEAD_MAX} bytes, so a block would take two compressions"),
-            -2: ("REFUSED_RANGE", "the last leaf's counter is not below 2^64")}
+            -2: ("REFUSED_RANGE", "the last leaf's counter is not below 2^64"),
+            -3: ("REFUSED_CAPTURE", "the stream is capturing a graph, whose replays would write the same counters again")}
 
 vp, u32, u64 = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 
@@ -93,11 +95,12 @@ def host_lib(build: Path) -> ctypes.CDLL:
 
 
 @cache
-def device_lib(build: Path, arch: str) -> ctypes.CDLL:
-    """``stream.cu`` built with nvcc for ``sm_<arch>`` (``"90a"``: the H100 and H200), cached under ``build``."""
-    tool = shutil.which("nvcc")
+def device_lib(build: Path, arch: str, nvcc: str | None = None) -> ctypes.CDLL:
+    """``stream.cu`` built with ``nvcc`` (else the one on the path) for ``sm_<arch>`` (``"90a"``: the H100 and H200), cached
+    under ``build``."""
+    tool = nvcc or shutil.which("nvcc")
     if tool is None:
-        raise RuntimeError("no nvcc on the path")
+        raise RuntimeError("no nvcc given or on the path")
     return _build(build, tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                   "libsha512_stream_cuda.so")
 

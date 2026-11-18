@@ -17,6 +17,7 @@ constexpr u64 LEAVES_MAX = ~0ull / LEAF_BLOCKS;
 // the launch functions' refusals, below 0 so they never read as a CUDA error
 constexpr int REFUSED_HEAD = -1;
 constexpr int REFUSED_RANGE = -2;
+constexpr int REFUSED_CAPTURE = -3;
 
 // the padded chunk of every block at one head, with the counter's eight bytes zero
 struct Head {

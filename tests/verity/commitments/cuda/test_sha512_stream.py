@@ -7,6 +7,7 @@ import ctypes
 import json
 import random
 from pathlib import Path
+from typing import Any, cast
 
 import cuda_build
 import numpy as np
@@ -19,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[4]
 SOURCE = ROOT / "verity/commitments/cuda/sha512_stream/stream_host.cpp"
 VECTORS = json.loads((ROOT / "tests/verity/commitments/randomness/vectors.json").read_text())
 KEY = Key(bytes(range(32)))
+#: the device library's build cache, the adapter's
+BUILD = Path.home() / ".cache" / "verity" / "sha512_stream"
 
 
 @pytest.fixture(scope="module")
@@ -113,3 +116,66 @@ def test_out_is_contiguous_uint8_rows_of_a_salt(lib, out):
 def test_the_loaders_own_build_agrees(lib, tmp_path):
     own = E.host_lib(tmp_path)
     assert _fill(own, KEY, ("a", 7), 3, 4) == _fill(lib, KEY, ("a", 7), 3, 4) == _blocks(KEY, ("a", 7), 3, 4)
+
+
+def _torch_cuda():
+    try:
+        import torch
+    except ImportError:
+        return None
+    return torch if torch.cuda.is_available() and cuda_build.gpu_name() is not None else None
+
+
+TORCH = _torch_cuda()
+card = pytest.mark.skipif(TORCH is None, reason="no CUDA device, torch or nvcc")
+
+
+@pytest.fixture(scope="module")
+def device() -> ctypes.CDLL:
+    return E.device_lib(BUILD, cuda_build.arch(cast(str, cuda_build.gpu_name())))
+
+
+def _card_fill(device: ctypes.CDLL, key: Key, index, first: int, leaves: int) -> bytes:
+    torch = cast(Any, TORCH)
+    out = torch.full((leaves, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
+    E.fill(device, out, key, index, first, stream=torch.cuda.current_stream().cuda_stream)
+    return out.cpu().numpy().tobytes()
+
+
+@card
+@pytest.mark.parametrize("leaves, first", [(1, 0), (32, 7), (4096, 123456), (753664, 0), (32, E.LEAVES_MAX - 32)],
+                         ids=["one", "decode-call", "prefill-call", "1b-tiles-at-8192", "last"])
+def test_the_card_writes_the_host_twins_bytes(lib, device, leaves, first):
+    """The sizes Pearl+ fills: a decode call's rows, a prefill's, Llama 3.2 1B's tiles of a pass at m = 8192, and the last
+    leaves a key's stream holds."""
+    assert _card_fill(device, KEY, ("y", 4095), first, leaves) == _fill(lib, KEY, ("y", 4095), first, leaves)
+
+
+@card
+@pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda c: c["domain"])
+def test_the_card_gives_the_pinned_stream_vectors(device, case):
+    key = derive(bytes.fromhex(case["source"]), case["domain"], _context(case["context"]))
+    s = case["stream"]
+    n = len(s["bytes"]) // 2
+    index = tuple(s["index"]) if isinstance(s["index"], list) else s["index"]
+    assert _card_fill(device, key, index, 0, -(-n // E.LEAF_BYTES))[:n].hex() == s["bytes"]
+
+
+@card
+def test_the_card_refuses_a_capturing_stream(device):
+    torch = cast(Any, TORCH)
+    out = torch.full((32, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
+    g, side = torch.cuda.CUDAGraph(), torch.cuda.Stream()
+    with torch.cuda.stream(side), pytest.raises(E.Refused, match="REFUSED_CAPTURE"), torch.cuda.graph(g, stream=side):
+        E.fill(device, out, KEY, "a", 0, stream=side.cuda_stream)
+    torch.cuda.synchronize()
+    assert bool((out == 0xA5).all())
+
+
+@card
+def test_the_card_refuses_a_two_compression_head(device):
+    torch = cast(Any, TORCH)
+    out = torch.full((2, E.LEAF_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
+    with pytest.raises(E.Refused, match="REFUSED_HEAD"):
+        E.fill(device, out, KEY, ("salts", "t", 2**32 - 1), 0)
+    assert bool((out == 0xA5).all())
