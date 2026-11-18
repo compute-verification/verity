@@ -956,6 +956,13 @@ def charges_nothing(component: str) -> str | None:
     return (resource.why or "charges nothing") if isinstance(resource, schemes.S.Lacks) else None
 
 
+def unchecked(components: Sequence[str], said: Mapping[str, str]) -> dict[str, str]:
+    """``said``, each component's stated source, with what its declared scheme's run has that no auditor-side entry
+    checks (`Scheme.unchecked`) at its end, for each of ``components`` whose declaration says any, whatever its row."""
+    return {**said, **{c: "; ".join(x for x in (said.get(c), why) if x) for c in components
+                       if c in schemes.DECLARATIONS and (why := schemes.get(c).unchecked)}}
+
+
 #: what the served window publishes of the execution phase its record is of, under ``out/serve``: its seal's SHA-512
 #: (``seal_sha512``), never its number or steps, which `served_verdicts.py publish` keeps on the node
 PHASE = "phase.json"
@@ -980,7 +987,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     rows = doc["protocols"]
     free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
     components = {c: rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
-    answer_from = {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"] if ROWS[c] in rows}
+    answer_from = unchecked(cfg["protocols"], {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN)
+                                               for c in cfg["protocols"] if ROWS[c] in rows})
     absent = sorted(c for c, v in components.items() if v == "absent")
     missing = sorted(c for c, v in components.items() if v == "missing")
     composed = doc.get("composed") or {}
@@ -1038,7 +1046,8 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
             "verdict": "undecided" if verdict == "accept" and held else verdict,
-            **({"charges_nothing": free} if free else {})}
+            **({"charges_nothing": free} if free else {}),
+            **({"answer_from": said} if (said := unchecked(cfg["protocols"], {})) else {})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
