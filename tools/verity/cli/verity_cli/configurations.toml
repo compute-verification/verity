@@ -4,7 +4,7 @@
 # A device's pins are read under a hash listed here (`memory_attester.trusted_device`), and only to refuse: a key they
 # give reads that it matched the pins its machine was handed, any other file's a rehearsal, either with no bound. A
 # second lane's application puts its line in this same file, and no change touches another application's line.
-"applications/onsite_full.toml" = "ff7a288df32fe89bd56a7cb6260571d73357b7cc29512a483aa7b9a417d4f2535385f79af8ef7cee1fa04947291033c7a11488694f3b5ac96b7e68f834cb220c"
+"applications/onsite_full.toml" = "9d2e6c3d79940c85994d185ba9c16a59cdd800d01102c7ec3fdf7befb4a6cde36bc3bb0d9254e98c6650e473c14b52f5616fdfee8736d9bf0266d2c7124d0be9"
 "applications/onsite_compute.toml" = "4ccd5a22e5f5ba7af0bcdd27c3a02d4728816499f8e8083ea4b5d65186f5e9408be9cb19d41dbdc9ef584846212dbdc61e3f206a12c89c7833ede7d347f88ec8"
 "applications/onsite_network.toml" = "41676c2b8ed781e6e8f4fcc85d8b708dce2b6d3a825edbc42a7ce354ed8cec12cdf15a3f66e7156a39a3eecd99c725dd09f857218a4a09e19a3bb37765b212bb"
 "applications/remote.toml" = "0b0611e7cbff2cd20514e26a4fe3feb1af746b33d061f3be43ff4679657429edef66a8d47b5c59600dc835865cb92442eac0c6f278b27481eef742782b5762ed"

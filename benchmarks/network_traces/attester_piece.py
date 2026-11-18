@@ -189,7 +189,7 @@ ROWS = "verity/network-rows/v1"
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the front's refusal without ``--gate``
 NO_GATE = ("--gate is unset: USER@HOST, the gate's, which `verity run` passes from the binding "
-           "network-certifier.certifier.gate, or local, the network attester on this machine under a key made for the run")
+           "network-attester.network-attester.gate, or local, the network attester on this machine under a key made for the run")
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
            "binding network-attester.network-attester.peer")

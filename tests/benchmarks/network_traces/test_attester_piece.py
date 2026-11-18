@@ -1119,7 +1119,7 @@ def test_the_front_without_its_gate_is_refused_by_the_settings_name_before_the_g
     serve, out = tmp_path / "serve", tmp_path / "out"
     assert CP.main(["front", "18190", str(serve), str(out), "--peer", PEER, *flags]) == 2
     why = json.loads((out / "session.json").read_text())["refused"]
-    assert why == CP.NO_GATE and "network-certifier.certifier.gate" in why and "or local" in why
+    assert why == CP.NO_GATE and "network-attester.network-attester.gate" in why and "or local" in why
     assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 

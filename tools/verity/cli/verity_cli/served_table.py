@@ -69,7 +69,7 @@ from verity.commitments.randomness import parse_rate, parse_strata_rate
 from verity.channel import Refused
 from verity.runtime import runner
 from verity.runtime.sources import MONOTONIC, RealClock
-from verity_cli import settings as cli_settings
+from verity_cli import settings as machine_settings
 from verity_cli.run import Start
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -257,17 +257,16 @@ DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
 def configuration(commit: str, demo: str = "onsite_full",
                   pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `applications/<demo>.toml` holds, at program ``commit``: `config new`'s over the application's subprotocols
-    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and each
-    listed component's default parameters stated (with the application's own, `DEMO_VALUES`), and ``pins``, the keys
-    the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
+    (`listed`), each party at its `PLACEMENT` (remote's auditor parties at `AUDITOR_REMOTE`), the workload's and PoUS's
+    parameters stated (with the application's own, `DEMO_VALUES`), and ``pins``, the keys the auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]`
     entries for the subprotocols the application lists: no code states a key)."""
     protocols = listed(demo)
     cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     workload, params = DEMO_VALUES.get(demo, ({}, {}))
     cfg["workload"]["params"] = {**SERVED.default_params, **workload}
     stated = {c.id: dict(c.default_params) for c in map(MANIFESTS.__getitem__, protocols) if c.default_params}
-    for cid, given in params.items():
-        stated[cid] = {**stated.get(cid, {}), **given}
+    for cid, own in params.items():
+        stated[cid] = {**stated.get(cid, {}), **own}
     if stated:
         cfg["params"] = stated
     for p in cfg["party"]:
@@ -444,13 +443,13 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 def _spot_challenger(cfg, params, bound):
     """The window's values committed under hiding leaves and sealed, its registration before the sample, and the sampled
     proof blocks proved in Flock --zk; the sample on the live challenger when its gate is bound, else on the challenger
-    party's loopback host's coins where ``loopback`` is bound, or with neither a local development session's, simulated
-    either way, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
+    party's loopback host's coins where ``loopback`` is bound, else on a local development session's, simulated either
+    way, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     if "gate" in bound:
         return hooks
     hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
-    return {**hooks, "DEVELOPMENT": "1"} if cli_settings.hold_placement() else hooks
+    return {**hooks, "DEVELOPMENT": "1"} if machine_settings.hold_placement() else hooks
 
 
 def _pouw(cfg, params, bound):
@@ -653,9 +652,9 @@ def _attester_piece(cfg, params, bound):
     """The network attester's developer side: its front before the requests (CERTIFIER_FRONT, which the served window
     runs), and its piece split around V3c: the chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period
     check on V3c's period.json (CERTIFIER_PERIOD_CMD). Under Pearl+'s tie (``pearl-plus`` listed, whose piece sets
-    ``PEARLPLUS_TIE``) the tied class is Pearl+'s and V3c runs after the pieces, so the piece is whole (CERTIFIER_CMD)
-    on the front's own window, sets no class, and the front's requests ask for at most the window's steps, so each is
-    in one window."""
+    ``PEARLPLUS_TIE``) the tied class is Pearl+'s and V3c runs after the pieces, so the piece is whole
+    (``CERTIFIER_CMD``) on the front's own window, sets no class, and the front's requests ask for at most the
+    window's steps, so each is in one window."""
     py = ".venv/bin/python"
     gate = f'--gate {shlex.quote(bound["gate"])} --peer {shlex.quote(bound["peer"])}'
     front = f'{py} {ATTESTER_PIECE} front "$1" "$2" "$3" {gate}'
@@ -1135,7 +1134,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ENTRIES", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED",
-           "STARTS", "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed",
-           "live", "onsite_check", "pending", "pieces", "placement", "prepare", "registration", "remote_check",
+__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ENTRIES", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
+           "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed", "live",
+           "onsite_check", "pending", "pieces", "placement", "prepare", "registration", "remote_check",
            "request_bound", "served_window", "unbound", "variables"]
