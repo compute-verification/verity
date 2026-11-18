@@ -65,7 +65,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/resource_accounting/compute/pouw/verifier/coins.py", "verity/protocols/resource_accounting/compute/pouw/verifier/core_check.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
-          # held_bandwidth.py reads its rate by the kit's reader of a card's file (`kit.datasheet_bandwidth`): ours to call
+          # served_piece.py reads the bandwidth session's rate by the kit's reader of a card's file (`kit.datasheet_bandwidth`): ours to call
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "verity/device.py", "calibration/hardware/cards", "tools/config/verity_config",

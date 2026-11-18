@@ -259,7 +259,7 @@ PIECES: dict[str, tuple[str, str, str, str]] = {
                "the challenger's key")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
                   ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
-                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_piece.py collect-bandwidth)")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
