@@ -83,7 +83,7 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/compose/verifier/live_challenger/auditor.py", "verity/protocols/compose/verifier/live_challenger/host.json", "verity/protocols/compose/verifier/live_challenger/serve.py",
           "tests/verity/protocols/compose/verifier/live_challenger/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
-          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/poub",
+          "adapters/vllm/verity_vllm/engine",
           "verity/protocols/__init__.py",
           # auditor_line.py: a line whose summed error is 1 or more holds no share, by the reporting grid's one rule
           "verity/protocol.py", "verity/protocols/proofs/__init__.py",

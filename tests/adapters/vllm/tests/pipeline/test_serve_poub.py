@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
@@ -23,9 +24,10 @@ VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
 
 
 @pytest.fixture(autouse=True)
-def _registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The adapter's `CommitSession` stands in for the session memory-accounting registers by name."""
-    monkeypatch.setitem(scheme.PROCESSES, poub_session.SESSION, remote.CommitSession)
+def _registered() -> None:
+    """The session memory-accounting registers by name (`POUB.processes`), there once the declarations are loaded."""
+    declarations.load()
+    assert poub_session.SESSION in scheme.PROCESSES
 
 
 def test_without_a_registered_session_the_remote_verifier_is_not_implemented(monkeypatch):

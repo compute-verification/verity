@@ -321,7 +321,7 @@ def apply(idx: int, quant):
 
 
 class DeviceWords:
-    """The name and word of a codec whose words the arm's install encoded on the device (`verity_vllm.protocols.poub` registers
+    """The name and word of a codec whose words the arm's install encoded on the device (PoUB's binder, `poub.prover.binder`, registers
     them as they are, ``encode=False``)."""
 
     def __init__(self, name: str, word_bytes: int) -> None:
@@ -572,7 +572,7 @@ def main() -> None:
     ap.add_argument("--profile-steps", type=int, default=0,
                     help="open a profiler window (cudaProfilerStart/Stop) over this many steady decode steps a point")
     ap.add_argument("--store", action="store_true",
-                    help="register the node's store through `verity_vllm.protocols.poub`'s binder: weights (the arm's encoded words, "
+                    help="register the node's store through PoUB's binder (`poub.prover.binder`): weights (the arm's encoded words, "
                          "identity for the rest), the KV pool and its pages' life, a pass a step")
     ap.add_argument("--store-window", type=int, default=0,
                     help="with --store, run the passes in windows of this many (chained seeds and plan digests, the "
@@ -621,7 +621,8 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm import messages
-        from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder, Every
+        from verity.protocols.resource_accounting.memory.poub.prover.binder import Every
+        from verity.protocols.resource_accounting.memory.poub.scheme import POUB
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
@@ -629,7 +630,8 @@ def main() -> None:
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(NodeMemory(), weights=lambda v: store_weights(v, install, args), **window).install(messages.current())
+        binder = messages.current().attach(POUB, None, store=NodeMemory(),
+                                           binder={"weights": lambda v: store_weights(v, install, args), **window})
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:

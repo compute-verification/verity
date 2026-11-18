@@ -154,16 +154,17 @@ class CommitSession:
         self.install()
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
-        """After the build: the engine is one the session serves, by what the build declared; then the filler, on
-        ``runner.device``. ``llm`` is not read."""
+        """After the build: the engine is one the session serves, by what the build declared and by ``runner``, its
+        model runner in this process (None where its core runs in another, which a build may also declare as
+        ``in_process`` false); then the filler, on ``runner.device``. ``llm`` is not read."""
         if self.declared is None:
             raise RuntimeError("the Commit's session checks its engine once the build has declared it on the exchange "
                                "the session is installed on (`install`, then the build)")
         p, why = self.declared.properties, []
-        if p.get("in_process") is not True:
+        if runner is None or p.get("in_process") is False:
             why.append("the engine core in another process")
         if p.get("async_steps") is not False:
-            why.append("async scheduling resolved on")
+            why.append("async scheduling not declared off")
         if p.get("prefix_cache"):
             why.append("prefix caching on")
         if p.get("world") != 1:

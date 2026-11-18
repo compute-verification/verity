@@ -82,9 +82,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # Needs: network attestation's release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
         "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
-        "verity/protocols/resource_accounting/memory/poub/prover/commit_session.py": (
-            "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",
-        ),
     },
     "compute-accounting": {
         # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).

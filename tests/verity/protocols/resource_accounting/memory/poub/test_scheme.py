@@ -28,7 +28,10 @@ def test_bandwidth_is_the_p2_verifiers_component() -> None:
 
 def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
     assert poub.POUB.protocol == audit.PROTOCOL_ID
-    assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("memory", "steps")
+    assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("declared", "memory", "steps")
+    assert set(poub.POUB.processes) == {poub.SESSION_PROCESS} == {"poub-session"}
+    assert S.PROCESSES[poub.SESSION_PROCESS] is poub.POUB.processes[poub.SESSION_PROCESS]
+    assert poub.prover("binder") is binder.Binder and set(poub.PROVER) == {"binder", poub.SESSION_PROCESS}
     assert poub.POUB.unit == poub.BANDWIDTH.unit == "bits"
 
 

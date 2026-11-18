@@ -144,15 +144,17 @@ def test_the_commits_session_attaches_a_binder_of_its_store_before_the_build(mon
     assert cs.binder is None
 
 
-def built(in_process: Any = True, asynchronous: Any = False, prefix: bool = False, tp: int = 1) -> H.Declared:
-    """What a build declares on the exchange as `CommitSession.check` reads it: whether the steps are taken in this
-    process, whether they overlap, the prefix cache, and the tensor parallel size."""
-    return H.Declared("", {"in_process": in_process, "async_steps": asynchronous, "prefix_cache": prefix, "world": tp})
+def built(in_process: Any = None, asynchronous: Any = False, prefix: bool = False, tp: int = 1) -> H.Declared:
+    """What a build declares on the exchange as `CommitSession.check` reads it: whether the steps overlap, the prefix
+    cache, the tensor parallel size, and, where a build says it (``in_process`` not None), whether its steps are
+    taken in this process."""
+    said = {} if in_process is None else {"in_process": in_process}
+    return H.Declared("", {"async_steps": asynchronous, "prefix_cache": prefix, "world": tp, **said})
 
 
 def test_the_commits_session_checks_the_declared_engine_and_registers_its_filler():
     """`CommitSession.check` after the build, from what it declared: it refuses, with every reason in order, an engine
-    whose core is in another process (or that does not say), that schedules asynchronously (or does not say), caches
+    whose core is in another process (no runner in this one, or declared so), that schedules asynchronously (or does not say), caches
     prefixes or has a tensor parallel size other than 1, and a
     store that registered a KV pool; else it registers ``filler_gib`` GiB of filler on the runner's device, in whole
     bytes rounded down (none at 0), logs the binder's stats and returns them."""
@@ -169,17 +171,21 @@ def test_the_commits_session_checks_the_declared_engine_and_registers_its_filler
     assert cs.check(None, runner) == {"weights": 3} and cs.binder.calls == ["stats"] and len(said) == 2
 
     head = "--remote-verifier: the engine is not one the session serves: "
-    whys = [("the engine core in another process", built(in_process=False)), ("the engine core in another process", built(in_process=None)),
-            ("async scheduling resolved on", built(asynchronous=True)), ("async scheduling resolved on", built(asynchronous=None)),
+    whys = [("the engine core in another process", built(in_process=False)),
+            ("async scheduling not declared off", built(asynchronous=True)), ("async scheduling not declared off", built(asynchronous=None)),
             ("prefix caching on", built(prefix=True)),
             ("tensor parallel size 2", built(tp=2)), ("tensor parallel size 0", built(tp=0)),
-            ("the engine core in another process; async scheduling resolved on; prefix caching on; tensor parallel size 4",
+            ("the engine core in another process; async scheduling not declared off; prefix caching on; tensor parallel size 4",
              built(in_process=False, asynchronous=True, prefix=True, tp=4))]
     for why, declared in whys:
         cs.declared = declared
         with pytest.raises(SystemExit) as e:
             cs.check(None, runner)
         assert str(e.value) == head + why
+    cs.declared = built(in_process=True)
+    with pytest.raises(SystemExit) as e:
+        cs.check(None, None)
+    assert str(e.value) == head + "the engine core in another process"
     cs.store, cs.declared = store(), built()
     with pytest.raises(SystemExit) as e:
         cs.check(None, runner)
