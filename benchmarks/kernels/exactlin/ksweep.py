@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 SASS_GATE = Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py"
+TOOLKIT = "13.0"  # kbench.sh's, whose cuobjdump and nvdisasm read the cubins' SASS
 BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
@@ -210,8 +211,11 @@ def sass(out: Path) -> dict:
     files = sorted((out / "cubins").glob("*.cubin"))
     if not files:
         return {"ok": False, "error": "no cubins"}
-    p = subprocess.run([sys.executable, str(SASS_GATE), *map(str, files), "--json", str(out / "sass_gate.json")],
-                       capture_output=True, text=True)
+    from verity_bench import kit
+
+    cuda_bin = Path(kit.toolkit(TOOLKIT)) / "bin"
+    p = subprocess.run([sys.executable, str(SASS_GATE), "--cuda-bin", str(cuda_bin), *map(str, files),
+                        "--json", str(out / "sass_gate.json")], capture_output=True, text=True)
     (out / "sass_gate.txt").write_text(p.stdout + p.stderr)
     return {"ok": p.returncode == 0, "rc": p.returncode, "cubins": [f.name for f in files]}
 

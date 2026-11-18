@@ -7,9 +7,9 @@ respells it. The kernel alone could pass by following no path at all, so the fra
 path, so nvcc itself gives the probe two cubins at two places and ship_nvcc.sh one; in a copy whose wrapper is nvcc
 itself the probe stops the build. And a header that uses __FILE__ is refused by name before the device compiler runs.
 
-These need what a ship build needs: a kernel that lets a process turn address randomization off, and the toolkit (nvcc
-12.8 or later at $CUDA, /usr/local/cuda-13.0 or /usr/local/cuda, found by ship.sh's own rule). Where either is missing
-they skip, with ship.sh's reason.
+These need what a ship build needs: a kernel that lets a process turn address randomization off, and the toolkit ($CUDA,
+else the machine's toolkit at 13.0, found by ship.sh's own rule). Where either is missing they skip, with ship.sh's
+reason.
 test_ship_nvcc.py holds what ship_nvcc.sh hands the device compiler, its refusals and the probe's, on every machine. The
 frame builds under a directory of its own in /tmp, whose path has one length, and removes it."""
 from __future__ import annotations
@@ -30,15 +30,13 @@ ROOT = FRAME.parents[1]
 MACHINE_FILES = ("benchmarks/kernels/machine.py", "benchmarks/harness/verity_bench", "tools/config/verity_config",
                  "verity/__init__.py", "verity/channel.py", "verity/device.py", "verity/errors.py",
                  "calibration/hardware/cards", "calibration/hardware/architectures")
-TOOLKITS = ("/usr/local/cuda-13.0", "/usr/local/cuda")
 
-#: the toolkit a ship build would compile with, by ship.sh's own rule (ship.sh, then the toolkits to try): its path, or
+#: the toolkit a ship build would compile with, by ship.sh's own rule (s8_linear's build.sh's version): its path, or
 #: nothing; ship.sh's frame refuses first where it can't build
 FIND = """set -euo pipefail
 . "$1"
-shift
-ship_find_cuda "$@"
-ship_nvcc_ok "$CUDA" && echo "$CUDA"
+ship_find_cuda 13.0
+echo "$CUDA"
 """
 
 #: build.sh's cubin step for one source: ROOT, the source's directory from it, the source's name, the cubin and the
@@ -71,10 +69,9 @@ USES_FILE_CUH = "// one line before it\ninline const char *where() { return __FI
 def toolkit(tmp: Path) -> tuple[str, str]:
     """The toolkit a ship build finds here, or "" and why it finds none."""
     (tmp / "find.sh").write_text(FIND)
-    r = subprocess.run(["bash", str(tmp / "find.sh"), str(FRAME / "ship.sh"), *TOOLKITS], capture_output=True, text=True,
-                       check=False)
+    r = subprocess.run(["bash", str(tmp / "find.sh"), str(FRAME / "ship.sh")], capture_output=True, text=True, check=False)
     found = r.stdout.strip()
-    return found, "" if found else r.stderr.strip() or f"no nvcc 12.8 or later at $CUDA or {' or '.join(TOOLKITS)}"
+    return found, "" if found else r.stderr.strip() or "no toolkit at $CUDA or the machine's at 13.0"
 
 
 @pytest.fixture(scope="session")
