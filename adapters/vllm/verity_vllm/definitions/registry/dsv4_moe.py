@@ -83,7 +83,7 @@ from verity_vllm.definitions.registry.moe import (
     _lane0_sum,
 )
 from verity_vllm.definitions.registry.prims import BF16, F32, I32
-from verity_vllm.definitions.registry.topp_word_gates import NvLogfV2
+from verity.circuits.ops.topp_word_gates import NvLogfV2
 
 __all__ = ["Dsv4HashWeight", "Dsv4SqrtSoftplus", "Ex2Approx", "LG2_COEFFS", "LG2_MEASURED", "MoeRouterHash", "MoeRouterSqrtSoftplus",
            "MufuLg2Mantissa", "SiluMulClamp", "SiluMulClampBf16", "TOPK", "limit_bits", "lg2_interpolant", "mufu_lg2_mantissa_bits",

@@ -37,13 +37,8 @@ from verity.circuits.ops import (
     s8,
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
 )
-from verity_vllm.definitions.registry import (  # noqa: F401
-    dsa,
-    dsv4_qnorm_insert,
-    flashmla,
-    marlin_moe,
-    topp_word_gates,
-)
+from verity_vllm.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe
+from verity.circuits.ops import topp_word_gates
 from verity_vllm.definitions.registry.ref_prims import gather_f32
 from verity.circuits.silicon.integer import S32_MAX, s32_word
 

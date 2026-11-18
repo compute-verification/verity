@@ -55,7 +55,7 @@ from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
 from verity_vllm.definitions.registry.moe import NvExpf
 from verity_vllm.definitions.registry.prims import A16, BF16, F32
 from verity_vllm.definitions.registry.sparse_mla_split import MufuLg2Ftz
-from verity_vllm.definitions.registry.topp_word_gates import NvLogfV2
+from verity.circuits.ops.topp_word_gates import NvLogfV2
 
 #: the split-KV kernel's split count at every shape it serves here
 SPLITS = 4

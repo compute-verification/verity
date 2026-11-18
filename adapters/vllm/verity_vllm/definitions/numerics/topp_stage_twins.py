@@ -13,9 +13,9 @@ from verity.circuits.evaluation import evaluate_batch, kernels
 
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
-from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity.circuits.ops import topp_keep_builder as K
 from verity_vllm.definitions.registry import topp_stages as T
-from verity_vllm.definitions.registry.topp_word_gates import GATES, SIG, WIDTH
+from verity.circuits.ops.topp_word_gates import GATES, SIG, WIDTH
 
 _M32 = np.uint64(0xFFFFFFFF)
 

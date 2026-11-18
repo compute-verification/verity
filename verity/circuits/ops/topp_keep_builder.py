@@ -15,7 +15,7 @@ import numpy as np
 from verity.circuits.ops.scalar import BitAnd, BitOr, SelectF32, SelectI32
 
 from verity_vllm.definitions.registry.topp_geometry import spt_for, z_group
-from verity_vllm.definitions.registry.topp_word_gates import (
+from verity.circuits.ops.topp_word_gates import (
     CW,
     GATES,
     SIG,

@@ -104,7 +104,7 @@ from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.b1 import _lane
 from verity_vllm.definitions.registry.fp8 import E4M3
 from verity_vllm.definitions.registry.prims import BF16, BIT, F32, I32
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32
+from verity.circuits.ops.topp_word_gates import I32ToF32
 
 M32 = 0xFFFFFFFF
 E8M0 = Value(8)

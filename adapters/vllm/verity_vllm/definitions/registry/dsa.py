@@ -80,7 +80,7 @@ from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.fp8 import E4M3
 from verity_vllm.definitions.registry.prims import BF16, F32, I32, bits_of
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32
+from verity.circuits.ops.topp_word_gates import I32ToF32
 
 M32 = 0xFFFFFFFF
 

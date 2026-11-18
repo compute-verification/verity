@@ -27,9 +27,9 @@ from verity.circuits.types import Tuple
 
 from verity_vllm.definitions.numerics import topp_stage_twins as TW
 from verity_vllm.definitions.registry import sampling as SA
-from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity.circuits.ops import topp_keep_builder as K
 from verity_vllm.definitions.registry import topp_stages as T
-from verity_vllm.definitions.registry.topp_word_gates import CW
+from verity.circuits.ops.topp_word_gates import CW
 
 OPERANDS = ("top_p", "seed", "pos", "temp", "splits")
 SERVED_V = 154880

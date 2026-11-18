@@ -85,7 +85,7 @@ from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import sampling as SM
-from verity_vllm.definitions.registry import topp_word_gates as TG
+from verity.circuits.ops import topp_word_gates as TG
 from verity_vllm.definitions.registry.sampling_boolean import (
     GB,
     F32ArgmaxStage,

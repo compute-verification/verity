@@ -84,7 +84,7 @@ from verity.circuits.types import Array, Tuple
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
 from verity_vllm.definitions.registry.prims import BF16, BIT, I32
-from verity_vllm.definitions.registry.topp_word_gates import BitXor
+from verity.circuits.ops.topp_word_gates import BitXor
 
 #: the chunks a served row is cut into, a number: any divisor of V is a plan of the same Definitions (`plan`'s K).  More chunks
 #: are smaller chunk blocks, a Definition more each, and a larger combine, which reads a row a chunk, an hm96 slot of its block

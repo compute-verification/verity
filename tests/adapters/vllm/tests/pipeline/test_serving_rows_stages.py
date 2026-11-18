@@ -32,7 +32,7 @@ from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR
-from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity.circuits.ops import topp_keep_builder as K
 from verity_vllm.definitions.registry import topp_stages as T
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW

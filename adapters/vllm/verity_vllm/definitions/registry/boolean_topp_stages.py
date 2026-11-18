@@ -36,7 +36,7 @@ from verity.circuits.types import Array
 
 from verity_vllm.definitions.registry import gumbel_boolean  # noqa: F401  (the log's and the lane's Boolean versions, which σ reads)
 from verity_vllm.definitions.registry import topp_stages as T
-from verity_vllm.definitions.registry import topp_word_gates as TG
+from verity.circuits.ops import topp_word_gates as TG
 
 __all__ = ["BOOLEAN_STAGE_DEFINITIONS", "BitXor", "GumbelTopPSelect", "SelectBit", "TopPNumkeep", "TopPProbs", "TopPStatsExp",
            "TopPStatsHead", "TopPStep", "U32Xor", "topp_numkeep"]

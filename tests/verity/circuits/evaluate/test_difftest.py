@@ -81,7 +81,7 @@ from verity_vllm.definitions.registry import prims as VP
 from verity_vllm.definitions.registry import ref_prims as RP
 from verity_vllm.definitions.registry import sampling as SPL
 from verity_vllm.definitions.registry import tables as TB
-from verity_vllm.definitions.registry import topp_word_gates as TW
+from verity.circuits.ops import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

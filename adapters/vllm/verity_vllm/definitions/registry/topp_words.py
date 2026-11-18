@@ -26,14 +26,14 @@ from verity.circuits.ops.scalar import BF16, BIT, F32, I32, BitAnd, I32Eq, Selec
 from verity.circuits.refs import Affine, Coll, Explicit, Strided, concat
 from verity.circuits.types import Array, Value
 
-from verity_vllm.definitions.registry.topp_keep_builder import (
+from verity.circuits.ops.topp_keep_builder import (
     NEG_INF,
     SPLIT_COUNTS,
     Engine,
     Vec,
     keep_word,
 )
-from verity_vllm.definitions.registry.topp_word_gates import CW, GATES, M32, SIG
+from verity.circuits.ops.topp_word_gates import CW, GATES, M32, SIG
 
 I64 = Value(64)
 

@@ -90,7 +90,7 @@ from verity_vllm.definitions.registry.fp8 import E4M3
 from verity_vllm.definitions.registry.prims import BF16, F32, I32
 from verity_vllm.definitions.registry.ref_prims import F32GtStrict
 from verity_vllm.definitions.registry.sampling import bit_at
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32
+from verity.circuits.ops.topp_word_gates import I32ToF32
 
 _CONF = ("model-untested: read from the Triton kernels and Triton 3.7.1's PTX at the commits the module docstring pins; "
          "tests/properties/dsv4_indexer_capture_gpu.py is its hardware check")

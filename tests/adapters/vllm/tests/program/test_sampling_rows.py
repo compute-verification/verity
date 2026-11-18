@@ -245,7 +245,7 @@ PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x804
 
 def _gpu_paths(name: str) -> list:
     """The `_v2` logs: the scalar function and, for logf, the registered `NvLogf_v2`."""
-    from verity_vllm.definitions.registry import topp_word_gates as TWG
+    from verity.circuits.ops import topp_word_gates as TWG
     return [getattr(SP, f"{name}_gpu")] + ([TWG.NvLogfV2.evaluate] if name == "nv_logf" else [])
 
 

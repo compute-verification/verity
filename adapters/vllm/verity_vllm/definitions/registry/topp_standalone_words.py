@@ -34,7 +34,7 @@ from verity.circuits.ops.scalar import BF16, BIT, F32, I32, SelectF32
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
 
-from verity_vllm.definitions.registry.topp_keep_builder import (
+from verity.circuits.ops.topp_keep_builder import (
     INF,
     NEG_INF,
     ONE_F,
@@ -57,7 +57,7 @@ from verity_vllm.definitions.registry.topp_standalone import (
     NUM_WARPS,
     SPT,
 )
-from verity_vllm.definitions.registry.topp_word_gates import CW, EPS9, HALF, f32_word
+from verity.circuits.ops.topp_word_gates import CW, EPS9, HALF, f32_word
 from verity_vllm.definitions.registry.topp_words import IREngine
 
 I64 = Value(64)

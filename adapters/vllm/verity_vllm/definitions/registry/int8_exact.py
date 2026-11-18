@@ -73,7 +73,7 @@ from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tables as T
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.prims import BF16, F32, I32, bits_of, f32_of
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32
+from verity.circuits.ops.topp_word_gates import I32ToF32
 
 V8, F64 = Value(8), Value(64)
 TOP = 127

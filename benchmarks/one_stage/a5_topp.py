@@ -49,7 +49,7 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.definitions.registry import sampling as SA  # noqa: E402
-from verity_vllm.definitions.registry import topp_keep_builder as K  # noqa: E402
+from verity.circuits.ops import topp_keep_builder as K  # noqa: E402
 from verity_vllm.definitions.registry import topp_stages as T  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402

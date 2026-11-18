@@ -120,7 +120,7 @@ from verity_vllm.definitions.registry import topp_stages as TS
 from verity_vllm.definitions.registry.dsa import I32Sub
 from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
 from verity_vllm.definitions.registry.ref_prims import F32GtStrict, F32Sub
-from verity_vllm.definitions.registry.topp_word_gates import LOG2E, I32ToF32, U32Xor
+from verity.circuits.ops.topp_word_gates import LOG2E, I32ToF32, U32Xor
 
 I64, U32 = SA.I64, SA.U32
 #: the stats kernel's `BLOCK_SIZE` at the pin (`VOCAB_BLOCK_SIZE`)

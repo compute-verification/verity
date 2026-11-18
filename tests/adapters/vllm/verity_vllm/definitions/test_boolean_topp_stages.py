@@ -28,7 +28,7 @@ from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import gumbel_boolean as GB
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_stages as T
-from verity_vllm.definitions.registry import topp_word_gates as TG
+from verity.circuits.ops import topp_word_gates as TG
 
 #: the nonzeros of the largest unit proved under ``--zk``: a plain step block of the served row,
 #: ``TopPStep_v1{V=154880,S=1,N=2048,FIRST=false,COMBINE=-1}``, whose proof Flock's verifier accepted.  The largest unit the

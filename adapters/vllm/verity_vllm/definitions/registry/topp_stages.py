@@ -38,11 +38,11 @@ from verity.circuits.ops.scalar import BF16, F32, I32
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
-from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity.circuits.ops import topp_keep_builder as K
 from verity_vllm.definitions.registry.dead_free import live_replay
 from verity_vllm.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey
 from verity_vllm.definitions.registry.topp_geometry import spt_for, z_group
-from verity_vllm.definitions.registry.topp_word_gates import CW
+from verity.circuits.ops.topp_word_gates import CW
 from verity_vllm.definitions.registry.topp_words import IREngine
 
 I64 = Value(64)

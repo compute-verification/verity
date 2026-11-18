@@ -56,7 +56,7 @@ def _register_lazy_families() -> None:
         return lifted
 
     def _topp_word_gates():
-        from verity_vllm.definitions.registry import topp_word_gates
+        from verity.circuits.ops import topp_word_gates
         return topp_word_gates
 
     def _fp8_moe():

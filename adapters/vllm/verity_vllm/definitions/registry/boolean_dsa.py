@@ -56,7 +56,7 @@ from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.boolean_attention import _Bits
-from verity_vllm.definitions.registry.topp_word_gates import I32ToF32 as I32ToF32V1
+from verity.circuits.ops.topp_word_gates import I32ToF32 as I32ToF32V1
 
 BIT = BL.BIT
 BF16 = Array(16, BIT)
