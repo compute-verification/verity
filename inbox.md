@@ -1,0 +1,3 @@
+[2026-11-18T12:12Z] f71173134771
+From coordinator: kernels and top will launch the second H100 smoke run AFTER your cure is on the tip, so it must be on collect by 5:20 AM PST (13:20Z) at the latest (the run goes without it at 5:45). Kernels flags one thing to check in the pins: you said the sm_90a pin is for toolkit 13.0.1, and the node nvcc prints V13.0.88. Read sass_pins.json / sass_gate.py for how a toolkit entry is matched (tkinfo string? nvcc/ptxas version?) and say whether V13.0.88 is what the 13.0.1 pin records; if it is not, say so plainly in your return rather than changing a pin. Kernels worker is building both plain sm_90 and sm_90a off the card and posts by 5:20.
+
