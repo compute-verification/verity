@@ -6452,7 +6452,7 @@ def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follo
     tied = [f"pearlplus/w7/tie/{f}" for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY, S.CIRCUIT_RECORD)]
     assert set(listed) >= {*tied, *(f"private/compose/pieces/pouw/{f}" for f in PEARLPLUS_HANDED)}
     assert S.witness(listed) == []
-    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin)
+    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin, VERITY_HOLD_PLACEMENT=None)  # pin: the test's own key
     assert rc == 2 and order == ["composite", "record"], (lines, order)
     assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
     argv = json.loads((tmp_path / "order.record").read_text())
