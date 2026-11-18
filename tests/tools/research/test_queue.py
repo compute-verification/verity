@@ -3680,6 +3680,19 @@ def test_the_lean_step_builds_the_changed_modules_and_their_importers_transitive
     assert lean_graph(tmp_path, files, ["lean/a/README.md", "a.txt"]).targets == {}
 
 
+def test_the_lean_step_leaves_the_auditor_s_fixture_packages_to_its_controls(tmp_path):
+    """The builder skips the auditor's fixture packages (`lean_audit.packages`), so a change to one builds nothing here."""
+    from research.queue import lean_graph
+
+    tree = {f"{d}/{rel}": text for d in ("tools/verity/lean/fixtures/old", "tests/tools/verity/lean/fixtures/finders")
+            for rel, text in (("lakefile.toml", 'name = "f"\n\n[[lean_lib]]\nname = "F"\n'), ("lean-audit.json", "{}\n"),
+                              ("F.lean", "def x := 1\n"))}
+    for rel, text in tree.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    assert lean_graph(tmp_path, sorted(tree), [f for f in tree if f.endswith(".lean")]).targets == {}
+
+
 #: `lean_changed.py --build`'s stand-in for Lake: a file whose `-- needs NAME` line names no `def NAME` of the tree's Lean files
 #: fails, as Lean's `unknown identifier` would; each call's files are appended to $FAKE_LEAN_SEEN, and $FAKE_LEAN_SKIP skips
 FAKE_LEAN_BUILDER = """\
@@ -4245,6 +4258,46 @@ def test_a_landed_move_that_adds_its_own_map_judges_a_head_lacking_it_by_that_ma
     names = world.change({"e.txt": "reads c.txt\n"}, base=base)
     assert Q.lacked_moves(world.origin, move, clean) == []
     assert Q.lacked_moves(world.origin, move, names) == [(move, "tools/move/own_map.toml", ["c.txt"])]
+
+
+def _commit(world: World, tree_of: str, *parents: str, msg: str) -> str:
+    """A commit of ``tree_of``'s tree on ``parents`` with message ``msg``, on the origin."""
+    tree = _git(world.dev, "rev-parse", f"{tree_of}^{{tree}}")
+    sha = _git(world.dev, "commit-tree", tree, *(x for p in parents for x in ("-p", p)), "-m", msg)
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def test_a_move_main_holds_only_through_a_merge_that_kept_its_first_parents_tree_and_ran_itself_is_no_move_a_head_lacks(world):
+    """A branch's earlier, landed work merged back with `-s ours` brought into `main`'s history a copy of a move `main` ran
+    itself, by another commit the head holds: the merge's tree is its first parent's, so the copy changed nothing on `main`,
+    and the head lacks nothing (`moves_between`, `lacked_moves`). A copy whose line `main` never ran elsewhere stays, as
+    restack.py's moved merge holds a move in flight whose change its rerun, with no move line, brought; a move on `main`'s
+    first-parent line, and the same line again on a merge's second parent with its tree, are still found, and
+    `move_lines.toml`'s `move = false` still takes one out. The same case is restack.py's (`test_restack.py`)."""
+    line = "Move\n\nLayout-move: tools/move/x_map.toml"
+    base = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    copy = _commit(world, world.change({"moved/c.txt": "c\n"}, base=base), base, msg=line)
+    ran = _commit(world, world.change({"moved/c.txt": "c\n", "r.txt": "r\n"}, base=base), base, msg=line)
+    head = world.change({"e.txt": "reads c.txt\n"}, base=ran)
+    beside = world.change({"m.txt": "1\n"}, base=ran)
+    ours = _commit(world, beside, beside, copy, msg="Merge the branch's earlier, landed work, keeping this tree (-s ours)")
+    _git(world.dev, "push", "-q", "origin", f"{ours}:refs/heads/main")
+    assert Q.moves_between(world.origin, ours, head) == []
+    assert Q.lacked_moves(world.origin, ours, head) == []
+    inflight = _commit(world, world.change({"tools/move/y_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n',
+                                             "moved/d.txt": "d\n"}, base=ours), ours,
+                       msg="Move\n\nLayout-move: tools/move/y_map.toml")
+    rerun = _commit(world, inflight, ours, msg="restack: rerun tools/move/layout.py")
+    moved = _commit(world, rerun, rerun, inflight, msg="Merge the layout move into the branch, restacked")
+    real = _commit(world, world.change({"n.txt": "n\n"}, base=moved), moved, msg=line)
+    side = _commit(world, world.change({"s.txt": "s\n"}, base=real), real, msg=line)
+    landed = _commit(world, side, real, side, msg="Queue: #2 lands the move")
+    assert [m for m, _ in Q.moves_between(world.origin, landed, head)] == [inflight, real, side]
+    assert Q.lacked_moves(world.origin, landed, head) == [(real, "tools/move/x_map.toml", ["c.txt"]),
+                                                          (side, "tools/move/x_map.toml", ["c.txt"])]
+    corrected = world.change({Q.MOVE_LINES: f'["{real}"]\nmove = false\nreason = "It ran nothing."\n'}, base=landed)
+    assert [m for m, _ in Q.moves_between(world.origin, corrected, head)] == [inflight, side]
 
 
 def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
