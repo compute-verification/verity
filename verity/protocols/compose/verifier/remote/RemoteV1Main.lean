@@ -15,5 +15,4 @@ line for each. `benchmarks/one_stage/composite.py` (`remote-v1`) and the composi
 @[expose] public section
 
 def main (args : List String) : IO UInt32 :=
-  VStar.Recursive.ChallengerPin.compositeMain Core.Remote.V1.protocolOf Core.Remote.V1.components
-    (fun pin => (PouwVerifier.Period.pinned pin).withoutBlobs) args
+  VStar.Recursive.ChallengerPin.compositeMain Core.Remote.V1.protocolOf Core.Remote.V1.components args

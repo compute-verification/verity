@@ -15,14 +15,18 @@ under that key and no other is not stated here:
   which the key file doesn't retire: the keys its check is handed.
 * `PeriodChallengerKeyPinned`: what PoUW's period accepts under a pin, the period parsed (`PouwVerifier.Period.paramsOf`)
   to parameters whose `key` is the pinned key, not retired: still JSON, the value its check is handed, which the credit
-  parses with the same `ChallengerKey.ofJson` (`Credit.periodCredit`).
-* `MembersPinned`: a composite under a pin is built over its members with SPOT and the period replaced by those two
-  under the pin (`VStar.Recursive.ChallengerPin.members`); each member answers its own case, so the two above hold of
-  each. It pins the list's top level only: a member that were itself a composite holding SPOT under another id would
-  be the third case. No registered composite nests one (`Core.Composites.composites`, held by a `#guard` there):
-  `verity/onsite/v0` holds `verity/certifier/v0`, `verity/inference-only/v0`, `verity/pous/p2/v4/run`,
-  `verity/pouw/period/v1`, `verity/remote-bandwidth/p2/v0`, `verity/sampled-proofs/v1` and `verity/wipe/v0`;
+  parses with the same `ChallengerKey.ofJson` (`Credit.periodCredit`). No registered composite holds the period
+  (a `#guard` in `Core.Composites`), so this is of the period's own executable (`pouw-period`) alone.
+* `MembersPinned`: a composite under a pin is built over its members with SPOT replaced by SPOT under the pin
+  (`VStar.Recursive.ChallengerPin.members`); each member answers its own case, so `ChallengerKeyPinned` holds of it. It
+  pins the list's top level only: a member that were itself a composite holding SPOT under another id would be a member
+  that is not SPOT. No registered composite nests one (`Core.Composites.composites`, held by a `#guard` there):
+  `verity/onsite/v1` holds `verity/certifier/v0`, `verity/inference-only/v0`, `verity/pous/p2/v4/run`,
+  `verity/pouw/pearl-plus/v1`, `verity/remote-bandwidth/p2/v0`, `verity/sampled-proofs/v1` and `verity/wipe/v0`;
   `verity/remote/v1` holds `verity/inference-only/v0`, `verity/pouw/pearl-plus/v1` and `verity/sampled-proofs/v1`.
+  Of those, SPOT alone names the challenger's key in Lean: Pearl+'s run verdict (`PouwVerifier.PearlPlus.Protocol`)
+  reads its live coins as a commitment's root and openings (`Spot.Challenger.LiveCommitment`), with no key, so no Lean
+  check binds that root to the challenger's key.
 
 The window's root needs no comparison of its own: the coins are read only from the ledger's open whose root is the
 parameters' window root, in a ledger checked under the case's key (`Spot.Challenger.auditedOpen`), withheld on that root
@@ -54,11 +58,9 @@ def PeriodChallengerKeyPinned : Prop :=
         ∃ key, _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok key ∧
           _root_.Spot.sha512Hex key.pub = pin.sha512 ∧ pin.retired.contains (_root_.Flock.hexOf key.pub) = false
 
-/-- A composite's members under `pin`, its period member given as `period` (the mains give the period under `pin`):
-SPOT under `pin`, `period`, or a member that is neither, at the list's top level. -/
+/-- A composite's members under `pin`: SPOT under `pin`, or a member that is not SPOT, at the list's top level. -/
 def MembersPinned : Prop :=
-  ∀ (pin : _root_.Spot.ChallengerPin.Pin) (period : Core.BlobProtocol) (cs : List Core.BlobProtocol),
-    ∀ Q ∈ ChallengerPin.members pin period cs, Q = ChallengerPin.sampled pin ∨ Q = period ∨
-        (Q ∈ cs ∧ Q.id ≠ Sampled.PROTOCOL ∧ Q.id ≠ _root_.Spot.ChallengerPin.PERIOD)
+  ∀ (pin : _root_.Spot.ChallengerPin.Pin) (cs : List Core.BlobProtocol),
+    ∀ Q ∈ ChallengerPin.members pin cs, Q = ChallengerPin.sampled pin ∨ (Q ∈ cs ∧ Q.id ≠ Sampled.PROTOCOL)
 
 end Properties.Spot.ChallengerPin

@@ -168,33 +168,6 @@ def test_pouw_period_under_the_challengers_pin(tmp_path, cheat, reason) -> None:
         assert rc == 1 and got["reason"].startswith(f"params: {reason}: "), got
 
 
-ONSITE = ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
-          "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0")
-
-
-def composite(members: dict) -> tuple[dict, dict]:
-    """A composite's parameters and case over `members` (id to parameters), each member's commitment and evidence
-    empty, its commitment 64 zero bytes."""
-    params = {"components": [{"id": i, "params": p} for i, p in members.items()]}
-    evidence = {"components": [{"commitment": "", "evidence": "", "id": i, "params": p} for i, p in members.items()]}
-    return params, {"commitment": "00" * 64, "evidence": D.canonical(evidence).encode().hex()}
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("pin", [True, False])
-def test_onsite_under_the_challengers_pin_refuses_a_period_member_whose_key_is_the_forgers(tmp_path, pin) -> None:
-    """Onsite's composite (`onsite`) under the pin answers its PoUW period member with the period under the pin, which
-    refuses the forger's key at the member's own parameters by name; unpinned, nothing refuses it so."""
-    case = cases.instance(random.Random("honest/credit"))
-    public = case["params"]["key"]["public"]
-    member = {**case["params"], "key": {**case["params"]["key"], "public": bytes(b ^ 0x5A for b in bytes.fromhex(public)).hex()}}
-    exe = D.build(LEAN.parents[5] / "compose" / "verifier" / "onsite", "onsite")
-    params, kase = composite({i: (member if i == "verity/pouw/period/v1" else {}) for i in ONSITE})
-    rc, got, _ = _run(exe, _pin(tmp_path, public, []) if pin else [], params, kase, tmp_path)
-    assert rc == 1, got
-    assert ("verity/pouw/period/v1 reject: params: challenger-key-not-pinned: " in got["reason"]) == pin, got
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("first", ["pinned", "forger"])
 def test_pouw_period_refuses_parameters_naming_key_twice(tmp_path, first) -> None:

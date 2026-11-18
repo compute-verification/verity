@@ -317,14 +317,24 @@ def test_a_forged_window_root_under_the_pinned_key_is_refused_by_the_ledgers_ope
     assert "opens no challenger session for this window" in on.stdout, (on.stdout + on.stderr)[-4000:]
 
 
+COMPOSITES = {
+    "remote-v1": ("remote", ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1")),
+    "onsite": ("onsite", ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
+                          "verity/pouw/pearl-plus/v1", "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1",
+                          "verity/wipe/v0")),
+}
+
+
 @pytest.mark.slow
+@pytest.mark.parametrize("exe", sorted(COMPOSITES))
 @pytest.mark.parametrize("pin", ["forger", None])
-def test_remote_v1_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_forgers(tmp_path, pin) -> None:
-    """Remote's composite (`remote-v1`) under the auditor's pin answers its SPOT member, the kept play (`CASE`) whose
-    challenger is not the pinned key, with SPOT under the pin, which refuses it at the member's own parameters by
-    `challenger-key-not-pinned`; unpinned, nothing refuses it so."""
+def test_a_composite_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_forgers(tmp_path, exe, pin) -> None:
+    """Remote's and onsite's composites (`remote-v1`, `onsite`) under the auditor's pin answer their SPOT member, the
+    kept play (`CASE`) whose challenger is not the pinned key, with SPOT under the pin, which refuses it at the member's
+    own parameters by `challenger-key-not-pinned`; unpinned, nothing refuses it so."""
     spot = _at_two_levels(json.loads((_case_dir() / "params.json").read_text()))
-    members = {"verity/inference-only/v0": {}, "verity/pouw/pearl-plus/v1": {}, "verity/sampled-proofs/v1": spot}
+    package, ids = COMPOSITES[exe]
+    members = {i: (spot if i == "verity/sampled-proofs/v1" else {}) for i in ids}
     params = tmp_path / "params.json"
     params.write_text(canonical({"components": [{"id": i, "params": p} for i, p in members.items()]}))
     (tmp_path / "commitment.bin").write_bytes(bytes(64))
@@ -332,9 +342,9 @@ def test_remote_v1_under_the_pin_refuses_a_spot_member_whose_challenger_is_the_f
         {"commitment": "", "evidence": "", "id": i, "params": p} for i, p in members.items()]}))
     keyfile = tmp_path / "challenger-key.json"
     keyfile.write_text(json.dumps({"retired": []}))
-    exe = D.build(R.ROOT / "verity/protocols/compose/verifier/remote", "remote-v1")
+    built = D.build(R.ROOT / "verity/protocols/compose/verifier" / package, exe)
     flags = ["--challenger-key-sha512", hashlib.sha512(b"auditor").hexdigest(), "--challenger-retired", str(keyfile)]
-    on = subprocess.run([str(exe), *(flags if pin else []), "check", str(params), str(tmp_path / "commitment.bin"),
+    on = subprocess.run([str(built), *(flags if pin else []), "check", str(params), str(tmp_path / "commitment.bin"),
                          str(tmp_path / "evidence.json")], capture_output=True, text=True, check=False)
     reason = json.loads(on.stdout)["reason"]
     assert on.returncode == 1, (on.stdout + on.stderr)[-4000:]

@@ -78,7 +78,7 @@ def main (args : List String) : IO UInt32 := do
   | ids :: rest =>
     match ofIds ((ids.splitOn ",").filter (· ≠ "")) >>= fun P => (buildOf P).elim (.error s!"{P.id} has no builder") .ok with
     | .ok (mk, cs) =>
-      VStar.Recursive.ChallengerPin.compositeMain mk cs (fun pin => (PouwVerifier.Period.pinned pin).withoutBlobs) rest
+      VStar.Recursive.ChallengerPin.compositeMain mk cs rest
     | .error e => IO.eprintln s!"product: {e}"; return 64
   | [] => IO.eprintln "usage: product IDS id | check PARAMS COMMITMENT EVIDENCE | serve"; return 64
 
@@ -94,6 +94,8 @@ private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 #guard composites.all fun (P, _) => (buildOf P).isSome
 -- no composite's member is a composite: the challenger's pin replaces members at the list's top level only
 #guard composites.all fun (_, xs) => xs.all fun i => !(composites.map (·.1.id)).contains i
+-- the pin replaces SPOT alone: a PoUW period member would need its own (`PouwVerifier.Period.pinned`)
+#guard composites.all fun (_, xs) => !xs.contains Spot.ChallengerPin.PERIOD
 #guard onsiteIds.all known.contains && remoteV1Ids.all known.contains
 #guard known.length == (onsiteIds ++ remoteV1Ids).eraseDups.length
 
