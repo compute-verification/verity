@@ -1,12 +1,16 @@
 """Pearl-C's pinned host arena (`pearl_c.host._Arena`), CPU only, over a stand-in for pinned memory: a take within half a
 ring lands in the first ring with room, and its give-back frees that ring's region; a take past half a ring gets memory of
 its own and makes no ring; a take no ring has room for waits for a give, and every give wakes the takes that wait; bytes
-taken inside inference mode take copies outside it.  The copies that land in the arena on a card are the e2e's.
+taken inside inference mode take copies outside it.  The copies that land in the arena on a card are the e2e's.  And a
+pass's hm96 salts (`fresh_into`, `renew_salts`): the next leaves of its keyed stream, a fresh key a pass and a process, one
+card fill on the caller's stream with no host bytes; the card's bytes are `sha512_stream`'s card tests'.
 """
 from __future__ import annotations
 
 import pytest
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96_SALT
 
+from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c.host import _Arena
 
 
@@ -101,3 +105,92 @@ def test_bytes_taken_inside_inference_mode_take_copies_outside_it(unpinned):
     later.copy_(src)
     own[:512].copy_(src)
     assert torch.equal(later, src) and torch.equal(own[:512], src)
+
+
+@pytest.fixture
+def salts(monkeypatch):
+    """This process's salt streams on their own, every key `derive` makes recorded."""
+    monkeypatch.setattr(PH, "_salt_streams", {})
+    keys, derive = [], PH.derive
+    monkeypatch.setattr(PH, "derive", lambda *a: keys.append((a, derive(*a))) or keys[-1][1])
+    return keys
+
+
+def _leaves(key, first: int, n: int) -> bytes:
+    return b"".join(key.block(PH.SALT_INDEX, c) for c in range(3 * first, 3 * (first + n)))
+
+
+def test_off_the_gpu_each_fill_is_the_next_leaves_of_the_passs_keyed_stream(salts):
+    """`fresh_into` on host bytes (the recording device's) writes `Key.block`'s bytes, each fill the leaves after the last's,
+    under a key derived from 32 fresh bytes in the salts' domain; the bytes past the fill are left as they were."""
+    import torch
+    cpu = torch.device("cpu")
+    a, b = torch.full((HM96_SALT * 5,), 0xA5, dtype=torch.uint8), torch.zeros(HM96_SALT * 2, dtype=torch.uint8)
+    PH.fresh_into(a, 3)
+    PH.fresh_into(b, 2)
+    ((source, domain, context), key), = salts
+    assert len(source) == 32 and domain == PH.SALT_STREAM and context == {}
+    assert a[:HM96_SALT * 3].numpy().tobytes() == _leaves(key, 0, 3) and (a[HM96_SALT * 3:] == 0xA5).all()
+    assert b.numpy().tobytes() == _leaves(key, 3, 2)
+    assert PH._salt_stream(cpu).next == 5
+
+
+def test_a_pass_begin_draws_a_new_key_and_starts_its_stream_at_leaf_zero(salts):
+    import torch
+    cpu = torch.device("cpu")
+    t = torch.zeros(HM96_SALT, dtype=torch.uint8)
+    PH.fresh_into(t, 1)
+    PH.renew_salts(cpu)
+    PH.fresh_into(t, 1)
+    (_, first), (_, second) = salts
+    assert first.value != second.value and t.numpy().tobytes() == _leaves(second, 0, 1)
+
+
+def test_a_forked_process_draws_its_own_key(salts, monkeypatch):
+    import torch
+    cpu = torch.device("cpu")
+    parent = PH._salt_stream(cpu)
+    monkeypatch.setattr(PH.os, "getpid", lambda: -1)
+    child = PH._salt_stream(cpu)
+    assert child is not parent and child.key.value != parent.key.value and len(salts) == 2
+
+
+def test_a_pass_past_its_keys_stream_is_refused(salts):
+    import torch
+    stream = PH._salt_stream(torch.device("cpu"))
+    stream.next = PH.SX.LEAVES_MAX - 1
+    assert stream.take(1)[1] == PH.SX.LEAVES_MAX - 1
+    with pytest.raises(RuntimeError, match="past its key's stream"):
+        stream.take(1)
+
+
+class _CardBytes:
+    """What `fresh_into` reads of device bytes on a card: its device, a slice and a view, recorded."""
+
+    is_cuda = True
+
+    def __init__(self, device, log):
+        self.device, self.log = device, log
+
+    def __getitem__(self, s):
+        self.log.append(("slice", s.stop))
+        return self
+
+    def view(self, *shape):
+        self.log.append(("view", shape))
+        return self
+
+
+def test_on_a_card_one_fill_launch_on_the_given_stream_else_the_current_one(salts, monkeypatch):
+    """No host bytes: one `sha512_stream` fill of the next leaves, on raw stream `raw` where given, else the device's
+    current stream (`_stream`)."""
+    import torch
+    dev, log, fills = torch.device("cuda", 0), [], []
+    monkeypatch.setattr(PH, "_fill_lib", lambda d: ("lib", d))
+    monkeypatch.setattr(PH, "_stream", lambda d: 777)
+    monkeypatch.setattr(PH.SX, "fill", lambda lib, out, key, index, first, stream: fills.append((lib, index, first, stream)))
+    monkeypatch.setattr(PH.os, "urandom", lambda n: pytest.fail("a card's salts drew host bytes") if n != 32 else bytes(n))
+    PH.fresh_into(_CardBytes(dev, log), 32, 123)
+    PH.fresh_into(_CardBytes(dev, log), 7)
+    assert fills == [(("lib", dev), PH.SALT_INDEX, 0, 123), (("lib", dev), PH.SALT_INDEX, 32, 777)]
+    assert log == [("slice", HM96_SALT * 32), ("view", (32, HM96_SALT)), ("slice", HM96_SALT * 7), ("view", (7, HM96_SALT))]

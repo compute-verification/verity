@@ -12,8 +12,9 @@ torch's current stream, in the device's primary context:
 * **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest and the row's salt.  The kernels derive no salt: each tree's are bytes in its
   ``salts_<tree>`` buffer.  B's are the weights' registration's (``weight_salts``, `pearl_c.weight_row_salts`; a bench's
-  `fresh_weight_salts`), put once a weight; A's are fresh operating-system bytes a call, written before the call's launches
-  or its graph's replay (`host.fresh_into`); the tiles' are fresh at the pass's end (`ends`); y's are fresh and kept
+  `fresh_weight_salts`), put once a weight; A's are the next leaves of the pass's keyed stream, filled on the card before the
+  call's launches or its graph's replay (`host.fresh_into`, under a key drawn fresh at the pass's begin, `host.renew_salts`);
+  the tiles' are the stream's at the pass's end (`ends`); y's are fresh and kept
   beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact; a weight
   in any other format is refused, `_weight_words`) are hashed into B's row tree (phase ``epoch``), whose root must be the
@@ -124,6 +125,7 @@ from verity_torch.pouw.pearl_c.host import (
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as callers read it
     memmove,
+    renew_salts,
     write_manifest,  # noqa: F401 - kept importable here, as callers read it
 )
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import Kernel
@@ -630,6 +632,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         With `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
         names `run`.  `stepped`: a step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
+        renew_salts(self.device)
         retain = retain or pass_dir(self)
         last, self._eager_from = self._eager_from or self.schedule, None
         self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))

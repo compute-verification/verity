@@ -405,6 +405,27 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
+def test_a_passs_salts_are_its_keys_stream_in_fill_order_and_the_next_pass_has_a_new_key(device_run, tmp_path, monkeypatch):
+    """A's salts and the tiles' (`host.fresh_into`) are the leaves of the pass's keyed stream from leaf 0, in the order they
+    were filled, under a key `derive` made from fresh bytes at the pass's begin; the next pass's key is another."""
+    make, _, weights, _, _ = device_run
+    keys, derive = [], PH.derive
+    monkeypatch.setattr(PH, "derive", lambda *a: keys.append(derive(*a)) or keys[-1])
+    run = make()
+    run.begin(retain=str(tmp_path / "first"))
+    (key,) = keys[-1:]
+    assert PH._salt_stream(run.device).key is key
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    files = [u["salts"]["path"] for u in man["matmuls"]] + [man["salts_t"]["path"]]
+    got = b"".join((tmp_path / "first" / f).read_bytes() for f in files)
+    assert len(got) == HM96_SALT * (32 + 32 + 6)
+    assert got == b"".join(key.block(PH.SALT_INDEX, c) for c in range(3 * (32 + 32 + 6)))
+    run.begin()
+    assert keys[-1] is not key and keys[-1].value != key.value and PH._salt_stream(run.device).next == 0
+
+
 def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
     """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
     written after the build is refused by the weight's name before any of the pass's last files is written, and an
