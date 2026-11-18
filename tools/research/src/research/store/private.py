@@ -280,11 +280,11 @@ TOYS = "toys"
 
 
 def toy(path: Path) -> str | None:
-    """The reason `path` may hold private-named files: it is an entry of the nearest enclosing REGISTRY and that registry's TOYS
-    map marks it; else None."""
+    """The reason `path` may hold private-named files: it is an entry of the REGISTRY at its repository's root (the nearest
+    enclosing directory holding `.git`) and that registry's TOYS map marks it; else None.  No other REGISTRY is read."""
     path = Path(os.path.abspath(path))
-    repo = next((d for d in path.parents if (d / REGISTRY).is_file()), None)
-    if repo is None:
+    repo = next((d for d in path.parents if os.path.lexists(d / ".git")), None)
+    if repo is None or not (repo / REGISTRY).is_file():
         return None
     try:
         doc = json.loads((repo / REGISTRY).read_text())

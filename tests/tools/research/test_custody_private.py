@@ -309,6 +309,7 @@ def test_a_registered_toy_fixture_is_put_with_its_private_named_files_and_nothin
     from research.store import fixtures as FX
 
     repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
     toy = _write(repo, "fx/toy/keys.bin", b"k").parent
     _registry(repo, "fx/toy")
     assert data_main(["put", "--store", str(tmp_path / "s"), "--kind", "x/v1", "--tree", str(toy)]) == 1
@@ -321,6 +322,22 @@ def test_a_registered_toy_fixture_is_put_with_its_private_named_files_and_nothin
     assert FX.private_fixtures(repo, json.loads((repo / "artifacts.json").read_text()), {"art:" + "0" * 64: FX.fixture_manifest(toy)}) == ([], set())
     _registry(repo, "fx/other", {"fx/toy": "a toy, but not registered"})
     assert P.toy(toy) is None, "only a registered path is a toy"
+
+
+def test_only_the_repository_roots_registry_marks_a_toy(tmp_path):
+    """A hand-written artifacts.json nearer the payload than the repository's root, or in a directory that is no repository's
+    root, marks nothing."""
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    toy = _write(repo, "fx/toy/keys.bin", b"k").parent
+    _registry(repo, "fx/other")
+    _registry(repo / "fx", "toy", {"toy": "hand-written beside the payload"})
+    assert P.toy(toy) is None
+    loose = _write(tmp_path / "loose", "toy/keys.bin", b"k").parent
+    _registry(tmp_path / "loose", "toy", {"toy": "no repository here"})
+    assert P.toy(loose) is None
+    _registry(repo, "fx/toy", {"fx/toy": "a toy circuit's prover store on made-up inputs"})
+    assert P.toy(toy) == "a toy circuit's prover store on made-up inputs"
 
 
 def test_fetch_all_copies_no_private_file_and_preserves_the_rest(tmp_path, monkeypatch):
