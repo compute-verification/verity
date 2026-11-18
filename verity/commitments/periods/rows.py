@@ -449,6 +449,11 @@ class Binding:
             out.setdefault(m.template, []).append(m)
         return {t: tuple(ms) for t, ms in out.items()}
 
+    @cached_property
+    def starts(self) -> dict[str, np.ndarray]:
+        """Each template's members' first units among its own (`owns`), in order."""
+        return {t: np.array([self.owns[m.key] for m in ms], dtype=np.int64) for t, ms in self.chunks.items()}
+
     def wire(self, m: Member, port: str) -> WI.Wired | None:
         return next((w for w in m.wired if w.port == port), None)
 
@@ -700,8 +705,7 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
 def _gather(window: Binding, writer: str, out: str, at: np.ndarray, get: Callable[[Member, str], np.ndarray]) -> np.ndarray:
     """Leaves ``at`` of the tree of template ``writer``'s output ``out``, read off its members (``get(member, out)``: one
     row a unit)."""
-    ms = window.chunks[writer]
-    starts = np.array([window.owns[m.key] for m in ms], dtype=np.int64)
+    ms, starts = window.chunks[writer], window.starts[writer]
     at = np.asarray(at, dtype=np.int64)
     j = np.searchsorted(starts, at, side="right") - 1
     res = None
