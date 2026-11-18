@@ -214,7 +214,7 @@ def _edit_meta(src: Path, dst: Path, edit) -> None:
     compact = '": ' not in line
     new = "\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None), rest]).encode()
     (dst / "circuit.txt").write_bytes(new)
-    was, now = hashlib.sha256(old).hexdigest().encode(), hashlib.sha256(new).hexdigest().encode()
+    was, now = hashlib.sha512(old).hexdigest().encode(), hashlib.sha512(new).hexdigest().encode()
     for f in dst.iterdir():
         if f.is_file() and f.name != "circuit.txt" and was in (b := f.read_bytes()):
             f.write_bytes(b.replace(was, now))
