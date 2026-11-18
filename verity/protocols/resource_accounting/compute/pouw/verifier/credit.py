@@ -2,12 +2,13 @@
 PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each sampled proof block's outcome from the verifier's own run, which the
-Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
+Lean `PouwVerifier.Credit.executionPhase` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`,
+`_lean_verified`):
 the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
 its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
 outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
 (`lean/check/tests/test_live_verified_difftest.py`). And so are the verdicts `window` and `period_credit` return: the Lean
-`Credit.window`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), the Python beside
+`Credit.executionPhase`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), the Python beside
 them as the twin they are held to, and a disagreement between the two is a refusal (``verifier.DISAGREE``).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
@@ -2678,7 +2679,7 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     the Lean's when `verifier.RECORD_VERDICT` is ``"lean"`` (`_lean_verified`, `_lean_live_verified`). `run` is the
     verifier (`proofs.verify`), the verifier's own, never the evidence's.
 
-    So is the window's verdict (`_of_record`): the Lean `PouwCheck.Credit.window`'s on the outcomes those runs gave, with
+    So is the window's verdict (`_of_record`): the Lean `PouwVerifier.Credit.executionPhase`'s on the outcomes those runs gave, with
     `_window` its Python twin. A refusal the runs made themselves stands as theirs, and so does the refusal of live
     evidence not in the statements' form (`LIVE_STATEMENTS_FORM`), which the Lean, reading outcomes, never sees.
 
@@ -2754,7 +2755,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
                      served: Any, commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proofs: Any,
                      live: Any, k: Any, rows: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """`window` on each sampled proof block's proof outcome `proofs` in place of its statements: the form the Lean
-    `PouwCheck.Credit.window` reads until it runs the verifier itself, which the difftest holds it to. A
+    `PouwVerifier.Credit.executionPhase` reads until it runs the verifier itself, which the difftest holds it to. A
     served H1 window's credited calls and None, or None and the refusal of the first step that refuses, every step
     over the same evidence and the one round log `rounds`:
 

@@ -447,3 +447,79 @@ def test_every_measurement_carries_its_metrics_version_and_no_caller_gives_one(t
     assert w.measurement("vllm/x", 1.0, "s", mark="measured")["version"] == 2
     assert w.measurement("vllm/y", 1.0, "s", mark="measured")["version"] == 1
     assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid
+
+
+PARAMETERS = {"epsilon": {"value": 0.0123, "from": "applications/onsite_compute.toml",
+                          "basis": "window.eps_at(K=64, δ=0.01, C=60, W=64, 1)"}, "delta": {"value": "1/100",
+                                                                                         "from": "onsite_compute"}}
+CALIBRATION = [{"path": "calibration/census/hardware.json", "key": "h100-sxm5-80gb/e4m3.flop_per_second"}]
+
+
+def test_a_measurement_names_its_parameters_and_calibration_each_only_where_given(tmp_path, no_gpu):
+    from research import result as research_result
+
+    w = kit.writer(tmp_path)
+    bare = w.measurement("vllm/x", 1.0, "s", mark="measured")
+    assert "parameters" not in bare and "calibration" not in bare
+    held = w.measurement("vllm/y", 1.0, "s", mark="modeled", parameters=PARAMETERS, calibration=CALIBRATION)
+    assert held["parameters"] == PARAMETERS and held["calibration"] == CALIBRATION
+    for bad in ({}, [], {"epsilon": 0.01}, {"epsilon": {"value": 0.01}}, {"epsilon": {"value": True, "from": "a"}},
+                {"epsilon": {"value": math.inf, "from": "a"}}, {"epsilon": {"value": 1, "from": "a", "unit": "s"}},
+                {"": {"value": 1, "from": "a"}}, {"epsilon": {"value": 1, "from": "a", "basis": ""}}):
+        with pytest.raises(ValueError, match="parameter"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", parameters=bad)
+    for bad in ([], "calibration/census/hardware.json", [{"path": "benchmarks/slowdown/data/reference.toml", "key": "k"}],
+                [{"path": "calibration/../x", "key": "k"}], [{"path": "calibration/x.toml"}],
+                [{"path": "calibration/x.toml", "key": " "}], CALIBRATION[0]):
+        with pytest.raises(ValueError, match="calibration is a list of"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", calibration=bad)
+    for key in ("parameters", "calibration"):
+        with pytest.raises(ValueError, match="already has a meaning for"):
+            w.measurement("vllm/z", 1.0, "s", mark="measured", extra={key: []})
+    assert [m["name"] for m in _result(tmp_path)["measurements"]] == ["vllm/x", "vllm/y"]
+    assert research_result.check_doc(tmp_path, _result(tmp_path), RUN).valid
+
+
+def test_a_metric_that_needs_a_parameter_or_a_calibration_number_is_refused_one_naming_none(tmp_path, no_gpu, monkeypatch):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter",), "vllm/pc": ("parameter", "calibration")})
+    w = kit.writer(tmp_path)
+    with pytest.raises(ValueError, match=r"^vllm/p's metrics.toml row needs parameter \(parameter\), and the measurement "
+                                         r"names none: pass parameters=\{NAME: "):
+        w.measurement("vllm/p", 1.0, "s", mark="measured", calibration=CALIBRATION)
+    with pytest.raises(ValueError, match=r"needs calibration \(parameter, calibration\).*pass calibration=\[\{'path': "):
+        w.measurement("vllm/pc", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    with pytest.raises(ValueError, match="needs parameter and calibration"):
+        w.measurement("vllm/pc", None, "s", mark="measured", why="no run yet")
+    with pytest.raises(ValueError, match="needs parameter"):
+        w.keep([{"name": "vllm/p", "value": 1.0}])
+    w.measurement("vllm/p", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    w.measurement("vllm/pc", 1.0, "s", mark="measured", parameters=PARAMETERS, calibration=CALIBRATION)
+    w.measurement("vllm/other", 1.0, "s", mark="measured", calibration=CALIBRATION)
+    assert [m["name"] for m in _result(tmp_path)["measurements"]] == ["vllm/p", "vllm/pc", "vllm/other"]
+
+
+def test_a_trial_is_held_to_what_its_metric_needs(tmp_path, no_gpu, monkeypatch):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter",)})
+    monkeypatch.setenv(kit.TRIAL, "1")
+    w = kit.writer(tmp_path)
+    with pytest.raises(ValueError, match="needs parameter"):
+        w.measurement("vllm/p", 1.0, "s", mark="measured")
+    w.measurement("vllm/p", 1.0, "s", mark="measured", parameters=PARAMETERS)
+    assert [m["parameters"] for m in json.loads(w.trial_file().read_text())] == [PARAMETERS]
+
+
+def test_the_kits_report_call_passes_parameters_and_calibration_through(tmp_path, no_gpu, monkeypatch, capsys):
+    from verity_bench import kit_report
+
+    monkeypatch.setattr(kit_report, "NEEDS", {"vllm/p": ("parameter", "calibration")})
+    m = {"name": "vllm/p", "value": 1.0, "unit": "s", "parameters": PARAMETERS, "calibration": CALIBRATION}
+    assert kit_report.report("p", "p: 1 s", {"value": 1.0}, [m], out=tmp_path) == 0
+    (held,) = _result(tmp_path)["measurements"]
+    assert held["parameters"] == PARAMETERS and held["calibration"] == CALIBRATION
+    with pytest.raises(ValueError, match="needs parameter and calibration"):
+        kit_report.report("p", "p: 1 s", {"value": 1.0}, [{"name": "vllm/p", "value": 2.0, "unit": "s"}],
+                          out=tmp_path / "again")

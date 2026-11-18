@@ -10,7 +10,6 @@ Definition before anything is timed; nothing here changes a committed format, an
 | `wide_leaf/` | Flock's wide level-0 commitment leaf (`--wide-leaf`) against today's leaf on one card: `run.sh` builds the prover with the steady harness's setup, holds `statement.toml`'s statement to its pin and times the two leaves interleaved through `server_rate.py`, one prover, each step under the steady harness's ten checks (`wleaf.py`); it writes GPU-seconds a statement and the proof's bytes, each wide over today's. Not in either number: the CPU's witness sets the pace, so a ratio is of that card and its slot's cores; what share of a monitoring period's proving such statements carry; and each step's acceptance is under the provisional unit cover |
 | `steady_walk.py`, `metrics.toml` | the metric `kernels/witness-walk-on-card-over-host`: a statement's GPU-seconds with the witness's units walked on the card over walked on the host, one member a pair of steady specs read from the store's runs: GLM-5.3's head block (`glm53-flock-steady-head-block` and its `-walk` sibling) and Llama 3.2 1B's `Gemm_v2` block (`llama32-1b-flock-steady-gemm` and its `-walk` sibling) (its suite: `tests/benchmarks/kernels/steady_walk`) |
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
-| `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
 | `smoke_h100.sh` | the kernels' part of a smoke run on one H100: each hm96 leaf kernel that takes its salts as data (Pearl-C for sm_90a, the row engine and slot commit, the z/y commit, `commit_gpu`) held on the card to its reference for the same salt bytes, and each build's machine-code gate; `--dry` runs what a CPU can. No timing |
 | `device_libs_gate.py` | `smoke_h100.sh`'s `device_libs.gate`: the harness's SASS gate on the device libraries the dynamic loader recorded the device steps loading, with host-only modules passed over and named (its suite: `tests/benchmarks/kernels`) |
 
@@ -37,9 +36,8 @@ that only moves one leaves each cubin they compile with it as it was. The progra
 so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
 `#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
 nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
-which it isn't builds no ship. A library a job builds off the card outside a ship
-compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
-doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
+which it isn't builds no ship. A library a job builds off the card outside a ship compiles with the machine's
+toolkit's own nvcc (`machine.py toolkit`): nothing here holds its cubin to its place or a rebuild to the same bytes.
 
 ## Interface
 
