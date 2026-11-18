@@ -42,6 +42,7 @@ FLAT = ((("c", 0, N_IN),),)
 SPEC = "q-template-instance"
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
+SPOT = LEAN.parents[1] / "spot" / "verifier" / "lean"
 
 #: the stagings every test reads take about 20 s
 pytestmark = pytest.mark.slow
@@ -315,6 +316,35 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     ok, out = _lean("--circuit", str(flat / "plain" / "circuit.txt"), "--public", str(flat / "plain" / f"pub-{k}.bin"),
                     "--partition", str(flat / "partition.json"))
     assert ok is not None and ok["partition_check"]["units"] == "as stated", out
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_sampled_proofs_own_setup_refuses_each_cheat(staged):
+    """The same statements set up by the sampled proofs' own check (`OneStageZk.sessionAt`, through `spot-difftest`'s
+    `session_setup`), each with the readers' registered reads."""
+    d, *_ = staged
+    subprocess.run(["lake", "build", "spot-difftest"], cwd=SPOT, check=True, capture_output=True)
+    program = (d / "program.desc").read_bytes().hex()
+    partition = json.loads((d / "partition.json").read_text())
+    lines = []
+    cases = (("honest", "readers"), ("own", "own"), ("made_up", "readers"), ("wrong_salt", "readers"),
+             ("other_leaf", "readers"), ("other_words", "readers"), ("honest", "wrong_field"))
+    for name, reads in cases:
+        lines.append(json.dumps({"fn": "session_setup", "input": {
+            "circuit": (d / name / "circuit.txt").read_bytes().hex(), "public": (d / name / f"pub-{N}.bin").read_bytes().hex(),
+            "tables": [], "program": program, "partition": partition,
+            "registered": json.loads((d / f"{reads}.reads.json").read_text()), "draw": None}}))
+    p = subprocess.run([str(SPOT / ".lake" / "build" / "bin" / "spot-difftest")], input="\n".join(lines) + "\n",
+                       capture_output=True, text=True)
+    got = [json.loads(x) for x in p.stdout.splitlines()]
+    assert len(got) == len(cases), p.stdout + p.stderr
+    verdicts = {}
+    for (name, reads), g in zip(cases, got):
+        key = "wrong_field" if reads == "wrong_field" else name
+        verdicts[key] = g.get("output", {}).get("refused", g)
+        print("session_setup", key, verdicts[key])
+    for cheat in ("made_up", "wrong_salt", "other_leaf", "other_words", "wrong_field"):
+        assert verdicts[cheat] is not None, (cheat, verdicts)
 
 
 @pytest.mark.skipif(not (os.environ.get("FLOCK_CIRCUIT") and Path(os.environ["FLOCK_CIRCUIT"]).exists()),
