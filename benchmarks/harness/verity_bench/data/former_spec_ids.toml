@@ -8,3 +8,6 @@
 "llama32-1b-bf16-h200-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h200" }
 "llama32-1b-bf16-h100-served-arm" = { spec = "llama32-1b-bf16-served-arm", card = "h100" }
 "llama31-8b-fp8-1gpu-commit-served-width-h200" = { spec = "llama31-8b-fp8-1gpu-commit-served-width", card = "h200" }
+"llama31-8b-fp8-1gpu-bandwidth-served-r6" = { spec = "llama31-8b-fp8-1gpu-bandwidth-served-reps6", card = "rtx-pro-6000" }
+"llama31-8b-fp8-1gpu-bandwidth-served-h200" = { spec = "llama31-8b-fp8-1gpu-bandwidth-served-reps6", card = "h200" }
+"llama32-1b-fp8-1gpu-bandwidth-served-h200" = { spec = "llama32-1b-fp8-1gpu-bandwidth-served", card = "h200" }

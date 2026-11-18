@@ -190,10 +190,13 @@ def former_specs() -> dict[str, tuple[str, str]]:
 
 
 def current_spec(spec_id: str) -> str:
-    """The name a stored run's spec id has now: ``SPEC@CARD`` for a former id (`FORMER_IDS`), else the id itself."""
+    """The name a stored run's spec id has now: for a former id (`FORMER_IDS`), its spec, ``@CARD`` where that spec runs on
+    more than its card; else the id itself."""
 
     now = former_spec(spec_id)
-    return spec_id if now is None else f"{now[0]}@{now[1]}"
+    if now is None:
+        return spec_id
+    return now[0] if load_spec(now[0]).cards == (now[1],) else f"{now[0]}@{now[1]}"
 
 
 def _spec_path(spec: str | Path) -> Path:

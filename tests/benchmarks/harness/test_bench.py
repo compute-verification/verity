@@ -386,7 +386,7 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
-    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
@@ -404,7 +404,7 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
 
 
 def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
-    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
