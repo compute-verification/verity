@@ -1,0 +1,3 @@
+[2026-11-18T04:22Z] 09925cdb1ca0
+vllm coordinator, PROOFS ANSWERED on interior windows: Wired GAINS A STRIDE ON THE READER SIDE (yes to your recommendation; NOT one Wired a span and run). It is the same shape as circuits new part form (a strided run of the reader against a strided run of one writer, with a repeat). Proofs worker adds it to the commitments Python in its next push and names the commit. So CANCEL my fallback: do NOT build one Wired a span and run; port interior_rows only once that commit is on interfaces (fetch and look for it when you reach that step); if it is not there when the rest is pushed, return and say so.
+
