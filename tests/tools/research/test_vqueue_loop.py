@@ -166,10 +166,11 @@ class Env:
         self.graph2.list_graph(f"ready:{sha}", graph)
         return {t["id"]: t.get("key", "") for t in graph["tasks"]}
 
-    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None) -> None:
+    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None,
+               run: str | None = None) -> None:
         detail = {**({"infra": True} if infra else {}), **({"failed_tests": tests} if tests is not None else {})}
         self.graph2.finish_result({"key": key, "task": task, "status": status, "outputs": {"out": "sha512:o"},
-                                   **({"detail": detail} if detail else {})})
+                                   **({"run": run} if run else {}), **({"detail": detail} if detail else {})})
 
     def graph2_script(self, loop: Loop, verdict: dict | None = None) -> Path:
         """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict on a check `<script>.verdict.<check>`'s,
@@ -2418,6 +2419,60 @@ def test_a_lone_member_s_failure_its_files_dont_meet_is_rerun_once_afresh_and_th
     assert script is None or Path(f"{script}.rerun").read_text().count("\n") == 1
 
 
+def test_an_unreached_failure_of_several_members_is_rerun_and_a_pass_is_recorded_and_rung(env):
+    """A pass is a `cured` line (the test, the candidate, the run ids) and a ring to the test's owner, and the candidate
+    lands.  The same test failing again within 24 hours is not rerun: it is red, and the owner is told to delete it."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(vqueue.decide, batch=2)
+    env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert built["members"] == [1, 2]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"})
+    z = keys["pytest:z"]
+    test = "tests/test_z.py::test_once"
+    fail_run, pass_run = "r20261118-090000-aaa1", "r20261118-090500-bbb2"
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    env.result(z, "pytest:z", "fail", tests=[test], run=fail_run)
+    (rerun,) = loop.tick()
+    assert (rerun["action"], rerun["sha"], rerun["keys"], rerun["done"]) == ("rerun", sha, [z], True), rerun
+    assert loop.tick() == []
+    env.result(z, "pytest:z", "pass", run=pass_run)
+
+    def own() -> None:
+        loop.world.driver()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/"]}]}
+
+    own()
+    logged = loop.tick()
+    cured = next(r for r in logged if r["action"] == "cured")
+    ring = next(r for r in logged if r["action"] == "ring")
+    assert (cured["test"], cured["sha"], cured["runs"]) == (test, sha, [fail_run, pass_run])
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "cures or deletes it within 24 hours" in ring["text"]
+    assert _acts(logged) == ["cured", "ring", "advance", "on_main", "drop"] and env.main() == sha
+    assert "deleted" not in ring["text"] and env.withdrawn == []
+    env.clock = T0 + 3600
+    env.put(3, {"c.txt": "3\n"})
+    env.put(4, {"d.txt": "4\n"})
+    (again,) = loop.tick()
+    assert again["members"] == [3, 4]
+    keys = env.listed(again["sha"], {"pytest:c": ["c.txt"], "pytest:d": ["d.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"}, keys={"pytest:z": "sha512:z2"})
+    env.result(keys["pytest:c"], "pytest:c", "pass")
+    env.result(keys["pytest:d"], "pytest:d", "pass")
+    env.result(keys["pytest:z"], "pytest:z", "fail", tests=[test], run="r20261118-100000-ccc3")
+    own()                                               # main moved, so the loop read the registry again
+    logged = loop.tick()
+    assert "rerun" not in _acts(logged)
+    ring = next(r for r in logged if r["action"] == "ring")
+    drop = next(r for r in logged if r["action"] == "drop" and r.get("outcome"))
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "flakes and must be deleted" in ring["text"]
+    assert drop["outcome"]["state"] == "fail" and drop["outcome"]["suspects"] == [3, 4]
+    assert not any(r["action"] == "cured" for r in logged)
+
+
 def test_a_rerun_sets_its_key_s_results_aside_for_the_candidate_above_too_as_graph2_drops_its_cached_result(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide)
@@ -3676,6 +3731,25 @@ def _checks(env: Env) -> list[str]:
     return [e["check"] for e in env.graph2.enqueued()]
 
 
+def test_a_plain_pr_that_conflicts_with_the_staged_batch_s_members_is_left_out_of_the_batch_beside_it_its_owner_told(env):
+    """#1, a Lean change, is staged; #2 merges onto `main` but not under #1, which `Commit` merges again onto main's chain's
+    top above the batch built beside it: the build leaves #2 out, naming #1 and the file, and tells its owner, and builds #3.
+    The next tick takes #2 into no batch while that batch stays staged and #2's head is the same, saying why."""
+    loop, records, sha, one, first = _records_loop(env, files={**LEAN, "shared.txt": "one\n"}, left_out=vqueue.left_out)
+    two = env.put(2, {"shared.txt": "two\n"})
+    env.put(3, {"c.txt": "3\n"})
+    skip, built = [r for r in loop.tick() if r["action"] != "leave"]
+    assert (skip["action"], skip["number"], skip["heads"], skip["by"], skip["staged"], skip["done"]) == (
+        "skip", 2, [two], [1], sha, True), skip
+    assert skip["why"] == (f"conflicts with #1, of the Lean batch staged at {sha[:12]}, which goes onto main's chain's top "
+                           "above it, in shared.txt"), skip
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [3], True), built
+    (post,) = env.posts
+    assert "#2 at" in post and "once #1 is on it" in post, post
+    assert [(r["action"], r["number"], r["cause"]) for r in loop.tick()] == [("leave", 2, "conflicts with staged batch")]
+    assert len(env.posts) == 1
+
+
 def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_records_commit_when_it_regenerated_some(env):
     """Its build starts its records run on its tree, and not its check: nothing is enqueued on it, and the next batch is built
     on its base beside it, not on it.  Once the run passed having regenerated records, it goes onto main's chain's top: its
@@ -4301,7 +4375,7 @@ def test_a_staged_batch_none_of_whose_members_merges_onto_the_chain_s_top_is_dro
     env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
     records.verdicts["regen-1"] = RecordsRun(PASS)
-    loop.world.build = lambda prs, base, main=None: (base, [], [])       # #1 merges onto main's chain's top no more
+    loop.world.build = lambda prs, base, main=None, staged=None: (base, [], [])       # #1 merges onto main's chain's top no more
     judged, drop = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"]) == (
         "drop", sha, f"no member of it merges onto {two['sha'][:12]}, main's chain's top: its members are built again")

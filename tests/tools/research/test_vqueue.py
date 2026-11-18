@@ -11,9 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build,
-                             Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun,
-                             Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
+from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, NEVER_RAN, ON_MAIN, PASS, PENDING, Advance,
+                             Build, Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate,
+                             Rerun, Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -515,10 +515,75 @@ def test_a_failure_whose_inputs_meet_several_members_suspects_only_them():
     assert decide(s)[1:] == [Build((2, 4), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
 
 
-def test_a_failure_whose_inputs_meet_no_member_suspects_every_member():
+def test_a_failure_whose_inputs_meet_no_member_is_rerun_afresh_then_suspects_every_member():
+    """No member's files meet the failure, so the keys are rerun once before every member is suspected; the rerun's failure
+    suspects every member, as one that was not rerun did."""
     t, six = task("t", "elsewhere/"), (1, 2, 3, 4, 5, 6)
     s = snap(cand("c1", MAIN, *six, state=FAIL, failed=(t,)), ready=prs(*six, 7))
+    assert decide(s) == [Rerun("c1", ("key:t",)), Build((7,), "c1", 1)]
+    s = snap(cand("c1", MAIN, *six, state=FAIL, failed=(t,), reruns=1), ready=prs(*six, 7))
     assert decide(s) == [Drop("c1", "failed: t", Outcome(six, heads(*six), FAIL, six, MAIN)), Build((1, 2, 3), MAIN, 2)]
+
+
+#: a test no member's change reaches, and the handle the registry gives its path
+UNREACHED = "tools/zz/tests/test_z.py::test_flake"
+OWNER = ((UNREACHED, "@zz"),)
+NOW = 1_700_000_000.0
+
+
+def _unreached(name: str = "pytest:z") -> Failed:
+    return Failed(name, f"key:{name}", frozenset({"tools/zz/tests/test_z.py"}), tests=frozenset({UNREACHED}))
+
+
+def test_a_candidate_of_several_failing_a_test_no_change_reaches_is_rerun_afresh():
+    """The chain above it stays: the drop waits for the rerun."""
+    t = _unreached()
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), cand("c2", "c1", 3), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s) == [Rerun("c1", ("key:pytest:z",)), Build((4,), "c2", 1)]
+
+
+def test_a_passing_rerun_of_an_unreached_test_rings_its_owner_and_the_candidate_lands():
+    """The pass is the record the loop writes, and the candidate is not dropped for the failure."""
+    t = _unreached()
+    c = replace(cand("c1", MAIN, 1, 2, state=PASS, reruns=1), reran=(t,))
+    why = (f"{UNREACHED} passed when rerun afresh, and no member's files meet its inputs: its owner cures or deletes it "
+           "within 24 hours")
+    acts = decide(snap(c, ready=prs(1, 2), now=NOW, owners=OWNER))
+    assert acts == [Ring("c1", why, to=("@zz",), test=UNREACHED, passed=True), Advance("c1"),
+                    Drop("c1", ON_MAIN, Outcome((1, 2), heads(1, 2), PASS))]
+
+
+def test_a_second_passing_rerun_of_the_same_test_within_24_hours_is_not_granted():
+    """The failure is red, every member a suspect, and the owner is told the test flakes and must be deleted.  One recorded
+    24 hours ago, or of another test, is granted."""
+    t = _unreached()
+    why = f"{UNREACHED} flakes and must be deleted by the rule: a passing rerun of it was recorded within 24 hours"
+    ring = Ring("c1", why, to=("@zz",), test=UNREACHED)
+    drop = Drop("c1", "failed: pytest:z", Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN))
+    fresh = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                 cured=((UNREACHED, NOW - 24 * 3600 + 1),), owners=OWNER)
+    assert decide(fresh) == [ring, drop, Build((1,), MAIN, 2)]
+    aged = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                cured=((UNREACHED, NOW - 24 * 3600),), owners=OWNER)
+    assert decide(aged) == [Rerun("c1", ("key:pytest:z",))]
+    other = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2), now=NOW,
+                 cured=(("tools/zz/tests/test_z.py::test_other", NOW - 60),), owners=OWNER)
+    assert decide(other) == [Rerun("c1", ("key:pytest:z",))]
+
+
+def test_a_test_a_member_reaches_is_blamed_as_before_the_unreached_rerun():
+    """A failure some member's files meet is that member's, rerun or not, and a recent passing rerun of its test changes nothing."""
+    test = "pkg2/tests/test_a.py::test_it"
+    t = Failed("suite:a", "key:suite:a", frozenset({"pkg2/"}), tests=frozenset({test}))
+    reached = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2, 3), now=NOW,
+                   cured=((test, NOW - 60),), owners=((test, "@aa"),))
+    acts = decide(reached)
+    assert acts == [Eject(2, "h2", "suite:a failed, and its changed files meet their inputs, no other member's", (t,)),
+                    Drop("c1", "failed: suite:a", Outcome((1, 2), heads(1, 2), FAIL, (2,), MAIN)),
+                    Build((1,), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
+    lone = _unreached()
+    assert decide(snap(cand("c1", MAIN, 5, state=FAIL, failed=(lone,)), ready=prs(5), now=NOW,
+                       cured=((UNREACHED, NOW - 60),), owners=OWNER)) == [Rerun("c1", ("key:pytest:z",))]
 
 
 def test_a_fail_is_acted_on_once_a_failure_of_its_own_is_known_while_the_rest_still_runs():
@@ -608,6 +673,22 @@ def test_without_tree_ejects_infra_that_persists_is_split_on_its_inputs_as_infra
         assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them as infra, "
                                                     "ejecting nobody", Outcome((1, 2, 3), heads(1, 2, 3), INFRA_SPLIT, suspects, MAIN)),
                         Drop("c2", "its base failed"), *rebuilt], (tries, rings)
+
+
+def test_launches_that_never_started_above_the_lowest_are_retried_at_once_side_by_side_and_only_once():
+    """Two candidates above a pending lowest whose launches started none of their steps are both enqueued again in that
+    tick, rather than each waiting to be the lowest; one already enqueued again waits to be the lowest, and an infra error
+    from a step that ran still waits for the lowest's rules.  A quick tier's run that left its slot line unrun is such a
+    launch by its words alone, as a verdict recorded before `Failed.launch` was set for it says."""
+    unrun = (replace(task("quick-tier"), launch=True),)
+    lowest = cand("c1", MAIN, 1)
+    c2, c3 = cand("c2", "c1", 2, state=INFRA, infra=unrun), cand("c3", "c2", 3, state=INFRA, infra=unrun)
+    assert decide(snap(lowest, c2, c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    assert decide(snap(lowest, replace(c2, tries=2), c3, ready=prs(1, 2, 3))) == [Retry("c3")]
+    said = (task(f"the run beside its check (r1) run r1 on m1 {NEVER_RAN} (`research inspect r1`)"),)
+    assert decide(snap(lowest, replace(c2, verdict=Verdict(INFRA, (), said)), c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    ran = cand("c2", "c1", 2, state=INFRA, infra=(task("test-file:pkg2/tests/test_reads.py", "pkg2/mod.py"),))
+    assert decide(snap(lowest, ran, ready=prs(1, 2))) == []
 
 
 def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():
@@ -857,7 +938,9 @@ def test_a_mixed_failure_ejects_or_bisects_on_its_own_failures_alone_and_rings_r
                     Drop("c1", "failed: suite:a, suite:r", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (2,), MAIN, (red,))),
                     Build((1, 3), MAIN, 2, replaces="c1"), Build((9,), "c1", 1)]
     nobody = task("suite:x", "elsewhere/")
-    acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody)), ready=prs(1, 2, 4)))
+    s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody)), ready=prs(1, 2, 4))
+    assert decide(s) == [Rerun("c1", ("key:suite:x",)), Build((4,), "c1", 1)]
+    acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody), reruns=1), ready=prs(1, 2, 4)))
     assert acts == [Red("c1", MAIN, acts[0].why, (red,)),
                     Drop("c1", "failed: suite:r, suite:x", Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN, (red,))),
                     Build((1,), MAIN, 2)]
@@ -1104,6 +1187,17 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == [Advance("c0"), Drop("c0", "on main", Outcome((3,), heads(3), PASS)), Build((2,), "c0", 3)]
     s = replace(s, candidates=(cand("c0", MAIN, 3), waiting("c1", "c0", 1), cand("c2", "c0", 2)))
     assert decide(s) == decide(replace(s, depth=2)) == []
+
+
+def test_a_pr_that_conflicts_with_the_staged_batch_s_members_waits_while_it_is_staged_and_is_built_once_it_is_on_the_chain():
+    """A PR a build left out for conflicting with the staged batch's members (`Ready.staged_conflict`) is taken into no batch
+    beside that batch, the others built meanwhile, saying why; once the batch is on the chain it is built in rank order,
+    where a conflict is one with members below it, as any."""
+    under = replace(pr(2), staged_conflict=True)
+    s = snap(waiting("c1", MAIN, 1), ready=[lean(1), under, pr(3)], depth=3, records=True)
+    assert decide(s) == [Build((3,), MAIN, 3)]
+    assert [(x.number, x.cause) for x in left_out(s)] == [(2, "conflicts with staged batch")]
+    assert decide(replace(s, candidates=(cand("c1", MAIN, 1),))) == [Build((2, 3), "c1", 2)]
 
 
 @pytest.mark.parametrize("files", [("tools/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
@@ -1916,7 +2010,7 @@ def test_an_env_bump_is_ejected_by_its_inputs_once_they_hold_the_envs_spec_and_a
     w = Play(ready, oracle).run()
     assert sorted(w.landed) == [1, 2, 3, 5, 6] and [e.number for e in w.ejected] == [4]
     assert ("meet their inputs" if env else "reads more than it declares") in w.ejected[0].why
-    assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 1))
+    assert (w.built, w.count(Rerun)) == ((2, 0) if env else (7, 3))
 
 
 # ---- members with no land verdict -------------------------------------------------------------------------------------------
@@ -2495,8 +2589,8 @@ class World:
             elif isinstance(a, Rerun):
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
-                assert len(c.members) == 1 and not c.reruns and own and a.keys == tuple(f.key for f in own), where
-                assert not any(meets(self.marks[c.members[0]].files, f.inputs) for f in own), where
+                assert not c.reruns and own and a.keys == tuple(dict.fromkeys(f.key for f in own if f.key)), where
+                assert not any(meets(built[m].files, f.inputs) for m in c.members for f in own), where
                 self.seen["rerun"] += 1
             elif isinstance(a, Ring):
                 assert a.pr is None or (not s.tree_ejects and by[a.sha].members == (a.pr,)), where
@@ -3035,8 +3129,9 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     infra or listing error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; without
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
-    pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
-    before it is ejected; a batch holds Lean PRs only, at most `lean`, or none, in rank order, and a Lean one opens whenever
+    pending past the bound is retried once and rung past twice it; a failure no member's files meet is rerun once
+    before the candidate is dropped, a lone member's then ejected; a batch holds Lean PRs only, at most `lean`, or none, in rank
+    order, and a Lean one opens whenever
     its chain allows, whether or not a PR with no Lean change waits; a move of main by someone else drops the stale candidates
     and rebuilds on it; a red or a leave takes out only its suspects or that member, every other member of what it dropped
     built again in its tick, in order, and a fail above the lowest is decided before its base's word only on `main`'s, where

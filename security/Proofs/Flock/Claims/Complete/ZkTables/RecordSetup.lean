@@ -127,10 +127,10 @@ open _root_.Flock FlockSoundness.Refine in
 set_option maxHeartbeats 4000000 in
 /-- **A statement `Stmt.setupHidden` returns keeps the coin tree its setup was given.** -/
 theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
-    {draw partition : Option Lean.Json} {program own : Option ByteArray} {st : Stmt}
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program own = .ok st) :
+    {sample partition : Option Lean.Json} {program own : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables sample partition program own = .ok st) :
     st.coinTree = coins.tree? := by
-  cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
+  cases sample <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
     repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h

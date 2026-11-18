@@ -12,7 +12,7 @@ payload    N blocks of seeded random bytes, each 128-byte word's top byte below 
            word whose top byte that leaves is at least p = 2^512 − 569 with probability 569/2^512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
            store `poub.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
-           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the store's own from the operating system, never sent or written;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -446,7 +446,7 @@ class DeviceStore:
             raise ValueError("a host tier needs GPUs with streams of their own")
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
-        self.payload_key = key
+        self.payload_key = secrets.token_bytes(32)
         self.rows = rows
         for each in (lib, lib_open):
             each.set_rows(rows)
@@ -1291,16 +1291,13 @@ class GpuBackend:
         torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
-        self.salt_key = self.rng.bytes(32)
+        self.rng.bytes(32)  # the sample that once made the salt key: the seeded samples after it stay as they were
+        self.salt_key = secrets.token_bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
         self.store.pass_mode(leaf_ctas)
-        self.payload_key = self.salt_key
-
-    def set_payload_key(self, key: bytes) -> None:
-        """Salt the payload tree with the verifier's key (`prover.ProverSide.register`), before its root is taken."""
-        self.payload_key = self.store.payload_key = key
+        self.payload_key = self.store.payload_key
 
     def payload_root(self, node: bytes) -> bytes:
         self.node = node
