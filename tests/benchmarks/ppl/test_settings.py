@@ -42,7 +42,7 @@ def test_an_eval_uses_the_gpus_its_lease_names(monkeypatch):
 
 def test_a_submitted_run_names_who_leases_its_gpus(monkeypatch):
     a = argparse.Namespace(model="llama-3.1-8b", set="c4", ctx=2048, gpus=0, seeds="0", plugin=None, spec=["adopted"],
-                           max_min=120, campaign="cmp-13")
+                           max_min=120, campaign="cmp-13", on=run.NODE, card=None, python=None, hf_home=None)
     monkeypatch.delenv("GPU_LEASE_WHO", raising=False)
     assert "GPU_LEASE_WHO=ppl-bench" in run.submit_command(a, run.LOCAL_DATA)
     monkeypatch.setenv("GPU_LEASE_WHO", "a-lane")

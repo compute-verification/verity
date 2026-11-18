@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# `run.py eval` on vy-nebius-2 under a gpu-lease of PPL_GPUS GPUs (cwd = the source's root). `run.py submit` writes the
-# `research run` that calls this, and sends the two dataset files (datasets.json) with it. Clocks are read, never set.
+# `run.py eval` on the submitted machine under a gpu-lease of PPL_GPUS GPUs (cwd = the source's root). `run.py submit`
+# writes the `research run` that calls this, and sends the two dataset files (datasets.json) with it. Clocks are read,
+# never set.
 #
-#   PPL_ARGS   eval's flags but --out and --data (`--model M --set S --ctx T --gpus N --seeds 0,1,2 SPEC...`)
-#   PPL_GPUS   GPUs to lease (1, or 2 for Llama-3.1-70B); PPL_MAX_MIN the lease's bound in minutes
+#   PPL_ARGS     eval's flags but --out and --data (`--model M --set S --ctx T --gpus N --seeds 0,1,2 SPEC...`)
+#   PPL_GPUS     GPUs to lease (1, or 2 for Llama-3.1-70B); PPL_MAX_MIN the lease's bound in minutes
+#   PPL_CARD     where set, the card each leased GPU must be, as nvidia-smi names it
+#   PPL_PY       the Python with the eval's packages; PPL_HF_HOME the Hugging Face cache (defaults: vy-nebius-2's)
 set -uo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$O"
-export PY=/workspace/jobs/venv312/bin/python HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 PPL_DATA=$RESEARCH_RUN_DIR/inputs
+export PY=${PPL_PY:-/workspace/jobs/venv312/bin/python} HF_HOME=${PPL_HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1
+export PPL_DATA=$RESEARCH_RUN_DIR/inputs PPL_CARD=${PPL_CARD:-}
 export PPL_ARGS=${PPL_ARGS:?}
 # a streamed model's pull window (stream.Hub, under TMPDIR) goes with the run, a cancelled one too: research cancel
 # SIGTERMs the whole scope, so Python's own cleanup never runs
@@ -19,6 +23,14 @@ trap 'exit 143' TERM INT
 gpu-lease "${PPL_GPUS:-1}" --wait --max-min "${PPL_MAX_MIN:-120}" -- bash -c '
   q=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit
   nvidia-smi --query-gpu=$q --format=csv -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
+  if [ -n "$PPL_CARD" ]; then
+    names=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "$GPU_LEASE_UUID") || names=
+    if [ -z "$names" ] || printf "%s\n" "$names" | grep -qvxF "$PPL_CARD"; then
+      echo "the lease holds ${names:-no GPU nvidia-smi names}, not the $PPL_CARD the run names (--card)" |
+        tee "$O/stderr.txt" >&2
+      exit 2
+    fi
+  fi
   # shellcheck disable=SC2086
   "$PY" benchmarks/ppl/run.py eval --out "$O" --data "$PPL_DATA" $PPL_ARGS > "$O/stdout.txt" 2> "$O/stderr.txt"
   r=$?

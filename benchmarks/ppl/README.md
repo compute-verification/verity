@@ -18,6 +18,7 @@ description. The other commands, `run.py`'s docstring has in full:
 
 ~~~text
 verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted        # a `research run` on vy-nebius-2
+verity bench ppl submit ... --on MACHINE --card "NVIDIA H100 80GB HBM3"          # on another machine, whose card it names
 verity bench ppl eval --model M --set S --ctx T --out DIR SPEC...                 # the same, on a GPU node
 verity bench ppl report DIR/results.json...                                       # a run's tables
 verity bench ppl baseline [DIR/results.json...]                                   # the locked baseline (and a check)

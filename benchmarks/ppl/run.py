@@ -3,7 +3,8 @@
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
                 [--data DIR] [--plugin FILE.py]... SPEC...                     on a GPU node: one results.json
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
-                                                                            (job.sh), the datasets sent with it
+          [--on MACHINE --card NAME [--python PY] [--hf-home DIR]]          (job.sh), or on MACHINE, whose card is NAME,
+                                                                            the datasets sent with it
     run.py report RESULTS.json...                                           the tables
     run.py metrics RESULTS.json [--out DIR]                                 its metrics (metrics.toml), through the kit
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
@@ -52,6 +53,7 @@ DATA = Path(settings.get("PPL_DATA"))
 LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
 HF_HOME = Path(settings.get("HF_HOME"))
 NODE = "vy-nebius-2"
+CARD_FILES = ROOT / "calibration/hardware/cards"
 
 
 def load_plugins(paths: Iterable[str] | None) -> None:
@@ -236,21 +238,29 @@ def cmd_shard(task_path: str) -> int:
 
 
 def submit_command(a: argparse.Namespace, data: Path) -> list[str]:
-    """The `research run` that runs this eval on vy-nebius-2 under a gpu-lease of the model's GPUs, from the
-    checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
-    the commit (paths relative to the repository's root)."""
+    """The `research run` that runs this eval on `a.on` (`NODE` by default) under a gpu-lease of the model's GPUs, from
+    the checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
+    the commit (paths relative to the repository's root). Another machine needs `a.card`, the name nvidia-smi gives its
+    card, which a card file must hold (`verity_bench.kit.card_short`) and the job holds its lease to; `a.python` and
+    `a.hf_home` replace `job.sh`'s Python and Hugging Face cache there."""
     gpus = a.gpus or models.get(a.model)["gpus"]
     if gpus > 2:
         raise SystemExit("a run leases at most 2 GPUs")
+    if a.on != NODE and not a.card:
+        raise SystemExit(f"--on {a.on} is not {NODE}: name its card with --card, as nvidia-smi names it")
+    if a.card:
+        from verity_bench import kit
+        kit.card_short(a.card, directory=CARD_FILES)
+    machine = [("PPL_CARD", a.card), ("PPL_PY", a.python), ("PPL_HF_HOME", a.hf_home)]
     flags = f"--model {a.model} --set {a.set} --ctx {a.ctx} --gpus {gpus} --seeds {a.seeds}"
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)
     who = settings.get("GPU_LEASE_WHO")
     sends = [x for d in windows.DATASETS.values() for x in ("--send", str(Path(data) / d["file"]))]
-    return ["research", "run", "--on", NODE, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
+    return ["research", "run", "--on", a.on, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
             "--cwd", "source", "--custody-ttl", "12h", *sends, "--env", f"GPU_LEASE_WHO={who}",
             "--env", f"PPL_GPUS={gpus}", "--env", f"PPL_MAX_MIN={a.max_min}", "--env", f"PPL_ARGS={flags}",
-            "--", "bash", "benchmarks/ppl/job.sh"]
+            *(x for k, v in machine if v for x in ("--env", f"{k}={v}")), "--", "bash", "benchmarks/ppl/job.sh"]
 
 
 def cmd_submit(a: argparse.Namespace) -> int:
@@ -398,6 +408,10 @@ def main(argv: list[str]) -> int:
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
     q.add_argument("--max-min", type=int, default=120)
+    q.add_argument("--on", default=NODE, help="the machine (default: %(default)s); another needs --card")
+    q.add_argument("--card", help="the machine's card, as nvidia-smi names it; the job refuses a lease of another")
+    q.add_argument("--python", help="the machine's Python with the eval's packages (default: job.sh's)")
+    q.add_argument("--hf-home", help="the machine's Hugging Face cache (default: job.sh's)")
     q.add_argument("--campaign", default="cmp-13")
     q.add_argument("--dry-run", action="store_true")
     q = sub.add_parser("report")

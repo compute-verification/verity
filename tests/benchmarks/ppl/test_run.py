@@ -28,8 +28,27 @@ def test_seeds_are_a_prefix():
 
 def submit(**kw) -> list[str]:
     a = argparse.Namespace(**{"model": "llama-3.1-8b", "set": "c4", "ctx": 2048, "gpus": 0, "seeds": "0,1,2",
-                              "plugin": None, "spec": ["adopted"], "max_min": 120, "campaign": "cmp-13", **kw})
+                              "plugin": None, "spec": ["adopted"], "max_min": 120, "campaign": "cmp-13",
+                              "on": run.NODE, "card": None, "python": None, "hf_home": None, **kw})
     return run.submit_command(a, run.LOCAL_DATA)
+
+
+def test_another_machine_runs_once_the_run_names_its_card():
+    cmd = submit(on="h100-box", card="NVIDIA H100 80GB HBM3", python="/opt/venv/bin/python", hf_home="/data/hf")
+    assert cmd[:4] == ["research", "run", "--on", "h100-box"]
+    env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")
+    assert (env["PPL_CARD"], env["PPL_PY"], env["PPL_HF_HOME"]) == ("NVIDIA H100 80GB HBM3", "/opt/venv/bin/python",
+                                                                    "/data/hf")
+    assert not {"PPL_CARD", "PPL_PY", "PPL_HF_HOME"} & {x.split("=")[0] for x in submit() if x.startswith("PPL_")}
+
+
+def test_another_machine_without_a_card_or_with_one_no_card_file_holds_is_refused():
+    with pytest.raises(SystemExit, match="--on h100-box is not vy-nebius-2: name its card with --card"):
+        submit(on="h100-box")
+    with pytest.raises(SystemExit, match="'NVIDIA H100', the card nvidia-smi names here"):
+        submit(on="h100-box", card="NVIDIA H100")
+    with pytest.raises(SystemExit, match="at most 2 GPUs"):
+        submit(on="h100-box", card="NVIDIA H100 80GB HBM3", gpus=3)
 
 
 def test_submit_is_a_research_run_on_the_node_under_a_lease():
