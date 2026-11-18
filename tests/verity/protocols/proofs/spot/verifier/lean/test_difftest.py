@@ -442,7 +442,7 @@ def _int(x) -> bool:
 
 def _exactly(j, keys: set[str], what: str) -> None:
     if not isinstance(j, dict) or set(j) != keys:
-        raise D.Reject(f"the keys of {what} are not {sorted(keys)}")
+        raise D.Reject(f"the keys of {what} are not {', '.join(sorted(keys))}")
 
 
 def _obj(j, what: str) -> dict:
@@ -7674,24 +7674,48 @@ def _base_held(verdicts, docket, window_values=()):
     return audit.less_own_reads(audit.session_registered(verdicts, docket), docket)
 
 
-#: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.
-KEYS_REFUSED = ("params: the keys of the parameters are not", "the keys of the record's input are not")
+#: The refusals whose text names the keys they read, which a `window_values` added to keys already wrong joins.
+KEYS_REFUSED = ("params: the keys of the parameters are not ", "the keys of the record's input are not ")
+
+
+def _reason(port, got):
+    return json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
+
+
+def _naming_window_values(reason: str) -> str:
+    """A keys refusal (`KEYS_REFUSED`) as it reads with `window_values` among the keys."""
+    head = next(h for h in KEYS_REFUSED if reason.startswith(h))
+    return head + ", ".join(sorted({*reason.removeprefix(head).split(", "), "window_values"}))
 
 
 def _same(port, got, unnamed, ok) -> None:
-    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it was given: then it refuses."""
-    reason = json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
+    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it read: then it refuses them
+    with `window_values` among them."""
+    reason = _reason(port, got)
     if got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
-        assert unnamed[0] == got[0], (ok, got, unnamed)
+        want = _naming_window_values(reason)
+        if port is ONE_STAGE and got[0] != "error":
+            assert unnamed[0] == got[0] and json.loads(unnamed[1]) == {**json.loads(got[1]), "reason": want}, (
+                ok, got, unnamed)
+        else:
+            assert unnamed == (got[0], want), (ok, got, unnamed)
     else:
         assert unnamed == got, (ok, got, unnamed)
+
+
+def _same_keys_refusal(port, lean, python, ok) -> None:
+    """Where Lean refuses the keys it read (`KEYS_REFUSED`), the mirror refuses them in the same words."""
+    reason = _reason(port, lean)
+    if lean[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+        assert python[0] == lean[0] and _reason(port, python) == reason, (ok, lean, python)
 
 
 def test_naming_no_window_value_changes_no_outcome(server, pieces):
     """Naming no window value changes nothing, reason included: on each sampled one-stage case and record-piece input of
     the agreement tests, the mirror with the key absent gives the line it gives holding the reads as before window
     values (`_base_held`), and Lean and the mirror with `window_values` empty give the lines they give with it absent,
-    but where the input's keys were already refused, a refusal that names them and refuses again."""
+    but where the input's keys were already refused, the same refusal with `window_values` among the keys, in the
+    mirror's words as in Lean's."""
     import hypothesis
     seen: set[str] = set()
 
@@ -7707,7 +7731,10 @@ def test_naming_no_window_value_changes_no_outcome(server, pieces):
         seen.add(lean[0])
         _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case)
         _same(ONE_STAGE, base, ONE_STAGE.python(named), case)
-        _same(RECORD_PORT, RECORD_PORT.lean(pieces, j), RECORD_PORT.lean(pieces, _unnamed(j)), j)
+        _same_keys_refusal(ONE_STAGE, lean, base, case)
+        lean_j = RECORD_PORT.lean(pieces, j)
+        _same_keys_refusal(RECORD_PORT, lean_j, base_j, j)
+        _same(RECORD_PORT, lean_j, RECORD_PORT.lean(pieces, _unnamed(j)), j)
         _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j)
         seen.add(f"record {base_j[0]}")
 
@@ -9125,7 +9152,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         out = server.exchange(case)
-        assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
+        assert out == answer(case) and out["verdict"] == "reject", (kind, out)
         assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
         circuit, public, record = STAND_IN_CIRCUIT, b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
@@ -9151,7 +9178,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                 sampling_design = {"law": "bernoulli", "p": p}
                 one, two = {**case, "params": {**params, "law": sampling_design}}, {**v2, "params": {**v2["params"], "law": sampling_design}}
                 out = server.exchange(one)
-                assert out == answer(one) | {"reason": out["reason"]}, (p, out)
+                assert out == answer(one), (p, out)
                 assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
                 out = server_v2.exchange(_json(two))
                 assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
