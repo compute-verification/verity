@@ -52,6 +52,7 @@ from typing import Any, Callable, NamedTuple
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.program import register_boolean_bodies
 from verity.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
 from verity.circuits.types import Array, RecordType, Tuple, Type, Value
 
@@ -174,11 +175,10 @@ _VERSIONS: dict[tuple[str | None, str], Any] = {}
 
 
 def boolean_version(fn: FunctionDefinition, family: str | None = None, opt_in: bool = False) -> FunctionDefinition:
-    """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, its newest version when
-    several versions of one name are, with ``bit_type`` of ``fn``'s signature as its own.  With ``family`` (`Name_vN`), that
-    version and not the newest: the one a Program names, for a reader of that Program, taken before any other name's is weighed,
-    since at most one registered Definition has that name and version.  Its function-valued statics are still the newest Boolean
-    versions of ``fn``'s.  With ``opt_in``, an ``opt_in`` Boolean Definition is weighed too.  `NoBooleanVersion` otherwise."""
+    """The Boolean Definition whose word is ``fn``: the one registered Boolean Definition linked to it, with ``bit_type`` of
+    ``fn``'s signature as its own; `NoBooleanVersion` where none is, or several are.  With ``family`` (`Name_vN`), only that
+    one is weighed: the one a Program names, for a reader of that Program.  With ``opt_in``, an ``opt_in`` Boolean Definition
+    is weighed too.  The lookup `Program` builds its Boolean map with (`program.register_boolean_bodies`)."""
     fid = descriptor_id(bind(fn) if isinstance(fn, CompositeDefinition) else fn)
     key = (family, fid, opt_in)
     hit = _VERSIONS.get(key)
@@ -282,10 +282,10 @@ def _find(fn: FunctionDefinition, fid: str, family: str | None = None, opt_in: b
             why += (" (no catalog is registered with the lookup, catalog_loader: only verity.circuits.ops.boolean and the modules "
                     "already imported were scanned)")
         raise NoBooleanVersion({fid: why})
-    names = {c.name for c in cands}
-    if len(names) > 1:
+    cands = list({descriptor_id(c): c for c in cands}.values())
+    if len(cands) > 1:
         raise NoBooleanVersion({fid: f"ambiguous: {sorted(descriptor_id(c) for c in cands)} all name it as their word"})
-    best = max(cands, key=lambda c: c.version)
+    best = cands[0]
     params, ret = fn.signature()
     bparams, bret = best.signature()
     want = (tuple(BL.bit_type(t) for _, t in params), BL.bit_type(ret))
@@ -434,34 +434,19 @@ def lift(fn: SpecializedDefinition, override: Callable[[FunctionDefinition], Fun
 
 
 class BooleanBody(NamedTuple):
-    """A primitive's Boolean body: its Boolean Definition, that Definition's descriptor id and its Program's digest."""
+    """A primitive's Boolean body: its Boolean Definition, that Definition's descriptor id and its definition digest."""
     fn: FunctionDefinition
     id: str
     digest: str
 
 
 def boolean_table(program) -> Mapping[str, BooleanBody]:
-    """Each word primitive ``program`` reaches, by descriptor id, to its Boolean body (`boolean_version`, looked up once
-    here): a Boolean primitive or an input has none, being a gate or an input of C.  `NoBooleanVersion` names every word
-    primitive with none."""
-    from verity.circuits.codec import program_digest
-    from verity.circuits.program import Program, is_input
+    """``program``'s Boolean map (a `Program`'s, fixed at its build, or a `DecodedProgram`'s, read from its descriptor), each
+    body with its id and its definition digest; no registry lookup."""
+    from verity.circuits.codec import definition_digest, definition_entry
 
-    out: dict[str, BooleanBody] = {}
-    missing: dict[str, str] = {}
-    for fid, fn in sorted(_reachable([program.root]).items()):
-        if not isinstance(fn, PrimitiveDefinition) or is_input(fn) or BL.is_boolean(fn):
-            continue
-        try:
-            v = boolean_version(fn)
-        except NoBooleanVersion as e:
-            missing.update(e.missing)
-            continue
-        v = bind(v) if isinstance(v, CompositeDefinition) else v
-        out[fid] = BooleanBody(v, descriptor_id(v), program_digest(Program(v)))
-    if missing:
-        raise NoBooleanVersion(missing)
-    return MappingProxyType(out)
+    return MappingProxyType({fid: BooleanBody(v, descriptor_id(v), definition_digest(definition_entry(v)))
+                             for fid, v in program.boolean.items()})
 
 
 def block_circuit(fn: FunctionDefinition, table: Mapping[str, BooleanBody], memo: dict[str, FunctionDefinition] | None = None
@@ -682,12 +667,13 @@ def dry_run(program) -> dict:
                             "list": nb["list"] + [{"id": w, "kind": "wrapper"} for w in wrappers]}}
 
 
-def gate_table(fns) -> tuple[dict[str, int], list[str]]:
+def gate_table(fns, bodies: Mapping[str, FunctionDefinition] | None = None) -> tuple[dict[str, int], list[str]]:
     """The gate table of the primitives ``fns`` reach (each Definition visited once; no input): each by its descriptor key, its
     two-input Boolean gates as `census` counts a Definition's Boolean work (an n-input And or Xor n - 1, a Not 1, a constant bit
     or an input 0) through its Boolean version (`boolean_version`, the primitive itself where it is Boolean); and, sorted, the
     keys of those it can't price: no Boolean version, or one that reaches a primitive that is no gate. The one table a count
-    of (c, k)-inference blocks reads (`InferenceOnlyCheck.Count`'s ``table``)."""
+    of (c, k)-inference blocks reads (`InferenceOnlyCheck.Count`'s ``table``). Given ``bodies`` (a Program's Boolean map), a word
+    primitive is priced by its body there and never by the lookup."""
     from verity.circuits import census as CE
     from verity.circuits.program import is_input
 
@@ -708,7 +694,7 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
     unpriced, keys, versions = [], [], []
     for key, p in sorted(prims.items()):
         try:
-            versions.append(p if BL.is_boolean(p) else boolean_version(p))
+            versions.append(p if BL.is_boolean(p) else boolean_version(p) if bodies is None else bodies[key])
             keys.append(key)
         except LookupError:
             unpriced.append(key)
@@ -732,3 +718,6 @@ def load_program(path: Path):
 __all__ = ["BooleanBody", "NoBooleanVersion", "boolean_table", "block_circuit", "boolean_version", "catalog_loader", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
            "boolean_function", "purity", "dry_run", "derived_calls", "gate_table", "load_program", "word_descriptor",
            "write_word"]
+
+
+register_boolean_bodies(boolean_version)

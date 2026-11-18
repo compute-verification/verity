@@ -12,7 +12,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import versions as V
-from verity.circuits.program import Program
+from verity.circuits.program import NoBooleanBody, Program
 from verity.circuits.types import Value
 from verity.commitments.periods import interface as I
 
@@ -74,9 +74,9 @@ def test_a_primitive_the_table_lacks_is_refused_by_name():
         V.block_circuit(GEMM, table)
 
 
-def test_a_word_primitive_with_no_boolean_body_is_named_by_the_table():
+def test_a_program_with_a_word_primitive_with_no_boolean_body_is_refused_at_build_by_name():
     opaque = PrimitiveDefinition("BlockCircuitTestOpaque", 1, (("a", Value(8)),), Value(8), lambda a: a, register=False)
     wrap = bind(CompositeDefinition("BlockCircuitTestWrap", 1, (), lambda S: ((("a", Value(8)),), Value(8)),
                                     lambda B, S, a: B.call(opaque, a), register=False))
-    with pytest.raises(V.NoBooleanVersion, match="BlockCircuitTestOpaque_v1"):
-        V.boolean_table(Program(wrap))
+    with pytest.raises(NoBooleanBody, match="E_NO_BODY: .*BlockCircuitTestOpaque_v1"):
+        Program(wrap)
