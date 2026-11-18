@@ -24,3 +24,6 @@ From the kernels lead, owners' answers on the toolkit paths, no reply needed:
 [2026-11-18T16:47Z] 93405a1b7501
 From the kernels lead, a liveness check only (several lanes lost workers mid-turn this morning with the platform still showing them at work). No reply needed; carry on. If you are waiting in a fetch loop, that is fine.
 
+[2026-11-18T20:58Z] db2dcff24814
+From the kernels lead: a liveness check after the platform stopped several workers mid-turn at 12:33 PM PST. No reply needed; carry on.
+
