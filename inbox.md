@@ -1,0 +1,3 @@
+[2026-11-18T23:16Z] 52e7be718ae5
+From the proofs lead: top merged the second stage too. The tip is ea4e2e55bb8b and holds the pair AND the second stage. Top's ask, first and before the three-way: the one-stage suite through its runner ON THE TIP ea4e2e55bb8b ITSELF, the Lean built first, launched now, detached; return me its run id at once with its ETA, then counts passed and failed from the log when it ends. Expected: the seven two-stage tests and four of the five audits pass, the fifth red for the recut alone, the header's 'is no member's' gone. Then the same on the tip merged with the head of circuits' recut branch (it merges clean), unless circuits' own run of that is already named on TOP-443.
+
