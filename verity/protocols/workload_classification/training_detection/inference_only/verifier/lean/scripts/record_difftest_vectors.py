@@ -930,6 +930,14 @@ SHARED = {
     "Norm's weight shared, each read a stretch a unit": ("norm", "stretched", None),
 }
 
+#: a weight each member of a batch reads a row of its own of (`shaped`), each `(how much the outer stride falls short
+#: of the row, the stage that refuses it)`: `Norm`'s, spelled as a strided part a row a member, the rows a row apart,
+#: read as the registered case is; and the rows one leaf closer, so that each overlaps the next, refused
+GATHERED = {
+    "Norm's weight read a row a member, the rows a stride apart": (0, None),
+    "Norm's weight read a row a member, the rows overlapping": (1, "own-rows"),
+}
+
 #: `Norm`'s shared weight over 4097 slots, each read a stretch a unit (`SHARED`'s), which takes the check past its
 #: bound: refused `shared-unheld`, not decided (`SHARED_UNDECIDED`)
 UNDECIDED = "4097x1 Norm's weight shared, each read a stretch a unit, past the check's bound"
@@ -1225,6 +1233,19 @@ def shaped() -> list[dict]:
     c.shared = params["norm"]
     first(UNDECIDED, c, 48 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS) + len(ROW_ROLE)
           + len(SPLITS) + len(SHARED), broken="shared-unheld", edit=stretched(c.shared[0]))
+
+    def gathered(short: int):
+        """`Norm`'s weights' row spelled as a strided part, a member's row of the run each, the rows `short` leaves
+        less than a row apart."""
+        def edit(nodes: list, _desc: dict) -> None:
+            norm = units(nodes)[2]
+            run = _run(nodes, norm["args"][1]["refs"])
+            per = run.count // norm["n"]
+            norm["args"][1]["refs"] = {"strided": ["n", run.idx, run.base, per, per - short, 1, run.count]}
+        return edit
+    for k, (what, (short, stage)) in enumerate(GATHERED.items()):
+        first(f"2x3 {what}", lowered(2, 3), 49 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES)
+              + len(FORMATS) + len(ROW_ROLE) + len(SPLITS) + len(SHARED) + k, reroot=gathered(short), broken=stage)
     return out
 
 
@@ -2274,7 +2295,7 @@ NAMES = ("cases", "python")
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
     return (len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
-            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED) + 1)
+            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED) + 1 + len(GATHERED))
 
 
 def results(case: dict) -> dict:

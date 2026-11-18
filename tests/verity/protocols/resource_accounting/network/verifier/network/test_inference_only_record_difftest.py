@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 729 cases (600 random circuits,
-two in five broken in one way, 104 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
+`verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 731 cases (600 random circuits,
+two in five broken in one way, 106 shaped ones, most in the shape of a served class, and 25 toys of edges) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -113,6 +113,8 @@ ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items(
 SPLITS = {f"2x3 {what}": ("templates" if short else None) for what, (_, short) in vectors.SPLITS.items()}
 #: the cases of a weight its units share, each with the stage that refuses it, None where the form takes it
 SHARED = {f"2x3 {what}": stage for what, (_, _, stage) in vectors.SHARED.items()} | {vectors.UNDECIDED: "shared-unheld"}
+#: the cases of a weight each member of a batch reads a row of its own of, each with the stage that refuses it, or None
+GATHERED = {f"2x3 {what}": stage for what, (_, stage) in vectors.GATHERED.items()}
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +129,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 729 cases and the reference's results, byte for byte as the record pins them."""
+    """All 731 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -178,7 +180,8 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | SHARED}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS | SHARED
+           | GATHERED}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -249,7 +252,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
             what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE | SPLITS
-                          | SHARED).items()
+                          | SHARED | GATHERED).items()
             if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
@@ -394,6 +397,24 @@ def test_a_weight_its_units_share_is_held(shaped):
     shared = ref.shared_of(gemm, ref.row_runs(gemm)[1])
     assert any(inner // (count // gemm.root.body.nodes[k].n) > 1 for k, _, _, _, inner, count in shared)
     assert ROWS["2x3 a row every unit shares"] == "own-rows"
+
+
+def test_a_member_may_read_a_row_of_its_own_of_a_weight(shaped):
+    """A strided part over an input node whose outer stride is at least its inner run hands each member of a batch a
+    row of its own, the rows that far apart: the form takes `Norm`'s weight so spelled, a row a member, as it takes the
+    registered case, with no run shared. With the rows one leaf closer, each overlaps the next and is neither a row
+    of its own nor a shared run: refused at the root (`own-rows`)."""
+    held = vectors.results(shaped["2x3 registered"]["case"])
+    for what, stage in GATHERED.items():
+        m = shaped[what]
+        r = vectors.results(m["case"])
+        program = vectors.reference.desc_program(m["case"]["instance"]["program"])
+        if stage is None:
+            assert ref.row_runs(program)[1] == [], what
+            assert r["detail"] == held["detail"] and r["public"] == held["public"], what
+        else:
+            assert ref.row_runs(program) is None, what
+            assert r["detail"] == r["public"] == {"error": stage, "message": ref.OWN_ROWS}, what
 
 
 def test_what_the_form_exports_of_a_row(shaped):

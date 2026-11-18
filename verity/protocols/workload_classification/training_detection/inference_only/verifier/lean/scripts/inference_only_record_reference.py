@@ -253,7 +253,8 @@ def refused(code: str, message: str) -> Malformed:
 #: `Record.OWN_ROWS`
 OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that "
             "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a "
-            "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the "
+            "batch maps every argument over its members, and no leaf is handed to two rows; a strided part's rows overlap "
+            "where its outer stride is between 0 and its inner run. Fix the Program, not the "
             "record: build its root as templates over input nodes of their own or other templates' outputs, each input "
             "leaf handed once.")
 
@@ -295,6 +296,16 @@ def part_run(nodes, p):
     return None
 
 
+def gather_runs(nodes, p):
+    """The Lean's `Record.gatherRuns`: the rows a strided part over an input node reads where no two overlap, its
+    outer stride at least its inner run or one row, `(node, first leaf, leaves)` a member; None for any other part."""
+    from verity.circuits.refs import Strided
+    if (isinstance(p, Strided) and p.space == "n" and input_at(nodes, p.idx) and p.inner_stride == 1 and p.base >= 0
+            and p.inner > 0 and p.count % p.inner == 0 and (p.count == p.inner or p.outer_stride >= p.inner)):
+        return [(p.idx, p.base + j * p.outer_stride, p.inner) for j in range(p.count // p.inner)]
+    return None
+
+
 def edge_of(nodes):
     """Whether a part of a root node's argument reads another root node's outputs: a grid, in every lane; an edge."""
     from verity.circuits.refs import Strided
@@ -314,17 +325,29 @@ def edge_of(nodes):
 def row_runs(program) -> tuple[list, list] | None:
     """The Lean's `Record.rowRuns`: the runs of input leaves the root's argument parts that are no edge read, as
     `(own, shared)`, `shared` those a strided part reads more than once over and those read by more than one part, in
-    order, once for each part after the first; None where a part is no run of an input node (`part_run`), a batch
-    maps an argument over no axis, or two runs share a leaf and are not the same run."""
+    order, once for each part after the first; a strided part's rows that lie apart (`gather_runs`) are in neither;
+    None where a part is neither a run of an input node (`part_run`) nor such rows, a batch maps an argument over no
+    axis, two runs share a leaf and are not the same run, or such a row shares a leaf with any other run."""
     nodes = program.root.body.nodes
     units, edge = [node for node in nodes if not is_input(node.fn)], edge_of(nodes)
     parts = [p for node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
-    runs = [part_run(nodes, p) for p in parts]
+    rest, rows = [], []
+    for p in parts:
+        gather = gather_runs(nodes, p) if part_run(nodes, p) is None else None
+        if gather is None:
+            rest.append(p)
+        else:
+            rows += gather
+    runs = [part_run(nodes, p) for p in rest]
     if any(node.form == "batch" and None in node.axes for node in units) or None in runs:
         return None
     runs = sorted((r for r in runs if r[0][2] > 0), key=lambda r: (r[0][0], r[0][1]))
     pairs = list(zip(runs, runs[1:]))
     if any(a[0] != b[0] and a[0][0] == b[0][0] and a[0][1] + a[0][2] > b[0][1] for a, b in pairs):
+        return None
+    marked = sorted([(r, True) for r in rows] + [(r[0], False) for r in runs], key=lambda r: (r[0][0], r[0][1]))
+    if any(a[0][0] == b[0][0] and a[0][1] + a[0][2] > b[0][1] and (a[0] != b[0] or a[1] or b[1])
+           for a, b in zip(marked, marked[1:])):
         return None
     same = {r[0] for r, q in pairs if r[0] == q[0]}
     own = [r[0] for r in runs if not r[1] and r[0] not in same]
