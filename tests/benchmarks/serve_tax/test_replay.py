@@ -31,8 +31,11 @@ def arm(tmp_path: Path, foreign: bool = False) -> Path:
     plan.write_text("".join(json.dumps({"i": i, "prompt_ids": [i, i + 1]}) + "\n" for i in range(3)))
     (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": str(plan), "checkpoint": "ck"}))
     (d / "sat" / "rep-1" / "meta.json").write_text(json.dumps({"tag": "sat1"}))
-    (d / "sat" / "rep-1" / "client.jsonl").write_text("".join(
+    kept = priv(d) / "client" / "sat" / "rep-1"
+    kept.mkdir(parents=True)
+    (kept / "client.jsonl").write_text("".join(
         json.dumps({"id": f"sat1-{i:05d}", "i": i, "output_ids": [7, i]}) + "\n" for i in range(2)))
+    R.S.kept_client(kept / "client.jsonl", d / "sat" / "rep-1")
     w, a, b = rid("warm", 2), rid("sat1", 0), rid("sat1", 1)
     recs = [{"kind": "header", "config": {}},
             {"kind": "arrive", "request": w, "before_step": 0, "sampling": {"max_tokens": 2}, "t": 0.0},
@@ -54,18 +57,13 @@ def test_window_is_the_loads_steps_from_its_first_arrival(tmp_path: Path):
     assert w["served_s"] == pytest.approx(0.2)
 
 
-def test_window_reads_the_plan_beside_the_arm_when_the_named_one_isnt_on_this_node(tmp_path: Path):
+def test_window_reads_the_plan_in_the_private_directory_when_meta_names_none_and_the_ids_from_there_only(tmp_path: Path):
     d = arm(tmp_path)
-    (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": "/elsewhere/out/plan.jsonl", "checkpoint": "ck"}))
-    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
-
-
-def test_window_reads_the_plan_in_the_arm_when_meta_names_none(tmp_path: Path):
-    d = arm(tmp_path)
+    assert all("output_ids" not in json.loads(x) for x in (d / "sat" / "rep-1" / "client.jsonl").read_text().splitlines())
     (d / "meta.json").write_text(json.dumps({"private": str(priv(d)), "plan": None, "checkpoint": "ck"}))   # serve_tax.py run without --plan
-    (tmp_path / "plan.jsonl").rename(d / "plan.jsonl")
+    (tmp_path / "plan.jsonl").rename(priv(d) / "plan.jsonl")
     assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
-    (d / "plan.jsonl").unlink()
+    (priv(d) / "plan.jsonl").unlink()
     with pytest.raises(SystemExit, match="no plan at"):
         R.window(d, "sat", 1)
 
@@ -567,7 +565,7 @@ def test_replay_tokens_round_trip(tmp_path: Path):
     assert R.read_tokens(tmp_path) == tokens
 
 
-def test_long_rows_reads_the_replays_tokens_from_the_private_directory_its_replay_json_names(tmp_path: Path, capsys):
+def test_long_rows_reads_the_replays_tokens_and_steps_from_the_private_directory_its_replay_json_names(tmp_path: Path, capsys):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("spot_long_rows", R.S.ROOT / "benchmarks" / "spot_proved" / "long_rows.py")
@@ -578,13 +576,13 @@ def test_long_rows_reads_the_replays_tokens_from_the_private_directory_its_repla
     out.mkdir(parents=True)
     rp.mkdir()
     (out / "replay.json").write_text(json.dumps({"private": str(rp)}))
-    (out / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in w["steps"]))
+    (rp / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in w["steps"]))
     R.write_tokens(rp, {r["engine_id"]: r["served"][:1] + [9] for r in w["requests"]})
     argv = ["--tree", str(R.S.ROOT), "--arm-dir", str(d), "--load", "sat", "--replay", str(out), "--keys", "1"]
     assert lr.main(argv) == 0
     res = json.loads(capsys.readouterr().out)
     assert res["long"]["tokens_differing"] == 2 and res["long"]["steps_differing"] == 0
-    assert not list(out.glob("*tokens*"))
+    assert not list(out.glob("*tokens*")) and not list(out.glob("*steps*"))
     (out / "replay.json").write_text(json.dumps({}))
     with pytest.raises(SystemExit, match="names no private directory"):
         lr.main(argv)

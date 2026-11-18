@@ -139,6 +139,8 @@ def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
 
     def main(argv):
         o = Path(argv[argv.index("--out") + 1])
+        assert argv[argv.index("--plan") + 1] == str(tmp_path / "private" / "plan.jsonl")
+        assert argv[argv.index("--private") + 1] == str(tmp_path / "private" / "capacity")
         sites.append(L.S.plugin_site(o / ".site", L.S.ARMS["compiled"]))
         return 1
 
@@ -149,7 +151,7 @@ def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
         from_pretrained=lambda *a, **k: None)))
     monkeypatch.setattr(L.S, "corpus", lambda: SimpleNamespace(traffic=SimpleNamespace()))
     a = SimpleNamespace(model="qwen3-8b", c4="c4.json.gz", out=str(out), docs=10, burst=8, over=1.45, span_s=60.0, plan=None,
-                        max_model_len=None)
+                        max_model_len=None, private=str(tmp_path / "private"))
     assert L.serve(a) == 1
     return out, sites
 
