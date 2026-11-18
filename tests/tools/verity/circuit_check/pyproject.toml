@@ -71,10 +71,14 @@ workers = 14
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py:
 # pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
 # verity_config: conftest.py reads the session's variables through the suite's registry (settings.py), built on its registry.
+# spot/prover/__init__.py, produced.py and served.py: pouw's h1 rows and network's charge rows import produced, and the
+# catalog's records digest served.py as an import site.
 inputs_only = true
 inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/protocols/proofs/spot/prover/__init__.py", "verity/protocols/proofs/spot/prover/produced.py",
+          "verity/protocols/proofs/spot/prover/served.py",
           "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
           "verity/commitments/randomness", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/periods",
@@ -258,6 +262,7 @@ paths = [
     "verity/protocols/resource_accounting/memory/pous",
     "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/resource_accounting/compute/pouw/prover", "verity/protocols/resource_accounting/memory/poub/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/__init__.py", "verity/protocols/resource_accounting/memory/poub/verifier/commitments", "verity/commitments/periods",
     "verity/protocols/proofs/spot/prover/__init__.py", "verity/protocols/proofs/spot/prover/produced.py",
+    "verity/protocols/proofs/spot/prover/served.py",
 ]
 
 [[tool.verity.tests.reads]]

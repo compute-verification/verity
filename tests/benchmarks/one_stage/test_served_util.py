@@ -199,7 +199,9 @@ def test_a_stub_runs_out_and_log_hold_no_trace_timings_summary_or_serve_options(
         bin_ / "nsys": ('case $1 in launch) while [ $# -gt 0 ]; do [ "$1" = --out ] && d=$2; shift; done; mkdir -p "$d"\n'
                         f'  for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do echo {SECRET} > "$d/$f"; done\n'
                         '  echo "SERVE-OPENAI listening" ;;\nesac'),
-        bin_ / "nvidia-smi": f"echo name, {SECRET}-uuid", bin_ / "sleep": "exit 0",
+        bin_ / "nvidia-smi": f"echo name, {SECRET}-uuid",
+        # the serve opens its log only once it runs: each wait is for its listening line, not a clock
+        bin_ / "sleep": f'until grep -q "SERVE-OPENAI listening" "{root}/scratch/local/serve.log" 2>/dev/null; do :; done',
         venv / "python": ('case "$*" in *serve_load.py*) while [ $# -gt 0 ]; do [ "$1" = --out ] && o=$2; shift; done\n'
                           f'  echo {SECRET} > "$o"; echo {SECRET} > "${{o%.jsonl}}.timings.json" ;;\nesac'),
     }
