@@ -742,8 +742,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     (`p2_case.same_store`) is refused. With `case_exe` (``poub-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
     case written; without it the session's reject or undecided stands and its accept is undecided
-    (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the host it ran on
-    (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
+    (`p2_case.unjudged`). With no key `key_of` gives, the session is undecided (`NO_KEY`). The summary names the program whose verdict the answer is and the machine it ran on, the
+    prover's (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
     same session can be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
