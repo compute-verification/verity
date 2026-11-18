@@ -203,6 +203,14 @@ def card_short(name: str, *, directory: Path) -> str:
     """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
     name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
     holds it and has a ``short``, the card's name in a measurement's member."""
+    return _card_named(name, directory)["short"]
+
+
+def card_sku(name: str, *, directory: Path) -> str:
+    return _card_named(name, directory)["sku"]
+
+
+def _card_named(name: str, directory: Path) -> dict:
     from verity.device import load_card, skus
 
     cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
@@ -212,7 +220,19 @@ def card_short(name: str, *, directory: Path) -> str:
             f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
             f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
             "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]["short"]
+    return found[0]
+
+
+def gpu_target(sku: str, *, directory: Path) -> dict[str, Any]:
+    from verity.device import load_card, number
+
+    card = load_card(sku, directory=directory)
+    names = [d["value"] for d in card.get("driver", ())]
+    arch = re.fullmatch(r"sm_(\d+)(\d)a?", str(card.get("arch", "")))
+    if card["kind"] != "gpu" or len(names) != 1 or not arch:
+        raise SystemExit(f"card {sku!r} ({directory}/{sku}.toml) is no compile target: it needs kind \"gpu\", one `driver` name "
+                         f"and an `arch` sm_<major><minor>[a], and has kind {card['kind']!r}, driver {names}, arch {card.get('arch')!r}")
+    return {"device_name": names[0], "compute_capability": [int(arch[1]), int(arch[2])], "num_sms": int(number(card["sm"]["count"]))}
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------

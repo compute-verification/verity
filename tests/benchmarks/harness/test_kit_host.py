@@ -88,3 +88,23 @@ def test_a_card_short_is_refused_by_name_unless_one_records_driver_holds_it_exac
     (tmp_path / "h200-twin.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', 'sku = "h200-twin"'))
     with pytest.raises(SystemExit, match="^2 card records .* add { value = \"NVIDIA H200\", source = ... }"):
         kit.card_short("NVIDIA H200", directory=tmp_path)
+
+
+def test_a_card_sku_is_the_file_of_the_record_card_short_reads_and_refused_as_it_is():
+    assert [kit.card_sku(n, directory=CARD_FILES) for n in ("NVIDIA H200", "NVIDIA H100 80GB HBM3")] == ["h200-sxm-141gb", "h100-sxm-80gb"]
+    with pytest.raises(SystemExit, match="^0 card records"):
+        kit.card_sku("NVIDIA H100 PCIe", directory=CARD_FILES)
+
+
+def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_none(tmp_path):
+    assert kit.gpu_target("h200-sxm-141gb", directory=CARD_FILES) == {"device_name": "NVIDIA H200", "compute_capability": [9, 0],
+                                                                      "num_sms": 132}
+    assert kit.gpu_target("b200-sxm-180gb", directory=CARD_FILES)["compute_capability"] == [10, 0]
+    with pytest.raises(KeyError, match="no card 'a100-sxm4-80gb'"):
+        kit.gpu_target("a100-sxm4-80gb", directory=CARD_FILES)
+    with pytest.raises(SystemExit, match="^card 'xeon-6776p-2s' .* is no compile target"):
+        kit.gpu_target("xeon-6776p-2s", directory=CARD_FILES)
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
+    with pytest.raises(SystemExit, match="arch 'GH100'"):
+        kit.gpu_target("h200-sxm-141gb", directory=tmp_path)
