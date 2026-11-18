@@ -4,6 +4,7 @@ block takes in one compression, three compressions a leaf, and refuses a longer 
 from __future__ import annotations
 
 import ctypes
+import importlib.util
 import json
 import random
 from pathlib import Path
@@ -133,10 +134,9 @@ def test_a_one_part_str_index_fixes_every_blocks_message_length(lib):
 
 
 def _torch_cuda():
-    try:
-        import torch
-    except ImportError:
+    if importlib.util.find_spec("torch") is None:
         return None
+    import torch
     return torch if torch.cuda.is_available() and cuda_build.gpu_name() is not None else None
 
 
