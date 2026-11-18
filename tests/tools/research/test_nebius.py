@@ -910,7 +910,7 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
 
 def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_gets_neither(tmp_path):
     """The memory lock is the clock.memory of the card file the GPU registry's entry for the platform names; a locking
-    platform whose entry names no card is refused before anything is created."""
+    platform is refused before anything is created when the registry refuses an entry naming no card."""
     (entry,) = [g for g in tomllib.loads(GPU_REGISTRY.read_text())["gpu"] if "gpu-rtx6000" in g["nebius_platforms"]]
     clock = tomllib.loads((ROOT / "calibration" / "hardware" / "cards" / f"{entry['card']}.toml").read_text())["clock"]
 
@@ -928,13 +928,14 @@ def test_a_platform_that_locks_clocks_gets_both_from_its_card_file_and_another_g
     copy.mkdir(parents=True)
     for name in ("launch.sh", "common.sh"):
         shutil.copy(NEBIUS / name, copy / name)
+    package = GPU_REGISTRY.parents[1]
+    shutil.copytree(package, tmp_path / package.relative_to(ROOT), ignore=shutil.ignore_patterns("__pycache__"))
     registry = tmp_path / GPU_REGISTRY.relative_to(ROOT)
-    registry.parent.mkdir(parents=True)
     registry.write_text(re.sub(r"^card = .*\n", "", GPU_REGISTRY.read_text(), flags=re.M))
     base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "RUNPOD_"))}
     r = subprocess.run(["bash", str(copy / "launch.sh"), "--dry-run"], env={**base, "NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy"},
                        capture_output=True, text=True)
-    assert r.returncode == 2 and f"({entry['id']}) names no card" in r.stderr and not r.stdout, r.stderr
+    assert r.returncode == 2 and f"GPU {entry['id']} names no card" in r.stderr and not r.stdout, r.stderr
 
 
 def test_the_first_boot_refuses_to_lock_with_a_clock_unset_before_writing_anything(tmp_path):

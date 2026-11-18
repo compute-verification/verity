@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity_config import Admission, ConfigError, dumps, gpus, load, sha256
+from verity_config.registry import REGISTRY
 
 CARDS = Path(__file__).resolve().parents[3] / "calibration" / "hardware" / "cards"
 
@@ -62,11 +63,18 @@ def test_gpu_registry_keeps_namespaces_distinct():
 
 
 def test_a_gpus_card_is_a_gpu_card_file_no_other_entry_names():
-    named = [gpu.card for gpu in gpus().values() if gpu.card]
+    named = [gpu.card for gpu in gpus().values()]
     assert len(named) == len(set(named)), named
     for card in named:
         doc = tomllib.loads((CARDS / f"{card}.toml").read_text())
         assert (doc["kind"], doc["sku"]) == ("gpu", card), card
+
+
+def test_a_gpu_entry_naming_no_card_is_refused_by_its_id(tmp_path):
+    path = tmp_path / "gpus.toml"
+    path.write_text((REGISTRY / "gpus.toml").read_text().replace('card = "h100-sxm-80gb"\n', ""))
+    with pytest.raises(ConfigError, match=r"GPU h100 names no card: set its `card` to the stem of its card file"):
+        gpus(path)
 
 
 def test_package_imports_the_standard_library_and_the_settings_machinery_alone():
