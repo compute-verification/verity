@@ -344,9 +344,8 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
         no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
         assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
-        no_install = (f"{entry}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
-                      "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
-                      "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")
+        no_install = (f"{entry}: the pouw setting 'period' is a Pearl-C install's, and no scheme this adapter installs is "
+                      "one: Pearl+ is attached by its name")
         assert refused(entry, {"pouw": {**settings["pouw"], "period": period}}) == (no_install,)
 
 
