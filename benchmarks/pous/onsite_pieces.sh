@@ -76,11 +76,9 @@ EOF
 onsite_cases() {
   local rc dir
   ONSITE_SKIP=()
-  PYTHONPATH=$TREE${PYTHONPATH:+:$PYTHONPATH} PYTHONDONTWRITEBYTECODE=1 "$PY" - "$D/private" "$OUT/pieces" "$P" 2> "$P/onsite_cases.log" <<'EOF' | tee -a "$OUT/verdicts.txt"
+  "$PY" - "$D/private" "$OUT/pieces" "$P" 2> "$P/onsite_cases.log" <<'EOF' | tee -a "$OUT/verdicts.txt"
 import json, os, sys
 from pathlib import Path
-
-from verity.protocols.compose import schemes
 
 # unresolved, as served_composite.sh's scan names a directory: it leaves one out where its own name for it is a skip
 private, pieces, composite = (Path(a) for a in sys.argv[1:4])
@@ -105,8 +103,8 @@ def pous(summary):
 
 
 # protocol: its Lean, its piece's summary under OUT/pieces, and its piece's private directory by that summary
-OWN = {schemes.get("pous").protocol: ("pous-run-protocol", "pous/pous.json", pous),
-       schemes.get("wipe").protocol: ("wipe-protocol", "wipe/summary.json", lambda _: private / "wipe")}
+OWN = {"verity/pous/p2/v4/run": ("pous-run-protocol", "pous/pous.json", pous),
+       "verity/wipe/v0": ("wipe-protocol", "wipe/summary.json", lambda _: private / "wipe")}
 
 composed = {}  # what served_composite.sh composes: each directory holding a case beside an answer, by its protocol
 for f in sorted(private.rglob("case.json")):
