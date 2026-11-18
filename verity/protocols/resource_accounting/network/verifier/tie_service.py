@@ -22,7 +22,7 @@ so no gate hashes it. A size class no sidecar pins has a gate that names no dige
 accepted (`proved`).
 
 **The statement is the verifier's own** (`io_request.lanes`): proof block t's public row is bucket t's lanes, from
-each input's place in the order and its length (`IngressInputs`, public outputs of the registered compiler's circuit) and
+each input's place in the order and its length (`IngressInputs`, the registered compiler's circuit's ``lengths`` output) and
 the network attester's ingress release (`io_request.Release`: each connection's first bucket and its request cells a
 bucket), which the verifier takes in the clear as it takes the ingress record's wiring (the named gap), never from the
 prover. The proof's ``pub`` row is a unit's lanes, its ``wit`` row the unit's bucket row under the
@@ -42,7 +42,7 @@ inputs' lanes or another release, or of an output word 0, fails the registered r
 that isn't the network attester's fails ``wit``'s.
 
 **The inputs** (`IngressInputs`) are each input's place in the order and its length, as the registered compiler's
-circuit outputs them, and `received[w]`, window w's request cells, under the link's public profile (`AdvisedProfile`:
+circuit outputs its lengths by certified arrival slot (`IngressInputs.compiled`), and `received[w]`, window w's request cells, under the link's public profile (`AdvisedProfile`:
 its windows, its framing and its own frames, fixed before the run). The tie never reads the advice's bytes.
 
 **The tie** (`IngressTie.tie`) is `IoTieVerdict(link, registrations, digest(A), accepted)`: the link,
@@ -106,8 +106,6 @@ _STATICS = ("B", "L", "R")
 U32_MAX = (1 << 32) - 1
 #: the inputs' digest (`digest`), which each window's `inputs` output and the tie's verdict name
 DIGEST = "verity-network-attester/ingress-inputs/v1"
-#: what `IngressInputs.compiled` waits on
-PENDING = "network/attester-behind-shared-interface: the registered compiler exposes each input's order and length"
 
 PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
@@ -120,7 +118,7 @@ PUBLIC = (
              "window, fixed before the run"),
     S.Public("verdict", "output", "the window's IoTieRequest verdict, every bucket row's, accept or reject"),
     S.Public("inputs", "output", "the inputs the window's statement is computed from (`digest`): each input's "
-             "place in the order and its length, the registered compiler's circuit's outputs, and the network "
+             "place in the order and its length, the registered compiler's circuit's ``lengths``, and the network "
              "attester's release give each bucket's lanes (`io_request.lanes`), a unit's public row in the named gap; "
              "`IngressTie.tie` holds every window to one set of inputs"),
 )
@@ -204,8 +202,8 @@ def _u32s(x: Any) -> bool:
 @dataclass(frozen=True)
 class IngressInputs:
     """What the tie reads of a link's inputs, never the advice's bytes: input i's place in the order, `places[i]`
-    (connection `places[i]` + 1 carries it), and its length in prompt tokens, `lengths[i]`, each a public output of the
-    registered compiler's circuit, public as the advice they come from was to the tie's verifier; and `received[w]`,
+    (connection `places[i]` + 1 carries it), and its length in prompt tokens, `lengths[i]`, from the registered
+    compiler's circuit's ``lengths`` output (`compiled`), public as the advice they come from was to the tie's verifier; and `received[w]`,
     window w's request cells, the prover's. Construction refuses (`ValueError`) places that aren't a permutation of
     the inputs, lengths that aren't positive u32s, and a `received` that isn't u32s."""
 
@@ -226,9 +224,11 @@ class IngressInputs:
 
     @classmethod
     def compiled(cls, outputs: Mapping[str, Any], received: Sequence[int]) -> "IngressInputs":
-        """The inputs from the registered compiler's circuit's public outputs, each input's place in the order and its
-        length, with the link's `received`."""
-        raise NotImplementedError(PENDING)
+        """The inputs from the registered compiler's circuit's ``lengths`` output (`compile_slice_v7`), its arrival
+        slots over the session's windows in order, with the link's `received`: each nonzero slot is the next input, in
+        certified arrival order, so input i's place is i; an empty slot is 0."""
+        lengths = tuple(n for n in outputs["lengths"] if n != 0)
+        return cls(tuple(range(len(lengths))), lengths, tuple(received))
 
 
 @dataclass(frozen=True)

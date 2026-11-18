@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
+from verity.protocols.interface.charge import arith_encode as AE
 from verity.commitments.gates.bits import ands
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"

@@ -121,7 +121,7 @@ def main() -> None:
             if [int(u) for u in r["indices"]] != [int(u) for u in z["units"]]:
                 raise ValueError(f"the request's indices {r['indices']} are not its rows' units {z['units'].tolist()}")
             st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports])
-            got = stager.stage(rows, out, os.urandom(32), salts=st["salts"], indices=r["indices"], set_name=r["set"],
+            got = stager.stage(rows, out, salts=st["salts"], indices=r["indices"], set_name=r["set"],
                                tables=st["tables"], refs=st["refs"], registered=st["registered"])
         except Exception as e:  # noqa: BLE001 - a refused round is reported in its stage.json, and the next one staged
             (out / "stage.json").write_text(json.dumps({"request": req.stem, "error": f"{type(e).__name__}: {e}"}))

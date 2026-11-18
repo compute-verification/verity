@@ -18,8 +18,8 @@ StepBegan                           a verifier's message since the last pass end
                                     allocated pages, tagged with the step (a pass still open from an earlier step is
                                     ended first)
 StepEnded                           end_pass, with the device reader's roots, and end_step (the step's KV is written by
-                                    now, so a memory map takes its digests; the pages vLLM frees after this are freed
-                                    at this step)
+                                    now, so a memory map takes its digests; the pages vLLM frees in the step, before
+                                    or after this, are freed at this step); again for a step that began none, nothing
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -32,7 +32,7 @@ import math
 from collections import deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from verity.protocols.resource_accounting.memory.poub.prover.node_store.interface import (
@@ -52,13 +52,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
 from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReuseOldestFreed,
                           StepBegan, StepEnded)
 
-
-if TYPE_CHECKING:
-    from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles
-
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
-#: the binder's name on the exchange (`messages.current`)
+#: the binder's name on the exchange
 NAME = "poub"
 
 
@@ -247,7 +243,7 @@ class Binder:
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
-                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
+                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Any = None,
                  passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
         self.receipt = receipt or (PoubReceipt() if tiles is not None else KindReceipt())

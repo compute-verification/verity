@@ -135,8 +135,8 @@ Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `Pous
 verdict at `k` accepts while its claim fails is at most its error there: one function of the subprotocol, so a composite's
 targets are those of the subprotocols it lists. `Verity.SoundnessOf` (`Properties.Verity.Soundness`) composes them at
 any composite, and `Verity.Soundness` and `Verity.PlainSoundness` are it at onsite's seven and the plain sibling's three.
-`Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's and, in the policy's place, `GateARow`
-(`Properties.Verity.Committed`).
+`Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's, the policy's being proved; what it leaves unsaid of the
+committed files is `Properties.Verity.Committed`'s.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the

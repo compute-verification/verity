@@ -50,7 +50,7 @@ its own table. -/
 def ownOf (roots : String → Flock.Registered.Port) (place : String → String × Nat) (T : Tile) (k : Option Nat) :
     List Flock.Registered.Port :=
   (regReads T k).map fun (nm, v, row) =>
-    { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0, wire := none }
+    { roots (place v).1 with name := nm, value := (place v).1, readsRel := #[some ((place v).2 + row)], readsFrom := 0 }
 
 /-- The placement that reads each value as its own table, from row 0. -/
 def selfPlace (v : String) : String × Nat := (v, 0)
@@ -68,7 +68,7 @@ def readFull (T : Tile) (k : Option Nat) : Array String :=
 def portEq (p q : Flock.Registered.Port) : Bool :=
   p.name == q.name && p.value == q.value && p.root.data == q.root.data && p.leaves == q.leaves && p.words == q.words &&
     p.wordBits == q.wordBits && p.domain.data == q.domain.data && p.readsRel == q.readsRel && p.schema == q.schema &&
-    p.readsFrom == q.readsFrom && p.wire == q.wire
+    p.readsFrom == q.readsFrom && p.tree == q.tree
 
 theorem eq_of_portEq {p q : Flock.Registered.Port} (h : portEq p q = true) : p = q := by
   obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s, f, wi⟩ := p

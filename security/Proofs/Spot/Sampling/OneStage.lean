@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Spot.Sampling.Analysis
 public import Definitions.Spot.Sampling.SamplingDesign
 public import Definitions.Flock.Circuit
 public import Definitions.Flock.Game
@@ -57,65 +58,7 @@ theorem prCoin_eq_one_of {C : Type} [Fintype C] [Nonempty C] {p : C → Prop} (h
   simp only [h, ite_true]
   exact avg_const 1
 
-/-- **The one-stage audit.** The prover registers `R : Reg`; the verifier samples `S` by `L`; the
-session on the sampled proof blocks runs against `R`. Output: the verdict and the sample. -/
-def audit (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) :
-    Game (Bool × Finset (Fin n)) :=
-  .send Reg fun R => .coin L.Ω fun ω => (session (L.draw ω) R).map fun ok => (ok, L.draw ω)
-
 variable {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
-
-/-- A prover's state after registering `R`: its session strategy for every sample. -/
-abbrev Cont (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) (R : Reg) :=
-  ∀ ω : L.Ω, Strategy (session (L.draw ω) R)
-
-/-- The registration of an audit strategy. -/
-def reg (σ : Strategy (audit L Reg session)) : Reg := σ.1
-
-/-- The prover's state after registration. -/
-def cont (σ : Strategy (audit L Reg session)) : Cont L Reg session (reg σ) :=
-  fun ω => Strategy.ofMap _ _ (σ.2 ω)
-
-/-- What the analysis of an audit fixes.
-* `Tr`, `incorrect`: transcripts, and the units incorrect in each;
-* `committed`: the committed transcript, a function of the prover's state at registration;
-* `ksFail S R τ u`: extraction of sampled proof block `u` from the session state `τ` fails;
-* `linkFail S R τ u X`: it succeeds, but disagrees with `X` on `u`'s wires;
-* `cover`: a unit incorrect in `X` fails one way or the other, from every state. -/
-structure Analysis (L : SamplingDesign n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) where
-  Tr : Type
-  incorrect : Tr → Finset (Fin n)
-  committed : (R : Reg) → Cont L Reg session R → Tr
-  ksFail : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Prop
-  linkFail : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Tr → Prop
-  cover : ∀ S R (τ : Strategy (session S R)) u X, u ∈ incorrect X → ksFail S R τ u ∨ linkFail S R τ u X
-
-namespace Analysis
-
-variable (A : Analysis L Reg session)
-
-/-- The committed transcript of an audit strategy. -/
-def committedOf (σ : Strategy (audit L Reg session)) : A.Tr := A.committed (reg σ) (cont σ)
-
-/-- **Knowledge soundness, per unit** (named hypothesis `ε_ks`): for every prover and every rule
-`tgt` that picks a sampled proof block before the session's first coin, the probability that the session
-accepts while extraction of the picked unit fails is at most `ε_ks`. -/
-def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
-  ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
-    avg (fun ω => prob (fun ok => ok = true ∧
-      ∃ u, tgt ω = some u ∧ u ∈ L.draw ω ∧ A.ksFail (L.draw ω) R (τ ω) u)
-      (session (L.draw ω) R) (τ ω)) ≤ εks
-
-/-- **The binding error** (named hypothesis `ε_bind`): for every prover and every rule `tgt` that
-picks a sampled proof block before the session's first coin, the probability that the session accepts while
-the picked unit's extraction disagrees with the committed transcript is at most `ε_bind`. -/
-def BindSound (εbind : ℝ≥0∞) : Prop :=
-  ∀ (R : Reg) (τ : Cont L Reg session R) (tgt : L.Ω → Option (Fin n)),
-    avg (fun ω => prob (fun ok => ok = true ∧
-      ∃ u, tgt ω = some u ∧ u ∈ L.draw ω ∧ A.linkFail (L.draw ω) R (τ ω) u (A.committed R τ))
-      (session (L.draw ω) R) (τ ω)) ≤ εbind
-
-end Analysis
 
 theorem avg_add₃ {C : Type} [Fintype C] (f g h : C → ℝ≥0∞) :
     avg (fun c => f c + g c + h c) = avg f + avg g + avg h := by
