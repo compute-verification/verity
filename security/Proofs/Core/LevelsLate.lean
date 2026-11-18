@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Core.LevelsCircuit
+public import Proofs.Core.LevelsMiss
 public import Proofs.Core.Game.InterleaveBridge
 
 /-!
@@ -10,10 +10,12 @@ The coins drawn level by level (`Levels.Coins`): at level `i`, one draw of `D_i^
 (`Levels.drawTo`) the blocks drawn through level `k`. A commitment made after `Q_k` is drawn is a function of the coins
 of the levels below `k` (`Levels.ReadsBelow`), of any of them, the other blocks' included.
 
-`Levels.LateAtLevels`: at the levels of a circuit's partitions (`Levels.ofPartitions`), the prover commits a trace
-`τ k` after `Q_k`, by any rule, each agreeing with the one before on that level's committed gates. Every sample then misses the
-last trace's incorrect last-level blocks with probability at most `missProb` of one trace's, fixed in advance and
-agreeing with the first on the first level's committed gates.
+* `Levels.late_le_missProb_levels`: the prover commits a trace before the first draw and after each level's draw moves,
+  by any rule, to one that agrees with the one before at that level. Its last trace's bad blocks escape the sample no
+  more often than those of one trace fixed in advance, where the traces glue at each level but the last. The proof
+  bounds the prover by its best miss at each block (`Level.lateVal`), level by level (`Levels.prCoin_le_lateVal`), and
+  glues the traces that attain it into one (`Level.exists_lateVal_le`).
+* `Levels.late_le_missProb`: two levels, the bad sets on offer gluing across outer blocks.
 -/
 
 @[expose] public section
@@ -402,138 +404,87 @@ theorem late_le_missProb_levels (L : Levels G) [Fintype Θ] (near : Finset G →
       exact hglue j hj θ θX h) (τ 0 ω₀)
   exact ⟨θs, hs, (L.prCoin_le_lateVal bad agree hn τ hτ hstep ω₀).trans (hle _ (Finset.mem_singleton_self _))⟩
 
-end Levels
+theorem _root_.Verity.Game.avg_apply_pi {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c, Fintype (T c)]
+    [∀ c, Nonempty (T c)] (c : C) (h : T c → ℝ≥0∞) : avg (fun f : (c : C) → T c => h (f c)) = avg h := by
+  rw [← avg_update_pi c]
+  simp only [Function.update_self, avg_const]
 
-/-- The chain's partition at level `i`, the first below the root at `0`, and the last past its end. -/
-def Partition.Chain.part {C : Circuit} : {nc : ℕ} → {Pc : Partition C nc} → Partition.Chain C Pc → ℕ →
-    Σ n, Partition C n
-  | nc, Pc, .nil, _ => ⟨nc, Pc⟩
-  | _, _, .cons Pf _ _ .nil, _ => ⟨_, Pf⟩
-  | _, _, .cons Pf _ _ (.cons _ _ _ _), 0 => ⟨_, Pf⟩
-  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1 => (Partition.Chain.cons Pg Rg rg rest).part i
-
-/-- Each level's committed gates are committed at every level below it. -/
-theorem Partition.Chain.committed_part_subset {C : Circuit} :
-    {nc : ℕ} → {Pc : Partition C nc} → (ch : Partition.Chain C Pc) → (k : ℕ) →
-      (ch.part k).2.committed ⊆ (ch.part (k + 1)).2.committed
-  | _, _, .nil, _ => subset_rfl
-  | _, _, .cons _ _ _ .nil, _ => subset_rfl
-  | _, _, .cons _ _ _ (.cons _ Rg _ rest), 0 => by
-    cases rest <;> exact Rg.committed_subset
-  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1 =>
-    Partition.Chain.committed_part_subset (.cons Pg Rg rg rest) i
-
-/-- The chain's `k`-th level's blocks are its `k`-th partition's. -/
-theorem Partition.Chain.levels_get_blocks {C : Circuit} :
-    {nc : ℕ} → {Pc : Partition C nc} → (ch : Partition.Chain C Pc) → (k : ℕ) → (hk : k < ch.levels.length) →
-      (ch.levels.get ⟨k, hk⟩).blocks = (ch.part k).2.blocks
-  | _, _, .nil, _, hk => absurd hk (Nat.not_lt_zero _)
-  | _, _, .cons _ _ _ .nil, 0, _ => rfl
-  | _, _, .cons _ _ _ .nil, _ + 1, hk => absurd hk (by simp [Partition.Chain.levels])
-  | _, _, .cons _ _ _ (.cons _ _ _ _), 0, _ => rfl
-  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1, hk =>
-    Partition.Chain.levels_get_blocks (.cons Pg Rg rg rest) i (by simpa [Partition.Chain.levels] using hk)
-
-namespace Partition
-
-variable {C : Circuit} {n : ℕ}
-
-/-- The gates a block of computed gates holds or reads. -/
-def region (X : Finset C.Computed) : Finset (Fin C.N) :=
-  X.image Subtype.val ∪ X.biUnion fun x => C.reads x.1
-
-theorem region_mono {X Y : Finset C.Computed} (h : X ⊆ Y) : region X ⊆ region Y :=
-  Finset.union_subset_union (Finset.image_subset_image h) (Finset.biUnion_subset_biUnion_of_subset_left _ h)
-
-theorem unit_of_mem_block {P : Partition C n} {u : Fin n} {x : C.Computed} (hx : x ∈ P.block u) :
-    P.unit x.1 = some u :=
-  (Finset.mem_filter.1 hx).2
-
-/-- Two blocks of a partition share only committed gates in their regions. -/
-theorem mem_committed_of_region (P : Partition C n) {X Y : Finset C.Computed} (hX : X ∈ P.blocks.parts)
-    (hY : Y ∈ P.blocks.parts) (hne : X ≠ Y) {g : Fin C.N} (hgX : g ∈ region X) (hgY : g ∈ region Y) :
-    g ∈ P.committed := by
-  obtain ⟨-, u, rfl⟩ := mem_blocks.1 hX
-  obtain ⟨-, v, rfl⟩ := mem_blocks.1 hY
-  have hsome : (some u : Option (Fin n)) ≠ some v := fun h => hne (by rw [Option.some_inj.1 h])
-  simp only [region, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion] at hgX hgY
-  rcases hgX with ⟨x, hx, rfl⟩ | ⟨x, hx, hgx⟩ <;> rcases hgY with ⟨y, hy, hyg⟩ | ⟨y, hy, hgy⟩
-  · exact absurd ((unit_of_mem_block hx).symm.trans (by rw [← hyg]; exact unit_of_mem_block hy)) hsome
-  · exact P.mem_committed_of_read hgy (by rw [unit_of_mem_block hy, unit_of_mem_block hx]; exact hsome.symm)
-  · exact P.mem_committed_of_read hgx (by rw [unit_of_mem_block hx, ← hyg, unit_of_mem_block hy]; exact hsome)
-  · by_cases hg : P.unit g = some u
-    · exact P.mem_committed_of_read hgy (by rw [unit_of_mem_block hy, hg]; exact hsome.symm)
-    · exact P.mem_committed_of_read hgx (by rw [unit_of_mem_block hx]; exact Ne.symm hg)
-
-theorem io_subset_region (P : Partition C n) (u : Fin n) : P.io u ⊆ region (P.block u) := by
+/-- **Committing late does not help, at two levels.** The bad sets on offer `𝒯` are sets of inner blocks, those
+of the traces for the inner blocks that restrict to one fixed outer trace, and they glue (`hglue`): any choice of one
+of them at each outer block agrees, inside every outer block, with one of them. After the outer sample is drawn the
+prover chooses, at each outer block `X`, a bad set `R ω₁ X` of `𝒯` by any rule. Every inner sample then misses the
+bad set chosen at its outer block with probability at most `missProb L.design T` at one `T` of `𝒯`, fixed in
+advance. -/
+theorem late_le_missProb (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l₁, l₂])
+    (𝒯 : Finset (Finset (Finset G)))
+    (hglue : ∀ c : Finset G → Finset (Finset G), (∀ X, c X ∈ 𝒯) →
+      ∃ T ∈ 𝒯, ∀ X ∈ l₁.blocks.parts, T.filter (· ⊆ X) = (c X).filter (· ⊆ X))
+    (R : (l₁.design Finset.univ).Ω → Finset G → Finset (Finset G)) (hR : ∀ ω X, R ω X ∈ 𝒯) :
+    ∃ T ∈ 𝒯,
+      prCoin (fun ω : (l₁.design Finset.univ).Ω × ((X : Finset G) → (l₂.design X).Ω) =>
+          ∀ X ∈ (l₁.design Finset.univ).draw ω.1, Disjoint ((l₂.design X).draw (ω.2 X)) (R ω.1 X)) ≤
+        L.design.missProb T := by
   classical
-  have hin : ∀ g, P.unit g = some u → C.isInput g = false := fun g hg => by
-    cases h : C.isInput g
-    · rfl
-    · exact absurd ((P.input_iff g).2 h) (by rw [hg]; exact Option.some_ne_none u)
-  intro g hg
-  simp only [io, Finset.mem_filter] at hg
-  simp only [region, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion]
-  rcases hg.2 with hu | ⟨h, hu, hgh⟩
-  · exact Or.inl ⟨⟨g, hin g hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, rfl⟩
-  · exact Or.inr ⟨⟨h, hin h hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, hgh⟩
-
-/-- Whether a block is incorrect reads a trace only in the block's region. -/
-theorem mem_image_incorrect_of_region (P : Partition C n) {X : Finset C.Computed} {a b : C.Trace}
-    (h : ∀ g ∈ region X, a g = b g) (hX : X ∈ (P.incorrect a).image P.block) : X ∈ (P.incorrect b).image P.block := by
-  obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hX
-  refine Finset.mem_image.2 ⟨u, P.mem_incorrect.2 fun hb => P.mem_incorrect.1 hu ?_, rfl⟩
-  exact P.correct_congr (fun g hg => h g (P.io_subset_region u hg)) hb
-
-end Partition
-
-namespace Levels
-
-variable {C : Circuit}
-
-/-- **Committing late does not help, at any number of levels.** At the levels of a circuit's partitions, the trace
-`τ k` is committed after `Q_k` is drawn, by any rule, and agrees with `τ (k - 1)` on the committed gates of level
-`k - 1`. Every sample misses the incorrect last-level blocks of the last trace with probability at most the miss of
-those of one trace fixed in advance that agrees with `τ 0` on the first level's committed gates. -/
-theorem ofPartitions_late_le_missProb (ch : Partition.Chain C (Partition.whole C))
-    (τ : ℕ → (Levels.ofPartitions ch).Coins → C.Trace) (hτ : ∀ k, (Levels.ofPartitions ch).ReadsBelow k (τ k))
-    (hstep : ∀ k ω, ∀ g ∈ (ch.part k).2.committed, τ (k + 1) ω g = τ k ω g) :
-    ∃ τ' : C.Trace, (∀ g ∈ (ch.part 0).2.committed, τ' g = τ 0 (Classical.arbitrary _) g) ∧
-      prCoin (fun ω => Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
-          (((ch.part (ch.levels.length - 1)).2.incorrect (τ (ch.levels.length - 1) ω)).image
-            (ch.part (ch.levels.length - 1)).2.block)) ≤
-        (Levels.ofPartitions ch).design.missProb
-          (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block) := by
-  classical
-  refine (Levels.ofPartitions ch).late_le_missProb_levels
-    (fun θ => ((ch.part (ch.levels.length - 1)).2.incorrect θ).image (ch.part (ch.levels.length - 1)).2.block)
-    (fun k a b => ∀ g ∈ (ch.part k).2.committed, b g = a g) (fun X a b => ∀ g ∈ Partition.region X, a g = b g)
-    (fun _ _ _ _ => rfl) (fun k _ _ _ hab hbc g hg => (hbc g (ch.committed_part_subset k hg)).trans (hab g hg))
-    (fun _ _ _ h g hg => (h g hg).symm) (fun _ _ _ _ hXY h g hg => h g (Partition.region_mono hXY hg))
-    (fun X a b h => ⟨Partition.mem_image_incorrect_of_region _ h,
-      Partition.mem_image_incorrect_of_region _ fun g hg => (h g hg).symm⟩)
-    (fun k X a b a' h ha => ⟨fun g => if g ∈ Partition.region X then a' g else b g, fun g hg => ?_,
-      fun g hg => by simp only [hg, ite_true]⟩) ?_ τ hτ hstep
-  · by_cases hX : g ∈ Partition.region X
-    · simp only [hX, ite_true]
-      exact (ha g hg).trans (h g hX)
-    · simp only [hX, ite_false]
-  · intro k hk θ θX hθX
-    rw [show ((Levels.ofPartitions ch).levels.get ⟨k, by omega⟩).blocks = (ch.part k).2.blocks from
-      ch.levels_get_blocks k _]
-    refine ⟨fun g => if h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X then θX h.choose g else θ g,
-      fun g hg => ?_, fun X hX g hg => ?_⟩
-    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
-      · simp only [h, dite_true]
-        exact hθX _ g hg
-      · simp only [h, dite_false]
-    · have h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X := ⟨X, hX, hg⟩
-      simp only [h, dite_true]
-      obtain ⟨hX₀, hg₀⟩ := h.choose_spec
-      by_cases hXX : h.choose = X
-      · rw [hXX]
-      · have hc := (ch.part k).2.mem_committed_of_region hX₀ hX hXX hg₀ hg
-        rw [hθX _ g hc, hθX X g hc]
+  obtain ⟨levels, hnest, hin⟩ := L
+  dsimp only at hL
+  subst hL
+  let L : Levels G := ⟨[l₁, l₂], hnest, hin⟩
+  have h₁ := hin.1
+  have h₂ := hin.2.1
+  have hfilter : ∀ Y ∈ l₁.blocks.parts, ∀ T : Finset (Finset G),
+      (l₂.design Y).missProb (T.filter (· ⊆ Y)) = (l₂.design Y).missProb T := fun Y hY T =>
+    SamplingDesign.missProb_filter (l₂.design Y) (· ⊆ Y) (fun ω b hb => (h₂ Y hY ω b hb).2) T
+  choose glue hglue𝒯 hglueEq using fun c : Finset G → {T // T ∈ 𝒯} => hglue (fun X => (c X).1) fun X => (c X).2
+  let t₀ : {T // T ∈ 𝒯} := ⟨R (Classical.arbitrary _) Finset.univ, hR _ _⟩
+  let late : (l₁.design Finset.univ).Ω → {T // T ∈ 𝒯} := fun ω₁ =>
+    ⟨glue fun X => ⟨R ω₁ X, hR ω₁ X⟩, hglue𝒯 _⟩
+  have h02 : 0 < L.levels.length := Nat.zero_lt_two
+  have h12 : 1 < L.levels.length := Nat.one_lt_two
+  let τ : ℕ → L.Coins → {T // T ∈ 𝒯} := fun k ω => if k = 0 then t₀ else late (ω ⟨0, h02⟩ Finset.univ)
+  have hτ : ∀ k, L.ReadsBelow k (τ k) := fun k ω ω' h => by
+    by_cases hk : k = 0
+    · simp only [τ, hk, ite_true]
+    · simp only [τ, hk, ite_false]
+      rw [h ⟨0, h02⟩ (Nat.pos_of_ne_zero hk)]
+  obtain ⟨θ, -, hle⟩ := L.late_le_missProb_levels Subtype.val (fun _ _ _ => True)
+    (fun X (a b : {T // T ∈ 𝒯}) => a.1.filter (· ⊆ X) = b.1.filter (· ⊆ X)) (fun _ _ => trivial)
+    (fun _ _ _ _ _ _ => trivial) (fun _ _ _ h => h.symm)
+    (fun X Y a b hXY h => by
+      ext Z
+      have hZ := Finset.ext_iff.1 h Z
+      simp only [Finset.mem_filter] at hZ ⊢
+      exact ⟨fun hz => ⟨(hZ.1 ⟨hz.1, hz.2.trans hXY⟩).1, hz.2⟩, fun hz => ⟨(hZ.2 ⟨hz.1, hz.2.trans hXY⟩).1, hz.2⟩⟩)
+    (fun X a b h => by
+      have hX := Finset.ext_iff.1 h X
+      simpa only [Finset.mem_filter, subset_refl, and_true] using hX)
+    (fun _ _ _ _ a' _ _ => ⟨a', trivial, rfl⟩)
+    (fun k hk θ θX _ => by
+      obtain rfl : k = 0 := by have : k + 1 < 2 := hk; omega
+      exact ⟨⟨glue θX, hglue𝒯 θX⟩, trivial, fun X hX => hglueEq θX X hX⟩)
+    τ hτ (fun _ _ => trivial)
+  refine ⟨θ.1, θ.2, le_trans (le_of_eq ?_) hle⟩
+  let H : (l₁.design Finset.univ).Ω → ℝ≥0∞ := fun ω₁ =>
+    ∏ X ∈ (l₁.design Finset.univ).draw ω₁, (l₂.design X).missProb (R ω₁ X)
+  calc prCoin (fun ω : (l₁.design Finset.univ).Ω × ((X : Finset G) → (l₂.design X).Ω) =>
+          ∀ X ∈ (l₁.design Finset.univ).draw ω.1, Disjoint ((l₂.design X).draw (ω.2 X)) (R ω.1 X))
+        = avg H := SamplingDesign.prCoin_bind_late _ _ R
+    _ = avg fun ω : L.Coins => H (ω ⟨0, h02⟩ Finset.univ) :=
+        (Eq.trans (avg_apply_pi (T := fun j : Fin 2 => (X : Finset G) → (([l₁, l₂].get j).design X).Ω)
+          ⟨0, h02⟩ fun t => H (t Finset.univ)) (avg_apply_pi (T := fun X => (l₁.design X).Ω) Finset.univ H)).symm
+    _ = avg fun ω : L.Coins => ∏ Y ∈ L.drawTo ω 1, avg fun c : ((L.levels.get ⟨1, h12⟩).design Y).Ω =>
+          ∏ X ∈ ((L.levels.get ⟨1, h12⟩).design Y).draw c, (Level.sampleBelow [] X).missProb (τ 1 ω).1 := by
+        refine congrArg avg (funext fun ω => ?_)
+        rw [L.drawTo_succ ω (k := 0) h02, show L.drawTo ω 0 = {Finset.univ} from rfl, Finset.singleton_biUnion]
+        refine Finset.prod_congr rfl fun Y hY => ?_
+        have hY₁ := (h₁ Finset.univ (Finset.mem_singleton_self _) _ Y hY).1
+        refine Eq.trans ?_ (Level.prCoin_disjoint_eq (fun c => (l₂.design Y).draw c) fun _ => (τ 1 ω).1)
+        show (l₂.design Y).missProb (R (ω ⟨0, h02⟩ Finset.univ) Y) =
+          (l₂.design Y).missProb (glue fun X => ⟨R (ω ⟨0, h02⟩ Finset.univ) X, hR _ X⟩)
+        rw [← hfilter Y hY₁ (glue _), hglueEq _ Y hY₁, hfilter Y hY₁]
+    _ = avg fun ω : L.Coins => ∏ X ∈ L.drawTo ω 2, (Level.sampleBelow [] X).missProb (τ 1 ω).1 :=
+        (L.avg_prod_drawTo_succ (k := 1) h12 (fun ω X => (Level.sampleBelow [] X).missProb (τ 1 ω).1)
+          fun ω ω' h => by simp only [hτ 1 ω ω' h]).symm
+    _ = _ := (Level.prCoin_disjoint_eq _ _).symm
 
 end Levels
 
