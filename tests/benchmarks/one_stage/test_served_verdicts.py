@@ -4128,8 +4128,9 @@ def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(
     templates it holds no circuit of."""
     rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", FAIL_WARM="1")
     assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
-    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): records_audit.py warm: a template's " \
-           "compose was killed; the audit composes the templates it didn't keep" in lines
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): (no exception, exit 1): {PRIVATE}; " \
+           "the audit composes the templates it didn't keep" in lines, lines
+    assert not [x for x in lines if "compose was killed" in x], lines
     audit = json.loads((tmp_path / "order.audit").read_text())
     assert "--compose-cache" in audit
 
@@ -5903,6 +5904,28 @@ def test_publish_holds_every_file_the_list_does_not_name_and_the_serves_records_
     assert {PF.listed(f"OUT/serve/{n}") for n in ("serve.json", "windows.jsonl", "seals.jsonl")} == {PF.MIRROR}
 
 
+def test_no_launcher_line_quotes_a_tools_stderr():
+    """A tool's stderr is free text from anything the prover runs: no say line of the served launchers quotes an ``.err``
+    file by `tail`, `cut`, `head` or `grep`; `failed` says its class and exit, `said` a passing tool's own last line."""
+    quoted = re.compile(r"\$\((?:tail|cut|head|grep)[^)]*\.err")
+    found = [f"{f.name}:{i}" for f in (Path(S.__file__).parent / n for n in ("served_verdicts.sh", "served_util.sh", "served_stock.sh",
+                                                          "served_composite.sh"))
+             for i, line in enumerate(f.read_text().splitlines(), 1) if quoted.search(line)]
+    assert found == [], found
+
+
+def test_a_pieces_piece_json_leaves_without_the_node_it_ran_on_which_stays_private(tmp_path):
+    """`pieces` writes each piece's `RAN` with the node it ran on, which `record` and the hand-off read in the serve dir;
+    the published copy holds its exit and limit alone, the whole file in the private directory."""
+    out, priv = tmp_path / "out", tmp_path / "private"
+    (out / "pieces" / "pous").mkdir(parents=True)
+    whole = json.dumps({"limit": "60m", "rc": 0, "server": "vy-dc-h200"}, sort_keys=True) + "\n"
+    (out / "pieces" / "pous" / S.RAN).write_text(whole)
+    assert S.publish(out, priv) == [f"pieces/pous/{S.RAN}"]
+    assert json.loads((out / "pieces" / "pous" / S.RAN).read_text()) == {"limit": "60m", "rc": 0}
+    assert (priv / "pieces" / "pous" / S.RAN).read_text() == whole and S.publish(out, priv) == []
+
+
 @pytest.mark.parametrize("extra, line", [
     ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
      "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
@@ -6374,7 +6397,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
         "whole command"])
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
-        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
+        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6}: exit 0, "
         f"the record accept, 1 files of its $OUT in the run's compose/"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
@@ -6492,8 +6515,8 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     gate = tmp_path / "gate-host"
     lines = (out / "verdicts.txt").read_text().splitlines()
     assert run.returncode == 1, (run.stderr, lines)
-    assert lines[0].startswith("HANDOFF ")
-    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 2, the record "
+    assert lines[0].startswith("HANDOFF ") and not [x for x in lines if "remote" in x.split(":", 1)[0]], lines
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]}: exit 2, the record "
                                 "pending, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
     argv = json.loads((tmp_path / "gate.argv").read_text())
     scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"

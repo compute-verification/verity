@@ -731,8 +731,9 @@ def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
     under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
     text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
-    give-up (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
-    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    give-up (`public_doc`), or holds a field `public_files.WITHOUT` keeps private, held in full, under ``private`` at its
+    path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole. Only
+    `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     import public_files as PF
 
     held: list[str] = []
@@ -756,6 +757,10 @@ def publish(out: Path, private: Path) -> list[str]:
             held.append(rel)
             continue
         pub = public_doc(text)
+        if drop := PF.without("OUT/" + rel):
+            with contextlib.suppress(ValueError):
+                if isinstance(doc := json.loads(pub), dict) and set(drop) & doc.keys():
+                    pub = json.dumps({k: v for k, v in doc.items() if k not in drop}, sort_keys=True) + "\n"
         if pub != text:
             dst.write_bytes(data)
             p.write_text(pub)
@@ -2492,8 +2497,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     except ValueError as e:
         return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
     said = line.get("composed") if isinstance(line, dict) else None
-    where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
-             + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
+    where = f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
                 f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))

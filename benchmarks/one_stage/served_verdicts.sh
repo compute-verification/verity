@@ -905,7 +905,7 @@ v3c_warm() {  # every template of the committed window composed into $VW/compose
   if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$LOGS/v3c-audit/warm.log" | cut -c1-600)
   else
     if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
-    else why=$(tail -3 "$LOGS/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
+    else why=$(failed "$rc" "$LOGS/v3c-audit/warm.err"); fi
     why+="; the audit composes the templates it didn't keep"
   fi
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
@@ -1281,7 +1281,7 @@ block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each
     if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
          --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
          --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
-      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-400)"
+      say "BLOCK-COUNTS class $c, the picked window alone: $(said 0 "$D/block-counts-$tag.err" | cut -c1-400)"
     else say "BLOCK-COUNTS class $c refused $(failed "$?" "$D/block-counts-$tag.err")"; fi
   done
 }
@@ -1904,8 +1904,8 @@ if [ "$LOAD" = front ]; then
 elif [ "$LOAD" = session ]; then
   say "OVERHEAD: none with LOAD=session (the relay paces the caller's requests, so no stock control compares)"
 else
-  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
-    || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$LOGS/overhead.err" \
+    || { rc=$?; say "OVERHEAD: no aggregate $(failed "$rc" "$LOGS/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
 fi
 }
 window() {
