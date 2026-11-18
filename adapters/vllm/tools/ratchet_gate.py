@@ -135,13 +135,10 @@ run on it, so that failure costs seconds; and the source checks aren't run on a 
 in the change's ``why`` and ``fix``, so one run tells a change all it fails.  Every verdict and the exit are as without
 it: it adds to a failed change's text alone, and lints or checks that can't run on a change another rule fails are named
 there, where they exit 2 on a change nothing else fails.  It costs the lints' time on each failed change (minutes on one
-that touches a lint or a list), which the preflight's budget may not have: it is for the run a failed change's author makes
-before marking the branch again.
+that touches a lint or a list): it is for the run a failed change's author makes before marking the branch again.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
-and only warns (``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new
-violation; what judges a PR is the check's ``ratchet-gate`` step
+and BASE's move_check, beside the scripts it loads).  What judges a PR is the check's ``ratchet-gate`` step
 (``tools/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
 drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
 change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
