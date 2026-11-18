@@ -11,4 +11,4 @@ from __future__ import annotations
 __version__ = "0.1.0"
 
 # registers the catalog's Boolean lookup with `verity.circuits.program`, which every Program's Boolean map is built by
-from .boolean import versions as _versions  # noqa: E402,F401
+from .boolean import versions as _versions  # noqa: F401

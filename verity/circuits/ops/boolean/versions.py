@@ -213,13 +213,16 @@ def _statics_on_bits(kw: dict) -> dict:
 
 def _families() -> tuple:
     """The Boolean versions made on demand, as their word Definitions are (a family by id): (word id pattern, its Boolean
-    version's factory), the core's constants and wiring first, then each registered catalog's (`catalog_loader`)."""
+    version's factory), the core's constants, wiring and MoE select first, then each registered catalog's (`catalog_loader`)."""
     if not _FAMILIES:
+        from verity.circuits.ops import moe as WM
+        from verity.circuits.ops.boolean import moe as BM
         from verity.circuits.ops.boolean import scalar as SC
         from verity.circuits.population import BIT_OF_ID, WORD_OF_ID
         _FAMILIES.extend((
             (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
-            (BIT_OF_ID, lambda m: SC.bit_of_bits(int(m[1]), int(m[2]))), (WORD_OF_ID, lambda m: SC.word_of_bits(int(m[1])))))
+            (BIT_OF_ID, lambda m: SC.bit_of_bits(int(m[1]), int(m[2]))), (WORD_OF_ID, lambda m: SC.word_of_bits(int(m[1]))),
+            (re.compile(WM.SELECT_ID), lambda m: BM.select_bf16(int(m[1])))))
         for families in _CATALOG_FAMILIES:
             _FAMILIES.extend(families())
     return tuple(_FAMILIES)
