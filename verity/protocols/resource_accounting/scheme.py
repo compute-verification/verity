@@ -33,7 +33,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   schemes (one for each value of its parameters) and its code, which `bound` evaluates at parameters its caller gives;
   unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
-  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
+  ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`, which is the one place
+  they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run), ``hooks``, ``ports``,
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
   reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
@@ -70,6 +71,10 @@ def _no_requests(ctx: Any) -> tuple[Any, ...]:
 
 
 def _attaches_nothing(exchange: Any, ctx: Any) -> None:
+    return None
+
+
+def _no_settings_check(values: Mapping[str, Any]) -> str | None:
     return None
 
 
@@ -162,7 +167,8 @@ class Term:
 @dataclass(frozen=True)
 class Scheme:
     """What a resource scheme supplies. ``settings`` are its settings with their defaults, which a configuration's
-    ``[params."<protocol>"]`` overrides (`settings`); ``option`` is the adapter's entry that attaches it to a served run
+    ``[params."<protocol>"]`` overrides (`settings`), and ``check_settings`` what it refuses of their values beyond their
+    types (a count below 1), as a sentence, None where it accepts them; ``option`` is the adapter's entry that attaches it to a served run
     (``NAME:scheme``, an adapter's ``protocols`` spelling), empty when it attaches through none; ``hooks`` the served
     run's hooks it attaches through (`HOOKS`); ``ports`` the external ports it reads or writes; ``requires`` maps each
     requirement it has of the proof layer to today's stand-in. ``delta_scheme`` is `Verity.Scheme.δscheme`, the bound on
@@ -180,6 +186,7 @@ class Scheme:
     log: tuple[Order, ...]
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
+    check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -222,14 +229,19 @@ class Scheme:
 
 
 def settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
-    """``scheme``'s settings with ``given`` over its defaults; refuses a key it doesn't have and a value of another type
-    than its default's."""
+    """``scheme``'s settings with ``given`` over its defaults, the one place a setting is checked: refuses a key it
+    doesn't have, a value of another type than its default's, and what its ``check_settings`` refuses. Every setting is
+    returned, its default included: what a run used is what an application's hash covers (`verity.config.check` fills
+    the defaults), so stating a default moves no hash and changing a default in code does."""
     if unknown := sorted(set(given) - set(scheme.settings)):
         raise ValueError(f"{scheme.name} has no setting {unknown}: its settings are {sorted(scheme.settings)}")
     for k, v in given.items():
         if type(v) is not type(scheme.settings[k]):
             raise ValueError(f"{scheme.name}.{k} is a {type(scheme.settings[k]).__name__}, not {v!r}")
-    return {**scheme.settings, **given}
+    out = {**scheme.settings, **given}
+    if refused := scheme.check_settings(out):
+        raise ValueError(f"{scheme.name}: {refused}")
+    return out
 
 
 @dataclass(frozen=True)

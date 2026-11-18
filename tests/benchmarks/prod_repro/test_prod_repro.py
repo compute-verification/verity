@@ -76,10 +76,13 @@ def corpus_arm(out: Path, name: str, tok_per_s: list[float], *, argv: tuple[str,
     for k, tps in enumerate(tok_per_s, 1):
         rep, done = d / LOAD / f"rep-{k}", 4 / tps
         rep.mkdir(parents=True)
-        (rep / "client.jsonl").write_text("".join(json.dumps(
+        whole = kept(d) / "client" / LOAD / f"rep-{k}" / "client.jsonl"
+        whole.parent.mkdir(parents=True, exist_ok=True)
+        whole.write_text("".join(json.dumps(
             {"id": f"{LOAD}{k}-{i:05d}", "i": i, "status": 200 if i >= unserved else 500, "send_unix": 1000.0,
              "first_token_s": done / 2, "done_s": done, "output_ids": [7, i], "chunks": [[done / 2, 1], [done, 1]]}) + "\n"
             for i in range(2)))
+        R.S.kept_client(whole, rep)
         (rep / "meta.json").write_text(json.dumps({
             "tag": f"{LOAD}{k}", "rate": 1000.0, "requests": 2, "arrivals_span_s": arrivals_s, "t0_unix": 1000.0,
             "wall_s": done, "unfinished": 0, "schedule": {"steps": 2, "step_tokens": 104, "generation_tokens": 4,
@@ -103,10 +106,11 @@ def replayed(out: Path, ours: str = "record", *, tokens: dict[str, list[int]] | 
         "arm_dir": str(out / ours), "served_run_id": "r-1", "run_id": "r-1", "load": load, "rep": 1, "mode": "compiled",
         "served_mode": "compiled", "served_window_s": 0.2, "replay_wall_s": 0.3, "engine_ready_s": 9.0,
         "served_under": None, "private": str(kept(d)), **R.compare(w, got), **over}))
-    kept(d).mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(kept(d), ignore_errors=True)
+    kept(d).mkdir(parents=True)
     R.write_tokens(kept(d), got["tokens"])
     if keep_steps:
-        (d / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in got["steps"]))
+        (kept(d) / "replay_steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in got["steps"]))
     return d
 
 
@@ -172,12 +176,13 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
     rc, txt, r = run(out)
     assert rc == 1 and r["tokens"]["reproduces"] is False
     assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"]) == (3, 3)
-    # the first token that differs: its request and position, the ids on each side, and the step that emitted it
+    # the first token that differs: its request and position and the step that emitted it, and no id of either side
     assert ("tokens: FAILED: 2 requests replayed, 4 served tokens compared with 4 replayed, 1 differ in 1 requests\n"
-            f"  the first token that differs: request {b} position 1: served id 1, replayed id 9; serving emitted it in "
+            f"  the first token that differs: request {b} position 1; serving emitted it in "
             "step 1 of the window\n"
             f"  request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)\n") in txt
-    assert r["tokens"]["differing"][0] | {"served_id": 1, "replayed_id": 9, "step": 1} == r["tokens"]["differing"][0]
+    assert r["tokens"]["differing"][0] | {"ended": None, "step": 1} == r["tokens"]["differing"][0]
+    assert "served_id" not in r["tokens"]["differing"][0] and "replayed id" not in txt
     assert r["failed"] == [f"request {b} position 1 (served 2 tokens, replayed 2; 1 positions differ)"]
     assert txt.endswith("prod_repro: 2 of 3 lines measured; FAILED: the replay differs from what was served\n")
     # of two requests that differ, the first is the one whose token serving emitted in the earlier step
@@ -186,7 +191,7 @@ def test_a_replayed_token_that_differs_fails_the_job_naming_the_token_and_the_st
     replayed(out, tokens={a: [7, 5], b: [3, 1]})
     _, txt, r = run(out)
     assert [d["request"] for d in r["tokens"]["differing"]] == [b, a]
-    assert f"the first token that differs: request {b} position 0: served id 7, replayed id 3; serving emitted it in step 0" in txt
+    assert f"the first token that differs: request {b} position 0; serving emitted it in step 0" in txt
 
 
 def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: Path):
@@ -197,7 +202,7 @@ def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: 
     assert rc == 1 and f"request {a} position 1 (served 2 tokens, replayed 1; 1 positions differ)" in txt
     assert (r["tokens"]["tokens_before_first_difference"], r["tokens"]["tokens_given_back"], r["tokens"]["tokens_differing"]) \
         == (3, 3, 1)
-    assert f"the first token that differs: request {a} position 1: served id 0, the replay ended before it; serving" in txt
+    assert f"the first token that differs: request {a} position 1: the replay ended before it; serving" in txt
     shutil.rmtree(out / "replay-compiled")
     # the same tokens from other rows: the replay did not run the served schedule, and the first step says how
     other = [{"step": 0, "rows": [[a, 0, 50], [b, 0, 50]]}, {"step": 1, "rows": [[a, 50, 1], [b, 50, 1]]}]
@@ -901,7 +906,7 @@ def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: 
     shutil.rmtree(out / "replay-compiled")
     replayed(out, "prod-record", load="chat@16", tokens={rid("chat@16-r1", 0): [7, 4]})
     assert P.main(argv) == 1
-    assert (f"the first token that differs: request {rid('chat@16-r1', 0)} position 1: served id 0, replayed id 4; serving "
+    assert (f"the first token that differs: request {rid('chat@16-r1', 0)} position 1; serving "
             "emitted it in step 1 of the window") in (out / "prod_repro.txt").read_text()
 
 
@@ -1646,7 +1651,7 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
     shutil.rmtree(run_dir / "out/replay-compiled")
     replayed(run_dir / "out", tokens={rid(f"{LOAD}1", 0): [8, 0]})
     p = bash(script, *ARMS, run_dir=run_dir)
-    assert p.returncode == 1 and f"request {rid(f'{LOAD}1', 0)} position 0: served id 7, replayed id 8" in p.stdout
+    assert p.returncode == 1 and f"request {rid(f'{LOAD}1', 0)} position 0" in p.stdout
     # a replay that left nothing fails it too: the corpus client's job always asks for one, unless told not to
     shutil.rmtree(run_dir / "out/replay-compiled")
     p = bash(script, *ARMS, run_dir=run_dir)
