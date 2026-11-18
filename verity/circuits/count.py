@@ -1,5 +1,8 @@
 """A circuit's Boolean gate count, from its own Boolean bodies: `count` over a descriptor, `of_block` over a proof block.
 
+C names things at word level; its bit-level circuit, each word primitive replaced by its body (Lean's `inline`), is a
+function of C, and `count` is exactly that function's size: the sum over C's gates of their bodies' counts, never a bound.
+
 **The rule** (`gate`), the census's (`census.BooleanWork`) and the one the inference-only count reads: a gate of the Boolean
 profile (PROTOCOL.md §9) counts its two-input gates, an `And<n>_v1` n - 1 of them, all ANDs, an `Xor<n>_v1` n - 1 and a
 `Not_v1` 1, none an AND; a constant bit and an input of either binding and any width count 0. A word primitive counts what
