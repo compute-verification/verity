@@ -78,6 +78,7 @@ inputs = ["benchmarks/prod_repro", "calibration/hardware/cards", "verity/__init_
     "verity/circuits/liveness.py",
     "verity/circuits/partition.py",
     "verity/circuits/partition_object.py",
+    "verity/circuits/partition_query.py",
     "verity/circuits/partition_v2.py",
     "verity/circuits/parts.py",
     "verity/circuits/population.py",
