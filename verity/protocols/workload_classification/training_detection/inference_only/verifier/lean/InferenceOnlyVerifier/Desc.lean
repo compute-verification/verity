@@ -297,7 +297,8 @@ def PS.slice (s : PS) (lo hi : Nat) : Array Seg := Id.run do
 def PS.pieces (s : PS) (lo hi : Nat) : Array Piece :=
   (s.slice lo hi).flatMap fun g => (Array.range g.reps).flatMap g.copy
 
-/-- A reference part as pieces: an affine part is one, a strided part its whole rows as one and a part of a row. -/
+/-- A reference part as pieces: an affine part is one, a strided part its whole rows as one and a part of a row, a grid
+one a lane a period (`Grid.pieces`). -/
 def ofPart : Part → Array Piece
   | .affine p i b c => #[{ tgt := .ref p i, base := b, stride := 1, len := c }]
   | .strided p i b inner os is c =>
@@ -314,6 +315,9 @@ def ofPart : Part → Array Piece
     | some q => if q.tgt == .ref r.p r.i && q.stride == 1 && q.at q.len == r.j then acc.pop.push { q with len := q.len + 1 }
       else acc.push one
     | none => acc.push one
+  | .grid run lanes =>
+    (Array.range ((lanes[0]?.map Lane.periods).getD 0)).flatMap fun t =>
+      lanes.map fun l => { tgt := .ref l.p l.i, base := l.leafAt t 0, stride := l.e, len := run }
 
 def ofSeq (s : Seq) : PS := PS.of ((s.parts.foldl (fun acc q => acc ++ ofPart q) #[]).map Seg.one)
 
