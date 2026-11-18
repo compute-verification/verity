@@ -120,6 +120,11 @@ def constant(b: int) -> PrimitiveDefinition:
     return CONSTANTS[b]
 
 
+# a Boolean body's gates and constant bits resolve by id in any decoder, whatever registry it is given
+register_lazy_family(_CONSTANT_ID, lambda m: constant(int(m[1])))
+register_lazy_family(r"^Not_v1$", lambda m: NOT)
+
+
 def is_gate(fn: Any) -> bool:
     return gate_kind(fn) is not None
 

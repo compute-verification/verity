@@ -1,10 +1,10 @@
 """`verity bench overhead points|run|table`: the one front door for overhead measurements, `verity-bench overhead` (its
 README beside this file).
 
-    verity bench overhead points [--card h200] [--model M] [--on NODE] [--gpu I] [--cores CPUS]
+    verity bench overhead points --on NODE [--model M] [--gpu I] [--cores CPUS]
                                                                      the sweep for C and L, a research run on one GPU
     verity bench overhead points --store RUN                         the finished sweep's points, stored and of record
-    verity bench overhead run --scheme S [--point C|L|all] [--card h200] [--model M] [--on NODE] [--gpu I] [--cores CPUS]
+    verity bench overhead run --on NODE --scheme S [--point C|L|all] [--model M] [--gpu I] [--cores CPUS]
                                                                      S against stock at the points, a research run
     verity bench overhead run --record RUN                           label RUN a run of record
     verity bench overhead table [--json]                             γ per scheme, point and card from runs of record

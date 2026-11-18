@@ -49,3 +49,16 @@ better = "lower"
 command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/attester_load/pacing.py --from RUN_OF_RECORD --card h200x8"
 every = "7d"
 goal = "network/pacing-slowdown-own-number"
+
+# written by the same command, beside the slowdown of each schedule, from `benchmarks/certifier_term/run.py`'s calculator
+# alone (the schedule, not the replay), over a week, a month and a year of a datacenter's and of the world's compute
+[[metric]]
+id = "network-accounting/pacing-capacity-left"
+title = "Exfiltration capacity a schedule leaves"
+owner = "network-accounting"
+unit = "GB"
+axis = "The network attester's term of record at a release schedule, in GB over the monitoring period and compute each value names, at the plan's request count: the exfiltration capacity the schedule leaves, beside its serving slowdown under pacing."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/attester_load/pacing.py --from RUN_OF_RECORD --card h200x8"
+every = "7d"
+goal = "network/pacing-slowdown-own-number"

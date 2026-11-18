@@ -64,7 +64,7 @@ composite takes it, unless the table's line says who combined its verdict (``com
 as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "coins_on": {NAME: MACHINE},
-             "components": {NAME: accept|reject|undecided|error|absent}, "configuration": HASH, "product": ID,
+             "components": {NAME: accept|reject|undecided|development|error|absent}, "configuration": HASH, "product": ID,
              "program": COMMIT, "reason": R, "registration": DIGEST, "run": RUN, "simulated": [...], "verdict": V}
 
 ``configuration`` is the file's hash and ``program`` the commit that ran, the running tree's (`run.json` holds both).
@@ -76,6 +76,9 @@ onsite's ``block`` is its execution phase's seal digest, the one the served wind
 onsite's line reads a record the workload's node composed, its verdicts as the record has them; ``answer_from`` names
 each row's stated source and decides nothing. Under ``VERITY_HOLD_PLACEMENT=1`` its accepts, each row's and the combined
 one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
+remote's line read from a record the prover composed, the serving node's own or a deferral's follow-on's, not a compose
+gate's answer, has ``source`` (``serving-node``, ``follow-on``), its reason led by a sentence saying so, and
+``development`` where the record says accept, a row's or the line's (`served_table.DEVELOPMENT_VERDICT`): no accept of it counts.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
 network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).

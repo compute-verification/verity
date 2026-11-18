@@ -15,11 +15,11 @@ The format is specified in `PROTOCOL.md` beside this module, with pinned vectors
 the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotations`: `canonical_json` is JCS on the domain a
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
-Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
-(the default) writes the same program with flat concatenations, the reference-sequence alias
-and interned callee ids / types (PROTOCOL.md §4.5–§4.7). Both decode. The digest is a function of the
-encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit.
+Schemas (`schema` field): `verity-ir/descriptor/v2`, the one written and read, writes flat concatenations, the
+reference-sequence alias and interned callee ids / types (PROTOCOL.md §4.5–§4.7), and `boolean`, each word primitive's one
+Boolean Definition, those Definitions among `definitions` (§4.9). `verity-ir/descriptor/v0` writes every body verbatim, the
+self-contained entries `definition_entry` writes, and is written but never read: a v0 or `verity-ir/descriptor/v1` descriptor
+is refused by name (`E_SCHEMA`).
 """
 
 from __future__ import annotations
@@ -33,14 +33,16 @@ from typing import Callable, Any, Iterator
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, BodyNode, PrimitiveDefinition, DefinitionTable,
                    SpecializedDefinition, _static_key, bind)
 from . import ports as P
-from .program import input_id, input_prim, is_input
+from .program import boolean_map, input_id, input_prim, is_input, is_word_primitive
 from .refs import Affine, Coll, Concat, Explicit, Grid, PartLog, Refs, Strided, lane_bounds, refs_from_json
 from .types import type_from_json
 
 SCHEMA_V0 = "verity-ir/descriptor/v0"
 SCHEMA_V1 = "verity-ir/descriptor/v1"
-SCHEMA = SCHEMA_V1
-SCHEMAS = (SCHEMA_V0, SCHEMA_V1)
+SCHEMA_V2 = "verity-ir/descriptor/v2"
+SCHEMA = SCHEMA_V2
+#: the schemas `encode_program` writes; `decode_program` reads `SCHEMA` alone
+SCHEMAS = (SCHEMA_V0, SCHEMA_V2)
 ALIAS_WINDOW = 8  # how many trailing parts an alias search may leave as the explicit suffix
 
 
@@ -323,9 +325,11 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     def encode(fid: str, fn: FunctionDefinition) -> None:
         done[fid] = _encode_definition(fn) if isinstance(fn, PrimitiveDefinition) else _encode_definition(fn, schema, tables)
 
-    seen = _walk(program, encode)
+    bmap = _boolean(program)
+    seen = _walk(program, encode, bmap.values())
     desc = {
         "schema": schema,
+        "boolean": {k: descriptor_id(v) for k, v in bmap.items()},
         "root": descriptor_id(program.root),
         "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
         "definitions": {fid: done[fid] for fid in seen},
@@ -340,12 +344,13 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
 def definitions(program) -> dict[str, FunctionDefinition]:
     """The definitions `encode_program` records for `program`, by descriptor id: those a decoder of its descriptor
     holds."""
-    return _walk(program, lambda fid, fn: None)
+    return _walk(program, lambda fid, fn: None, getattr(program, "boolean", {}).values())
 
 
-def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str, FunctionDefinition]:
+def _walk(program, done: Callable[[str, FunctionDefinition], None], bodies=()) -> dict[str, FunctionDefinition]:
     """`encode_program`'s dependency walk: each specialization the descriptor records, by descriptor id in first-visit order.
     `done(fid, fn)` runs once per specialization, after every specialization it depends on: the order v1's tables intern in.
+    ``bodies``, the Boolean map's Definitions in key order, are walked last.
     Raises `IdentityConflict` on two different definitions under one id, once every specialization is done."""
     seen: dict[str, FunctionDefinition] = {}
     duplicates: list[tuple[str, FunctionDefinition]] = []
@@ -381,10 +386,18 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
     visit(program.root)
     for f in _program_fn_functions(program):  # the program function is inlined into the root: its binding record
         visit(f)  # (`program_fn`) is part of the identity, so every function it references is a definition too
+    for f in bodies:
+        visit(f)
     for fid, fn in duplicates:  # a different object under an already-recorded id must denote the same definition
         if _encode_definition(fn) != _encode_definition(seen[fid]):  # self-contained (v0) forms: no table side effects
             raise IdentityConflict(f"E_IDENTITY: two different definitions claim the specialization {fid!r}")
     return seen
+
+
+def _boolean(program) -> dict[str, FunctionDefinition]:
+    """``program``'s Boolean map: a `Program`'s or `DecodedProgram`'s own, else computed (`program.boolean_map`)."""
+    got = getattr(program, "boolean", None)
+    return boolean_map(program) if got is None else got
 
 
 def _intern_body(b: Body, tables: _Tables) -> None:
@@ -443,16 +456,18 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
         if tables is not None:
             _intern_body(fn.body, tables)
 
-    seen = _walk(program, intern)
-    skeleton = {"schema": schema, "root": descriptor_id(program.root),
+    bodies = _boolean(program)
+    bmap = {k: descriptor_id(v) for k, v in bodies.items()}
+    seen = _walk(program, intern, bodies.values())
+    skeleton = {"schema": schema, "boolean": bmap, "root": descriptor_id(program.root),
                 "program_fn": getattr(program, "program_fn_id", None) or descriptor_id(program.fn),
                 "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
         interned = (len(tables.callees), len(tables.type_json))
-        yield b'{"callees":' + canonical_json(skeleton["callees"]) + b',"definitions":{'
+        yield b'{"boolean":' + canonical_json(bmap) + b',"callees":' + canonical_json(skeleton["callees"]) + b',"definitions":{'
     else:
-        yield b'{"definitions":{'
+        yield b'{"boolean":' + canonical_json(bmap) + b',"definitions":{'
     for i, fid in enumerate(sorted(seen)):
         yield (b"," if i else b"") + canonical_json(fid) + b":"
         fn = seen[fid]
@@ -716,7 +731,7 @@ def _lookup_primitive(registry: DefinitionTable, fid: str) -> PrimitiveDefinitio
 
 class DecodedProgram:
     def __init__(self, root: SpecializedDefinition, defs: dict[str, Any], desc: dict,
-                 program_fn_functions: tuple[FunctionDefinition, ...] = ()) -> None:
+                 program_fn_functions: tuple[FunctionDefinition, ...] = (), boolean: dict[str, Any] | None = None) -> None:
         self.root = root
         self.defs = defs
         self.desc = desc
@@ -727,6 +742,7 @@ class DecodedProgram:
         root.theta = tuple(theta) if isinstance(theta, list) else theta  # type: ignore[attr-defined]  # `ports.facts` checks it
         self.program_fn_id = desc["program_fn"]
         self.program_fn_functions = program_fn_functions  # the definitions `program_fn`'s record references
+        self.boolean = dict(boolean or {})  # each word primitive's Boolean Definition, as the descriptor holds it
 
     @property
     def gates(self) -> int:
@@ -875,16 +891,16 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
 def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
     """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
-    if schema not in SCHEMAS:
-        raise ValueError(f"unexpected descriptor schema {schema!r}")
+    if schema in (SCHEMA_V0, SCHEMA_V1):
+        raise ValueError(f"E_SCHEMA: a {schema} descriptor holds no Boolean bodies, and only {SCHEMA} is read; encode the "
+                         "program again")
+    if schema != SCHEMA:
+        raise ValueError(f"E_SCHEMA: unexpected descriptor schema {schema!r}, only {SCHEMA} is read")
     _check_domain(desc)
     ddefs = desc["definitions"]
     built = {} if built is None else built
-    if schema == SCHEMA_V0:
-        callee_id, arg_type = (lambda f: f), _type
-    else:
-        callees, types = desc["callees"], [_type(t) for t in desc["types"]]
-        callee_id, arg_type = (lambda i: _at(callees, i, "callees")), (lambda i: _at(types, i, "types"))
+    callees, types = desc["callees"], [_type(t) for t in desc["types"]]
+    callee_id, arg_type = (lambda i: _at(callees, i, "callees")), (lambda i: _at(types, i, "types"))
 
     def get(fid: str):
         if fid in built:
@@ -989,7 +1005,34 @@ def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
         raise ValueError(f"root {desc['root']!r}: the root is a composite without parameters")
     pfn_fns = tuple(get(fid) for fid in _record_function_ids(desc["program_fn"]) if fid in desc["definitions"])
     P.check(root)
-    return DecodedProgram(root, built, desc, pfn_fns)
+    return DecodedProgram(root, built, desc, pfn_fns, _decode_boolean(desc, get))
+
+
+def _decode_boolean(desc: dict, get: Callable[[str], Any]) -> dict[str, FunctionDefinition]:
+    """``desc``'s Boolean map, each body read from ``desc`` alone (PROTOCOL.md §4.9): its keys exactly the word primitives
+    among `definitions` (`E_BODY_MISSING`, `E_BODY_KEY`), each value a Boolean Definition among them with the bit form of
+    its word's signature (`E_BODY_NOT_BOOLEAN`)."""
+    from .boolean import bit_type, is_boolean
+    bm = desc.get("boolean")
+    if not isinstance(bm, dict) or not all(isinstance(v, str) for v in bm.values()):
+        raise ValueError(f"E_BODY_KEY: `boolean` is {type(bm).__name__}, not an object of descriptor ids")
+    ddefs = desc["definitions"]
+    word = {fid for fid, d in ddefs.items() if d.get("form") == "primitive" and is_word_primitive(get(fid))}
+    if missing := sorted(word - set(bm)):
+        raise ValueError(f"E_BODY_MISSING: the word primitives {missing[:4]} have no Boolean body in `boolean`")
+    if extra := sorted(set(bm) - word):
+        raise ValueError(f"E_BODY_KEY: `boolean` names {extra[:4]}, which are no word primitive among `definitions`")
+    out: dict[str, FunctionDefinition] = {}
+    for fid in sorted(bm):
+        bid = bm[fid]
+        if bid not in ddefs:
+            raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid!r} is no definition")
+        body, (params, ret) = get(bid), get(fid).signature()
+        bparams, bret = body.signature()
+        if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
+            raise ValueError(f"E_BODY_NOT_BOOLEAN: {fid}'s body {bid} is not a Boolean Definition of its bit signature")
+        out[fid] = body
+    return out
 
 
 def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:

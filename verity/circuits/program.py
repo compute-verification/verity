@@ -37,6 +37,61 @@ REGISTERED_ID = re.compile(r"^RegisteredInput([1-9][0-9]*)_v1$")
 RUN = "run"
 REGISTRATION = "registration"
 
+#: the catalog's lookup of a word primitive's one Boolean Definition (`register_boolean_bodies`), which `Program` calls at
+#: build; a decoder never calls it, as the descriptor holds every body
+_BODY_LOOKUP: list[Callable[[PrimitiveDefinition], Any]] = []
+
+
+class NoBooleanBody(ValueError):
+    """``E_NO_BODY``: a Program reaches word primitives with no one Boolean Definition; ``missing`` names each with why."""
+
+    def __init__(self, missing: dict[str, str]) -> None:
+        self.missing = dict(missing)
+        super().__init__("E_NO_BODY: no one Boolean Definition for " + "; ".join(f"{k}: {v}" for k, v in sorted(self.missing.items())))
+
+
+def register_boolean_bodies(lookup: Callable[[PrimitiveDefinition], Any]) -> None:
+    """Make ``lookup`` (a word primitive -> its one Boolean Definition, `LookupError` where it has none) the one `Program`
+    builds its Boolean map with."""
+    _BODY_LOOKUP[:] = [lookup]
+
+
+def is_word_primitive(fn: Any) -> bool:
+    """A primitive that is no Boolean gate and no input: one the Boolean map names a body for."""
+    from .boolean import is_boolean
+    return isinstance(fn, PrimitiveDefinition) and not is_input(fn) and not is_boolean(fn)
+
+
+def boolean_map(program: Any) -> dict[str, Any]:
+    """Each word primitive among ``program``'s definitions (`codec.definitions`), by descriptor id, to its one Boolean
+    Definition by the registered lookup, sorted by id. `NoBooleanBody` names each that has none, or whose body is not Boolean."""
+    from .boolean import bit_type, is_boolean
+    from .codec import definitions
+    from .defs import CompositeDefinition, bind
+    out: dict[str, Any] = {}
+    missing: dict[str, str] = {}
+    for fid, p in definitions(program).items():
+        if not is_word_primitive(p):
+            continue
+        if not _BODY_LOOKUP:
+            missing[fid] = "no Boolean lookup is registered (`register_boolean_bodies`; the catalog's registers as it loads)"
+            continue
+        try:
+            body = _BODY_LOOKUP[0](p)
+        except LookupError as e:
+            missing[fid] = str(e)
+            continue
+        body = bind(body) if isinstance(body, CompositeDefinition) else body
+        params, ret = p.signature()
+        bparams, bret = body.signature()
+        if not is_boolean(body) or ([t for _, t in bparams], bret) != ([bit_type(t) for _, t in params], bit_type(ret)):
+            missing[fid] = f"{body.id} is not a Boolean Definition of its bit signature"
+            continue
+        out[fid] = body
+    if missing:
+        raise NoBooleanBody(missing)
+    return dict(sorted(out.items()))
+
 
 def is_registered(fn: Any) -> bool:
     """A registered input: `RegisteredInput<w>_v1`, bound at registration."""
@@ -102,7 +157,8 @@ class Program:
     """`Program(fn)` where `fn` is a fully-bound `SpecializedDefinition` (or a static-free `CompositeDefinition`).
     `registered`: the names of `fn`'s parameters bound at registration; every other parameter is bound per run. `theta`: the
     names of `fn`'s parameters that are the model's weights. `annotations["theta"]` is the Program's own (their input nodes):
-    one passed in, which may name another layout's nodes, is dropped.
+    one passed in, which may name another layout's nodes, is dropped. `boolean`: each word primitive's one Boolean Definition
+    (`boolean_map`), computed once here; a Program with a word primitive that has none is refused (`NoBooleanBody`).
     `strict`: a guard (`verity.circuits.operations.program_data`, root -> the data it holds); the Program is refused when it holds
     any. Off by default until programs move their data to inputs."""
 
@@ -128,6 +184,8 @@ class Program:
             self.annotations["theta"] = sorted(self.root.theta)
         _refuse_inner_inputs(self.root)
         ports.check(self.root)
+        self.boolean: dict[str, Any] = {}
+        self.boolean = boolean_map(self)
         self._circuit: Circuit | None = None
         if strict is not None and (held := strict(self.root)):
             raise ValueError(f"program function {fn.id} holds data, which a strict Program refuses: "

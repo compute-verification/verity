@@ -48,9 +48,10 @@ done
 K=$W/keep NP=$P/verity/protocols/resource_accounting/network/verifier/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" -m verity.protocols.resource_accounting.network.prover.scan_period \
   --mirror "$P/tests/verity/protocols/resource_accounting/network/verifier/network/period_case.py" --lean "$NP" --out "$OUT/period" \
-  "honest=$K/honest/warden,$K/honest/sczk" "late=$K/late/warden,$K/late/sczk" \
-  "tampered=$K/honest/warden,$K/honest/sczk,tampered" "chain=$K/honest/warden,$K/honest/sczk,chain" \
-  "forged=$K/honest/warden,$K/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
+  "honest=$K/honest/network_attester,$K/honest/sczk" "late=$K/late/network_attester,$K/late/sczk" \
+  "tampered=$K/honest/network_attester,$K/honest/sczk,tampered" \
+  "chain=$K/honest/network_attester,$K/honest/sczk,chain" \
+  "forged=$K/honest/network_attester,$K/honest/sczk,forged" 2>&1 | tee -a "$OUT/period.log"
 p=${PIPESTATUS[0]}
 log "period: scans ${rc[honest]} ${rc[late]}, period check $p"
 [ "${rc[honest]}" = 0 ] && [ "${rc[late]}" = 0 ] && exit "$p"

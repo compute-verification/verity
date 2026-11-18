@@ -67,8 +67,8 @@ def _checked(P, root: Path, tmp_path: Path, rid: str) -> Path:
     cache, check = tmp_path / f"tests-{rid}", tmp_path / f"check-{rid}"
     env = {**P.step_env(C), "VERITY_TEST_CACHE": str(cache), "RESEARCH_STORE": str(tmp_path / "store"),
            "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml"), "RESEARCH_FIXTURES_URL": "", "CHECK_SLOT_MEM_GB": "1000"}
-    p = subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--run", rid,
-                        "--logs", str(tmp_path / f"logs-{rid}")], cwd=root, env=env, capture_output=True, text=True)
+    p = subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--why-serial", "a test's tiny tree",
+                        "--run", rid, "--logs", str(tmp_path / f"logs-{rid}")], cwd=root, env=env, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     pack = tmp_path / f"{rid}.tar.gz"
     subprocess.run([sys.executable, str(root / "tools" / "check" / "verdicts.py"), "export", str(pack)],
