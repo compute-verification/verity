@@ -28,6 +28,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1w
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as Cr
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 LEAF = (8, 16)
@@ -117,7 +118,7 @@ def prove(w: dict, to: Path, files: dict, units=SAMPLED) -> tuple[dict, dict]:
             by_call.setdefault(call, []).append(u)
             continue
         name = LL.served(PREFIX, LL.PARTIALS, u)
-        tree = PR.commit(digest, name, [[rng.randrange(1 << 16) for _ in range(2 * LL.words(k))] for _ in range(LL.lanes(r, c))],
+        tree = PP.commit(digest, name, [[rng.randrange(1 << 16) for _ in range(2 * LL.words(k))] for _ in range(LL.lanes(r, c))],
                          SAMPLE_ROOT)
         produced.append(tree.entry())
         openings[name] = PR.rows_of(tree)

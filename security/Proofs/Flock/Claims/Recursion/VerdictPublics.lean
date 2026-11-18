@@ -81,8 +81,8 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
 theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := (rfl)
 
 /-- **The verdict's record keeps the reader's link `publics`.** -/
-theorem fld_link_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {l : Json}
+theorem fld_link_jAt {H : Hash.Msg → Hash.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
+    {mids : List (Hash.Msg × Coin)} {f : FinalP} {l : Json}
     (h : Record.fld (jAt H spec sts c₁ mids f) "link" = .ok l) :
     ∃ l₀, Record.fld f.j "link" = .ok l₀ ∧ l.getObjVal? "publics" = l₀.getObjVal? "publics" := by
   unfold jAt coinSubJ fillCoins eraseCoins at h
@@ -113,7 +113,7 @@ namespace RecDeploy.Rows.DecAt
 open Flock
 open FlockDeploy (Coin FinalP)
 
-variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.Msg} {cs : List Coin}
+variable {rd : Hash.Msg → Option FinalP} {x : Hash.Msg} {ms : List Hash.Msg} {cs : List Coin}
 
 /-- **`TargetPublics`: the decoded session's public words are empty**, at every decision. -/
 theorem publics_empty (D : DecAt rd x ms cs) : (D.sess.publics.all fun p => p.size == 0) = true := by

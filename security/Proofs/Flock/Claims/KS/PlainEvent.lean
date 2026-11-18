@@ -111,7 +111,7 @@ at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the che
 (`publicInputs_none_of_checks`), verity-verify-proof accepts what `wrP` writes for the run (`accepts_wrP`), and that
 transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
 (`cols_plain`). -/
-theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
     (h : (Claims.run sha512 P (V false) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,

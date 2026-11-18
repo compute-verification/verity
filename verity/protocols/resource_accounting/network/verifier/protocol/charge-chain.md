@@ -11,7 +11,7 @@ Every later carry is a function of the session's decisions so far: a value, comm
 96 bits each: n0 3×15, n1 3×15, run 2, zero padding): its carry-in (row 0) and its carry-out (row 1).
 
 - Execution phase w's row 0 is execution phase w − 1's row 1 under the same salt, so its opening b‖c is the same.
-- Execution phase 0's row 0 is the priors' row under the value's public salt (`registered.supplied_salts`), whose opening the
+- Execution phase 0's row 0 is the priors' row under the value's public salt (`registered_value.supplied_salts`), whose opening the
   verifier computes from the registered book.
 - Row 1 is under a fresh salt.
 - The charging proof block reads both rows. `ChargeLink_v1{N}` is `ChargeCount_v1{N}` run from row 0's carry, and its ok

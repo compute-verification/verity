@@ -59,6 +59,7 @@ from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF, docket as R
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.commitments import registered_value as RV
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
@@ -123,7 +124,7 @@ def _window(d: Path, flipped: bool = False, own: str | None = None) -> Path:
     reg = None if own is None else IF.Registered({own: KS[0] // 2}, reads=(
         IF.Read(descriptor_id(TEMPLATES[0]), "wrow", own, 0, (1, 1), 0, (0, KS[0] // 2)),), values=(own,))
     circuit = IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES), registered=reg)
-    values = {} if own is None else {own: REG.Registered.commit(program_digest(circuit.program()[0]), own,
+    values = {} if own is None else {own: RV.Registered.commit(program_digest(circuit.program()[0]), own,
                                                                 data[0][1].view(np.uint16).tolist(), schema=REG.SCHEMA_V2,
                                                                 window=RUN)}
     win = IF.Window(circuit, RUN, RND.parse_design(DESIGN), 4, registered=values)

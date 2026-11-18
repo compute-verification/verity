@@ -197,7 +197,7 @@ end Generic
 /-- **The port's rounds as the session's from round `base`**: a port run from round `k` that returns `a` at round `k'`
 relates to a session run from a log of `base + k` sends, which returns `a` with a log of `base + k'`. -/
 def bridge (base : ℕ) : Sim (StateT ℕ V) FlockComplete.PS where
-  R x y := ∀ k (l : Array Claims.Msg), l.size = base + k → ∀ a k', x.run k = .ok (a, k') →
+  R x y := ∀ k (l : Array Hash.Msg), l.size = base + k → ∀ a k', x.run k = .ok (a, k') →
     (y.go l).1 = .ok a ∧ (y.go l).2.size = base + k'
   pure _ _ _ hl _ _ h := by
     cases h
@@ -225,7 +225,7 @@ def bridge (base : ℕ) : Sim (StateT ℕ V) FlockComplete.PS where
 /-- **The port's coins as the session's** from round `base` on: the session's round `j` is the rep's round `j - base`. -/
 def coinsFrom (base : ℕ) (coins : Array (Array F128)) (j i : ℕ) : F128 := (coins[j - base]!)[i]!
 
-theorem asksCut_round_fw (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Claims.Msg) :
+theorem asksCut_round_fw (coin : ℕ → ℕ → F128) (n : ℕ) (c : ByteArray) (l : Array Hash.Msg) :
     ((FlockComplete.asksCut coin n).round c).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size), l.push (Claims.toMsg c)) := by
   have e : ((FlockComplete.asksCut coin n).round c).go l =
@@ -282,7 +282,7 @@ theorem repFw_cut (coins : Array (Array F128)) (base n : ℕ) (hn : base + coins
     (tr : Transcript) {p : Zk.ZkProof} {t : Transcript} {k' : ℕ}
     (h : ((repFw (asksOf coins) (Hashes.ofSha512 Sha512.hash) (fun lv g s => pure (commitFw lv g s)) st sch tPad rep
       dom g cm0 extras pads ic vals extra lanePad salt).run tr).run 0 = .ok ((p, t), k'))
-    (l : Array Claims.Msg) (hl : l.size = base) :
+    (l : Array Hash.Msg) (hl : l.size = base) :
     (((repFwC (FlockComplete.asksCut (coinsFrom base coins) n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g
         cm0.toC extras pads.toC ic.toC vals extra lanePad salt).run tr).go l).1 = .ok (p, t) ∧
       (((repFwC (FlockComplete.asksCut (coinsFrom base coins) n) (Hashes.ofSha512 Sha512.hash) st sch tPad rep dom g

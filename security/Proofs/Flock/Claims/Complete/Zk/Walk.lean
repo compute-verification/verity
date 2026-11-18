@@ -63,7 +63,7 @@ open Lean (Json)
 
 /-- A `for` loop over a list, from position `k` of `s`, with an invariant of the position, the loop's state and the
 sends; each step sees the element at its position. -/
-theorem forIn_list_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
+theorem forIn_list_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Hash.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', s[k]? = some a → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
     ∀ (xs : List α) (k : ℕ), s.drop k = xs → ∀ b l b' l', inv k b l → (forIn xs b f).go l = (.ok b', l') →
@@ -90,9 +90,9 @@ theorem forIn_list_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
 /-- A `for` loop over an array, with an invariant of the steps taken, the loop's state and the sends; each step sees
 the element at its index. -/
 theorem forIn_array_idx {α β : Type} (xs : Array α) (f : α → β → PS (ForInStep β))
-    (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
+    (inv : ℕ → β → Array Hash.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
       (f a b).go l = (.ok r, l') → ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
-    {b : β} {l : Array Claims.Msg} {b' : β} {l' : Array Claims.Msg} (h0 : inv 0 b l)
+    {b : β} {l : Array Hash.Msg} {b' : β} {l' : Array Hash.Msg} (h0 : inv 0 b l)
     (e : (forIn xs b f).go l = (.ok b', l')) : inv xs.size b' l' := by
   rw [← Array.forIn_toList] at e
   have := forIn_list_idx f inv xs.toList (fun k a b l r l' ha => hs k a b l r l' (by simpa using ha))
@@ -109,7 +109,7 @@ theorem push_getElem!_size {α : Type} [Inhabited α] (xs : Array α) (x : α) :
 /-- **Rep `rep`'s run**: the rep, on the table's trace `tr`, its packed table, the masked level-0 commitment `cm`, the
 extra claims `e`, and rep `rep`'s pads committed as `ic`, returns a proof with `q`, from the empty transcript at its
 domain, ending at the rounds `rs`, its rank check at some earlier claim points and mask words. -/
-def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
+def RepRunZk (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup)
     (v : Schedule × ℕ) (tr : Trace) (cm : Commit) (e : Array Claim) (tape : TapeZk) (rep : ℕ) (rs : Array Round)
     (q : Zk.ZkProof → Prop) : Prop :=
   ∃ p ic l t' l' prior ws, innerCommitP (Hashes.ofSha512 h : Hashes V)
@@ -122,7 +122,7 @@ def RepRunZk (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : S
 
 /-- **The one-table masked session, rep by rep**: `sessionPZk_facts` and `sessionPZk_files` on the same streams, the
 `j`th stream and proof file being rep `j`'s rounds and proof (`RepRunZk`). -/
-theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionPZk_walk (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json}
     (hown : Flock.JsonParse.parse spec.hello = .ok own) {hz : String} (hc : canon (helloJ own) = .ok hz) (st : Setup)
     (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
@@ -133,7 +133,7 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
         lanePad salt nonce prior ws).run (Transcript.init #[] dom)) fun pt => RepOk pt.2.rounds)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] words trs tape).go #[] =
       (.ok r, bodies)) :
     ∃ v cm e streams, Zk.schedule st.wideLeaf st.m = .ok v ∧
@@ -182,7 +182,7 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
   obtain ⟨rfl, rfl⟩ := hL
   have hrs1 := repStreams_one ht
   obtain ⟨⟨ss, ps⟩, l₄, hF, hrun⟩ := go_bind_ok hrun
-  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hinv := forIn_array_idx _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       b.1.size = k ∧ b.2.size = k ∧ (∀ rs ∈ b.1, RoundsOk rs) ∧
         (0 < k → ∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
         (∀ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e → ∀ j < k,
@@ -252,7 +252,7 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       simp only [Array.toList_push, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil, hrs]
       exact Recs.append hrec (by rw [← hsz]; exact hrec')
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest masked run, rep by rep**: at the run's one table, with `--zk` schedule `v`, the record decodes to two
 streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the

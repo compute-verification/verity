@@ -146,10 +146,10 @@ theorem pr_slot_le {k : ℕ} (j i : ℕ) :
 /-! ## The bad coins -/
 
 /-- **The bad coins**: a zerocheck outer coin is `1`, where the verifier's `(1 + r)⁻¹` is `0⁻¹ = 0`. -/
-def Bad (x : Claims.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ outerSlots x, (Claims.coinSeq r p.1).at p.2 = 1
+def Bad (x : Hash.Msg) {k : ℕ} (r : Fin k → Coin) : Prop := ∃ p ∈ outerSlots x, (Claims.coinSeq r p.1).at p.2 = 1
 
 /-- **`Pr[Bad] ≤ ε`**: the union bound over the outer coins. -/
-theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
+theorem pr_bad_le (x : Hash.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin => Bad x r) ≤ ε x := by
   have h1 := Pr_exists_le (fun p (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1) (outerSlots x)
   have h2 : ((outerSlots x).map fun p =>
       Claims.Pr (fun (r : Fin k → Coin) => (Claims.coinSeq r p.1).at p.2 = 1)).sum ≤ ε x := by
@@ -166,7 +166,7 @@ theorem pr_bad_le (x : Claims.Msg) {k : ℕ} : Claims.Pr (fun r : Fin k → Coin
 /-- **Completeness from acceptance at the good coins**: if, on every statement in scope that the verifier can accept
 and every witness in the relation, the honest prover is accepted at every tape and every coin outside `Bad`, then Flock's
 plain verifier is complete for `honestP` at the record's error, `δc H`. -/
-theorem complete_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem complete_of (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hacc : ∀ x w, Claims.Flock.Scope (deployPlain rel) x → Claims.Flock.R (deployPlain rel).parse x w →
       ready H x = true → ∀ (ω : Tape) (r : Fin ((V false).k x) → Coin), ¬ Bad x r →
         (Claims.run H (honestP w) (V false) x ω r).out = .acc) :
@@ -202,27 +202,27 @@ theorem m_sub_le {sts : Array Flock.Stmt} (hm : ∀ st ∈ sts.toList, st.m ≤ 
   omega
 
 /-- **At most `22` outer coins per rep**, two reps per table, at tables of `m ≤ 35`. -/
-theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem outerSlots_length_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf false x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (outerSlots x).length ≤ 2 * sts.size * 22 := by
   unfold outerSlots
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
 
-theorem outerSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem outerSlotsZk_length_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (outerSlotsZk x).length ≤ 2 * sts.size * 22 := by
   unfold outerSlotsZk
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
 
-theorem rhoSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem rhoSlotsZk_length_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) : (rhoSlotsZk x).length ≤ 2 * sts.size * 1 := by
   unfold rhoSlotsZk
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
 
-theorem betaSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem betaSlotsZk_length_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) : (betaSlotsZk x).length ≤ 2 * sts.size * 1 := by
   unfold betaSlotsZk
   rw [hs]
@@ -237,7 +237,7 @@ theorem sum_flatMap_range_le (n c : ℕ) (f : ℕ → List ℕ) (h : ∀ q < n, 
     exact Nat.add_le_add (ih fun q hq => h q (by omega)) (h n (by omega))
 
 /-- **At most `4·35` rank-check coins per table**, at tables of `m ≤ 35`. -/
-theorem rankSlotsZk_sum_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+theorem rankSlotsZk_sum_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hs : setupOf true x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     ((rankSlotsZk x).map fun s => 4 * s.1.m).sum ≤ sts.size * 140 := by
   unfold rankSlotsZk
@@ -254,8 +254,8 @@ end FlockComplete
 open Flock FlockDeploy FlockComplete in
 /-- **The plain record's error is below `1`** on every statement the verifier can accept (`ready H`) at a session the
 numbers are stated at (`PlainIn`): at most `44` outer coins per table over `2^128`, at most `200` tables. -/
-theorem Claims.Flock.Complete_meets_plain (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : PlainIn x s spec sts)
+theorem Claims.Flock.Complete_meets_plain (rel : Readable.Parsed → Readable.Relation) (H : Hash.Msg → Hash.Msg)
+    {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : PlainIn x s spec sts)
     (hready : ready H x = true) :
     (deployPlain rel).δc H x ≤ 44 * sts.size / 2 ^ 128 ∧ (deployPlain rel).δc H x < 1 := by
   have hlen := outerSlots_length_le hin.setup fun st hst => (hin.tab st hst).2.1
@@ -275,8 +275,8 @@ open Flock FlockDeploy FlockComplete in
 /-- **The masked record's error is below `1`** on every statement the masked verifier can accept (`readyZk H`, one
 table) at a session the numbers are stated at (`ZkIn`): `44` outer coins, two `β`s, two pairs counted twice and the
 table's rank checks counted `4·m ≤ 140` times, over `2^128`. -/
-theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
-    {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts)
+theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relation) (H : Hash.Msg → Hash.Msg)
+    {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts)
     (hready : readyZk H x = true) :
     (deployZk rel).δc H x ≤ 190 / 2 ^ 128 ∧ (deployZk rel).δc H x < 1 := by
   have h1 : sts.size = 1 := by

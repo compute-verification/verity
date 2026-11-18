@@ -134,7 +134,7 @@ theorem rootBList_distinct {spec : SessionSpec} (h : spec.tables.toList.Nodup) (
   refine (List.pairwise_map.1 this).imp fun hne heq => hne ?_
   exact compare_eq_iff_eq.1 heq
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **At a good case of several tables the spec names its tables `Tags.tableNames`.** -/
 theorem Case.names (c : Case H rel) (hc : 1 < c.sts.size) : ∃ t : Tags, c.spec.tables = t.tableNames c.sts.size := by
