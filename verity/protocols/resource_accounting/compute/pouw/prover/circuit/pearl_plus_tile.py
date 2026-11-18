@@ -84,7 +84,7 @@ from ..schemes import pearl_c_inert_work as D
 from ..schemes import pearl_c_u as CU
 from ..schemes import pearl_kw as P
 from ..schemes.pearl_c_device import DEVICES
-from . import boolean as _boolean
+from verity.circuits.ops.boolean import words as _boolean
 from . import inert_bound, pc8
 from . import tile_units as U
 from . import leaves as L
