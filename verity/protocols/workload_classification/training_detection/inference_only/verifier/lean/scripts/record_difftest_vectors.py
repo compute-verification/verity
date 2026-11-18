@@ -334,10 +334,10 @@ class Circuit:
         output (`wired_population_program`), so its edges are the circuit's wires: its descriptor's text and digest.
         The root lays its units out in `order`, else the circuit's."""
         order = self.order if order is None else order
+        reads = [d for d in (r.doc() for r in self.reads) if d["param"] in self.shared]
         rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
                "wires": [w.doc() for w in self.wires], **({"order": order} if order is not None else {}),
-               "registered": {"params": dict(self.params), "values": list(self.values),
-                              "reads": [d for d in (r.doc() for r in self.reads) if d["param"] in self.shared]}}
+               "registered": {"params": dict(self.params), "values": list(self.values), **({"reads": reads} if reads else {})}}
         desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
         units: dict[str, int] = {}
         for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
