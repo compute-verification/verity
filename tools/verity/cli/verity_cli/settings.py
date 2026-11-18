@@ -14,7 +14,11 @@ def hold_placement() -> bool:
     return os.environ.get("VERITY_HOLD_PLACEMENT") == "1"
 
 
+#: the runner's variable that carries the application file's SPOT levels to it
+SPOT_LEVELS = "SPOT_LEVELS"
+
+
 def spot_levels() -> str | None:
-    """``SPOT_LEVELS`` as this environment sets it, ``None`` where unset: it only carries the application file's
-    ``levels`` to the runner, so `served_table.levels` refuses one that differs."""
-    return os.environ.get("SPOT_LEVELS") or None
+    """`SPOT_LEVELS` as this environment sets it, ``None`` where unset: it only carries the application file's levels to
+    the runner, so `served_table.levels` refuses one that differs."""
+    return os.environ.get(SPOT_LEVELS) or None

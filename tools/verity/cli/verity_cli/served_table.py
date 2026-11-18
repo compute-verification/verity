@@ -136,8 +136,9 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
     return {k: params[k] for k in ("class", "tie-uniform") if k in params}
 
 
-#: SPOT's levels a served run may name; the runner's variable that carries the application file's ``levels`` to it
-LEVELS, SPOT_LEVELS = (1, 2), "SPOT_LEVELS"
+#: SPOT's levels a served run may name, and the application file's key for them under SPOT's params
+LEVELS, LEVELS_KEY = (1, 2), "levels"
+SPOT_LEVELS = settings.SPOT_LEVELS
 TWO_LEVELS = ("levels = 2: the served window has no two-level path yet (the outer blocks' boundaries committed at "
               "serve, the drawn outer blocks' inner blocks committed after the draw, and the second level's audit), "
               "so nothing is run, and it is not run as one level")
@@ -146,13 +147,13 @@ TWO_LEVELS = ("levels = 2: the served window has no two-level path yet (the oute
 def _spot(params: Mapping[str, Any]) -> dict[str, Any]:
     """SPOT's parameters: ``levels``, 1 or 2. Absent unless the file states it, where it reads one and the configuration
     and its hash hold nothing for it."""
-    if extra := sorted(set(params) - {"levels"}):
-        raise Refused("unknown-key", f"[params.\"{SP.IDS['sampled-proofs']}\"]: {', '.join(extra)} (known: levels)")
-    if "levels" not in params:
+    if extra := sorted(set(params) - {LEVELS_KEY}):
+        raise Refused("unknown-key", f"[params.\"{SP.IDS['sampled-proofs']}\"]: {', '.join(extra)} (known: {LEVELS_KEY})")
+    if LEVELS_KEY not in params:
         return {}
-    if type(params["levels"]) is not int or params["levels"] not in LEVELS:
-        raise Refused("levels", f"levels is 1 or 2, not {params['levels']!r}: SPOT has one level or two")
-    return {"levels": params["levels"]}
+    if type(params[LEVELS_KEY]) is not int or params[LEVELS_KEY] not in LEVELS:
+        raise Refused(LEVELS_KEY, f"{LEVELS_KEY} is 1 or 2, not {params[LEVELS_KEY]!r}: SPOT has one level or two")
+    return {LEVELS_KEY: params[LEVELS_KEY]}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -462,15 +463,15 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
 def levels(cfg: Mapping[str, Any]) -> int:
     """SPOT's levels for the run, the auditor's: the application file's ``levels``, one where it states none. Refused by
     name (``levels``) where ``SPOT_LEVELS`` is set to another, and at two (`TWO_LEVELS`)."""
-    stated = cfg["params"].get(SP.IDS["sampled-proofs"], {}).get("levels")
+    stated = cfg.get("params", {}).get(SP.IDS["sampled-proofs"], {}).get(LEVELS_KEY)
     n = stated or 1
     if (env := settings.spot_levels()) is not None and env != str(n):
-        raise Refused("levels", f"{SPOT_LEVELS}={env} and the application file's levels is {n}"
-                                f"{'' if stated else ' (it states none)'}: the levels a run audits are the file's "
-                                f"alone, so unset {SPOT_LEVELS} or state levels = {env} under "
-                                f"[params.\"{SP.IDS['sampled-proofs']}\"]")
+        raise Refused(LEVELS_KEY, f"{SPOT_LEVELS}={env} and the application file's {LEVELS_KEY} is {n}"
+                                  f"{'' if stated else ' (it states none)'}: the levels a run audits are the file's "
+                                  f"alone, so unset {SPOT_LEVELS} or state {LEVELS_KEY} = {env} under "
+                                  f"[params.\"{SP.IDS['sampled-proofs']}\"]")
     if n == 2:
-        raise Refused("levels", TWO_LEVELS)
+        raise Refused(LEVELS_KEY, TWO_LEVELS)
     return n
 
 
@@ -481,7 +482,7 @@ def _spot_challenger(cfg, params, bound):
     development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
     n = levels(cfg)
-    hooks |= {SPOT_LEVELS: str(n)} if "levels" in params else {}
+    hooks |= {SPOT_LEVELS: str(n)} if LEVELS_KEY in params else {}
     if "gate" in bound:
         return hooks
     hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
@@ -1154,6 +1155,6 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 
 __all__ = ["DEMOS", "HEADERS", "LEVELS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL",
-           "SERVED", "SPOT_LEVELS", "STARTS", "TWO_LEVELS", "WORKLOADS", "Held", "Piece", "Result", "Session",
+           "LEVELS_KEY", "SERVED", "SPOT_LEVELS", "STARTS", "TWO_LEVELS", "WORKLOADS", "Held", "Piece", "Result", "Session",
            "attested", "held", "levels", "live", "onsite_check", "pending", "pieces", "placement", "prepare",
            "registration", "remote_check", "request_bound", "served_window", "unbound", "variables"]

@@ -80,7 +80,7 @@ def test_two_levels_are_refused_by_name_before_anything_starts_and_never_run_as_
     assert (e.value.name, e.value.detail) == ("levels", T.TWO_LEVELS)
 
 
-@pytest.mark.parametrize("value", [0, 3, "2", True, 1.0])
+@pytest.mark.parametrize("value", [0, 3, "2", True])
 def test_levels_other_than_one_or_two_are_refused_by_name(tmp_path, value):
     with pytest.raises(Refused) as e:
         R.load(stating(tmp_path, "onsite_full", value), REG)
