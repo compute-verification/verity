@@ -27,15 +27,19 @@ if [ "$DRY" = 1 ]; then
 else
   SR=/workspace/research/vllm-servedproof/serve-root/smoke-${RESEARCH_RUN_ID:-local}
 fi
-CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || { echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; }
+NOKIT=
+CUDA_HOME=$("$PY" benchmarks/kernels/machine.py toolkit 12.9) || if [ "$DRY" = 1 ]; then
+  NOKIT=1 CUDA_HOME=$SCRATCH/no-toolkit; echo "DRY: this machine lists no CUDA 12.9, so the committer's native build is not run"
+else echo "SMOKE REFUSED toolkit: the machine lists no CUDA 12.9 (machine.py, above)"; exit 3; fi
 if [ "$DRY" = 1 ] && [ -n "${CARD_SKU:-}" ]; then echo "DRY: CARD_SKU $CARD_SKU as given (off the card, no card to read it from)"
 else CARD_SKU=$("$PY" benchmarks/kernels/machine.py sku); fi || { echo "SMOKE REFUSED card: the machine's record names no card sku for this host (machine.py sku, above)"; exit 3; }
 export CUDA_HOME CARD_SKU HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 export PATH=$(dirname "$PY"):$CUDA_HOME/bin:$PATH
 SNAP=$HF_HOME/hub/models--unsloth--Llama-3.2-1B/snapshots/$REV
+if [ "$DRY" = 1 ] && [ ! -s "$NSO" ]; then NSO=$SCRATCH/stand-in-norm-tap.so; echo x > "$NSO"; echo "DRY: no norm tap here, a stand-in path"; fi
 [ -s "$NSO" ] || { echo "SMOKE REFUSED norm tap: no $NSO; build it outside the lease (no card):" \
   "cd $TREE/adapters/vllm && CUDA_HOME=$CUDA_HOME CARD_SKU=$CARD_SKU bash verity_vllm/ops/pod_norm_tap.sh"; exit 3; }
-{ [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || {
+{ [ -s "$SNAP/config.json" ] && ls "$SNAP"/*.safetensors > /dev/null 2>&1; } || { [ "$DRY" = 1 ] && echo "DRY: $MODEL at $REV is not in $HF_HOME (the dry run loads no model)"; } || {
   echo "SMOKE REFUSED model: $MODEL at $REV is not in $HF_HOME; fetch it outside the lease:" \
     "HF_HOME=$HF_HOME $PY -c \"from huggingface_hub import snapshot_download as s; s('$MODEL', revision='$REV')\""; exit 3; }
 OUT=${OUT:-${RESEARCH_RUN_DIR:-$SR}/out}
@@ -98,7 +102,7 @@ if run := os.environ.get("RESEARCH_RUN_DIR"):
     except cli.UsageError as e:
         print("INSIDE THE RUN DIR REFUSED:", str(e)[:60])
 EOF
-  CUDA_VISIBLE_DEVICES= "$PY" - <<'EOF'
+  [ -n "$NOKIT" ] || CUDA_VISIBLE_DEVICES= "$PY" - <<'EOF'
 import os
 from verity_vllm import settings
 from verity_vllm.commit.committer import native_ext, native_jit
@@ -118,7 +122,7 @@ else:
     assert a.varied == 1 and not a.fixed, a
     print("LOAD PARSED:", a.varied, "request(s), max_tokens", a.max_tokens)
 EOF
-  echo "SMOKE DRY OK; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal and the open"
+  echo "SMOKE DRY OK${NOKIT:+ (no toolkit here: the native collector not built)}; not exercised off the card: the model load, the committer's construction over the engine, the request, the seal and the open"
   exit 0
 fi
 
