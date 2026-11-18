@@ -5569,11 +5569,12 @@ def graph(pkg: Path, modules: Path, out: Path, log: Path) -> dict:
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
 _WRITING: set[Path] = set()
+_READING: set[Path] = set()
 _WROTE = threading.Condition()
 
 
 @contextlib.contextmanager
-def writing(pkg: Path, log=print):
+def writing(pkg: Path, log=print, reads: bool = False):
     """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
     others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
     `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
@@ -5583,11 +5584,14 @@ def writing(pkg: Path, log=print):
             log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
         _WROTE.wait_for(lambda: not _WRITING & dirs)
         _WRITING.update(dirs)
+        if reads:
+            _READING.update(dirs)
     try:
         yield
     finally:
         with _WROTE:
             _WRITING.difference_update(dirs)
+            _READING.difference_update(dirs)
             _WROTE.notify_all()
 
 
@@ -6428,10 +6432,10 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     # so every build in the run has ended before its tests start. Fail loudly rather than read a build one is still
     # writing: a `runs` entry on a depended-on package would be caught here, not read mid-build.
     with _WROTE:
-        racing = pkg.resolve() / ".lake" in _WRITING
+        racing = (lake := pkg.resolve() / ".lake") in _WRITING and lake not in _READING
     if racing:
         return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
-                        f"it live; a package with `runs` must be one no other package builds")], now
+                        f"it live; a package with `runs` must be one no other package builds")], dict(policy.get("runs", {}))
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
@@ -6464,7 +6468,9 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
             if data[name] != want and not update:
                 bad.append(Failure("runs.data-digest", mod, f"runs: {mod}'s data {name} has SHA-256 {data[name]}, not the "
                                    f"record's {want or '(none)'}: run `check.py --update` when the data changed on purpose"))
-        now[mod] = entry | {"data": data} if update else entry
+        named = {a[1:-1] for a in entry.get("args", []) if a.startswith("{") and a.endswith("}")}
+        now[mod] = entry | {"data": {n: data.get(n, d) for n, d in sorted(entry.get("data", {}).items())
+                                     if n in data or n in named}} if update else entry
         if bad:
             fails += bad
             continue
@@ -6825,7 +6831,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     # `writable` directories from before the announcement until it ends, and no build that writes them starts beside it
     hold, held = contextlib.ExitStack(), threading.Lock()
     if later is not None and not replays:
-        hold.enter_context(writing(pkg, log))
+        hold.enter_context(writing(pkg, log, reads=True))
         log(f"sampled: {rel(pkg)}: no replay to plan it beside, so a build that writes its .lake starts once it ends")
 
     def release() -> None:
