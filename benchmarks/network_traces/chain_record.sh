@@ -231,7 +231,10 @@ tie() {
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1
-  echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie"; log "chain: tie done, rc $(cat "$W/tie.rc")"
+  echo $? > "$W/tie.rc"; mkdir -p "$OUT/tie"   # the tie's summary and public parameters; its inputs stay in $W
+  (cd "$W/tie" && for f in summary.json stager/program.json stager/partition.json; do
+    [ -f "$f" ] && cp --parents "$f" "$OUT/tie/"; done)
+  log "chain: tie done, rc $(cat "$W/tie.rc")"
   [ "$(cat "$W/tie.rc")" = 0 ] || tail -n 1 "$OUT/tie.log" | cut -c1-600 > "$W/tie.why"
 }
 if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; tie; scan; fi

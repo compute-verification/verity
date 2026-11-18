@@ -1074,7 +1074,7 @@ theorem keyedExecutionPhase_extraction_audit_of_record {C : ℕ} (σ : Fin n →
       hnames hsmall hA4 B) A hks hlink hW hone hN hfy σ'
 
 /-- **The claim of record on the real, receipt-keyed game**: the key's context `ctx R` is the digest of the
-registration's receipt, so the sample is `auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
+registration's receipt, so the sample is `Pouw.Window.auditReg`'s. Strategy by strategy (`prob_auditReg`), it is
 `keyedExecutionPhase_extraction_audit_of_record` at `ctx (reg σ)`, with A4 and the analysis taken for every registration and one `η`
 for all of them. -/
 theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n → Fin M) (call : Fin M → Fin C)
@@ -1093,11 +1093,11 @@ theorem keyedExecutionPhaseReg_extraction_audit_of_record {C : ℕ} (σ : Fin n 
     (hks : ∀ R, (A R).KnowledgeSound (εks R)) (hlink : ∀ R, (A R).BindSound (εbind R)) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
-    (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
+    (σ' : Strategy (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
     prob (fun o => o.1 = true ∧
         (totalWork σ w ≤ 1000 * unsoundWork σ w cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ'))) ∨
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
-        (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
+        (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks σ'.1 (reg (atReg σ')) (cont (atReg σ')) +
         εbind σ'.1 (reg (atReg σ')) (cont (atReg σ')) := by
   rw [prob_auditReg]
@@ -1119,11 +1119,11 @@ theorem keyedExecutionPhaseReg_audit_of_record {C : ℕ} (σ : Fin n → Fin M) 
     (hks : ∀ R, (A R).KnowledgeSound εks) (hlink : ∀ R, (A R).BindSound εbind) (hW : 0 < totalWork σ w)
     (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card)
     (hN : 0 < totalWork σ v) (hfy : ∀ s, 27713 * v s * (stratum σ s).card ≤ f s * totalWork σ v)
-    (σ' : Strategy (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
+    (σ' : Strategy (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session)) :
     prob (fun o => o.1 = true ∧
         (totalWork σ w ≤ 1000 * unsoundWork σ w cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ'))) ∨
           totalWork σ v ≤ 1000 * unsoundWork σ v cl ((A σ'.1).incorrect ((A σ'.1).committedOf (atReg σ')))))
-        (auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
+        (Pouw.Window.auditReg (fun R => (keyedExecutionPhase (n := n) sec domain (ctx R) calls L).closure cl) session) σ' ≤
       ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind := by
   rw [prob_auditReg]
   exact keyedExecutionPhase_audit_of_record σ call w v f calls hWS sec hsec L domain (ctx σ'.1) η hnames hsmall (hA4 σ'.1)

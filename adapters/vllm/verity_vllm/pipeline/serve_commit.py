@@ -243,7 +243,7 @@ class CommitWindows:
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
     in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``arm``
-    (`serve_h1.H1Windows`, `serve_pearl.PearlWindows`) opens on each window once its committer is installed and closes first
+    (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first
     at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
     its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
     `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with

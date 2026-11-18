@@ -2049,8 +2049,8 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   is attested and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
   `warden-rehearse` (`verity/protocols/compose/verifier/live_challenger/auditor.py`) runs the same rehearsal on the auditor's
   device.
-- The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
-  release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
+- The server's copy of each request carries its release order (`release`), so that a server under the network
+  attester's order `release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network attester's `run_id` (in
   `deployment.json`), and `x-verity-release-bucket: a`, the bucket of that `END`. The server gets a request whole at
   its `END`'s release, and nothing of a connection that fails before it.

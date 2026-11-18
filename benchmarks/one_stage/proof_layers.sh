@@ -20,7 +20,7 @@
 #                  holds; set to other steps than the file's own, the zero-knowledge layer proves every proof block by
 #                  rate:1/1 in place of subset:880, the sampling layer still samples 256 of them, and every member the
 #                  printer writes ends in the batch (`prove layers --batch`); the file's own steps are the batch unset
-#   A5_KEEP        optional, a new directory outside WORK: the sampling run's served window (its serving-rows, the
+#   A5_KEEP        optional, a new directory outside WORK and --out: the sampling run's served window (its serving-rows, the
 #                  prover's files included) copied there before WORK is removed, for `benchmarks/recursion_e2e/stage.sh
 #                  WINDOW=`; it stays on the machine
 #   --out DIR      where the results go (default $RESEARCH_RUN_DIR/out in a research run, else ./out): the three runs'
@@ -95,6 +95,7 @@ free_gb=$(df -Pk "$d" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')
 [ "${free_gb:-0}" -ge 96 ] || refuse "${free_gb:-0} GB free under $d, not 96: WORK peaks at about 21 GB, and 75 GB must stay free beside it; free some or give another WORK"
 RESULTS=$(realpath -m "${RESULTS:-${RESEARCH_RUN_DIR:-.}/out}")
 case $RESULTS/ in "$WORK"/*) refuse "--out $RESULTS is inside WORK, which is removed at the end: give a directory outside it" ;; esac
+[ -z "$A5_KEEP" ] || case $(realpath -m "$A5_KEEP")/ in "$RESULTS"/*) refuse "A5_KEEP=$A5_KEEP is under --out $RESULTS, where only the public files go: keep the window outside it" ;; esac
 for f in out-flock out-zk out-sampling bootstrap proof-layers.txt proof-layers.json steps.log; do
   [ ! -e "$RESULTS/$f" ] || refuse "$RESULTS/$f exists, an earlier run's: move it or give --out another directory"
 done
