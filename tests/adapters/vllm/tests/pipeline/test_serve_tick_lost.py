@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
-from tests.pipeline.test_serve_admit_tick import RUN, TICK, read_all, request
+from tests.pipeline.test_serve_admit_tick import RUN, TICK, hooked, read_all, request
 from tests.pipeline.test_serve_advice import REG, C, SchedEngine, Server, _body
 from tests.pipeline.test_serve_openai import Tokenizer, records
 from verity_vllm.engine import step_trace as ST
@@ -78,8 +78,7 @@ class TickServer(Server):
 
     def order(self) -> sa.TickAdmit:
         self.gate = self.loop.gate = sa.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
-        self.loop.sched = self.engine.sched
-        self.ticked = sa.install(self.loop.sched, self.gate, key=external_id)
+        self.ticked = self.loop.hook = hooked(self.engine.sched, self.gate, key=external_id)
         self.added, self.lines = threading.Semaphore(0), threading.Semaphore(0)
         admitted = self.windows.admitted
 
@@ -98,7 +97,7 @@ class TickServer(Server):
     def __exit__(self, *exc: Any) -> None:
         self.loop.stop()
         self.engine_thread.join()
-        self.ticked.uninstall()                          # before the trace's wrappers, which it sits on
+        self.ticked.uninstall()
         super().__exit__(*exc)
 
 
