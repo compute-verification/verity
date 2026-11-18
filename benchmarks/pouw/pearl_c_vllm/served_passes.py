@@ -185,9 +185,9 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.wi
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
-SPEC = HERE.parents[1] / "harness" / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
-#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
-#: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
+SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
+#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm, Pearl+'s ``pouw:pearl-c-h100-v1-h3`` on an
+#: H100 or H200
 ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
@@ -246,9 +246,22 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
     return [[3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(tokens)] for i in range(requests)]
 
 
+def undeclared(entries) -> str | None:
+    """Why a served arm of ``entries`` can't run: the first Pearl-C entry whose kernel row names no declared scheme
+    (`kernel_schemes.KernelScheme.scheme`), which no served path serves; None when there is none."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
+
+    for e in entries:
+        row = BY_NAME.get(e.partition(":")[2]) if e.startswith(ARM_PREFIX) else None
+        if row is not None and not row.scheme:
+            return (f"{e}: no declared scheme serves Pearl-C on {row.parameters.get('device', 'that card')}, so no served "
+                    "arm runs it; its kernel's own benchmarks (bench_arm.py, e2e.py) run it directly")
+    return None
+
+
 def pearl_c_arm(spec, name: str | None = None):
     """The spec's PoUW Pearl-C arm (`ARM_PREFIX`) ``name``, else its one; SystemExit naming them when it has none, several
-    or not ``name``."""
+    or not ``name``, and naming the scheme when the picked one is `undeclared`."""
     from verity_bench.vllm import arms as A
 
     got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -257,6 +270,8 @@ def pearl_c_arm(spec, name: str | None = None):
     if len(picked) != 1:
         want = name or f"a spec's one {ARM_PREFIX}* arm"
         raise SystemExit(f"served_passes.py serves {want}; {spec.id} has {[a.id for a in got] or 'none'}")
+    if why := undeclared(picked[0].protocols):
+        raise SystemExit(f"served_passes.py: {why}")
     return picked[0]
 
 

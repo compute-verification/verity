@@ -201,6 +201,20 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     settings(M.option("pouw:pearl-c-h100-v1-h3"), {**doc["pouw"], "coins": "in-process"})
 
 
+@pytest.mark.parametrize("mode", ["arm", "serve"])
+def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(mode, tmp_path):
+    """No declared scheme serves Pearl-C on sm_120 (`pearl-c-sm120-v1-h3`'s kernel row names none), so ``served_passes.py``
+    refuses the RTX PRO 6000 spec's arm by its entry before any engine or challenger, and its default spec is Pearl+'s."""
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+
+    spec = str(SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml")
+    args = ["--passes", str(tmp_path / "passes")] if mode == "serve" else []
+    with pytest.raises(SystemExit, match=r"pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on sm120"):
+        SP.main([mode, "--spec", spec, "--out", str(tmp_path / "out.json"), *args])
+    assert SP.undeclared(["pouw:pearl-c-h100-v1-h3", "stock"]) is None
+    assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
+
+
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
     path = tmp_path / "spec.toml"
