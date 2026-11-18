@@ -53,8 +53,8 @@ at 16 KiB rows and without segment S's rows. Output tiles of 128 × 128 output c
 output cells row-major (c = 128 r + col); per tile, its tile-segments' 16,384 T_s for s = 1 .. S − 1 as little-endian u16
 (32 KiB each) and then its O as little-endian u32 (64 KiB), cut into rows of `row` bytes, so a tile is `Shape.lpt`
 consecutive leaves. Each row is an ``hm96-sha512/row/v2`` leaf (`leaf_h`) in one binary frame-v3-sha512 tree a call,
-salted by the prover with ``prf_salt(Ks, off + pos)`` (`salts`, commit_gpu's PRF of its private Ks at the call's salt
-offset); no coin feeds a salt. A block (i, j, s) opens T_s's row (s < S), T_{s−1}'s (s > 1), and at s = S O's.
+salted with fresh operating-system bytes, 192 a leaf (`salts`), which the prover keeps and hands to the tree as data;
+no key derives them and no coin feeds them. A block (i, j, s) opens T_s's row (s < S), T_{s−1}'s (s > 1), and at s = S O's.
 
 The reference: `values` gives a call's T (S × m × n) and O; `cell_values` one output cell's from its two rows alone;
 `values_buffer`, `row_bytes` and `leaf_row` the leaf rows, the last from only the output cells it holds; `tree` and `opens` the
@@ -68,7 +68,7 @@ import struct
 from array import array
 from dataclasses import dataclass, field
 from operator import mul
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, ZERO, add, and_reduce, compress_columns
@@ -448,15 +448,9 @@ def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], 
 
 # -- the leaves and the trees ----------------------------------------------------------------------------------------------------
 
-def prf_salt(ks: bytes, pos: int) -> bytes:
-    """commit_gpu's salt PRF (`verity/commitments/cuda/commit_gpu/reference.py`): leaf `pos`'s hm96 salt under the prover's private
-    key `ks`, three SHA-512 blocks."""
-    return b"".join(hashlib.sha512(ks + pos.to_bytes(8, "big") + r.to_bytes(8, "big")).digest() for r in range(3))
-
-
-def salts(ks: bytes, off: int = 0) -> Callable[[int], bytes]:
-    """A call's salts: row pos's is ``prf_salt(ks, off + pos)``, at the call's salt offset `off`."""
-    return lambda pos: prf_salt(ks, off + pos)
+def salts(n: int) -> list[bytes]:
+    """`n` leaves' salts, each fresh operating-system bytes (`hm96.SHA512.fresh_salt`, 192 bytes), for the prover to keep."""
+    return [hm96.SHA512.fresh_salt() for _ in range(n)]
 
 
 def leaf_h(row: bytes, salt: bytes) -> bytes:
@@ -470,7 +464,7 @@ class Tree:
 
     dom: CommitmentDomain
     rows: list[bytes]
-    salt: Callable[[int], bytes]
+    salts: Sequence[bytes]
     hs: list[bytes] = field(default_factory=list)
     levels: list[list[bytes]] = field(default_factory=list)
 
@@ -483,22 +477,24 @@ class Tree:
 
     def open(self, pos: int) -> tuple[bytes, bytes, tuple[bytes, ...]]:
         """(row, salt, path) of leaf `pos`."""
-        return self.rows[pos], self.salt(pos), self.path(pos)
+        return self.rows[pos], self.salts[pos], self.path(pos)
 
 
-def tree(dom: CommitmentDomain, rows: Sequence[bytes], salt: Callable[[int], bytes]) -> Tree:
-    """`rows` under one tree of `dom`, row p's salt ``salt(p)``."""
-    t = Tree(dom, list(rows), salt)
-    t.hs = [leaf_h(r, salt(p)) for p, r in enumerate(t.rows)]
+def tree(dom: CommitmentDomain, rows: Sequence[bytes], salts: Sequence[bytes]) -> Tree:
+    """`rows` under one tree of `dom`, row p's salt ``salts[p]``."""
+    if len(salts) != len(rows):
+        raise ValueError(f"{len(rows)} rows take {len(rows)} salts, not {len(salts)}")
+    t = Tree(dom, list(rows), salts)
+    t.hs = [leaf_h(r, salts[p]) for p, r in enumerate(t.rows)]
     t.levels = [list(lv) for lv in tree_levels(dom, [row_leaf(dom, p, h, V2) for p, h in enumerate(t.hs)])]
     return t
 
 
-def commit(sh: Shape, buf: bytes, salt: Callable[[int], bytes]) -> Tree:
+def commit(sh: Shape, buf: bytes, salts: Sequence[bytes]) -> Tree:
     """The call's values (`values_buffer`) under its value root."""
     if len(buf) != sh.leaves * sh.row:
         raise ValueError(f"the call's values are {sh.leaves * sh.row} bytes, not {len(buf)}")
-    return tree(sh.domain(), [buf[p * sh.row:(p + 1) * sh.row] for p in range(sh.leaves)], salt)
+    return tree(sh.domain(), [buf[p * sh.row:(p + 1) * sh.row] for p in range(sh.leaves)], salts)
 
 
 def opens(dom: CommitmentDomain, root: bytes, leaves: int, pos: int, row: bytes, salt: bytes, path: Sequence[bytes]) -> bool:
@@ -515,11 +511,11 @@ def operand_domain(side: str, rows: int, k: int) -> CommitmentDomain:
                             RangeIndexedDomain(0, rows), hash="sha512")
 
 
-def operand_tree(side: str, M: Sequence[Sequence[int]], salt: Callable[[int], bytes]) -> Tree:
+def operand_tree(side: str, M: Sequence[Sequence[int]], salts: Sequence[bytes]) -> Tree:
     """An operand's rows (each its K int8 codes, one hm96 row) under its root: a call's A, or the pinned weights' B."""
     k = len(M[0])
     rows = [array("b", _row(f"{side}'s row {r}", v, k)).tobytes() for r, v in enumerate(M)]
-    return tree(operand_domain(side, len(rows), k), rows, salt)
+    return tree(operand_domain(side, len(rows), k), rows, salts)
 
 
 def operand_row(row: bytes) -> list[int]:
@@ -862,5 +858,5 @@ __all__ = ["DEVICES", "FILL_SEEDS_TAG", "K_LIMIT", "M16", "M32", "NOISE", "PAD",
            "block_bits", "block_definition", "block_inputs", "block_widths", "cell_values", "check_block", "check_last",
            "checkpoint_digest", "commit", "dithers", "dot_steps", "fill_seeds", "leaf_h", "leaf_row", "noise_a",
            "noise_b", "operand_domain", "operand_row", "operand_tree", "opens", "out_at", "out_dot", "pad_rows",
-           "perms", "prf_salt", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values", "values_buffer",
+           "perms", "prg", "row_bytes", "salts", "seeds", "step_ok", "tree", "values", "values_buffer",
            "word_at", "wrap8"]

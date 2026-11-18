@@ -97,6 +97,7 @@ public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit
 public import Definitions.Pouw.PearlC.WholeCircuit4
+public import Definitions.Pouw.PearlPlus.Scheme
 public import Definitions.Pouw.Receipt.Duo
 public import Definitions.Pouw.Receipt.Li
 public import Definitions.Pouw.Receipt.Fx1
