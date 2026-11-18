@@ -440,9 +440,13 @@ def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of
                         ({"prover": S.Launch(optional=("address",), starts=("address", "host"))},
                          "start writes is among its binds or optional, not \\['host'\\]"),
                         ({"prover": S.Launch(optional=("address", "host"), starts=("address",), starts_optional=("host",))},
-                         "start may leave out is among what it writes, not \\['host'\\]")):
+                         "start may leave out is among what it writes, not \\['host'\\]"),
+                        ({"prover": S.Launch(launcher="a.b")}, "prover's launcher is an attribute's name")):
         with pytest.raises(ValueError, match=why):
             _toy(parties=parties, pieces=pieces)
+    assert isinstance(ok.pieces["prover"].launcher, S.Lacks)
+    assert _toy(parties=parties, pieces={"prover": S.Launch(launcher="TOY_LAUNCHER")}).pieces["prover"].launcher == \
+        "TOY_LAUNCHER"
 
 
 def test_a_partys_start_reads_runs_only_of_its_depends_and_a_scheme_that_says_none_refuses_by_name() -> None:

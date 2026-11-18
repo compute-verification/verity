@@ -134,6 +134,7 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
+_LAUNCHER = re.compile(r"[A-Za-z_]\w*")
 
 
 @dataclass(frozen=True)
@@ -260,7 +261,9 @@ class Launch:
     the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
     ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
     bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
-    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``."""
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``. ``launcher`` names
+    the launcher that gives the runner's variables for it, an attribute of the table that runs the served window; a
+    piece whose launch names none is refused by name when it is launched."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
@@ -268,6 +271,7 @@ class Launch:
     reaches: str = ""
     starts: tuple[str, ...] = ()
     starts_optional: tuple[str, ...] = ()
+    launcher: str | Lacks = UNDECLARED
 
 
 @dataclass(frozen=True)
@@ -441,6 +445,9 @@ class Scheme:
                 if extra := sorted(set(p.starts_optional) - set(p.starts)):
                     raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
                                      f"not {extra}")
+                if not isinstance(p.launcher, Lacks) and not _LAUNCHER.fullmatch(p.launcher):
+                    raise ValueError(f"{self.name}: {party}'s launcher is an attribute's name ({_LAUNCHER.pattern}), "
+                                     f"not {p.launcher!r}")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         if not isinstance(self.reads, Lacks):
             named = set() if isinstance(self.parties, Lacks) else {r.name for r in self.parties}

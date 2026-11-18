@@ -10,6 +10,7 @@ import pytest
 from verity import config as K
 from verity.channel import Refused
 from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.scheme import Launch
 from verity_cli import run as R
 
 REG = R.registry()
@@ -63,10 +64,23 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
     assert (e.value.name, e.value.detail) == (name, detail)
 
 
-def test_every_declared_piece_has_an_entry_and_every_entry_a_declared_piece() -> None:
-    declared = {(n, p) for n in T.MANIFESTS for p in T.launches(n)}
-    assert declared == set(T.ENTRIES), (f"declared without an entry: {sorted(declared - set(T.ENTRIES))}; an entry "
-                                        f"without a declared piece: {sorted(set(T.ENTRIES) - declared)}")
+#: the declared pieces whose launch names no launcher yet, each refused by name when launched; only shrinks
+NO_LAUNCHER = {("sampled-proofs", T.WORKERS), ("pearl-plus", T.WORKERS), ("network-attester", T.WORKERS)}
+
+
+def test_every_declared_piece_names_its_launcher_and_one_that_names_none_is_refused_by_name() -> None:
+    said = {(n, p): x.launcher for n in T.MANIFESTS for p, x in T.launches(n).items()}
+    assert {k for k, v in said.items() if isinstance(v, T.Lacks)} == NO_LAUNCHER
+    for (n, p), name in said.items():
+        hooks = T.PIECES[n][p].hooks
+        if (n, p) in NO_LAUNCHER:
+            with pytest.raises(Refused) as e:
+                hooks({}, {}, {}, [])
+            assert e.value.name == "no-launcher" and e.value.detail.startswith(f"{n} declares a piece for {p} whose")
+        else:
+            assert hooks is getattr(T, name).hooks
+    with pytest.raises(ValueError, match="names the launcher 'ABSENT', which is no Launcher of served_table"):
+        T._launcher("x", T.PROVER, Launch(launcher="ABSENT"))
 
 
 def test_a_piece_reaches_its_declared_channels_gate_party_and_says_one_only_where_none_joins() -> None:

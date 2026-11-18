@@ -196,7 +196,7 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
-     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",))}),
+     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), launcher="POUW_LAUNCHER")}),
 )}
 #: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
 #: ``record`` names its row (a scheme with no row, an experimental one or a session's own, is no component here)
@@ -689,23 +689,37 @@ SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on
               writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
                       "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 class Launcher(NamedTuple):
-    """A declared piece's entry (`Launch`): ``hooks(cfg, params, bound, pinned)``, the runner's variables for it, whose
-    docstring says what the piece does, and the scripts it runs."""
+    """A declared piece's launcher, the attribute of this table its `Launch.launcher` names: ``hooks(cfg, params,
+    bound, pinned)``, the runner's variables for it, whose docstring says what the piece does, and the scripts it runs."""
 
     hooks: Hooks
     scripts: tuple[str, ...] = ()
 
 
-#: each declared piece's entry, by component and party (`Scheme.pieces`, and `UNDECLARED`'s for its rows)
-ENTRIES: dict[tuple[str, str], Launcher] = {
-    ("sampled-proofs", WORKERS): Launcher(_spot_challenger),
-    ("pouw", WORKERS): Launcher(_pouw),
-    ("pearl-plus", WORKERS): Launcher(_pearlplus, (PEARLPLUS_SCRIPT,)),
-    ("pous", PROVER): Launcher(_pous_piece, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT)),
-    ("bandwidth", PROVER): Launcher(_bandwidth_piece, (BANDWIDTH_SCRIPT,)),
-    ("network-attester", WORKERS): Launcher(_attester_piece, (ATTESTER_PIECE,)),
-    ("wipe", PROVER): Launcher(_wipe, (WIPE_SCRIPT,)),
-}
+SPOT_LAUNCHER = Launcher(_spot_challenger)
+POUW_LAUNCHER = Launcher(_pouw)
+PEARLPLUS_LAUNCHER = Launcher(_pearlplus, (PEARLPLUS_SCRIPT,))
+POUS_LAUNCHER = Launcher(_pous_piece, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT))
+BANDWIDTH_LAUNCHER = Launcher(_bandwidth_piece, (BANDWIDTH_SCRIPT,))
+ATTESTER_LAUNCHER = Launcher(_attester_piece, (ATTESTER_PIECE,))
+WIPE_LAUNCHER = Launcher(_wipe, (WIPE_SCRIPT,))
+
+
+def _launcher(component: str, party: str, said: Launch) -> Launcher:
+    """The launcher ``said`` names (`Launch.launcher`); where it names none, one whose hooks refuse by name
+    (``no-launcher``) when the piece is launched, so nothing launches in its place."""
+    if isinstance(said.launcher, Lacks):
+        def lacking(cfg, params, bound, pinned):
+            raise Refused("no-launcher", f"{component} declares a piece for {party} whose launch names no launcher "
+                                         "(`Launch.launcher`): its declaration names the attribute of this table that "
+                                         "launches it")
+        lacking.__doc__ = f"{component}'s {party}: its launch names no launcher (`Launch.launcher`)"
+        return Launcher(lacking)
+    found = globals().get(said.launcher)
+    if not isinstance(found, Launcher):
+        raise ValueError(f"{component}'s piece for {party} names the launcher {said.launcher!r}, which is no Launcher "
+                         "of served_table")
+    return found
 
 
 def launches(name: str) -> Mapping[str, Launch]:
@@ -733,7 +747,7 @@ def _reaches(c: Component, party: str, said: str) -> str:
 
 def _pieces(c: Component) -> dict[str, Piece]:
     """Each of ``c``'s declared parties' piece: the verifier's at the check, another auditor party's at the gate, a
-    developer party's in the served window; a declared piece (`launches`) with its entry, the party it reaches, and the
+    developer party's in the served window; a declared piece (`launches`) with its launcher, the party it reaches, and the
     declared ``depends`` it ``follows``, the one whose piece of the same party also has a development binding."""
     mine, out = launches(c.name), {}
     for r in c.parties:
@@ -742,10 +756,8 @@ def _pieces(c: Component) -> dict[str, Piece]:
             out[r.name] = Piece(c.name, r.name, runs, f"{c.name}'s row" if runs == CHECK else
                                 f"the gate: {c.name}'s {r.name}" if runs == GATE else f"{c.name}'s {r.name}")
             continue
-        if (c.name, r.name) not in ENTRIES:
-            raise ValueError(f"{c.name} declares a piece for {r.name} and served_table.ENTRIES has no entry for it: "
-                             f"add ({c.name!r}, {r.name!r}) to ENTRIES")
-        said, entry = mine[r.name], ENTRIES[c.name, r.name]
+        said = mine[r.name]
+        entry = _launcher(c.name, r.name, said)
         follows = next((d for d in c.requires if said.development and launches(d).get(r.name, Launch()).development),
                        "")
         out[r.name] = Piece(c.name, r.name, runs, " ".join((entry.hooks.__doc__ or "").split()), scripts=entry.scripts,
@@ -1209,7 +1221,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ENTRIES", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
+__all__ = ["DEMO_VALUES", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PIECES", "REGISTRATION_GOAL", "SERVED", "STARTS",
            "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "launched", "listed", "live",
            "onsite_check", "pending", "pieces", "placement", "prepare", "registration", "remote_check",
            "request_bound", "served_window", "unbound", "variables"]
