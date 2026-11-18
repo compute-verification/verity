@@ -183,3 +183,20 @@ def test_a_dry_prove_s_summary_holds_no_digest_of_the_inputs_nor_their_lengths_o
     assert set(s["members"]) == set(s["changed"]) == set(tz.EXPECT)
     assert not {"advice", "inputs", "prompt_lens", "releases"} & set(s), \
         "the inputs' digest, lengths and releases are witness"
+    assert s["changed"]["honest"] == [] and all(s["changed"][n] for n in tz.EXPECT if n != "honest")
+    assert all(isinstance(k, str) for v in s["changed"].values() for k in v), "a member names what it changed, no value"
+
+
+def test_a_members_summary_holds_its_verdicts_and_counts_and_no_digest_or_piece_of_its_inputs():
+    digest, key, piece = "ab" * 64, "cell 3 t1 w0", "cd" * 16
+    res = {"windows": [{"window": 0, "accepted": True, "public": {"verdict": 1, "inputs": digest},
+                        "service_public": {"verdict": 1, "inputs": digest, "window": 0}, "words": [1]}],
+           "tie": {"link": tz.LINK, "registrations": ["r"], "inputs": digest, "accepted": [True]},
+           "received": {"files": 4, "verifier_bytes": 100, "blobs": 9, "verifier_found": [key], "leaked": [],
+                        "structured": {key: "across"}, "public_pieces": [piece],
+                        "control": {"file": "c", "holds_all": True, "blobs_found": 9, "of": 9, "missing": [key]}}}
+    got = tz.summarized(res)
+    assert not [x for x in (digest, key, piece) if x in json.dumps(got)], got
+    assert got["windows"][0]["public"] == {"verdict": 1} and got["tie"]["accepted"] == [True]
+    assert got["received"] == {"files": 4, "verifier_bytes": 100, "blobs": 9, "found": 1, "leaked": 0, "structured": 1,
+                               "public_pieces": 1, "control": {"holds_all": True, "blobs_found": 9, "of": 9}}
