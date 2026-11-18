@@ -144,12 +144,9 @@ which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`,
 policy `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (its whole check, in shards), and fast-forwards `main` to one with no new failure (`--gate verdict`: AGENTS.md). A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
-its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
-LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
-there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR
-the loop certifies. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
-(`lock_drops`). `research queue status` says what each PR waits for.
+checks each with its whole check, in shards, and fast-forwards `main` to one with no new failure (`--gate verdict`: AGENTS.md).
+A PR lands when it is open against `main`, names its owner, is marked ready at its head, and has a land verdict, changes
+nothing drive.toml's `lowrisk_excludes` names, or is a move the loop certifies. `research queue status` says what each waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local workload runs in its run directory unless `--cwd`
@@ -605,27 +602,3 @@ prints the plan. It keeps reports, unstamped names, anything untracked or change
 `inbox` has not shown (all mail, in a clone without the lane's `.inbox-seen`, which git ignores: run it where the lane reads its
 inbox); it overwrites nothing, and a failure puts every file back. `inbox`, `status` and `mail` read only a lane's own folder, so
 that folder stays its working set; `git log --follow` finds a moved note's history.
-
-### Approaches: check, then claim
-
-The registry of what has been tried, what is live and what was killed and why (`approaches.py`; the notes' `kb/onboarding.md`
-is the how-to). An approach is a record in the evidence store, kind `approach/v1` with meta `{campaign, slug}`, so its `art:` id
-is a function of its name `<campaign>/<slug>`. Its title, hypothesis, owner lane, status (`live | parked | killed | superseded |
-merged`), reason and evidence are labels in the vocabulary's `approach` group. A run joins one with `research data label RUN
-approach <campaign>/<slug> --by LANE`.
-
-~~~text
-research notes approaches [--campaign C] [--status S] [--grep WORDS] [--refresh]   # the registry
-research notes claim C/SLUG --lane L [--title T --hypothesis H --type scheme|route|attack] [--cite TOKEN]... [--reopen WHY]
-research notes approach C/SLUG [STATUS --reason R] --by L [--cite TOKEN]... [--uncite TOKEN]... [--superseded-by C/SLUG] [--owner L] [--at UTC]
-research notes approaches render | check                                           # campaigns/<c>/APPROACHES.md; the lint
-~~~
-
-- **`claim` refuses** (exit 2, nothing written) an approach that is live under another lane, and names the owner. It also
-  refuses a killed, superseded or merged approach without `--reopen WHY`. It writes through to the remote and re-reads it, exiting
-  3 when a rival claim landed first.
-- **`approach --at`** records work done before the registry existed. History is append-only.
-- **`approach` without a status** changes only cites (`--cite`, `--uncite`).
-- **The public view** is one generated file per campaign, `campaigns/<c>/APPROACHES.md` in the notes. The steward's
-  `[approaches]` rule in `steward.toml` (`store`, `every_min`) refreshes and renders it. The campaign's `BRIEF.md` front matter
-  `registry: titles | full` sets whether hypotheses and reasons are shown, since the notes repo is public.

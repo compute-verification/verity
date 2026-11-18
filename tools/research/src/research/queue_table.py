@@ -1,4 +1,4 @@
-"""`research queue stats` with no `--log`: the merge queue's core numbers as one table, read live in under two minutes.
+"""`research queue stats`: the merge queue's core numbers as one table, read live in under two minutes.
 
 Each row is one number with its unit, over three windows: now, the last hour, and the last 24 hours. What is read:
 
@@ -648,10 +648,10 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
             doc["open"] = {}
             doc["errors"].append("gh pr list: no list of open PRs")
     try:
-        import tomllib
+        from .policy import PATH, parse
 
-        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/check/policy.toml").read_text())["off_gate"]
-    except (OSError, ValueError, KeyError, IndexError):
+        doc["off_gate"] = list(parse((CHECKOUT / PATH).read_text()).off_gate)
+    except (OSError, ValueError):
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
              for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
