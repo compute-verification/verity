@@ -3,11 +3,8 @@
 residual, `encodings/derived.py`) and the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`). Each stage's result says what it stood on; `stubs` lists what is still a stand-in.
 
-* **The advice** (`advice`, a file): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
-  advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
-  `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
-  bound to the runs only on the advice profile, by the honest run's attested I/O (``io.json``): every advice request is
-  an attested request (its ``user``), once.
+* **The advice**: I1 v0 (`verity_vllm.pipeline.advice_code.format`), bound to the runs only on the advice profile, by
+  the honest run's attested I/O (``io.json``): every advice request is an attested request (its ``user``), once.
 * **Bits per execution phase** (`bits`), T the honest run's egress window in buckets: v0's (I1's
   `bits_by_window`) and, given the registered serving config (`derived.Config`'s fields, or a step
   trace's ``config``) and the attested I/O the advice is bound to, whose tokens the residual reads (canonical sources,
@@ -26,10 +23,9 @@ residual, `encodings/derived.py`) and the prove path's audit of a committed run'
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when the forged unit it sampled was stopped (`prove_path.forged_row`:
   the ZK server released no proof of it, or in a plain audit Lean refused the proof it read). The advice the arm
-  committed is held to the given advice file's: the stand-in's codec committed the file's bytes (its SHA-512), v0's
-  commitment is hiding, so there only its ``total_bits``. That holds it to the file, not to these runs: the prove path
-  is bound to them only when the file is their advice and the Commit it proves is theirs, and only a bound prove path
-  counts in the OK.
+  committed is held to the given advice's ``total_bits`` alone, its commitment being hiding. That holds it to the
+  advice, not to these runs: the prove path is bound to them only when the advice is theirs and the Commit it proves is
+  theirs, and only a bound prove path counts in the OK.
   Beside the endpoint's own advice, an arm of ``prove_path.py audit --serve-run`` names the served run's Commit window
   it proves (`served_commit`); the prove path is bound to these runs when every arm's Commit is the endpoint's (its
   ``windows.jsonl``) and sealed while serving, every arm's committed advice is held by content to the report's advice
@@ -68,36 +64,7 @@ D = _derived()
 ADVICE = "advice"  # the varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
-def _sha512(data: bytes) -> str:
-    return hashlib.sha512(data).hexdigest()
-
-
 # --- the advice -------------------------------------------------------------------------------------------------------
-
-def standin(doc: dict) -> dict:
-    """A prove-path stand-in's advice from before v0 (no ``schema``, rows without ``sources``, no ``release``) as I1 v0's
-    JSON, as `advice_windows.advice_of_workload` now writes it: each kept output released in its step's bucket (every row
-    of the stand-in keeps one: a whole-prompt prefill, then one decode a step)."""
-    steps = [{"rows": [{"sources": []} | r for r in st["rows"]]} for st in doc["steps"]]
-    return {"schema": I1.SCHEMA, "requests": doc["requests"], "steps": steps,
-            "release": doc.get("release") or [s for s, st in enumerate(steps) for _ in st["rows"]]}
-
-
-def advice(path: Path):
-    """The advice at ``path`` and what the report says of it: its form, the SHA-512 of the file and of its v0 encoding,
-    its v0 bits and its shape."""
-    data = path.read_bytes()
-    try:
-        doc = json.loads(data)
-    except ValueError:
-        adv, form = I1.decode(data), "I1 v0 bytes"
-    else:
-        form = "I1 v0 JSON" if "schema" in doc else "a prove-path stand-in's from before v0, upgraded (chain.standin)"
-        adv = I1.from_json(doc if "schema" in doc else standin(doc))
-    return adv, {"file": str(path), "form": form, "file_sha512": _sha512(data), "v0_sha512": _sha512(I1.encode(adv)),
-                 "bits": I1.total_bits(adv), "requests": len(adv.requests), "steps": len(adv.steps),
-                 "outputs": len(adv.release)}
-
 
 def holdings(adv, io: list[dict]):
     """The attested I/O (``io.json``'s requests, in ingress order) as `derived.Holdings`, and each advice request's
@@ -334,7 +301,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             "window, a chain of windows that carry requests across their close joined into one I1 v0 advice",
             "served": serve.get("run_id"), "windows": len(ran), "bits": out["v0_total"],
             "requests": sum(r["requests"] for r in ran), "steps": sum(r["steps"] for r in ran),
-            "outputs": sum(r["outputs"] for r in ran), "file_sha512": None, "v0_sha512": None}
+            "outputs": sum(r["outputs"] for r in ran)}
     return info, out
 
 
@@ -347,8 +314,6 @@ def _refused(v) -> bool:
 def _same(committed: dict | None, info: dict | None) -> bool | None:
     if not committed or info is None or info.get("served"):
         return None
-    if "digest" in committed:
-        return committed["digest"] in (info["file_sha512"], info["v0_sha512"])
     return committed.get("bits") == info["bits"] if "bits" in committed else None
 
 
@@ -514,8 +479,8 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
 def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | None = None, bits: dict | None = None,
                ep: Path | None = None, registered: dict | None = None) -> dict:
     """`prove_path.py audit`'s output at ``src`` (one directory or several), one row per arm and rank (the module's
-    docstring). Each arm's committed advice is held to the given advice file (``info``), which says nothing of these
-    runs: the prove path is ``bound`` to them only when that file is these runs' advice (``advice_bound``, `bits`'
+    docstring). Each arm's committed advice is held to the given advice (``info``) by its bits, which says nothing of
+    these runs: the prove path is ``bound`` to them only when that advice is these runs' (``advice_bound``, `bits`'
     ``bound``) and the Commit it proves is theirs, which nothing here checks (no Commit record of these runs is an
     input), so it is never bound and its ``ok`` stays out of the report's. Beside the endpoint's own advice
     (`served_advice`'s ``bits``, its records ``ep``) an arm of the fixed workload proves its own Commit, not this run's;
@@ -552,9 +517,8 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
                    "compiler": (s.get("compiler") or {}).get("name"),
                    "tp_run_root": s.get("tp_run_root") or s.get("run_root"),
                    "advice": s.get("advice"), "committed_is_the_advice_file": _same(committed, info),
-                   "advice_held_by": "the file's SHA-512" if "digest" in committed else
-                   "its bits only: the committed root hides it, and its opening is the prover's" if "root" in committed
-                   else None, "gap": s.get("gap"), "ranks": ranks}
+                   "advice_held_by": "its bits only: the committed root hides it, and its opening is the prover's"
+                   if "root" in committed else None, "gap": s.get("gap"), "ranks": ranks}
             name = p.name
             if served and "serve" in s:
                 arm["commit"] = served_commit(s, bits or {}, commits, registered or {}, adv_dir, closed)
@@ -620,9 +584,6 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         out.append(f"Advice: {a['file'] if a else 'the endpoint’s'} is not these runs' ({b.get('bound_why')})"
                    + ("." if served else "; a served run's comes from the committing endpoint's step trace "
                                          "(`verity-vllm advice`)."))
-    if a is not None and "upgraded" in a["form"]:
-        out.append("Advice form: the stand-in's pre-v0 JSON, upgraded to v0 here; the bits are v0's of the upgrade, while "
-                   "the prove path committed the file's bytes.")
     if served and b.get("config") is not None:
         out.append(f"Derived bits: the serving config is read off {b['config_from']}.")
     elif (a is not None or served) and b.get("config") is None:
@@ -690,10 +651,6 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
 
 # --- the report's sections --------------------------------------------------------------------------------------------
 
-def _cell(x) -> str:
-    return "—" if x is None else str(x)
-
-
 def _lag(s: float | None) -> str:
     if s is None:
         return "its Commit window's close not in the endpoint's records"
@@ -736,148 +693,3 @@ def _registered(g: dict | None) -> str:
     return (f"after serving, by {by}{ref}, {lag}, {' and '.join(late)}{stamped}"
             + (f", {lead} s before the first sample" if lead is not None and lead >= 0 else ""))
 
-
-def markdown(c: dict) -> list[str]:
-    """The chain's sections of the report's Markdown."""
-    lines = []
-    a, b = c.get("advice"), c.get("bits")
-    served = b is not None and "served" in b
-    if served:
-        lines += ["", "## Advice", "",
-                  (f"The endpoint's own ({b['served']}): `verity-vllm advice` over its records, one window advice a "
-                   f"closed Commit window, at {a['file']}. The run's Commit windows (those opening in its execution phases): "
-                   f"{a['windows']}, with {a['requests']} requests, {a['steps']} steps, {a['outputs']} kept outputs, "
-                   f"{a['bits']} bits in v0." if a else "The endpoint's own: none.")
-                  + f" Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'every window opened to its registered root under its Commit, every advice request a certified one, each admitted in one window'})."
-                  + (" A window that carries requests in is joined to the window before it into one I1 v0 advice, "
-                     "its carried requests the earlier window's (windows "
-                     + ", ".join("–".join(map(str, c)) for c in b["chains"]) + "): each chain's v0 and derived bits "
-                     "are on its first window's row, the committed bits each window's own string's."
-                     if b.get("chains") else ""),
-                  "", "| Commit window | Commit run id | opens at s | execution phase | requests admitted | carried in | "
-                  "steps | committed bits | v0 bits | derived bits | derived, shaped | forced | opened | bound | rebuilt |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-        lines += [f"| {x['window']} | refused: {x['refused']} |" + " — |" * 13 if "refused" in x else
-                  f"| {x['window']} | {_cell((x['commit'] or {}).get('run_id'))} | {x['t0_s']} | {x['link_window']} | "
-                  f"{x['requests']} | {_cell(x.get('carried'))} | {x['steps']} | {_cell(x.get('committed_bits'))} | "
-                  f"{x['v0_bits']} | {_cell(x['derived_bits'])} | "
-                  f"{_cell(x['derived_shaped_bits'])} | {_cell(x['forced_bits'])} | {x['opened']} | {_cell(x['bound'])} "
-                  f"| {_cell(x['rebuilt'])} |" for x in b["commit_windows"]]
-    elif a is not None:
-        lines += ["", "## Advice", "",
-                  f"From {a['file']} ({a['form']}): {a['requests']} requests, {a['steps']} steps, {a['outputs']} kept "
-                  f"outputs, {a['bits']} bits in v0. SHA-512 of the file {a['file_sha512'][:16]}…, of its v0 encoding "
-                  f"{a['v0_sha512'][:16]}…. Bound to these runs: {_cell(b['bound'])} ({b['bound_why'] or 'by the certified I/O'})."]
-    if b is not None:
-        cfg = b["config"]
-        lines += ["", "## Advice bits per execution phase", "",
-                  f"T = {b['T']} buckets a window. v0: I1's `bits_by_window` ({b['v0_total']} bits in all). Derived: "
-                  "the derived rules' residual at its least widths, charged by I1's rule, with the release sent "
-                  "(unshaped) and derived (shaped); forced: the residual's fields only witness fixes. "
-                  + ("Each Commit window's advice is charged per bucket and placed at its first step's bucket. "
-                     if served else "") + "Serving config: "
-                  + (f"{json.dumps(cfg, sort_keys=True)}, read off {b['config_from']}, so these bits and the "
-                     "residual's own check under it are outside the OK" if cfg and served else
-                     f"{json.dumps(cfg, sort_keys=True)}, the one the job was given (--serving-config), not one the "
-                     "endpoint registered, so these bits and the residual's own check under it are outside the OK"
-                     if cfg else "none") + f". Every step and output length given "
-                  f"back by the residual and the config alone: {_cell(b['public_fields'])}; the whole advice rebuilt "
-                  f"from the residual and the certified I/O: {_cell(b['rebuilt'])}."
-                  + (f" {b['why']}." if b["why"] else ""),
-                  "", "| window | v0 bits | derived bits | derived bits, shaped | of them forced |", "|---|---|---|---|---|"]
-        lines += [f"| {x['window']}{'' if x['in_run'] else ' (past the run)'} | {x['v0_bits']} | {_cell(x['derived_bits'])} "
-                  f"| {_cell(x['derived_shaped_bits'])} | {_cell(x['forced_bits'])} |" for x in b["windows"]]
-    p = c.get("prove_path")
-    if p is not None:
-        commit = [(n, a["commit"]) for n, a in p["arms"].items() if "commit" in a]
-        named = {n: a["gap"] for n, a in p["arms"].items() if a.get("gap")}
-        gaps = (f" Every arm's gap: {next(iter(named.values()))}." if len(named) == len(p["arms"]) > 1
-                and len(set(named.values())) == 1 else "".join(f" {n}'s gap: {g}." for n, g in named.items()))
-        if served and commit:
-            lines += ["", "## Prove path", "",
-                      f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
-                      f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
-                      f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
-                      + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
-                         "root registered under that Commit and opened to the report's advice of its window, and an "
-                         "honest arm's one of the honest run's own Commit windows)" if p["bound"] else
-                         f" ({p['bound_why']})" + (", so its ok is not the report's" if p.get("tied") is not False
-                                                   else ", and its advice isn't the report's, so the report isn't OK"))
-                      + "." + gaps,
-                      "", "| arm | Commit window | Commit run id | run root | sealed while serving | the endpoint's | "
-                      "one of the honest run's | advice root | v0 bits | the report's root | the registered root | "
-                      "registered under its Commit | opens to the report's advice | advice registered |",
-                      "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-            lines += [f"| {n} | {x['window']} | {_cell(x['run_id'])} | {str(x['run_root'])[:16]}… | "
-                      f"{x['sealed_while_serving']} | {x['the_endpoints']} | {x['of_the_honest_run']} | "
-                      f"{str(x['advice_root'])[:16]}… | {_cell(x['advice_bits'])} | {_cell(x['the_reports_root'])} | "
-                      f"{_cell(x['the_registered_root'])} | {_cell(x['names_the_commit'])} | {_cell(x['opens'])} | "
-                      f"{_registered(x['registered'])} |" for n, x in commit]
-        else:
-            lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
-                      f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
-                      "advice by the registered compiler, sampled on the auditor's challenger's coins, proved --zk behind the Lean "
-                      "ZK server and verified by Lean. The advice each arm committed is the --advice file: "
-                      f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
-                      + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
-                      + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()
-                                if a.get("advice_held_by")) + "." + gaps]
-        lines += ["", "| arm | ok | rank | audit accepted | units | sampled | incorrect proof blocks at most | negatives refused | "
-                  "forged unit refused | s | prove s a sampled proof block | Lean verify s a sampled proof block | proof bytes | source |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-
-        def each(x, k):
-            return _cell("; ".join(f"{m} {_cell(v[k])}" for m, v in x["per_unit"].items()) or None)
-        for name, arm in p["arms"].items():
-            lines += [f"| {name} | {arm['ok']} | {r} | {_cell(x['accepted'])} | {_cell(x['population'])} | {x['drawn']} | "
-                      f"{_cell(x['wrong_units_bound'])} | {x['negatives_refused']} | {_cell(x['forged_refused'])} | "
-                      f"{_cell(x['seconds'])} | {each(x, 'prove_s_per_unit')} | {each(x, 'lean_verify_s_per_unit')} | "
-                      f"{each(x, 'proof_bytes')} | {_cell(x['source'])} |" for r, x in arm["ranks"].items()]
-    n = c.get("negatives")
-    if n is not None:
-        lines += ["", "## Negatives (the negatives registry)", ""]
-        if not n.get("ran"):
-            lines.append(f"Not run: {n.get('why')}.")
-        else:
-            lines += ["Each tampering, the check that must refuse it and its code; ok: refused by that code (a pending "
-                      "check's row, ok —, says what it waits on).", "",
-                      "| negative | family | tampers | code | ran | N2 accepted | refused windows | codes | I/O tie | ok | "
-                      "waits on, or why not run |", "|---|---|---|---|---|---|---|---|---|---|---|"]
-            for name, x in n["rows"].items():
-                lines.append(f"| {name} | {x['family']} | {x['tampers']} | `{x['code']}` | {x.get('ran')} | "
-                             f"{_cell(x.get('n2_accepted'))} | {_cell(x.get('refused_windows'))} | "
-                             f"{_cell(', '.join(x['codes']) if x.get('codes') else None)} | {_tie(x.get('tie'))} | "
-                             f"{_cell(x.get('ok'))} | {_cell(x.get('why') or ', '.join(x['waits']) or None)} |")
-    t = c.get("tie")
-    if t is not None:
-        lines += ["", "## I/O tie", ""]
-        if not t["ran"]:
-            lines.append(f"Didn't run: {t['why']}. The advice profile requires it, so the report isn't OK.")
-        else:
-            lines += ["`negatives.tie_run` on each run: `io_tie`'s reference in the clear, the sampled ids from "
-                      f"{t['from']}. Required on the advice profile: the report is OK only when the tie accepts the "
-                      "honest run, its ids covering every certified request. Owed: honest accepted, token refused by "
-                      "content at exactly the execution phases its changed ids fall in, drop refused by content; late and "
-                      "extra owe nothing here. Window -1: committed outputs no certified cell carries.", "",
-                      "| run | verdict | ok | codes | refused execution phases (parts) | changed ids' execution phases | requests "
-                      "| outputs | placed | unplaced | frames held egress/ingress | why |",
-                      "|---|---|---|---|---|---|---|---|---|---|---|---|"]
-            for name, x in t["runs"].items():
-                failing = "; ".join(f"{w}: {'+'.join(p)}" for w, p in sorted(x["failing"].items(), key=lambda i: int(i[0])))
-                held = x["held"] or {}
-                lines.append(f"| {name} | {x['verdict']} | {_cell(x['ok'])} | "
-                             f"{_cell(', '.join(f'`{c}`' for c in x['codes']) or None)} | {_cell(failing or None)} | "
-                             f"{_cell(x['changed'])} | {_cell(x['requests'])} | {_cell(x['outputs'])} | "
-                             f"{_cell(x['placed'])} | {_cell(x['unplaced'])} | "
-                             f"{_cell(held.get('egress'))}/{_cell(held.get('ingress'))} | {_cell(x['why'])} |")
-    return lines
-
-
-def _tie(t: dict | None) -> str:
-    """A negative's I/O tie cell: the parts that refused it, ``accepts``, or why it didn't run."""
-    if t is None:
-        return "—"
-    if not t["ran"]:
-        return f"not run: {t['why']}"
-    return ", ".join(f"`{c}`" for c in t["codes"]) or "accepts"

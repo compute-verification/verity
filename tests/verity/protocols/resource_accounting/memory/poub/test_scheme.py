@@ -11,7 +11,7 @@ from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.prover import binder
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties, period
 
 
 def test_each_is_registered_under_its_one_name() -> None:
@@ -27,7 +27,7 @@ def test_bandwidth_is_the_p2_verifiers_component() -> None:
 
 
 def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:
-    assert poub.POUB.protocol == audit.PROTOCOL_ID
+    assert poub.POUB.protocol == audit.PROTOCOL_ID == period.PROTOCOL
     assert binder.NAME == poub.POUB.name and poub.POUB.hooks == ("memory", "steps")
     assert poub.POUB.unit == poub.BANDWIDTH.unit == "bits"
 
@@ -75,7 +75,7 @@ def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is
 def test_neither_term_is_said_and_each_names_its_lean_constant() -> None:
     zero = {name: 0 for name in poub.CHARGES}
     assert sorted(poub.DELTA_SCHEME) == ["bandwidth", "poub"]
-    assert poub.POUB.delta_scheme is None and all(c.bounded for c in poub.POUB.charges)
+    assert isinstance(poub.POUB.delta_scheme, S.Lacks) and all(c.bounded for c in poub.POUB.charges)
     with pytest.raises(ValueError, match="delta_scheme .* is not said"):
         S.bound(poub.POUB, Fraction(1, 100), 0, zero)
     assert not any(c.bounded for c in poub.BANDWIDTH.charges)
@@ -84,10 +84,19 @@ def test_neither_term_is_said_and_each_names_its_lean_constant() -> None:
 
 
 def test_refresh_is_poubs_one_setting_off_by_default() -> None:
-    assert poub.settings({}) == {"refresh": False} == poub.settings({"refresh": False})
-    with pytest.raises(NotImplementedError, match=poub.REFRESH_GOAL):
-        poub.settings({"refresh": True})
+    assert S.settings(poub.POUB, {}) == {"refresh": False} == S.settings(poub.POUB, {"refresh": False})
+    with pytest.raises(ValueError, match=f"poub: refresh waits on {poub.REFRESH_GOAL}"):
+        S.settings(poub.POUB, {"refresh": True})
     with pytest.raises(ValueError, match="has no setting"):
-        poub.settings({"lifetime": 2})
+        S.settings(poub.POUB, {"lifetime": 2})
     with pytest.raises(ValueError, match="is a bool"):
-        poub.settings({"refresh": 1})
+        S.settings(poub.POUB, {"refresh": 1})
+
+
+def test_neither_says_its_term_and_says_why() -> None:
+    for s in (poub.POUB, poub.BANDWIDTH):
+        assert isinstance(s.delta_scheme, S.Lacks) and "δs" in s.delta_scheme.why
+    with pytest.raises(LookupError, match="bandwidth attaches through no hook"):
+        poub.BANDWIDTH.attach(None, {})
+    with pytest.raises(LookupError, match="poub declares no record: no combined record"):
+        S.declared(poub.POUB, "record")

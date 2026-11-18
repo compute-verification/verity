@@ -296,7 +296,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-veri
               "verity/protocols/resource_accounting/network/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-verifier-difftest", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-attester-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger", "verity/protocols/proofs/spot/prover",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/verifier/challenger",
               "verity/protocols/resource_accounting/network/verifier", "verity-pouw-benchmarks",
               "verity/protocols/resource_accounting/network/prover",
               "verity/circuits/requirement", "benchmarks/poub_session", "benchmarks/one_stage",
@@ -1870,10 +1870,12 @@ def _last_passes(dirs: list[Path]) -> dict[str, tuple[str, float]]:
 
 
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
-    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
-    key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first,
+    of the test modules the tree holds: of which the guard starts the longest it collected at the heads of the workers' shares
+    (`heavy_first`). An order only, which no key or verdict reads."""
     last = _last_passes([per_test_dir(suite)])
+    held = {m for m in {node.split("::", 1)[0] for node in last} if (ROOT / suite.path / m).is_file()}
+    last = {node: v for node, v in last.items() if node.split("::", 1)[0] in held}
     return sorted(last, key=lambda node: (-last[node][1], node))[:n]
 
 

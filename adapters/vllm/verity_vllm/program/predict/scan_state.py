@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity.circuits.defs import bind
 from verity.protocols.resource_accounting import scheme as schemes
@@ -31,6 +31,8 @@ from verity_vllm.definitions.registry import boolean_io_shell as BIO
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 #: the port whose layout the state row is, looked up on the declared scheme that has it (`messages.declaring`)
 PORT = "scan-state"
+if TYPE_CHECKING:
+    SCAN_STATE: str
 
 
 @dataclass(frozen=True)

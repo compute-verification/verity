@@ -14,7 +14,7 @@
 # (`python benchmarks/proof_throughput/run.py run` prints and launches these.)
 # env: WORKLOAD= B= (required)  WARM=1 RUNS=3  IDENTITY= (the plan's point identity, recorded as the run's key param)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the prover builds, the venv and FLOCK_STAGE_CACHE under it)
-#      LEASE_MAX_MIN=30  BUNDLE=1 (0: keep the sessions out of the store)  STAGE_ONLY=1 (build, stage and check; no GPU)
+#      LEASE_CARD= LEASE_CORES= (the leased card and cores; unset: any free card)  LEASE_MAX_MIN=30  BUNDLE=1 (0: keep the sessions out of the store)  STAGE_ONLY=1 (build, stage and check; no GPU)
 #      any FC_*=VALUE reaches the prover (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as the hill-climb)
 #      ZK=1: configuration 2's stand-in (zk.py): M1's masked sessions (--zk) on the host's witness, under the ZK server's send
 #      check unless FC_ZK_SERVER=0; the result is zk-point's, no contract result and no bundle
@@ -108,7 +108,7 @@ fi
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/proof_throughput/${RESEARCH_RUN_ID:-local}}
 ph lease wait
 # one point's sessions at a time on this node (their staging overlaps): two would share its host CPUs and memory bandwidth
-flock "${SESSIONS_LOCK:-$FLOCK_WORK/sessions.lock}" "${LEASE[@]}" 1 --wait ${LEASE_CORES:+--cores "$LEASE_CORES"} --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
+flock "${SESSIONS_LOCK:-$FLOCK_WORK/sessions.lock}" "${LEASE[@]}" 1 --wait ${LEASE_CARD:+--on "$LEASE_CARD"} ${LEASE_CORES:+--cores "$LEASE_CORES"} --max-min "${LEASE_MAX_MIN:-30}" -- bash -c '
   set -u; O=$1; shift
   printf "lease\tstart\t%s\n" "$(date +%s.%N)" >> "$O/phases.tsv"
   G=${GPU_LEASE_UUID:-${CUDA_VISIBLE_DEVICES:-0}}

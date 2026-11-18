@@ -11,6 +11,11 @@
 #   verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
 #     [--arms "ARM ARM ..."] [--target 1]
 #   verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
+#   verity bench prod_repro ... --stage capture --minify RUN [--exact RUN] | --stage minify
+# --stage makes the run's result the record of that stage of the serving cost (stage.py, which says what each holds
+# and what fails it), which `verity bench serving_cost` reads by the run's id: capture, the full model's out/ as
+# priced.py reads it, taken against the minify run (and the exact run) named; minify, on a stand-in, the top-k's
+# device time a call on one card under a lease of its own after the arms (topk_units.py, OUT/units.jsonl).
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
@@ -67,13 +72,20 @@ while [ $# -gt 0 ]; do
     --max-model-len) MAX_MODEL_LEN=$1 ;; --target) TARGET=$1 ;; --client) CLIENT=$1 ;; --report) REPORT=$1 ;;
     --replay) REPLAYED=$1 ;; --pass-prompts) PASS_PROMPTS=$1 ;; --stop-at) STOP_AT=$1 ;; --replay-of) REPLAY_OF=$1 ;;
     --lifetimes) LIFETIMES=$1 ;; --leave-out) LEAVE_OUT=$1 ;; --arms) SERVE=$1 ;;
+    --stage) STAGE=$1 ;; --minify) MINIFY_RUN=$1 ;; --exact) EXACT_RUN=$1 ;;
     *) echo "prod_repro: unknown flag $flag (--model, --stock, --again, --ours, --arms, --load, --rate, --requests, --span-s," \
             "--reps, --replay PASS|none, --pass-prompts NAME=N, --sampled, --stop-at TIME, --lifetimes L, --leave-out N," \
-            "--max-model-len, --target, --client corpus|vllm-bench, --report OUT, --replay-of OUT)"; exit 2 ;;
+            "--max-model-len, --target, --client corpus|vllm-bench, --report OUT, --replay-of OUT," \
+            "--stage capture|minify, --minify RUN, --exact RUN)"; exit 2 ;;
   esac
   shift
 done
 case $CLIENT in corpus|vllm-bench) ;; *) echo "prod_repro: --client corpus or vllm-bench, not $CLIENT"; exit 2 ;; esac
+STAGE=${STAGE:-}
+case $STAGE in ''|capture|minify) ;; *) echo "prod_repro: --stage capture or minify, not $STAGE"; exit 2 ;; esac
+[ -z "$STAGE" ] || [ -z "$REPORT$REPLAY_OF" ] || { echo "prod_repro: --stage is the record of a job that serves its arms, not of --report or --replay-of"; exit 2; }
+[ "$STAGE" != capture ] || [ -n "${MINIFY_RUN:-}" ] || { echo "prod_repro: --stage capture --minify RUN: the stored minify run whose unit costs price this capture"; exit 2; }
+[ "$STAGE" = capture ] || [ -z "${MINIFY_RUN:-}${EXACT_RUN:-}" ] || { echo "prod_repro: --minify and --exact name the runs a capture (--stage capture) is taken against"; exit 2; }
 [ -z "${SAMPLED:-}" ] || [ "$CLIENT" = vllm-bench ] || { echo "prod_repro: --sampled is a pass of vLLM's client (--client vllm-bench): the corpus client's sampling is its arm's"; exit 2; }
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # as serve_tax/run.sh finds it
 VENV=${VENV:-$venv}
@@ -186,5 +198,20 @@ if [ $termed = 1 ]; then
   done
   rc=$(( rc ? rc : 143 ))
 fi
+if [ "$STAGE" = minify ] && [ $termed = 0 ]; then
+  if command -v gpu-lease > /dev/null; then
+    GPU_LEASE_WHO=${GPU_LEASE_WHO:-prod-repro-units} gpu-lease 1 --wait --max-min "${UNITS_MAX_MIN:-60}" \
+      ${GPU_LEASE_ON:+--on "$GPU_LEASE_ON"} ${GPU_LEASE_CORES:+--cores "$GPU_LEASE_CORES"} -- "$PY" "$here/topk_units.py" "$OUT" \
+      > "$OUT/topk_units.log" 2>&1
+  else
+    "$PY" "$here/topk_units.py" "$OUT" > "$OUT/topk_units.log" 2>&1
+  fi || echo "prod_repro: topk_units.py ended $? (see $OUT/topk_units.log): the minify record fails on what it lacks"
+fi
 report "$OUT" job; r=$?
-exit $(( rc ? rc : r ))
+s=0
+if [ -n "$STAGE" ]; then
+  stage=(capture "$OUT" --model "$MODEL_ID" --minify "${MINIFY_RUN:-}" ${EXACT_RUN:+--exact "$EXACT_RUN"} ${STOCK:+--stock "$STOCK"})
+  [ "$STAGE" = capture ] || stage=(minify "$OUT" --model "$MODEL_ID")
+  "$PY" "$here/stage.py" "${stage[@]}"; s=$?
+fi
+exit $(( rc ? rc : r ? r : s ))

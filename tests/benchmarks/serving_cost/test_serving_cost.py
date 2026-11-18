@@ -508,3 +508,12 @@ def test_price_refuses_arms_the_capture_did_not_serve(store, tmp_path):
     with pytest.raises(SystemExit, match="the capture served none of prod-record-bisect: give --ours an arm it served"):
         S.main(["price", "--capture", CAPTURE, "--minify", MINIFY, "--ours", "prod-record-bisect", "--out",
                 str(tmp_path / "price")])
+
+
+def test_price_refuses_a_capture_that_holds_no_public_steps_and_names_the_converter(store, tmp_path):
+    store[MINIFY], store[CAPTURE] = minify_record(tmp_path), capture_record(tmp_path)
+    for f in (store[CAPTURE] / "out").glob(S.STEPS):
+        f.unlink()
+    with pytest.raises(SystemExit, match=f"capture run {CAPTURE} holds no public steps .*which `benchmarks/serve_tax/"
+                                         "serve_tax.py steps-of-trace RUN_OUT"):
+        price(tmp_path / "price")

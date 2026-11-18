@@ -59,6 +59,7 @@ import identity as I
 import report as R
 import schedule as S
 import shapes as SH
+from verity_bench import kit
 
 #: what `characterize.py` and the tests read
 __all__ = [
@@ -84,6 +85,8 @@ def _gate():
 
 
 SG = _gate()
+#: the version native/build.sh builds the harness with, whose cuobjdump and nvdisasm read every arm's SASS
+HARNESS_TOOLKIT = "12.9"
 EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY, EXIT_TERMINATED = 0, 2, 3, 5, 6, 143
 EXIT_SASS = SG.EXIT_FAIL
 METHODS = ("graph", "burst")
@@ -1375,7 +1378,7 @@ def main(argv: list[str] | None = None) -> int:
         if arms:
             args.passes.mkdir(mode=0o700, parents=True, exist_ok=True)
             args.passes.chmod(0o700)
-        sass = SG.SassChecker(log)
+        sass = SG.SassChecker(log, tools=SG.find_tools(Path(kit.toolkit(HARNESS_TOOLKIT)) / "bin"))
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
             build = a.build({"device": dev, "arch": card["arch"], "out_dir": str(args.out.parent),

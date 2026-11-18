@@ -24,12 +24,12 @@ uv run pytest tests/benchmarks/pouw/test_masked_gemm_tables.py -q
 
 It prints `5 passed`.
 
-On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `run.sh` builds, gates and times the arms, from the clone's
-root:
+On a leased RTX PRO 6000 with the CUDA 13.0 toolkit, `benchmarks/pouw/masked_gemm/run.sh` builds, gates and times the
+arms, from the clone's root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-  --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+  --send benchmarks/pouw/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 ~~~
 
 It exits 4 when the build fails.

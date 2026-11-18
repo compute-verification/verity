@@ -253,11 +253,14 @@ def serve(a: argparse.Namespace) -> int:
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site", arm)
-    port = S.corpus().free_port()
+    S.kit()
+    from verity_bench import kit
+
+    port = kit.free_port()
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
-    env = S.server_env(arm, srv, site, None, 600.0, 600.0, private=private) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
+    env = S.server_env(arm, srv, site, None, 600.0, private=private) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": a.dump, "savers": a.saver,
                              "outputs": True, "whole_pool": True})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",

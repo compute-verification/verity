@@ -100,7 +100,7 @@ class Device:
 H100 = Device("h100", 0, 0, 13, 14, True)
 B200 = Device("b200", 1, -1, 25, 26, False)
 ADA = Device("ada", 2, 0, 13, 14, True)
-DEVICES = {"h100": H100, "b200": B200, "ada": ADA}
+DEVICES = {d.name: d for d in (H100, B200, ADA)}
 WINDOW = 128
 
 

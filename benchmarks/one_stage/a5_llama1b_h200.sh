@@ -88,7 +88,11 @@ print(checkpoint_dir(*sys.argv[1:]) or "")' "$REPO" "$REV" "$HF_HOME" 2>/dev/nul
 if [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; then
   [[ ${A5_CORES:-} =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || refuse "A5_CORES=${A5_CORES:-}: every gpu-lease names its CPUs (--cores), and a lease without them holds every other lane out: A5_CORES=CPUS, the cores this machine's map gives you (e.g. 40-59)"
 fi
-command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: the workload serves on one H200 (sm_90), which this machine doesn't show"
+command -v nvidia-smi >/dev/null || refuse "no nvidia-smi: $ROW serves on a GPU, which this machine doesn't show"
+if [ -z "${A5_CARD:-}" ] && { [ -n "${GPU_LEASE-}" ] || command -v gpu-lease >/dev/null; }; then on=(); else on=(-i "${A5_CARD:-0}"); fi
+mapfile -t cards < <(nvidia-smi --query-gpu=name --format=csv,noheader "${on[@]}" 2>/dev/null)
+PYTHONPATH=$TREE python3 "$TREE/benchmarks/one_stage/row_card.py" "$ROW" "${cards[@]}" \
+  || refuse "card ${A5_CARD:-any} is not one $ROW serves on: set A5_CARD to such a card's index"
 UNGUARDED=(); [ ! -e "$FA3" ] || UNGUARDED=(--hidden-so-fa3 "$FA3")
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 finish() {  # at exit, success or failure: BASE (the row dir, the window, the audit's private files) removed, or with A5_KEEP=1 kept

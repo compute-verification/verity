@@ -184,7 +184,7 @@ def test_a_session_registers_its_cards_node_file(name, node):
 
 
 def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
-    nodes = CARD_FILES.parent / "nodes"
+    nodes = kit.nodes_directory()
     for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
         text = (nodes / "h200-sxm-141gb-x1.toml").read_text()
         (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
@@ -193,7 +193,12 @@ def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
     assert kit.session_node("NVIDIA H200", "serving", kind="h200-sxm-141gb-x2") == "local/h200-sxm-141gb-x2/serving"
 
 
-def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none():
+def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none(tmp_path):
     assert kit.datasheet_bandwidth("NVIDIA H200") == 4_800_000_000_000
+    assert kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3") == 3_350_000_000_000
+    text = (kit.cards_directory() / "h100-sxm-80gb.toml").read_text(encoding="utf-8")
+    (tmp_path / "h100-sxm-80gb.toml").write_text(
+        "".join(line for line in text.splitlines(keepends=True) if not line.startswith("datasheet_bandwidth")),
+        encoding="utf-8")
     with pytest.raises(SystemExit, match="^the card record h100-sxm-80gb .* has no memory.datasheet_bandwidth"):
-        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3")
+        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3", directory=tmp_path)

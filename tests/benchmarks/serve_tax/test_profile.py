@@ -16,6 +16,7 @@ import pytest
 import serve_tax as S
 
 S.profiles()
+from verity_bench import kit  # noqa: E402
 from verity_bench import profiles as P  # noqa: E402 (benchmarks/harness, put on sys.path by S.profiles)
 
 #: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.scheme_plugin.unseeded`)
@@ -75,8 +76,8 @@ def test_pearl_plus_plans_on_one_gpu_with_a_reserved_session_a_lifetime_checked_
         return {"gate": "ssh -i KEY research@GATE", "pearl-plus": {
             "kernel": "/k", "challenger": "127.0.0.1:0", "session": {"session": session}}}
 
-    with pytest.raises(SystemExit, match="^the arm's schemes need pearl-plus.kernel, pearl-plus.challenger, "
-                                         "pearl-plus.session, gate: --scheme-settings"):
+    with pytest.raises(SystemExit, match="^the arm's schemes need pearl-plus.kernel, pearl-plus.challenger, gate: "
+                                         "--scheme-settings"):
         S.profile_plan("coding-agent", "llama32-1b", ["pearl-plus"], False)
     with pytest.raises(SystemExit, match="^--scheme-settings: arm pearl-plus is served in 2 server lifetimes and a "
                                          "reserved session opens once"):
@@ -163,8 +164,9 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *flags: str, dataset
                        "wait_ready": lambda server, port, startup_s: None, "nvml": lambda: (None, "no NVML here"),
                        "scrape": lambda port: dict.fromkeys(S.SCHEDULE, 0.0), "versions": lambda: {},
                        "stop": lambda server, grace_s: "exited", "end_of_text_ids": lambda ck: [1],
-                       "reset_prefix_cache": lambda port: True, "corpus": lambda: NS(free_port=lambda: 8000)}.items():
+                       "reset_prefix_cache": lambda port: True}.items():
         monkeypatch.setattr(S, name, stub)
+    monkeypatch.setattr(kit, "free_port", lambda: 8000)
     if datasets is not None:
         monkeypatch.setattr(S, "parse_datasets", lambda given, loads, fetch_missing=False: datasets)
     monkeypatch.setattr(S.subprocess, "Popen", lambda argv, **how: servers.append(argv) or NS(returncode=0, poll=lambda: 0))

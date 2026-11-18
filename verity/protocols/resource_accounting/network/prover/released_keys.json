@@ -224,7 +224,6 @@
  "not_yet": [
   "session/session.json",
   "session/leak-guard.json",
-  "endpoint/report.json",
   "leak-guard.json",
   "job.json",
   "custody.json",
@@ -233,7 +232,6 @@
   "gates/*/*/out/deployment.json",
   "gates/*/*/out/groups.json",
   "gates/*/*/out/load-relay.json",
-  "n2/**",
   "tie/**",
   "scan/**",
   "report/**"
