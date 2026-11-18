@@ -218,10 +218,10 @@ def test_the_card_is_the_record_whose_driver_holds_the_gpu_the_run_found(tmp_pat
         (tmp_path / "found.json").write_text(json.dumps({"name": NAME[sku]}))
         assert S.sheet(tmp_path) == load_card(sku, directory=CARD_FILES)
     (tmp_path / "found.json").write_text(json.dumps({"name": NAME[None]}))
-    with pytest.raises(KeyError, match=f"0 GPU card files under .* {NAME[None]!r}, the name the device reports"):
+    with pytest.raises(SystemExit, match=f"0 GPU card files under .* {NAME[None]!r}, the name the device reports"):
         S.sheet(tmp_path)
     (tmp_path / "found.json").unlink()
-    with pytest.raises(KeyError, match="0 GPU card files under .* '', the name the device reports"):
+    with pytest.raises(SystemExit, match="0 GPU card files under .* '', the name the device reports"):
         S.sheet(tmp_path)
 
 

@@ -24,6 +24,7 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
+from verity.circuits import partition_object as PO
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
@@ -1133,8 +1134,9 @@ def _served(monkeypatch, out, check, inline: bool, stop: BS.Stop | None) -> list
             return real(*a, **kw)
         return call
     for name in BUILDERS:
-        mod = BR if name in ("population", "inlined") else P
-        monkeypatch.setattr(mod, name, counted(name, getattr(mod, name)))
+        mod, attr = {"population": (BR, name), "inlined": (BR, name), "population_program": (P, name),
+                     "template_instance_query": (PO, name), "partition": (PO, "build")}[name]
+        monkeypatch.setattr(mod, attr, counted(name, getattr(mod, attr)))
 
     def salted(spans, layout, window, **kw):
         y = _salts(layout, window)

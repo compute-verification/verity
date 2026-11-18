@@ -37,6 +37,7 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
+from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     REPLY_FIELDS,
     SESSION_FIELDS,
@@ -58,7 +59,7 @@ SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
 FAMILIES = (POSITIONS, IDENTITIES, REPLAY)
 CHALLENGER, IN_PROCESS = "challenger", "in-process"
-ROOT_BYTES = remote.ROOT_BYTES
+ROOT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def families(runs: int) -> list[list[Any]]:

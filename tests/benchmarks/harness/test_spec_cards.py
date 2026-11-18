@@ -96,7 +96,7 @@ def test_each_former_id_is_its_spec_on_a_card_that_spec_lists_and_no_file_holds_
     for old, (spec, card) in presets.former_specs().items():
         assert not (SPEC_ROOT / f"{old}.toml").exists(), old
         assert card in load_spec(spec).cards, old
-        assert presets.current_spec(old) == f"{spec}@{card}"
+        assert presets.current_spec(old) == (spec if load_spec(spec).cards == (card,) else f"{spec}@{card}")
     assert presets.current_spec(POUW) == POUW
 
 
