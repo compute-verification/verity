@@ -56,8 +56,7 @@ Open premises (`open`):
 
 ## Interface
 
-- **Python**: `verity.protocols.resource_accounting.network.verifier`. Code outside this directory imports every module but `boundary`
-  and `pacer`. Its importers: the prover side, `verity/protocols/resource_accounting/network/prover`; `../attester`'s vector
+- **Python**: `verity.protocols.resource_accounting.network.verifier`. Code outside this directory imports every module but `pacer`. Its importers: the prover side, `verity/protocols/resource_accounting/network/prover`; `../attester`'s vector
   scripts; `adapters/vllm` (`advice`, `arith_encode`, `blocks`, `charge_chain`, `head_check`, `id_form`, `io_tie`,
   `link_frame`, `network_attester`, `release`);
   `verity/protocols/compose/verifier/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
@@ -281,15 +280,8 @@ A spec-level reference for network attestation's timing channel:
   the execution phase it expects at the verifier's own shape and returns the root to pin, or refuses by name
   (`REFUSALS`: another width is ``out-width``, another row count ``out-rows``), so the output proof blocks' rows are
   registered reads of the network attester's root rather than a comparison in the clear;
-- the run's boundary in an execution phase's circuit (`boundary`): the circuit record's ``boundary``, which names the template
-  whose proof block ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
-  committed as a registered read of the network attester's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
-  ingress link ℓ (its frame parameter row, the network attester's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
-  format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
-  circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
-  grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
-  state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
-  stays structural: a served execution phase fits in the step-indexed scan's form, and one in any other form is refused;
+- that the boundary's layout fits the scan (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one
+  the circuit returns) is the period check's, Lean's `NetworkVerifier.Period.scanOf`, which refuses each by name;
 - the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
   ``load``, ingress), committed as a registered value under the network attester's own salts at the reading port's
   leaf width and row format, its root in a head the network attester signs for the session's first execution phase
