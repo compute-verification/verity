@@ -62,14 +62,16 @@ class Served:
         self.sw = {op: (np.abs(rng.standard_normal(n)) * 0.02).astype(np.float32) for op, n in N.items()}
         for u, (rid, step, tok, i, op) in enumerate(ROWS):
             n, w = N[op], 1000 + list(N).index(op)
-            r: dict[str, Any] = {"i": i, "spec": f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}",
-                                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, n * K]], [["p", w, n * K, n * K + n]]]}
+            h = n * K // 2
+            r: dict[str, Any] = {"i": i, "spec": f"ScaledMmS8_v3{{K={K},N={n},DOT={DOT}}}",
+                                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, h]], [["p", w, h, h + 2 * n]]]}
             d = {"statics": {"K": K, "N": n}, "op_path": op, "members": [("y", n, "bf16")], "row": tok, "step": step}
             self.rows.append((rid, None, r, d))
             x, sx = rng.integers(-128, 128, K).astype(np.int8), np.array([abs(rng.standard_normal()) / 127], np.float32)
             got = E.evaluate_batch(DEFN, np.repeat(x.view(np.uint8)[None], n, 0), np.repeat(sx.view(np.uint32), n),
                                    self.W[op].view(np.uint8), self.sw[op].view(np.uint32), kernel="reference")
-            for g, a in zip(r["args"], (x.view(np.uint8), sx.view(np.uint32), self.W[op].reshape(-1).view(np.uint8), self.sw[op].view(np.uint32))):
+            for g, a in zip(r["args"], (x.view(np.uint8), sx.view(np.uint32), self.W[op].reshape(-1).view("<u2"),
+                                        self.sw[op].view(np.uint32).astype("<u4").view("<u2"))):
                 self.ops[(rid, json.dumps(g))] = a
             self.y.setdefault((rid, ARRIVALS[rid] + step, op), {})[tok] = np.asarray(got, dtype=np.uint16).reshape(-1)
 
@@ -448,7 +450,7 @@ CAPS = {4096: 2048, 14336: 1024}
 
 
 def llama_b32_decode_step() -> tuple[list[str], list[list], dict[str, int]]:
-    """One decode step of B = 32 requests: per request, per layer, its four linears' ScaledMmS8_v1 rows (one token row each)."""
+    """One decode step of B = 32 requests: per request, per layer, its four linears' ScaledMmS8_v3 rows (one token row each)."""
     tmpls = [f"ScaledMmS8Coordinate_v1{{K={k},DOT={DOT}}}" for k in CAPS]
     rows: list[list] = [[], []]
     for q in range(B):
