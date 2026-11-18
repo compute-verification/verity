@@ -276,6 +276,16 @@ def render_entry(name: str, entry: dict) -> str:
     return head + keys + tables
 
 
+def properties_copy(name: str, entry: dict) -> str | None:
+    """The file `research run` puts in a run's inputs/ as NAME.toml: the machine's name and its `[properties]` table, and no
+    other field of its record (no address, user, pod id or key); None for a record without the table."""
+    props = entry.get("properties")
+    if not isinstance(props, dict):
+        return None
+    return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml_value(name)}\n\n"
+            "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
+
+
 def write_entry(d: Path, name: str, entry: dict) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{name}.toml"
