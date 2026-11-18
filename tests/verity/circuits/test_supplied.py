@@ -89,6 +89,15 @@ def test_a_blocks_part_names_cs_input_and_range():
         S.part("round_3", mark, 2, 4, 32)
 
 
+def test_a_blocks_part_is_a_mark_its_own_nodes_hold():
+    p = S.part("round_3", S.check_entry(*SERVED[0]), 2, 3, 32)
+    assert S.check_entry(["round_3/p0", 1, p], [(S.SUPPLIED, 32, 1)]) == p
+    with pytest.raises(S.SuppliedError, match="^E_SUPPLIED_WIDTH: "):
+        S.check_entry(["round_3/p0", 1, p], [(S.SUPPLIED, 32, 2)])
+    with pytest.raises(S.SuppliedError, match="^E_SUPPLIED_MARK: "):
+        S.check_entry(["round_3/p0", 1, {**p, "of": ["round_3", 3, 3]}], [(S.SUPPLIED, 32, 1)])
+
+
 def test_the_order_rule():
     S.check_order({"store": 0, "session": 1}, coin=2)
     with pytest.raises(S.SuppliedError, match=r"^E_SUPPLIED_ORDER: \['late'\] registered after the coin"):
