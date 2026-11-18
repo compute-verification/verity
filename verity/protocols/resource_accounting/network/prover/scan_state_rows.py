@@ -2,7 +2,7 @@
 bucket 0, as a window of ``buckets`` buckets from scan bucket t0 reads it (`ingress_scan.window_state`), with the
 request each of the window's slots starts.
 
-A window here is any object with ``scan`` (an `ingress_scan.Class`), ``buckets``, ``slots``, and ``anchor(k)`` and
+A window here is any object with ``scan.shape`` (an `ingress_scan.Class`'s statics by name), ``buckets``, ``slots``, and ``anchor(k)`` and
 ``lane(k)``, slot k's bucket and lane."""
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def scan_anchors(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Seque
     Programs start it (its slot's ``occ`` bit 0 set in the state before it), by its ordinal q. ValueError where the scan
     refuses the rows."""
     out: dict[int, int] = {}
-    for t, st in enumerate(_scan(cls.scan, ingress, outputs)):
+    for t, st in enumerate(_scan(IS.Class(**cls.scan.shape), ingress, outputs)):
         for s in st.slots:
             if s.occ & 1:
                 out.setdefault(s.q, t + 1)
@@ -40,7 +40,7 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     in its lane (``occ``'s bit 0 set in the row there), None for a slot no request starts. ``ingress`` is the network
     attester's registered ingress rows (a row a bucket, `network_attester_rows.window_rows`) to the window's last row,
     each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses the rows."""
-    scan, n = cls.scan, t0 + cls.buckets - 1
+    scan, n = IS.Class(**cls.scan.shape), t0 + cls.buckets - 1
     if len(ingress) < n:
         raise ValueError(f"the window from scan bucket {t0} reads the scan's states to bucket {n - 1}: give the ingress "
                          f"rows to it, {n}, not {len(ingress)}")
@@ -57,7 +57,7 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
 def standin_rows(cls: Any, slots: Sequence[tuple[Sequence[int], int]]) -> list[list[int]]:
     """The state rows where no scan ran that give slot k its row (occupancy, prompt length, ids) and ``max_tokens``,
     ``slots[k]``, at its anchor and lane, every other field zero."""
-    scan = cls.scan
+    scan = IS.Class(**cls.scan.shape)
     states = [IS.empty(scan) for _ in range(cls.buckets)]
     for k, (row, max_tokens) in enumerate(slots):
         s = states[cls.anchor(k)].slots[cls.lane(k)]
