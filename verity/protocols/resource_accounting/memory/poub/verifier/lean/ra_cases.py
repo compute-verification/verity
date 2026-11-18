@@ -1435,6 +1435,8 @@ SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
 
 # --- refresh (`Params.refresh`): Python alone until the Lean has it ----------------------------------------------------
 
+REFRESH_FAILURES = ("probation", "origin-path", "origin")
+"""The failures only a refresh session reaches (`audit.FAILURES`' last three)."""
 REFRESH = dict(refresh=True, lifetime=2, windows=5)
 """N = 6 at L = 2: registered blocks 0 … 2 are rota class 0, re-keyed to join the even windows, and 3 … 5 class 1, the
 odd ones; the session's first fresh append is class 0."""

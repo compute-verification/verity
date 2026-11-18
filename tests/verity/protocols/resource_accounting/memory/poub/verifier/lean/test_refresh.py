@@ -18,7 +18,6 @@ OFF_DIGEST = ("b1cf68970ff5c7bc8b749a63c21b08a91988d4db17041348714f2c1f223e8e6"
               "76d517bcc7ce9f95d57d0433ff0317cdabddfe76ce7f89786a004b06e45ede73e")
 """SHA-512 over every recorded scenario's case, outcome and, accepted, its record's public form, profile and ledger, as
 `off_digest` lists them, on main at c326b5a2b7d, before refresh."""
-NEW_FAILURES = {"probation", "origin-path", "origin"}
 
 
 def _ledger(rec: audit.Record, **kw) -> audit.GammaTerms:
@@ -67,7 +66,8 @@ def test_python_only_a_refresh_scenario_reaches_its_outcome_recorded_and_replaye
 
 def test_the_refresh_scenarios_reach_every_new_failure_and_an_accepted_session() -> None:
     reached = {s[3] for s in M.REFRESH_SCENARIOS.values()}
-    assert reached >= NEW_FAILURES | {"lifetime", "append", "malformed", "accepted"}
+    assert set(M.REFRESH_FAILURES) == set(audit.FAILURES[-3:])
+    assert reached >= {*M.REFRESH_FAILURES, "lifetime", "append", "malformed", "accepted"}
 
 
 def test_the_honest_refresh_session_opens_rekeys_of_registered_and_fresh_payloads() -> None:
