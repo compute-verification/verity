@@ -8,10 +8,11 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.population import _record_digest, cut_wires, wired_population_program
-from verity.circuits.program import Program
+from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, coll_concat, concat, runs
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.periods import interface as I
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 
 RUN, SAMPLING_DESIGN = "ab" * 64, {"law": "stratified", "k": 2}
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -39,25 +40,48 @@ def held(values: tuple[str, ...]) -> I.Circuit:
     return I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=values))
 
 
+COORD = bind(G.ScaledMmS8Coordinate, K=64, **G.GEMM_SM120_S8)
+CID = descriptor_id(COORD)
+
+
+def recut(params: dict | None = None, values: tuple[str, ...] = (), formats: dict | None = None, tables: tuple = (),
+          wired: bool = False) -> I.Circuit:
+    """Twelve ``ScaledMmS8Coordinate_v1`` units reading registered ``w``'s words (16-bit, or ``formats``') in rows of 8-bit
+    leaves, so recut (`refs.recut`); ``wired``: beside `rounded`'s two wired templates."""
+    reads = (I.Read(CID, "wrow", "w", 0, (6, 2), 0, (32, 0)),)
+    reg = I.Registered({"w": 6 * 32, **(params or {})}, tables, reads=reads, values=values, formats=formats or {})
+    pair = rounded() if wired else None
+    return I.Circuit("recut", (*(pair.templates if pair else ()), (COORD, 12)), wires=pair.wires if pair else (),
+                     registered=reg)
+
+
 def record(circuit: I.Circuit) -> dict:
     return {**circuit.description(), "external": list(circuit.external)}
 
 
+def batches(program: Program) -> list[str]:
+    return [nd.fn.id for nd in program.root.body.nodes if not is_input(nd.fn)]
+
+
 def edges(program: Program) -> int:
-    return sum(1 for nd in program.fn.body.nodes for a in nd.args for s, *_ in runs(a.refs) if s == "n")
+    nodes = program.root.body.nodes
+    return sum(1 for nd in nodes for a in nd.args for s, i, *_ in runs(a.refs) if s == "n" and not is_input(nodes[i].fn))
 
 
-@pytest.mark.parametrize("make", [rounded, chain, lambda: held(()), lambda: held(("w",))])
+@pytest.mark.parametrize("make", [
+    rounded, chain, lambda: held(()), lambda: held(("w",)), recut, lambda: recut(values=("w",)),
+    lambda: recut({"v": 8}, ("v",)), lambda: recut(formats={"w": {"row_schema": SEG, "word_bits": 32}}),
+    lambda: recut(tables=(I.Table("w", "w", 0, 32, 6),)), lambda: recut(wired=True)])
 def test_the_cut_is_the_wired_builder_with_no_wires_and_its_positions_are_the_members_reads(make):
     """The cut of a circuit's wired Program is `wired_population_program` of its record with no wires, digest and query:
     the same root batches in the same order, none reading another. Each member's wired port reads, unit by unit, the
     writer units the cut's positions give (`rows.Binding.reads`), and the positions are the wires' rows, one each."""
     circuit = make()
-    wired, _ = circuit.program()
+    wired, _ = wired_population_program(list(circuit.templates), record(circuit))
     cut, query, positions = cut_wires(wired, record(circuit))
     want, want_query = wired_population_program(list(circuit.templates), {**record(circuit), "wires": []})
     assert (program_digest(cut), query) == (program_digest(want), want_query)
-    assert len(cut.fn.body.nodes) == len(wired.fn.body.nodes) and edges(cut) == 0
+    assert batches(cut) == batches(wired) and edges(cut) == 0
     w = I.Window(circuit, RUN, SAMPLING_DESIGN, 2).window
     reads = {}
     for m in w.members:
@@ -76,7 +100,7 @@ def test_a_cut_program_has_nothing_to_cut_and_another_record_is_refused():
     it with no positions; under the wired record, or any record its root does not name by digest, it is refused
     (cut-record), as is a root that is no wired population (cut-input)."""
     circuit = chain()
-    wired, _ = circuit.program()
+    wired, _ = wired_population_program(list(circuit.templates), record(circuit))
     cut, _, _ = cut_wires(wired, record(circuit))
     again, _, positions = cut_wires(cut, {**record(circuit), "wires": []})
     assert (program_digest(again), positions) == (program_digest(cut), {})

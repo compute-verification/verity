@@ -24,7 +24,7 @@ from .codec import canonical_json, descriptor_id, register_lazy_family
 from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
-from .program import Program
+from .program import Program, is_input
 from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, recut, runs, spell
 from .types import Array, RecordType, Tuple, Value
 
@@ -370,9 +370,13 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
     if fn.bindings["record"] != _record_digest(record) or [list(x) for x in record.get("templates", ())] != [
             [t, n] for t, n in zip(ids, counts)]:
         raise ValueError("cut-record: the record is not the one the wired Program's root names by digest")
-    body, index, cuts = fn.body, {t: j for j, t in enumerate(ids)}, record.get("cuts", {})
+    # the root's body, whose parameters are input nodes: a registered value read recut is read from one (`refs.recut`)
+    body, index, cuts = program.root.body, {t: j for j, t in enumerate(ids)}, record.get("cuts", {})
     nodes, defs, of = body.nodes, {}, []
     for k, nd in enumerate(nodes):
+        if is_input(nd.fn):
+            of.append(None)
+            continue
         j = index.get(descriptor_id(nd.fn)) if nd.form == "batch" else None
         if j is None:
             raise ValueError(f"cut-form: root node {k} is a {nd.form} of {descriptor_id(nd.fn)}, not a batch of a template")
@@ -390,13 +394,15 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
             raise ValueError(f"cut-return: the root returns ({s}, {i}, {lo}, {hi}) at leaf {pos}, not one batch whole in "
                              "its template's units")
         first[i], pos = (pos - bounds[j]) // ret[j], pos + hi
-    if pos != bounds[-1] or min(first, default=0) < 0:
+    if pos != bounds[-1] or min((f for f, j in zip(first, of) if j is not None), default=0) < 0:
         raise ValueError("cut-return: the root returns no batch once each, in its templates' units")
     fields = [({o: f for f, o in enumerate(accumulate(ls[:-1], initial=0))}, ls)
               for ls in ([f.leaves for f in _fields(r)] for _, r in sigs)]
     got: Positions = {}
     for k, nd in enumerate(nodes):
         j = of[k]
+        if j is None:
+            continue
         for (port, t), arg in zip(sigs[j][0], nd.args):
             kc = int(cuts.get(ids[j], {}).get(port, 1))
             if kc < 1 or t.leaves % kc or kc > 1 and not (isinstance(t, Array) and t.n % kc == 0):
@@ -404,14 +410,14 @@ def cut_wires(program: Program, record: Mapping[str, Any]) -> tuple[Program, dic
             rl = t.leaves // kc
             at = 0
             for s, i, lo, hi in runs(arg.refs):
-                if s == "n":
+                if s == "n" and of[i] is not None:
                     _wired_rows(got, ids, of, first, fields, ret, k, j, port, kc, rl, at, i, lo, hi)
                 at += hi - lo
     cut, query = wired_population_program([(defs[j], n) for j, n in enumerate(counts)], {**record, "wires": []})
     return cut, query, got
 
 
-def _wired_rows(got: dict, ids: list[str], of: list[int], first: list[int], fields: list, ret: list[int],
+def _wired_rows(got: dict, ids: list[str], of: list[int | None], first: list[int], fields: list, ret: list[int],
                 k: int, j: int, port: str, kc: int, rl: int, at: int, i: int, lo: int, hi: int) -> None:
     where = f"{ids[j]} {port}: root node {k}'s leaves [{at}, {at + hi - lo}) read root node {i}'s [{lo}, {hi})"
     if at % rl or (hi - lo) % rl:
