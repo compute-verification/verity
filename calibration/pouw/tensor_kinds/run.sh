@@ -1,34 +1,38 @@
 #!/usr/bin/env bash
-# Every native MMA form alone and beside IADD3, then the fit. TK_ARCH picks the target: 120 (one RTX
-# PRO 6000, the default), 89 (one L40S; its forms build as four groups in parallel and run back to back) or 100 (one
-# B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it doesn't).
+# Every native MMA form alone and beside IADD3, then the fit. The target is the card's: the card record
+# (calibration/hardware/cards) whose `driver` holds the name nvidia-smi gives the leased GPU (every GPU of the host, one
+# name, outside a lease) sets the build's arch: sm_120a (an RTX PRO 6000: one build), sm_90a (an H200 or H100: the int8
+# and f16/bf16 mma.sync forms native there, two groups), sm_100a (a B200: the legacy mma.sync forms, premise (M′); group
+# 0, int8, must build, and group 1 is dropped if it doesn't) or sm_89 (an L40S: four groups). A card no record holds, or
+# an arch with no forms here, refuses and writes no point.
 #
-#   research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=LANE -- bash calibration/pouw/tensor_kinds/run.sh
-#   research run --on MACHINE --project verity --source /workspace --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=LANE --env TK_ARCH=89 -- bash calibration/pouw/tensor_kinds/run.sh
-#   research run --on MACHINE --project verity --cwd source --mem-gb 8 \
-#     --env GPU_LEASE_WHO=LANE --env TK_ARCH=100 -- bash calibration/pouw/tensor_kinds/run.sh
+#   research run --on NODE --project verity --source . --cwd source -- env GPU_LEASE_WHO=LANE \
+#     gpu-lease 1 --wait --on CARD --cores CORES --max-min 25 -- bash calibration/pouw/tensor_kinds/run.sh
 #
-# The binaries are built and their SASS dumped outside the lease; the timed GPU work runs under `gpu-lease 1 --wait
-# --max-min 15`, with nvidia-smi sampling the leased GPU's clock and power every 200 ms. Clocks are read, never set.
+# The binaries are built and their SASS dumped before the timed work; outside a lease that work runs under its own
+# `gpu-lease 1 --wait --max-min 25`, with nvidia-smi sampling the leased GPU's clock and power every 200 ms. Clocks are
+# read, never set.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 SRC=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$SRC/../../..
+PY=(env "PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" python3)
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc)
 CUOBJDUMP=$(dirname "$NVCC")/cuobjdump
-ARCH=${TK_ARCH:-120}
+CARD=$(nvidia-smi ${GPU_LEASE_UUID:+--id="$GPU_LEASE_UUID"} --query-gpu=name --format=csv,noheader | sort -u | paste -sd, | sed 's/,/, /g')
+ARCH=$("${PY[@]}" "$SRC/tensor_kinds.py" target "$CARD") || exit 2
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/sass"
-echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"arch\":$ARCH,\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$($NVCC --version | tail -2 | head -1)\"}" >"$OUT/meta.json"
+echo "{\"run_id\":\"${RESEARCH_RUN_ID:-unknown}\",\"host\":\"$(hostname)\",\"card\":\"$CARD\",\"arch\":$ARCH,\"start_utc\":\"$(date -u +%FT%TZ)\",\"nvcc\":\"$($NVCC --version | tail -2 | head -1)\"}" >"$OUT/meta.json"
 
 case $ARCH in
   120) GENCODE=arch=compute_120a,code=sm_120a GROUPS_=(-1) ;;
+  90) GENCODE=arch=compute_90a,code=sm_90a GROUPS_=(0 1) ;;
   89) GENCODE=arch=compute_89,code=sm_89 GROUPS_=(0 1 2 3) ;;
   100) GENCODE=arch=compute_100a,code=sm_100a GROUPS_=(0 1) ;;
-  *) echo "TK_ARCH=$ARCH: 120, 89 or 100" >&2; exit 2 ;;
+  *) echo "tensor_kinds: no build for TK_SM $ARCH" >&2; exit 2 ;;
 esac
 pids=()
 for g in "${GROUPS_[@]}"; do
@@ -75,9 +79,7 @@ if [ ! -s "$OUT/tensor_kinds.jsonl" ]; then
   exit 3
 fi
 
-ROOT=$SRC/../../..
-PYTHONPATH="$ROOT/benchmarks/harness:$ROOT/tools/config${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 "$SRC/tensor_kinds.py" "$OUT" --record >"$OUT/fit.log" 2>&1
+"${PY[@]}" "$SRC/tensor_kinds.py" "$OUT" --record >"$OUT/fit.log" 2>&1
 rc=$?
 cat "$OUT/gpu.log" "$OUT/fit.log" >&2
 exit $rc

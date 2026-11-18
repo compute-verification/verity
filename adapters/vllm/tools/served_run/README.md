@@ -62,9 +62,10 @@ defers V3c's audit off the node (`V3C_AUDIT_MEM_GB` above node A's memory) to `r
 `run.sh audit`. Its sampling design is a setting of the launch's environment (`[run.window.tie]`), by default the benchmark's
 `stratified-rate:1/2097152`.
 
-`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which only
-a composite computed off the served node, on an auditor device, is; 2 pending; 1 a rejection, a refused composite or a
-failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
+`served_verdicts.sh`'s exit is its record's verdict: 0 when the compiled Lean composite of record accepted, which with
+neither `VERITY_HOLD_PLACEMENT=1` nor `COMPOSE_OFF_NODE=1` set is the composite computed on the served node, and under
+either only a composite computed off the served node, on an auditor device; 2 pending; 1 a rejection, a refused
+composite or a failed step. A window on the served node can only end pending, so `window.sh` exits 0 when it does, its last line
 `pending: composed off this node` (or, under a deferral, audited and composed off it), and with `PREFLIGHT_ONLY=1`
 exits 0 when the preflight passed.
 
@@ -103,9 +104,10 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 - The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
   `LOAD=fixed` one full execution phase of fixed length).
 - `placement.toml`: where each run goes and what its node holds. The window serves on node A (`vy-spot-glm53`, eight
-  H200s shared by card) and its record is composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF
-  cache, taps, traced Builds and Flock's build, which `run.sh setup` leaves under the served run's directory, and a
-  run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
+  H200s shared by card) unless the launch names another node (`--env NODE=vy-h100-1`, one H100), and its record is
+  composed on `vy-nebius-cpu-14`. A node's table holds its venv, CUDA, HF cache, taps, traced Builds and Flock's build,
+  which `run.sh setup` leaves under the served run's directory, and the rows it serves where they are not the top's
+  (`rows`), and a run's table the flags the run recorder starts it with. `run.sh` hands a run's script these as its environment, so no
   script names a node. No file or command line holds a machine's address: `window.sh` reads the gate's
   (`VY_CHALLENGER_1_HOST`) from `CHALLENGER_ENV`, a mode-600 env file on the node. The window's card, cores and end
   are `CARD`, `CORES` and `END`, which `run.sh` fills from the environment the run is launched in.
@@ -115,13 +117,14 @@ read, may run on the endpoint's node too. Being placed needs each of them on a m
 
 ## Commands
 
-`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit] [--dry-run] [--development] [--tie] [FLAG...]`).
+`run.sh` is the one command (`bash adapters/vllm/tools/served_run/run.sh [window|compose|setup|copy|audit|device-pin] [--dry-run] [--development] [--tie] [FLAG...]`).
 It starts the run with the run recorder from the tree root, on the node `placement.toml` names, and returns once the
 run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--dry-run` prints the command.
 
 1. `CARD=N CORES=A-B END=UTC run.sh setup [--tie]`, once per row and node: `setup.sh` makes what the window reads,
    each step skipped where its result is there unless `STEPS` names it: the INT8 pin, the taps, Flock's build, and the
-   row's predicted Build, held to its pin (INT8: `test_predict.py`'s; BF16: `served_verdicts.sh`'s `BUILD_OF_RECORD`),
+   row's predicted Build, held to its pin (INT8: `test_predict.py`'s; BF16: its row's `BUILD_OF_RECORD` in `served_verdicts.sh`, and a
+   row with none set up and its predicted digests named, while its window is refused),
    its traced Build and their compare. Its last line names the run id to add to `builds`. A tap's bytes change when it
    is rebuilt even where its sources don't, so a rebuilt tap is not live until its exactness test passes on the card
    (`fa_tap_exactness_gpu.py`, the guarded build against the default build's record): only then does setup install
@@ -148,9 +151,18 @@ run starts. FLAGs go to the recorder (`--timeout 200m` to end with the row); `--
    base) as `NAME=value` lines, which name no address; with `-- CMD`, CMD run under them wherever its environment sets
    none, after the node's env files (`env_files`, each mode 600) are read and each `${NAME}` they or the environment
    set is filled in, the INT8 pin linked and the venv's CUDA headers found. The window run's `served_verdicts.sh` runs
-   so. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
+   so. The settings name no `COMPOSE_OFF_NODE`, so where an application's record is composed is `served_verdicts.sh`'s
+   default, by its product and `VERITY_HOLD_PLACEMENT`. An application's command takes no bindings: every party runs on node A, the challenger with coins of its own. For a run
    on the auditor's coins, `uv run bash run.sh bindings applications/X.toml` prints `verity run --bindings` for that application:
    node A's `bindings` values, each to every party whose piece reads its key, the addresses such `${NAME}`s.
+   With `CARD=N`, every `gpu-lease` CMD starts leases card N alone, by a `gpu-lease` first on its PATH (`pin_card.sh`,
+   the window's too), and `PORT` reaches CMD as given, so two applications on one node each keep their own card and
+   endpoint port; with no `CARD`, a lease takes any free card.
+
+6. `CARD=N CORES=A-B run.sh device-pin --env NODE=<node>`: `device-pin.sh`, the node's cuBLAS device pin probed on that
+   card under its lease (`verity-vllm device-pin probe`, the H200's shapes): its routes and the route conditions the
+   probe ran under, in `out/device_pin.json`, which registered as `device_pins/<device>.json` is what a Build naming
+   that device binds and what a serving process on it is held to.
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `adapters/vllm`, and run
 `verity_vllm.pipeline.cli` and the integration's tools from `adapters/vllm/`.

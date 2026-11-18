@@ -23,6 +23,7 @@ sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "adapters" / "vllm
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import program_digest
+
 from verity_vllm.definitions.numerics import serve3_reference as ref
 from verity_vllm.definitions.registry import b1, serve3
 from verity_vllm.definitions.registry.b1 import weights_type

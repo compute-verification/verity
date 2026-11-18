@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity_vllm.definitions.registry import b1
 
 from verity_vllm.check.replay.stoch_recompute import evaluate_spec
+from verity_vllm.definitions.registry import b1
 
 
 def _bf16_words(n: int, rng: np.random.Generator) -> np.ndarray:

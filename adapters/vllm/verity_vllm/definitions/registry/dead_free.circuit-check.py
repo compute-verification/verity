@@ -18,7 +18,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     Both are over `targets.MAX_GATES`, so ``--all`` checks the greedy one's combine at the served V and builds the top-p one,
     whose keep word's `live_replay` holds V-sized liveness sets (its peak in this module's unkeyed file): a build that fails only at the served V fails here."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import dead_free as DF, hopper, prims as P
+
+    from verity_vllm.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import hopper
+    from verity_vllm.definitions.registry import prims as P
     from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
     glm53_v, glm53_s = 154880, registered_splits(132)

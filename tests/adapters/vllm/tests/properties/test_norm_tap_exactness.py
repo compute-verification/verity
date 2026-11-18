@@ -7,10 +7,10 @@ import json
 
 import numpy as np
 import pytest
-from verity_vllm.definitions.numerics import derived_rows as D
 
 from tests.properties import norm_tap_exactness as X
 from tests.properties import norm_tap_exactness_gpu as G
+from verity_vllm.definitions.numerics import derived_rows as D
 from verity_vllm.records.property_record import REGISTRY, digest_of
 
 TAP_LINES = ("    scale_ptr,\n", "    tl.store(scale_ptr + row_idx + tl.arange(0, 1), inv_rms)\n")

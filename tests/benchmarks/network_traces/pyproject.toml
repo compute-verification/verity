@@ -55,7 +55,7 @@ untraced = [
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
 # total_cost.py, the second stage's bound it imports and the cards they read); where asked, the census's request and
 # GPU peak at the workload card's MACs a token.
-inputs = ["calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
+inputs = ["calibration/hardware/cards", "calibration/census/deployments.json", "calibration/census/adversary.json", "calibration/census/hardware.json",
           "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
@@ -94,7 +94,9 @@ inputs = ["calibration/census/deployments.json", "calibration/census/adversary.j
           # record.py writes its metric through the harness kit's writer, whose settings are verity_config's
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
-          "tools/config/verity_config"]
+          "tools/config/verity_config",
+          # and names its card by its short name in the card records (kit.card_short)
+          "benchmarks/harness/verity_bench/overhead.py", "calibration/hardware/cards", "verity/device.py"]
 # network-rows, the compiled audit of the network attester's records, which test_attester_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_network_attester_zk
 # and test_egress_zk run on their staged members.
