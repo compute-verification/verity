@@ -53,7 +53,7 @@ grep -q "Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>" "$FA2/trees/tap8/csrc/flash
 [ "${TREE_ONLY:-0}" = "1" ] && { echo "FA2-TAP-TREE-OK $FA2/trees/tap8"; exit 0; }
 
 # (3) build for this GPU
-ARCH=${FA2_TAP_ARCH:-$(PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" $PY -c "import sys; from verity_vllm.engine.profiles.devices import cuda_arch; print(cuda_arch(sys.argv[1]))" "${CARD_SKU:?set CARD_SKU to the SKU of the card file the tap compiles for (calibration/hardware/cards), or FA2_TAP_ARCH}")} || fail "no arch for card ${CARD_SKU:-}"
+ARCH=${FA2_TAP_ARCH:-$(PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" $PY -c "import sys; from verity_vllm.config import cuda_arch; print(cuda_arch(sys.argv[1]))" "${CARD_SKU:?set CARD_SKU to the SKU of the card file the tap compiles for (calibration/hardware/cards), or FA2_TAP_ARCH}")} || fail "no arch for card ${CARD_SKU:-}"
 OUT=$FA2/build/$BUILD
 if [ "$ROW_GUARD" != "1" ] && [ -f "$OUT/verity_fa2_matReq.so" ] && ! $PY -c "import torch,sys; torch.ops.load_library('$OUT/verity_fa2_matReq.so'); sys.exit(0 if hasattr(torch.ops.verity_fa2_matReq,'verity_tap_hdims') else 1)" 2>/dev/null; then
   log "existing $OUT is the hd-64-only build -> kept as $FA2/build/matReq_hd64_r9"; rm -rf "$FA2/build/matReq_hd64_r9"; mv "$OUT" "$FA2/build/matReq_hd64_r9"

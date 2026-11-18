@@ -13,11 +13,11 @@ from __future__ import annotations
 import json
 from functools import cache
 
-from verity.device import compute_capability, gpu_card_reporting, load_card, skus
+from verity.device import gpu_card_reporting, load_card, skus
 from verity_vllm.config import CARD_FILES, workload_file
 from verity_vllm.target_family import device_token_of_row
 
-__all__ = ["card_arch", "card_sku", "class_device_name", "cuda_arch", "device_name", "device_name_of_row", "fused_moe_config"]
+__all__ = ["card_sku", "class_device_name", "device_name", "device_name_of_row", "fused_moe_config"]
 
 
 @cache
@@ -33,20 +33,6 @@ def card_sku(name: str) -> str:
     """The SKU of the one GPU card file whose `driver` holds `name`, the name the device reports (`verity.device.gpu_card_reporting`);
     refused by name (KeyError) where none or several do."""
     return gpu_card_reporting(name, directory=CARD_FILES)["sku"]
-
-
-def card_arch(sku: str) -> str:
-    """Card `sku`'s `arch` (sm_90a), refused unless it is a GPU card's sm_<major><minor>[a|f]."""
-    card = load_card(sku, directory=CARD_FILES)
-    compute_capability(card)
-    return card["arch"]
-
-
-def cuda_arch(sku: str) -> str:
-    """The `TORCH_CUDA_ARCH_LIST` entry of card `sku`'s `arch` (sm_90a -> 9.0a), which an extension built for it compiles to."""
-    card = load_card(sku, directory=CARD_FILES)
-    major, minor = compute_capability(card)
-    return f"{major}.{minor}{card['arch'][-1] if card['arch'][-1] in 'af' else ''}"
 
 
 def class_device_name(token: str) -> str | None:

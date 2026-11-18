@@ -30,7 +30,7 @@ import torch
 
 from verity_vllm import settings
 from verity_vllm.engine.int8_exact import ZY_BYTES, zy_units
-from verity_vllm.engine.profiles.devices import card_arch
+from verity_vllm.config import card_arch
 from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH, WGMMA_ZY
 
 HERE = Path(__file__).resolve().parent

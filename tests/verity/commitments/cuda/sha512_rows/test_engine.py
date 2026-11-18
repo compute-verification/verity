@@ -57,9 +57,30 @@ def test_row_digests_match_the_reference_at_edge_sizes(engine: E.Engine) -> None
     assert all(v == 0 for v in r["mismatches"].values()), r
 
 
-def test_hm96_leaves_match_under_a_salt_key_and_given_salts_and_fused(engine: E.Engine) -> None:
+def test_hm96_leaves_match_hm96s_under_the_same_salt_bytes_in_place_and_fused(engine: E.Engine) -> None:
     r = check.check_leaves(engine)
-    assert r["mismatches"] == {"salt_key": 0, "salts": 0, "fused": 0}, r
+    assert r["mismatches"] == {"salts": 0, "strided": 0, "fused": 0}, r
+
+
+def test_a_leaf_takes_its_salt_as_data_and_nothing_derives_one() -> None:
+    """The engine has no salt of its own: ``leaves`` refuses a call with no buffer, a key in its place, or a buffer that is
+    not a salt a leaf; and a leaf moves with its own salt's bytes alone."""
+    e = E.Engine("host", build=BUILD)
+    G, S = 3, 2
+    x = e.row_digests(e.rows([[(0, 0, n)] for n in (1, 64, 128)], [np.zeros((S, 128), dtype=np.uint8)]))
+    lt = e.leaf_table([bytes(64)], [0] * G, list(range(G)))
+    assert not hasattr(E, "SaltKey") and not hasattr(e, "rekey")
+    for bad in (None, bytes(32), np.zeros((G, S, 191), dtype=np.uint8), np.zeros((S, G, 192), dtype=np.uint8),
+                np.zeros((G, S, 192), dtype=np.uint16), np.zeros((G, S, 384), dtype=np.uint8)[:, :, ::2]):
+        with pytest.raises(ValueError, match="salt"):
+            e.leaves(lt, x, bad)
+    salts = np.random.default_rng(5).integers(0, 256, (G, S, 192), dtype=np.uint8)
+    base = E.digests(e.leaves(lt, x, salts))
+    for g, s, n in ((0, 0, 0), (1, 1, 100), (2, 0, 191)):
+        moved = salts.copy()
+        moved[g, s, n] ^= 1
+        got = E.digests(e.leaves(lt, x, moved))
+        assert [i for i in range(G * S) if got[i] != base[i]] == [g * S + s]
 
 
 def test_frame_leaves_levels_pads_and_roots_match_tree_levels(engine: E.Engine) -> None:
@@ -91,22 +112,23 @@ def test_each_call_costs_its_compressions_on_the_host_twin() -> None:
     """Counted, not timed: a row of at most 111 bytes is one compression, the empty row's over a constant schedule (its
     block is padding alone), and a row whose last block is padding alone ends with one, as do 112 and 128 bytes' second;
     an hm96 leaf five (c two, h two of which the padding block's schedule is a constant, the frame leaf one from the row's
-    midstate) and three ChaCha20 blocks, and fused with its unit's slot-tree leaf six; a unit's slot-tree leaf one from its
+    midstate), its salt read and not hashed for, and fused with its unit's slot-tree leaf six; a unit's slot-tree leaf one from its
     frame table's midstate (two from rank 2^24), against frame_leaves' two from the IV; a node two."""
     e = E.Engine("host", build=BUILD)
     G, S = 6, 4
     t = (np.arange(S * 128) % 251).astype(np.uint8).reshape(S, 128)
     table = e.rows([[(0, 0, n)] for n in (0, 1, 16, 64, 100, 111)], [t])
-    assert _cost(e, lambda: e.row_digests(table)) == {"compressions": G * S, "kw": S, "chacha": 0}
+    assert _cost(e, lambda: e.row_digests(table)) == {"compressions": G * S, "kw": S}
     pads = e.rows([[(0, 0, n)] for n in (110, 111, 112, 127, 128)], [t])
-    assert _cost(e, lambda: e.row_digests(pads)) == {"compressions": (1 + 1 + 2 + 2 + 2) * S, "kw": 3 * S, "chacha": 0}
+    assert _cost(e, lambda: e.row_digests(pads)) == {"compressions": (1 + 1 + 2 + 2 + 2) * S, "kw": 3 * S}
     x = e.row_digests(table)
     lt = e.leaf_table([bytes(64)], [0] * G, list(range(G)))
-    assert _cost(e, lambda: e.leaves(lt, x, E.SaltKey(bytes(32)))) == {"compressions": 5 * G * S, "kw": G * S, "chacha": 3 * G * S}
+    salts = np.zeros((G, S, 192), dtype=np.uint8)
+    assert _cost(e, lambda: e.leaves(lt, x, salts)) == {"compressions": 5 * G * S, "kw": G * S}
     ft = e.frame_table([bytes(range(64))], 100, G)
-    assert _cost(e, lambda: e.frame_table([bytes(range(64))], 100, G)) == {"compressions": G, "kw": 0, "chacha": 0}
+    assert _cost(e, lambda: e.frame_table([bytes(range(64))], 100, G)) == {"compressions": G, "kw": 0}
     dest = e.u32s(np.arange(G))
-    assert _cost(e, lambda: e.leaves(lt, x, E.SaltKey(bytes(32)), None, 0, ft, dest, e._words(S, G))) == {"compressions": 6 * G * S, "kw": G * S, "chacha": 3 * G * S}
+    assert _cost(e, lambda: e.leaves(lt, x, salts, None, 0, ft, dest, e._words(S, G))) == {"compressions": 6 * G * S, "kw": G * S}
     v = e._words(G, S)
     assert _cost(e, lambda: e.frame_units(ft, np.arange(G), v, e._words(S, G)))["compressions"] == G * S
     assert _cost(e, lambda: e.frame_leaves(v, [bytes(64)], 100))["compressions"] == 2 * G * S
