@@ -91,13 +91,11 @@ the lock's sections, each naming the docstring with the detail. This is the work
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
-  (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
-  code, which the spec can't import), or in a module under it that reads less than the root module (`Assumptions/Flock.lean`,
-  since the root module reads InferenceOnly); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
-  `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id,
-  which its lock entry carries as `id` (`tools/verity/lean/claim_ids.py` writes the table from id to Lean name), and gives
-  its rationale; a ledger points to it.
+- **An assumption** is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+  (a module or a list of them), or in a module under it that reads less than the root module; an area's other premises
+  live in its `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` for now), each owner
+  in the lock. Its docstring opens with its claim id, which its lock entry carries as `id`, and gives its rationale; a
+  ledger points to it.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
@@ -126,6 +124,7 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 - A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
   check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
   entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
+  Its records run (`lean_changed.py --records security`) runs that ratchet and fails on it before the mark.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
@@ -141,9 +140,11 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
   `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
-  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
-  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
-  asked to conclude it.
+  entry's `why` (the README's lock sections). A `Prop` no guarantee takes, which a listed guarantee's stronger conclusion
+  waits on, is `open` by hand with `waits` naming that guarantee beside its owner, issue, due date and `why`; `--update`
+  keeps it and adds none, and the check refuses it once a guarantee takes it. A named `Prop` counted only as an
+  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
+  restricts there, and no witness is asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

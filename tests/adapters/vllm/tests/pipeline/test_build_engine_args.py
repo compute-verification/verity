@@ -95,12 +95,13 @@ def test_a_build_of_a_declared_target_names_the_platform_it_selected(tmp_path, m
     monkeypatch.setattr(B, "_cuda_available", lambda: False)
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     monkeypatch.setattr("verity_vllm.program.frontend.export_compat.select_cuda_platform", lambda world, name: f"{world} of {name}")
-    target = json.dumps({"compute_capability": [12, 0], "num_sms": 188})
+    target = json.dumps({"card": "rtx-pro-6000-server"})
     with caplog.at_level(logging.INFO, logger="verity_vllm"):
-        B.main(B.Options(out=str(tmp_path / "declared"), target=target, tp=2, device_name="a device"))
-        B.main(B.Options(out=str(tmp_path / "host"), tp=2, device_name="a device"))     # no declared target: the line is not written
+        B.main(B.Options(out=str(tmp_path / "declared"), target=target, tp=2))
+        B.main(B.Options(out=str(tmp_path / "host"), tp=2))     # no declared target: the line is not written
     (rec,) = _logged(caplog)
-    assert (rec.levelno, rec.getMessage()) == (logging.INFO, "[derive_step] declared target sm_120 x2: vLLM platform 2 of a device")
+    assert (rec.levelno, rec.getMessage()) == (
+        logging.INFO, "[derive_step] declared target sm_120 x2: vLLM platform 2 of NVIDIA RTX PRO 6000 Blackwell Server Edition")
 
 
 def test_a_build_that_raises_says_so_in_one_error_that_ends_with_its_traceback(tmp_path, monkeypatch, caplog):

@@ -157,7 +157,20 @@ def test_remote_and_onsite_full_have_the_values_pearl_pluss_tie_takes_and_the_sm
         assert T.variables(cfg, {}).items() >= (TIED_WORKLOAD | TIED_CLASS).items(), name
     for name in set(T.HEADERS) - {"remote", "onsite_full"}:
         cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
-        assert cfg["workload"]["params"] == T.SERVED.default_params and "pearl-plus" not in cfg["protocols"]
+        assert cfg["workload"]["params"] == {**T.SERVED.default_params, **T.DEMO_VALUES.get(name, {})}, name
+        assert "pearl-plus" not in cfg["protocols"], name
+
+
+def test_the_front_application_is_the_networks_with_the_fronts_load_and_the_split_attester():
+    """`onsite_network_front.toml` is `onsite_network.toml` but for its load: served_verdicts.sh's LOAD=front, the
+    front's group the run's one load and its audited window, with the network attester's piece split around V3c."""
+    front = R.load(ROOT / "applications" / "onsite_network_front.toml", REG)
+    network = R.load(NETWORK, REG)
+    assert front["protocols"] == network["protocols"] and front["params"] == network["params"]
+    assert front["workload"]["params"] == {**network["workload"]["params"], "load": "front"}
+    hooks = T.variables(front, {})
+    assert T.SERVE.variables(front, {})["LOAD"] == "front"
+    assert {"CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) and "CERTIFIER_CMD" not in hooks
 
 
 def test_the_configuration_states_no_host_or_address():
@@ -817,7 +830,8 @@ def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys,
 SEAL = "5" * 128
 
 
-def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None) -> None:
+def published(state: Path, rows: dict, composed: str = "accept", reason: str = "", source: str | None = None,
+              lean: str | None = None) -> None:
     """All the served window publishes that the onsite check reads: the execution phase by its seal's digest and the
     record, every row but ``rows``' accepting, each row's ``answer_from`` ``source``, else as served_verdicts.py's
     record writes it, the served node's."""
@@ -828,7 +842,8 @@ def published(state: Path, rows: dict, composed: str = "accept", reason: str = "
     (state / "out" / "serve" / T.PHASE).write_text(json.dumps({"seal_sha512": SEAL}))
     (state / "out" / "record" / "verdicts.json").write_text(json.dumps(
         {"protocols": {k: {"verdict": v, "answer_from": source or f"{T.AS_WRITTEN} (its piece files in {k}/)"}
-                       for k, v in every.items()}, "composed": {"verdict": composed, "reason": reason}}))
+                       for k, v in every.items()},
+         "composed": {"verdict": composed, "reason": reason, **({"lean": lean} if lean else {})}}))
 
 
 def written(*components: str, composed: bool = False) -> str:
@@ -859,11 +874,13 @@ def undecided(components: dict) -> dict:
      "network-attester error"),
     ({"bandwidth": "accept", "communication": "error", "work": "missing"}, "reject", "reject", 1, "network-attester error"),
 ])
-def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, rows, composed,
-                                                                              verdict, rc, reason):
+def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(tmp_path, capsys, monkeypatch, rows,
+                                                                              composed, verdict, rc, reason):
     """The serving step publishes its window's number, steps and requests to no one, so the verifier reads only the
-    published record and the execution phase's seal digest; the serving node composed that record, so a reject or an
-    error stands and each accept, a row's or the composed verdict, reads undecided."""
+    published record and the execution phase's seal digest; under the placement hold, since the workload's node
+    composed that record, a reject or an error stands and each accept, a row's or the composed verdict, reads
+    undecided."""
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, rows, composed, "the network attester: error")
     assert sorted(p.relative_to(state).as_posix() for p in state.rglob("*") if p.is_file()) == [
@@ -884,15 +901,43 @@ def test_the_onsite_line_is_the_published_records_and_takes_none_of_its_accepts(
 
 
 @pytest.mark.parametrize("source", NOT_WRITTEN)
-def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, source):
-    """``answer_from`` is the serving node's word too: a record whose every row says it was recomputed elsewhere, under
-    a composed accept, is still undecided."""
+def test_a_row_the_serving_node_says_came_from_elsewhere_is_no_accept_either(tmp_path, capsys, monkeypatch, source):
+    """``answer_from`` is the serving node's word too: under the placement hold, a record whose every row says it was
+    recomputed elsewhere, under a composed accept, is still undecided."""
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, {"bandwidth": "accept", "inference-only": "accept"}, source=source)
     assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2
     (line,) = said(capsys.readouterr().out, "VERDICT")
     assert (line["verdict"], line["reason"]) == ("undecided", written(*PROTOCOLS, composed=True))
     assert set(line["components"].values()) == {"undecided"} and set(line["answer_from"].values()) == {source}
+
+
+@pytest.mark.parametrize("rows, composed, lean, verdict, rc, reason", [
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", None, "accept", 0, None),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "pending", "no composite was read", "undecided", 2,
+     "no composite was read"),
+    ({"bandwidth": "missing"}, "pending", None, "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept", "inference-only": "accept", "communication": "error"}, "reject", None, "reject", 1,
+     "network-attester error"),
+])
+def test_without_the_placement_hold_the_onsite_line_is_the_record_as_the_workloads_node_wrote_it(
+        tmp_path, capsys, monkeypatch, rows, composed, lean, verdict, rc, reason):
+    """With ``VERITY_HOLD_PLACEMENT`` unset, the line's verdicts are the record's, the composed one and each row's,
+    and each row's ``answer_from`` still says the workload's node wrote it; a record composed with no composite stays
+    undecided, and a reject or an error stands."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    state = tmp_path / "state"
+    published(state, rows, composed, lean=lean)
+    assert R.run_main([str(CONFIG), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == rc
+    (line,) = said(capsys.readouterr().out, "VERDICT")
+    assert (line["verdict"], line["reason"], line["product"]) == (verdict, reason, T.ONSITE)
+    assert line["components"] == {**{c: "accept" for c in PROTOCOLS}, "bandwidth": "absent", "inference-only": "absent",
+                                  **{NAMES[k]: v for k, v in rows.items()}}
+    assert line["coins"] == "simulated" and line["coins_on"] == {
+        **{c: T.PROVER_NODE for c in ("pous", "bandwidth", "wipe", "pearl-plus")}, "sampled-proofs": T.GATE_HOST}
+    assert set(line["answer_from"].values()) == {f"{T.AS_WRITTEN} (its piece files in {k}/)" for k in
+                                                 ("integrity", "work", "space", "communication", "wipe", *rows)}
 
 
 @pytest.mark.parametrize("left", [T.PHASE, "verdicts.json"])
@@ -1144,10 +1189,11 @@ case "$*" in *memory.used*) echo 0 ;; esac
 """
 #: ip's stand-in: the default route's NIC
 IP = "#!/bin/sh\necho '1.1.1.1 via 10.0.0.1 dev eth9 src 10.0.0.2 uid 0'\n"
-#: the launcher's Python, its attach a stand-in: what the launcher handed it, and the directory its scratch is made in
-#: with that directory's mode, written to ``attach.json``; it then refuses, so no wipe runs
+#: the launcher's Python, its attach a stand-in: what the launcher handed it, the directory its scratch is made in with
+#: that directory's mode, and the streamer handed with the labels it streams under the zero key (as the memory attester's
+#: gate runs it), written to ``attach.json``; it then refuses, so no wipe runs
 PYTHON = """#!{python}
-import json, os, runpy, stat, sys
+import json, os, runpy, stat, subprocess, sys
 from pathlib import Path
 if sys.argv[1] != "-":
     sys.argv = sys.argv[1:]
@@ -1161,8 +1207,12 @@ from verity_vllm import messages
 def attach(self, scheme, given, **ctx):
     tmp = os.environ["TMPDIR"]
     facts = {{k: ctx[k] for k in ("host", "address", "command", "links", "run_keys")}}
+    stream = ctx.get("wipe_stream")
+    labels = stream and subprocess.run([stream, "check", "--start", "0", "--count", "2"], input="0" * 64 + "\\n",
+                                       capture_output=True, text=True, check=True).stdout.splitlines()[1:]
     Path({log!r}).write_text(json.dumps({{"settings": given, "facts": facts, "trusted": ctx.get("trusted"),
-                                          "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]]}}))
+                                          "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]],
+                                          "wipe_stream": stream, "labels": labels}}))
     raise ValueError("wipe: the stand-in attach")
 
 
@@ -1201,9 +1251,25 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
         assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
             "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
             "links": handed["facts"]["links"]}
+        assert handed["wipe_stream"] is None
     else:
         assert handed["settings"] == {} and handed["facts"]["run_keys"] is True and not handed["facts"]["host"]
     assert handed["tmpdir"] == [str(keys), "700"] and not keys.exists()
+
+
+def test_the_runs_streamer_is_built_and_run_outside_the_serve_dir(tmp_path):
+    """With the memory attester the run's, its native streamer is built into a directory of its own and handed to the
+    attach (`wipe_stream`), so nothing under the serve dir, which may be mounted noexec (/dev/shm), is run: the key stays
+    under it (TMPDIR), the streamer runs from outside it and derives `streamed_wipe.label`'s labels, and both are gone
+    when the wipe ends."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+    p, log = served_wipe(tmp_path, {})
+    assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
+    handed, serve = json.loads(log.read_text()), tmp_path / "serve"
+    stream = Path(handed["wipe_stream"])
+    assert handed["facts"]["run_keys"] is True and not stream.resolve().is_relative_to(serve.resolve())
+    assert b"".join(bytes.fromhex(x) for x in handed["labels"]) == sw.labels(bytes(32), 0, 2)
+    assert not stream.parent.exists() and not (serve / "private" / "run-keys" / "wipe").exists()
 
 
 @pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
@@ -1218,8 +1284,9 @@ def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_ca
     ({}, "accept", NOT_WRITTEN[0], "undecided", written("network-attester", "sampled-proofs", "wipe", composed=True)),
     ({"communication": "reject"}, "reject", None, "reject", "network-attester reject"),
 ])
-def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, rows, composed,
-                                                                                      source, verdict, reason):
+def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_verdict(tmp_path, monkeypatch, rows,
+                                                                                      composed, source, verdict, reason):
+    monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     state = tmp_path / "state"
     published(state, rows, composed, source=source)
     line = T.onsite_check(R.load(NETWORK, REG), state)
@@ -1227,11 +1294,19 @@ def test_a_set_no_lean_verifier_takes_reads_the_published_record_and_no_python_v
     assert "combined_by" not in line
 
 
-@pytest.mark.parametrize("rows, composed, reason", [
-    ({}, "accept", written("network-attester", "sampled-proofs", "wipe", composed=True)),
-    ({"communication": "reject"}, "reject", "network-attester reject"),
+@pytest.mark.parametrize("hold, rows, composed, reason", [
+    ("1", {}, "accept", written("network-attester", "sampled-proofs", "wipe", composed=True)),
+    ("1", {"communication": "reject"}, "reject", "network-attester reject"),
+    (None, {}, "accept", "no composite takes verity/onsite-network/v0"),
+    (None, {"communication": "reject"}, "reject", "network-attester reject"),
 ])
-def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, rows, composed, reason):
+def test_a_set_no_lean_verifier_takes_is_undecided_under_its_own_id(tmp_path, capsys, monkeypatch, hold, rows, composed,
+                                                                    reason):
+    """Python never accepts where a Lean verifier is written: with the placement hold or without it."""
+    if hold:
+        monkeypatch.setenv("VERITY_HOLD_PLACEMENT", hold)
+    else:
+        monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
     state = tmp_path / "state"
     published(state, rows, composed)
     assert R.run_main([str(NETWORK), "--on", T.AUDITOR_HOST, "--party", "verifier", "--state", str(state)], REG) == 2

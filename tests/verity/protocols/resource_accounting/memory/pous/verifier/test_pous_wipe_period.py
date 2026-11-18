@@ -264,6 +264,24 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.placement("n0", "a", OTHER, simulated=True)
 
 
+@pytest.mark.parametrize("tools, streamer", [({}, "build"), ({"wipe-stream": "/exec/wipe_stream"}, "/exec/wipe_stream")])
+def test_a_native_challenger_here_runs_the_streamer_the_period_names(tmp_path, tools, streamer) -> None:
+    """A challenger on this node streaming natively is started with period.json's `tools.wipe-stream`, a streamer built
+    where programs run, and builds its own beside its key (`--streamer build`) only when none is named."""
+    period = tmp_path / "periods" / "p0"
+    period.mkdir(parents=True)
+    (period / "period.json").write_text(json.dumps({"tools": tools, "wipe": {"streamer": "native", "threads": 4}}))
+    started = []
+
+    def side_of(doc, node, key, local, what=None):
+        started.append(local)
+        raise LookupError("started")
+
+    with pytest.raises(LookupError, match="started"):
+        wipe_run.subprotocol(period, "n0", tmp_path / "out", side_of=side_of)
+    assert started == [WP.command(tmp_path / "periods" / "wipe-challenger", ("--streamer", streamer, "--threads", "4"))]
+
+
 AUDITOR = "vy-auditor-2"
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 OTHER = hashlib.sha512(b"a key that is no auditor's").hexdigest()
@@ -409,6 +427,8 @@ def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypat
     assert challenger["via"] == f"{record['report']['connection']['local']} to {record['report']['connection']['peer']}"
     assert challenger["via"].startswith("127.0.0.1:") and challenger["counted_by"] is None
     assert answer["profile"]["placement"] == record["placement"]
+    assert record["placement"]["graded_by"] == wipe_run.GRADED_BY and record["placement"]["unchecked"] == dict(mc.UNCHECKED)
+    assert wipe_run.GRADED_BY.endswith("; not certified: survivors bounded by nothing")
     dram = [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"]
     assert len(dram) == 1 and dram[0]["what"] == "the host's DRAM outside the declared tier" and dram[0]["bytes"] > 0
     window = {"t0": "2026-10-27T08:00:00.123456Z", "t1": "2026-10-27T08:03:03.000001Z"}

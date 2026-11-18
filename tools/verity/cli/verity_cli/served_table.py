@@ -140,7 +140,9 @@ def _pearlplus_params(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> di
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
-LOADS = ("varied", "fixed")
+#: the served window's loads (served_verdicts.sh's LOAD); ``front``, network-accounting's: the network attester's front's
+#: group is the run's one load and its audited window
+LOADS = ("varied", "fixed", "front")
 
 
 def _served(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -233,6 +235,10 @@ HEADERS = {
         "The served window under the network attester, SPOT and the memory wipe (verity/onsite-network/v0, a",
         "deployment of its own, never onsite), each party on its machine, and the key the auditor pinned for",
         "its memory attester.", *_UNDECIDED),
+    "onsite_network_front": (
+        "onsite_network.toml with the network attester's front as the run's one load (load front): the one run in",
+        "which the network attester's chain and the window's compute audit see the same window, so the period check",
+        "can reach its tied form.", *_UNDECIDED),
     "remote": (
         "The served window under remote's subprotocols (verity/remote/v1): SPOT, PoUW's Pearl+ run verdict and the",
         "inference-only policy. No auditor's device is at the site: the developer's parties are on the prover node",
@@ -246,12 +252,12 @@ def listed(demo: str) -> tuple[str, ...]:
     return tuple(tomllib.loads((APPLICATIONS / f"{demo}.toml").read_text())["protocols"])
 
 
-#: an application's own workload values over the shared defaults, for the applications that tie their workload to the
-#: schemes they list, each of which then states its declared `Scheme.tie` over its parameters' defaults; remote and
-#: onsite both serve the tie
+#: an application's own workload values over the shared defaults, each of whose listed schemes then states its declared
+#: `Scheme.tie` over its parameters' defaults; remote and onsite both serve the tie, and onsite_network_front only the
+#: front's load
 _TIED = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
          "precision": "bfloat16", "slots": 4, "window-steps": 2, "load": "fixed"}
-DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED}
+DEMO_VALUES = {"remote": _TIED, "onsite_full": _TIED, "onsite_network_front": {"load": "front"}}
 
 
 def tied(protocols: Sequence[str]) -> dict[str, dict[str, Any]]:
@@ -964,10 +970,12 @@ PHASE = "phase.json"
 def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     """The verifier's onsite line over what the application's serving step published in ``state``'s ``out/`` and
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
-    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form. The serving node composed that record, so each of
-    its accepts, each row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason, whatever a row's
-    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. A component that charges nothing
-    keeps its row's verdict like any other; the line's ``charges_nothing`` says why it has no figure. Refused
+    ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form: its verdicts as the record has them, each row's
+    ``answer_from`` (printed, deciding nothing) saying who wrote it. Under ``VERITY_HOLD_PLACEMENT=1``
+    (`verity_cli.settings.hold_placement`), since the workload's node composed that record, each of its accepts, each
+    row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason; a reject or an error stands either way.
+    A component that charges nothing keeps its row's verdict like any other; the line's ``charges_nothing`` says why it
+    has no figure. Refused
     (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
@@ -989,14 +997,15 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = (wrong or composed.get("reason")) if verdict == "reject" else \
         (f"missing {missing}" if missing else None) or (f"no row for {absent}" if absent else None) \
         or (composed.get("lean") if verdict != "accept" else None)
-    # The serving node composed this record, so none of its accepts stands; one recomputed by the verifier would.
-    held = (["the composed verdict"] if verdict == "accept" else []) + \
-        sorted(c for c, v in components.items() if v == "accept")
-    components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
-    if verdict == "accept":
-        verdict = "undecided"
-    if held and verdict == "undecided":
-        reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
+    if machine_settings.hold_placement():
+        # The workload's node composed this record, so none of its accepts stands; one recomputed by the verifier would.
+        held = (["the composed verdict"] if verdict == "accept" else []) + \
+            sorted(c for c, v in components.items() if v == "accept")
+        components = {c: "undecided" if v == "accept" else v for c, v in components.items()}
+        if verdict == "accept":
+            verdict = "undecided"
+        if held and verdict == "undecided":
+            reason = "; ".join(x for x in (reason, "not accepted: " + ", ".join(f"{h} {AS_WRITTEN}" for h in held)) if x)
     on = coins_on(cfg, bindings_of(state))
     developer = {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,

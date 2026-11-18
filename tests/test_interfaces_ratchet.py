@@ -70,7 +70,33 @@ KEPT = {"scheme_name_tables": {
     "verity/protocols/proofs/spot/verifier/parties.py":
         "the sampled proofs' verifier files each case under its protocol id itself (`SUBPROTOCOLS`, `ids_of`): which "
         "id the composite check is told is decided on the verifier's side, never handed in by a caller, and the "
-        "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"}}
+        "verifier may not load the one table; a test outside the verifier holds the two equal (soundness, 18 Nov)"},
+    "card_names_in_code": {
+    "calibration/pouw/sass_census/lowering.sh":
+        "the script's own table of the lowering it expects for each case and architecture, a measured fact about an "
+        "architecture and no second copy of a card's figure (top, 18 Nov)",
+    "calibration/pouw/dc/archs.py":
+        "the tensor-form probe's one table of what it is written for on each architecture, keyed by the "
+        "architecture's name (top, 18 Nov)",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh":
+        "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh":
+        "the kernel's one line stating its own target, which `build.sh --arch` reads (top, 18 Nov)",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py":
+        "the variants' registered names, `VARIANT_G`'s keys (top, 18 Nov)",
+    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py":
+        "the variants' registered names, `VARIANT_G`'s keys (top, 18 Nov)",
+    "benchmarks/pouw/pearl_c_sm120/card.sh": "the variants' registered names (top, 18 Nov)",
+    "benchmarks/pouw/pearl_c_vllm/served_profile.sh": "the variants' registered names (top, 18 Nov)",
+    "benchmarks/pouw/pearl_c_vllm/window.sh": "the variants' registered names (top, 18 Nov)",
+    "benchmarks/pouw/pearl_c_vllm/served_step.sh": "a refusal quoting a scheme's registered id (top, 18 Nov)",
+    "benchmarks/pouw/pearl_c4/ship.sh":
+        "a pinned commit message, whose hash is every rebuilt ship's launch path (top, 18 Nov)",
+    "verity/commitments/cuda/commit_slots/slots.py":
+        "a key of a pinned fixture, `commit-slots-v1.json`, whose digest a suite pins (top, 18 Nov)",
+    "benchmarks/pouw/hidden_zk/registered.sh":
+        "the registered semantics' name its template is generated at, an `INSTRUCTIONS` key of `verity/circuits/silicon` "
+        "(compute-accounting, 18 Nov)"}}
 #: a toolkit's directory written out: under `/usr/local` or `/opt`, any path to a `cuda-<version>` directory (a file
 #: named so, `cuda-13.3.sh`, is not one), and pip's toolkit under `site-packages` (kernels' pattern, 18 Nov)
 CUDA = re.compile(r"(?<![\w.-])(?:/usr/local/cuda|/opt/cuda)"

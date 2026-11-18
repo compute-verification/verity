@@ -60,6 +60,10 @@ from . import wipe_store
 
 
 T = TypeVar("T")
+#: who graded the wipe's answer, its placement's ``graded_by``
+GRADED_BY = ("graded by the developer's piece (verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py: "
+             "wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) on the served node; no auditor-side entry "
+             "runs it; not certified: survivors bounded by nothing")
 
 
 class Side(Protocol):
@@ -210,7 +214,9 @@ alone), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills the 
 `wipe_store.Joint`), the host's DRAM (`dram`, `DRAM`: in the same session as a `cuda` or `disk` store, after it), the
 declared `tier` (the store's own by default; a joint store's are its parts'), the deadline a read, and the fill's
 streamer (`native`, `wipe_stream` on
-`threads` CPUs, or `python`) when the challenger runs on this node. A challenger on its own host streams as its
+`threads` CPUs, or `python`) when the challenger runs on this node: the one built at period.json's `tools.wipe-stream`
+when it names one, else built into the challenger's key directory, which may be on a filesystem that runs no
+programs. A challenger on its own host streams as its
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
 `"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
@@ -411,14 +417,14 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     `period.json`'s `deployment`, `period.deployment`), what the prover's store leaves out (`wipe_period.store_gaps`),
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
-    (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
-    its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
+    (`placement`, `wipe_party.placement` with who graded it, `GRADED_BY`), which names no device; `wipe.json` adds
+    the prover's own record (`prover`: its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
     the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, c = doc.get("tools") or {}, config(doc)
-    extra = (("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
+    extra = (("--streamer", tools.get("wipe-stream", "build"), *(("--threads", str(c["threads"])) if c["threads"] else ()))
              if c["streamer"] == "native" else ()) + (() if c["reads"] is None else ("--reads", str(c["reads"])))
     party = side_of(doc, node, "wipe", wipe_party.command(Path(period_dir).parent / "wipe-challenger", extra),
                     "the wipe")
@@ -466,6 +472,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
                                  store_gaps=W.store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
+    where = where | {"graded_by": GRADED_BY}
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),
                          "clock": f"{socket.gethostname()}'s real-time clock, around the whole session (the "

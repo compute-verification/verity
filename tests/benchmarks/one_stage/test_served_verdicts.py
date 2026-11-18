@@ -629,7 +629,8 @@ def test_the_hand_off_of_a_record_whose_v3c_audit_was_refused_its_coin_trees_is_
 def _integrity_entry(size: int, sampled: int) -> dict:
     """The block record's sampled-proofs entry of an accepted uniform sample of ``sampled`` of ``size`` proof blocks."""
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 0, "drawn": list(range(sampled)), "per_template": None, "proved": list(range(sampled))},
+         "public": {"bound": 0, "complete": True, "drawn": list(range(sampled)), "per_template": None,
+                    "proved": list(range(sampled))},
          "profile": {"levels": [{"name": "unit", "size": size}], "drawn": {"unit": sampled}, "delta": "1/2"}}
     return BR.subprotocol("integrity", S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent")), server="n", runs=[])
 
@@ -859,7 +860,7 @@ MAIN = f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}"
 
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
-         "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
+         "public": {"bound": 2, "complete": True, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
@@ -927,8 +928,10 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     error: the composed verdict is ``reject``, with no block record."""
     from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
     from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
+    from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
     beside = ledger.DELTA_FORM.removeprefix("δ")
+    unchecked = "".join(f"{n} {w}; " for n, w in mc.UNCHECKED.items())
     (d := tmp_path / "bandwidth").mkdir()
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
 
@@ -957,7 +960,8 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     refusal = BR._bound(BR._scheme("bandwidth"), a["profile"])["unbounded"]["why"]
     assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept" and rec["legs"]["bandwidth"]["unbounded"]["why"] == refusal
     assert all(x["not_established"] == ["bandwidth"] for x in sums["at"].values())
-    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+    assert (f"; the bandwidth audit: accept ({unchecked}its quantity is not established at δ = 1/100 or 1/1000000: "
+            f"{refusal}; "
             f"its error reads 1/1099511627776{beside}); ") in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
@@ -965,7 +969,8 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
     assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept"
-    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+    assert (f"; the bandwidth audit: accept ({unchecked}its quantity is not established at δ = 1/100 or 1/1000000: "
+            f"{refusal}; "
             f"its error reads 1/100 + 2^-64{beside}); ") in line["reason"]
 
     silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
@@ -1037,6 +1042,29 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
+
+
+def test_a_one_stage_accept_that_is_not_complete_rows_not_complete_and_never_composes_to_accept(tmp_path):
+    """An accept whose audit record left an entry without a verdict says so in its public ``complete``: its row is
+    `verdict_record.NOT_COMPLETE`, naming the entry, so the composed verdict is no accept and carries no block record."""
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import NOT_COMPLETE
+
+    (tmp_path / "window").mkdir()
+    (tmp_path / "window" / "audit.json").write_text(json.dumps(
+        {"accepted": True, "complete": False, "verdicts": {"lean": {"accepted": True}, "upstream": {"accepted": None}}}))
+    a = _accepted()["answer"]
+    row = S.row_of(S.INTEGRITY_OWNER, {**a, "public": {**a["public"], "complete": False}}, tmp_path)
+    assert (row["verdict"], row["reason"]) == (
+        NOT_COMPLETE, "its accept is not complete: its audit record has no verdict of upstream")
+    _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
+    assert rec is None and line["composed"] != "accept" and line["by"] == ["sampled proofs"]
+    assert f"sampled proofs: {NOT_COMPLETE}: its accept is not complete: its audit record has no verdict of upstream" \
+        in line["reason"]
+    bare = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
+    assert S.row_of(S.INTEGRITY_OWNER, bare, tmp_path / "none")["verdict"] == NOT_COMPLETE
+    (tmp_path / "window" / "audit.json").write_text("{not json")
+    row = S.row_of(S.INTEGRITY_OWNER, bare, tmp_path)
+    assert row["verdict"] == NOT_COMPLETE and "its audit record does not parse: " in row["reason"]
 
 
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
@@ -2744,11 +2772,40 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("pending", "accept", {})
     assert (line["record_missing"], rec["composed"]["verdict"], rec["composed"]["answer"]) == ([], "undecided", None)
-    assert line["answers"]["PoUW"] == S.PEARLPLUS_FROM
+    assert line["answers"]["PoUW"].startswith(S.PEARLPLUS_FROM)
     reason = line["reason"]
     assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+
+
+@pytest.mark.parametrize("product", ["remote", "onsite"])
+def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_record_on_both_paths(
+        tmp_path, monkeypatch, capsys, live, product):
+    """What a row's protocol's declaration says no auditor-side entry checks (`declared_unchecked`), Pearl+'s coins'
+    signatures here, ends the row's stated source in the report and the RECORD line's ``answers``, and follows its
+    accept in the composed reason, on both products' paths; the row keeps Pearl+'s reason of record."""
+    unchecked = "coins' signatures checked on the served node only; not checked by the auditor"
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "declared_unchecked", lambda p: unchecked if p == S.PEARLPLUS_PROTOCOL else "")
+    pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
+    (tmp_path / "serve").mkdir()
+    S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
+            "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200", "--product", product,
+            "--key-sha512", pin, "--lane", lane])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    row = json.loads((tmp_path / "record" / "verdicts.json").read_text())["protocols"]["work"]
+    assert line["verdicts"]["PoUW"] == "accept"
+    assert row["answer_from"] == line["answers"]["PoUW"] == f"{S.PEARLPLUS_FROM}; {unchecked}"
+    reason = line["reason"]
+    assert reason.index("PoUW: accept (") < reason.index(f"), {unchecked}, {S.PEARLPLUS_SAID}; PoUS:"), reason
+
+
+def test_a_protocol_no_declaration_names_has_nothing_unchecked():
+    """`declared_unchecked` reads the declarations by protocol id: an id none declares says nothing."""
+    assert S.declared_unchecked("verity/no-such-protocol/v0") == "" and S.declared_unchecked(None) == ""
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])

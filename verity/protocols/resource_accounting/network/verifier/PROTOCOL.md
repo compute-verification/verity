@@ -257,8 +257,8 @@ One execution phase's attestations are registered through the proof system
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), the opening's two
   attestations hold under the network attester's key in its session (`TransferBlocks.certified`), and both heads met their
   deadline. It is a debug comparison (`verify(…, opening=…)`, off by default, which
-  decides nothing) and the tests' reference. `TransferBlocks.unproved_outcome` decides a run that proves nothing (a
-  rehearsal, the simulator) on it, its verdict ``"decided_by": "clear"``, never zero-knowledge.
+  decides nothing) and the tests' reference. A run that proves nothing (a rehearsal, the simulator) has no outcome of
+  record, so `TransferBlocks.network_verdict` rejects its link, every window it didn't prove refused.
 
 What this establishes: the outcome is accept exactly when the Lean verifier accepts a proof of the registered proof
 block whose public row is the verifier's own and whose output word is 0b11 and the attestations verify; the outcome record binds the root, the sample and the delivered sessions. The claim is counts only: on every
@@ -1222,7 +1222,7 @@ and checking state row u + 1. Steps past the execution phase's executed count ar
   left or past A, and decisions read past what is left or past A.
 - **The carry.** Execution phase w's state row 0 is execution phase w − 1's last state row, and its execution-phase
   row 0 is execution phase w − 1's execution-phase row 1, each under the same salt (`commit_window(carry=…)`), so their
-  openings b‖c are equal for the honest prover; the check of it (`check_chain`, `C-carry`) is called by no verifier. Decisions an execution phase leaves unread carry: the load writes its own after the last
+  openings b‖c are equal for the honest prover; nothing checks it. Decisions an execution phase leaves unread carry: the load writes its own after the last
   execution-phase row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a
   decision to the earlier of its step's execution phase and its arrival's ingress execution phase, up to two before
   its step's: at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries
