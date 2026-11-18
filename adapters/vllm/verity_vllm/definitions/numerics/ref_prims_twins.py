@@ -8,7 +8,6 @@ import numpy as np
 
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.ref_prims import (
-    f32_erf_rn_bits,
     f32_exp_rn_bits,
     f32_log_rn_bits,
     f32_tanh_rn_bits,
@@ -109,12 +108,11 @@ def np_layernorm_ref(x_words, g_words, b_words, eps: float, DT: str) -> np.ndarr
 def np_gelu_ref(x_words, DT: str, approx: str) -> np.ndarray:
     xf = np_widen(x_words, DT)
     half_x = (xf * np.float32(0.5)).astype(np.float32)
-    if approx == "none":
-        f = _np_scalar_fn(f32_erf_rn_bits, (xf * np.float32(0.7071067811865476)).astype(np.float32))
-    else:
-        x3 = ((xf * xf).astype(np.float32) * xf).astype(np.float32)
-        inner = (np.float32(0.7978845608028654) * (xf + (np.float32(0.044715) * x3).astype(np.float32)).astype(np.float32)).astype(np.float32)
-        f = _np_scalar_fn(f32_tanh_rn_bits, inner)
+    if approx != "tanh":
+        raise ValueError(f"approx must be 'tanh', got {approx!r}")
+    x3 = ((xf * xf).astype(np.float32) * xf).astype(np.float32)
+    inner = (np.float32(0.7978845608028654) * (xf + (np.float32(0.044715) * x3).astype(np.float32)).astype(np.float32)).astype(np.float32)
+    f = _np_scalar_fn(f32_tanh_rn_bits, inner)
     return np_narrow((half_x * (np.float32(1.0) + f).astype(np.float32)).astype(np.float32), DT)
 
 

@@ -162,7 +162,6 @@ def registry : List (String × Class) := [
   ("F32Div_v1", .budgeted .rounding),
   ("F32Div_v2", .budgeted .rounding),
   ("F32Eq_v1", .budgeted .compareSelect),
-  ("F32ErfRn_v1", .budgeted .rounding),
   ("F32ExpRn_v1", .budgeted .rounding),
   ("F32Fabs_v1", .budgeted .rounding),
   ("F32FmaFtz_v1", .budgeted .rounding),

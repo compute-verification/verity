@@ -16,11 +16,8 @@ from verity.circuits.program import is_word_primitive
 
 ROOTS = ("verity", "verity_vllm", "verity_torch", "verity_flock")
 
-_ADAPTER = "the adapter's registry: no Boolean body written yet"
 #: the word primitives without a Boolean body: id -> why; only shrinks
-BODYLESS: dict[str, str] = {
-    **{f"{n}_v1": _ADAPTER + f" ({m})" for n, m in (("F32ErfRn", "ref_prims"),)},
-}
+BODYLESS: dict[str, str] = {}
 #: word primitives made on demand, one per binding, so that no import registers one: each at a served binding
 ON_DEMAND = ("TopPMaskWordx154880_v1",)
 
