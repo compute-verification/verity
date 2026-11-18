@@ -35,5 +35,7 @@ def test_an_applications_hash_is_pinned(name: str) -> None:
 def test_a_setting_stated_at_its_default_moves_no_hash(name: str) -> None:
     raw = K.parse((ROOT / "applications" / f"{name}.toml").read_text())
     listed = [REG.components[n] for n in raw["protocols"]]
-    stated = {c.id: {**c.default_params, **raw.get("params", {}).get(c.id, {})} for c in listed if c.default_params}
+    # what the file states for a subprotocol that declares no default (Pearl+'s class and tie) stays as stated
+    stated = raw.get("params", {}) | {c.id: {**c.default_params, **raw.get("params", {}).get(c.id, {})}
+                                      for c in listed if c.default_params}
     assert K.digest(K.check({**raw, "params": stated}, REG.components, REG.workloads)) == HASHES[name]
