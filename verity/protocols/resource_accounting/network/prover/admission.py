@@ -400,10 +400,10 @@ class TickGate:
         start()
 
     def on(self, event: Any) -> None:
-        """A ``steps`` event: a step that began advances T; a held request completed from outside is dropped, as its N
+        """A ``steps`` event: a step that computes advances T; a held request completed from outside is dropped, as its N
         won't come."""
         if isinstance(event, H.StepBegan):
-            if self.run is not None and self.opened is None:
+            if self.run is not None and self.opened is None and event.slots > 0:
                 self.T += self.tick.step(event.queued > 0)
                 self.steps += 1
         elif isinstance(event, H.OutputsComplete):
@@ -502,6 +502,9 @@ class TickGate:
         """The gate holds a request, or waits on the watermark or a release: the engine has work though its scheduler may
         have none."""
         return bool(self.held) or self.wait_start is not None
+
+    def record(self) -> dict[str, int]:
+        return self.tick.record()
 
     def summary(self) -> dict[str, Any]:
         return {**self.counts, "tick": self.tick.record(), "hold_s": self.hold_s, "runs": len(self.runs), "steps": self.steps,

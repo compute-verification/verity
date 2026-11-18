@@ -165,10 +165,6 @@ class Exchange:
         """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
         return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
 
-    def held(self, input: str, step: int) -> bool:
-        """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
-        return any(r.input == input and step < r.until for _, r in self._filed(H.HoldRelease))
-
     def resident(self, range_: int, step: int) -> bool:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
@@ -185,6 +181,13 @@ class Exchange:
             start, readers = schemes.PROCESSES[r.process], [self.readers[k] for k in r.readers]
             out.append((r.process, (lambda f, a: lambda: f(*a))(start, readers)))
         return out
+
+
+def attester() -> schemes.Scheme:
+    """The network attester's scheme, by its declaration's name, from the one table of schemes."""
+    from verity.protocols.compose import schemes as table
+    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
+    return table.get(NETWORK_ATTESTER.name)
 
 
 _CURRENT: Exchange | None = None

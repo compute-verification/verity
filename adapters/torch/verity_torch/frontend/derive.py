@@ -287,6 +287,11 @@ def _export(source, example_inputs):
         refuse("export", None, None, f"torch.export failed: {type(e).__name__}: {msg}")
 
 
+def _bits(t: Type) -> int | None:
+    ws = t.width_set()
+    return t.leaves * next(iter(ws)) if len(ws) == 1 else None
+
+
 def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[str, int]]:
     """Distinct parameter/buffer tensors in module order; tied tensors collapse to one leaf with aliases."""
     if module is None:
@@ -317,6 +322,15 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
     leaves, fqn_to_leaf = _weights_of(module)
+    for r in ruleset.rules:
+        if r.modes is not None and mode not in r.modes:
+            continue
+        for fqn, t in r.weight_types(ep, mode).items():
+            leaf = leaves[fqn_to_leaf[fqn]] if fqn in fqn_to_leaf else None
+            if leaf is None or _bits(t) is None or _bits(t) != _bits(leaf.type):
+                refuse("shape", None, None, f"rule {r.rule_id} reads {fqn!r} as {t!r}, which holds other bits than the parameter's "
+                                            f"{leaf.type if leaf else 'no tensor'!r}")
+            leaf.type = t
     placeholder_to_weight: dict[str, int] = {}
     for ph, fqn in list(sig.inputs_to_parameters.items()) + list(sig.inputs_to_buffers.items()):
         if fqn not in fqn_to_leaf:

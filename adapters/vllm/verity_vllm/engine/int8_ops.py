@@ -6,7 +6,7 @@ product, and each layer's int8 attention as two, its batch's KV quantization and
         per row)
     verity_int8::scaled_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w) -> Tensor y
         w int8 [N, K], s_w f32 [N, 1] (or [N]): the plain linear's product of row_quant's results, y bf16 [M, N]
-        (`registry.int8_exact.ScaledMmS8_v1{K,N}` per row)
+        (`verity.circuits.ops.gemm.ScaledMmS8_v3{K,N}` per row, W and s_w as their registered u16 words)
     verity_int8::scaled_mm_zy(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int rows) -> (Tensor y, Tensor zy)
         scaled_mm's y, and from the same product (on CUDA the same accumulator) the call's z/y records over `rows` slots
         (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`),

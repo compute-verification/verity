@@ -449,8 +449,8 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
         return run
 
     stand_in = SimpleNamespace(attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
-    monkeypatch.setattr(schemes, "SCHEMES", {"stand-in": stand_in})
-    monkeypatch.setattr(schemes, "PROCESSES", {"relay": process})
+    monkeypatch.setitem(schemes.SCHEMES, "stand-in", stand_in)
+    monkeypatch.setitem(schemes.PROCESSES, "relay", process)
     try:
         opts = cli.parse("ids-front", ["--upstream", "127.0.0.1:18745", "--protocols", "stand-in"], environ={})
         assert F.main(opts) == 0
@@ -462,9 +462,17 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
         F.launch(messages.Exchange(), ["other"])
     with pytest.raises(UsageError, match="no scheme starts a process"):
         F.launch(messages.Exchange(), [])
-    with pytest.raises(NotImplementedError, match="vllm/adapter-names-no-scheme"):
-        monkeypatch.setattr(schemes, "SCHEMES", {"bare": SimpleNamespace()})
-        F.launch(messages.Exchange(), ["bare"])
+
+
+def test_the_launcher_starts_the_network_attesters_id_relay_from_the_one_table():
+    from verity.protocols.resource_accounting.network import scheme as network
+    from verity.protocols.resource_accounting.network.prover import id_relay
+    from verity_vllm import messages
+
+    ex = messages.Exchange()
+    (name, start), = F.launch(ex, [network.NETWORK_ATTESTER.name])
+    assert name == network.START_ID_RELAY.process and ex.requests == [(network.NETWORK_ATTESTER.name, network.START_ID_RELAY)]
+    assert network.START_ID_RELAY.readers == id_relay.READERS and callable(start())
 
 
 def test_a_broken_stream_is_the_hooks_broken():

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
-from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
+from .refs import Affine, Coll, Concat, Explicit, Grid, Refs, Strided, concat
 from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
@@ -708,6 +708,8 @@ class _Widths:
     def _first(self, t: Type, r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
         # A method, not a closure: a recursive closure is a reference cycle, which only the cyclic collector frees, and this
         # runs for every argument of every node.
+        if isinstance(r, Grid):
+            r = Concat(r.pieces())
         if not isinstance(r, Concat):
             k = self.misread(t, pos, r)
             return None if k is None else (pos + k, r[k])

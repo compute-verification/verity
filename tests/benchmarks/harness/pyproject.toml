@@ -114,6 +114,8 @@ inputs = [
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
     "calibration/hardware/cards",
+    # a card's compute capability (kit.gpu_target) and its nvcc target (kit.card_gencode) are its architecture's file
+    "calibration/hardware/architectures",
     # a host core-second's weight is read from its node's file and the cards it names (host_weight)
     "calibration/hardware/nodes",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",

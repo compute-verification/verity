@@ -139,7 +139,7 @@ private def without (id : String) : Answer := answer ((components.filter (·.id 
 -- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
 -- and onsite rejects on it with SPOT's refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
 private def v1 : Answer := answer (components.map fun P =>
-  if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with params := "{\"form\":\"one-stage\",\"law\":{}}" }
+  if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with params := "{\"law\":{}}" }
   else refused P)
 #guard v1.verdict == .reject && v1.published.isNone
 #guard (v1.reason.map (contains · (s!"verity/sampled-proofs/v1 reject: params: the parameters name no proofs: " ++

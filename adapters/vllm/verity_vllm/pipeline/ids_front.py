@@ -3,7 +3,7 @@
     verity-vllm ids-front --upstream HOST:PORT --protocols NAME[,NAME] [--listen 127.0.0.1:18746] [--id-payload 503]
         [--log FILE]
 
-Each scheme ``--protocols`` names (`verity.protocols.resource_accounting.scheme.get`) is attached to this process's
+Each scheme ``--protocols`` names (`verity.protocols.compose.schemes.get`) is attached to this process's
 exchange, where it files the processes it starts beside the workload (`verity.hooks.StartBeside`), each bound to the
 readers it names by what they do (`READERS`): ``server-request``, an input's copy for the server (`server_request`, a
 ``POST /v1/completions`` of its fields with ``return_token_ids``, under the release headers it came with), and
@@ -27,7 +27,7 @@ from typing import Any
 
 from verity import hooks as H
 from verity.hooks import Broken
-from verity.protocols.resource_accounting import scheme as schemes
+from verity.protocols.compose import schemes
 
 from verity_vllm import messages
 from verity_vllm.config import UsageError, option
@@ -134,9 +134,6 @@ def launch(exchange: messages.Exchange, names: list[str]) -> list[tuple[str, Any
             scheme = schemes.get(name)
         except KeyError as e:
             raise UsageError(f"--protocols: {e.args[0]}") from None
-        if not hasattr(scheme, "attach"):
-            raise NotImplementedError(f"vllm/adapter-names-no-scheme: scheme {name!r} files no requests on an exchange "
-                                      "(Scheme.attach(exchange, ctx) is not in the scheme registry yet)")
         scheme.attach(exchange, {})
     started = exchange.beside()
     if not started:

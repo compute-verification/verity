@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from fractions import Fraction
 from pathlib import Path
 
@@ -19,7 +22,8 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
                 S.Order("receipts", "seed", within_ns=1_000_000, assumption="ToyNoCompression")),
         "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
         "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"},
-        "delta_scheme": Fraction(0), **kw})
+        "delta_scheme": Fraction(0), "over": "the session's credited bits, cleared of (1 - γ)",
+        "under": "the tier's reads, in bits", **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -27,13 +31,22 @@ def _empty(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(S, "SCHEMES", {})
 
 
-def test_picked_by_name() -> None:
-    a, b = S.register(_toy("pearl-plus")), S.register(_toy("dither"))
-    assert S.get("pearl-plus") is a and S.get("dither") is b
-    with pytest.raises(KeyError, match="registered: dither, pearl-plus"):
-        S.get("pouw")
+def test_picked_by_name_its_module_imported_on_first_use(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from verity.protocols.compose import schemes
+
+    (tmp_path / "toy_declaration.py").write_text(
+        "from verity.protocols.resource_accounting import scheme as S\n"
+        "S.register(S.Scheme('toy', 'toy', 'memory', (), (), (), ()))\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(schemes, "DECLARATIONS", {"toy": "toy_declaration", "absent": "toy_declaration"})
+    assert "toy" not in S.SCHEMES
+    assert schemes.get("toy") is S.SCHEMES["toy"]
+    with pytest.raises(KeyError, match="declared: absent, toy"):
+        schemes.get("pouw")
+    with pytest.raises(KeyError, match="registers no scheme 'absent'"):
+        schemes.get("absent")
     with pytest.raises(KeyError, match="registered already"):
-        S.register(_toy("dither"))
+        S.register(_toy("toy"))
 
 
 def test_settings_toggle() -> None:
@@ -54,7 +67,7 @@ def test_block_cost_and_unit() -> None:
 def test_bound() -> None:
     s = _toy()
     b = S.bound(s, Fraction(1, 100), 65_536, {"on-chip": 10, "rebuilt": 6})
-    assert b.uncredited == 65_552
+    assert b.excess == 65_552
     with pytest.raises(ValueError, match="charges are"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0})
     with pytest.raises(ValueError, match="δ lies"):
@@ -108,9 +121,37 @@ def test_scheme_term_carried() -> None:
         _toy(delta_scheme=Fraction(1))
 
 
+def test_a_said_term_says_both_sides() -> None:
+    assert _toy().over and _toy().under
+    with pytest.raises(ValueError, match="says its two sides"):
+        _toy(under="")
+    assert _toy("silent", delta_scheme=None, over="", under="").over == ""
+
+
+def test_a_named_term_is_evaluated_at_the_parameters_its_caller_gives() -> None:
+    pearl = S.Term("Pouw.PearlC.δPearlC", ("q", "N"), lambda q, N: Fraction(q + N, 2**128))
+    b = S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**64, "N": 4096})
+    assert b.delta_scheme == Fraction(2**64 + 4096, 2**128) and b.term == "Pouw.PearlC.δPearlC"
+    assert b.parameters == {"q": 2**64, "N": 4096}
+    with pytest.raises(ValueError, match=r"δPearlC is evaluated at \['q', 'N'\], and \['q'\] were not given"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"N": 4096})
+    with pytest.raises(ValueError, match="has no parameters"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1, "N": 1, "P": 1})
+    with pytest.raises(ValueError, match="outside"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**128, "N": 0})
+    with pytest.raises(ValueError, match="takes no parameters"):
+        S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1})
+    sketch = S.Term("ResourceAccounting.Guarantees.Remote.SketchBoundDeployed", ("Q", "P", "N", "ε"),
+                    lambda Q, P, N, ε: Fraction((Q + P) ** 2, 2**257) + N * ε)
+    four = {"Q": 2**40, "P": 2**10, "N": 64, "ε": Fraction(1, 2**80)}
+    assert S.bound(_toy(delta_scheme=sketch), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, four).parameters == four
+    with pytest.raises(ValueError, match="once each"):
+        S.Term("Pouw.PearlC.δPearlC", ("q", "q"), lambda q: Fraction(0))
+
+
 def test_scheme_term_not_said_refuses_a_bound() -> None:
     s = _toy("silent", delta_scheme=None)
-    assert S.register(s) is S.get("silent")
+    assert S.register(s) is S.SCHEMES["silent"]
     with pytest.raises(ValueError, match=r"silent: its delta_scheme \(Verity.Scheme.δscheme\) is not said"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0})
 
@@ -153,7 +194,8 @@ def test_ports() -> None:
         _toy(ports=(S.Port("scan state", "input", "IngressScanBucket_v1", "state"),))
 
 
-def test_every_declaration_is_on_the_one_list() -> None:
+def test_every_scheme_is_a_line_of_the_one_table() -> None:
+    """Each name maps to the module that registers it, and every module that registers one is in the table."""
     from verity.protocols.compose import schemes
 
     root = Path(__file__).resolve().parents[4]
@@ -161,7 +203,16 @@ def test_every_declaration_is_on_the_one_list() -> None:
                  for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
-    assert declaring == set(schemes.DECLARATIONS), "add each declaration module to compose.schemes.DECLARATIONS"
+    assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
+    probe = ("import importlib, json, sys\n"
+             "from verity.protocols.resource_accounting import scheme as S\n"
+             "by = {}\n"
+             "for m in sys.argv[1:]:\n"
+             "    before = set(S.SCHEMES); importlib.import_module(m)\n"
+             "    by.update({n: m for n in set(S.SCHEMES) - before})\n"
+             "print(json.dumps(by))\n")
+    out = subprocess.run([sys.executable, "-c", probe, *sorted(declaring)], capture_output=True, text=True, check=True)
+    assert json.loads(out.stdout) == dict(schemes.DECLARATIONS), "each name maps to the module that registers it"
 
 
 def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:

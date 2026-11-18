@@ -233,15 +233,16 @@ def test_int8_linear_resolves_to_the_quantizer_then_the_product_with_both_weight
     assert isinstance(q, Compute) and isinstance(mm, Compute), (q, mm)
     assert spec_label(q.spec) == f"Int8RowQuant_v1{{K={K}}}" and q.rows == M and q.consumed and q.hint == f"{QKV}/quant"
     assert [type(o) for o in q.operands] == [PerRow] and [type(o) for o in q.outputs] == [PerRow, PerRow]
-    assert spec_label(mm.spec) == f"ScaledMmS8_v1{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed
+    assert spec_label(mm.spec) == f"ScaledMmS8_v3{{K={K},N={N},DOT=BlackwellS8ImmaDot32_v1}}" and mm.rows == M and mm.consumed
     assert mm.operands[:2] == q.outputs and [type(o) for o in mm.operands[2:]] == [Shared, Shared] and [type(o) for o in mm.outputs] == [PerRow]
+    assert [(o.view.dtype, o.view.shape) for o in mm.operands[2:]] == [("uint16", (N, K // 2)), ("uint16", (N, 2))]
     assert mm.roots == (None, None, f"{QKV}.weight", f"{QKV}.weight_scale")
 
 
 def test_int8_linear_refuses_other_dtypes_and_non_parameter_weights():
     ctx = _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}, roots=_lin_roots())
     assert "Int8RowQuant_v1 is" in Int8RowQuant().match(_quant("float16"), ctx).reason
-    assert "ScaledMmS8_v1 is" in Int8ScaledMm().match(_mm(w_dtype="uint8"), ctx).reason
+    assert "ScaledMmS8_v3 is" in Int8ScaledMm().match(_mm(w_dtype="uint8"), ctx).reason
     r = Int8ScaledMm().match(_mm(), _ctx([("r0", i) for i in range(M)], {"r0": M}, {"r0": [0]}))
     assert isinstance(r, Unsupported) and "weight Roots" in r.reason
     other = _tree([DispatchEnter(1, None, 0, "forward", "aten.linear.default", "aten::linear(Tensor input, Tensor weight, "

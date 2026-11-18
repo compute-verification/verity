@@ -6,7 +6,7 @@ TMEM stage alone, ε_tensor at L = 32 with the measured points, the fold's issue
     python3 pipe.py agree OUT_A OUT_B               a repeat's rates against the first's, point by point
 
 OUT is pipe.sh's output (rate.jsonl, gate/*/result.json and ref.json, sass/pgemm.sass). --census takes the B200 probe runs
-(run.sh sm100, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
+(run.sh on a B200, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
 points added, give ε_tensor at L = 32 by TENSOR's two-stage LP (analyze.tmem_model). Without it the census lines in
 `../../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
 

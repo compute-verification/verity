@@ -191,7 +191,7 @@ theorem unshown_of_accepts {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange
     {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
     (hcase : caseOf o.sent = .ok (p, c, e)) : VStar.Recursive.SampledTwo.interiorUnshown p e = .ok () := by
   obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
-  obtain ⟨_, _, _, _, _, _, _, _, _, hu, _, _⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨_, _, _, _, _, _, _, _, hu, _, _⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hd
   have hpce := Except.ok.inj (hcase.symm.trans hcase')
   simp only [Prod.mk.injEq] at hpce
@@ -279,7 +279,7 @@ session is the evidence's `coins` (`firstCoins`). -/
 theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C := by
   intro o ha p c e c₂ hcase hi₂
   obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
-  obtain ⟨-, c₂', _, _, _, _, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨c₂', _, _, _, _, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hd
   have hpce := Except.ok.inj (hcase'.symm.trans hcase)
   simp only [Prod.mk.injEq] at hpce
