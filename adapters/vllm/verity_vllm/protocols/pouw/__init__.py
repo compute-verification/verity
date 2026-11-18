@@ -108,7 +108,7 @@ from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "cuts", "h1_run", "keeps_weight_copy", "linear_types", "pearl_c_salt_key", "refusals",
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "keeps_weight_copy", "linear_types", "pearl_c_salt_key", "refusals",
            "requests"]
 
 NAME = "pouw"
@@ -144,12 +144,6 @@ UNREGISTERED = "nothing about which weights were served: the checkpoint is not r
 
 def schemes() -> tuple[str, ...]:
     return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, *PEARL_C_SCHEMES, H1_SCHEME, LEAD_SCHEME}))
-
-
-def cuts(scheme: str) -> bool:
-    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
-    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    return scheme in PEARL_C_SCHEMES
 
 
 def keeps_weight_copy(scheme: str) -> bool:

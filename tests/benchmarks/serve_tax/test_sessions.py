@@ -69,7 +69,7 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     # the launch line is prod's in each, and prod-seeded's server is prod's whole: its environment too
     argv = {n: S.server_argv(S.ARMS[n], GLM, Path("/ck"), 8000) for n in names}
     assert argv["prod-seeded"] == argv["prod-trace"] == argv["prod-record"] == argv["prod"]
-    env = {n: S.server_env(S.ARMS[n], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=tmp_path / "private")
+    env = {n: S.server_env(S.ARMS[n], tmp_path, tmp_path / "site", None, 600.0, private=tmp_path / "private")
            for n in names}
     assert env["prod-seeded"] == env["prod"]
     assert replace(S.ARMS["prod-seeded"], what="", seeds=False) == replace(S.ARMS["prod"], parent="prod", what="")
@@ -79,7 +79,7 @@ def test_what_prod_record_differs_from_prod_by_is_read_apart_by_two_arms(tmp_pat
     assert replace(S.ARMS["prod-trace"], what="", env=S.TOPK_ENV, general=S.TOPK) == replace(S.ARMS["prod-record"], what="")
     # prod-record-bisect is prod-record with its top-k's other pass, which writes the same rows: against it, what the
     # refinement saves
-    bisect = S.server_env(S.ARMS["prod-record-bisect"], tmp_path, tmp_path / "site", None, 600.0, 600.0,
+    bisect = S.server_env(S.ARMS["prod-record-bisect"], tmp_path, tmp_path / "site", None, 600.0,
                           private=tmp_path / "private")
     assert {k: v for k, v in bisect.items() if env["prod-record"].get(k) != v} == {"VERITY_DSA_TOPK": "canonical-bisect"}
     assert S.changes_of("prod-record-bisect") == S.changes_of("prod-record")
@@ -102,7 +102,7 @@ def test_an_arms_meta_holds_the_value_settings_in_force_in_the_environment_its_s
     monkeypatch.setenv("HF_HOME", "/where/not/what")               # no value setting
     monkeypatch.delenv("VERITY_DSA_TOPK", raising=False)
     site, private = tmp_path / "site", tmp_path / "private"
-    env = {n: S.server_env(S.ARMS[n], tmp_path, site, None, 600.0, 600.0, private=private)
+    env = {n: S.server_env(S.ARMS[n], tmp_path, site, None, 600.0, private=private)
            for n in ("prod", "prod-again", "prod-record")}
     stock, again, ours = (S.value_settings(env[n]) for n in ("prod", "prod-again", "prod-record"))
     assert stock["schema"] == "verity-vllm/settings/v1" and len(stock["digest"]) == 128

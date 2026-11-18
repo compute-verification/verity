@@ -199,7 +199,8 @@ LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
 #: the flags the endpoint serves the session with: the network attester's id form, in its release order, each window
 #: sealed without the attention interiors (about 1 GB a request at 256 ids)
-ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
+ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 " \
+           "--protocols-config '{{\"network-attester\": {{\"order\": \"release-order\"}}}}' " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
@@ -685,6 +686,8 @@ def served_as(serve: dict, port: int) -> list[str]:
             continue
         v = words[i + 1] if i + 1 < len(words) and not words[i + 1].startswith("--") else None
         flag = w[2:]
+        if flag == "protocols-config":                  # serve.json records the order it read there as admit
+            flag, v = "admit", next(iter(json.loads(v).values()))["order"]
         have = {"host": host, "port": at, "seal": serve.get("sealed")}.get(flag, serve.get(flag.replace("-", "_")))
         if (have is None) if v is None else str(have) != v:
             off.append(f"{w}{' ' + v if v else ''} (serve.json: {have!r})")
