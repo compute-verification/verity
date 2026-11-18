@@ -12,9 +12,9 @@ local indices mapped to the stratum's units (`Stratum.unit`), and the union sort
 `ExecStrata σ k S` says the executable strata `S` are the model's: the same `k`, the same sizes, and each stratum's
 units run over `σ`'s stratum.
 
-* `stratified_exec_escape_le`: over independent uniform streams, the executable sample misses `B` with probability at most
-  `SamplingDesign.stratified`'s missProb, the product over strata of `subset_exec_escape_le` (`ExecSample.lean`).
-* `execStratified`: the executable sample as a sampling design, a sample that runs out sampling every unit. `execStratified_escape_le`: it
+* `stratified_exec_missProb_le`: over independent uniform streams, the executable sample misses `B` with probability at most
+  `SamplingDesign.stratified`'s missProb, the product over strata of `subset_exec_missProb_le` (`ExecSample.lean`).
+* `execStratified`: the executable sample as a sampling design, a sample that runs out sampling every unit. `execStratified_missProb_le`: it
   misses each set with at most `SamplingDesign.stratified`'s missProb. `execStratified_miss_le`: its count curve is at most
   `SamplingDesign.stratified`'s, which `stratified_miss_eq_greedy` computes.
 * `flock_e2e_sampled_exec`, `flock_e2e_count_exec`: `flock_e2e_sampled` and `flock_e2e_count` (`E2E.lean`) at that sampling design, the
@@ -108,9 +108,9 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
 
 /-- **The executable stratified sample escapes no more often than the model's.** Its probability space is independent
 uniform streams: that the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`,
-`uniform/io-getrandombytes`), which `sampleOS_stratified_escape_le` (`ExecSampleOS.lean`) takes for the live sample, reruns
+`uniform/io-getrandombytes`), which `sampleOS_stratified_missProb_le` (`ExecSampleOS.lean`) takes for the live sample, reruns
 included. -/
-theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_exec_missProb_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     prCoin (fun f : (s : Fin m) → Fin (L s) → Fin 256 =>
         ∃ D, Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (f s)) = some D ∧
@@ -143,11 +143,11 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         prCoin_pi_forall (Ω := fun s => Fin (L s) → Fin 256) univ (fun s (g : Fin (L s) → Fin 256) =>
           ∃ D, Flock.Draw.subset (S s).k (S s).size (streamOf g) = some D ∧ ∀ j ∈ Bl s, j.val ∉ D)
     _ ≤ ∏ s, (Verity.SamplingDesign.subset (S s).size (S s).k (hkS s)).missProb (Bl s) :=
-        Finset.prod_le_prod fun s _ => subset_exec_escape_le _ _ _ (hkS s) (Bl s)
+        Finset.prod_le_prod fun s _ => subset_exec_missProb_le _ _ _ (hkS s) (Bl s)
     _ ≤ (stratified σ k hk).missProb B := by
-        rw [stratified_escape]
+        rw [stratified_missProb]
         refine Finset.prod_le_prod fun s _ => ?_
-        rw [Verity.SamplingDesign.subset_escape]
+        rw [Verity.SamplingDesign.subset_missProb]
         -- `B`'s units in stratum `s` are the units of `Bl s`'s indices, so `Bl s` is at least as large
         have hcard : (B.filter (σ · = s)).card ≤ (Bl s).card := by
           have hsub : (B.filter (σ · = s)).map Fin.valEmbedding ⊆ (Bl s).image fun j => (S s).unit j.val := by
@@ -174,19 +174,19 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
         exact ENNReal.div_le_div_right (by exact_mod_cast hnum) _
 
 /-- The executable sample as a sampling design escapes no more often than `SamplingDesign.stratified`: a sample that runs out samples every unit. -/
-theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem execStratified_missProb_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     (execStratified (n := n) S L).missProb B ≤ (stratified σ k hk).missProb B := by
   classical
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · have h1 : (stratified σ k hk).missProb ∅ = 1 := by
-      rw [stratified_escape]
+      rw [stratified_missProb]
       refine Finset.prod_eq_one fun s _ => ?_
       simp only [Finset.filter_empty, Finset.card_empty, Nat.sub_zero]
       exact ENNReal.div_self (by exact_mod_cast (Nat.choose_pos (hk s)).ne') (ENNReal.natCast_ne_top _)
     rw [h1]
     exact SampleExec.prCoin_le_one _
-  · refine le_trans (prCoin_mono fun ω hd => ?_) (stratified_exec_escape_le σ k hk S hS L B)
+  · refine le_trans (prCoin_mono fun ω hd => ?_) (stratified_exec_missProb_le σ k hk S hS L B)
     change Disjoint (match Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (ω s)) with
       | some D => univ.filter fun u => u.val ∈ D
       | none => univ) B at hd
@@ -199,7 +199,7 @@ theorem execStratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
 theorem execStratified_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (K : ℕ) :
     (execStratified (n := n) S L).miss K ≤ (stratified σ k hk).miss K :=
-  iSup₂_mono fun B _ => execStratified_escape_le σ k hk S hS L B
+  iSup₂_mono fun B _ => execStratified_missProb_le σ k hk S hS L B
 
 end SamplingDesign
 
