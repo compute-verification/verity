@@ -417,6 +417,7 @@ def test_a_split_end_reading_two_scores_templates_is_refused_by_name():
     """With its key blocks served as scores and values units (``UNITS``), a split's end reads the scores units of its first
     block and of the full block after it, two templates: one port reading two templates' trees, which `chain_rows.pieces`
     refuses by name. The window has no cut of that port per writer template, so neither its key rows' checks (a values unit
-    on other keys, a copy of its key rows, a reference to another row of its writer's table) nor its commitment is built."""
+    on other keys, a copy of its key rows, a reference to another row of its writer's table) nor its commitment is built.
+    `chain_rows`' wiring goes when the verifier derives positions from the registered circuit."""
     with pytest.raises(ValueError, match=NAME):
         window(Served(row(HALF)), UNITS, UNITS_CHUNK)
