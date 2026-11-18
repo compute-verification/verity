@@ -154,13 +154,13 @@ def _run(argv: Sequence[str]) -> tuple[int, str]:
     return r.returncode, r.stdout if r.returncode == 0 else r.stderr or r.stdout
 
 
-def _commit() -> str | None:
-    """The commit of the tree the job runs: the one `research run` shipped, else this checkout's HEAD; None where neither
-    says."""
+def commit(root: Path | None = None) -> str | None:
+    """The commit of the tree the job runs: the one `research run` shipped, else the HEAD of the checkout at `root` (this
+    file's where None); None where neither says."""
 
     if sha := settings.RESEARCH_SOURCE_SHA:
         return sha
-    rc, out = _run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"])
+    rc, out = _run(["git", "-C", str(root or Path(__file__).resolve().parent), "rev-parse", "HEAD"])
     return out.strip() or None if rc == 0 else None
 
 
@@ -203,7 +203,7 @@ def host_stamp() -> dict:
         "card": ", ".join(dict.fromkeys(g["name"] for g in gpus)) or "none",
         "gpus": [{"uuid": g["uuid"], "sm_mhz": _mhz(g["clocks.sm"]), "mem_mhz": _mhz(g["clocks.mem"])} for g in gpus],
         "driver": ", ".join(dict.fromkeys(g["driver_version"] for g in gpus)) or None,
-        "cuda": cuda, "node": platform.node(), "commit": _commit()}
+        "cuda": cuda, "node": platform.node(), "commit": commit()}
     if why:
         stamp["why"] = why
     return stamp
