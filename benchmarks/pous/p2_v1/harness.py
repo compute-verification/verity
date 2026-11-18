@@ -157,7 +157,6 @@ class MC(V3):
         return block_digest(block)
 
 
-FRAMINGS = {f.impl: f for f in (V3, MC)}
 TAMPER_EVERY = 10
 """The tampered control flips the top bit of the last byte of one block in this many."""
 TIMED_AUDIT_CHECK = H.ROOT / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check"
