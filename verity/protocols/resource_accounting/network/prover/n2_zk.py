@@ -79,6 +79,7 @@ from verity.protocols.resource_accounting.network.verifier.schedule import Clock
 from verity.protocols.resource_accounting.network.verifier.service import TransferBlocks
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.ports import free_port
 
 ENDS = ("egress", "ingress")
 #: the stream's δ, by default
@@ -456,7 +457,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             raise SystemExit(f"{name} window {x.window}: the stream sampled {list(sample.units)}, not the one unit")
         sdir = wdir / "session"
         m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
-        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else proof_drivers.free_port(), env=env)
+        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else free_port(), env=env)
         sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
         delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
                                   x.statement.output)

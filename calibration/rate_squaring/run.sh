@@ -3,7 +3,8 @@
 # `research run`. Each writes its records in $RESEARCH_RUN_DIR/out and the run's result.json through the harness's kit
 # (`result.py`), mod 2^$BITS - $C (default 2^512 - 569):
 #
-#   sq      sq.cu on one GPU, built for ARCH (90a, 120a; where it isn't given, the node's first card's name tells
+#   sq      sq.cu on one GPU, with toolkit 13.0 ($CUDA_HOME, else the machine's record: `machine.py toolkit 13.0`;
+#           refused without one), built for ARCH (90a, 120a; where it isn't given, the node's first card's name tells
 #           it), for every (FOLD, ILP) in $FORMS, each gated against Python's pow (512 words at K = 1, 777 and 1,000)
 #           before it is timed, with the SASS opcode mix of every kernel, ncu's pipe and issue counts and its stall
 #           reasons; then each pipe probe in $PROBES (P:W:A; set it empty for none), its digests checked against the
@@ -22,7 +23,8 @@ USAGE="usage: verity calibrate rate_squaring sq|ifma"
 sq() {
 set -x
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 3
+export PATH=$CUDA_HOME/bin:$PATH
 export D=calibration/rate_squaring
 export B; B=$(mktemp -d /tmp/rate-squaring.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FORMS=${FORMS:-"0:1 0:2 1:1 1:2 1:4 2:1 2:2 2:4 3:1 3:2 4:1 4:2"}

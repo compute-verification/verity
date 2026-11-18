@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from verity.commitments import coin_tree as CT
+from verity.commitments.hm96 import SHA512
 
 VECTORS = Path(__file__).resolve().parents[3] / "verity/protocols/proofs/flock/prover/live/src/coin_open_vectors.json"
 NONCE = bytes(range(CT.NONCE_BYTES))
@@ -79,7 +80,7 @@ def test_the_sample_reproduces_the_specs_vectors():
     x = r.h(r.round_tag, s.to_bytes(4, "big"), k.to_bytes(4, "big"), t0)
     assert x.hex() == ("c75f2678385f0b50c6dd3a849a024dad914a0741c35374601deb048d071522b5"
                        "dbb403561feda7da12d3f510ed964c4784bff2c580f9439e2f5456ed3777f1dc")
-    assert bytes(p ^ q for p, q in zip(x, r.mask(salt))).hex() == (
+    assert bytes(p ^ q for p, q in zip(x, SHA512.mask(r.key, salt))).hex() == (
         "d03b0fdcadbbc02b5e8b6ad48a16aa16a9e1d499553c1429b396b5de1a12e8df2457d1dfa8908e4eb3b856e3c22dcc141e9809ea8731ea4a0e9bdcc077eaf043")
     assert r.h(r.salt_prefix, salt).hex() == (
         "5a5a8122e97ed2a930a1a15ef7cff32f4b325fe1b68eb63fd3fdf1cf8b1feaa2abaeb6ac59b4befc7a6ada40408d65773bb6f57c36518d4629f287d7b0a5c033")
