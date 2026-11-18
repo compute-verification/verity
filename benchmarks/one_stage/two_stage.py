@@ -872,7 +872,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     record commits, and a port that reads a parameter it commits, reads that port of ``boundary``, at the root, leaves
     and domain that record gives it, unit j of the i-th sampled block its row ``sample[i]·per + at[j]``
     (`interior_rows.Return.rows`, `interior_rows.Input.rows`); a wired port its writer's
-    output port of the interior record, and any other its own, each unit its own leaf (`rows.Binding.held`). A read's
+    output tree of the interior record, and any other its own, each unit its own leaf (`rows.Binding.tree`). A read's
     verdict of registered tables (``d.verdicts``) reads its value as a link's port does, so a verdict the interior
     registers no such value for is refused by name and never read at the read's own port. A return
     round 1's record doesn't commit is read at its own port too: round 2 refuses that read (``second-read``), and
@@ -892,7 +892,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 ports[p] = LK.reads(boundary, y.value, words, m.schema(p), y.rows(sample), m.base, registered=REG)
                 continue
             if x is None:
-                ports[p] = LK.reads(interior, window.held(m, p), words, m.schema(p), window.held_leaves(m, p), m.base,
+                ports[p] = LK.reads(interior, window.tree(m, p), words, m.schema(p), window.reads(m, p).tolist(), m.base,
                                     registered=REG)
                 continue
             if x.value not in values:
@@ -929,11 +929,11 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         member_stager(template_fn(m.template), m, bind).stage(
             rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
             tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
+            refs={r: window.refs(m, r) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.held(m, p)), "words": int(words),
+        reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])

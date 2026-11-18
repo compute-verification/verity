@@ -15,8 +15,8 @@ at a time, in four records:
    reads the advice.
 3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
-   convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
-   window-domain rule (`verity.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
+   convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per (template, output
+   field) and per unwired input port, under the window-domain rule (`verity.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
    the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.docket``).
 4. **On a sample, the openings**: a sampled member's private rows and salts as Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the ZK server.
@@ -37,8 +37,8 @@ lowering refuses, with `check_proof_block`, a template whose rows Flock's compos
 past 111 bytes, or past a Flock block of 2^27 bits). A Boolean-profile port's leaves (one bit each) are read as their
 `boolean.word_type` words.
 
-A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
-the wiring check holds on the sampled proof blocks (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
+A wired port commits nothing: each (template, output field) is one tree, and a reader's row is a leaf of its writer's
+tree at the position its wire gives in closed form (`wiring.Wired`), opened by its path. A wire reads a row whole: a row gathered from several
 writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
 form, the wire cut (``cuts``, `Spot.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
@@ -138,7 +138,7 @@ from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
-from . import rows as CS
+from . import rows as CS, wiring as WI
 
 #: the element widths a parameter's or return field's leaves may have: a row is their little-endian bytes
 PACKED = (8, 16, 32, 64)
@@ -484,12 +484,7 @@ class _Pattern:
 
     def source(self, i: np.ndarray) -> np.ndarray:
         """The sources of reader indices ``i``."""
-        i = np.asarray(i, dtype=np.int64).copy()
-        out = np.full(i.shape, self.base, dtype=np.int64)
-        for r, s in zip(reversed(self.radix), reversed(self.step)):
-            out += (i % r) * s
-            i //= r
-        return out
+        return WI.source(self.radix, self.base, self.step, i)
 
     def _doc(self) -> dict[str, Any]:
         return {"at": self.at, "radix": list(self.radix), "base": self.base, "step": list(self.step),
@@ -1815,7 +1810,6 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     lays = {descriptor_id(fn): (layout(fn), n) for fn, n in templates}
     check_wires(lays, wires, cuts, order)
     ranges = CS.template_partition(program, query).ranges
-    base = {tid: lo for _k, tid, lo, _n in ranges}
     by: dict[str, list[Wire]] = {}
     for w in wires:
         by.setdefault(w.reader, []).append(w)
@@ -1835,11 +1829,13 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
                 nxt += 1
             for at in range(a, b, cap):
                 m = min(cap, b - at)
-                wired = tuple((row_name(w.port, r, int(kv.get(w.port, 1))), w.out,
-                               tuple((base[w.writer] + w.writers(at, m, r)).tolist()))
+                wired = tuple(WI.Wired(row_name(w.port, r, int(kv.get(w.port, 1))), w.writer, w.out, w.at, w.radix, w.base,
+                                       w.step, w.cut, r)
                               for w in live for r in range(w.cut[0], w.cut[0] + w.cut[1]))
                 got = _reads_of(tid, at, m, index, dict(rows + lay.outs))
-                tables = tuple((p, len(got[p][1]) if p in got else m) for p, _ in rows) if got else ()
+                held = {x.port: len(WI.table(x.positions(at, m))[0]) for x in wired}
+                tables = (tuple((p, len(got[p][1]) if p in got else held.get(p, m)) for p, _ in rows)
+                          if got or held or m != n else ())
                 out.append(CS.Member(tid, rows, lay.outs, m, lo + at, tables, name=f"{tid}/c{j}", schemas=schemas,
                                      wired=wired))
                 j += 1
@@ -1989,13 +1985,13 @@ def _member_doc(m: CS.Member) -> dict[str, Any]:
     return {"template": m.template, "name": m.name, "n": m.n, "base": m.base, "rows": [list(r) for r in m.rows],
             "outs": [list(o) for o in m.outs], "schemas": [list(s) for s in m.schemas], "tables": [list(t) for t in m.tables],
             "link_units": list(m.link_units), "links": [list(x) for x in m.links],
-            "wired": [[p, o, list(ws)] for p, o, ws in m.wired]}
+            "wired": [w.doc() for w in m.wired]}
 
 
 def _listed_members(doc: Mapping[str, Any]) -> tuple[CS.Member, ...]:
     return tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                            tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
-                           tuple(map(tuple, m["links"])), tuple((p, o, tuple(ws)) for p, o, ws in m["wired"]))
+                           tuple(map(tuple, m["links"])), tuple(WI.Wired.of(w) for w in m["wired"]))
                  for m in doc["members"])
 
 
@@ -2031,7 +2027,7 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
             m = ms[j] if j < len(ms) else None
             if m is None or not m.base <= reach < m.base + m.n:
                 raise ValueError(f"period ingress {g.doc()}: unit {reach - lo0} of {g.reader} is in no member")
-            rows, wired = dict(m.rows), {p for p, _o, _ws in m.wired}
+            rows, wired = dict(m.rows), {w.port for w in m.wired}
             if g.port not in rows or g.port in dict(m.tables) or g.port in wired:
                 raise ValueError(f"period ingress {g.doc()}: {m.key}'s {g.port} is not an input row of its own units; a wire or a "
                                  "shared-row table fills it")
@@ -2109,7 +2105,7 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
 
     def unfilled(i: int, port: str, what: Any) -> None:
         m = members[i]
-        if port not in dict(m.rows) or port in {p for p, _o, _ws in m.wired} or (m.links and port == CS.LINKED):
+        if port not in dict(m.rows) or port in {w.port for w in m.wired} or (m.links and port == CS.LINKED):
             raise ValueError(f"{what}: {m.key}'s {port} is not an input row of its own; a wire or a row table fills it")
 
     for r in reg.reads:
@@ -2130,7 +2126,7 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
                 raise ValueError(f"read {r.doc()}: leaves [{s_lo}, {s_hi + words}) of a registered parameter "
                                  f"{dict(reg.params)}")
             if r.port in dict(m.rows):
-                if r.port in {p for p, _o, _ws in m.wired} or (m.links and r.port == CS.LINKED):
+                if r.port in {w.port for w in m.wired} or (m.links and r.port == CS.LINKED):
                     raise ValueError(f"read {r.doc()}: a wire or a row table fills {m.key}'s {r.port}")
                 out[(i, r.port)] = r.param
         rects.append((r.reader, r.port, r.at, r.at + r.reader_units, 0, 1, r.doc()))
@@ -2352,7 +2348,7 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
     held = held_params(pins, roots)
     inputs = wired = registered = 0
     for i, m in enumerate(members):
-        tables, wires = dict(m.tables), {p for p, _o, _ws in m.wired}
+        tables, wires = dict(m.tables), {w.port for w in m.wired}
         for p, words in m.rows:
             n = 16 * int(words) * int(tables.get(p, m.n))
             inputs += n
@@ -2670,8 +2666,10 @@ class Window:
                     # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`RowLayout.cut`)
                     d["rows"][row_name(p, j, k)] = (None if ports[g] is None else ports[g][lo:lo + m.n] if k == 1 else
                                                     np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
-            if reads:
-                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in m.rows], axis=1)
+            if m.tables:
+                wires = {x.port: WI.table(x.positions(lo, m.n))[1] for x in m.wired}
+                d["refs"] = np.stack([reads[p][2] if p in reads else wires[p] if p in wires else np.arange(m.n)
+                                      for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
                     if p in d["outs"]:
                         # an output row stays the unit's own, committed under the value's salt, so a row other than
@@ -2693,11 +2691,11 @@ class Window:
                     if param not in public:
                         carried[m.port(p)] = sampled.strings(param, positions)
                     self._entries.setdefault(m.key, {})[p] = sampled.entry(param, positions)
-            wired = {q for q, _o, _ws in m.wired}
+            wired = {x.port for x in m.wired}
             for r, x in d["rows"].items():
-                if x is None:
-                    if r not in wired:
-                        raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
+                if x is None and r not in wired:
+                    raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
+                if r in wired:
                     d["rows"][r] = CS.WIRED
             data.append(d)
         return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of,
@@ -2751,8 +2749,6 @@ class Window:
         lay, base = layout(self.circuit.template(tid)), self._bases()
         mine, kv = self._words(tid) if self._recorded.get(tid) else [None] * len(lay.rows), self.circuit.cuts.get(tid, {})
         committed, cache = _ReadIndex(committed_reads(self.circuit.registered)), {}
-        starts = sorted((b, t) for t, b in base.items())
-        firsts = np.array([b for b, _ in starts], dtype=np.int64)
 
         def out(t: str, port: str) -> np.ndarray:
             if (t, port) not in cache:
@@ -2778,17 +2774,13 @@ class Window:
                     at = np.asarray(positions, dtype=np.int64)[refs[s - mlo:e - mlo]]
                     a[s - lo:e - lo] = CS.value_rows(self.registered[param], at).reshape(e - s, w)
                     continue
-                wires = {q: (o, ws) for q, o, ws in m.wired}
+                wires = {x.port: x for x in m.wired}
                 for j in range(k):
                     r = row_name(p, j, k)
                     if r not in wires:
                         raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
-                    o, ws = wires[r]
-                    x = np.asarray(ws[s - mlo:e - mlo], dtype=np.int64)
-                    at = np.searchsorted(firsts, x, side="right") - 1
-                    for i in np.unique(at):
-                        b, t = starts[int(i)]
-                        a[np.flatnonzero(at == i) + (s - lo), j * w // k:(j + 1) * w // k] = out(t, o)[x[at == i] - b]
+                    x = wires[r]
+                    a[s - lo:e - lo, j * w // k:(j + 1) * w // k] = out(x.writer, x.out)[x.positions(s, e - s)]
             res.append(a)
         return res
 
