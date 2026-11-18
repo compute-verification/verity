@@ -60,6 +60,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity import hooks as H
 from verity.protocols.interface.charge import charge_chain as CC
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import served_rows as SRW
@@ -227,6 +228,13 @@ class _Closed:
     seed_coin: dict[str, Any] | None = None                    # the seed coin it opened under (`SeedCoins.record`)
 
 
+def committed(window: int, rc: Any) -> None:
+    """Closed window ``window``'s root on the exchange (`hooks.PhaseCommitted`): its finalize's run root, empty where it
+    committed no step."""
+    if (ex := M.current()).wants("steps"):
+        ex.emit(H.PhaseCommitted(window, bytes(getattr(rc, "run_root", b"") or b"") if rc is not None else b""))
+
+
 class CommitWindows:
     """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
@@ -358,6 +366,8 @@ class CommitWindows:
         if not self.installed:
             self.com.install()
             self.installed = True
+        if (ex := M.current()).wants("steps"):
+            ex.emit(H.PhaseOpened(self.window, ex.next_step))
         if self.arm is not None:
             try:
                 self.arm.open(self.window)
@@ -431,6 +441,8 @@ class CommitWindows:
         t0 = self.clock()
         laps = [("", t0)]
         lap = functools.partial(end_lap, laps, self.clock)
+        if (ex := M.current()).wants("steps"):
+            ex.emit(H.PhaseClosed(self.window, ex.step, bytes(getattr(self.com, "program_digest", b"") or b"")))
         if self.arm is not None:
             self._close_arm()
             lap("arm")
@@ -441,6 +453,7 @@ class CommitWindows:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
         lap("finalize")
+        committed(self.window, rc)
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         lap("readback")
         self.com.uninstall()
@@ -513,6 +526,7 @@ class CommitWindows:
             lap("finalize_wait")
             rc = c.com.finalize() if c.com is not None else None
             lap("finalize")
+            committed(c.window, rc)
             readback = self.record.absorb(c.com, c.window) if rc is not None else None
             lap("readback")
             rec, job = self._record(c, rc, readback, lap)
