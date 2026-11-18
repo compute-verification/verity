@@ -396,11 +396,6 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2
-    if not ns.claimed and (unknown := _unknown_harness_opts(harness_opts)):
-        print(f"research run: unrecognized arguments: {' '.join(unknown)}: neither `research run` nor the runner it starts takes "
-              "them, here or on a machine (`research run --help`; the runner's are research/telemetry/run.py's add_args)",
-              file=sys.stderr)
-        return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 
@@ -409,6 +404,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if not ns.claimed and (unknown := _unknown_harness_opts(harness_opts)):
+        print(f"research run: unrecognized arguments: {' '.join(unknown)}: neither `research run` nor the runner it starts takes "
+              "them, here or on a machine (`research run --help`; the runner's are research/telemetry/run.py's add_args)",
+              file=sys.stderr)
+        return 2
     if ns.env_host:
         from .pods import registry
 
