@@ -17,7 +17,9 @@ mkdir -p "$S/fw/py/bin" && ln -s "$(command -v python3)" "$S/fw/py/bin/python"
 G=${CUDA_VISIBLE_DEVICES:-0}
 export PATH=$S/bin:$PATH CUDA_TK=$FC LD_LIBRARY_PATH=$FC/lib64:${LD_LIBRARY_PATH:-} GPU_LEASE_UUID=${G%%,*}
 { nvidia-smi --query-gpu=name,driver_version,memory.total,memory.used --format=csv -i "${GPU_LEASE_UUID:-0}"
-  ldd "$FC/bin/flock-circuit"; sha256sum "$FC/bin/flock-circuit"; } > "$OUT/host.txt" 2>&1
+  ldd --version | head -1; ldd "$FC/bin/flock-circuit"; sha256sum "$FC/bin/flock-circuit"; } > "$OUT/host.txt" 2>&1
+! grep -E "not found|version .* not found" "$OUT/host.txt" \
+  || { echo "flock-circuit can't load here (OUT/host.txt): build it against this node's glibc, or carry what ldd lacks in FC/lib64"; exit 1; }
 RESEARCH_RUN_DIR=$OUT/pt PT_DEVICE=${PT_DEVICE:-gpu} STEPS=prove PT_BINARY=$FC/bin/flock-circuit PT_UNITS= FLOCK_WORK=$S/fw \
   PT_STATEMENTS="$(ls -d "$S"/statements/*/ | sed 's|/$||' | tr '\n' ' ')" WARM=${WARM:-0} RUNS=${RUNS:-1} VCPUS=${VCPUS:-4} \
   bash benchmarks/served_units/prove_time.sh
