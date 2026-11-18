@@ -264,7 +264,7 @@ open Spot.RecordText (Row Decl Fill inputsOf fillAt)
 
 /-- **A record `read` accepts passed the `shared-unheld` stage**, over the declarations and the θ it holds. -/
 theorem finish_shared {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
-    c.f = f ∧ inputsOf f.ts c.W f.doc = .ok c.x ∧ sharedHeld f.P f.ts c.W c.x.decls c.isTheta = true := by
+    c.f = f ∧ inputsOf f.ts c.W f.doc = .ok c.x ∧ sharedHeld f.P f.ts c.W c.x.decls c.x.tables c.isTheta = true := by
   unfold finish at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   split at h
@@ -286,12 +286,12 @@ theorem finish_shared {f : Front} {pin : String → Option String} {c : Case} (h
               · cases h
               · cases h
                 refine ⟨rfl, hx, ?_⟩
-                show sharedHeld f.P f.ts _ x.decls (fun p => ((thetaOf f.T f.doc x).lookup p).getD false) = true
+                show sharedHeld f.P f.ts _ x.decls x.tables (fun p => ((thetaOf f.T f.doc x).lookup p).getD false) = true
                 simpa using hs
     · cases h
 
 theorem read_shared {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) :
-    inputsOf c.f.ts c.W c.f.doc = .ok c.x ∧ sharedHeld c.f.P c.f.ts c.W c.x.decls c.isTheta = true := by
+    inputsOf c.f.ts c.W c.f.doc = .ok c.x ∧ sharedHeld c.f.P c.f.ts c.W c.x.decls c.x.tables c.isTheta = true := by
   obtain ⟨f, pin, -, hc⟩ := read_front h
   obtain ⟨hf, hx, hs⟩ := finish_shared hc
   rw [hf]
@@ -301,6 +301,32 @@ theorem read_shared {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) :
 theorem heldAt_read {c : Case} {r : Row} {p : String} (hf : fillAt c.x.decls r = some (.read p))
     (ht : c.isTheta p = true) : c.heldAt r = some (.read p) := by
   simp [Case.heldAt, hf, Spot.RecordText.Inputs.declares, ht]
+
+/-- The reason a shared run's source holds a row as: its registered read, or its table read, of the table's
+parameter. -/
+def heldOf (c : Case) : Source → Spot.RecordText.Held
+  | .read p _ => .read p
+  | .table name root _ => .table name (((c.x.tables.find? (·.name == name)).map (·.param)).getD "") root
+
+theorem sharesRun_heldOf (c : Case) : ∀ src, Properties.Record.SharesRun (heldOf c src)
+  | .read _ _ => trivial
+  | .table _ _ _ => trivial
+
+/-- What a shared run's source says of a row it holds: what fills it, θ. -/
+def SourceFill (c : Case) (r : Row) : Source → Prop
+  | .read p _ => fillAt c.x.decls r = some (.read p) ∧ c.isTheta p = true
+  | .table name root _ => fillAt c.x.decls r = some (.table name root) ∧ tableTheta c.x.tables c.isTheta name = true
+
+/-- **A row its source fills is held as the source's reason.** -/
+theorem heldAt_of_fill {c : Case} {r : Row} : ∀ {src : Source}, SourceFill c r src → c.heldAt r = some (heldOf c src)
+  | .read _ _, ⟨hf, ht⟩ => heldAt_read hf ht
+  | .table name root _, ⟨hf, ht⟩ => by
+    unfold tableTheta at ht
+    cases hx : c.x.tables.find? (·.name == name) with
+    | none => simp [hx] at ht
+    | some t =>
+      simp only [hx, Option.map_some, Option.getD_some] at ht
+      simp [heldOf, Case.heldAt, hf, Spot.RecordText.Inputs.declares, hx, ht]
 
 theorem cover_bounds {w : Circuits.Wire} {tid port : String} {u c : Nat}
     (hu : (w.indexOf tid u port c).isSome = true) : w.start ≤ u ∧ u < w.start + w.readerUnits := by
@@ -368,6 +394,46 @@ theorem heldFrom_cover {ds : List Decl} {theta : String → Bool} {tid port : St
         · cases h
       · cases h
 
+/-- **Where `tableFrom` holds a row, a table read of `name`'s root (`root`), else its domain id, the table θ, covers
+it at every unit it visits.** -/
+theorem tableFrom_cover {ds : List Decl} {tables : List Spot.RecordText.Table} {theta : String → Bool}
+    {tid port : String} {c e : Nat} {name : String} {root : Bool} : ∀ fuel u,
+      tableFrom ds tables theta tid port c e name root fuel u = some true →
+      ∀ v, u ≤ v → v < e → tableTheta tables theta name = true ∧
+        ∃ d ∈ ds, (d.w.indexOf tid v port c).isSome = true ∧ d.fill = .table name root := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro u h v huv hve
+    unfold tableFrom at h
+    split at h
+    · omega
+    · cases h
+  | succ fuel ih =>
+    intro u h v huv hve
+    unfold tableFrom at h
+    split at h
+    · omega
+    · simp only at h
+      split at h
+      · rename_i d hd
+        split at h
+        · rename_i name' root' hq
+          split at h
+          · rename_i hok
+            simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hok
+            obtain ⟨⟨⟨h1, h2⟩, hth⟩, hlt⟩ := hok
+            subst h1
+            subst h2
+            have hc := List.find?_some hd
+            have hb := cover_bounds hc
+            by_cases hv : v < min e (d.w.start + d.w.readerUnits)
+            · exact ⟨hth, d, List.mem_of_find?_eq_some hd, cover_at hc (by omega) (by omega), hq⟩
+            · exact ih _ h v (by omega) hve
+          · cases h
+        · cases h
+      · cases h
+
 /-- The rows `sharedDecide` checks of the shared argument `s`: its port's cuts, 1 where it finds no port. -/
 def sharedCuts (P : Prog) (rs : Array TRange) (ts : List Spot.RecordText.Tmpl) (W : Spot.Wires.Wiring) (s : Shared) :
     Nat :=
@@ -377,11 +443,11 @@ def sharedCuts (P : Prog) (rs : Array TRange) (ts : List Spot.RecordText.Tmpl) (
 /-- **What the stage decides**: where some run is shared, every row of every argument that reads one is held
 (`sharedRow`), and two rows' marks of one input node are one. -/
 theorem decide_rows {P : Prog} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring} {ds : List Decl}
-    {theta : String → Bool} (h : sharedDecide P ts W ds theta = some true) (hne : (sharedRuns P).isEmpty = false) :
+    {tables : List Spot.RecordText.Table} {theta : String → Bool} (h : sharedDecide P ts W ds tables theta = some true) (hne : (sharedRuns P).isEmpty = false) :
     ∃ sh rs, sharedOf P = some sh ∧
       Flock.TemplateQuery.evaluate (Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs ∧
-      ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds theta s c = some (some m) ∧
-        ∀ s' ∈ sh, ∀ c' < sharedCuts P rs ts W s', ∀ m', sharedRow P rs ts W ds theta s' c' = some (some m') →
+      ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds tables theta s c = some (some m) ∧
+        ∀ s' ∈ sh, ∀ c' < sharedCuts P rs ts W s', ∀ m', sharedRow P rs ts W ds tables theta s' c' = some (some m') →
           m.1 = m'.1 → m = m' := by
   unfold sharedDecide at h
   simp only [hne, Bool.false_eq_true, ↓reduceIte] at h
@@ -395,23 +461,23 @@ theorem decide_rows {P : Prog} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.
     · simp at h
     rename_i h2 h1
     have hall := Option.some.inj h
-    have hmem : ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds theta s c = some (some m) := by
+    have hmem : ∀ s ∈ sh, ∀ c < sharedCuts P rs ts W s, ∃ m, sharedRow P rs ts W ds tables theta s c = some (some m) := by
       intro s hs c hc
-      match hr : sharedRow P rs ts W ds theta s c with
+      match hr : sharedRow P rs ts W ds tables theta s c with
       | none =>
-        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds theta s c, List.mem_map.2 ⟨(s, c),
+        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds tables theta s c, List.mem_map.2 ⟨(s, c),
           List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩, by rw [hr]; rfl⟩) h1
       | some none =>
-        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds theta s c, List.mem_map.2 ⟨(s, c),
+        exact absurd (List.any_eq_true.2 ⟨sharedRow P rs ts W ds tables theta s c, List.mem_map.2 ⟨(s, c),
           List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩, by rw [hr]; rfl⟩) h2
       | some (some m) => exact ⟨m, rfl⟩
     refine ⟨sh, rs, hsh, hrs, fun s hs c hc => ?_⟩
     obtain ⟨m, hm⟩ := hmem s hs c hc
     refine ⟨m, hm, fun s' hs' c' hc' m' hm' he => ?_⟩
-    have h1' := List.all_eq_true.1 hall m (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds theta s c,
+    have h1' := List.all_eq_true.1 hall m (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds tables theta s c,
       List.mem_map.2 ⟨(s, c), List.mem_flatMap.2 ⟨s, hs, List.mem_map.2 ⟨c, List.mem_range.2 hc, rfl⟩⟩, rfl⟩,
       by rw [hm]; rfl⟩)
-    have := List.all_eq_true.1 h1' m' (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds theta s' c',
+    have := List.all_eq_true.1 h1' m' (List.mem_filterMap.2 ⟨sharedRow P rs ts W ds tables theta s' c',
       List.mem_map.2 ⟨(s', c'), List.mem_flatMap.2 ⟨s', hs', List.mem_map.2 ⟨c', List.mem_range.2 hc', rfl⟩⟩, rfl⟩,
       by rw [hm']; rfl⟩)
     simpa [he] using this
@@ -525,11 +591,16 @@ theorem sharedOf_arg {P : Prog} {sh : List Shared} (h : sharedOf P = some sh) {k
     rw [hr]
     exact hc
 
+/-- A plan's template, port, first unit and count. -/
+def Plan.at : Plan → String × String × Nat × Nat
+  | .read tid port u0 n _ _ _ _ => (tid, port, u0, n)
+  | .table tid port u0 n _ _ => (tid, port, u0, n)
+
 /-- **What a row's plan reads**: its range, by the argument's node, its template and port, by the argument's index,
 and its first unit (`u0_eq`) and count, the row one of the port's cuts. -/
 theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
-    {ds : List Decl} {s : Shared} {c : Nat} {tid port : String} {u0 n : Nat} {p : String} {g : List (Nat × Int)}
-    {gb o : Int} (h : sharedPlan P rs ts W ds s c = some (tid, port, u0, n, p, g, gb, o)) :
+    {ds : List Decl} {s : Shared} {c : Nat} {pl : Plan} {tid port : String} {u0 n : Nat}
+    (h : sharedPlan P rs ts W ds s c = some pl) (hat : pl.at = (tid, port, u0, n)) :
     ∃ r t ty, rs.find? (·.node == s.node) = some r ∧ ts.find? (·.tid == r.template) = some t ∧
       (P.defs[t.defn]!).params[s.arg]? = some (port, ty) ∧ tid = r.template ∧
       u0 = (Spot.RecordText.rangesAt rs r.template).foldl (fun a q => if q.first < r.first then a + q.count else a) 0 ∧
@@ -560,20 +631,33 @@ theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} 
             · simp at h
             · rename_i hif
               split at h <;> try (simp at h; done)
-              cases hfl : (‹Decl›).fill <;> simp only [hfl] at h <;> try (simp at h; done)
-              split at h <;> try (simp at h; done)
-              simp only [Option.some.injEq, Prod.mk.injEq] at h
-              obtain ⟨rfl, rfl, rfl, rfl, -⟩ := h
-              refine ⟨hp, rfl, rfl, rfl, ?_⟩
               simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not] at hif
-              simp_all
+              cases hfl : (‹Decl›).fill <;> simp only [hfl] at h <;> try (simp at h; done)
+              · split at h <;> try (simp at h; done)
+                simp only [Option.some.injEq] at h
+                subst h
+                simp only [Plan.at, Prod.mk.injEq] at hat
+                obtain ⟨rfl, rfl, rfl, rfl⟩ := hat
+                refine ⟨hp, rfl, rfl, rfl, ?_⟩
+                simp_all
+              · split at h <;> try (simp at h; done)
+                simp only [Option.some.injEq] at h
+                subst h
+                simp only [Plan.at, Prod.mk.injEq] at hat
+                obtain ⟨rfl, rfl, rfl, rfl⟩ := hat
+                refine ⟨hp, rfl, rfl, rfl, ?_⟩
+                simp_all
 
-/-- **What a held row says**: its plan, `heldFrom` over the members' units, and its mark. -/
+/-- **What a held row says**: its plan, `heldFrom` over the members' units and its mark, for a registered read;
+its plan, `tableFrom` over them and its mark, for a table read. -/
 theorem row_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.Wiring}
-    {ds : List Decl} {theta : String → Bool} {s : Shared} {c : Nat} {m : Nat × String × Int}
-    (h : sharedRow P rs ts W ds theta s c = some (some m)) :
-    ∃ tid port u0 n p g gb o, sharedPlan P rs ts W ds s c = some (tid, port, u0, n, p, g, gb, o) ∧
-      heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0 = some true ∧ m = (s.input, p, o) := by
+    {ds : List Decl} {tables : List Spot.RecordText.Table} {theta : String → Bool} {s : Shared} {c : Nat}
+    {m : Nat × Source} (h : sharedRow P rs ts W ds tables theta s c = some (some m)) :
+    (∃ tid port u0 n p g gb o, sharedPlan P rs ts W ds s c = some (.read tid port u0 n p g gb o) ∧
+      heldFrom ds theta tid port c u0 (u0 + n) p g gb (ds.length + 1) u0 = some true ∧ m = (s.input, .read p o)) ∨
+    (∃ tid port u0 n name root, sharedPlan P rs ts W ds s c = some (.table tid port u0 n name root) ∧
+      tableFrom ds tables theta tid port c (u0 + n) name root (ds.length + 1) u0 = some true ∧
+      m = (s.input, .table name root s.base)) := by
   unfold sharedRow at h
   split at h
   · simp at h
@@ -584,7 +668,15 @@ theorem row_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} {
       cases b
       · simp [hh] at h
       · simp only [hh, Option.map_some, ↓reduceIte, Option.some.injEq] at h
-        exact ⟨tid, port, u0, n, p, g, gb, o, hplan, hh, h.symm⟩
+        exact .inl ⟨tid, port, u0, n, p, g, gb, o, hplan, hh, h.symm⟩
+  · rename_i tid port u0 n name root hplan
+    cases hh : tableFrom ds tables theta tid port c (u0 + n) name root (ds.length + 1) u0 with
+    | none => simp [hh] at h
+    | some b =>
+      cases b
+      · simp [hh] at h
+      · simp only [hh, Option.map_some, ↓reduceIte, Option.some.injEq] at h
+        exact .inr ⟨tid, port, u0, n, name, root, hplan, hh, h.symm⟩
 
 theorem find_tid {ts : List Spot.RecordText.Tmpl} (hnd : (ts.map (·.tid)).Nodup) {t : Spot.RecordText.Tmpl}
     (ht : t ∈ ts) : ts.find? (·.tid == t.tid) = some t := by
@@ -877,8 +969,8 @@ theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
     (Properties.Record.SecurityProofs.readProg_inputs hP) hrs
   have hrow : ∀ r l lo hi, Properties.Record.RowLeaf c.f.P rs' c.W r l g lo hi →
       ∃ s ∈ sh, s.input = xi ∧ ∃ cc < sharedCuts c.f.P rs' c.f.ts c.W s, ∀ m,
-        sharedRow c.f.P rs' c.f.ts c.W c.x.decls c.isTheta s cc = some (some m) →
-          m.1 = xi ∧ fillAt c.x.decls r = some (.read m.2.1) ∧ c.isTheta m.2.1 = true := by
+        sharedRow c.f.P rs' c.f.ts c.W c.x.decls c.x.tables c.isTheta s cc = some (some m) →
+          m.1 = xi ∧ SourceFill c r m.2 := by
     intro r l lo hi hrl
     obtain ⟨sc, hU, pi, hpi, hport, hrw, hl, hres, -, -⟩ := hrl
     have hsz := Properties.Record.SecurityProofs.inRow_size (c.f.P.defs[sc.d]!) pi (c.W.cutsOf r.tid r.port) r.row hrw
@@ -939,35 +1031,41 @@ theorem sharedHeld_of (hNE : EdgeFreeReads) (h3 : LeafPart) : SharedHeld := by
         rw [htm, hpt]
       rw [hcuts]
       exact hrw
-    · obtain ⟨tid', port', u0, n, p, gg, gb, o, hplan, hheld, rfl⟩ := row_of hmk
-      obtain ⟨r', t', ty, hr', ht', hp', htid, hu0, hn, -⟩ := plan_of hplan
-      rw [hfind] at hr'
-      cases hr'
-      rw [hfindt] at ht'
-      cases ht'
-      rw [hpar] at hp'
-      have hport' : port' = r.port := by
-        rw [← hpt, Option.some.inj hp']
-      have hu0' := u0_eq (evaluate_chained hrs) hi rs'[i].template
-      rw [htm] at hu0'
-      rw [htm] at hu0
-      obtain ⟨hth, d, hd, hcov, hfill⟩ := heldFrom_cover _ _ hheld r.unit (by omega) (by omega)
-      refine ⟨hsi, ?_, hth⟩
-      rw [htid, htm, hport'] at hcov
-      rw [Properties.Record.SecurityProofs.fillAt_of_covers
-        (Properties.Record.SecurityProofs.inputsOf_decls hin).1 hd hcov, hfill]
+    · have hcommon : ∀ {pl : Plan} {tid' port' : String} {u0 n : Nat}, sharedPlan c.f.P rs' c.f.ts c.W c.x.decls s r.row = some pl →
+          pl.at = (tid', port', u0, n) → tid' = r.tid ∧ port' = r.port ∧ u0 ≤ r.unit ∧ r.unit < u0 + n := by
+        intro pl tid' port' u0 n hplan hat
+        obtain ⟨r', t', ty, hr', ht', hp', htid, hu0, hn, -⟩ := plan_of hplan hat
+        rw [hfind] at hr'
+        cases hr'
+        rw [hfindt] at ht'
+        cases ht'
+        rw [hpar] at hp'
+        have hport' : port' = r.port := by
+          rw [← hpt, Option.some.inj hp']
+        have hu0' := u0_eq (evaluate_chained hrs) hi rs'[i].template
+        rw [htm] at hu0'
+        rw [htm] at hu0
+        refine ⟨by rw [htid, htm], hport', by omega, by omega⟩
+      have hfa := (Properties.Record.SecurityProofs.inputsOf_decls hin).1
+      rcases row_of hmk with ⟨tid', port', u0, n, p, gg, gb, o, hplan, hheld, rfl⟩ |
+          ⟨tid', port', u0, n, name, root, hplan, hheld, rfl⟩
+      · obtain ⟨rfl, rfl, h1, h2⟩ := hcommon hplan rfl
+        obtain ⟨hth, d, hd, hcov, hfill⟩ := heldFrom_cover _ _ hheld r.unit h1 h2
+        exact ⟨hsi, by rw [Properties.Record.SecurityProofs.fillAt_of_covers hfa hd hcov, hfill], hth⟩
+      · obtain ⟨rfl, rfl, h1, h2⟩ := hcommon hplan rfl
+        obtain ⟨hth, d, hd, hcov, hfill⟩ := tableFrom_cover _ _ hheld r.unit h1 h2
+        exact ⟨hsi, by rw [Properties.Record.SecurityProofs.fillAt_of_covers hfa hd hcov, hfill], hth⟩
   by_cases hex : ∃ r l lo hi, Properties.Record.RowLeaf c.f.P rs' c.W r l g lo hi
   · obtain ⟨r0, l0, lo0, hi0, h0⟩ := hex
     obtain ⟨s0, hs0, -, cc0, hcc0, hm0⟩ := hrow _ _ _ _ h0
     obtain ⟨m0, hsr0, hagree⟩ := hrows s0 hs0 cc0 hcc0
-    refine ⟨m0.2.1, fun r l lo hi hrl => ?_⟩
+    refine ⟨⟨heldOf c m0.2, sharesRun_heldOf c m0.2⟩, fun r l lo hi hrl => ?_⟩
     obtain ⟨s, hs, -, cc, hcc, hm⟩ := hrow _ _ _ _ hrl
     obtain ⟨m, hsr', -⟩ := hrows s hs cc hcc
     have he : m0 = m := hagree s hs cc hcc m hsr' (by rw [(hm0 m0 hsr0).1, (hm m hsr').1])
-    obtain ⟨-, hf, ht⟩ := hm m hsr'
     rw [he]
-    exact heldAt_read hf ht
-  · exact ⟨"", fun r l lo hi hrl => absurd ⟨r, l, lo, hi, hrl⟩ hex⟩
+    exact heldAt_of_fill (hm m hsr').2
+  · exact ⟨⟨.read "", trivial⟩, fun r l lo hi hrl => absurd ⟨r, l, lo, hi, hrl⟩ hex⟩
 
 /-- **`SharedInNode` holds**, on every root `rowRuns` reads: a shared run is the run of a part, and the part's last
 reference, in that one part (`part_at`), is a leaf of the run's node (`BodyOk`). -/

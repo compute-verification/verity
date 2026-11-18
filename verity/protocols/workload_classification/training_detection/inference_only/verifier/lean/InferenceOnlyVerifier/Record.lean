@@ -798,7 +798,7 @@ table read of table `name`'s root (`root`), else its domain id, of the run from 
 inductive Source where
   | read (p : String) (o : Int)
   | table (name : String) (root : Bool) (base : Nat)
-  deriving BEq, Inhabited, Repr
+  deriving DecidableEq, Inhabited, Repr
 
 /-- What `sharedRow` checks of a shared run's row: a registered read (`sharedPlan`'s first form) or a table read
 of the whole row at every member, units `[u0, u0 + n)` of template `tid`'s port `port`. -/

@@ -217,6 +217,13 @@ def SharedLeaf (P : Prog) (g : ℕ) : Prop :=
   ∃ runs x, InferenceOnlyVerifier.Record.rowRuns P = some runs ∧ x ∈ runs.shared ∧
     (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 ≤ g ∧ g < (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 + x.2.2
 
+/-- **A reason that may hold a shared run's rows**: a registered read of a parameter, or a table read of a table's
+root or its domain id; an opened row never. -/
+def SharesRun : Held → Prop
+  | .read _ => True
+  | .table _ _ _ => True
+  | .opened _ _ _ => False
+
 /-- **Every unit's rows are input gates, each its own or a shared run's**: a leaf of a reader row is an input gate,
 and no gate is a leaf of two rows, or two leaves of one, unless it is a leaf of a shared run (`SharedLeaf`). -/
 def OwnRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
@@ -307,8 +314,8 @@ and the edges of the Program's root (`Spot.RecordText.wiring`); the slots are th
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
 are input gates or its writers' outputs (`OwnOrEdgeRows`), every wire lands whole, and every bit of a wired row is
 its writer's; no row the check holds has a writer; every row with a leaf of a shared run is held as a registered read
-of one parameter, the same for every row of that leaf (`SharedLeaf`), so the registration commits the one value each
-reads; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
+of one parameter, or as a table read of one table's root or domain id, the same for every row of that leaf
+(`SharedLeaf`, `SharesRun`), so every row of the leaf declares the one value each reads; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
 No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
 unit has a slot and the row a declaration and the text's readers give neither unless the text names the Program by
@@ -334,7 +341,8 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs ∧
     Templates P rs (F.wiring c) ∧ OwnOrEdgeRows P rs (F.wiring c) S ∧ Aligned P rs (F.wiring c) S ∧
     Filled P rs (F.wiring c) S ∧ (∀ r, (F.held c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) ∧
-    (∀ g, SharedLeaf P g → ∃ p, ∀ r l lo hi, RowLeaf P rs (F.wiring c) r l g lo hi → F.held c r = some (.read p)) ∧
+    (∀ g, SharedLeaf P g → ∃ h : {h : Held // SharesRun h}, ∀ r l lo hi, RowLeaf P rs (F.wiring c) r l g lo hi →
+      F.held c r = some h.1) ∧
     LaysOut P rs (F.wiring c) S d.D at_ ∧
     Names P rs (F.wiring c) (fun r => (F.held c r).isSome) at_ d.θ ∧ Divides P rs (F.slot c) at_ d.𝓘
 
