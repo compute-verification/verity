@@ -235,7 +235,7 @@
     {"file": "benchmarks/network_traces/network_attester_chain.py", "count": 4},
     {"file": "benchmarks/network_traces/network_attester_zk.sh", "count": 4},
     {"file": "benchmarks/network_traces/record.py", "count": 1},
-    {"file": "benchmarks/network_traces/scan_period.sh", "count": 6},
+    {"file": "benchmarks/network_traces/scan_period.sh", "count": 1},
     {"file": "benchmarks/network_traces/scan_zk.sh", "count": 28},
     {"file": "benchmarks/network_traces/served_session.py", "count": 26},
     {"file": "benchmarks/network_traces/wipe_egress.py", "count": 2},

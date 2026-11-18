@@ -121,14 +121,10 @@ __all__ = [
 
 # ---- reading -------------------------------------------------------------------------------------------------------------
 
-#: whether a benchmark result gives its figures a sampled proof block (the means over the draw count); off, it gives the
-#: sampled statements' totals, which stay public, since a public total over a public mean gives the held count back
-PUBLISH_PER_BLOCK = False
-#: why a result gives no figure a proof block where its output holds no draw count and no keep of the run's is read
-HELD_COUNT = "held: the draw count is private (network-accounting, 18 Nov)"
-#: why it gives none where `PUBLISH_PER_BLOCK` is off
-HELD_PER_BLOCK = ("its figures a proof block are held (proof_layers.PUBLISH_PER_BLOCK off): a public total over a public "
-                  "mean gives the draw count back; its figures are the sampled statements' totals")
+#: why a result gives no figure a proof block where neither its output nor a keep of the run's holds the draw counts
+NO_COUNT = "the public copy of this run carries no count of sampled proof blocks; read it with the run's keep"
+#: the workload's words where its draw counts are read from the run's keep (`PRIVATE_PATHS`)
+FROM_KEEP = "from the run's own keep"
 #: the run's statement of the private directories its job keeps on the node, at its directory's root (serve_tax's
 #: `PRIVATE_PATHS`, ``{"schema": "private-paths/v1", "private": [each directory, absolute], ...}``)
 PRIVATE_PATHS = "private-paths.json"
@@ -137,68 +133,28 @@ PRIVATE_PATHS = "private-paths.json"
 def per_unit(timing: Mapping[str, Any], counts: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     """An a5 summary's ``timing`` per sampled proof block of each type, in the form prove_path's ``per_unit`` prints:
     the proof blocks sampled (``draw_counts``), Flock's ``prove_total_s`` and Lean's verify seconds over them, and one
-    rep's proof's bytes where every rep's are the same (a timed repeat of the one proof), else none; and the two
-    seconds' totals (``prove_s``, ``lean_verify_s``), which need no count."""
+    rep's proof's bytes where every rep's are the same (a timed repeat of the one proof), else none."""
 
     out = {}
     for key, t in timing.items():
         tm, n = (t or {}).get("timing") or {}, counts.get(key) or 0
         pb = tm.get("proof_bytes")
         one = pb[0] if isinstance(pb, list) and pb and len(set(pb)) == 1 else pb if isinstance(pb, int) else None
-        raws = (("prove_s", tm.get("prove_total_s")), ("lean_verify_s", (t or {}).get("lean_verify_s")))
-        out[key] = {"units": n, "proof_bytes": one, **{x: _number(raw) for x, raw in raws},
-                    **{f"{x}_per_unit": v / n if n and (v := _number(raw)) is not None else None for x, raw in raws}}
+        out[key] = {"units": n, "proof_bytes": one,
+                    **{f"{x}_per_unit": v / n if n and (v := _number(raw)) is not None else None
+                       for x, raw in (("prove_s", tm.get("prove_total_s")), ("lean_verify_s", (t or {}).get("lean_verify_s")))}}
     return out
 
 
-def _totaled(per: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-    """prove_path's ``per_unit`` map with each type's two seconds' totals, its means times its blocks, where it gives both."""
-
-    return {key: {**x, **{t: v * k for t in ("prove_s", "lean_verify_s")
-                          if (v := _number(x.get(f"{t}_per_unit"))) is not None and (k := int(x.get("units") or 0))}}
-            for key, x in per.items()}
-
-
-def _totals(result: Result, units: list[Mapping[str, Mapping[str, Any]]], bytes_what: str) -> None:
-    """The benchmark result's prover and Lean seconds and proof bytes summed over the sampled statements of `units`
-    (`per_unit` maps, one a rank), with `HELD_PER_BLOCK`."""
-
-    n, figures, missing = 0, {"prove": 0.0, "lean": 0.0, "bytes": 0.0}, set()
-    for per in units:
-        for x in per.values():
-            n += 1
-            for name, raw in (("prove", x.get("prove_s")), ("lean", x.get("lean_verify_s")), ("bytes", x.get("proof_bytes"))):
-                v = _number(raw)
-                missing |= {name} if v is None else set()
-                figures[name] += v or 0.0
-    result.held = HELD_PER_BLOCK
-    result.notes.append(HELD_PER_BLOCK)
-    if not n:
-        result.notes.append("no sampled statement holds a timing")
-        return
-    result.notes += [f"no {name} total: a sampled member's timing doesn't give one" for name in sorted(missing)]
-    result.per = f"over {n} sampled statement{'s' if n > 1 else ''}"
-    result.prover_s = None if "prove" in missing else figures["prove"]
-    result.prover_what = f"Flock's prove_total_s, summed over {n}"
-    result.lean_s = None if "lean" in missing else figures["lean"]
-    result.lean_what = f"Lean's verify, summed over {n}"
-    result.proof_bytes = None if "bytes" in missing else figures["bytes"]
-    result.bytes_what = f"{bytes_what}, summed over {n}"
-
-
 def _per_block(result: Result, units: Iterable[Mapping[str, Mapping[str, Any]]],
-               bytes_what: str = "one rep's proof over its sampled proof blocks", held: bool = False) -> None:
+               bytes_what: str = "one rep's proof over its sampled proof blocks", uncounted: bool = False) -> None:
     """The benchmark result's prover and Lean seconds and proof bytes a proof block, over every sampled proof block of `units` (prove_path's
-    ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks,
-    only under `PUBLISH_PER_BLOCK`; off, the statements' totals (`_totals`). ``held``: its output holds no draw count."""
+    ``per_unit`` maps, one a rank): the seconds' means weighted by each type's blocks, and the bytes' sum over the blocks.
+    ``uncounted``: neither its output nor the run's keep holds the draw counts (`NO_COUNT`)."""
 
-    units = list(units)
-    if not PUBLISH_PER_BLOCK:
-        _totals(result, units, bytes_what)
-        return
-    if held:
-        result.held = HELD_COUNT
-        result.notes.append(f"no figure a proof block: {HELD_COUNT}")
+    if uncounted:
+        result.uncounted = NO_COUNT
+        result.notes.append(f"no figure a proof block: {NO_COUNT}")
         return
     n, figures = 0, {"prove": 0.0, "lean": 0.0, "bytes": 0.0}
     missing: set[str] = set()
@@ -386,14 +342,10 @@ def read_prove_path(d: Path, result: Result) -> None:
         raise Unreadable(f"{d} holds {len(honest)} honest arms ({', '.join(a.name for a, _, _ in honest)}): give one arm's "
                          "directory")
     arm, pp, rec = honest[0]
-    public = sorted(arm.glob("rank*/summary.json")) or [f for f in [arm / "window" / "summary.json"] if f.is_file()]
-    shown = any("draw_counts" in x for x in [*((pp or {}).get("ranks") or {}).values(), rec or {},
-                                             *(json.loads(f.read_text()) for f in public)])
     if kept := _kept(arm):
         text = _text(kept / "audit.log")
         pp, rec = (pp and next((x for x in reversed(_tagged(text, "PROVE-PATH", [])) if x.get("forged") is False), pp),
                    rec and next(iter(_tagged(text, "RECORDS", [])[-1:]), rec))
-        result.notes.append(f"the draw counts read from the run's keep on this node ({PRIVATE_PATHS}): {kept}")
     src = kept or arm
     audits = [x for x in _tagged(_text(arm / "audit.log"), "A5", result.notes) if "audit" in x]
     per_rank = [_lean_verdicts([x]) for x in audits]
@@ -444,7 +396,8 @@ def read_prove_path(d: Path, result: Result) -> None:
     result.workload = ((f"the output disagrees on its values: ran-with.txt says served ({place}), the audit's source field "
                      f"says {', '.join(sorted(source))}: " if served and source - {"served"} else
                      f"served per ran-with.txt ({place}): " if served else "")
-                    + f"arm {arm.name}: " + (HELD_COUNT if not shown else _sampled(counts, population, n_ranks)))
+                    + f"arm {arm.name}: "
+                    + (NO_COUNT if no_counts else _sampled(counts, population, n_ranks) + (f" ({FROM_KEEP})" if kept else "")))
     for forged in sorted(arm.parent.glob(f"{arm.name}-forged")):
         if not (forged / "audit.log").is_file():
             err = next((x for x in reversed(_text(forged / "commit.log").splitlines()) if re.match(r"\w+(Error|Exception): ", x)),
@@ -459,7 +412,7 @@ def read_prove_path(d: Path, result: Result) -> None:
                    f"one rep's proof over its sampled proof blocks, of {' or '.join(map(str, reps)) or '?'} reps in summary.json's "
                    "timing; prove_path's per_unit sums them", no_counts)
     elif pp is not None:
-        _per_block(result, [_totaled(r.get("per_unit") or {}) for r in (pp.get("ranks") or {}).values()],
+        _per_block(result, [r.get("per_unit") or {} for r in (pp.get("ranks") or {}).values()],
                    "every rep's proof files over its sampled proof blocks, as prove_path's per_unit sums them: no summary.json "
                    "states its reps", no_counts)
     m = re.fullmatch(r"ran with: coins (.+?); parameters (\S+) \((.*)\)", ran_with[0] if ran_with else "")
@@ -512,9 +465,9 @@ def read_a5(d: Path, result: Result) -> None:
                      f"{VALUES_NOT_STATED}: ")
                     + (f"workload {Path(machine[len('row dir '):]).name}: " if machine else
                        f"source {summary['source']}: " if summary.get("source") else "")
-                    + (HELD_COUNT if no_counts else _sampled(counts, summary.get("population"))) + (f" ({window})" if window else ""))
+                    + (NO_COUNT if no_counts else _sampled(counts, summary.get("population"))) + (f" ({window})" if window else ""))
     if summary.get("timing"):
-        _per_block(result, [per_unit(summary["timing"], counts)], held=no_counts)
+        _per_block(result, [per_unit(summary["timing"], counts)], uncounted=no_counts)
     result.prover_batch = _statement_instances(d)
     if result.prover_batch is not None and result.prover_what:
         result.prover_what += f"; its Flock statement holds {result.prover_batch:,} proof blocks, the prover's batch"

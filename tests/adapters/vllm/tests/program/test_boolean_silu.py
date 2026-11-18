@@ -32,7 +32,7 @@ PINS = {
     "SiluMul_v4{I=8}": (11040, 56184, 1328, "28e2e644cc7ab2a39d60e14429558cc92c3019807248898144be4f77010d17f646c05383e5e5049b756449aa12af9abbfe4d17f29bf566f87f1d35e51c5d3505"),
 }
 #: version -> (element, row)
-VERSIONS = {"v3": (BSL.SiluMulBf16, BSL.SiluMul), "v4": (BSL.SiluMulBf16Expf, BSL.SiluMulExpf)}
+VERSIONS = {"v3": (BSL.SiluMulBf16, BSL.SiluMul), "v4": (act.SiluMulBf16Expf, act.SiluMulExpf)}
 
 _EXP = [0, 1, 2, 116, 117, 118, 119, 120, 126, 127, 128, 129, 130, 131, 133, 134, 135, 254, 255]
 #: per sign: zero and the subnormal ends, each band edge's exponents at the mantissa ends, ones, the finite maximum, the
@@ -100,8 +100,8 @@ def test_the_ands_are_the_builders_live_ands(version: str) -> None:
 def test_the_word_views() -> None:
     assert TR.word_of(bind(BSL.SiluMulBf16)) is P.SiluMulBf16
     assert TR.word_of(bind(BSL.SiluMul, I=8)).id == bind(b1.SiluMul, I=8).id == "SiluMul_v1{I=8}"
-    assert TR.word_of(bind(BSL.SiluMulBf16Expf)) is act.SiluMulBf16 and act.SiluMulBf16.id == "SiluMulBf16_v2"
-    assert TR.word_of(bind(BSL.SiluMulExpf, I=8)).id == bind(act.SiluMul, I=8).id == "SiluMul_v2{I=8}"
+    assert TR.word_of(bind(act.SiluMulBf16Expf)) is act.SiluMulBf16 and act.SiluMulBf16.id == "SiluMulBf16_v2"
+    assert TR.word_of(bind(act.SiluMulExpf, I=8)).id == bind(act.SiluMul, I=8).id == "SiluMul_v2{I=8}"
 
 
 def _half(g: int) -> int:
@@ -140,7 +140,7 @@ def test_the_expf_band_table_differs_only_where_expf_overflows() -> None:
     band `expf_band_table` is `band_table` but at the gates whose ``expf(-g)`` overflows, each 0 (``g / inf`` = -0); some of those
     are nonzero in `band_table` (the finding's window)."""
     silu = [act.SiluMulBf16.evaluate(g, 0x3F80) for g in range(1 << 16)]
-    old, new = BSL.band_table(), BSL.expf_band_table()
+    old, new = BSL.band_table(), act.expf_band_table()
     over = {_index(g) for g in range(0x8000 | BSL.BAND_LO << 7, 0x8000 | (BSL.BAND_HI[1] + 1) << 7)
             if -_f(g) >= act.LN_F32_OVERFLOW}
     assert min(g for g in range(0x8000, 1 << 16) if -_f(g) >= act.LN_F32_OVERFLOW and (g >> 7) & 0xFF < 255) == 0xC2B2
@@ -149,7 +149,7 @@ def test_the_expf_band_table_differs_only_where_expf_overflows() -> None:
     for g, s in enumerate(silu):
         sign, e, m = g >> 15, (g >> 7) & 0xFF, g & 0x7F
         if e == 255 and (m or sign):
-            assert s == BSL.NAN_F2FP
+            assert s == P.BF16_NAN_F2FP
         elif BSL.BAND_LO <= e <= BSL.BAND_HI[sign]:
             assert s >> 15 == sign and s & 0x7FFF == new[_index(g)]
         elif e < BSL.BAND_LO:
@@ -161,7 +161,7 @@ def test_the_expf_band_table_differs_only_where_expf_overflows() -> None:
 def test_the_finding_pair() -> None:
     """cov-gm001's element: gate -97.0, up 16.375. The GPU commits -0 (``expf(97)`` overflows); `_v1`, and so `_v3`, does not."""
     g, u = np.array([0xC2C2], np.uint16), np.array([0x4183], np.uint16)
-    assert _bits(bind(BSL.SiluMulBf16Expf), g, u).tolist() == _word(bind(BSL.SiluMulBf16Expf), g, u).tolist() == [0x8000]
+    assert _bits(bind(act.SiluMulBf16Expf), g, u).tolist() == _word(bind(act.SiluMulBf16Expf), g, u).tolist() == [0x8000]
     assert _bits(bind(BSL.SiluMulBf16), g, u).tolist() == _word(bind(BSL.SiluMulBf16), g, u).tolist() == [0x8010]
 
 
@@ -180,7 +180,7 @@ def test_the_overflow_window_at_every_up_word() -> None:
     """`SiluMulBf16_v4` on the 31 gates of `OVERFLOW_WINDOW` at all 65,536 up words (2,031,616 pairs, the slow word's ~20 s):
     the window is where `_v2` and `_v1` part, and every up word is every scale and special the -0 meets there."""
     u: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
-    _agree(bind(BSL.SiluMulBf16Expf), np.repeat(OVERFLOW_WINDOW, len(u)), np.tile(u, len(OVERFLOW_WINDOW)))
+    _agree(bind(act.SiluMulBf16Expf), np.repeat(OVERFLOW_WINDOW, len(u)), np.tile(u, len(OVERFLOW_WINDOW)))
 
 
 @pytest.mark.parametrize("version", sorted(VERSIONS))
