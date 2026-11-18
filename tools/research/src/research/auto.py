@@ -144,6 +144,8 @@ LEAN_RECORDS = "lean-records"
 LEAN_BUILT_SHARE = 0.5
 #: the Lean tool's own fixtures, which are no packages a run builds (lean_audit.py's LEAN_TOOL)
 LEAN_TOOL = ("tools/verity/lean/", "tests/tools/verity/lean/")
+#: a lakefile.toml's package name, its top-level `name = "..."` line
+LAKE_NAME = re.compile(r'^name\s*=\s*"([^"]+)"', re.M)
 
 
 def _words(command: list[str]) -> list[str]:
@@ -208,11 +210,11 @@ def lean_package(command: list[str], source: Path | None, env: list[str] = ()) -
     name = None if file or not any(Path(w).name == "lean_changed.py" for w in words) else _flag(words, "--records")
     if not (file or name):
         return None
-    try:
-        listed = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "*lean-audit.json", "*.lean"],
-                                capture_output=True, timeout=READ_TIMEOUT_S, check=True).stdout.decode().split("\0")
-    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+    git = subprocess.run(["git", "-C", str(source), "ls-files", "-z", "--", "*lean-audit.json", "*.lean"],
+                         capture_output=True, timeout=READ_TIMEOUT_S)
+    if git.returncode:
         return None
+    listed = git.stdout.decode(errors="replace").split("\0")
     pkgs = sorted({f.rsplit("/", 1)[0] for f in listed if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
 
     def deepest(f: str) -> str | None:
@@ -224,10 +226,9 @@ def lean_package(command: list[str], source: Path | None, env: list[str] = ()) -
         name = name.rstrip("/")
 
         def lake_name(p: str) -> str | None:
-            try:
-                return tomllib.loads((Path(source) / p / "lakefile.toml").read_text()).get("name")
-            except (OSError, ValueError):
-                return None
+            toml = Path(source) / p / "lakefile.toml"
+            m = LAKE_NAME.search(toml.read_text(errors="replace")) if toml.is_file() else None
+            return m.group(1) if m else None
 
         match = [p for p in pkgs if p == name] or [p for p in pkgs if lake_name(p) == name] or [p for p in pkgs if name in p]
         pkg = match[0] if len(match) == 1 else None
@@ -725,6 +726,17 @@ def _holds(doc: Any, needs: LeanNeeds) -> tuple[bool | None, str]:
                    + ("" if any((t or {}).get("deps") for t in trees.values()) else ", and none has its fetched dependencies") + ")")
 
 
+def _sort(docs: dict[str, dict | str], needs: LeanNeeds) -> tuple[dict, dict[str, str], list[str], dict[str, str]]:
+    """``docs``' machines that were read, by `_holds`: each one's answer, those that hold the package, those unknown, and
+    those a Lean run of ``needs`` may not go to, with why (`_for_package`)."""
+    seen = {m: _holds(d, needs) for m, d in docs.items() if isinstance(d, dict)}
+    held = {m: why for m, (ok, why) in seen.items() if ok}
+    unknown = [m for m, (ok, _) in seen.items() if ok is None]
+    lacking = {m: why if ok is False else f"is not known to hold {needs.package} built ({why}), and {', '.join(held)} "
+               f"{'does' if len(held) == 1 else 'do'}" for m, (ok, why) in seen.items() if ok is False or (ok is None and held)}
+    return seen, held, unknown, lacking
+
+
 def _for_package(docs: dict[str, dict | str], needs: LeanNeeds | None) -> tuple[dict[str, str], dict[str, str], str | None]:
     """The machines a Lean run of ``needs`` may not go to, and why ({machine: what it lacks}); those that hold its package
     built ({machine: how}); and a note, where machines whose probe said nothing of their trees (`_holds`' None) are taken
@@ -732,11 +744,7 @@ def _for_package(docs: dict[str, dict | str], needs: LeanNeeds | None) -> tuple[
     `Unplaceable` when no machine holds it or may: a run there would build the package cold, or be refused at once."""
     if needs is None:
         return {}, {}, None
-    seen = {m: _holds(d, needs) for m, d in docs.items() if isinstance(d, dict)}
-    held = {m: why for m, (ok, why) in seen.items() if ok}
-    unknown = [m for m, (ok, _) in seen.items() if ok is None]
-    lacking = {m: why if ok is False else f"is not known to hold {needs.package} built ({why}), and {', '.join(held)} "
-               f"{'does' if len(held) == 1 else 'do'}" for m, (ok, why) in seen.items() if ok is False or (ok is None and held)}
+    seen, held, unknown, lacking = _sort(docs, needs)
     if held or not unknown:
         if not held:
             each = "; ".join(f"{m}: {seen[m][1] if m in seen else f'not read ({d})'}" for m, d in docs.items())
@@ -924,10 +932,7 @@ def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: st
     what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts now. A pool
     of a machine a Lean run of ``needs`` may not go to (`_for_package`) is none."""
     cpus = max(cpus, 1)
-    try:
-        lacking = _for_package(docs, needs)[0]
-    except Unplaceable:
-        return None
+    lacking = _sort(docs, needs)[3] if needs else {}
     docs = {m: d for m, d in docs.items() if m not in lacking}
     shapes = set()
     for machine, pool in _pools(docs):
