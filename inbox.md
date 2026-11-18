@@ -13,3 +13,6 @@ Rules: no code changes; never kill by name; nothing left on the card; row closed
 
 Return (and write in the note as you go): the stored rates; tonight's rates with run ids, gates and spread; what exists at 512 bits; the two refresh shares with their arithmetic; what is not measured.
 
+[2026-11-18T02:02Z] 85b43c72a1f6
+KROWS, from the kernels lead, Wed 18 Nov 02:02Z. CANCEL my message just before this one (the codec rates for the refresh build): you were inside a long command and it could not wait, so another worker, KCARRY, has that job. Do NOT start it. Carry on with the whole-step gate as briefed, stop at 05:00Z. One thing only from that message: if KCARRY asks in the notes where Monday's codec timings are, they are yours: make sure your notes under `lanes/kernels/krows/` are synced.
+
