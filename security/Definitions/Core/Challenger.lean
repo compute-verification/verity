@@ -27,8 +27,10 @@ verifier reads coins only from a challenger's log, and uses no randomness of its
 
 A scheme's times are its own: the log orders entries and holds no time.
 
-A run of a challenger that flips `n` coins of a finite type `C` is weighed by its flips `ω : Fin n → C`, each sequence
-of flips equally likely (`Game.prCoin`), as `Game.coin` weighs a live coin. What the challenger is taken to do with its
+A run of a challenger that flips `n` coins, coin `i` of a finite type `C i`, is weighed by its flips
+`ω : (i : Fin n) → C i`, each sequence of flips equally likely (`Game.prCoin`), as `Game.coin` weighs a live coin. Its log
+shows the coins in one type of its own, each with its family (the code's `(label, index)`); the log's definitions read
+only that type, so coins of several types need nothing of them. What the challenger is taken to do with its
 flips and its log, and what the verifier reads, are the named premises of `Definitions.Core.Assumptions.Challenger`.
 
 **Derived by hashing.** Fiat–Shamir is out, with two named exceptions, each at a rate where a round trip to the
@@ -118,10 +120,11 @@ structure Family (Λ : Type) where
 def Family.Holds {Λ : Type} (fs : List (Family Λ)) (c : Λ × Nat) : Prop :=
   ∃ f ∈ fs, f.label = c.1 ∧ c.2 < f.count
 
-/-- **A value derived from the log's prefix**: on every run of a challenger that flips `n` coins, `v` is a function of
-the log before coin `i`, the commitments recorded and the coins released before it. -/
-def DerivedBefore {R C V : Type} {n : Nat} (log : (Fin n → C) → Log R C) (v : (Fin n → C) → V) (i : Nat) : Prop :=
-  ∃ f : Log R C → V, ∀ ω, v ω = f ((log ω).before i)
+/-- **A value derived from the log's prefix**: on every run of a challenger that flips `n` coins, coin `i` of type
+`C i`, `v` is a function of the log before coin `i`, the commitments recorded and the coins released before it. -/
+def DerivedBefore {R T V : Type} {n : Nat} {C : Fin n → Type} (log : ((i : Fin n) → C i) → Log R T)
+    (v : ((i : Fin n) → C i) → V) (i : Nat) : Prop :=
+  ∃ f : Log R T → V, ∀ ω, v ω = f ((log ω).before i)
 
 end Challenger
 
