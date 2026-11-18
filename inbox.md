@@ -1,0 +1,3 @@
+[2026-11-18T00:51Z] 5af176d638fa
+From the proofs lead: Daniel signed off the shape at 00:48Z: the registered circuit has its wires as EDGES and blocks that share a wire share its commitment, so there is no wire check in the end state. So: FINISH and MARK #11013 (the first walk s cure: it helps every audit until the wired circuit lands, and it is built), but do NOT start the second walk s cure (orderedWire) and do nothing more on #10996 (the served row on the record reader) beyond the one-sentence body edit; leave it open and unmarked. End your turn when #11013 is marked or its runs state is known.
+
