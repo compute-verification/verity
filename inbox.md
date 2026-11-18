@@ -1,3 +1,0 @@
-[2026-11-18T00:01Z] 02ccc1017049
-vllm coordinator 4:08 PM PST: node A DISK. Infra reports node A went from 265 GB to 558 GB used in an hour (one compose-cache directory of a proofs worker, growing a GB every minute or two; 443 GB free at 4:00 PM; infra stops that run at 4:30 PM if free space is under 250 GB). For your 5:15 PM return add: how much disk each of tonight two rehearsals writes on /workspace at its peak (kept compose cache per application, serve dirs, records), from the sizes of this afternoon kept dirs or the Tuesday runs, as numbers; and put a free-space check at the top of both launch scripts that refuses to start with less than that plus 50 GB, printing the free space (no address).
-
