@@ -83,14 +83,19 @@ def SpotCase (k : Verity.Registration.Composite) (s : Sent) (p : Spot.OneStageZk
       (Core.canonicalJson x.2.1.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
       Spot.OneStage.commitmentOf x.2.2.commitment = .ok c
 
+/-- **A template's unit in its ranges** `rs` (each a first unit and count, in the partition's order): unit `u` is the
+population's unit `first + u` of the first range when `u` is less than its count, else unit `u - count` of the rest;
+none past them. -/
+def popUnitIn : List (ℕ × ℕ) → ℕ → Option ℕ
+  | [], _ => none
+  | (lo, n) :: rest, u => if u < n then some (lo + u) else popUnitIn rest (u - n)
+
 /-- **A template's unit in the population**, at the partition's ranges `rs` (each its template, first unit and
-count): the wiring's unit `u` of the template `t` is the population's unit `first + u` of the one range of `rs` that
-is `t`'s, and none where `rs` holds no range of `t` or several, or `u` is outside its count. It is
-`Spot.OneStageZk.wiresOn`'s reading, which refuses a wiring with a template of no one range (`Spot.OneStageZk.WIRES_TEMPLATE`). -/
+count): the wiring's unit `u` of the template `t` in `t`'s ranges of `rs`, in order (`popUnitIn`), and none where `u`
+is negative or past them. It is `Spot.OneStageZk.wiresOn`'s reading, which refuses a wiring with a template whose
+ranges do not hold exactly its units (`Spot.OneStageZk.WIRES_TEMPLATE`). -/
 def popUnit (rs : Array (String × ℕ × ℕ)) (t : String) (u : ℤ) : Option ℕ :=
-  match (rs.filter (·.1 == t)).toList with
-  | [(_, lo, n)] => if 0 ≤ u ∧ u < (n : ℤ) then some (lo + u.toNat) else none
-  | _ => none
+  if 0 ≤ u then popUnitIn ((rs.filter (·.1 == t)).toList.map (·.2)) u.toNat else none
 
 /-- **A member's row's name** in the registration: the member's name, `/` and the row's name, as each of the
 registration's roots is the member's whose name, then `/`, its port begins with (`Spot.OneStageZk.rootsOf`). -/
@@ -228,7 +233,7 @@ What it does not say:
 * **Anything of parameters that name no members or no wiring.** At the one statement's parameters
   (`Spot.OneStageZk.paramsOfJson_wiring`: their parse names no wiring) or members with no wiring, the claim holds of
   the play and says nothing, not even SPOT's share. The one-statement reading is `WiresHold`'s.
-* **Anything of a template no one range of the partition holds.** Its units are no population unit (`popUnit`), so
+* **Anything of a template's units past its ranges of the partition.** They are no population unit (`popUnit`), so
   they are held to no wire; the compiled check refuses such a wiring (`Spot.OneStageZk.WIRES_TEMPLATE`).
 * **Anything of a committed circuit whose units are not the members' side by side.** It reads the population's unit
   `g` as the committed circuit's unit `g`.
