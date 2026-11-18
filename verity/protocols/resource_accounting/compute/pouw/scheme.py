@@ -7,8 +7,10 @@ Definition's K, which is the unit's padded width. The cost is of a tile whose ev
 given-up rows credit none (`UnitRecord.credited`).
 
 On a served run (`attach`) it computes every linear block with its device run (`verity.hooks.ComputeBlockWith`), the
-workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), opened once the run registers its weight operands
-(``memory``), and ends the run's pass once each step's blocks are issued (``steps``, `StepComputed`). Its settings are
+workload's `PearlCDeviceRun` (`serving.tensors.pearl_c_device`), over the weight operands the run registers
+(``memory``): one epoch a Commit phase (`PhaseOpened` to `PhaseClosed`), or one for the server's life where no phase
+arrives (`Attached.step`); outside an epoch a block is the workload's own. It ends the run's pass once each step's blocks
+are issued (``steps``, `StepComputed`). Its settings are
 `SETTINGS`; ``tie-uniform`` lets a uniform sampling rate stand under the tie to its tables, with the weaker tie its
 record states.
 """
@@ -149,8 +151,15 @@ class Attached:
             raise ValueError("pearl-plus: no 'kernel' among its settings (ctx['settings']): its run computes on the device, through "
                              "the kernel's library")
         self.declared: H.Declared | None = None
+        self.weights: dict[int, H.Handle] | None = None
         self.run: Any = None
         self.session: Any = None
+        self.epochs = 0
+        self.phase: int | None = None
+        self.phased = False
+        self.first_step = 0
+        self.life: dict[str, Any] | None = None
+        self.phases: dict[int, dict[str, Any]] = {}
         self.busy: dict[int, int] = {}
         self.computed: set[int] = set()
 
@@ -158,7 +167,7 @@ class Attached:
         self.declared = event
 
     def registered(self, event: H.RegisteredValues) -> None:
-        self.run = self.open(self.keyed(event), self.own)
+        self.weights = self.keyed(event)
 
     def keyed(self, event: H.RegisteredValues) -> dict[int, H.Handle]:
         """The linear weights by block key (``operands``, the key `BlockDue` carries), every one committed before the
@@ -172,9 +181,41 @@ class Attached:
         return {key: values[name] for name, key in event.operands.items()}
 
     def step(self, event: Any) -> None:
-        """A pass ends at each `StepComputed`, once the step's blocks are all issued. A step that computed and ended
-        without one is refused: under a multiprocess executor the adapter emits no `StepComputed`, and no pass would
-        end."""
+        """Its epochs, keyed on whether phase events arrive: one epoch a phase, opened at `PhaseOpened` and finished at
+        `PhaseClosed`, its committed root taken from `PhaseCommitted` whenever it comes, after the next phase has opened
+        too; with no phase, one epoch for the server's life, opened at the first step with tokens and finished at
+        `release`. A pass ends at each `StepComputed`, once the step's blocks are all issued. A step that computed and
+        ended without one is refused: under a multiprocess executor the adapter emits no `StepComputed`, and no pass
+        would end."""
+        if isinstance(event, H.PhaseOpened):
+            if self.run is not None and not self.phased:
+                raise RuntimeError(f"pearl-plus: phase {event.phase} opens at step {event.step}, after steps outside any "
+                                   "phase opened its epoch for the server's life: its committer opens phase 0 before "
+                                   "the first step")
+            if self.phase is not None:
+                raise RuntimeError(f"pearl-plus: phase {event.phase} opens while phase {self.phase} is open")
+            if self.weights is None:
+                raise RuntimeError(f"pearl-plus: phase {event.phase} opens before its linear weights registered")
+            self.phased, self.phase, self.first_step = True, event.phase, event.step
+            self.run = self.open(self.weights, self.own)
+            return
+        if isinstance(event, H.PhaseClosed):
+            if self.phase != event.phase:
+                raise RuntimeError(f"pearl-plus: phase {event.phase} closes, and the open phase is {self.phase}")
+            self.phases[event.phase] = {**self.close(), "first_step": self.first_step, "last_step": event.step,
+                                        "program": event.program.hex(), "root": None}
+            self.phase = None
+            return
+        if isinstance(event, H.PhaseCommitted):
+            if event.phase not in self.phases:
+                raise RuntimeError(f"pearl-plus: phase {event.phase}'s root comes before the phase closed")
+            if self.phases[event.phase]["root"] is not None:
+                raise RuntimeError(f"pearl-plus: phase {event.phase}'s root comes twice")
+            self.phases[event.phase]["root"] = event.root.hex()
+            return
+        if isinstance(event, H.StepBegan) and self.run is None and not self.phased and event.slots \
+                and self.weights is not None:
+            self.run = self.open(self.weights, self.own)
         if self.run is None:
             return
         if isinstance(event, H.StepBegan):
@@ -194,39 +235,72 @@ class Attached:
     def kernel(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         if due.format not in READS:
             raise ValueError(f"pearl-plus: block {due.block}'s weight is {due.format}, and its kernel reads {READS}")
-        if self.run is None:
+        if self.weights is None:
             raise RuntimeError(f"pearl-plus: block {due.block} is due before the run registered its linear weights")
+        if self.run is None:
+            return original(None)
         return self.run.gemm(due.key, due.inputs["x"], due.inputs["weight"], due.inputs.get("bias"))
 
     def commitment(self) -> Mapping[str, Any]:
-        return dict(self.run.commits) if self.run is not None else {}
+        """The epoch's commitment for the server's life; with phases, each phase's by number, with its first and last
+        step, its Program's digest and its committed root (None until `PhaseCommitted`)."""
+        if self.phased:
+            return {"phases": {str(p): {k: v for k, v in e.items() if k != "summary"} for p, e in self.phases.items()}}
+        return dict(self.life["commitment"]) if self.life else dict(self.run.commits) if self.run is not None else {}
 
     def record(self) -> Mapping[str, Any]:
         return {"entry": OPTION, "schedule": self.own["schedule"], "tie-uniform": self.own["tie-uniform"]}
 
     def summary(self) -> Mapping[str, Any]:
-        return dict(self.run.details) if self.run is not None else {}
+        if self.phased:
+            return {"phases": {str(p): e["summary"] for p, e in self.phases.items()}}
+        return dict(self.life["summary"]) if self.life else dict(self.run.details) if self.run is not None else {}
 
     def release(self) -> None:
+        """The open epoch finished when serving stops: the server's life's, or a phase that never closed, recorded
+        with ``closed`` False."""
         if self.run is None:
             return
-        if self.session is None:
-            self.run.finish()
+        if self.phase is None:
+            self.life = self.close()
+            return
+        self.phases[self.phase] = {**self.close(), "first_step": self.first_step, "last_step": None, "program": None,
+                                   "root": None, "closed": False}
+        self.phase = None
+
+    def close(self) -> dict[str, Any]:
+        """The open epoch's device run finished (its session closed with it) and freed, before another opens; what it
+        committed and its details."""
+        import gc
+
+        from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+
+        run, session = self.run, self.session
+        self.run = self.session = None
+        if session is None:
+            run.finish()
         else:
-            from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
-            SV.finish_window(self.run, self.session)
+            SV.finish_window(run, session)
+        out = {"commitment": dict(run.commits), "summary": dict(run.details)}
+        del run
+        gc.collect()
+        return out
 
     def open(self, weights: Mapping[int, H.Handle], own: Mapping[str, Any]) -> Any:
         """The device run over ``weights``, under Pearl+'s own settings ``own`` (``kernel``, ``cubin``, ``schedule``,
         ``transcript_dir``, and ``coins`` or ``challenger`` with its ``session``, which the launcher's gate opens):
         their roots committed before any salt, the salt coin opened on their root (with ``challenger``, one session
-        for the server's life, closed at `release`, on an epoch number first spent in ``ctx["private"]``,
-        `spend_epoch`; else the in-process coins), and the run's pass limit, retained passes and ``registration``,
+        an epoch, closed at its `close`, on an epoch number first spent in ``ctx["private"]``, `spend_epoch`; else
+        the in-process coins of this process's epoch count), and the run's pass limit, retained passes and ``registration``,
         what it claims of the weights it serves."""
         from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import pearl_c_device
 
         device, name, weights = pearl_c_device(), OPTION.partition(":")[2], dict(weights)
+        self.epochs += 1
+        if own["challenger"] and self.epochs > 1:
+            raise NotImplementedError("pearl-plus piece 2 (compute-accounting): a salt session a phase; the one "
+                                      "'session' setting is a reserve answer, and a reserve opens once")
         if bad := SV.pearl_c_refusals(name, {w: tuple(t.shape) for w, t in weights.items()}):
             raise ValueError(f"pearl-plus: its weights are refused before any commitment: {'; '.join(bad)}")
         kernel = SV.PearlCKernel.load(own["kernel"], own["cubin"] or None)
@@ -238,7 +312,7 @@ class Attached:
             self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
                                                                           epoch=spend_epoch(self.private))
         else:
-            held = SV.in_process_coins(0)
+            held = SV.in_process_coins(self.epochs - 1)
             coins, opening = held.commitment, held.open("salt", SV.weights_root(roots))
         with SV.closed_on_error(self.session):
             scheme = SV.pearl_c_scheme(name)

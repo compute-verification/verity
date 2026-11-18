@@ -68,8 +68,13 @@ class _Exchange:
 class _Run:
     def __init__(self) -> None:
         self.details: dict = {"max_step_tokens": 64}
+        self.commits: dict = {}
         self.calls: list = []
         self.passes = 0
+        self.finished = False
+
+    def finish(self) -> None:
+        self.finished = True
 
     def gemm(self, w: int, x, weight, bias):
         self.calls.append((w, x, weight, bias))
@@ -98,6 +103,10 @@ def test_attach_computes_each_linear_block_with_its_run(monkeypatch) -> None:
     ex, run = _attached(monkeypatch)
     [(name, req)] = ex.filed
     assert name == "pearl-plus" and isinstance(req, H.ComputeBlockWith)
+    assert req.kernel(_due(), lambda given: given or "stock") == "stock"
+    ex.emit(H.StepBegan(0))
+    assert req.kernel(_due(), lambda given: "stock") == "stock"
+    ex.emit(H.StepBegan(1, ("a",), 8))
     assert req.kernel(_due(), lambda given: "stock") == "y"
     assert run.calls == [(3, "x", "w", None)]
     with pytest.raises(ValueError, match="e4m3"):
@@ -117,6 +126,78 @@ def test_a_pass_ends_at_each_steps_computed_and_a_step_over_one_is_refused(monke
     assert run.passes == 2
     with pytest.raises(RuntimeError, match="65 tokens is over one pass"):
         ex.emit(H.StepBegan(3, ("a",), 65))
+
+
+def _phased(monkeypatch) -> tuple[_Exchange, list[_Run], PS.Attached]:
+    ex, runs = _Exchange(), []
+    monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: runs.append(_Run()) or runs[-1])
+    on = PS.PEARL_PLUS.attach(ex, CTX)
+    ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 3}))
+    return ex, runs, on
+
+
+def test_each_phase_is_one_epoch_and_its_root_may_come_after_the_next_opens(monkeypatch) -> None:
+    ex, runs, on = _phased(monkeypatch)
+    [(_, req)] = ex.filed
+    p0, p1, root = b"\x01" * 64, b"\x02" * 64, b"\x0a" * 64
+    ex.emit(H.PhaseOpened(0, 0))
+    ex.emit(H.StepBegan(0, ("a",), 8))
+    assert req.kernel(_due(), lambda given: "stock") == "y"
+    ex.emit(H.StepComputed(0))
+    ex.emit(H.StepEnded(0))
+    ex.emit(H.PhaseClosed(0, 0, p0))
+    assert runs[0].finished and runs[0].passes == 1 and on.run is None
+    ex.emit(H.StepBegan(1, ("a",), 8))
+    assert req.kernel(_due(), lambda given: "stock") == "stock" and len(runs) == 1
+    ex.emit(H.StepEnded(1))
+    ex.emit(H.PhaseOpened(1, 2))
+    ex.emit(H.PhaseCommitted(0, root))
+    assert on.run is runs[1] and not runs[1].finished
+    ex.emit(H.StepBegan(2, ("a",), 8))
+    assert req.kernel(_due(), lambda given: "stock") == "y" and runs[1].calls == [(3, "x", "w", None)]
+    ex.emit(H.StepComputed(2))
+    ex.emit(H.StepEnded(2))
+    ex.emit(H.PhaseClosed(1, 2, p1))
+    with pytest.raises(RuntimeError, match="phase 0's root comes twice"):
+        ex.emit(H.PhaseCommitted(0, root))
+    with pytest.raises(RuntimeError, match="phase 2's root comes before the phase closed"):
+        ex.emit(H.PhaseCommitted(2, root))
+    on.release()
+    assert on.commitment() == {"phases": {
+        "0": {"commitment": {}, "first_step": 0, "last_step": 0, "program": p0.hex(), "root": root.hex()},
+        "1": {"commitment": {}, "first_step": 2, "last_step": 2, "program": p1.hex(), "root": None}}}
+    ex.emit(H.PhaseCommitted(1, b""))
+    assert on.commitment()["phases"]["1"]["root"] == ""
+    assert on.summary() == {"phases": {"0": {"max_step_tokens": 64}, "1": {"max_step_tokens": 64}}}
+
+
+def test_phases_out_of_order_are_refused_and_an_unclosed_one_is_finished_at_release(monkeypatch) -> None:
+    ex, runs, on = _phased(monkeypatch)
+    with pytest.raises(RuntimeError, match="phase 0 closes, and the open phase is None"):
+        ex.emit(H.PhaseClosed(0, 0, b""))
+    ex.emit(H.PhaseOpened(0, 0))
+    with pytest.raises(RuntimeError, match="phase 1 opens while phase 0 is open"):
+        ex.emit(H.PhaseOpened(1, 0))
+    on.release()
+    assert runs[0].finished and on.commitment()["phases"]["0"]["closed"] is False
+    ex, runs, on = _phased(monkeypatch)
+    ex.emit(H.StepBegan(0, ("a",), 8))
+    with pytest.raises(RuntimeError, match="after steps outside any phase opened its epoch for the server's life"):
+        ex.emit(H.PhaseOpened(0, 1))
+    on = PS.PEARL_PLUS.attach(_Exchange(), CTX)
+    with pytest.raises(RuntimeError, match="phase 0 opens before its linear weights registered"):
+        on.step(H.PhaseOpened(0, 0))
+
+
+def test_a_second_challenger_epoch_is_refused_by_name_until_a_session_a_phase(monkeypatch, tmp_path) -> None:
+    _gated(monkeypatch)
+    monkeypatch.setattr(SV, "finish_window", lambda run, session: run.finish(), raising=False)
+    on = PS.Attached({**CTX, "private": str(tmp_path)})
+    on.weights = {0: W0}
+    on.step(H.PhaseOpened(0, 0))
+    on.step(H.PhaseClosed(0, 0, b""))
+    with pytest.raises(NotImplementedError, match="pearl-plus piece 2"):
+        on.step(H.PhaseOpened(1, 1))
 
 
 def test_a_step_that_computed_without_steps_computed_is_refused(monkeypatch) -> None:
@@ -274,16 +355,19 @@ def test_requests_eager_and_one_rank() -> None:
 
 
 def test_reports_are_the_runs_commitment_and_details(monkeypatch) -> None:
-    ex, run, finished = _Exchange(), _Run(), []
-    run.commits, run.finish = {"salt_opening": "o"}, lambda: finished.append(True)
+    ex, run = _Exchange(), _Run()
+    run.commits = {"salt_opening": "o"}
     monkeypatch.setattr(PS.Attached, "open", lambda self, weights, own: run)
     on = PS.PEARL_PLUS.attach(ex, CTX)
     ex.emit(H.RegisteredValues((("w", "w"),), operands={"w": 0}))
+    assert on.commitment() == {} and on.run is None
+    ex.emit(H.StepBegan(0, ("a",), 8))
     assert on.commitment() == {"salt_opening": "o"}
     assert on.record() == {"entry": PS.OPTION, "schedule": "serial", "tie-uniform": False}
     assert on.summary() == {"max_step_tokens": 64}
     on.release()
-    assert finished == [True]
+    assert run.finished and on.run is None
+    assert on.commitment() == {"salt_opening": "o"} and on.summary() == {"max_step_tokens": 64}
 
 
 def test_a_challenger_opens_one_session_for_the_servers_life(monkeypatch, tmp_path) -> None:
