@@ -63,11 +63,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     draw as DR,
     partition as P,
     docket as R,
+    proofs as PF,
     verifier as V,
 )
 from verity.commitments import randomness as RND
 from verity.circuits import codec, partition_object as PO
-from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1, PROOF_SERVICE_OUTCOME
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -76,7 +77,7 @@ from verity_vllm.definitions.registry import catalog
 import r2_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
-ROW = "hm96-sha512/row/v1"
+ROW = HM96_SHA512_ROW_V1
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
 STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
@@ -321,17 +322,13 @@ def archive_keys(path: Path) -> dict[str, str]:
     return out
 
 
-def sha512_file(path: Path) -> str:
-    return hashlib.sha512(path.read_bytes()).hexdigest()
-
-
 def public_digest(run: Run, pub: str, archive_log: str) -> tuple[str, str]:
     """The SHA-512 of the verifier's public file `pub`: `archive-put`'s key for it, else the file's own."""
     if run.has(archive_log):
         key = next((k for path, k in archive_keys(run.path(archive_log)).items() if path.endswith("/" + pub)), None)
         if key is not None:
             return key, f"archive-put's key of {pub} ({archive_log})"
-    return sha512_file(run.path(pub)), f"SHA-512 of {pub}"
+    return PF.file_sha512(run.path(pub)), f"SHA-512 of {pub}"
 
 
 def stage_report(run: Run, log: str) -> dict:
@@ -1431,7 +1428,7 @@ def bundle_leaf_layer(run: Run) -> tuple[str, str | dict]:
         for m in run.json("members.json")["members"]:
             f = f"m{m['k']}-pub-{m['n']}.bin"
             if run.has(f):
-                publics[m["template"]], how[m["template"]] = sha512_file(run.path(f)), f"SHA-512 of {f}"
+                publics[m["template"]], how[m["template"]] = PF.file_sha512(run.path(f)), f"SHA-512 of {f}"
             else:
                 publics[m["template"]], how[m["template"]] = m["pub"]["file_sha512"], "members.json's pub.file_sha512"
         return hashlib.sha512(DT.canonical(publics).encode()).hexdigest(), how
@@ -1733,7 +1730,7 @@ def served_window(run: Run) -> Iterator[Case]:
                          "GAP: no derivation matches the record's ports; today's")
     sampling_design = sampling_design_at(levels[0])
     first = run.json(outcomes[0])
-    service = first.get("format") == "verity/proof-service/outcome/v0"
+    service = first.get("format") == PROOF_SERVICE_OUTCOME
     scheme = SCHEME if service else SERVED_ZK_SCHEME
     prov["scheme"] = "the proof system's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof system)"
     p = params(program, query, sampling_design, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
@@ -1890,7 +1887,7 @@ def served_audit(run: Run) -> Iterator[Case]:
 
 
 def session_digests(run: Run, session: str) -> list[str]:
-    return sorted(f["sha256"] and sha512_file(run.path(f["path"])) for f in run.files
+    return sorted(f["sha256"] and PF.file_sha512(run.path(f["path"])) for f in run.files
                   if f["path"].startswith(f"{session}/sessions/") and f["path"].endswith("/session.json"))
 
 
@@ -2064,7 +2061,7 @@ def a6(run: Run) -> Iterator[Case]:
                                     prefix=f"{m['name']}/"))
     prov["ports"] = ("a6.frame_ports over each member's set (summary.json's, else its public file's; x row-seg, w and o0 "
                      "row-v2)" if matches(ports, rec) else "GAP: a6.frame_ports' domains are not the record's")
-    publics = {m["name"]: sha512_file(pub_of(m)) for m in summary["members"]}
+    publics = {m["name"]: PF.file_sha512(pub_of(m)) for m in summary["members"]}
     leaf_layer_of = lambda pubs: hashlib.sha512(DT.canonical(pubs).encode()).hexdigest()  # noqa: E731
     leaf_layer = leaf_layer_of(publics)
     prov["leaf_layer"] = f"SHA-512 of the map from member to the SHA-512 of {base}/stage-k<K>[/c<j>]/pub-<n>.bin"
@@ -2192,13 +2189,13 @@ def a7(run: Run) -> Iterator[Case]:
         kind, n = m["name"].split("-")[0], m["n"]
         layout = {f"{m['name']}/{r}": (V2, n) for r in [r for r, _b, _ps in rows[kind]] + ["o0"]}
         ports.update(stand_in_ports(f"unit-a7-{m['name']}", "", n, layout, tag, False, prefix=f"{m['name']}/"))
-        publics[m["name"]] = sha512_file(run.path(f"{base}/stage-{kind}/c0/pub-{n}.bin"))
+        publics[m["name"]] = PF.file_sha512(run.path(f"{base}/stage-{kind}/c0/pub-{n}.bin"))
     for kind in sorted(re.fullmatch(rf"{base}/canon-([a-z]+)\.bc", f["path"]).group(1) for f in run.files
                        if re.fullmatch(rf"{base}/canon-[a-z]+\.bc", f["path"])):
         path = run.path(f"{base}/canon-{kind}.bc")
         n = path.stat().st_size // 128
         ports.update(stand_in_ports(f"a7-canon-{kind}", "", n, {f"canon/{kind}": (V2, n)}, tag, False, prefix="canon/"))
-        publics[f"canon/{kind}"] = sha512_file(path)
+        publics[f"canon/{kind}"] = PF.file_sha512(path)
     prov["ports"] = ("each member's set-bound domains over unit-a7-<member> (the Definition's rows and o0) and each "
                      "canon-<kind>.bc's over a7-canon-<kind>" if matches(ports, rec) else
                      "GAP: A7's member and canonical domains are not the record's")

@@ -43,8 +43,9 @@ from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
+from verity.commitments.domains import REGISTRATION_PRODUCED
 
-FORMAT = "verity/registration/produced/v1"
+FORMAT = REGISTRATION_PRODUCED
 KEYS = ("draw", "format", "openings", "produced", "registration")
 PRODUCED_KEY = RV.PRODUCED_KEY
 _HEX = re.compile(r"[0-9a-f]+")
@@ -84,15 +85,6 @@ def entry(program: str, value: str, leaves: int, words: int, docket: str,
     of ``words`` leaves of ``word_bits``, as the protocol states its shape: what `check` holds the record's entry to."""
     return {"leaves": int(leaves), "words": int(words), "word_bits": int(word_bits),
             "domain": domain(program, value, words, leaves, word_bits, docket).domain_id.hex()}
-
-
-def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = G.SCHEMA) -> dict[str, Any]:
-    """The Lean verifier's ``--registered`` port (`registered.reads_file`'s form) reading ``value`` at ``rows`` (one per
-    proof block, None where the proof block doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
-    docket) and ``root`` the accepted record's."""
-    return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
-            "word_bits": int(e.get("word_bits", RV.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),
-            "reads": list(rows)}
 
 
 def check(rec: Any, docket: str, draw: str, mine: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
@@ -193,9 +185,9 @@ def known_port(program: str, value: str, row: Sequence[int], salt: bytes, docket
     """A port the verifier registers at known content (H1's lane: its salt, position, roots and index, its admit bits, and
     every statement's ``ok``): ``row`` committed under the known ``salt`` as the one row of a produced value's tree
     (under `domain`), so a session's row of it opens the root only as that content. The ``--registered`` port reading its row
-    0 (`port`) and its opening ``(0, b || c hex)``."""
+    0 (`registered_value.port`) and its opening ``(0, b || c hex)``."""
     t = RV.Registered.commit(program, value, [row], [salt], word_bits, schema, produced=docket)
-    return port(value, t.entry(), t.root.hex(), [0], schema), (0, t.bcs[0].hex())
+    return RV.port(value, t.entry(), t.root.hex(), [0], schema), (0, t.bcs[0].hex())
 
 
 def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] | None) -> tuple[str, ...]:
@@ -207,5 +199,5 @@ def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] 
     return () if all(got.get(v) == r for v, r in want.items()) else ("P-opened",)
 
 
-__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "domain", "entry", "known_port", "opened", "port",
-           "record", "rows_of", "shared", "wanted"]
+__all__ = ["FORMAT", "KEYS", "PRODUCED_KEY", "check", "domain", "entry", "known_port", "opened", "record", "rows_of",
+           "shared", "wanted"]

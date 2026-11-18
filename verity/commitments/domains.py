@@ -351,7 +351,6 @@ REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
 STORE_SALT = "verity/store/salt/v1"
 
 # Not yet read from here: the network attester and network accounting
-CERTIFIER_ADVISED_ADVICE = "verity-network-certifier/advised-advice/v2"
 CERTIFIER_CERTIFICATES = "verity-network-certifier/certificates/v3"
 CERTIFIER_CLOCK = "verity-network-certifier/clock/v1"
 CERTIFIER_EMPTY = "verity-network-certifier/empty/v2"

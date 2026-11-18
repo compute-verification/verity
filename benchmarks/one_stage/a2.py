@@ -40,6 +40,7 @@ from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
+from verity.commitments.domains import PARTITION  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -100,7 +101,7 @@ def main() -> int:
         part = {"program": part["program"], "query": {"name": query["name"], "version": query["version"], "template": P.template_id(template),
                                                       "width_rule": None}}
     summary: dict = {"n": n, "k": a.k, "delta": a.delta, "source": rec.get("window", {}).get("kind"), "n_from": "registration",
-                     "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else "verity/partition/v1"}
+                     "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else PARTITION}
 
     # the verifier's own circuit, bound to its own partition and program
     st_dir = out / "stage"

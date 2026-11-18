@@ -94,7 +94,6 @@
   "benchmarks/attester_load/pacing.py": 3,
   "benchmarks/codec_tensor/wide.py": 2,
   "benchmarks/datacenter/datacenter/memory.py": 1,
-  "benchmarks/harness/verity_bench/schemes.py": 1,
   "benchmarks/harness/verity_bench/vllm/runner.py": 1,
   "benchmarks/hash/dither/dbw_side.py": 3,
   "benchmarks/hash/dither/h1r_torch.py": 1,
