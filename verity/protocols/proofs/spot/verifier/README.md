@@ -89,8 +89,8 @@ it stays refused by name.
   (`levels.of_params`). A case's `levels` (a JSON integer; a string is refused) and its `form` (`one-stage` or `two-stage`, which the Lean
   dispatcher reads today) must name that shape. A case that names neither reads as one level, and a mismatch is
   refused with both values named.
-- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field (from
-  `levels.record_field`, its one writer) holds the count. A record without the field is of one level. A record of the
+- **The run's record and `SPOT_LEVELS` are the prover's.** They say what was served. A record's `levels` field holds the
+  count. A record without the field is of one level. A record of the
   boundary commitment's format (`verity-vllm/boundary-rows/v1`) is of two by that format, and one whose `levels` is
   another count is refused (`levels-format-mismatch`). A record that served another
   count than the parameters check is refused (`levels-record-mismatch`).
