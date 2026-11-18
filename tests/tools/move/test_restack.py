@@ -340,6 +340,24 @@ def test_a_move_whose_map_main_deleted_after_it_landed_is_crossed_by_the_map_at_
     assert "app/util.py" not in paths(repo, r["result"]) and "tools/move/layout_map.toml" not in paths(repo, r["result"])
 
 
+def test_each_move_is_named_as_its_crossing_starts_and_many_moves_say_how_to_cross_in_parts(repo, monkeypatch, capsys):
+    """A crossing of many moves runs for minutes with nothing to print until its end: each move writes a line as it starts,
+    and from `MANY_MOVES` on the first line counts them and names each, so a carry in parts can begin at once."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    move = generate(repo, LINE)
+    on(repo, "pr", ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    said = capsys.readouterr()
+    assert f"restack.py: pr: move 1 of 1, {move[:12]} (" in said.err and "each crossed in turn" not in said.err
+    monkeypatch.setattr(RS, "MANY_MOVES", 1)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    first, started = capsys.readouterr().err.splitlines()[:2]
+    assert "pr lacks 1 moves, each crossed in turn" in first and first.endswith(f"oldest first: {move[:12]}")
+    assert started.startswith("restack.py: pr: move 1 of 1, ")
+
+
 @pytest.fixture
 def late(repo, monkeypatch):
     """main as a move that lands late leaves it: the first move, made on `base`, reaches main by a merge after main went on

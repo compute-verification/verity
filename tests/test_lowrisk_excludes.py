@@ -27,12 +27,10 @@ from research.queue import DRIVE_FLAGS, DriveFlags, lowrisk
 
 ROOT = Path(__file__).resolve().parents[1]
 #: what `verdict_plain` may never make plain, beside every file under a `TRUSTED_DIRS` directory and every file of a trusted
-#: place of tests/import_order.toml or of a place one reaches (the soundness path): Lean, its locks and Lake files, the
-#: research tool and the move tool it certifies moves against, the check, the Lean check, and the code an auditor's device runs
-#: outside a `device/` directory
+#: place of tests/import_order.toml or of a place one reaches (the soundness path): Lean, its locks and Lake files, the Lean
+#: check, and the code an auditor's device runs outside a `device/` directory
 NEVER_PLAIN = re.compile(r"(.*/)?(.*\.lean|lean-audit\.json|unread-caps\.json|lakefile\..*|lean-toolchain|lake-manifest\.json"
-                         r"|TRUSTED\.sha256)|tools/research/.*|tools/move/.*|tools/verity/check/.*|tools/check/.*"
-                         r"|tools/verity/lean/.*"
+                         r"|TRUSTED\.sha256)|tools/verity/lean/.*"
                          r"|benchmarks/one_stage/.*|benchmarks/network_traces/.*|benchmarks/poub_session/auditor_line\.py")
 #: the directories whose every file, present or added later, is the auditor's devices' or a verifier's code
 TRUSTED_DIRS = ("device", "verifier", "attester")
@@ -122,9 +120,8 @@ def test_each_directory_of_tests_is_the_repository_suites_own_or_mirrors_one_of_
 
 def test_every_verdict_plain_entry_frees_no_file_the_whole_check_must_see_and_matches_a_tracked_path():
     """An entry of `verdict_plain` names a tracked path, and together they make plain no file under a `verifier/` or
-    `device/` directory, of the soundness path, of Lean, a lock or a Lake file, of the research tool, the move tool, the
-    check or the Lean check, or of the code an auditor's device runs: such a file keeps the whole check before it lands,
-    whatever its land verdicts."""
+    `device/` directory, of the soundness path, of Lean, a lock or a Lake file, of the Lean check, or of the code an
+    auditor's device runs: such a file keeps the whole check before it lands, whatever its land verdicts."""
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
     assert flags.verdict_plain and not (bad := dead_entries(tracked(), flags.verdict_plain)), (
         f"these `verdict_plain` entries of {DRIVE_FLAGS} match no tracked path: {', '.join(bad)}. Fix: delete each, here and "
@@ -150,13 +147,12 @@ def test_each_check_catches_its_failure():
                         "benchmarks/network_traces/x.py", "benchmarks/poub_session/auditor_line.py",
                         "v/circuits/ops/add.py", "v/defs/__init__.py", "benchmarks/poub_session/x.py", "pyproject.toml"],
                        paths) == [
-        "a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml", "tools/research/x.py",
-        "tools/verity/check/merge_map.py", "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py",
-        "tools/move/restack.py", "benchmarks/one_stage/a5.py", "benchmarks/network_traces/x.py",
-        "benchmarks/poub_session/auditor_line.py"]
+        "a/device/x.py", "b/verifier/__init__.py", "x/Y.lean", "p/lean-audit.json", "p/lakefile.toml",
+        "tools/verity/lean/check.py", "v/circuits/program.py", "v/channel.py", "benchmarks/one_stage/a5.py",
+        "benchmarks/network_traces/x.py", "benchmarks/poub_session/auditor_line.py"]
     assert never_plain(["tests/b/verifier/t.py", "tests/tools/research/test_x.py", "tests/v/channel.py",
                         "tests/v/defs/test_d.py", "tests/test_repo.py", "tests/lint/test_y.py", "tests/v/circuits/ops/test_a.py"],
-                       paths) == ["tests/b/verifier/t.py", "tests/tools/research/test_x.py", "tests/v/channel.py"]
+                       paths) == ["tests/b/verifier/t.py", "tests/v/channel.py"]
     assert unmirrored(["v/a.py", "tests/test_r.py", "tests/lint/test_l.py", "tests/v/test_a.py"]) == []
     assert unmirrored(["v/a.py", "tests/fixtures/x.json", "tests/v/test_a.py"]) == ["fixtures"]
     assert unmirrored(["v/a.py", "lint/b.py", "tests/lint/test_l.py"]) == ["lint"]

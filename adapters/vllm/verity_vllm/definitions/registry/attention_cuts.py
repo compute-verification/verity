@@ -6,6 +6,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry.dead_free import AttentionV19
 from verity_vllm.definitions.registry.fa3_check_inf import AttentionV20
 
