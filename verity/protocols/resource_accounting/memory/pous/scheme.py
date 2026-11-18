@@ -95,7 +95,7 @@ def _wipe_reading(row: Mapping[str, Any]) -> Reading:
 
 
 POUS = register(Scheme(
-    name="pous",
+    name=CS.COMPONENT,
     messages=workload.MESSAGES,
     protocol=domains.POUS_P2_RUN,
     resource="memory",
@@ -161,7 +161,7 @@ def _wipe_attach(exchange: Any, ctx: Any) -> Any:
 
 
 WIPE = register(Scheme(
-    name="wipe",
+    name=WP.COMPONENT,
     protocol=domains.WIPE_PROTOCOL,
     resource="memory",
     blocks=Lacks("the wipe runs before the engine loads, outside the workload's circuit: no block of the circuit "

@@ -144,7 +144,7 @@ _REQUIRES = {
 }
 
 BANDWIDTH = S.register(S.Scheme(
-    name="bandwidth",
+    name=P2.COMPONENT,
     protocol=domains.POUB_P2,
     resource="read",
     blocks=S.Lacks(_OUTSIDE + "no block of the workload's circuit carries its cost"),
