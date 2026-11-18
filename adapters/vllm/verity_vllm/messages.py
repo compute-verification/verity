@@ -24,7 +24,6 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
-import verity_torch.pouw  # noqa: F401 -- the workload's PoUW device code, handed in before any scheme attaches; loads no torch
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
@@ -368,9 +367,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
     (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
-    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned. Where one runs
+    kernels on the card (`Scheme.kernels`), the workload's device code is handed in first (`verity_torch.pouw.hand_in`)."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
+    if any(not isinstance(s.kernels, schemes.Lacks) for s, _ in listed):
+        from verity_torch.pouw import hand_in
+        hand_in()
     return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 
