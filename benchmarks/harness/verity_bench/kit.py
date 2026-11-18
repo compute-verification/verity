@@ -230,10 +230,6 @@ def card_short(name: str, *, directory: Path | None = None) -> str:
     return _card_named(name, directory or cards_directory())["short"]
 
 
-def card_sku(name: str, *, directory: Path | None = None) -> str:
-    return _card_named(name, directory or cards_directory())["sku"]
-
-
 def _card_named(name: str, directory: Path) -> dict:
     found = _holding(name, directory)
     if len(found) != 1 or not found[0].get("short"):

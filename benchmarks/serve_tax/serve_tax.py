@@ -4459,12 +4459,60 @@ def bounds_text(doc: object, profile: str) -> str:
     return " and ".join(said[b] for b in doc.profiles[profile].within)
 
 
+#: the kind of a profile's job's result, as the kit's writer writes it and `verity bench serving_cost profile` reads it
+PROFILE_KIND = "serve-tax-profile/v1"
+#: the latencies and the share within the bounds a profile's result holds beside its cost, each side's, with their units
+SIDE_FIGURES = {"ttft_p50_s": "s", "ttft_p99_s": "s", "tpot_p50_s": "s", "tpot_p99_s": "s", "within": "share"}
+
+
+def profile_measured(r: dict, model_id: str, profile: str, feature: str, stock: str, load: str,
+                     point: int) -> list[dict]:
+    """A ``--feature`` result's measurements, the keywords of the kit's `Writer.measurement`: the cost, `EXTRA`, under
+    the model's metric id (`Model.metric`) in percent, with its interval, its member (`member`, the profile's name after
+    it) and, beside it, how it reads (``reading``: ours slower, ours faster or cannot tell, and why), its unit and its
+    noise floor; under it, each side's latencies and share within the bounds (`SIDE_FIGURES`), each under its side's
+    member. Where the feature cannot run, the cost has no value and the refusal's words as its why, and a second line
+    served with a change on our side alone is measured under the member that names the change. None for a model
+    whose cost no metric records, or a stand-in."""
+    model = MODELS[model_id]
+    if model.metric is None or model.stand_in:
+        return []
+    ours, theirs = (f"{member(model, *x)}-{profile}" for x in ((feature, stock), (stock,)))
+    out: list[dict] = []
+    if "cannot_run" in r:
+        out.append({"name": model.metric, "value": None, "unit": "percent", "member": ours,
+                    "inputs": [pass_name(load, point)], "why": "cannot run: " + "; ".join(x["words"] for x in r["cannot_run"]),
+                    "extra": {"label": EXTRA, "profile": profile}})
+        if "second" not in r:
+            return out
+        ours = "-".join((ours, *(x["change"] for x in r["cannot_run"])))
+    lines = r.get("second", r)
+    t = lines["throughput"]
+    cost = {"name": model.metric, "value": _pct(t["value"]), "unit": "percent", "member": ours,
+            "inputs": [pass_name(load, point)],
+            "extra": {"label": EXTRA, "profile": profile, "cost_unit": t["unit"], "paired": t["reps"],
+                      "noise_floor": _pct(t["floor"]), "reading": t["verdict"], "reading_why": t["why"]}}
+    if t["value"] is None:
+        cost["why"] = t["why"] or "no rep of the two sides pairs"
+    elif t["ci95"]:
+        cost["interval"] = [_pct(x) for x in t["ci95"]]
+    out.append(cost)
+    for side, who in (("ours", ours), ("stock", theirs)):
+        figures = {**lines["latency"][side], "within": lines["within"][side]["within"]}
+        for key, unit in SIDE_FIGURES.items():
+            m = {"name": key, "value": figures[key], "unit": unit, "member": who, "inputs": [pass_name(load, point)],
+                 "extra": {"under": model.metric, "profile": profile}}
+            out.append(m if figures[key] is not None else m | {"why": f"{side} served no rep at {pass_name(load, point)}"})
+    return out
+
+
 def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str | None, find_load: bool,
                    out: Path | None = None) -> tuple[int, dict, str]:
-    """A profile's job's result from its arms' directories, written to OUT/serving_profile.{json,txt} with
-    ``--feature`` or OUT/find_load.{json,txt} with ``--find-load``: its exit status (1 where the feature cannot run, as
-    run.sh's job exits 1 for an arm whose run refuses it, the result written all the same), the result and its
-    text."""
+    """A profile's job's result from its arms' directories: its exit status (1 where the feature cannot run, as run.sh's
+    job exits 1 for an arm whose run refuses it, the result written all the same), the result and its text. With
+    ``out`` it is the run's result (`PROFILE_KIND`), written through the kit's report (`kit_report.report`): with
+    ``--feature`` its measurements (`profile_measured`), passed where the cost has a value; with ``--find-load`` no
+    measurement, and OUT/find_load.json, the line it prints for the file."""
     P, doc = profile_doc(profile, model_id)
     stock, load, card_ = profile_stock(profile, model_id), profile_load(profile, model_id), profile_card(model_id)
     metas = [json.loads((d / "meta.json").read_text()) for d in dirs]
@@ -4504,9 +4552,17 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, feature: str |
     r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by]) | {"card": card_}
     text += tail_text(r)
     if out is not None:
-        out.mkdir(parents=True, exist_ok=True)
-        (out / f"{name}.json").write_text(json.dumps(r, indent=1))
-        (out / f"{name}.txt").write_text("\n".join(text) + "\n")
+        measured = [] if find_load else profile_measured(r, model_id, profile, feature, stock, load, r["point"])
+        kit()
+        from verity_bench import kit as bench
+
+        w = bench.writer(out, PROFILE_KIND)
+        w.fingerprint(profile=profile, version=r["version"], digest=r["digest"], model=model_id, card=card_,
+                      stock=stock, feature=feature, load=load, point=r.get("point"))
+        bench.report(name, "\n".join(text), r, measured, out=out, document=find_load)
+        cost = next((m for m in measured if m["name"] == MODELS[model_id].metric and m["value"] is not None), None)
+        good = find_load or cost is not None or not measured
+        w.validation("passed" if good and not rc else "failed", "serve_tax profile result", text[0])
     return rc, r, "\n".join(text)
 
 
@@ -4735,7 +4791,8 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--model-id", required=True, choices=sorted(MODELS))
     pr.add_argument("--feature", metavar="ARM", help="one arm of ours beside stock at the profile's load")
     pr.add_argument("--find-load", action="store_true", help="stock alone over the ladder: where it saturates")
-    pr.add_argument("--out", type=Path, help="result: write serving_profile.* or find_load.* there")
+    pr.add_argument("--out", type=Path, help="result: write the run's result there (the kit's report), and "
+                    "find_load.json with --find-load")
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
     c.add_argument("--model-id", required=True, choices=sorted(MODELS))
     c = sub.add_parser("standin", help="a stand-in's checkpoint directory: its cut config and the model's tokenizer")
@@ -4767,7 +4824,8 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"{k}={shlex.quote(v)}" for k, v in plan.items()))
             return 0
         rc, _, text = profile_result(a.dirs, a.profile, a.model_id, a.feature, a.find_load, a.out)
-        print(text)
+        if a.out is None:
+            print(text)
         return rc
     if a.cmd == "standin":
         return standin(MODELS[a.model_id], Path(a.tokenizer_from), Path(a.out))

@@ -14,7 +14,7 @@
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e; PASSES=$WORK/passes/$ID
-CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2; export CUDA_HOME; CUDA=$CUDA_HOME
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}; export CUDA_HOME
 S=$(mktemp -d /workspace/pouw/tmp-served-zk-window.XXXXXX); trap 'rm -rf "$S"' EXIT
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 stamp() { echo "served-zk: $* at $(date -u +%H:%M:%SZ)"; }

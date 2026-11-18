@@ -97,103 +97,97 @@ def test_plan_identity_binds_resolved_spec_commit_lock_pin_and_point_but_not_adm
     assert identity != jobs.point_identity(spec.config_sha256, pins, expand_sweep("quick")[1])
 
 
-def test_plan_marks_passing_points_and_dispatches_one_recorded_run_for_each_missing_point():
-    root = Path(__file__).resolve().parents[3]
-    seen = []
-
-    def lookup(identity, commit):
-        seen.append((identity, commit))
-        return "r-passed" if len(seen) == 1 else None
-
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lookup)
-    assert [point.passing_run for point in plan.points] == ["r-passed", None]
-    commands = []
-    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root,
-                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
-    [(command, cwd)] = commands
-    assert cwd == root
-    assert command[:3] == ["research", "run", "--queue"]
-    assert command[command.index("--kind") + 1] == "vllm-bench-1gpu"
-    assert "--preemptible" in command[:command.index("--")]
-    assert command[command.index("--gpus") + 1] == "1"
-    assert command[command.index("--gpu-model") + 1] == "rtx-pro-6000"
-    assert command[command.index("--disk-gb") + 1] == str(jobs.POINT_DISK_GB)
-    assert command[command.index("--") + 1:][:2] == ["bash", "benchmarks/harness/run_point.sh"]
-    assert (root / "benchmarks/harness/run_point.sh").is_file()
-    assert command[command.index("--point") + 1] == "b32-p512-mixed"
+def _lease_host(monkeypatch, held: bool) -> None:
+    monkeypatch.setattr(jobs, "lease_host", lambda: held)
+    for name in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(name, raising=False)
 
 
-def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_queued_point(monkeypatch):
-    """`run --direct NODE`: `research run --on NODE` through one of the node's GPU slots and its gpu-lease, the slot-only
-    launcher's form, with the queued point's tool, point command, identity and environment, so plan and check find it."""
-
-    from research.pods.nebius.slot_only import through_slot
+def test_run_runs_the_named_point_here_and_a_passed_one_only_again(monkeypatch, capsys):
+    """`run SPEC --point P` is the point's own command in this process's run, and no launch of another run: a point a
+    passing run stands for runs only when --again names it."""
 
     root = Path(__file__).resolve().parents[3]
-    monkeypatch.setenv("VERITY_BENCH_VENV", "/workspace/jobs/venv312")
+    _lease_host(monkeypatch, False)
     seen = []
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40,
                           lookup=lambda identity, commit: seen.append(identity) or ("r-passed" if len(seen) == 1 else None))
     assert [point.passing_run for point in plan.points] == ["r-passed", None]
     commands = []
-    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-3",
-                         execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
-    [(command, cwd)] = commands
-    item = plan.points[1]
-    assert command == [
-        "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
-        "--cwd", "source", "--timeout", "21600", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
-        "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py", "--by", "benchmarks",
-        "--wait-max", "14400", "--run-max", "7200", "--",
-        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
-        "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
-        "--point", "b32-p512-mixed", "--identity", item.identity,
-    ], "the whole launch: a changed token anywhere in it is a changed launch"
-    queued = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
-    flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-    assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]
-    assert "--queue" not in flags and "--gpus" not in flags
-    assert flags[flags.index("--source") + 1] == str(root) and flags[flags.index("--cwd") + 1] == "source"
-    assert flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}" and "--require-result" in flags
-    assert flags[flags.index("--tool") + 1] == queued[queued.index("--tool") + 1]
-    queued_flags = queued[:queued.index("--")]
-    assert [flags[i + 1] for i, t in enumerate(flags) if t == "--env"] == [
-        queued_flags[i + 1] for i, t in enumerate(queued_flags) if t == "--env"] == ["VERITY_BENCH_VENV=/workspace/jobs/venv312"]
-    assert through_slot(workload)
-    assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
-    assert workload[workload.index("--run-max") + 1] == "7200"
-    lease = workload[workload.index("--", 4) + 1:]
-    assert lease[:3] == ["gpu-lease", "1", "--wait"] and lease[lease.index("--max-min") + 1] == "120"
-    assert lease[lease.index("--") + 1:] == queued[queued.index("--") + 1:]
-    assert VLLM_BENCH_POINT.parse(command)["identity"] == VLLM_BENCH_POINT.parse(queued)["identity"] == item.identity
+
+    def execute(command, cwd):
+        commands.append((list(command), cwd))
+        return 0
+
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b32-p512-mixed", root=root, execute=execute) == 0
+    assert commands == [(["env", "bash", "benchmarks/harness/run_point.sh", "--spec",
+                          "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml", "--point", "b32-p512-mixed",
+                          "--identity", plan.points[1].identity], root)], "the whole command: a changed token is a changed run"
+    assert jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b8-p512-mixed", root=root, execute=execute) == 0
+    assert len(commands) == 1 and "has its passing run r-passed, so nothing runs" in capsys.readouterr().err
+    again = jobs.again(plan, ["b8-p512-mixed"])
+    assert jobs.dispatch(again, "llama31-8b-fp8-1gpu", root=root, execute=execute) == 0
+    assert commands[-1][0][commands[-1][0].index("--point") + 1] == "b8-p512-mixed"
+    for name in ("b8-p512-mixed", "b32-p512-mixed"):
+        assert jobs.to_run(plan, name).point.id == name
+    with pytest.raises(ValueError, match="has 2 points .* and a run runs one: name it with --point"):
+        jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, execute=execute)
+    with pytest.raises(ValueError, match="--point b9: not a point of spec"):
+        jobs.dispatch(plan, "llama31-8b-fp8-1gpu", point="b9", root=root, execute=execute)
+    assert len(commands) == 2
 
 
-def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes():
+def test_on_a_lease_host_a_point_waits_for_its_cards_in_its_own_lease_and_in_a_leased_job_takes_none(monkeypatch):
+    """Where gpu-lease hands out every GPU a run sees none until it takes a lease: the point takes one of the spec's
+    GPUs for its max_minutes, preemptible, of GPU_LEASE_ON's cards on GPU_LEASE_CORES' CPUs; a job holding its lease
+    (GPU_LEASE_UUID) takes no second one, and a spec with no max_minutes is refused before anything runs."""
+
     root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: "r-passed")
-    launched = []
-    for node in ("vy-nebius-cpu-1", "vy-nebius-cpu-4"):
-        with pytest.raises(ValueError, match=f"--direct {node}: not a GPU node with gpu slots"):
-            jobs.dispatch(plan, "llama31-8b-fp8-1gpu", root=root, direct=node, execute=lambda c, cwd: launched.append(c) or 0)
+    _lease_host(monkeypatch, True)
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[1]
+    point = ["bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
+             "--point", item.point.id, "--identity", item.identity]
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == [
+        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--", "env", *point]
+    monkeypatch.setenv("GPU_LEASE_ON", "4")
+    monkeypatch.setenv("GPU_LEASE_CORES", "48-59")
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == [
+        "gpu-lease", "1", "--wait", "--on", "4", "--cores", "48-59", "--max-min", "120", "--preemptible", "--", "env",
+        *point]
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-1")
+    assert jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root) == ["env", *point]
+    monkeypatch.delenv("GPU_LEASE_UUID")
     unbounded = replace(plan, spec=replace(plan.spec, admission=Admission(None, None, None)))
+    launched = []
     with pytest.raises(ValueError, match="admission max_minutes"):
-        jobs.dispatch(unbounded, "llama31-8b-fp8-1gpu", root=root, direct="vy-nebius-2",
+        jobs.dispatch(unbounded, "llama31-8b-fp8-1gpu", point=item.point.id, root=root,
                       execute=lambda c, cwd: launched.append(c) or 0)
     assert launched == []
-    assert _parser().parse_args(["run", "x", "--direct", "vy-nebius-3"]).direct == "vy-nebius-3"
-    assert _parser().parse_args(["run", "x"]).direct is None
 
 
-def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx():
+def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
+    """The one launch is `research run ... -- verity-bench run SPEC`: no flag of a node, a slot, a booked card, cores or
+    end, and no queue of the harness's own; what `research run` can't do yet of a booked period is the launcher's
+    (`jobs.booked`)."""
+
+    for flag in ("--direct", "--here", "--card", "--cores", "--end"):
+        with pytest.raises(SystemExit):
+            _parser().parse_args(["run", "x", flag, "1"])
+    assert _parser().parse_args(["run", "x", "--point", "b8"]).point == "b8"
+    for gone in ("DIRECT_NODES", "GPU_SLOTS", "DIRECT_WAIT_S", "SLOT_GRACE_S", "slot_run", "direct_command",
+                 "direct_minutes", "research_command", "QUEUE_KINDS", "queue_kind", "here_command"):
+        assert not hasattr(jobs, gone), gone
+    with pytest.raises(NotImplementedError, match="infra's launcher goal"):
+        jobs.booked(0.0, "34-43")
+
+
+def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
     """The Commit's width spec on an H200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine settings) on
-    another GPU, and `--direct` takes the DC VM's one GPU through its slot and gpu-lease, the wait for other leases on the
-    node inside the spec's max_minutes."""
-
-    from research.pods.nebius.slot_only import through_slot
+    another GPU, and a run of it runs the point it names."""
 
     root = Path(__file__).resolve().parents[3]
-    node, name = "vy-spot-glm53", "llama31-8b-fp8-1gpu-commit-served-width-h200"
+    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
     spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
     assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
         rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
@@ -201,19 +195,9 @@ def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_th
         "h200", rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
     assert dict(spec.preset.engine_settings) == dict(rtx.preset.engine_settings)
     assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
-
-    assert node in jobs.DIRECT_NODES
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    commands = []
-    assert jobs.dispatch(plan, name, root=root, direct=node,
-                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
-    assert len(commands) == 3
-    for command in commands:
-        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
-        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == f"{jobs.DIRECT_WAIT_S + 7200}"
-        assert through_slot(workload)
-        lease = workload[workload.index("--", 4) + 1:]
-        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+    assert [jobs.to_run(plan, point.id).point.id for point in expand_sweep(spec.sweep.id)] == [
+        "b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
 
 
 def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
@@ -231,13 +215,8 @@ def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
     assert ran.stdout.strip() == str(python)
 
 
-def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
+def test_the_launcher_runs_the_point_in_its_venv(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    monkeypatch.setenv("VERITY_BENCH_VENV", str(tmp_path / "venv"))
-    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
-    assert f"VERITY_BENCH_VENV={tmp_path / 'venv'}" == command[command.index("--env") + 1]
-
     launcher = root / "benchmarks/harness/run_point.sh"
     env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
     missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
@@ -325,10 +304,10 @@ def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_othe
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     plan = jobs.Plan(spec, spec.config_sha256, jobs.toolchain(root, spec, commit="a" * 40),
                      tuple(jobs.PlannedPoint(p, "f" * 64, None) for p in expand_sweep(spec.sweep.id)))
-    command = jobs.research_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
-    flags = command[:command.index("--")]
-    forwarded = [flags[i + 1] for i, token in enumerate(flags) if token == "--env"]
-    assert forwarded == ["ARM_KNOB=on", "VERITY_BENCH_SETUP=benchmarks/harness/setup/vllm_encoded.sh"]
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    command = jobs.point_command(plan, "llama31-8b-fp8-1gpu", plan.points[0], root)
+    forwarded = command[1:command.index("bash")]
+    assert command[0] == "env" and forwarded == ["ARM_KNOB=on", "VERITY_BENCH_SETUP=benchmarks/harness/setup/vllm_encoded.sh"]
 
     environ = dict(item.split("=", 1) for item in forwarded)
     jobs.check_point_environment(spec, environ)
@@ -443,17 +422,23 @@ def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_
     assert {b["kv_cache_memory_bytes"] for b in built} == {60129542144}
 
 
-def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
+def test_a_points_run_records_its_identity_as_the_key_param_resume_matches(monkeypatch):
+    """The launch `research run ... -- uv run verity-bench run SPEC --point P` records the identity of the point the run
+    runs, planned in the launching checkout as the run plans it; so does the point's own command, leased or not."""
+
     root = Path(__file__).resolve().parents[3]
-    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
-    item = plan.points[0]
-    workload = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
-    workload = workload[workload.index("--") + 1:]
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
+    monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, lookup=lambda identity, commit: None)
+    item = plan.points[1]
+    workload = jobs.point_command(plan, "llama31-8b-fp8-1gpu", item, root)
     wrapped = ["/workspace/pouw/infra/bin/gpu-lease", "1", "--wait", "--max-min", "120", "--mem-gb", "64", "--", *workload]
-    for argv in (workload, wrapped):
+    launch = ["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu", "--point", item.point.id]
+    for argv in (workload, wrapped, launch):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
-        assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
+        assert key == {"identity": item.identity}, argv
+        assert params["point"] == item.point.id
+    assert VLLM_BENCH_POINT.resolve_params(["uv", "run", "verity-bench", "run", "llama31-8b-fp8-1gpu"], root)[1] == {}
 
 
 def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
@@ -473,21 +458,17 @@ def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_
         load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
 
 
-def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
-    """The queue refuses an unregistered kind's job without --mem-gb, so each spec's points need a kind whose shape has
-    the spec's GPUs and whose wall time covers its admission."""
+def test_every_spec_fits_the_queued_points_kind():
+    """A point run through the queue is a job of the kind the README names, `vllm-bench-1gpu`: each spec's GPUs are its
+    shape's, and its wall time covers the spec's admission."""
 
     kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
-    kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
-    phase_gpus = {"gpu1": 1}
+    kind = tomllib.loads(kinds_toml.read_text())["kinds"]["vllm-bench-1gpu"]
     specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
-    assert specs
+    assert specs and kind["phase"] == "gpu1"
     for spec in specs:
-        kind = kinds[jobs.queue_kind(spec.preset.gpu_count)]
-        assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
+        assert spec.preset.gpu_count == 1, spec.id
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
-    with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
-        jobs.queue_kind(8)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
@@ -572,8 +553,7 @@ def test_the_readme_states_the_contract_the_code_keeps():
     for mode in ("resident", "blocks"):
         assert f"`{mode}`" in readme and f'"{mode}"' in runner_source
     assert f"`{result_format.SCHEMA}`" in readme
-    for kind in jobs.QUEUE_KINDS.values():
-        assert f"`{kind}`" in readme, kind
+    assert "`vllm-bench-1gpu`" in readme
     [subparsers] = [a for a in _parser()._actions if isinstance(a, argparse._SubParsersAction)]
     public = {name for name in subparsers.choices if not name.startswith("_")}
     assert public == set(re.findall(r"^verity-bench ([a-z-]+) ", readme, re.M))

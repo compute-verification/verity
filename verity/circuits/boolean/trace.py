@@ -655,9 +655,9 @@ def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
     its outputs as one ``ret``."""
     ref: dict[int, Ref] = {}
     w = 2
-    for i, t in enumerate(params):
+    for c, t in zip(colls, params, strict=True):
         for j in range(t.leaves):
-            ref[w] = ("p", i, j)
+            ref[w] = c.refs[j]
             w += 1
     if any(o in (0, 1) for o in T.outputs):
         for b in (0, 1):

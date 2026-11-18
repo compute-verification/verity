@@ -1,5 +1,5 @@
 """What `predict.steps.compile_steps` costs on a class-G window, with the one part of `Compiled.summary()` that walks every node
-(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on H200, one rank's request Programs, GP-01 over them and the
+(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on the card `--card` names, one rank's request Programs, GP-01 over them and the
 batch rules, by phase, in wall seconds and resident memory.
 
 A window is its requests' (arrival step, prompt length, max_tokens), greedy, scheduled as vLLM V1 schedules them (no preemption,
@@ -8,7 +8,7 @@ no prefix cache) at class G's 2,048 tokens a step and 256-row prefill chunks. A 
 reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
 
     research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
-      .venv/bin/python benchmarks/compile_cost/run.py --window long-w0 --out "$OUT" [--guard]'
+      .venv/bin/python benchmarks/compile_cost/run.py --card h200-sxm-141gb --window long-w0 --out "$OUT" [--guard]'
 
 writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
 seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and
@@ -17,9 +17,9 @@ OUT/summary.json, `Compiled.summary()` (what `steps.trace_commands` and `steps.c
 given, also writes those two numbers (`metrics.toml`) into the run's result.
 `--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
 `graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
-measurement: its digests are another model's), `--card SKU` compiles for that card file's device name, compute capability and
-SM count in place of the H200's (the record names it), `--profile` writes cProfile's stats (`profile.pstats`, and the top
-functions in `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window, the H200's.
+measurement: its digests are another model's), `--card SKU` (required) compiles for that card file's device name, compute capability
+and SM count (the record names it), `--profile` writes cProfile's stats (`profile.pstats`, and the top
+functions in `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window, compiled for `PINS_CARD`.
 
 The two numbers are `long-w0`'s wall minutes and peak GiB on one core, against a target of 10 minutes and 16 GiB: a
 serving window (256 sequences, 8,192-token steps, 40k context) is compiled ahead of time from the same code.
@@ -37,7 +37,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-CARD = "h200-sxm-141gb"
+PINS_CARD = "h200-sxm-141gb"
 
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
@@ -94,7 +94,7 @@ def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seq
 
 def session(reqs: list[tuple[int, int, int]]):
     """The window's I1 advice and certified bodies: greedy requests `q<i>` to their max_tokens, prompts of token ids below 256."""
-    from verity.protocols.resource_accounting.network.verifier import advice as I1
+    from verity_vllm.pipeline.advice_code import format as I1
     steps = scheduled(reqs, ENGINE["max_num_batched_tokens"], ENGINE["long_prefill_token_threshold"])
     requests = tuple(I1.RequestAdvice(f"q{i}", lp, m, "length") for i, (_, lp, m) in enumerate(reqs))
     advice = I1.Advice(requests, tuple(I1.StepAdvice(tuple(
@@ -105,7 +105,7 @@ def session(reqs: list[tuple[int, int, int]]):
     return advice, ingress
 
 
-def registered(rank: int, layers: int | None, execution: str = "eager", card: str = CARD):
+def registered(rank: int, layers: int | None, execution: str = "eager", *, card: str):
     """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on `card` at TP8 `rank`, class G's engine at `execution` (compiled:
     the target compilation class G serves it at, `engine_classes.compilation`), the public seed."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
@@ -122,7 +122,7 @@ def registered(rank: int, layers: int | None, execution: str = "eager", card: st
     return Registered.of(phi, default_seed=DEFAULT_SEED)
 
 
-def class_cost(m: Meter, card: str = CARD) -> dict:
+def class_cost(m: Meter, card: str) -> dict:
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.program.predict import window_circuit
@@ -243,7 +243,7 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
                     help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered unwired, in place of a window")
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
-    ap.add_argument("--card", default=CARD, help="the card the target is compiled for, by its card file's name under "
+    ap.add_argument("--card", required=True, help="the card the target is compiled for, by its card file's name under "
                     "calibration/hardware/cards (its device name, compute capability and SM count)")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
@@ -291,7 +291,7 @@ def main() -> int:
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
     from verity_vllm.program.predict.steps import compile_steps
     advice, ingress = session(reqs)
-    reg = registered(a.rank, a.layers, a.execution, a.card)
+    reg = registered(a.rank, a.layers, a.execution, card=a.card)
     tp = reg.phi.target_profile()
     graphs = {"compilation": tp.compilation, **({k: tp.COMPILATIONS[tp.compilation][k] for k in ("mode", "cudagraph_mode", "capture_sizes")}
                                                 if tp.compilation else {"cudagraph_mode": None})}
@@ -337,7 +337,7 @@ def main() -> int:
     print(f"COMPILE-COST window={rec['window']} card={a.card} execution={a.execution} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
           f"nodes={sorted(nodes.values())} digests={','.join(d[:16] for d in digests)} workload={compiled.workload.digest[:16]}", flush=True)
     if a.guard:
-        want = PINS.get(a.window or "") if a.card == CARD else None
+        want = PINS.get(a.window or "") if a.card == PINS_CARD else None
         if a.layers is not None or want is None or digests != want:
             print(f"COMPILE-COST guard FAILED: digests {[d[:16] for d in digests]} against PINS {want}", flush=True)
             return 1
@@ -351,13 +351,13 @@ def machine(card: str) -> str:
     return "cpu" if card == "none" else kit.card_short(card)
 
 
-def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str = CARD) -> None:
+def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str) -> None:
     from verity_bench import kit
     short = kit.card_short(target(card)["device_name"])
     w = kit.writer(out)
     fields = {"model": MODELS[model], "window": window, "execution": execution, "card": short,
               "machine": machine(w.stamp["card"])}
-    member = (f"glm-5.3-{window}-{execution}-{fields['machine']}" + ("" if card == CARD else f"-for-{short}") if model == "glm-5.3"
+    member = (f"glm-5.3-{window}-{execution}-{fields['machine']}" + ("" if card == PINS_CARD else f"-for-{short}") if model == "glm-5.3"
               else f"{model}-{short}")
     for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
         m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)

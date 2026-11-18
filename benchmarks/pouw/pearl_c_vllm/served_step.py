@@ -131,9 +131,9 @@ def _live(arm):
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
     env = PearlCArm()
-    if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols):
+    if not any(e.partition(":")[2] in kernel_names("pearl-c") for e in arm.protocols):
         return arm, None
     config = dict(arm.protocols_config or {})
     try:

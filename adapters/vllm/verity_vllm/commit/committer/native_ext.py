@@ -1,5 +1,5 @@
 """The native collector's extension: ``native_collect.cpp`` and the ``.cu`` kernels beside it (`native_jit.SOURCES`), JIT-built once
-per process.  The collector (`native_collect`) and the host committer's rows-sha512 weights registration (`weights_rows`) both load it
+per process for the arch of the card file `CARD_SKU` names.  The collector (`native_collect`) and the host committer's rows-sha512 weights registration (`weights_rows`) both load it
 here, so neither imports the other."""
 from __future__ import annotations
 
@@ -25,8 +25,9 @@ def ext(build_dir: str | None = None, verbose: bool = False) -> Any:
     if _EXT is None:
         # Read here, not at import: `native_jit` takes the kernels' headers from the core `verity`, which only a build needs.
         from verity_vllm.commit.committer import native_jit
+        from verity_vllm.engine.profiles.devices import cuda_arch
 
-        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
+        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE), arch=cuda_arch(settings.card_sku()),
                                                parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
                                                cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
         missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))

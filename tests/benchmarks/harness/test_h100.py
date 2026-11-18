@@ -38,17 +38,13 @@ def test_an_h100_spec_takes_the_h100_sxm_card_alone_and_an_h200_spec_no_h100(nam
     assert [gpu for gpu in ("h100", "h200") if kit.is_card(name, gpu)] == ([card] if card else [])
 
 
-def test_the_h100_pouw_spec_runs_direct_on_the_h100_vm_through_its_slot_and_one_card_lease():
-    from research.pods.nebius.slot_only import through_slot
-
-    root, name, node = Path(__file__).resolve().parents[3], f"{POUW}@h100", "vy-h100-1"
-    assert node in jobs.DIRECT_NODES
+def test_the_h100_pouw_spec_runs_its_one_point_in_a_one_card_lease(monkeypatch):
+    root, name = Path(__file__).resolve().parents[3], f"{POUW}@h100"
+    monkeypatch.setattr(jobs, "lease_host", lambda: True)
+    for variable in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(variable, raising=False)
     plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     commands: list[list[str]] = []
-    assert jobs.dispatch(plan, name, root=root, direct=node,
-                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert jobs.dispatch(plan, name, root=root, execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     assert len(commands) == len(plan.points) == 1
-    flags, workload = commands[0][:commands[0].index("--")], commands[0][commands[0].index("--") + 1:]
-    assert flags[:4] == ["research", "run", "--on", node] and through_slot(workload)
-    lease = workload[workload.index("--", 4) + 1:]
-    assert lease[:3] == ["gpu-lease", "1", "--wait"]
+    assert commands[0][:3] == ["gpu-lease", "1", "--wait"]
