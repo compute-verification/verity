@@ -167,12 +167,14 @@ theorem withBoundary_accept {p : SampledTwo.Params} {c : OneStage.Commitment}
     (h : withBoundary p c o = .accept pub prof) : ∃ prof', o = .accept pub prof' := by
   cases o with
   | accept pub' prof' =>
-    unfold withBoundary at h
-    split at h
-    · cases h; exact ⟨_, rfl⟩
-    · cases h
-  | reject _ => cases h
-  | undecided _ => cases h
+    cases hb : boundaryLevel p c with
+    | some lk =>
+      obtain ⟨l, k⟩ := lk
+      simp only [withBoundary, hb, Core.Outcome.accept.injEq] at h
+      exact ⟨prof', by rw [h.1]⟩
+    | none => simp [withBoundary, hb] at h
+  | reject s => simp [withBoundary] at h
+  | undecided s => simp [withBoundary] at h
 
 /-- The refusal of an accept whose profile lists `got` levels where the parameters' form is `n` levels'. -/
 def LEVELS_PROFILE (n got : Nat) : String :=
@@ -187,12 +189,13 @@ theorem levelsHeld_accept {n : Nat} {o : Core.Outcome OneStage.Public Core.Integ
     {prof : Core.Integrity} (h : levelsHeld n o = .accept pub prof) : o = .accept pub prof ∧ prof.levels.size = n := by
   cases o with
   | accept pub' prof' =>
-    unfold levelsHeld at h
-    split at h
-    · cases h; exact ⟨rfl, by assumption⟩
-    · cases h
-  | reject _ => cases h
-  | undecided _ => cases h
+    by_cases hs : prof'.levels.size = n
+    · rw [levelsHeld, if_pos hs, Core.Outcome.accept.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨rfl, hs⟩
+    · simp [levelsHeld, hs] at h
+  | reject s => simp [levelsHeld] at h
+  | undecided s => simp [levelsHeld] at h
 
 /-- That form's check, its accept's profile listing that form's levels (`levelsHeld`): one, or two for the two-stage
 form, whose coarse level is the boundary's (`withBoundary`); evidence of another form than the params' rejects
