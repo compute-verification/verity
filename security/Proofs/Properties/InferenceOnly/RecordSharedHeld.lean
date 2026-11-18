@@ -414,4 +414,113 @@ theorem decide_rows {P : Prog} {ts : List Spot.RecordText.Tmpl} {W : Spot.Wires.
       by rw [hm']; rfl⟩)
     simpa [he] using this
 
+/-- A step of `sharedOf`'s fold. -/
+def sharedStep (P : Prog) (sh : List (Nat × Nat × Nat)) (reads : Part → Bool) (mapped : Nat → Nat → Nat → Bool) :
+    Nat × Nat × List Part → Option (List Shared) → Option (List Shared) :=
+  fun (k, j, ps) acc => acc.bind fun out => match ps with
+    | [q] => match partRun P q with
+      | some ((i, base, inner), _) =>
+        if !sh.contains (i, base, inner) then some out
+        else if mapped k j q.count then
+          some ({ node := k, arg := j, input := i, base, inner, count := q.count } :: out)
+        else none
+      | none => some out
+    | _ => if ps.any reads then none else some out
+
+/-- `sharedOf`'s fold: an argument with a part over a shared run is that part alone, and is listed. -/
+theorem shared_fold (P : Prog) (sh : List (Nat × Nat × Nat)) (reads : Part → Bool)
+    (mapped : Nat → Nat → Nat → Bool) : ∀ (L : List (Nat × Nat × List Part)) (out : List Shared),
+    L.foldr (sharedStep P sh reads mapped) (some []) = some out →
+    ∀ k j ps, (k, j, ps) ∈ L → ∀ q ∈ ps, ∀ i base inner b, partRun P q = some ((i, base, inner), b) →
+      sh.contains (i, base, inner) = true → reads q = true →
+      ps = [q] ∧ ∃ s ∈ out, s.node = k ∧ s.arg = j ∧ s.input = i ∧ s.base = base ∧ s.inner = inner ∧
+        s.count = q.count
+  | [], _, _, _, _, _, hm, _, _, _, _, _, _, _, _, _ => by cases hm
+  | (k0, j0, ps0) :: L, out, h, k, j, ps, hm, q, hq, i, base, inner, b, hr, hc, hrd => by
+    rw [List.foldr_cons] at h
+    cases hacc : L.foldr (sharedStep P sh reads mapped) (some []) with
+    | none =>
+      rw [hacc] at h
+      cases h
+    | some out' =>
+      rw [hacc] at h
+      simp only [sharedStep, Option.bind_some] at h
+      have ih := shared_fold P sh reads mapped L out' hacc k j ps
+      have hlift : ∀ (ss : List Shared), (∀ s ∈ out', s ∈ ss) →
+          (ps = [q] ∧ ∃ s ∈ out', s.node = k ∧ s.arg = j ∧ s.input = i ∧ s.base = base ∧ s.inner = inner ∧
+            s.count = q.count) →
+          ps = [q] ∧ ∃ s ∈ ss, s.node = k ∧ s.arg = j ∧ s.input = i ∧ s.base = base ∧ s.inner = inner ∧
+            s.count = q.count := fun ss hss ⟨h1, s, hs, h2⟩ => ⟨h1, s, hss s hs, h2⟩
+      split at h
+      · rename_i q'
+        split at h
+        · rename_i i' base' inner' b' hpr
+          split at h
+          · rename_i hnc
+            cases h
+            rcases List.mem_cons.1 hm with heq | hm'
+            · cases heq
+              rw [List.mem_singleton] at hq
+              subst hq
+              rw [hr] at hpr
+              cases hpr
+              simp only [List.contains_iff_mem] at hc
+              simp at hnc
+              exact absurd hc hnc
+            · exact ih hm' q hq i base inner b hr hc hrd
+          · split at h
+            · cases h
+              rcases List.mem_cons.1 hm with heq | hm'
+              · cases heq
+                rw [List.mem_singleton] at hq
+                subst hq
+                rw [hr] at hpr
+                cases hpr
+                exact ⟨rfl, _, List.mem_cons_self, rfl, rfl, rfl, rfl, rfl, rfl⟩
+              · exact hlift _ (fun s hs => List.mem_cons_of_mem _ hs) (ih hm' q hq i base inner b hr hc hrd)
+            · cases h
+        · rename_i hpr
+          cases h
+          rcases List.mem_cons.1 hm with heq | hm'
+          · cases heq
+            rw [List.mem_singleton] at hq
+            subst hq
+            rw [hr] at hpr
+            cases hpr
+          · exact ih hm' q hq i base inner b hr hc hrd
+      · split at h
+        · cases h
+        · rename_i hany
+          cases h
+          rcases List.mem_cons.1 hm with heq | hm'
+          · cases heq
+            exact absurd (List.any_eq_true.2 ⟨q, hq, hrd⟩) hany
+          · exact ih hm' q hq i base inner b hr hc hrd
+
+/-- **An argument of a root node with a part over a shared run is that part alone, and is one of `sharedOf`'s.** -/
+theorem sharedOf_arg {P : Prog} {sh : List Shared} (h : sharedOf P = some sh) {k j : Nat}
+    (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hj : j < ((P.defs[P.root]!).body.nodes[k]!).args.size) {q : Part}
+    (hq : q ∈ (((P.defs[P.root]!).body.nodes[k]!).args[j]!).seq.parts.toList) {i base inner : Nat} {b : Bool}
+    (hr : partRun P q = some ((i, base, inner), b)) (hc : (sharedRuns P).contains (i, base, inner) = true) :
+    (((P.defs[P.root]!).body.nodes[k]!).args[j]!).seq.parts.toList = [q] ∧
+      ∃ s ∈ sh, s.node = k ∧ s.arg = j ∧ s.input = i ∧ s.base = base ∧ s.inner = inner ∧ s.count = q.count := by
+  have h' : ((P.defs[P.root]!).body.nodes.toList.zipIdx.flatMap fun (nd, k) =>
+      if InferenceOnlyVerifier.Desc.isInputNode P nd then [] else
+        nd.args.toList.zipIdx.map fun (a, j) => (k, j, a.seq.parts.toList)).foldr
+      (sharedStep P (sharedRuns P) (fun q => ((partRun P q).map ((sharedRuns P).contains ·.1)).getD false)
+        (fun (k j c : Nat) => (((P.defs[P.root]!).body.nodes[k]?).map fun nd =>
+          nd.form != .batch || (nd.args[j]?.bind (·.dims)).map (·.2) == some (c / nd.n)).getD false)) (some []) =
+      some sh := h
+  refine shared_fold P _ _ _ _ _ h' k j _ ?_ q hq i base inner b hr hc ?_
+  · refine List.mem_flatMap.2 ⟨((P.defs[P.root]!).body.nodes[k]!, k),
+      List.mem_zipIdx_iff_getElem?.2 (by simp [getElem!_pos (P.defs[P.root]!).body.nodes k hk, hk]), ?_⟩
+    simp only [hu, Bool.false_eq_true, ↓reduceIte]
+    exact List.mem_map.2 ⟨((((P.defs[P.root]!).body.nodes[k]!).args[j]!), j),
+      List.mem_zipIdx_iff_getElem?.2 (by simp [getElem!_pos ((P.defs[P.root]!).body.nodes[k]!).args j hj, hj]), rfl⟩
+  · show ((partRun P q).map ((sharedRuns P).contains ·.1)).getD false = true
+    rw [hr]
+    exact hc
+
 end InferenceOnlyVerifier.Record.SecurityProofs
