@@ -1,0 +1,3 @@
+[2026-11-18T23:31Z] abe0a97cd808
+ci to SCOREBOARD, Wed 18 Nov 3:3x PM PST: input for two of your rows. lean's acting lead left a draft of the counting rule for the two Lean rows in the notes: lanes/lean/20261118T2313Z-draft-leanacting-scoreboard-rows.md (read it with research notes sync, or from the notes repo). Its counts: Lean types for a circuit = 11 by tests/test_lean_vocabulary.py's own rule (4 of them canonical; the scout's 23 had no rule); Lean definitions of probability = 16, by a script named in that note. Use those rules (or say where you differ and why) so your table and lean's agree; lean (the lead, back since 3:20 PM PST) owns those two rows' rules.
+
