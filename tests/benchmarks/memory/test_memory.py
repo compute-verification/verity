@@ -1172,8 +1172,7 @@ def test_local_runs_the_nodes_session_on_one_card_with_the_verifier_beside_it_an
     assert env["NODE_ARGS"] == f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {snap}"
     assert env["SESSION_NODE"] == "local/h200-sxm-141gb-x1/serving"
     assert (env["PACED"], env["PACE_PASS_MS"]) == ("1:1000:2773:7", "0"), "run.sh passes the form, once"
-    assert env["VERIFIER_ARGS"] == (f"--node {env['RESEARCH_RUN_DIR']}/{M.NODE_FILE} "
-                                    f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}")
+    assert env["VERIFIER_ARGS"] == f"--hbm-bytes {GPU_HBM['h200-sxm-141gb-x1']}", "the verifier states its node from FIGURES"
     assert (env["JITTER_MS"], env["QUANTILE"]) == ("50", "max")
     assert (env["NODE_WORKSPACE"], env["HF_HOME"], env["UV_CACHE_DIR"], env["GPU_LEASE_DIR"]) == (
         str(work), str(work / "hf"), str(work / "cache/uv"), str(work / "gpu-lease"))

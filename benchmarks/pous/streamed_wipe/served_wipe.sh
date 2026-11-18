@@ -163,7 +163,7 @@ EOF
 P=$SERVE_DIR/private/wipe
 if [ -f "$DIR/wipe.case.json" ]; then
   { install -d -m 700 "$P" && mv -f "$DIR/wipe.case.json" "$P/wipe.case.json" && chmod 600 "$P/wipe.case.json"; } \
-    || echo "WIPE CASE: the case didn't move to $P"
+    || { rm -f "$DIR/wipe.case.json"; echo "WIPE CASE: the case didn't move to $P: removed from DIR, which leaves the node"; }
 fi
 if [ -f "$DIR/answer.json" ] && [ -f "$P/wipe.case.json" ]; then
   PYTHONPATH=$ROOT "${PY:-python3}" "$ROOT/benchmarks/pous/served_case.py" --window "$DIR" --private "$P" \
