@@ -134,6 +134,22 @@ def test_register_refuses_a_foreign_name_a_bad_name_and_a_silent_rebind(reg, tmp
         registry.register("vy-lane-b", OTHER["id"], "verity", get_pod=pods(OTHER))
 
 
+def test_a_re_registration_of_the_same_binding_keeps_the_properties_table(reg):
+    assert registry.register("vy-lane-a", POD["id"], "verity", get_pod=pods(POD))[1] == "registered"
+    f = reg / "vy-lane-a.toml"
+    props = {"cards": {"value": 1, "read": "nvidia-smi -L | wc -l"},
+             "toolkit": {"value": {"directory": "/usr/local/cuda-13.0", "version": "13.0", "loader": "lib64",
+                                   "others": [{"directory": "/usr/local/cuda-12.9", "version": "12.9"}]}, "read": "nvcc --version"}}
+    f.write_text(f.read_text() + '\n[properties]\ncards = { value = 1, read = "nvidia-smi -L | wc -l" }\n'
+                 'toolkit = { value = { directory = "/usr/local/cuda-13.0", version = "13.0", loader = "lib64", others = '
+                 '[{ directory = "/usr/local/cuda-12.9", version = "12.9" }] }, read = "nvcc --version" }\n')
+    assert registry.register("vy-lane-a", POD["id"], "verity", guard="90", get_pod=pods(POD))[1] == "updated"
+    got = tomllib.loads(f.read_text())
+    assert got["guard"] == 90 and got["properties"] == props
+    assert registry.register("vy-lane-a", OTHER["id"], "verity", any_name=True, replace=True, get_pod=pods(OTHER))[1] == "updated"
+    assert "properties" not in tomllib.loads(f.read_text())
+
+
 def test_a_name_the_two_sources_bind_to_different_pods_is_refused_not_guessed(reg, tmp_path):
     (tmp_path / "machines.toml").write_text(
         f'[machines.vy-lane-a]\nprovider = "runpod"\npod_id = "{OTHER["id"]}"\nproject = "verity"\n'
