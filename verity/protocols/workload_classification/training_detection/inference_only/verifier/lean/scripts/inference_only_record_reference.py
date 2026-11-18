@@ -116,7 +116,7 @@ def parse(inst) -> dict:
             and all(map(is_digest, inst["pins"]))):
         raise Malformed("params")
     return {"program": inst["program"], "record": inst["record"], "gamma": gamma, "num": alpha[0], "den": alpha[1],
-            "pins": inst["pins"], **({"order": inst["order"]} if "order" in inst else {})}
+            "pins": inst["pins"]}
 
 
 def closure_digest(desc: dict, key: str) -> str:
@@ -213,8 +213,9 @@ class Template:
 
 
 def templates_of(program, rec: dict, digest: str) -> list[Template]:
-    """The record's templates, held to the Program: the record names the Program, and its templates are the root's
-    nodes that are no input, each a call or a batch of a template of its own, in order. A root node of a composite
+    """The record's templates, held to the Program: the record names the Program, and its templates are the
+    templates of the root's nodes that are no input, each a call or a batch of a template, each template once in the
+    order of its first node, its units its nodes' members summed (`RecordText.unitsOf`). A root node of a composite
     keyed as an input id is refused, listed or not (`RecordText.keyedAsInput`)."""
     ts = rec.get("templates")
     if rec.get("program") != digest or not (isinstance(ts, list) and all(
@@ -223,10 +224,17 @@ def templates_of(program, rec: dict, digest: str) -> list[Template]:
     nodes = [n for n in program.root.body.nodes if not is_input(n.fn)]
     if any(input_id(codec.descriptor_id(n.fn)) is not None for n in nodes):
         raise Malformed("templates")
-    if any(n.form not in ("call", "batch") for n in nodes) or len({t for t, _ in ts}) != len(ts) \
-            or [[codec.descriptor_id(n.fn), n.n if n.form == "batch" else 1] for n in nodes] != ts:
+    if any(n.form not in ("call", "batch") for n in nodes) or len({t for t, _ in ts}) != len(ts):
         raise Malformed("templates")
-    return [Template(t, n.fn, k) for (t, k), n in zip(ts, nodes, strict=True)]
+    units: dict[str, int] = {}
+    first: dict = {}
+    for n in nodes:
+        tid = codec.descriptor_id(n.fn)
+        units[tid] = units.get(tid, 0) + (n.n if n.form == "batch" else 1)
+        first.setdefault(tid, n)
+    if [[t, k] for t, k in units.items()] != ts:
+        raise Malformed("templates")
+    return [Template(t, first[t].fn, k) for t, k in ts]
 
 
 def refused(code: str, message: str) -> Malformed:
@@ -237,27 +245,35 @@ def refused(code: str, message: str) -> Malformed:
 
 
 #: `Record.OWN_ROWS`
-OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Every argument of a root node that is no "
-            "input node is affine runs of leaves of the root's input nodes, a batch maps every argument over its "
-            "members, and no leaf is handed to two rows. Fix the Program, not the record: build its root as templates "
-            "over input nodes of their own, each input leaf handed once.")
+OWN_ROWS = ("the root hands a unit a row that is not input gates of its own. Every part of an argument of a root node that "
+            "is no input node reads another such node's outputs or is affine runs of leaves of the root's input nodes, a "
+            "batch maps every argument over its members, and no leaf is handed to two rows. Fix the Program, not the "
+            "record: build its root as templates over input nodes of their own or other templates' outputs, each input "
+            "leaf handed once.")
 
 
 def own_rows(program, form_only: bool = False) -> None:
-    """The Lean's `ownRows` (`own-rows`). The rule, restated: every argument of a root node that is no input node is
-    affine runs of leaves of the root's input nodes (each a primitive or a batch), a batch maps every argument over its
-    members, and no two runs, of one argument or of two, share a leaf. Then, unless `form_only`, what the rule stands
-    for, leaf by leaf: every leaf of every parameter of every unit, resolved through the root
-    (`layout.resolve_gate`), is an input gate, and no gate is two of them."""
+    """The Lean's `ownRows` (`own-rows`). The rule, restated: every part of an argument of a root node that is no input
+    node, but a part reading another such node's outputs (an edge), is affine runs of leaves of the root's input nodes
+    (each a primitive or a batch), a batch maps every argument over its members, and no two runs, of one argument or of
+    two, share a leaf. Then, unless `form_only`, what the rule stands for, leaf by leaf: every leaf of every parameter
+    of every unit that no edge fills, resolved through the root (`layout.resolve_gate`), is an input gate, and no gate
+    is two of them."""
+    from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
+    from verity.circuits.refs import Strided
     nodes = program.root.body.nodes
+
+    def edge(p) -> bool:
+        return (isinstance(p, (Affine, Strided)) and p.space == "n" and 0 <= p.idx < len(nodes)
+                and not is_input(nodes[p.idx].fn))
 
     def run(p) -> bool:
         return (isinstance(p, Affine) and p.space == "n" and 0 <= p.idx < len(nodes) and is_input(nodes[p.idx].fn)
                 and nodes[p.idx].form in ("primitive", "batch"))
     units = [(k, node) for k, node in enumerate(nodes) if not is_input(node.fn)]
-    parts = [p for _, node in units for a in node.args for p in _parts(a.refs)]
+    parts = [p for _, node in units for a in node.args for p in _parts(a.refs) if not edge(p)]
     runs = sorted((p.idx, p.base, p.count) for p in parts if run(p) and p.count > 0)
     if any(node.form == "batch" and None in node.axes for _, node in units) or not all(map(run, parts)) \
             or any(a[0] == b[0] and a[1] + a[2] > b[1] for a, b in zip(runs, runs[1:])):
@@ -270,7 +286,11 @@ def own_rows(program, form_only: bool = False) -> None:
         for m in range(n_members(node)):
             unit = root.child(k, m)
             for i, (_, ty) in enumerate(node.fn.signature()[0]):
+                refs = member_refs(node.args[i], node.axes[i] if node.form == "batch" else None, m)
                 for leaf in range(ty.leaves):
+                    r = refs[leaf]
+                    if r[0] == "n" and not is_input(nodes[r[1]].fn):
+                        continue
                     gate, prim = resolve_gate(unit, ("p", i, leaf))
                     if not is_input(prim) or gate in seen:
                         raise refused("own-rows", OWN_ROWS)
@@ -357,35 +377,35 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         assert all(lands_whole(leaves, out) for leaves in filled)
 
 
-def spot_instance(templates: list[Template], rec: dict, order=None) -> dict:
-    """The record's wires as SPOT's `wires` piece reads them (`Spot.Wires.Wiring.ofJson`): the templates' units, rows
-    and outputs, the cuts, the wires, and the order the record states, else `order` where one is given."""
-    out = {"templates": {t.tid: {"units": t.units, "rows": {p: [w, n] for p, w, n in t.rows}, "outs": dict(t.outs)}
-                         for t in templates},
-           "cuts": rec.get("cuts", {}), "wires": rec.get("wires")}
-    if "order" in rec:
-        out["order"] = rec["order"]
-    elif order is not None:
-        out["order"] = order[0]
-    return out
-
-
-def wires_of(templates: list[Template], rec: dict, order) -> tuple[list[dict], dict]:
-    """The record's wires and cuts, refused (`wires`) as `verity.commitments.periods.interface.check_wires` refuses them, under
-    the record's order, else the instance's (`order`: a one-entry tuple where the instance gives one)."""
+def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dict], dict]:
+    """The record's wiring (`RecordText.wiring`): the record's cuts and the wires the Program's root states
+    (`verity.commitments.periods.edges`), refused (`wires`) where it refuses them or as
+    `verity.commitments.periods.interface.check_wires` refuses them."""
     import verity.commitments.periods.interface as IF
-    spot = spot_instance(templates, rec, order)
+    from verity.commitments.periods.edges import edges
+    by = {t.tid for t in templates}
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    ranges, at = [], 0
+    for k, x in enumerate(nodes):
+        tid = desc["callees"][x["fn"]]
+        if tid in by:
+            n = x["n"] if x["form"] == "batch" else 1
+            ranges.append([k, tid, at, n])
+            at += n
+    cuts = rec.get("cuts", {})
     lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
                     t.units) for t in templates}
     try:
-        if not (isinstance(spot["wires"], list) and isinstance(spot["cuts"], dict)):
-            raise ValueError("the record states its wires as a list and its cuts as an object")
-        wires = tuple(IF.Wire.of(x) for x in spot["wires"])
-        cuts = IF._cuts(spot["cuts"])
-        IF.check_wires(lays, wires, cuts, IF.order_of(spot))
+        if not isinstance(cuts, dict):
+            raise ValueError("the record states its cuts as an object")
+        got = edges(desc, ranges, {"templates": {t.tid: {} for t in templates}, "cuts": cuts})
+        if "refusal" in got:
+            raise ValueError(got["refusal"])
+        wires = tuple(IF.Wire.of(x) for x in got["wires"])
+        IF.check_wires(lays, wires, IF._cuts(cuts), None)
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise Malformed("wires") from e
-    return [{**w.doc(), "c0": w.cut[0], "C": w.cut[1]} for w in wires], cuts
+    return [{**w.doc(), "c0": w.cut[0], "C": w.cut[1]} for w in wires], IF._cuts(cuts)
 
 
 def pattern(d, keys: set[str]) -> dict:
@@ -708,7 +728,7 @@ def expand(inst, tr, form_only: bool = False) -> dict:
     `gates`, `inputs` (every row, whole), each of `KINDS`' bits, and `fresh`, the sum of `FRESH`'s. Refused
     (`Malformed`) with the first stage's code, in `Record`'s order."""
     i, program, desc, rec, T, templates = front(inst, tr, form_only)
-    wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
+    wires, cuts = wires_of(templates, rec, desc)
     leaf_widths(program, templates, wires, cuts, form_only)
     x = Inputs(templates, cuts, wires, rec)
     if not formats_held(T, rec, x.params):
