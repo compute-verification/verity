@@ -15,9 +15,8 @@ A scheme's trees are frame-v3 trees under its `commitment_hash`: `hm96-sha512` (
 and the frame leaf is the one over `hm96.SHA512.tree_leaf(b ‖ c)` under the schema `hm96-sha512/row-seg/v1`. Elsewhere a
 leaf is the frame's plain leaf over the value under the tree's schema (`verity/pouw/row/v1`, `verity/pouw/tile/v1`).
 
-`commit_rows` samples the hm96 salts from the prover's 32-byte key: leaf `i`'s salt is ChaCha20 blocks `3i, 3i+1, 3i+2` under
-the key, with a 64-bit counter and the tree's 64-bit nonce (`hm96_salt`). It builds a plain tree only for a caller that
-says its rows are public.
+`commit_rows` takes the hm96 salts as data, one 192-byte salt a row in rank order, each fresh operating-system bytes
+that no key derives. It builds a plain tree only for a caller that says its rows are public.
 -/
 
 @[expose] public section
@@ -106,19 +105,22 @@ def verify (d : RowsDomain) (root : ByteArray) (rank : Nat) (schema : String) (v
 
 end RowsDomain
 
-/-- `commit_rows(binding, owner, rows, hash, salt_key, nonce, digests, public).commitment.root`: under `hm96-sha512` each
-row is followed by its salt `hm96Salt saltKey nonce i`, and the key is 32 bytes. A nonce of 2⁶⁴ or more, which Python's
-ChaCha20 words would carry past 32 bits, is refused. A plain `sha256` or `sha512` tree is not hiding, and is refused
-unless `isPublic` (Python's `public`). -/
-def commitRows (binding : ByteArray) (owner : Int) (rows : Array ByteArray) (hash : String) (saltKey : Option ByteArray)
-    (nonce : Nat) (digests : Bool) (isPublic : Bool) : Except String ByteArray := do
+/-- The values of an `hm96-sha512` tree: row `i` followed by `salts[i]`, one 192-byte salt a row in rank order. -/
+def salted (rows salts : Array ByteArray) : Except String (Array ByteArray) := do
+  if salts.size != rows.size then throw s!"{rows.size} rows take {rows.size} salts, not {salts.size}"
+  if salts.any (·.size != HM96_SALT) then throw "a salt is 192 bytes"
+  pure ((Array.range rows.size).map fun i => rows[i]! ++ salts[i]!)
+
+/-- `commit_rows(binding, owner, rows, hash, salts, digests, public).commitment.root`: under `hm96-sha512` row `i` is
+followed by `salts[i]`. A plain `sha256` or `sha512` tree takes no salts, is not hiding, and is refused unless `isPublic`
+(Python's `public`). -/
+def commitRows (binding : ByteArray) (owner : Int) (rows : Array ByteArray) (hash : String)
+    (salts : Option (Array ByteArray)) (digests : Bool) (isPublic : Bool) : Except String ByteArray := do
   let values ← if hash == "hm96-sha512" then
-      match saltKey with
-      | none => throw "an hm96-sha512 tree takes the prover's salt key"
-      | some k =>
-        if !rows.isEmpty && k.size != 32 then throw "the salt key is 32 bytes"
-        if !rows.isEmpty && nonce ≥ 2 ^ 64 then throw "the salt nonce is a u64"
-        pure ((Array.range rows.size).map fun i => rows[i]! ++ hm96Salt k nonce i)
+      match salts with
+      | none => throw "an hm96-sha512 tree takes a salt a row"
+      | some ss => salted rows ss
+    else if salts.isSome then throw s!"a plain {hash} tree takes no salts"
     else if !isPublic then throw s!"a plain {hash} tree is not hiding"
     else pure rows
   (← rowsDomain binding owner rows.size hash digests).root ROW_SCHEMA values
@@ -128,12 +130,14 @@ def transcriptDomain (salt weightsRoot : ByteArray) (count : Nat) (hash : String
   rowsDomain (transcriptBinding salt weightsRoot) (-1) count hash true
 
 /-- The transcript's root over the tiles' digests in order (`Prover.prove`): under `hm96-sha512` digest `i` is followed by
-`hm96Salt saltKey 2⁶³ i`. -/
-def transcriptRoot (salt weightsRoot : ByteArray) (digests : Array ByteArray) (hash : String) (saltKey : ByteArray) :
-    Except String ByteArray := do
+`salts[i]`; a plain tree takes no salts. -/
+def transcriptRoot (salt weightsRoot : ByteArray) (digests : Array ByteArray) (hash : String)
+    (salts : Option (Array ByteArray)) : Except String ByteArray := do
   let values ← if hash == "hm96-sha512" then
-      if !digests.isEmpty && saltKey.size != 32 then throw "the salt key is 32 bytes"
-      pure ((Array.range digests.size).map fun i => digests[i]! ++ hm96Salt saltKey (2 ^ 63) i)
+      match salts with
+      | none => throw "an hm96-sha512 tree takes a salt a row"
+      | some ss => salted digests ss
+    else if salts.isSome then throw s!"a plain {hash} tree takes no salts"
     else pure digests
   (← transcriptDomain salt weightsRoot digests.size hash).root TILE_SCHEMA values
 

@@ -101,13 +101,15 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 )
 
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
-from verity_vllm.protocols.interface import Context, Option, Target
+from verity import hooks as H
+from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals"]
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals",
+           "requests"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
@@ -263,10 +265,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     out = []
     if scheme not in EXECUTED:
         out.append(f"{scheme}: this adapter's executor runs {', '.join(EXECUTED)} only")
-    if not ctx.enforce_eager:
-        out.append("compiled execution: the wrapper around each linear layer's apply is not graph-capturable")
-    if ctx.world > 1:
-        out.append(f"TP {ctx.world}: PoUW's units and transcript are per rank, which is not wired")
     try:
         settings = Settings.of(ctx.settings_of(NAME))
     except ValueError as e:
@@ -289,9 +287,13 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
-def requires_build(scheme: str, ctx: Context) -> bool:
-    """The circuit-backed executor is lowered into the row's Build."""
-    return scheme in NCP_CIRCUIT_SCHEMES
+def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
+    """Eager execution and one rank, and for the circuit-backed executor, which is lowered into the row's Build, the
+    profile's kernels."""
+    return (H.RequireProperty("eager", True, "compiled execution: the wrapper around each linear layer's apply is not "
+                              "graph-capturable"),
+            H.RequireProperty("world", 1, "PoUW's units and transcript are per rank, which is not wired"),
+            *((BUILD_BOUND,) if scheme in NCP_CIRCUIT_SCHEMES else ()))
 
 
 def cuts(scheme: str) -> bool:

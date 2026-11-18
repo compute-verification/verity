@@ -21,6 +21,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
+from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCHEMES
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import Shape
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
@@ -85,9 +87,10 @@ def test_settings_take_a_path_string_and_none_for_no_transcript_directory():
 
 @pytest.mark.parametrize("scheme", HOST)
 def test_a_tensor_parallel_world_is_refused(scheme):
-    assert P.refusals(scheme, _serve(scheme)) == ()
-    assert P.refusals(scheme, _serve(scheme, world=2)) == (
-        "TP 2: PoUW's units and transcript are per rank, which is not wired",)
+    tp = _serve(scheme, world=2)
+    assert P.refusals(scheme, _serve(scheme)) == () == P.refusals(scheme, tp)
+    assert [r.why for _, r in H.unmet([(scheme, r) for r in P.requests(scheme, tp)], tp.properties())] == [
+        "PoUW's units and transcript are per rank, which is not wired"]
 
 
 def test_a_forward_anchor_is_refused_under_an_executor_that_counts_its_own_forwards():

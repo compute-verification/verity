@@ -527,9 +527,13 @@ no `.git` needed. A tree that none of these names is refused before anything is 
 
 - `--find-load` serves stock alone over its load's own rungs (`LOADS`), requests in flight up to the profile's prompts.
   It says where output tokens a second stop rising and prints the file's line for this host's card, the profile's
-  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A profile whose load is still `not found yet` refuses `--feature` until that line is in.
-- `--feature ARM` serves stock and one arm of ours in turn at the profile's one load: two server lifetimes each, three
-  reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
+  version raised by one and the digest `tests/benchmarks/harness/test_profiles.py` then pins. It edits no file. A
+  profile whose load is still `not found yet` refuses `--feature` until that line is in.
+- `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
+  by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
+  the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
+  `NotImplementedError` (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+  two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
   through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
   stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
   and share within the bounds as measurements beside it. `verity bench serving_cost profile RUN` reads it back. The
@@ -558,7 +562,7 @@ short makes the first line `cannot tell`.
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
   --profile coding-agent --find-load
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
-  --profile coding-agent --feature record
+  --profile coding-agent --feature pearl-plus
 ~~~
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,

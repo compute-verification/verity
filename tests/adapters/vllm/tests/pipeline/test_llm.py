@@ -212,7 +212,7 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     ("compilation_config", {"mode": 0}),
 ])
 def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(built, option, value):
-    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: engine overrides {option} .* no longer match its Build"):
+    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: its served computation is the row's Build.* \(kernels \('{option}',\)\)"):
         L.LLM(
             LLAMA[0],
             revision=LLAMA[1],

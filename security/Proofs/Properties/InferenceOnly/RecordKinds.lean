@@ -20,7 +20,7 @@ Both read what fills the row off the declarations. No two declarations fill one 
 fills a row is the fill of any declaration that covers it (`fill_of_cover`, by `cover_apart`: two disjoint wires do
 not both cover a row). A row of kind `inside` is filled by a wire's declaration whose wire the check found to stay
 inside a slot (`Record.sameSlot`); the row's writer is that wire's, at the row's index, and the test is sound there
-(`sameSlot_sound`) for a wire with a step for each digit and no digit of radix zero (`text_digits`).
+(`sameSlot_sound`) for a wire with a step for each digit and no digit of radix zero (`EdgeDigits`).
 -/
 
 @[expose] public section
@@ -29,7 +29,7 @@ namespace InferenceOnlyVerifier.Properties.Record.SecurityProofs
 
 open InferenceOnlyVerifier.Record (Case Front read finish sameSlot openingHeld Kind kindOf)
 open InferenceOnlyVerifier.Record.SecurityProofs (read_front finish_text slotOf OneGrid slotIn_eq gridsOf_lookup sameSlot_sound
-  text_digits)
+  EdgeDigits)
 open Spot.RecordText (Row Decl Fill Inputs fillAt)
 open Lean (Json)
 
@@ -147,7 +147,7 @@ theorem theta_held {f : Front} {pin : String → Option String} {c : Case} (hc :
 /-- **A row of kind `inside` has a writer, in the row's slot.** The row is filled by a wire's declaration, the wire
 one the check found to stay inside a slot (`Record.sameSlot`); the row's writer is that wire's (no two declarations
 fill one row), at the row's index, where `sameSlot` is sound (`sameSlot_sound`). -/
-theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
+theorem inside_writer (hD : EdgeDigits) {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
     (hk : c.rowKind r = Kind.inside) :
     (c.wired.writerOf r.tid r.unit r.port r.row).isSome = true ∧
       ∀ wt wu out s s', c.wired.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) →
@@ -224,7 +224,7 @@ theorem inside_writer {j tr : Json} {c : Case} (h : read j tr = .ok c) (r : Row)
           subst hie
           obtain ⟨rt, wtm, hsh, -⟩ := wire_shape hchk w' hw'm
           obtain ⟨-, -, p, ow, -, -, hc1, -, hlast, hmod, -⟩ := shape_spec hsh
-          obtain ⟨hlen, hrad⟩ := text_digits htext w' (by rw [← hwires]; exact hw'm)
+          obtain ⟨hlen, hrad⟩ := hD _ _ _ htext w' (by rw [← hwires]; exact hw'm)
           obtain ⟨hrd, hpt, hu1, hu2, hr1, hr2, hie⟩ := indexOf_some hidx'
           have hlt := Spot.Wires.indexOf_lt hmod hidx'
           have hgr : ∀ tid, OneGrid (c.gridsAt tid) := fun tid =>
