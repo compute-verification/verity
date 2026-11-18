@@ -23,8 +23,8 @@ misses a set `B` of units.
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
 
-`subset n k` is the uniform `k`-subset of `n` units, whose missProb is hypergeometric:
-`C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
+Core's uniform `k`-subset of `n` units, `Verity.SamplingDesign.subset n k`, has a missProb that is hypergeometric:
+`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 -/
 
@@ -102,19 +102,16 @@ theorem miss_eq_zero_of_sample_univ (L : SamplingDesign n) (hL : ∀ ω, L.draw 
 
 /-! ## The uniform `k`-subset -/
 
-/- The uniform `k`-subset's miss probability is core's (`Proofs.Core.Draw`). -/
-export Verity.SamplingDesign (card_disjoint_subsets subset_escape)
-
 /-- **The uniform `k`-subset's count curve**, exactly: `miss K = C(n - K, k) / C(n, k)`. -/
 theorem subset_miss {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n) :
-    (subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
+    (Verity.SamplingDesign.subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
   refine le_antisymm (iSup₂_le fun B hB => ?_) ?_
-  · rw [subset_escape]
+  · rw [Verity.SamplingDesign.subset_escape]
     gcongr
   · obtain ⟨B, -, hB⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
       (by simpa using hK)
-    have := escape_le_miss (subset n k hk) (K := K) hB.ge
-    rwa [subset_escape, hB] at this
+    have := escape_le_miss (Verity.SamplingDesign.subset n k hk) (K := K) hB.ge
+    rwa [Verity.SamplingDesign.subset_escape, hB] at this
 
 /-- A uniform `k`-subset of `n` misses one given unit with probability `(n − k)/n`. -/
 theorem choose_ratio {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) :
@@ -156,11 +153,11 @@ theorem choose_sub_mul_pow_le (n k : ℕ) : ∀ b, b ≤ n →
 /-- **The product bound for the uniform subset**: a set escapes with at most the product of its
 units' miss probabilities, so inclusion probabilities alone give a valid bound. -/
 theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finset (Fin n)) :
-    (subset n k hk).missProb B ≤ ∏ u ∈ B, (1 - (subset n k hk).incl u) := by
-  have hu : ∀ u, 1 - (subset n k hk).incl u = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
+    (Verity.SamplingDesign.subset n k hk).missProb B ≤ ∏ u ∈ B, (1 - (Verity.SamplingDesign.subset n k hk).incl u) := by
+  have hu : ∀ u, 1 - (Verity.SamplingDesign.subset n k hk).incl u = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
     intro u
-    rw [← escape_singleton, subset_escape, Finset.card_singleton, choose_ratio hk hn]
-  rw [Finset.prod_congr rfl fun u _ => hu u, Finset.prod_const, subset_escape, div_eq_mul_inv
+    rw [← escape_singleton, Verity.SamplingDesign.subset_escape, Finset.card_singleton, choose_ratio hk hn]
+  rw [Finset.prod_congr rfl fun u _ => hu u, Finset.prod_const, Verity.SamplingDesign.subset_escape, div_eq_mul_inv
     (((n - k : ℕ) : ℝ≥0∞)), mul_pow, ← ENNReal.inv_pow, ← div_eq_mul_inv]
   have hc : (n.choose k : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hk).ne'
   have hp : ((n : ℝ≥0∞)) ^ B.card ≠ 0 := pow_ne_zero _ (by exact_mod_cast (show n ≠ 0 by omega))
@@ -171,7 +168,7 @@ theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finse
 
 /-- **The demo's curve** (`docs/audit-protocols.md` §0.2): with 1,024 heads and 16 drawn, 590 or
 more wrong heads missProb with probability at most `2^-20`. -/
-theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ≥0∞) ^ 20)⁻¹ := by
+theorem demo_count_590 : (Verity.SamplingDesign.subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ≥0∞) ^ 20)⁻¹ := by
   rw [subset_miss _ (by norm_num), ENNReal.div_le_iff (by exact_mod_cast (Nat.choose_pos
     (by norm_num : 16 ≤ 1024)).ne') (ENNReal.natCast_ne_top _), ← ENNReal.div_eq_inv_mul,
     ENNReal.le_div_iff_mul_le (Or.inl (by norm_num)) (Or.inl (by norm_num))]
@@ -272,19 +269,19 @@ theorem avg_card (L : SamplingDesign n) : avg (fun ω => ((L.draw ω).card : ℝ
 /-- **Averaging over `K`-sets.** For any sampling design, the missProb of a uniformly random `K`-set is the mean
 of `C(n - |S|, K) / C(n, K)` over the draw `S`. -/
 theorem avg_escape_subsets (M : SamplingDesign n) {K : ℕ} (hK : K ≤ n) :
-    avg (fun B : (subset n K hK).Ω => M.missProb B.1) =
+    avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => M.missProb B.1) =
       avg fun ω => (((n - (M.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
   classical
   unfold missProb prCoin
   rw [avg_comm]
   refine congrArg avg (funext fun ω => ?_)
-  rw [← subset_escape hK (M.draw ω)]
+  rw [← Verity.SamplingDesign.subset_escape hK (M.draw ω)]
   unfold missProb prCoin
   refine congrArg avg (funext fun B => ?_)
   by_cases h : Disjoint (M.draw ω) B.1
-  · simp only [subset, h, h.symm, ite_true]
+  · simp only [Verity.SamplingDesign.subset, h, h.symm, ite_true]
   · have h' : ¬ Disjoint B.1 (M.draw ω) := fun h' => h h'.symm
-    simp only [subset, h, h', ite_false]
+    simp only [Verity.SamplingDesign.subset, h, h', ite_false]
 
 theorem choose_eq_add_drop (n K s : ℕ) :
     (n - s).choose K = (n - (s + 1)).choose K + drop n K s := by
@@ -352,20 +349,20 @@ theorem choose_support (n K k s : ℕ) :
 /-- **Uniform is optimal.** No sampling design that proves `k` units on average has a smaller count curve than
 the uniform `k`-subset, at any `K`. -/
 theorem subset_minimax (L : SamplingDesign n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.incl u = k) {K : ℕ}
-    (hK : K ≤ n) : (subset n k hk).miss K ≤ L.miss K := by
+    (hK : K ≤ n) : (Verity.SamplingDesign.subset n k hk).miss K ≤ L.miss K := by
   classical
   set D := drop n K k
   have hc : (n.choose K : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hK).ne'
   -- the uniform subset's count curve, read through the averaging identity
-  have hU : (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
-    have h1 : avg (fun B : (subset n K hK).Ω => (subset n k hk).missProb B.1) = (subset n k hk).miss K := by
+  have hU : (Verity.SamplingDesign.subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
+    have h1 : avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => (Verity.SamplingDesign.subset n k hk).missProb B.1) = (Verity.SamplingDesign.subset n k hk).miss K := by
       rw [subset_miss hk hK]
       refine (congrArg avg (funext fun B => ?_)).trans (avg_const _)
-      rw [subset_escape, B.2]
+      rw [Verity.SamplingDesign.subset_escape, B.2]
     rw [← h1, avg_escape_subsets]
     refine (congrArg avg (funext fun ω => ?_)).trans (avg_const _)
     show _ = (((n - k).choose K : ℕ) : ℝ≥0∞) / _
-    have : ((subset n k hk).draw ω).card = k := ω.2
+    have : ((Verity.SamplingDesign.subset n k hk).draw ω).card = k := ω.2
     rw [this]
   -- Jensen at the mean `k`, through the supporting line
   have hJ : (((n - k).choose K : ℕ) : ℝ≥0∞) ≤ avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) := by
@@ -382,15 +379,15 @@ theorem subset_minimax (L : SamplingDesign n) {k : ℕ} (hk : k ≤ n) (hmean : 
           rw [avg_add, avg_mul_const]
       _ = _ := by rw [avg_card, hmean]
   -- the average over `K`-sets is at most the maximum
-  have hmax : avg (fun B : (subset n K hK).Ω => L.missProb B.1) ≤ L.miss K :=
+  have hmax : avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => L.missProb B.1) ≤ L.miss K :=
     (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
-  calc (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := hU
+  calc (Verity.SamplingDesign.subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := hU
     _ ≤ (avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞)) / (n.choose K : ℝ≥0∞) := by
         gcongr
     _ = avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
         simp only [div_eq_mul_inv]
         rw [avg_mul_const]
-    _ = avg (fun B : (subset n K hK).Ω => L.missProb B.1) := (avg_escape_subsets L hK).symm
+    _ = avg (fun B : (Verity.SamplingDesign.subset n K hK).Ω => L.missProb B.1) := (avg_escape_subsets L hK).symm
     _ ≤ L.miss K := hmax
 
 end SamplingDesign

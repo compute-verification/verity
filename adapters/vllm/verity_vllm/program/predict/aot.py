@@ -69,6 +69,7 @@ from verity_vllm.records.predicted_row import FILE, PredictedRow
 from verity_vllm.records.schema_ids import AOT_COMPARISON_SCHEMA
 
 from . import score as S
+from .node_registration import load_descriptor
 from .build import build_program
 from .naming import named_program, write_build
 from .phi import Phi
@@ -123,7 +124,7 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
         raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest'))[:16]}… is not the predicted {r.digest[:16]}…: what it "
                          f"holds is about another Program (the row's comparison no longer holds: `verity-vllm predict compare` on a "
                          f"fresh trace, `verity-vllm neutrality --tier heavy`)")
-    annotations = S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations")
+    annotations = load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations")
     desc = {**r.desc, "annotations": annotations if annotations else {}}   # a trace without annotations: predicted under empty ones
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):

@@ -2590,6 +2590,25 @@ def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
                                  *linked.members[k + 1:]))
 
 
+class Table(Held):
+    """`EMB`'s table, one token a row under ``hm96-sha512/row-seg/v1`` (`gates.embedding`), as core registers it: its rows,
+    salts, tree and entry."""
+
+    def __init__(self) -> None:
+        rng = np.random.default_rng(7)
+        super().__init__("embed", rng.integers(0, 1 << 16, (4, 16), dtype=np.uint16))
+        self.salts = [bytes(rng.integers(0, 256, E.SALT_BYTES, dtype=np.uint8)) for _ in range(4)]
+        self.dom = CommitmentDomain(hashlib.sha512(b"embed").digest(), -2, RangeIndexedDomain(0, 4), hash="sha512")
+        self.tree = RT.commit(self.dom, [bit_row((r.tolist(), 16)) for r in self.rows], self.salts)
+
+    def entry(self):
+        return {"value": "embed", "root": self.tree.root.hex(), "leaves": 4, "words": 16, "domain": self.dom.domain_id.hex()}
+
+    def path(self, tok: int) -> list[bytes]:
+        p = self.tree.path(tok)
+        return [p[k:k + 64] for k in range(0, len(p), 64)]
+
+
 def embedding(**edit) -> I.Circuit:
     """Three embedding reads of `Table`, their tokens free."""
     reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
