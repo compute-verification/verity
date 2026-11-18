@@ -34,8 +34,8 @@
 # sampling flag (the model's generation_config) and each request to its recorded length (fixed-size's 1,024 tokens).
 # It fixes ARMS, LOADS, REPS, LIFETIMES, SAMPLED, MAX_MODEL_LEN, PASS_PROMPTS, the published arm's flags, TARGET and
 # WITH, and refuses each one given, naming it. --profile, --feature and --find-load are flags alone: PROFILE, FEATURE
-# and FIND_LOAD in the environment are refused. --find-load serves stock alone over its load's rungs (serve_tax.LOADS;
-# requests in flight up to the profile's prompts) and prints where its output
+# and FIND_LOAD in the environment are refused. --find-load serves stock alone over the profile's ladder (its users
+# or requests in flight, benchmarks/production.toml) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
 # (OUT/find_load.json); it edits no file. --feature SCHEME names a registered useful-work scheme (serve_tax.feature),
 # whose arm ARM is served with stock in turn at the profile's one load, two lifetimes of three reps each, and writes
