@@ -38,6 +38,7 @@ test -s "$FS_CK/config.json" || { echo "no checkpoint at $FS_CK (and no verified
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export GPU_UTIL=0.92 COMMIT_GPU_UTIL=0.92 HF_HOME=/workspace/cp/hf PY=/workspace/cp/venv312/bin/python
 export SERVING_ROWS=$TREE/benchmarks/one_stage/glm53_silu_mul_v2_tp8.json REPLAY_DEFERRED=1 PAIRS=${PAIRS:-1} COMMIT_TIMEOUT=${COMMIT_TIMEOUT:-10800}
+export VERITY_PROTOCOLS_CONFIG=${VERITY_PROTOCOLS_CONFIG:-"{\"private\": \"$BASE/private\"}"}  # where a replay bundle's keys and salts go
 export TMPDIR=$(mktemp -d /tmp/glm53-commit-a5.XXXXXX)
 source /workspace/cp/venv312/bin/activate
 export PYTHONPATH=$TREE:$TREE/tools/research/src:$TREE/tools/config:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/adapters/vllm:$TREE/adapters/torch:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/tools/difftest/python
