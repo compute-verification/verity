@@ -109,7 +109,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
   from a clone of the tree (`bash benchmarks/one_stage/served_verdicts.sh`). It serves
-  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
+  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal`, the network attester scheme's order `release-order`), sends a
   few greedy requests from the network attester's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
