@@ -54,6 +54,7 @@ REHEARSAL = {
     "honest/out-witness.jsonl": [{"window": 0, "rows": [PROMPT], "salts": ["00"]}],
     "honest/deployment.json": {"windows": 2},
     "honest/certified.jsonl": [{"window": 0, "head": "cd"}],
+    "honest/cells.jsonl": [{"registration": {"wiring": "17"}, "cost": {"rows": 1}}],
     "honest/out-records.jsonl": [{"window": 0, "root": "ef"}],
     "honest/check.json": {"accepted": True},
     "honest/client/certificates.jsonl": [{"window": 0}],
@@ -68,8 +69,8 @@ def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
     got = run(block("chain_record.sh", '(cd "$G" && find', "  ! -name plan.json"), G=g, OUT=out)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"gates/g1/attester-x/{f}" for f in (
-        "end.json", "request.json", "out/calibration.json", "out/honest/deployment.json", "out/honest/certified.jsonl",
-        "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
+        "end.json", "request.json", "out/calibration.json", "out/honest/deployment.json", "out/honest/out-records.jsonl",
+        "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 
 
 #: a network attester run's files, the gate's publisher's input: a record head with its frames' root and the
