@@ -10,7 +10,7 @@ resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
-sits in ``pipeline``.  ``OPTIONAL`` names the packages a
+sits in ``pipeline``; ``protocols.linear``, the linear site ``engine.kv_blocks`` attaches, sits in ``engine``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
 the environment's registry, ``messages``, the schemes' exchange, and ``log``, the logger, import nothing from the package
@@ -36,6 +36,7 @@ LAYER = {
     "verity_vllm.check": "check",
     "verity_vllm.acquire": "acquire",
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
+    "verity_vllm.protocols.linear": "engine",                  # the linear site on vLLM's layers; imports only messages, engine.hooks, errors
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
     "verity_vllm.engine": "engine",

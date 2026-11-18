@@ -276,7 +276,7 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
 def sms_at(cc: tuple[int, int]) -> int:
     """The SMs of the one GPU card file at compute capability ``cc``, read when a head is bound so that loading this module reads no
     card; ValueError, naming them, where none or several cards are at it."""
-    from verity_vllm.config import CARD_FILES as cards
+    from verity_torch.pouw.row_table_device import CARD_FILES as cards
 
     found = [c for c in (load_card(s, directory=cards) for s in skus("gpu", directory=cards)) if compute_capability(c) == tuple(cc)]
     if len(found) != 1:
