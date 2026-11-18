@@ -226,10 +226,21 @@ class HoldResident:
     until: int
 
 
-type Request = RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+@dataclass(frozen=True)
+class StartBeside:
+    """A scheme's request to start the process it registered as ``process``
+    (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
+    readers it names by what they do (``server-request``, ``stream-token-ids``), in that order."""
+
+    process: str
+    readers: tuple[str, ...] = ()
+
+
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+                | StartBeside)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
            "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "StartOnBoundary",
+           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "StartBeside", "StartOnBoundary",
            "StepBegan", "StepEnded", "ValueProduced"]

@@ -110,11 +110,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import block_key as BK
 from verity.commitments.gates.frame_v3 import _refs
-from verity.protocols.resource_accounting.network.verifier.head_check import (
-    _coll,
-    _Consts,
-    ands,
-)
+from verity.commitments.gates.bits import _coll, _Consts, ands
 
 from verity_vllm.compiler import cache_step as CST
 from verity_vllm.compiler import cache_step_v3 as V3S

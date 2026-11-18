@@ -6,8 +6,9 @@
 #   card    (the default) on a GPU node, on the CPUs CORES (ten, the card's NUMA node's) where given, else on the run's
 #           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh) in FLOCK_WORK on the node's disk with CUDA 13.3, CUDA_HOME
-#           where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py), handed to it as CUDA_TK, fetched where
-#           the record lists none and refused before any lease where there is no record or its toolkit is unread; the statement
+#           where given, else the run's machine's [properties]' (benchmarks/kernels/machine.py, which the setup reads too),
+#           fetched and handed to it as CUDA_HOME where the record lists none, and refused before any lease where there is
+#           no record or its toolkit is unread; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
 #           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,
 #           running STEPS (a-own,b-wide,c-wide,d-own,e-own,f-wide; SESSIONS 120 timed sessions after WARM 3 warm, one
@@ -93,14 +94,13 @@ card)
   export FLOCK_WORK=${FLOCK_WORK:-/workspace/tmp/kernels-wide-leaf}; mkdir -p "$FLOCK_WORK/scratch"
   log "card: $(git rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-?}") on $(hostname); $NAME; steps $STEPS"
   TOOLKIT=13.3   # the CUDA flock_prover.sh builds the prover with
-  CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit "$TOOLKIT"); rc=$?
+  python3 benchmarks/kernels/machine.py toolkit "$TOOLKIT" > /dev/null; rc=$?
   case $rc in
     0) ;;
-    3) CUDA_TK=; cuda_fetch || { log "REFUSED: no CUDA $TOOLKIT here, and none fetched"; exit 4; }
-       [ -x "$FLOCK_WORK/cuda-root/usr/local/cuda-13.3/bin/nvcc" ] && CUDA_TK=$FLOCK_WORK/cuda-root/usr/local/cuda-13.3 ;;
+    3) cuda_fetch || { log "REFUSED: no CUDA $TOOLKIT here, and none fetched"; exit 4; }
+       [ -x "$FLOCK_WORK/cuda-root/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_HOME=$FLOCK_WORK/cuda-root/usr/local/cuda-13.3 ;;
     *) log "REFUSED: no CUDA $TOOLKIT (machine.py, above)"; exit 4 ;;
   esac
-  if [ -n "$CUDA_TK" ]; then export CUDA_TK; else unset CUDA_TK; fi
   setup
   export SCRATCH; SCRATCH=$(mktemp -d "$FLOCK_WORK/scratch/run-XXXXXX"); export STAGED=$SCRATCH/z
   trap 'rm -rf "$SCRATCH"' EXIT

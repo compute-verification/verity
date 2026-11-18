@@ -24,13 +24,11 @@ kernel's tile unsplit (`Attention_v5`, kBlockN `fa2_split_kblock_n`, FA2's causa
 """
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
-from verity.device import load_card
+from verity.device import compute_capability, load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
@@ -106,19 +104,17 @@ def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dic
 def card_of(name: str) -> str:
     """The SKU of the card the served target `name` (the name its device reports) is registered on: the card record whose `driver`
     holds it (`devices.card_sku`).  A name no record holds is refused."""
-    if (sku := card_sku(name)) is None:
-        raise Unmodelled(f"device {name!r} is in the `driver` of no card record under calibration/hardware/cards/: add "
-                         f"{{ value = {json.dumps(name)}, source = ... }} to its card's `driver`, adding its <sku>.toml if it has none")
-    return sku
+    try:
+        return card_sku(name)
+    except KeyError as e:
+        raise Unmodelled(str(e.args[0])) from e
 
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
     c = load_card(sku, directory=CARD_FILES)
-    arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
-    if arch is None:
-        raise Unmodelled(f"calibration/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
-    fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
+    want = compute_capability(c)
+    fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{want[0]}.{want[1]}"),
               ("SM count", str(sms), str(c["sm"]["count"]["value"])))
     off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
     if off:

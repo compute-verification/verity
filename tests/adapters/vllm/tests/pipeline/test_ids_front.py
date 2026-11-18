@@ -16,15 +16,16 @@ import threading
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
-from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
-
-from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import ids_front as F
 from verity_vllm.pipeline import serve_protocol as proto
+
+from tests.pipeline import test_serve_openai as served
+from verity.protocols.resource_accounting.network.prover import id_relay as R
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT
+from verity.protocols.resource_accounting.network.verifier import release as REL
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
@@ -164,8 +165,14 @@ class Echo(threading.Thread):
                     c.sendall(data)
 
 
+def copy_of(head: bytes, host: bytes) -> bytes:
+    """`ids_front.server_request` of `FIELDS` under `head`'s release headers, as the relay hands them to it."""
+    rel = REL.release_of(head)
+    return F.server_request(FIELDS, host, b"" if rel is None else REL.release_head(*rel))
+
+
 class Fronted:
-    """`ids_front.serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
+    """`id_relay.serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
     seconds a reading) and its records kept in ``log``, ``recorded`` released once a record."""
 
     address: tuple[str, int]                 # where the front listens, known once `__enter__` returns
@@ -178,7 +185,8 @@ class Fronted:
         def log(rec: dict) -> None:
             self.log.append(rec)
             self.recorded.release()
-        self.front = F.Front(tuple(upstream), payload, log=log, clock=lambda: float(next(ticks)))
+        self.front = R.Front(tuple(upstream), payload, request_of=F.server_request, stream_ids=F.token_ids, log=log,
+                             clock=lambda: float(next(ticks)))
         self.ready = threading.Event()
 
     def __enter__(self) -> Fronted:
@@ -188,7 +196,7 @@ class Fronted:
 
         async def main() -> None:
             self.loop, self.stop = asyncio.get_running_loop(), asyncio.Event()
-            await F.serve(self.front, ("127.0.0.1", 0), announce=announce, stop=self.stop)
+            await R.serve(self.front, ("127.0.0.1", 0), announce=announce, stop=self.stop)
 
         self.thread = threading.Thread(target=lambda: asyncio.run(main()), daemon=True)
         self.thread.start()
@@ -229,13 +237,13 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
     """`server_request`: a streamed POST of the id request's fields with ``return_token_ids``, no stop strings, on a
     connection the server closes, under the release headers the network attester put on it; none where it put none."""
     head = released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n"
-    got_head, _, body = F.server_request(head, FIELDS, b"127.0.0.1:8000").partition(b"\r\n\r\n")
+    got_head, _, body = copy_of(head, b"127.0.0.1:8000").partition(b"\r\n\r\n")
     assert json.loads(body) == FIELDS | {"stop": [], "stream": True, "return_token_ids": True}
     assert got_head == (b"POST /v1/completions HTTP/1.1\r\nhost: 127.0.0.1:8000\r\ncontent-type: application/json\r\n"
                         b"x-verity-release: 4\r\nx-verity-release-run: " + b"run".hex().encode() +
                         b"\r\nx-verity-release-bucket: 9\r\ncontent-length: %d\r\nconnection: close" % len(body))
     assert REL.release_of(got_head + b"\r\n\r\n") == (4, b"run", 9)
-    bare = F.server_request(served.id_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS, b"h")
+    bare = copy_of(served.id_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", b"h")
     assert b"x-verity" not in bare and REL.release_of(bare.partition(b"\r\n\r\n")[0] + b"\r\n\r\n") is None
 
 
@@ -310,8 +318,8 @@ def test_the_ids_come_in_order_however_the_server_frames_its_stream():
         with Fronted(server.address) as f:
             assert f.send(released()) == b"".join(IT.id_event(t, P) for t in (7, 8, 9)) + IT.TRAILER
         server.join()
-        assert server.requests == [F.server_request(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS,
-                                                    b"%s:%d" % (server.address[0].encode(), server.address[1]))]
+        assert server.requests == [copy_of(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n",
+                                           b"%s:%d" % (server.address[0].encode(), server.address[1]))]
         assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(3, True, None)]
 
 
@@ -368,9 +376,9 @@ def test_once_the_network_attesters_side_has_ended_the_front_ends_the_servers(an
         server.join()
         f.recorded.acquire()
     assert got == b"".join(IT.id_event(t, P) for t in sent)
-    assert server.requests == [F.server_request(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS,
-                                                b"%s:%d" % (server.address[0].encode(), server.address[1]))]
-    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": F.GONE,
+    assert server.requests == [copy_of(released().partition(b"\r\n\r\n")[0] + b"\r\n\r\n",
+                                       b"%s:%d" % (server.address[0].encode(), server.address[1]))]
+    assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": R.GONE,
                       "at": 1.0, "ms": [1000.0] * len(sent)}]
 
 
@@ -420,5 +428,3 @@ def test_the_command_is_registered_with_the_scans_payload_as_its_default():
     for bad in ("18745", "host:", ":18745", "host:port"):
         with pytest.raises(UsageError):
             F.address(bad)
-    with pytest.raises(ValueError, match="an id event is at least"):
-        F.Front(("127.0.0.1", 1), IT.ID_EVENT_BYTES - 1)

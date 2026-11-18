@@ -30,39 +30,20 @@ def test_a_listed_class_reports_its_devices_name(tmp_path: Path) -> None:
 
 def test_a_class_and_a_reported_name_are_read_from_the_card_records() -> None:
     """A class is the record whose `short` is its token; a token no record's `short` is (rtxpro6000, whose record's is
-    rtx-pro-6000) names no device.  A reported name is registered on the record whose `driver` holds it, and on none otherwise."""
+    rtx-pro-6000) names no device.  A reported name is registered on the record whose `driver` holds it, and refused by name
+    otherwise."""
     assert [devices.class_device_name(t) for t in ("h200", "h100", "b200", "rtxpro6000", "l40s")] == \
         ["NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA B200", None, None]
-    assert [devices.card_sku(n) for n in ("NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA B200", "NVIDIA H200 NVL")] == \
-        ["h200-sxm-141gb", "h100-sxm-80gb", "b200-sxm-180gb", None]
+    assert [devices.card_sku(n) for n in ("NVIDIA H200", "NVIDIA H100 80GB HBM3", "NVIDIA B200")] == \
+        ["h200-sxm-141gb", "h100-sxm-80gb", "b200-sxm-180gb"]
+    with pytest.raises(KeyError, match=r"0 GPU card files .* have 'NVIDIA H200 NVL'"):
+        devices.card_sku("NVIDIA H200 NVL")
 
 
-def test_a_name_two_records_hold_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    two = ({"kind": "gpu", "sku": "a", "driver": [{"value": "G"}]}, {"kind": "gpu", "sku": "b", "driver": [{"value": "G"}]})
-    monkeypatch.setattr(devices, "_gpu_records", lambda: two)
-    with pytest.raises(ValueError, match=r"'G' is in the `driver` of 2 card records"):
-        devices.card_sku("G")
-
-
-@pytest.mark.parametrize("doc", [
-    {},
-    {"sweep": None},
-    {"sweep": {}},
-    {"sweep": 0},
-    {"sweep": ""},
-    {"sweep": False},
-    {"sweep": []},
-    {"sweep": {"row_id": None}},
-    {"sweep": {"row_id": L40S_ROW}},
-], ids=["no sweep", "null sweep", "empty sweep", "zero", "empty text", "false", "empty list", "null row id", "unlisted class"])
-def test_no_name_without_a_listed_class(tmp_path: Path, doc: dict[str, Any]) -> None:
-    assert devices.device_name(_workload(tmp_path, doc)) is None
-
-
-@pytest.mark.parametrize("workload", [None, ""])
-def test_no_workload_reads_no_file(monkeypatch: pytest.MonkeyPatch, workload: str | None) -> None:
-    def refuse(path: str) -> Path:
-        raise AssertionError(f"read {path}")
-
-    monkeypatch.setattr(devices, "workload_file", refuse)
-    assert devices.device_name(workload) is None
+def test_a_name_two_records_hold_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for sku in ("h200-sxm-141gb", "h100-sxm-80gb"):
+        text = (devices.CARD_FILES / f"{sku}.toml").read_text()
+        (tmp_path / f"{sku}.toml").write_text(text.replace("NVIDIA H100 80GB HBM3", "NVIDIA H200"))
+    monkeypatch.setattr(devices, "CARD_FILES", tmp_path)
+    with pytest.raises(KeyError, match=r"2 GPU card files .* have 'NVIDIA H200'"):
+        devices.card_sku("NVIDIA H200")

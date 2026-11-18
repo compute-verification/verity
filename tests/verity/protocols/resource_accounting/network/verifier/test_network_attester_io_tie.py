@@ -25,7 +25,8 @@ from verity.commitments import advice as ADV
 from verity.commitments.gates.frame_v3 import _part, opens
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import row_leaf
-from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.protocols.resource_accounting.network.verifier import io_tie as IT, network_attester as W, network_attester_rows as WR
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.grid import Certifier
@@ -250,14 +251,14 @@ def test_a_rows_root_is_its_domains_tree_and_a_path_opens_its_row():
     for count in (2, 3, 5, 8):
         dom = IT.domain(_h(b"d"), count)
         rows, salts = [bytes([i]) * 40 for i in range(count)], [IT.fake_salt(b"s", i) for i in range(count)]
-        leaves = [row_leaf(dom, i, HC.hiding_value(r, s), IT.SCHEMA) for i, (r, s) in enumerate(zip(rows, salts))]
+        leaves = [row_leaf(dom, i, GB.hiding_value(r, s), IT.SCHEMA) for i, (r, s) in enumerate(zip(rows, salts))]
         root = IT.rows_root(dom.domain_id, rows, salts)
         assert root == tree_levels(dom, leaves)[-1][0]
         levels = IT.rows_levels(dom.domain_id, rows, salts)
         for i in range(count):
             path = IT.rows_path(levels, i)
-            assert opens(IT.SCHEMA, root, dom.domain_id, HC.hiding_value(rows[i], salts[i]), i, path) == 1
-            assert opens(IT.SCHEMA, root, dom.domain_id, HC.hiding_value(rows[i - 1], salts[i - 1]), i, path) == 0
+            assert opens(IT.SCHEMA, root, dom.domain_id, GB.hiding_value(rows[i], salts[i]), i, path) == 1
+            assert opens(IT.SCHEMA, root, dom.domain_id, GB.hiding_value(rows[i - 1], salts[i - 1]), i, path) == 0
 
 
 def test_every_window_of_the_network_attesters_egress_is_accepted(link, big):
@@ -594,7 +595,7 @@ def test_the_cell_circuit_is_its_reference():
               end[:12] + b"x" + end[13:], bytes([DATA ^ 1]) + good[1:], bytes([W.FAIL]) + end[1:],
               HEADER.pack(DATA, 1, 247 + 1) + good[HEADER.size:], HEADER.pack(PAD, 3, 1) + bytes(247),
               HEADER.pack(W.END, 3, len(IT.TRAILER) + 1) + end[HEADER.size:], b"\x00" * 9 + good[9:]]
-    out = np.asarray(evaluate_bits(bind(IT.IoTieCell, B=256), _bits([HC._bytes_bits(c) for c in cells])))
+    out = np.asarray(evaluate_bits(bind(IT.IoTieCell, B=256), _bits([GB._bytes_bits(c) for c in cells])))
     out = out.reshape(len(cells), IT.CELL_OUT)
     for c, o in zip(cells, out):
         p = IT.parse_cell(c)
@@ -657,13 +658,13 @@ def test_the_recursive_route_is_the_flat_one():
     for W_, D in ((1, 1), (5, 1), (3, 2), (8, 3), (9, 4), (36, 4), (44, 5), (2, 6)):
         new, flat = bind(IT.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
         n = (2 * D - 1) << (D - 1)
-        assert HC.ands(new) == HC.ands(flat) == W_ * n
+        assert GB.ands(new) == GB.ands(flat) == W_ * n
         xs = _bits([[rng.randrange(2) for _ in range(W_ << D)] for _ in range(16)])
         bits = _bits([[rng.randrange(2) for _ in range(n)] for _ in range(16)])
         assert np.array_equal(np.asarray(evaluate_bits(new, xs, bits)), np.asarray(evaluate_bits(flat, xs, bits)))
     deep = bind(IT.IoTieRoute, W=46, D=14)
     assert [nd.form for nd in deep.body.nodes] == ["batch", "call", "call", "batch"]
-    assert HC.ands(deep) == 46 * (27 << 13)
+    assert GB.ands(deep) == 46 * (27 << 13)
 
 
 def _changed(inst, cells, cmap):
@@ -719,7 +720,7 @@ def _tz(x: int) -> int:
 
 def test_the_parts_ands():
     """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
-    sh, a = SMALL, HC.ands
+    sh, a = SMALL, GB.ands
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
     for N, D, E in ((sh.R, sh.D, sh.E), (12, 5, 20), (100, 7, 96)):
@@ -751,4 +752,4 @@ def test_the_bucket_circuit_is_its_reference():
     args = [IT.bucket_arguments(i, t, IT.switches(i, t)) for i, t in cases]
     fn = bind(IT.IoTieBucket, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S)
     assert _eval(fn, *[list(col) for col in zip(*args)]) == want
-    assert HC.ands(fn) == HC.ands(bind(IT.IoTieContent, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S))
+    assert GB.ands(fn) == GB.ands(bind(IT.IoTieContent, B=SMALL.B, R=SMALL.R, P=SMALL.P, S=SMALL.S))

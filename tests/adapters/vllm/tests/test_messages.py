@@ -8,6 +8,7 @@ import json
 import pytest
 from verity import hooks as H
 from verity.channel import Refused
+from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
@@ -163,7 +164,14 @@ def test_exchange_answers_requests_by_name_before_serving():
     ex.requests.pop()
     assert ex.answer(declared) is True and seen == [declared]
     with pytest.raises(Refused, match="after the requests were answered"):
-        ex.subscribe("c", "values", seen.append)
+        ex.request("c", H.HoldRelease("in-0", 1))
+    off = ex.subscribe("c", "values", seen.append)
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    off()
+    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.StepBegan(4))
+    assert ex.step == 4
 
 
 def test_exchange_refuses_an_unknown_hook():
@@ -210,11 +218,27 @@ def test_exchange_starts_through_every_gate_and_holds():
 
 
 def test_one_exchange_a_process():
-    ex = M.open_exchange()
+    M.close()
+    ex = M.current()
     try:
-        assert M.current() is ex
-        with pytest.raises(Refused, match="open in this process"):
-            M.open_exchange()
+        assert M.current() is ex and not ex.wants("values")
     finally:
         M.close()
-    assert M.current() is not ex and not M.current().wants("values")
+    assert M.current() is not ex
+
+
+def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
+    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
+    ex = M.Exchange()
+    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
+                                      r"'stream-token-ids'\] no launcher here offers"):
+        ex.answer(H.Declared("", {}))
+    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
+    ex.answer(H.Declared("", {}))
+    ((process, start),) = ex.beside()
+    assert process == "id-front" and start() == ("relay", "req", [1, 2])
+    other = M.Exchange()
+    other.request("network", H.StartBeside("tap"))
+    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
+        other.answer(H.Declared("", {}))
