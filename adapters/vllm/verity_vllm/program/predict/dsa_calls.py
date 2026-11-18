@@ -34,6 +34,7 @@ class _CallsNet(Protocol):
     world: int
     dot: Any
     tp: Any
+    device: str | None
 
     @property
     def capture_sizes(self) -> tuple[int, ...]: ...
