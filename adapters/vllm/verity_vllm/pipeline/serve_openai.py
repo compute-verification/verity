@@ -883,6 +883,7 @@ def main(opts: Options) -> int:
               "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
+              "weight_copy_allowed": [n.record() for n in M.current().allowed],
               "admit": admission_order(opts), "admission": M.current().attached.get(M.providing("admission").name) if order is not None else None,
               "tick": loop.gate.record() if loop.gate is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",

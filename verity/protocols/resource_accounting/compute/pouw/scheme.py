@@ -32,7 +32,7 @@ from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Ruled, Scheme, Term, register
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -533,4 +533,13 @@ PEARL_PLUS = register(Scheme(
     salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
     keeps_weight_copy=True,
+    weight_copy_beside_storage=Ruled(
+        "storage holds its store; a useful-work scheme may keep a weight-derived form in memory beside it, and the serve "
+        "may read that form",
+        # placeholders, awaiting soundness's final words
+        ("that storage's decode is bit-exact, so the keeper multiplies on the registered weight",
+         "that the handles the keeper holds stay valid after storage releases each weight",
+         "that the keeper's buffers and storage's labels are separate bytes",
+         "that both fit the node's memory together",
+         "that the keeper behaves the same as the inner of the two")),
 ))

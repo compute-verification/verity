@@ -105,6 +105,18 @@ class Lacks:
 UNDECLARED = Lacks()
 
 
+@dataclass(frozen=True)
+class Ruled:
+    """A declared fact's ruling: the sentence that rules it, and what that ruling does not show."""
+
+    ruling: str
+    not_shown: tuple[str, ...] = ()
+
+
+#: the field that declares a scheme's weight-derived copy beside storage ruled (`Ruled`), as its readers name it
+BESIDE_STORAGE = "weight_copy_beside_storage"
+
+
 class Kernels(Protocol):
     """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
     ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
@@ -302,7 +314,8 @@ class Scheme:
     and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
     name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
-    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    against the committed root once at build; ``weight_copy_beside_storage`` (`BESIDE_STORAGE`), the ruling (`Ruled`)
+    that lets that copy sit beside storage, a `Lacks` where none has ruled it. ``pieces``, by developer-side party, what the served runner launches for
     it (`Launch`), a `Lacks` where it launches nothing.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
@@ -353,6 +366,7 @@ class Scheme:
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
     kernels: Kernels | Lacks = UNDECLARED
     keeps_weight_copy: bool | Lacks = UNDECLARED
+    weight_copy_beside_storage: Ruled | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
@@ -645,8 +659,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+__all__ = ["BESIDE_STORAGE", "CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Ruled", "Scheme", "Term", "Unbounded",
            "bound",
            "credited", "declared", "layout", "order_refusals", "register", "register_circuits", "register_process", "settings",
            "unbounded"]

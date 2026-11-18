@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
@@ -60,6 +60,9 @@ class Exchange:
         self.attached: dict[str, Mapping[str, Any]] = {}
         #: the schemes `attach` attached, by name: what `weight_copy_refusals` reads of the next one's
         self.schemes: dict[str, schemes.Scheme] = {}
+        #: the pairs `weight_copy` allowed among the attached schemes, each with what it does not show: serve.json's
+        #: ``weight_copy_allowed``
+        self.allowed: list[WeightCopyNote] = []
         #: what each attached scheme's ``attach`` returned, by its name, read by `scheme_plugin.write_reports`
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
@@ -81,8 +84,8 @@ class Exchange:
         else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
         is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
         ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
-        A scheme that `weight_copy_refusals` refuses beside those already attached, in either order, is refused by
-        name (`Refused`) before its attach runs, and the exchange is left as it was.
+        A scheme that `weight_copy` refuses beside those already attached, in either order, is refused by name
+        (`Refused`) before its attach runs, and the exchange is left as it was; the pairs it allows are `allowed`.
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
         `request` refuses them.
 
@@ -95,7 +98,8 @@ class Exchange:
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
                                "engine runs before the load")
-        if bad := weight_copy_refusals([*self.schemes.values(), scheme]):
+        bad, allowed = weight_copy([*self.schemes.values(), scheme])
+        if bad:
             raise Refused(scheme.name, "; ".join(bad))
         for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
             handed, held = launcher.get(key), settings.get(name)
@@ -115,6 +119,7 @@ class Exchange:
                 self.request(scheme.name, r)
         self.attached[scheme.name] = ctx["settings"]
         self.schemes[scheme.name] = scheme
+        self.allowed = allowed
         if got is not None:
             self.reports[scheme.name] = got
         return got
@@ -288,24 +293,48 @@ def storage(s: Any) -> bool:
     return getattr(s, "resource", None) == STORAGE[0] and not isinstance(needs, schemes.Lacks) and STORAGE[1] in needs
 
 
-def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
-    """A storage scheme (`storage`) beside one that keeps a weight-derived copy (``keeps_weight_copy``), or beside one
-    that has not declared whether it does, in any order; sorted by name, so the order listed or attached changes none.
-    A scheme keeps a weight-derived copy when, across forwards, it holds or keeps alive resident bytes from which the
-    weights can be had without decoding storage's store; whether a product reads them does not enter."""
-    out = []
+class WeightCopyNote(NamedTuple):
+    """Storage ``storage`` attached beside ``keeps``, which declares it keeps a weight-derived copy and that its copy
+    beside storage is ruled: the ruling and what it does not show, as ``keeps``'s declaration states them."""
+
+    storage: str
+    keeps: str
+    ruling: str
+    not_shown: tuple[str, ...]
+
+    def record(self) -> dict[str, Any]:
+        """Both declared facts, by the fields that declare them: serve.json's ``weight_copy_allowed`` entry."""
+        return {"storage": self.storage, "keeps_weight_copy": self.keeps,
+                schemes.BESIDE_STORAGE: {"ruling": self.ruling, "not_shown": list(self.not_shown)}}
+
+
+def weight_copy(listed: Sequence[schemes.Scheme]) -> tuple[list[str], list[WeightCopyNote]]:
+    """Storage (`storage`) beside a scheme that keeps a weight-derived copy (``keeps_weight_copy``) is refused by name
+    unless that scheme's declaration rules its copy beside storage (`schemes.BESIDE_STORAGE`, a `schemes.Ruled`), and
+    then the pair is allowed and noted with the ruling; beside one that has not declared whether it keeps one, refused.
+    In any order, sorted by name, so the order listed or attached changes neither. A scheme keeps a weight-derived
+    copy when, across forwards, it holds or keeps alive resident bytes from which the weights can be had without
+    decoding storage's store; whether a product reads them does not enter."""
+    refused, noted = [], []
     for st in sorted({s.name: s for s in listed if storage(s)}.values(), key=lambda s: s.name):
         for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
             keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
-            if keeps is True:
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
-                           f"(keeps_weight_copy), so the weights would be resident outside {st.name}'s store: "
-                           "the two are not attached in one process while the pairing awaits a decision")
+            ruled = getattr(o, schemes.BESIDE_STORAGE, schemes.UNDECLARED)
+            if keeps is True and isinstance(ruled, schemes.Ruled):
+                noted.append(WeightCopyNote(st.name, o.name, ruled.ruling, tuple(ruled.not_shown)))
+            elif keeps is True:
+                refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
+                               f"(keeps_weight_copy), and {o.name}'s declaration does not say that its copy beside storage has "
+                               f"been ruled ({schemes.BESIDE_STORAGE} is undeclared), so the two are not attached in one process")
             elif isinstance(keeps, schemes.Lacks):
-                out.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
-                           f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
-                           "until it declares that, and a scheme that keeps one beside storage awaits a decision")
-    return out
+                refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
+                               f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
+                               "until it declares that, and a scheme that keeps one beside storage awaits a decision")
+    return refused, noted
+
+
+def weight_copy_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
+    return weight_copy(listed)[0]
 
 
 def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
