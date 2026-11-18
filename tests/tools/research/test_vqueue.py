@@ -11,9 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build,
-                             Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun,
-                             Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
+from research.vqueue import (BASE_DROPPED, BUILT, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, NEVER_RAN, ON_MAIN, PASS, PENDING, Advance,
+                             Build, Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate,
+                             Rerun, Retry, Ring, Snapshot, UNSAID, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -661,6 +661,22 @@ def test_without_tree_ejects_infra_that_persists_is_split_on_its_inputs_as_infra
         assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them as infra, "
                                                     "ejecting nobody", Outcome((1, 2, 3), heads(1, 2, 3), INFRA_SPLIT, suspects, MAIN)),
                         Drop("c2", "its base failed"), *rebuilt], (tries, rings)
+
+
+def test_launches_that_never_started_above_the_lowest_are_retried_at_once_side_by_side_and_only_once():
+    """Two candidates above a pending lowest whose launches started none of their steps are both enqueued again in that
+    tick, rather than each waiting to be the lowest; one already enqueued again waits to be the lowest, and an infra error
+    from a step that ran still waits for the lowest's rules.  A quick tier's run that left its slot line unrun is such a
+    launch by its words alone, as a verdict recorded before `Failed.launch` was set for it says."""
+    unrun = (replace(task("quick-tier"), launch=True),)
+    lowest = cand("c1", MAIN, 1)
+    c2, c3 = cand("c2", "c1", 2, state=INFRA, infra=unrun), cand("c3", "c2", 3, state=INFRA, infra=unrun)
+    assert decide(snap(lowest, c2, c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    assert decide(snap(lowest, replace(c2, tries=2), c3, ready=prs(1, 2, 3))) == [Retry("c3")]
+    said = (task(f"the run beside its check (r1) run r1 on m1 {NEVER_RAN} (`research inspect r1`)"),)
+    assert decide(snap(lowest, replace(c2, verdict=Verdict(INFRA, (), said)), c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    ran = cand("c2", "c1", 2, state=INFRA, infra=(task("test-file:pkg2/tests/test_reads.py", "pkg2/mod.py"),))
+    assert decide(snap(lowest, ran, ready=prs(1, 2))) == []
 
 
 def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():

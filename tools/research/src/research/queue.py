@@ -4150,11 +4150,11 @@ def tier_report(d: Path, rid: str, on: str, status: dict):
     """Run ``rid``'s result.json (its records in ``d``, its `status.json` ``status``) as a `quick_tier` report, and None; or None and
     why it isn't one."""
     from .result import check
+    from .vqueue import NEVER_RAN
 
     res = check(d, rid)
     if not res.present and status.get("rc") == SLOT_NOT_STARTED:
-        return None, NotStarted(f"run {rid} on {on} waited for a check slot until its --wait-max and never ran the tier "
-                                f"(`research inspect {rid}`)")
+        return None, NotStarted(f"run {rid} on {on} {NEVER_RAN} (`research inspect {rid}`)")
     if not res.present:
         return None, f"run {rid} on {on} ended {status.get('state')} (exit {status.get('rc')}) without a result.json (`research inspect {rid}`)"
     if not res.valid:
