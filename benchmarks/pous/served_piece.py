@@ -24,9 +24,9 @@ same sessions, which no second session replaces. With neither, one process does 
    the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
-2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, at PoUS's declared option ``POUS.option``, its
-   registered point): the commitment to ``W``, then the salt, which the memory attester samples after it from its own
-   host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
+2. **Setup** by PoUS's scheme, ``compose.schemes.get("pous")`` attached on an exchange (`verity_vllm.messages.Exchange`)
+   with ``W`` registered as its weight operands (`memory/pous/prover/served.py`): the commitment to ``W``, then the
+   salt, which the memory attester samples after it from its own host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
    verb on a salt request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and
    the root. Setup's own inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory attester's side started on its host by ``--challenger-command`` (the auditor gate's
@@ -113,18 +113,18 @@ from typing import Any
 
 import torch
 
+from verity import hooks as H
 from verity.runtime.stream import Side
 from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
-from verity.protocols.resource_accounting.memory.pous.scheme import POUS
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import run as R
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
-from verity_vllm import protocols as PO
+from verity_vllm import messages
 
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -133,7 +133,6 @@ import held_bandwidth as HB
 import served_case as SC
 
 POUS = table.get("pous")
-pous = PO.adapter(POUS.name)
 ROOT = Path(__file__).resolve().parents[2]
 #: the manifests a served model's pin is read from, the first that names it at its revision
 PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
@@ -172,45 +171,20 @@ class Refusal(Exception):
     """No answer can be made: what the piece needs isn't there."""
 
 
-class _Unused:
-    """The layers' ``quant_method``, whose ``apply`` the adapter wraps; the piece runs no forward."""
-
-    def apply(self, layer: Any, x: Any, bias: Any = None) -> Any:
-        raise RuntimeError("the PoUS piece runs no forward")
-
-
 class Linear:
-    """A linear as the adapter reads one: its weight and, in the int8 form, its per-row scales."""
+    """A linear as vLLM holds one: its weight and, in the int8 form, its per-row scales."""
 
     def __init__(self, weight: torch.Tensor, scale: torch.Tensor | None = None) -> None:
         self.weight = torch.nn.Parameter(weight, requires_grad=False)
         if scale is not None:
             self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
-        self.quant_method = _Unused()
 
 
 class Model:
-    """The served model's linears, as the adapter reads a model: by module and by parameter."""
+    """The served model's linears, by module name in vLLM's order."""
 
     def __init__(self, layers: dict[str, Linear]) -> None:
         self.layers = layers
-
-    def named_modules(self):
-        yield "", self
-        yield from self.layers.items()
-
-    def named_parameters(self):
-        for n, m in self.layers.items():
-            yield f"{n}.weight", m.weight
-            if hasattr(m, "weight_scale"):
-                yield f"{n}.weight_scale", m.weight_scale
-
-    def named_buffers(self):
-        return iter(())
-
-
-def _linear_types() -> tuple[type, ...]:
-    return (Linear,)
 
 
 class NoSalt(Exception):
@@ -461,14 +435,17 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     load_s = round(time.monotonic() - t0, 3)
     _stamp(out, "the weights loaded")
 
-    types = pous.linear_types
-    pous.linear_types = _linear_types
+    values = {name: m.weight for name, m in model.layers.items()}
+    ex = messages.Exchange()
+    held = None
     try:
-        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]), settings={POUS.name: {
-            "salt_source": _salt_source(party, bind), "p2_lib": p2_lib, "experimental": True}})
         t = time.monotonic()
         try:
-            comp = PO.install(model, ctx)
+            held = ex.attach(POUS, {"challenges": rounds}, salt_source=_salt_source(party, bind), p2_lib=p2_lib,
+                             experimental=True)
+            ex.answer(H.Declared(bw_card or str(dev), {"eager": True}, tuple(ex.attached),
+                                 {n: dict(v) for n, v in ex.attached.items()}))
+            ex.emit(H.RegisteredValues(tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
         except NoSalt as e:
             why = f"the memory attester on {party.host} drew no salt for the setup: {e}"[:1000]
             if bw_party is not None:
@@ -476,66 +453,64 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             return done(_no("undecided", why, None, protocol))
         install_s = round(time.monotonic() - t, 3)
         _stamp(out, "setup done")
+        s = held.store
+        point = replace(s.point, k=rounds)
+        store = s.segments()
+        details = held.details()
+        weights = {"model": repo, "revision": rev, "covers": "linears", "linears": len(model.layers),
+                   "bytes": details["tensor_bytes"], "used_blocks": details["used_blocks"],
+                   "blocks": details["blocks"], "checkpoint_bytes": total,
+                   "share": str(Fraction(details["tensor_bytes"], total))}
+        summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
+                    "details": details}
+        published = s.published()
+        sid = CS.session_id(bind, s.commitment, s.salt)
+        t = time.monotonic()
         try:
-            opt = comp.get(POUS.name)
-            s = opt.store
-            point = replace(s.point, k=rounds)
-            store = s.segments()
-            details = opt.details
-            weights = {"model": repo, "revision": rev, "covers": pous.COVERS, "linears": details["layers"], "bytes": details["tensor_bytes"],
-                       "used_blocks": details["used_blocks"], "blocks": details["blocks"], "checkpoint_bytes": total,
-                       "share": str(Fraction(details["tensor_bytes"], total))}
-            summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
-                        "details": details}
-            published = s.published()
-            sid = CS.session_id(bind, s.commitment, s.salt)
-            t = time.monotonic()
-            try:
-                rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
-                                 opt.prover(()))
-                key = bytes.fromhex(rep["public_key"])
-                session = R.ChallengePhaseRecord.from_json(rep["session"])
-            except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
-                why = (f"the memory attester's session on {party.host} did not complete: "
-                       f"{type(e).__name__}: {e}"[:1000])
-                if bw_party is not None:
-                    HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
-                return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
-            session_s = round(time.monotonic() - t, 3)
-            _stamp(out, "PoUS's session done")
-            if rep.get("session_id") != sid.hex():
-                return done(_no("reject", "the memory attester's report is of a session under another id than the one "
-                                "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
-                            session_s=session_s)
-            _private(private, {
-                "run.json": {"point": period.point_json(point), "published": published.to_json(),
-                             "session": rep["session"], "session_id": sid.hex(), "public_key": key.hex(),
-                             "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
-                             "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
-                     s.digests)
-            _keep(private, store)
-            del store
-            bandwidth = None
+            rep = CR.session(party, CS.request_of(node, point, s.root, audit=bind, published=published),
+                             held.prover(()))
+            key = bytes.fromhex(rep["public_key"])
+            session = R.ChallengePhaseRecord.from_json(rep["session"])
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
+            why = (f"the memory attester's session on {party.host} did not complete: "
+                   f"{type(e).__name__}: {e}"[:1000])
             if bw_party is not None:
-                if bw_card is None:
-                    raise Refusal(f"no card on {device} whose data sheet's memory bandwidth the bandwidth session is "
-                                  "against: name it with --bw-card")
-                _stamp(out, "PoUB's session start")
-                t = time.monotonic()
-                deployed = from_runner() if deployment is None else deployment
-                HB.held(s, node=node, card=bw_card, party=bw_party, party_host=bw_host, sid=sid,
-                        request_=bw_request or HB.request(node.encode()), private=bw_private,
-                        trusted_sha512=HB.key_of(deployed, bw_trusted_sha512))
-                bandwidth = {"session_s": round(time.monotonic() - t, 3)}
-                _stamp(out, "PoUB's session done")
-            (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
-                                                    "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
-                                        + "\n")
-            return None
-        finally:
-            comp.close()
+                HB.missing(bw_out, window, f"no PoUS session bound a store: {why}")
+            return done(_no("undecided", why, None, protocol), session_s=round(time.monotonic() - t, 3))
+        session_s = round(time.monotonic() - t, 3)
+        _stamp(out, "PoUS's session done")
+        if rep.get("session_id") != sid.hex():
+            return done(_no("reject", "the memory attester's report is of a session under another id than the one "
+                            "the window's binding and its setup fix (challenger_session.session_id)", None, protocol),
+                        session_s=session_s)
+        _private(private, {
+            "run.json": {"point": period.point_json(point), "published": published.to_json(),
+                         "session": rep["session"], "session_id": sid.hex(), "public_key": key.hex(),
+                         "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
+                         "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
+                 s.digests)
+        _keep(private, store)
+        del store
+        bandwidth = None
+        if bw_party is not None:
+            if bw_card is None:
+                raise Refusal(f"no card on {device} whose data sheet's memory bandwidth the bandwidth session is "
+                              "against: name it with --bw-card")
+            _stamp(out, "PoUB's session start")
+            t = time.monotonic()
+            deployed = from_runner() if deployment is None else deployment
+            HB.held(s, node=node, card=bw_card, party=bw_party, party_host=bw_host, sid=sid,
+                    request_=bw_request or HB.request(node.encode()), private=bw_private,
+                    trusted_sha512=HB.key_of(deployed, bw_trusted_sha512))
+            bandwidth = {"session_s": round(time.monotonic() - t, 3)}
+            _stamp(out, "PoUB's session done")
+        (private / HELD).write_text(json.dumps({"summary": summary | {"session_s": session_s},
+                                                "bandwidth": bandwidth}, indent=1, sort_keys=True, default=str)
+                                    + "\n")
+        return None
     finally:
-        pous.linear_types = types
+        if held is not None:
+            held.release()
 
 
 def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | None = None,

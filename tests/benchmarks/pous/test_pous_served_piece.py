@@ -79,7 +79,6 @@ SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdic
 fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
-pous = SP.pous
 
 
 def _tensors(plain: bool = False) -> dict[str, torch.Tensor]:
@@ -270,7 +269,7 @@ def _gone(*args, **kw):
 
 def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
     """`_run` in the two parts `served_piece.sh` runs: `sessions`, which leaves no answer, then ``between``, then
-    `answers` with the challenger's sides and the adapter's setup out of reach."""
+    `answers` with the challenger's sides and PoUS's setup out of reach."""
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CR, "session", auditor.session)
@@ -287,7 +286,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     assert early is None
     between()
     with monkeypatch.context() as m:
-        for mod, name in ((CS, "salt"), (CR, "session"), (SP.PO, "install"), (SP.HB, "held")):
+        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (SP.HB, "held")):
             m.setattr(mod, name, _gone)
         return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
                           protocol=TEST_PROTOCOL, **kw)
@@ -324,10 +323,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     """The served weights held as C*, the session answered from it, the verifier's tie and check: an accept, which the
     composed run's row and the block record read as PoUS's certificate (0 bits at the small point, which no certificate
     covers); the weights covered are the linears, the rest of the checkpoint and the serving state named outside."""
-    types = pous.linear_types
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
-    assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "answer.json").read_text()) == answer
     assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
     assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
