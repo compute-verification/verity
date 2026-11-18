@@ -101,7 +101,7 @@ def python_door(member: Any, circuit_file: bytes = b"", public: bytes = b"",
         s.mkdir()
         (s / "session.json").write_text("{}")
         return PF.verify(PF.Proof(cf, pub, (s,)), program=r["C"], partition=r["partition"] if partition is None else partition,
-                         block=member.base, registered=r["theta"])
+                         units=[(member.base, member.base + member.n)], registered=r["theta"])
 
 
 def own_root_public(k: int) -> bytes:
@@ -121,7 +121,7 @@ def own_root_public(k: int) -> bytes:
 
 def stopped(why: tuple[str, str] | None) -> None:
     if why is not None and why[1].startswith(OC.PREFIX):
-        raise Stop(f"python door: refused {why[0]!r} at {PF.__file__}:verify -> one_circuit.restrict: {why[1]}")
+        raise Stop(f"python door: refused {why[0]!r} at {PF.__file__}:verify -> {OC.__file__}: {why[1]}")
 
 
 def stage_register() -> str:
@@ -175,11 +175,11 @@ def stage_crossing() -> str:
 
 
 def stage_not_cs() -> str:
-    """(b) a proof whose circuit is not the lowering of the drawn block's Definition."""
+    """(b) a proof whose circuit is not C_S: the door reads no circuit of the prover's, and runs on its own C_S."""
     win, _c = committed()
     _f, why = python_door(drawn(win), b"flock-circuit v2\nnot C_S\n")
     stopped(why)
-    assert why is not None and why[0] == "circuit", why
+    assert why is not None, "cheat (b): the door accepted a statement whose circuit is not C_S"
     return f"refused: {why}"
 
 

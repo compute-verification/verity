@@ -119,4 +119,11 @@ def scanTmpl : V Tmpl.Tmpl := do
       | .error _ => false
   | .error _ => false
 
+-- a template the reader refuses is refused under the self-check's own name, not as a refusal of the input
+#guard match tmpl with
+  | .ok t => match Lower.selfCheck { t with root := t.defs.size } with
+    | .error e => e.startsWith Lower.SELF_CHECK
+    | .ok _ => false
+  | .error _ => false
+
 end Flock.Test.Lower
