@@ -696,18 +696,16 @@ class TickAdmit:
         return {**self.counts, "runs": len(self.seen)}
 
 
-def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] | None:
+def tick_config(cfg: Any, source: str) -> dict[str, Any] | None:
     """The certified tick's configuration from ``cfg``, the JSON object the adapter read under ``source``, None for None:
-    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``feed`` (a feed file's
-    path; optional, None without it, where ``feed`` is False), ``log`` (a
-    directory for each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
+    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``log`` (a directory for
+    each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
     ``catch_up`` (`RuleGate`; 0 and ``quiet``, the registered rule, by default), with ``arm``, the benchmark arm
     measuring it, where ``catch_up`` is ``open``."""
     if cfg is None:
         return None
-    if not isinstance(cfg, dict) or (feed and not cfg.get("feed")):
-        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us{' and feed' if feed else ''}, "
-                         f"not {json.dumps(cfg)[:80]!r}")
+    if not isinstance(cfg, dict):
+        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us, not {json.dumps(cfg)[:80]!r}")
     rule = {"token_ns": cfg.get("token_ns", 0), "catch_up": cfg.get("catch_up", "quiet")}
     if type(rule["token_ns"]) is not int or rule["token_ns"] < 0 or rule["catch_up"] not in CATCH_UPS:
         raise ValueError(f"{source}: token_ns a non-negative integer and catch_up one of {sorted(CATCH_UPS)}, not {rule}")
@@ -715,8 +713,7 @@ def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] |
         raise ValueError(f"{source}: catch_up 'open' opens the gate, which then orders nothing, so nothing serves under "
                          "it; only a benchmark arm that names it measures it, its name the object's \"arm\"")
     return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
-            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]) if cfg.get("feed") else None,
-            "log": cfg.get("log"), **rule}
+            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "log": cfg.get("log"), **rule}
 
 
 class RuleGate(TickGate):
@@ -773,8 +770,7 @@ class Admitter:
     configuration and installed on the adapter's exchange before the engine is built, as memory's `Binder` is.
 
     ``cfg`` is a JSON object: ``order``, one of `ORDERS` (``tick`` by default), ``hold_ms``, and under ``tick`` the rest of
-    `tick_config`'s (its ``feed`` and ``log`` are the adapter's to read and write: the gate reads ``pull`` and writes
-    ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
+    `tick_config`'s (its ``log`` is the adapter's to write: the gate reads ``pull`` and writes ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
     `verity.hooks.Gate`): `RuleGate` under a rule other than the registered one, else `TickGate`; and, given ``submit``,
     the frontend `TickAdmit`, which hands the gate its records through ``take`` (the gate's own `TickGate.take` by
     default; where the gate runs on another thread, a call that queues them to it). `ValueError` names what ``cfg``
@@ -798,7 +794,7 @@ class Admitter:
         if order == "release-order":
             self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000, schedule=schedule)
             return
-        tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source, feed=False)
+        tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source)
         kw = {"hold_s": tc["hold_s"], "clock": clock, "pull": pull, "log": log}
         rule = {k: tc[k] for k in ("token_ns", "catch_up") if tc.get(k) not in (None, 0, "quiet")}
         self.gate = RuleGate(tc["tick"], **rule, **kw) if rule else TickGate(tc["tick"], **kw)
@@ -864,8 +860,8 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
 
 
 def engine(settings: Mapping[str, Any], feed: str, name: str | None = None) -> Admitter:
-    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s
-    less ``feed``), reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
+    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s),
+    reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
     return Admitter({**settings, "order": "tick"}, source=f"{name or scheme_name()}'s settings",
                     pull=FeedReader(feed_file(feed, name)), log=_log_to(settings.get("log")))
 

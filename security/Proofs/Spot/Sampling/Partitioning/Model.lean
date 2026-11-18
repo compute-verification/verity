@@ -57,12 +57,12 @@ noncomputable def detectionRisk (N k : ℕ) (p : ℝ) (m : ℕ) : ℝ :=
   -Real.log (1 - p + p * ((N - m).choose k : ℝ) / (N.choose k : ℝ))
 
 /-- **The nested sampling design** over `R` replay blocks of `N` proof blocks each, proof block `j` of replay block `i` being
-`finProdFinEquiv (i, j)`: each replay block is sampled independently with probability `a / b` (`SamplingDesign.bernoulli`), and inside
+`finProdFinEquiv (i, j)`: each replay block is sampled independently with probability `a / b` (`Verity.SamplingDesign.bernoulli`), and inside
 each sampled one, `k` of its `N` proof blocks uniformly (`Verity.SamplingDesign.subset`), independently across replay blocks. -/
 def nested (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) : SamplingDesign (R * N) where
-  Ω := (SamplingDesign.bernoulli R a b).Ω × (Fin R → (Verity.SamplingDesign.subset N k hk).Ω)
+  Ω := (Verity.SamplingDesign.bernoulli R a b).Ω × (Fin R → (Verity.SamplingDesign.subset N k hk).Ω)
   draw ω := Finset.univ.filter fun v =>
-    (finProdFinEquiv.symm v).1 ∈ (SamplingDesign.bernoulli R a b).draw ω.1 ∧
+    (finProdFinEquiv.symm v).1 ∈ (Verity.SamplingDesign.bernoulli R a b).draw ω.1 ∧
       (finProdFinEquiv.symm v).2 ∈ (Verity.SamplingDesign.subset N k hk).draw (ω.2 (finProdFinEquiv.symm v).1)
 
 /-- The number of proof blocks of `B` in replay block `i`, numbered as in `nested`. -/

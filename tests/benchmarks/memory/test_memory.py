@@ -1476,7 +1476,7 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
      3),
     (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), f"0 GPU card files under {M.CARD_FILES} have 'NVIDIA A100-SXM4-80GB', "
      "the name the device reports, in `driver`: add { value = 'NVIDIA A100-SXM4-80GB', source = ... } to its one card "
-     "file's `driver`", 3),
+     "file's `driver`, adding its <sku>.toml if it has none, and give it a `short`", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),
