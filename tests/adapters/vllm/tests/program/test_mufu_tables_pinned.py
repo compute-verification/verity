@@ -8,6 +8,7 @@ import os
 import numpy as np
 import pytest
 from verity.circuits.ops import mufu
+
 from verity_vllm.definitions.numerics import fa2_model as FA
 from verity_vllm.definitions.numerics import fa2_relation, rms_relation
 from verity_vllm.definitions.numerics import rms_triton_model as RM

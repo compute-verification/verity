@@ -111,6 +111,7 @@ from verity.circuits.ops.scalar import (
 )
 from verity.circuits.refs import Coll, broadcast, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import dsa as D
 from verity_vllm.definitions.registry.dead_free import TokenSelectCombineV2
 from verity_vllm.definitions.registry.prims import BIT, I32
