@@ -255,6 +255,25 @@ class Attached:
         return run
 
 
+def served_record(d: str | os.PathLike[str]) -> dict[str, Any]:
+    """A served run's report as vLLM's scheme plugin writes it (``out/schemes/pearl-plus/``: ``configuration.json``,
+    ``summary.json``, ``commitment.json``), read as the served verdicts' Pearl+ piece reads ``served.json``: its
+    ``arm``, ``passes`` (`pearl_c.window.served_passes`), ``coins`` (`pearl_c.window.coins_of`, the gate's reserve answer
+    its ``session`` setting), pass limit and pass ends. What only the load's driver measures (``generate_s``, the
+    requests and their tokens, ``ok``) is not in it, and a pass's ``manifest`` is there only where it was retained."""
+    import json
+
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PW
+
+    configuration, summary, commitment = (json.loads((Path(d) / f"{n}.json").read_text())
+                                          for n in ("configuration", "summary", "commitment"))
+    own = configuration.get("settings") or {}
+    held = SimpleNamespace(commitment=lambda: commitment, info=lambda: summary)
+    return {"arm": configuration["record"]["entry"], "retained": bool(own.get("transcript_dir")),
+            "max_step_tokens": summary.get("max_step_tokens"), "pass_ends": summary.get("pass_ends"),
+            "passes": PW.served_passes(summary.get("passes") or []), "coins": PW.coins_of(held, own.get("session") or None)}
+
+
 def attach(exchange: Any, ctx: Any) -> Attached:
     on = Attached(ctx)
     exchange.subscribe(PEARL_PLUS.name, "declared", on.declare)
