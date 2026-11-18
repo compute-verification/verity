@@ -257,6 +257,8 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     for desc in ({**bare, "annotations": {}}, bare):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
         Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
         assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
+    Path(commit["o"].program).write_bytes(gzip.compress(canonical_json({**NODE.desc, "schema": "verity-ir/descriptor/v0"})))
+    assert NR.main(commit["o"]) == 2 and "not verity-ir/descriptor/v2" in capsys.readouterr().out
 
 
 def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):

@@ -72,13 +72,17 @@ class Options:
 
 
 def root_inputs(desc: dict[str, Any]) -> list[tuple[int, int, int]]:
-    """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode)."""
+    """(root node, width, members) of each input node of the descriptor's root, in order, read off its JSON (no decode);
+    refuses a descriptor of another schema than `codec.SCHEMA`."""
+    from verity.circuits.codec import SCHEMA
     from verity.circuits.program import input_id
 
-    callees = desc.get("callees") or []
+    if desc.get("schema") != SCHEMA:
+        raise Refused(f"the node descriptor is {desc.get('schema')!r}, not {SCHEMA}: `predict node` writes one")
+    callees = desc["callees"]
     out = []
     for k, n in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]):
-        got = input_id(callees[n["fn"]] if isinstance(n["fn"], int) else n["fn"])
+        got = input_id(callees[n["fn"]])
         if got is not None:
             out.append((k, got[1], int(n["n"]) if n["form"] in ("batch", "scan") else 1))
     return out
