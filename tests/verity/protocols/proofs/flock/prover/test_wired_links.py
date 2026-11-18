@@ -344,7 +344,7 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     print("no_words", out.strip().splitlines()[-1])
     assert bad is None and "a tree port names its rows' words" in out, out
     # an inner statement's description reads no row by path: a linked one is refused by checkLinked's name
-    bad, out = at("plain_leaves", *bound)
+    bad, out = at("plain_leaves", *bound, "--statement", "verity/flock-circuit+plain-leaves")
     print("plain_leaves", out.strip().splitlines()[-1])
     assert bad is None and NO_TREE in out, out
     # without registered reads every linked statement is refused, the honest one included: one whose header names
