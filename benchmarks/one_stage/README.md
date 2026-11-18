@@ -394,7 +394,10 @@ the three partition files, the three runs and the printer, whose table it keeps 
 records each step's start, command, exit code and seconds; the peaks of the job's own memory (PSS over its session), of
 the machine's memory in use (other jobs' included) and of `WORK`'s size; and the largest process. At its end, success or
 failure, it copies the three runs' records and the bootstrap's to the results directory and removes `WORK`. It does not
-run the recursion benchmark. By hand, the same steps (the script's bootstrap writes its record under `WORK`):
+run the recursion benchmark. Its bootstrap is `kept_bootstrap.sh`'s: `pod_bootstrap.sh`'s environment kept on the node
+under `/workspace/cache/one-stage-bootstrap` (`BOOT_ROOT`), keyed by a digest of what it is built from (its `key.txt`),
+reused while the key matches and built anew when it doesn't, its venv and checkpoint before the card's lease and its taps
+under it; each run reads it under a shared lock. By hand, the same steps with the bootstrap in `WORK`:
 
 ~~~sh
 export WORK=/workspace/a5-layers A5_CARD=0 A5_CORES=40-59 GPU_LEASE_WHO=$USER
