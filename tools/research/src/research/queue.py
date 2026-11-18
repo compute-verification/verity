@@ -5166,8 +5166,12 @@ def worktrees_locked(repo: Path):
 
 @contextlib.contextmanager
 def merged_worktree(repo: Path, commit: str, root: Path | None = None):
-    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (else `MERGED_ROOT`, else the
-    temporary directory; `MERGED_PREFIX`), removed with it whatever happens; one a dead process left is swept first."""
+    """A detached checkout of ``repo`` at ``commit`` in a temporary directory under ``root`` (else `MERGED_ROOT`, else the
+    temporary directory; `MERGED_PREFIX`), removed with it whatever happens; one a dead process left is swept first.  Its git
+    directory is its own, beside it (``git``: HEAD, its index, and a `commondir` naming ``repo``'s), registered nowhere in
+    ``repo``: the clone's other worktree commands (a detached quick tier's or auto plan's `git worktree prune`, which takes no
+    lock) never see it, so none removes it while a build uses it, as one racing a registered worktree's add could (part of its
+    registration deleted, the rest pruned later: `gitfile does not point to a valid repository`)."""
     root = Path(root or MERGED_ROOT or tempfile.gettempdir())
     root.mkdir(parents=True, exist_ok=True)
     for d in root.glob(f"{MERGED_PREFIX}*"):
@@ -5175,17 +5179,18 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
         if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
             shutil.rmtree(d, ignore_errors=True)
     tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
-    wt = tmp / "tree"
+    wt, gd = tmp / "tree", tmp / "git"
     try:
-        with worktrees_locked(repo):
-            _git(repo, "worktree", "prune", check=False)
-            _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        sha = _out(repo, "rev-parse", "--verify", f"{commit}^{{commit}}")
+        gd.mkdir()
+        (gd / "commondir").write_text(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") + "\n")
+        (gd / "HEAD").write_text(sha + "\n")
+        wt.mkdir()
+        (wt / ".git").write_text(f"gitdir: {gd}\n")
+        _git(wt, "reset", "-q", "--hard", sha)
         yield wt
     finally:
-        with worktrees_locked(repo):
-            _git(repo, "worktree", "remove", "--force", str(wt), check=False)
-            shutil.rmtree(tmp, ignore_errors=True)
-            _git(repo, "worktree", "prune", check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 #: the repository's root suite as the quick tier runs it (`suites.py --quick`): `tests/` without the tests marked slow, here
