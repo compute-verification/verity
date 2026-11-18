@@ -16,12 +16,11 @@ untraced = [
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `adapters/torch`: the
 # frontend class_rows and the tie tests load beside it; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
-# imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import, and `zk_drivers.py`, the
-# proof drivers both install, which leak_scan reads with; scan_zk (with
+# imports; scan_zk (with
 # network_attester_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
-inputs = ["calibration/hardware/cards", "calibration/hardware/nodes/rtx-pro-6000-server-x8.toml", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
+inputs = ["calibration/hardware/cards", "verity", "adapters/vllm", "adapters/torch/verity_torch", "benchmarks/one_stage", "verity/protocols/resource_accounting/network/prover/leak_scan.py",
           "verity/protocols/resource_accounting/network/prover/scan_zk.py", "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",

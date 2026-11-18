@@ -202,14 +202,15 @@ A spec-level reference for network attestation's timing channel:
   its registered leaf, as the advice's ``adv`` row is held, and `reads_port` is the same read as the Lean verifier's
   registered reads take it;
 - the served rows' tie, in vLLM's compiler (`verity_vllm.compiler.served_tie`): `ServedRowsTie_v2`, a Boolean Definition
-  with `check` its reference, holds an execution phase's served rows to the positions its steps' Commit holds (the step-input
-  port, `port_chunks`: each step's ids and then its positions at the head of its stream), so the rows registered at
-  serve time are the batch the server ran. Every proof block is proved, and its port, selection and cost are its
-  docstring;
+  with `check` its reference, states that an execution phase's served rows are the positions its steps' Commit holds (the
+  step-input port, `port_chunks`: each step's ids and then its positions at the head of its stream). No proof of it runs,
+  so today the rows registered at serve time are the prover's word, and nothing the verifier accepts rests on this tie.
+  Its port, selection and cost are its docstring;
 - the served rows held to their Programs, in vLLM's compiler (`verity_vllm.compiler.served_statics`):
-  `ServedStaticsTie_v1`, a Boolean Definition with `check` its reference, holds each block's registered served rows,
-  read through the Lean verifier's registered reads, to the RoPE statics of the Programs its steps ran, with no row
-  hashed but the block's ([protocol/served-statics.md](protocol/served-statics.md));
+  `ServedStaticsTie_v1`, a Boolean Definition with `check` its reference, states that each block's registered served
+  rows, read through the Lean verifier's registered reads, agree with the RoPE statics of the Programs its steps ran, with no
+  row hashed but the block's ([protocol/served-statics.md](protocol/served-statics.md)). No proof of it runs, so today
+  the rows registered at serve time are the prover's word, and nothing the verifier accepts rests on this tie;
 - the prefix cache, in vLLM's compiler (`verity_vllm.compiler.cache_step`): `CacheStep_v1`, a Boolean Definition of one
   scheduled row's pass over a table of whole cached units (an engine step's calls are `scan_step` and, as a circuit,
   `build_scan_step`), which checks the row's hit (the longest cached prefix while no block can have been evicted, a

@@ -242,6 +242,7 @@ abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 -- Not yet read from here: composition (onsite, remote)
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v1"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
+abbrev REMOTE_V1_PROTOCOL : String := "verity/remote/v1"
 
 -- Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)
 abbrev VLLM_ADVICE_WINDOWS_ADVICE : String := "verity-vllm/advice-windows/advice/v1"

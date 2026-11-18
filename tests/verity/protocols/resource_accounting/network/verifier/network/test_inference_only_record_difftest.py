@@ -291,9 +291,9 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
 
 #: the cases on a unit's rows, each with the stage that refuses it
 ROWS = {
-    "2x3 one input run handed to two rows": "own-rows",
+    "2x3 one input run handed to two rows": "shared-unheld",
     "2x3 a row every unit shares": "own-rows",
-    "2x3 a row of computed gates": "own-rows",
+    "2x3 a row of computed gates": "wires",
 }
 #: the toys of an edge from an output of leaves other than its row's (`vectors.EDGED`)
 LEAVES = ("an edge from an output of two widths into one 32-bit leaf", "an edge from an output of 8 bits into a 16-bit leaf",
@@ -323,28 +323,29 @@ def test_an_edges_writer_output_has_its_rows_leaves():
 
 def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
     """The form counts a unit's row by what the record says fills it, which says something of the circuit only where
-    the row is input gates of that unit alone. The root says which gates a unit's rows are, and the form refuses a
-    root that hands a unit anything else (`own-rows`): the input gates of another row, the first unit's for every
-    unit, or computed gates. Each case here is the accepted one with its root so edited, the record the same but for
+    the row is input gates of that unit alone. The root says which gates a unit's rows are: a row an edge of the root
+    fills holds its writer's computed gates, every other row is the unit's own, and the form refuses a root that hands
+    an own row anything but input gates of its own (`own-rows`): the first unit's input gates for every unit. A run
+    of input gates handed to two rows is a shared weight's, refused where no registered read declares it
+    (`shared-unheld`). Each case here is the accepted one with its root so edited, the record the same but for
     the Program it names; without the refusal the reference reads the same of each as of the accepted one, and
     accepts it."""
     held = shaped["2x3 registered"]
     want = vectors.results(held["case"])
     doc = json.loads(held["case"]["instance"]["record"])
     made = {what: shaped[what] for what, stage in ROWS.items() if stage == "own-rows"}
-    assert len(made) == 3
+    assert len(made) == 1
     for what, m in made.items():
         r, inst = vectors.results(m["case"]), m["case"]["instance"]
         assert r["detail"] == r["public"] == {"error": "own-rows", "message": ref.OWN_ROWS}, what
         assert r["count"] == r["kinds"] == r["exported"] == {"error": "own-rows"}, what
         assert inst["program"] != held["case"]["instance"]["program"]
         assert {**json.loads(inst["record"]), "program": doc["program"]} == doc
-    # what the root hands, gate by gate: the same gates to two rows, to every unit, or gates that are no input
+    # what the root hands, gate by gate: a unit's own rows, which no edge fills, are input gates of its own; its
+    # edges' rows are computed gates
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
     from verity.circuits.program import is_input
-    honest, twice, shared, computed = (ref.reference.desc_program(m["case"]["instance"]["program"])
-                                       for m in (held, *made.values()))
 
     def gates(program, node: int, param: int) -> list[list[tuple]]:
         """Per unit of root node `node`, the gates its parameter `param`'s leaves are, each with its primitive."""
@@ -353,21 +354,32 @@ def test_a_units_rows_are_input_gates_of_its_own(shaped, monkeypatch):
         return [[resolve_gate(root.child(node, m), ("p", param, leaf))
                  for leaf in range(n.fn.signature()[0][param][1].leaves)] for m in range(n_members(n))]
 
-    def distinct(rows: list[list[tuple]]) -> bool:
-        """Whether the rows are input gates, none twice."""
-        flat = [g for row in rows for g in row]
-        return all(is_input(prim) for _, prim in flat) and len({g for g, _ in flat}) == len(flat)
-    units = [k for k, n in enumerate(honest.root.body.nodes) if n.args]
-    norm, select, feed = units[2], units[-2], units[-1]
-    assert distinct(gates(honest, norm, 0) + gates(honest, norm, 1))
-    assert distinct(gates(honest, feed, 0)) and distinct(gates(honest, select, 0))
-    assert gates(twice, norm, 0) == gates(twice, norm, 1)
-    assert len({tuple(g for g, _ in row) for row in gates(shared, feed, 0)}) == 1 < len(gates(shared, feed, 0))
-    assert not any(is_input(prim) for row in gates(computed, select, 0) for _, prim in row)
+    def rows(case: dict) -> list[tuple]:
+        """Each row of each unit as the reference reads the case: `(template, port, edge, gates)`, an edge where a
+        wire the root states fills it (`wires_of`, `entries`)."""
+        _, program, desc, rec, _, templates = ref.front(case["instance"], case["trusted"])
+        wires, cuts = ref.wires_of(templates, rec, desc)
+        filled = {(w["reader"], w["port"], u, r) for w in wires for u, r, _ in ref.entries(w)}
+        tids = [t.tid for t in templates]
+        at = [k for k, x in enumerate(desc["definitions"][desc["root"]]["body"]["nodes"]) if desc["callees"][x["fn"]] in tids]
+        out = []
+        for k, (tid, first, _n) in zip(at, ref.root_order(desc, tids), strict=True):
+            for i, (port, ty) in enumerate(program.root.body.nodes[k].fn.signature()[0]):
+                c = cuts.get(tid, {}).get(port, 1)
+                out += [(tid, port, (tid, port, first + u, r) in filled, row[r * ty.leaves // c:(r + 1) * ty.leaves // c])
+                        for u, row in enumerate(gates(program, k, i)) for r in range(c)]
+        return out
+    honest = rows(held["case"])
+    own = [g for _, _, edge, row in honest if not edge for g in row]
+    assert own and all(is_input(prim) for _, prim in own) and len({g for g, _ in own}) == len(own)
+    assert not any(is_input(prim) for _, _, edge, row in honest if edge for _, prim in row)
+    assert {(t, p) for t, p, edge, _ in honest if edge} == {(w["reader"], w["port"]) for w in doc["wires"]}
     monkeypatch.setattr(ref, "own_rows", lambda *_: None)
     for what, m in made.items():
         off = vectors.results(m["case"] | {"rows": held["case"]["rows"]})
         assert off == want and off["detail"]["complies"], what
+        own = [g for _, _, edge, row in rows(m["case"]) if not edge for g, _ in row]
+        assert len(set(own)) < len(own), what
 
 
 def test_a_weight_its_units_share_is_held(shaped):
@@ -515,10 +527,11 @@ def test_a_row_is_declared_once(shaped):
     held = shaped["2x3 registered"]["case"]
     *_, templates = ref.front(held["instance"], held["trusted"])
     built = json.loads(held["instance"]["record"])
+    program = json.loads(held["instance"]["program"])
 
     def declarations(rec: dict) -> None:
         """The wires' check and the declarations' on the record `rec`, refused (`Malformed`) as the reference refuses."""
-        wires, cuts = ref.wires_of(templates, rec, None)
+        wires, cuts = ref.wires_of(templates, rec, program)
         ref.Inputs(templates, cuts, wires, rec)
 
     declarations(built)

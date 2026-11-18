@@ -241,8 +241,6 @@
   "benchmarks/property_redteam/squaring.py": 1,
   "benchmarks/prove_path/prove_path.py": 6,
   "benchmarks/prove_path/records_audit.py": 1,
-  "benchmarks/prove_path/served_statics_zk.py": 1,
-  "benchmarks/prove_path/served_tie_zk.py": 1,
   "benchmarks/serve_tax/cell_shim.py": 3,
   "benchmarks/serve_tax/release_front.py": 1,
   "benchmarks/serve_tax/serve_tax.py": 2,

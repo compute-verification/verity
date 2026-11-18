@@ -475,7 +475,7 @@ def shared_held(program, templates: list, cuts: dict, x, is_theta) -> None:
     by = {t.tid: t for t in templates}
     src = {(r["reader"], r["port"], u, c): s for r in x.reads for u, c, s in entries(r)}
     runs = row_runs(program)
-    if not runs[1]:
+    if runs is None or not runs[1]:
         return
     readers = shared_of(program, runs[1])
     if readers is None:
