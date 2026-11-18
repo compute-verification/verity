@@ -351,6 +351,22 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(len(sent), False, why)]
 
 
+@pytest.mark.parametrize("field, name", [(b"x-verity-release: 4x", "x-verity-release"),
+                                         (b"x-verity-release: 4\r\nx-verity-release-run: zz", "x-verity-release-run"),
+                                         (b"x-verity-release: 4\r\nx-verity-release-bucket: -1", "x-verity-release-bucket")])
+def test_an_id_request_with_a_malformed_release_is_refused_by_name_and_the_front_goes_on(field, name):
+    """A malformed release header on an id request (`release.release_of`'s refusal) is no release: the front answers
+    nothing, opens no server connection for it and records the refusal's name as why; the next request is served."""
+    request = served.id_request(P).replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
+    server = Scripted(STREAM + chunked(event(choice([7], " a")), event(b"[DONE]")))
+    with Fronted(server.address) as f:
+        assert f.send(request) == b""
+        assert f.send(released()) == IT.id_event(7, P) + IT.TRAILER
+    server.join()
+    assert len(server.requests) == 1
+    assert [(r["n"], r["ended"], r["why"] and r["why"].split(":")[0]) for r in f.log] == [(None, False, name), (4, True, None)]
+
+
 @pytest.mark.parametrize("answer, sent", [
     (b"", []),                                                              # the server holds the request and says nothing
     (STREAM, []),                                                           # its 200 head and no chunk
