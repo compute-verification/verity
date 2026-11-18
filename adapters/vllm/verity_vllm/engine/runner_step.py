@@ -41,11 +41,9 @@ from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass
 from typing import Any
 
-from verity import hooks as H
-from verity_vllm import messages
 from verity_vllm.engine import hooks
 
-__all__ = ["Part", "Rank", "Step", "Steps", "add"]
+__all__ = ["Part", "Rank", "Step", "add"]
 
 #: the tag of the two patches (`hooks.live`)
 TAG = "runner-step"
@@ -202,32 +200,3 @@ def parts(runner: Any) -> tuple[Part, ...]:
     """The parts that are on ``runner``, in the order they run."""
     wraps = _WRAPS.get(id(runner))
     return wraps.on if wraps is not None else ()
-
-
-class Steps(Part):
-    """Each step's `verity.hooks.StepBegan` and `StepEnded`, emitted to the process's exchange (`messages.current`):
-    the step's index from 1, the requests it schedules as its inputs and its scheduled tokens as its slots."""
-
-    rank = Rank.ADMIT
-
-    def __init__(self) -> None:
-        self.index = 0
-
-    def before_forward(self, step: Step) -> None:
-        self.index += 1
-        so, ex = step.scheduler_output, messages.current()
-        ex.step = self.index
-        if ex.wants("steps"):
-            ex.emit(H.StepBegan(self.index, tuple(getattr(so, "num_scheduled_tokens", None) or ()),
-                                int(getattr(so, "total_num_scheduled_tokens", 0))))
-
-    def after_forward(self, step: Step) -> None:
-        if not hasattr(step.runner, "sample"):
-            self._ended()
-
-    def after_sample(self, step: Step) -> None:
-        self._ended()
-
-    def _ended(self) -> None:
-        if (ex := messages.current()).wants("steps"):
-            ex.emit(H.StepEnded(self.index))
