@@ -188,8 +188,8 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
     `network-rows`.
     Every disagreement is reported with both verdicts. By design: a run under a
     `max_tokens_cap` the Python check accepts and `network-rows` refuses by name; a run whose egress cell isn't
-    id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts and
-    `network-rows` refuses. The relay check, running it, names no `lean-disagrees` on any of them, and its `lean` is
+    id-form the Python audit refuses and `network-rows` accepts; and a bytes-form run the Python check accepts, the
+    case's builder refuses by name and `network-rows`, handed it as an id-form run's, refuses. The relay check, running it, names no `lean-disagrees` on any of them, and its `lean` is
     accepted on exactly those `network-rows` accepts and not covered on the capped and bytes-form runs."""
     exe = str(D.build(LEAN, "network-rows"))
     honest = served(tmp_path / "honest")
@@ -238,7 +238,11 @@ def test_network_rows_and_the_python_check_decide_each_run_alike(tmp_path):
 
     bytes_run = served(tmp_path / "bytes", replace(W63K4, egress="bytes"))
     assert python(bytes_run) == []
-    got = lean(exe, bytes_run, tmp_path / "case-bytes")
+    with pytest.raises(ValueError, match="^the rows audit's schedule is the id egress form's, not 'bytes''s$"):
+        case(bytes_run)
+    dep = json.loads((bytes_run / "deployment.json").read_text())
+    as_id = RC.rows_audit_case(bytes_run, dep, replace(NetworkAttesterParams(**dep["params"]), egress="id"))
+    got = period_check.lean_check(exe, as_id, tmp_path / "case-bytes")
     assert (got["verdict"], got["reason"]) == ("reject", "requests window 0: the certified head isn't the record's"), got
 
     accepted = {"honest", "resigned", "one window fewer", "not id"}
