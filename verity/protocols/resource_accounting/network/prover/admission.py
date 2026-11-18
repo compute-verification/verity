@@ -1,11 +1,11 @@
 """The network attester's admission on the served node: its release order (`ReleaseOrder`) and the certified tick
 (`TickGate`, `RuleGate`), the readers of its release headers and its watermark (`release_of`, `Watermark`), and the
-frontends that feed them: serve-openai's (`TickAdmit`) and an OpenAI-style server's middleware (`ReleaseFeed`). The
-adapter hands in what is its own: the engine loop's submit and abort, its server's routes and body check, the
-configuration it read, and the exchange of `verity.hooks` events and requests the gate and serve-openai's frontend
-attach to, both built and attached by one entry (`Admitter`). Nothing here imports the adapter or vLLM.
+frontends that feed them: a front that hands its engine each input (`TickAdmit`) and a front in another process than
+its engine (`FrontFeed`). The adapter hands in what is its own: its submit and abort of an input, the configuration it
+read, and the exchange of `verity.hooks` events and requests the gate and the frontend attach to, both built and
+attached by one entry (`Admitter`). Nothing here names a serving stack.
 
-`ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
+`ReleaseOrder` is a reorder buffer in front of the adapter's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
 is no hold to a bucket boundary (the boundary saves no step bits).
 
@@ -30,14 +30,15 @@ it is skipped and the held ones go on; if it comes after all it is forwarded at 
 
 **The certified tick** (``tick``, `TickGate`). Step k has a logical time T_k, an integer of microseconds, and before it the
 gate adds exactly the requests whose release bucket a has closed by then, (a + 1)·τ_b ≤ T_k, in release order. After a step
-that scheduled a token, T advances by τ_sat if vLLM's waiting queue is nonempty and by τ_free if it is empty; when nothing is
+that computed a slot, T advances by τ_sat if a started input is left waiting for a slot (`hooks.StepBegan.queued`) and by
+τ_free if none is; when nothing is
 running or waiting, T jumps to the close of the next release's bucket, so T_0 is the first release's. τ_b is the network
 attester's bucket and τ_sat, τ_free the engine class's (`Tick`), registered with the class: a configuration, not a
 run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
 once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n but
-the ones a line names lost. The rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request
-outside it until its step (a hold on release, driven by the adapter's admission hook, `verity_vllm.engine.admission`), so the
-scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
+the ones a line names lost. The rest of each step is the serving stack's own scheduler, unpatched: the gate holds a
+numbered request outside it until its step (`hooks.StartOnBoundary`: an input starts only when `ready` lets its step
+run), so the scheduler sees each request from its admission on, and the batches are a function of the certified releases and the
 registered τ, which the encoder's replay recomputes (`advice_code.replay`, ``tick``) without timing advice. A release a
 watermark line names lost is skipped (``lost``): the gate doesn't wait for it, the later ones are admitted in order, and
 its request, should it reach the engine all the same, before that line or after it, is kept out of the scheduler
@@ -45,15 +46,14 @@ its request, should it reach the engine all the same, before that line or after 
 and counted (`TickGate.summary`): a request without the header (``unordered``), one of an older run (``stale``), one that
 comes after it was skipped (``late``). A released request that doesn't reach the engine, and that no line names lost,
 holds the later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that
-breaks, opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. Refused: a
-scheduler policy other than FCFS (the waiting queue must be the admission order) and more than one data-parallel engine.
-Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
-through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
-file, and a vLLM general plugin whose gate in the engine core process reads it). A request the gate drops is its
-frontend's to end, and each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the
-one in the engine with that error and aborts it (`TickAdmit`). vLLM's own server's is given the request's disconnect, on
-which vLLM aborts it as it does on its connection's close, and is then answered by the middleware: 400 where the server
-had begun no response, a stream ended with nothing more of it where its head had gone (`tick_plugin.TickFeed`).
+breaks, opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. The
+gate requires that inputs start in the order it adds them, on one stream of steps; the adapter refuses a scheduler that
+can't give it that. Two frontends feed the gate: `TickAdmit`, where the front hands its engine each input itself (its
+watermark route in the server), and, where the server's front runs in another process than its engine, `FrontFeed` on
+the front's hooks, which appends the releases and the watermark to a feed file that the engine's gate reads (`engine`).
+A request the gate drops is its frontend's to end, and each refuses one that comes after its line with one sentence
+(`LOST`): `TickAdmit` answers the one in the engine with that error and aborts it; `FrontFeed` hands the refusal to the
+adapter's front (`hooks.RefuseInput`), which ends the request in its server.
 """
 from __future__ import annotations
 
@@ -80,10 +80,10 @@ CATCH_UPS = frozenset({"quiet", "marks", "open"})
 
 
 class ReleaseOrder:
-    """Forward each `Admission` to ``forward`` (the engine loop's ``submit``) in release order.
-    `key` reads a request's headers as the frontend receives it; `submit` and `abort` stand in for the engine loop's;
-    `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the HTTP
-    server's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
+    """Forward each `Admission` to ``forward`` (the adapter's ``submit``) in release order.
+    `key` reads a request's headers as the frontend receives it; `submit` and `abort` stand in for the adapter's;
+    `passed` says a numbered request won't be submitted (refused, or its connection ended). All of it runs on the
+    front's event loop. ``schedule(delay_s, fn)`` arms the skip (default: the running loop's ``call_later``)."""
 
     #: the release headers `key` reads, the release's number and its run
     headers = (RELEASE_HEADER, RUN_HEADER)
@@ -194,7 +194,7 @@ def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
-    # Imported where a line is read, not with the module, which `tick_plugin` loads in each of vLLM's processes and
+    # Imported where a line is read, not with the module, which an adapter loads in each of its serving processes and
     # which imports only the stdlib and this package.
     from verity.protocols.resource_accounting.network.verifier.release import (
         read_watermark,
@@ -219,7 +219,7 @@ def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None
 @dataclass(frozen=True)
 class Tick:
     """The certified tick's constants, in microseconds: the network attester's bucket τ_b, and the engine class's step
-    times τ_sat (a step after which vLLM's waiting queue is nonempty) and τ_free (one after which it is empty)."""
+    times τ_sat (a step that leaves a started input waiting for a slot) and τ_free (one that leaves none)."""
 
     bucket_us: int
     sat_us: int
@@ -251,7 +251,7 @@ class Tick:
 
 
 class TickGate:
-    """``--admit tick``, a gate on starting inputs (`verity.hooks.Gate`) and a subscriber of the ``steps`` hook, which
+    """The certified tick's gate on starting inputs (`verity.hooks.Gate`) and a subscriber of the ``steps`` hook, which
     `attach` files and subscribes on an exchange that the adapter's admission hook drives (the module docstring).
 
     The frontend's records come through `take`: a numbered request's release ``{"key", "run", "n", "bucket"}`` (``key``
@@ -578,17 +578,17 @@ def scheme_name() -> str:
 
 
 class TickAdmit:
-    """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
-    or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
-    queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
+    """The frontend of a front that hands its engine each input: `key` reads a request's release headers (`ValueError` on
+    a malformed or repeated N, the server's 400), `submit` hands the gate the release (through ``take``) just before the
+    request itself (``forward``), `passed` says a numbered request won't be submitted, and the
     watermark's route (`attach`, `serve_watermark`) feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
     a watermark line names lost is the gate's to drop and this frontend's to answer, since the engine never finishes a
     request its scheduler never saw: a request of it that is in the engine is answered with that error and aborted, and
     one that comes later is refused (`key`). A watermark that breaks forgets its run's lost releases: the gate is open
     then, and adds every request at once. The frontend sees no other opening of the gate (a watermark that stalls past
-    the hold, the engine loop's drain), so after one a line still has it abort or refuse the requests of the releases it
+    the hold, the engine's drain), so after one a line still has it abort or refuse the requests of the releases it
     names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
-    orders nothing. All of it runs on the HTTP server's event loop."""
+    orders nothing. All of it runs on the front's event loop."""
 
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
                  take: Callable[[dict[str, Any]], None]) -> None:
@@ -697,18 +697,16 @@ class TickAdmit:
         return {**self.counts, "runs": len(self.seen)}
 
 
-def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] | None:
+def tick_config(cfg: Any, source: str) -> dict[str, Any] | None:
     """The certified tick's configuration from ``cfg``, the JSON object the adapter read under ``source``, None for None:
-    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``feed`` (the file
-    `ReleaseFeed` appends to and the gate reads; optional, None without it, where ``feed`` is False), ``log`` (a
-    directory for each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
+    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``log`` (a directory for
+    each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
     ``catch_up`` (`RuleGate`; 0 and ``quiet``, the registered rule, by default), with ``arm``, the benchmark arm
     measuring it, where ``catch_up`` is ``open``."""
     if cfg is None:
         return None
-    if not isinstance(cfg, dict) or (feed and not cfg.get("feed")):
-        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us{' and feed' if feed else ''}, "
-                         f"not {json.dumps(cfg)[:80]!r}")
+    if not isinstance(cfg, dict):
+        raise ValueError(f"{source}: a JSON object with bucket_us, sat_us, free_us, not {json.dumps(cfg)[:80]!r}")
     rule = {"token_ns": cfg.get("token_ns", 0), "catch_up": cfg.get("catch_up", "quiet")}
     if type(rule["token_ns"]) is not int or rule["token_ns"] < 0 or rule["catch_up"] not in CATCH_UPS:
         raise ValueError(f"{source}: token_ns a non-negative integer and catch_up one of {sorted(CATCH_UPS)}, not {rule}")
@@ -716,8 +714,7 @@ def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] |
         raise ValueError(f"{source}: catch_up 'open' opens the gate, which then orders nothing, so nothing serves under "
                          "it; only a benchmark arm that names it measures it, its name the object's \"arm\"")
     return {"tick": Tick(cfg.get("bucket_us"), cfg.get("sat_us"), cfg.get("free_us")),
-            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "feed": str(cfg["feed"]) if cfg.get("feed") else None,
-            "log": cfg.get("log"), **rule}
+            "hold_s": float(cfg.get("hold_ms", 5000)) / 1000, "log": cfg.get("log"), **rule}
 
 
 class RuleGate(TickGate):
@@ -774,8 +771,7 @@ class Admitter:
     configuration and installed on the adapter's exchange before the engine is built, as memory's `Binder` is.
 
     ``cfg`` is a JSON object: ``order``, one of `ORDERS` (``tick`` by default), ``hold_ms``, and under ``tick`` the rest of
-    `tick_config`'s (its ``feed`` and ``log`` are the adapter's to read and write: the gate reads ``pull`` and writes
-    ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
+    `tick_config`'s (its ``log`` is the adapter's to write: the gate reads ``pull`` and writes ``log``). ``release-order`` makes the frontend, `ReleaseOrder`, and no gate. ``tick`` makes the gate (`gate`, a
     `verity.hooks.Gate`): `RuleGate` under a rule other than the registered one, else `TickGate`; and, given ``submit``,
     the frontend `TickAdmit`, which hands the gate its records through ``take`` (the gate's own `TickGate.take` by
     default; where the gate runs on another thread, a call that queues them to it). `ValueError` names what ``cfg``
@@ -799,7 +795,7 @@ class Admitter:
         if order == "release-order":
             self.front = ReleaseOrder(submit, abort, hold_s=float(cfg.get("hold_ms", 5000)) / 1000, schedule=schedule)
             return
-        tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source, feed=False)
+        tc = tick_config({k: v for k, v in cfg.items() if k != "order"}, source)
         kw = {"hold_s": tc["hold_s"], "clock": clock, "pull": pull, "log": log}
         rule = {k: tc[k] for k in ("token_ns", "catch_up") if tc.get(k) not in (None, 0, "quiet")}
         self.gate = RuleGate(tc["tick"], **rule, **kw) if rule else TickGate(tc["tick"], **kw)
@@ -865,8 +861,8 @@ def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
 
 
 def engine(settings: Mapping[str, Any], feed: str, name: str | None = None) -> Admitter:
-    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s
-    less ``feed``), reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
+    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s),
+    reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
     return Admitter({**settings, "order": "tick"}, source=f"{name or scheme_name()}'s settings",
                     pull=FeedReader(feed_file(feed, name)), log=_log_to(settings.get("log")))
 
@@ -922,178 +918,3 @@ class _Release:
     release: tuple[str, int]
     engine_id: str
 
-
-async def _buffered(receive: Callable[[], Any]) -> tuple[bytes, Callable[[], Any]]:
-    """The request's whole body, and a ``receive`` that replays the messages it read before the rest."""
-    msgs: list[dict[str, Any]] = []
-    while True:
-        m = await receive()
-        msgs.append(m)
-        if m.get("type") != "http.request" or not m.get("more_body", False):
-            break
-    body = b"".join(m.get("body", b"") for m in msgs if m.get("type") == "http.request")
-
-    async def replay() -> Any:
-        return msgs.pop(0) if msgs else await receive()
-    return body, replay
-
-
-async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str) -> None:
-    body = text.encode()
-    await send({"type": "http.response.start", "status": status,
-                "headers": [(b"content-type", b"text/plain"), (b"content-length", b"%d" % len(body))]})
-    await send({"type": "http.response.body", "body": body})
-
-
-class ReleaseFeed:
-    """An OpenAI-style server's side of ``--admit tick`` (an ASGI middleware): with a configuration (`tick_config`), it appends to
-    the feed file the records `TickGate.take` reads: a numbered request's release before the server sees the
-    request (its key the request's X-Request-Id, ``verity-<run>-<N>`` set where the client sent none), that it won't reach
-    the engine (no 200 response began), and the watermark's lines from its ``POST /verity/watermark``, which it answers
-    itself. A malformed or repeated release and a malformed watermark are answered 400, and so is a watermark POST that
-    is a client's (it carries a release) or a run's second, which feeds no line (`open_watermark`).
-
-    It serves an allow-list, matched on the route less the server's ``root_path`` (`route_of`): ``/v1/completions`` and
-    ``/v1/chat/completions`` (`SAMPLED_PATHS`), the watermark's, and ``/health``, ``/ping``, ``/version``, ``/v1/models``,
-    ``/metrics``, ``/tokenize`` and ``/detokenize`` (`OTHER_PATHS`), which don't generate. Any other route
-    (``/v1/responses``, ``/v1/audio/...``, ``/pooling``, ``/invocations``, ...) is answered 400, and a websocket closed,
-    before the engine sees it. So is a completions or chat request sampled without a seed (`unseeded`): serve-openai fills
-    such a request's seed with the public default its registration fixes (`engine.served_seed`); this path has no
-    registered default, so it refuses instead. A refused numbered request is fed as passed. Without the variable it
-    passes everything.
-
-    A request of a release a watermark line names lost is this middleware's to end: the gate keeps it from the
-    scheduler, so vLLM never answers it. One that is in the server when its line comes is given its disconnect, the next
-    message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Where the
-    server had begun no response, nothing it sends after that goes on, and once its call returns the middleware answers
-    400 with `LOST`. Where a stream's head had gone, nothing more of the stream goes on and the middleware
-    ends it with no body, since a middleware writes no event in the server's stream. A response whose head gave its
-    length is the server's whole answer, which only an open gate lets it have, and is left to finish: a shorter body
-    would break the length it declared. One whose line has come by the time its body is read, so every one that comes
-    after its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that
-    breaks forgets its run's lost releases: the gate is open then, and adds every request at once. What the middleware
-    keeps for this is its process's own: among several API server processes, a line ends only the requests of the
-    process its stream reached, and only that process refuses the later ones."""
-
-    def __init__(self, app: Any, cfg: Mapping[str, Any] | None, *, sampled: frozenset[str], other: frozenset[str],
-                 route: Callable[[Mapping[str, Any]], str], refuses: Callable[[bytes], str | None]) -> None:
-        self.app, self.sampled, self.other, self.route, self.refuses = app, sampled, other, route, refuses
-        self.fd = None if cfg is None else os.open(cfg["feed"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
-        self.seen: dict[str, set[int]] = {}
-        self.streams: set[str] = set()              # the runs whose watermark stream has come
-        self.lost: dict[str, set[int]] = {}         # run -> the N its watermark named lost
-        self.served: dict[tuple[str, int], asyncio.Future[None]] = {}   # (run, N) in the server -> done once N is named lost
-
-    def write(self, rec: dict[str, Any]) -> None:
-        os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
-
-    def _record(self, rec: dict[str, Any]) -> None:
-        """One watermark record, to the feed: before it a line's lost releases are marked, so that a request of one that
-        comes later is refused, and after it each request of them that is in the server is given its disconnect."""
-        run = rec["run"]
-        lost = [int(n) for n in rec.get("lost") or ()]
-        if lost:
-            self.lost.setdefault(run, set()).update(lost)
-        if "error" in rec:
-            self.lost.pop(run, None)
-        self.write(rec)
-        for n in lost:
-            gone = self.served.get((run, n))
-            if gone is not None and not gone.done():
-                gone.set_result(None)
-
-    async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        if self.fd is None or scope.get("type") not in ("http", "websocket"):
-            return await self.app(scope, receive, send)
-        if scope["type"] == "websocket":
-            await receive()
-            return await send({"type": "websocket.close", "code": 1008})
-        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
-        route = self.route(scope)
-        try:
-            rel = release_of(headers)
-            if rel is not None and rel[1] in self.seen.setdefault(rel[0], set()):
-                raise ValueError(f"{RELEASE_HEADER}: {rel[1]} came twice in run {rel[0]!r}")
-        except ValueError as e:
-            return await _answer(send, 400, str(e))
-        why = None
-        if route == WATERMARK_PATH:
-            try:
-                w = open_watermark(headers, self.streams, self._record)
-            except ValueError as e:
-                why = str(e)
-            else:
-                return await self._watermark(w, receive, send)
-        elif route in self.sampled:
-            body, receive = await _buffered(receive)
-            why = self.refuses(body)
-        elif route not in self.other:
-            why = (f"under the certified tick this server serves only {', '.join(sorted(self.sampled | self.other))}, "
-                   f"not {route[:80]!r}")
-        if rel is not None and rel[1] in self.lost.get(rel[0], ()):      # read here: its line may come while its body does
-            return await _answer(send, 400, LOST.format(n=rel[1], run=rel[0]))
-        if why is not None:
-            if rel is not None:
-                self.seen[rel[0]].add(rel[1])
-                self.write({"run": rel[0], "n": rel[1], "passed": True})
-            return await _answer(send, 400, why)
-        if rel is None:
-            return await self.app(scope, receive, send)
-        run, n, bucket = rel
-        self.seen[run].add(n)
-        key = headers.get("x-request-id")
-        if not key:
-            key = f"verity-{run}-{n}"
-            scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", key.encode())]}
-        self.write({"key": key, "run": run, "n": n, "bucket": bucket})
-        gone = self.served[run, n] = asyncio.get_running_loop().create_future()
-        began = started = sized = ended = False
-
-        async def heard() -> Any:
-            """The request's next message, or its disconnect once a line has named its release lost."""
-            if gone.done():
-                return {"type": "http.disconnect"}
-            message = asyncio.ensure_future(receive())
-            try:
-                await asyncio.wait({message, gone}, return_when=asyncio.FIRST_COMPLETED)
-                if message.done():
-                    return message.result()
-            finally:
-                message.cancel()
-            return {"type": "http.disconnect"}
-
-        async def watched(message: dict[str, Any]) -> None:
-            nonlocal began, started, sized, ended
-            if gone.done() and not sized:
-                return
-            kind = message.get("type")
-            if kind == "http.response.start":
-                started, began = True, began or message.get("status") == 200
-                sized = any(k.lower() == b"content-length" for k, _ in message.get("headers") or ())
-            elif kind == "http.response.body" and not message.get("more_body", False):
-                ended = True
-            await send(message)
-
-        try:
-            await self.app(scope, heard, watched)
-        finally:
-            del self.served[run, n]
-            if not began:
-                self.write({"run": run, "n": n, "passed": True})
-        if gone.done() and not started:
-            await _answer(send, 400, LOST.format(n=n, run=run))
-        elif gone.done() and not sized and not ended:
-            await send({"type": "http.response.body", "body": b""})
-
-    async def _watermark(self, w: Watermark, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        while True:
-            message = await receive()
-            if message.get("type") == "http.disconnect":
-                w.close("the connection closed before the watermark's end")
-                return
-            if not w.feed(message.get("body", b"")):
-                break
-            if not message.get("more_body", False):
-                w.close()
-                break
-        await _answer(send, 200 if w.error is None else 400, w.error or "")

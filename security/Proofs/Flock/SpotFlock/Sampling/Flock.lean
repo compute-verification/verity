@@ -175,11 +175,11 @@ theorem flock_oracle_count
 theorem flock_oracle_count_subset
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n)
-    (σ : Strategy (audit (SamplingDesign.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
+    (σ : Strategy (audit (Verity.SamplingDesign.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (reg σ)).card)
-        (audit (SamplingDesign.subset n k hk) _ (flockSession plan)) σ ≤
+        (audit (Verity.SamplingDesign.subset n k hk) _ (flockSession plan)) σ ≤
       ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
-  have := P.flock_oracle_count plan hlow (SamplingDesign.subset n k hk) K σ
+  have := P.flock_oracle_count plan hlow (Verity.SamplingDesign.subset n k hk) K σ
   rwa [SamplingDesign.subset_miss hk hK] at this
 
 /-- **Sampled proof blocks of the Flock audit** are correct up to `2^-205`, even for a consumer who looks

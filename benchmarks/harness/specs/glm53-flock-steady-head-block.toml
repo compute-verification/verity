@@ -1,5 +1,5 @@
 schema = "verity-bench/steady-spec/v0"
-id = "glm53-flock-steady-head-block-h200"
+id = "glm53-flock-steady-head-block"
 # The proof server's rate at steady state on GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms
 # (`FIRST=false`, `FIRST=true`): each one's full statement of 256 blocks at one, two and four provers on one H200 with
 # ten cores. Run a point with `research run --on NODE --pool gpu ... -- uv run verity-bench run SPEC --point POINT`, NODE

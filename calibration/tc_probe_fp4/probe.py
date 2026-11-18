@@ -16,8 +16,10 @@ Instructions (``--instruction``): ``nvf4`` = ``mma.sync.aligned.kind::mxf4nvf4.b
 replay only); ``bf16`` = ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` (``sm120.mma.m16n8k16.bf16``), compared with
 ``verity.circuits.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
 
-The kernel (``mma_fp4.cu``) is built with ``-arch=sm_120a``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on plain
-``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  ``--sass-check`` runs ``cuobjdump -sass``
+The kernel (``mma_fp4.cu``) is built for the card the run opened (``--card`` names the card of a ``--sass-only`` or
+``--fake-silicon`` build), with its architecture file's ``-gencode``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on
+plain ``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  A card of another architecture
+than the source's kernels (``SOURCE_ARCH``) is refused by name.  ``--sass-check`` runs ``cuobjdump -sass``
 and records the number of MMA instructions per tile kernel (must be exactly one each; the run fails otherwise).
 
 ``--replay-autoproof FILE`` replays every ``sample_cases`` record of autoproof's ``probes/results/probe{2,3}_*.json`` (read-only
@@ -88,7 +90,6 @@ import multiprocessing as mp
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -179,10 +180,14 @@ NBLK = {"nvf4": 4, "mxf4": 2, "f8f6f4": 0, "bf16": 0, "tcgen05_nvf4": 4, "tcgen0
 SCALE_KIND = {"nvf4": "ue4m3", "mxf4": "ue8m0", "f8f6f4": "none", "tcgen05_nvf4": "ue4m3", "tcgen05_mxf4": "ue8m0", "tcgen05_mxf4kind": "ue8m0",
               "f8f6f4_e2m1_e4m3": "none", "f8f6f4_e4m3_e2m1": "none", "mxf8f6f4_e2m1": "ue8m0", "mxf8f6f4_e2m1_e4m3": "ue8m0",
               "mxf8f6f4_e4m3_e2m1": "ue8m0"}
-#: sm_100 backend: instruction -> kernel kind (tcgen05_fp4.cu) ; the source file and the default arch per backend
+#: sm_100 backend: instruction -> kernel kind (tcgen05_fp4.cu) ; the source file per backend
 TCGEN05_KIND = {"tcgen05_nvf4": 0, "tcgen05_mxf4": 1, "tcgen05_mxf4kind": 2}
 SOURCE = {instr: ("tcgen05_fp4.cu" if instr in TCGEN05_KIND else "mma_fp4.cu") for instr in PTX}
-DEFAULT_ARCH = {instr: ("sm_100a" if instr in TCGEN05_KIND else "sm_120a") for instr in PTX}
+#: the architecture each source's kernels are written for (f1_rates.py's are generated); a run's card must be of it
+#: the CUDA toolkit the kernels are built with, the run's machine's (`kit.toolkit`)
+TOOLKIT = "13.0"
+SOURCE_ARCH = {"mma_fp4.cu": "sm_120a", "cvt_fp4.cu": "sm_120a", "w1_price.cu": "sm_120a", "f1_rates.py": "sm_120a",
+               "tcgen05_fp4.cu": "sm_100a"}
 #: canonical K-major no-swizzle shared-memory strides (bytes): LBO = the second 16-byte K chunk of an 8-row group, SBO = the next group
 TCGEN05_SMEM = {"lbo_a": 128, "sbo_a": 256, "lbo_b": 128, "sbo_b": 256}
 #: hex digits per operand code in the records (E4M3 bytes take two)
@@ -201,22 +206,46 @@ def uuid_allowed(uuid: str | None, expect: str) -> bool:
 
 
 def nvcc_bin() -> str:
-    return shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
+    from verity_bench import kit
+
+    return str(Path(kit.toolkit(TOOLKIT)) / "bin" / "nvcc")
 
 
-def arch_flags(arch: str) -> list[str]:
-    """nvcc target flags.  For an arch-specific target (sm_100a, sm_103a, sm_120a) name the compute_XXXa PTX explicitly: nvcc 12.9's
-    ``-arch=sm_100a`` also embeds a plain ``compute_100`` PTX, and the tcgen05 mnemonics do not assemble for that target."""
-    m = re.fullmatch(r"sm_(\d+)a", arch)
-    if m:
-        return [f"-gencode=arch=compute_{m.group(1)}a,code=sm_{m.group(1)}a"]
-    return [f"-arch={arch}"]
+def has_nvcc() -> bool:
+    try:
+        return Path(nvcc_bin()).is_file()
+    except SystemExit:
+        return False
 
 
-def build(arch: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
-    so = out / f"lib{Path(source).stem}_{arch}.so"
+def target(card: str | None, source: str) -> tuple[str, str]:
+    from verity_bench import kit
+
+    card = card or kit.host_stamp()["card"]
+    if card == "none":
+        raise SystemExit("tc_probe_fp4: no GPU here: --card names the card a --sass-only or --fake-silicon build is for, "
+                         "as nvidia-smi names it")
+    arch = kit.card_arch(card)
+    if arch != SOURCE_ARCH[source]:
+        raise SystemExit(f"tc_probe_fp4: the card {card!r} is {arch}, and {source}'s kernels are {SOURCE_ARCH[source]}: "
+                         "run it on a card of their architecture")
+    return card, arch
+
+
+def card_flags(card: str) -> list[str]:
+    """nvcc target flags: the card's architecture file's compute_XXXa PTX named explicitly, since nvcc 12.9's ``-arch=sm_100a``
+    also embeds a plain ``compute_100`` PTX, and the tcgen05 mnemonics do not assemble for that target."""
+    from verity_bench import kit
+
+    return [f"-gencode={kit.card_gencode(card)}"]
+
+
+def build(card: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
+    from verity_bench import kit
+
+    so = out / f"lib{Path(source).stem}_{kit.card_arch(card)}.so"
     nvcc = subprocess.run([nvcc_bin(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
-    subprocess.run([nvcc_bin(), "-O2", *arch_flags(arch), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
+    subprocess.run([nvcc_bin(), "-O2", *card_flags(card), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
     return so, " / ".join(line.strip() for line in nvcc)
 
 
@@ -1480,7 +1509,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instruction", default="nvf4",
                     choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS)
                     + list(META_RULE_INSTRUCTIONS) + list(LEAN_VECTOR_INSTRUCTIONS))
-    ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
+    ap.add_argument("--card", default=None, help="--sass-only or --fake-silicon: the card to build for, as nvidia-smi names it "
+                    "(default: the run's card)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
     ap.add_argument("--smem-strides", default=None, metavar="LBO_A,SBO_A,LBO_B,SBO_B",
@@ -1517,6 +1547,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--library", default=None, help="load this library (a build of the same source and arch on a host with the CUDA "
                     "toolkit) instead of compiling")
     args = ap.parse_args(argv)
+    if args.card and not (args.sass_only or args.fake_silicon):
+        ap.error("--card names the card of a --sass-only or --fake-silicon build; a capture builds for the card the run opened")
     if args.instruction in LEAN_VECTOR_INSTRUCTIONS:
         import lean_vectors
         return lean_vectors.main(args)
@@ -1536,8 +1568,6 @@ def main(argv: list[str] | None = None) -> int:
     t_all = time.time()
     instr = args.instruction
     tcgen05 = instr in TCGEN05_KIND
-    if args.arch is None:
-        args.arch = DEFAULT_ARCH[instr]
     if args.chain2 and not tcgen05:
         ap.error("--chain2 is a tcgen05 option")
     if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
@@ -1547,22 +1577,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.sass_only:
         args.sass_check = True
 
+    card, arch = (None, None) if args.fake_silicon and not has_nvcc() else target(args.card, SOURCE[instr])
     if args.fake_silicon:
-        so, nvcc = (None, "not built (fake silicon)") if not shutil.which(nvcc_bin()) else build(args.arch, out, SOURCE[instr])
+        so, nvcc = (None, "not built (fake silicon)") if card is None else build(card, out, SOURCE[instr])
         probe = FakeProbe(instr, args.fake_silicon)
     elif args.prebuilt:
         so = Path(os.path.expandvars(args.prebuilt))
         nvcc = f"prebuilt {so.name} sha256 {hashlib.sha256(so.read_bytes()).hexdigest()}"
         probe = None if args.sass_only else Probe(so)
     else:
-        so, nvcc = prebuilt(os.path.expandvars(args.library)) if args.library else build(args.arch, out, SOURCE[instr])
+        so, nvcc = prebuilt(os.path.expandvars(args.library)) if args.library else build(card, out, SOURCE[instr])
         probe = None if args.sass_only else Probe(so)
     if tcgen05 and args.smem_strides and probe is not None:
         probe.smem = dict(zip(("lbo_a", "sbo_a", "lbo_b", "sbo_b"), (int(x) for x in args.smem_strides.split(","))))
     identity = probe.identity() if probe is not None else {"device": None, "gpu_uuid": None, "driver": None, "compute_capability": None,
                                                            "has_mxf4": True, "backend": "none (--sass-only)"}
     identity["nvcc"] = nvcc
-    identity["arch"] = args.arch
+    identity["arch"] = arch
     if args.expect_uuid and not args.fake_silicon and not args.sass_only and not uuid_allowed(identity.get("gpu_uuid"), args.expect_uuid):
         msg = f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement"
         (out / "probe_results.json").write_text(json.dumps({"identity": identity, "failures": [msg]}, indent=1))
@@ -1822,7 +1853,7 @@ def main(argv: list[str] | None = None) -> int:
         model_agrees = all(agree[k] for k in verdict_keys) if verdict_keys else None
         result = {
             "schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": run_id,
-            "instruction": INSTRUCTION_ID[instr], "ptx": PTX[instr], "arch": args.arch, "sku": identity["device"],
+            "instruction": INSTRUCTION_ID[instr], "ptx": PTX[instr], "arch": arch, "sku": identity["device"],
             "compute_capability": identity["compute_capability"], "driver": identity["driver"], "gpu_uuid": identity["gpu_uuid"],
             "nvcc": nvcc, "sass_mma_counts": {k: v["mma_count"] for k, v in results.get("sass", {}).items()},
             "families": {name: {"elements": f["elements"], "mismatches": f["mismatches_vs_model"], "hot_firings": f.get("hot_firings"),
@@ -1841,7 +1872,7 @@ def main(argv: list[str] | None = None) -> int:
                        "note": "recorded, not locked: a capture's words do not depend on the clock"},
             "backend": identity["backend"], "tcgen05": {**results.get("tcgen05", {}), **results.get("sweep", {}).get("tcgen05", {})} if tcgen05 else None,
             "sass_opcodes": {k: sorted(set(v["opcodes"])) for k, v in results.get("sass", {}).items()},
-            "workload_fingerprint": {"probe": "calibration/tc_probe_fp4/probe.py", "instruction": INSTRUCTION_ID[instr], "arch": args.arch,
+            "workload_fingerprint": {"probe": "calibration/tc_probe_fp4/probe.py", "instruction": INSTRUCTION_ID[instr], "arch": arch,
                                      "device": identity["device"], "seed": args.seed, "n_random": args.n_random, "chain2": bool(args.chain2),
                                      "chain": args.chain,
                                      "replays": [Path(p).name for p in args.replay_autoproof]},

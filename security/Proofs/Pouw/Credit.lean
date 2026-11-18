@@ -103,9 +103,9 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
         prCoin_pi_forall (ι := Fin S.size) (Ω := fun s : Fin S.size => Fin S[s].need → Fin 256) univ
           (fun (s : Fin S.size) (f : Fin S[s].need → Fin 256) =>
           ∃ D, Flock.Draw.subset S[s].k S[s].size (SamplingDesign.streamOf f) = some D ∧ ∀ j ∈ localOf S B s, j.val ∉ D)
-    _ ≤ ∏ s : Fin S.size, (SamplingDesign.subset S[s].size S[s].k (hk s)).missProb (localOf S B s) :=
+    _ ≤ ∏ s : Fin S.size, (Verity.SamplingDesign.subset S[s].size S[s].k (hk s)).missProb (localOf S B s) :=
         Finset.prod_le_prod fun s _ => SamplingDesign.subset_exec_escape_le _ _ _ (hk s) _
-    _ = _ := Finset.prod_congr rfl fun s _ => SamplingDesign.subset_escape (hk s) _
+    _ = _ := Finset.prod_congr rfl fun s _ => Verity.SamplingDesign.subset_escape (hk s) _
 
 /-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
@@ -441,7 +441,8 @@ theorem drawWithheld : DrawWithheld := by
 `trustedChallengePhaseOf` trusts, as a withheld deployment's is. -/
 theorem drawChallengePhase_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
     (ht : trustedChallengePhaseOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
-    (hw : withheldOn ledger root = true) : PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok x := by
+    (hw : withheldOn ledger root = true) :
+    PouwVerifier.Credit.drawChallengePhase ledger k pins main session root = .ok (x.1, Spot.Challenger.byFamily x.1 x.2) := by
   simp [PouwVerifier.Credit.drawChallengePhase, ht, hw, Except.mapError]
 
 /-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the sample

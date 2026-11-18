@@ -16,9 +16,9 @@ from verity_config import ConfigError
 
 SERVE_TAX = Path(__file__).resolve().parents[3] / "benchmarks" / "serve_tax" / "serve_tax.py"
 PINS = {
-    "coding-agent": (1, "54ef9ec108314bddeaff1f5c8546edf8b00f8cdd32e046be0a3ca8a159578ade"),
-    "chat": (1, "553bc90ac63b177fcd651c58798f764d7e30f26f57dee79688a92b613e3c2a40"),
-    "fixed-size": (1, "93036f84deab9449aa7d8e4f1343c9f23a1918bed489dc5efbcb036d51e1cbc4"),
+    "coding-agent": (2, "c747ee6aeba7b6c996b12d52e0e6a9a07cf7d3b32e2d17a99931a0d931454ef9"),
+    "chat": (2, "d041374b054a79181c52169f457d15748cd9e6826202f89b660b5d7b7cbf1efd"),
+    "fixed-size": (2, "25954da65383cb37bca95dc34d93c8e6cb2bd4cbb56e3effd515af50566e5cac"),
 }
 
 
@@ -67,17 +67,33 @@ def test_an_unknown_key_is_refused(tmp_path, table, line):
 
 
 @pytest.mark.parametrize(("old", "new", "refusal"), [
-    ("glm53.h200 = 4\n", "glm53.h200 = 0\n", "a positive count"),
+    ("glm53.h200 = \"not found yet\"\n", "glm53.h200 = 0\n", "a positive count"),
     ("llama32-1b.h100 = \"not found yet\"\n", "llama32-1b.h100 = \"unknown\"\n", "a positive count"),
     ("llama32-1b.h100 = \"not found yet\"\n", "", "names cards \\['h200'\\], not its cards \\['h100', 'h200'\\]"),
-    ("glm53.h200 = 4\n", "glm53.h200 = 4\nglm53.h100 = 4\n", "names cards"),
+    ("glm53.h200 = \"not found yet\"\n", "glm53.h200 = 4\nglm53.h100 = 4\n", "names cards"),
     ("prompts = 200\n", "", "exactly"),
     ("within = [\"token\"]\n", "within = [\"e2e\"]\n", "within names"),
     ("[profiles.coding-agent.cuts.131072]", "[profiles.coding-agent.cuts.65536]", "no cut at llama-3.2-1b"),
+    ("factor = 2\n", "factor = 1\n", "factor of at least 2"),
+    ("gain = 0.05\n", "gain = 0.0\n", "gain a fraction between 0 and 1"),
+    ("most = 64\n", "most = 0\n", "start of at least 1 and at most most"),
+    ("most = 8\n", "most = 32\n", "fixed-size.ladder: most 32 in flight is more than the 24 prompts a pass sends"),
 ])
 def test_a_profile_off_its_shape_is_refused(tmp_path, old, new, refusal):
     (tmp_path / "production.toml").write_text(P.PATH.read_text(encoding="utf-8").replace(old, new, 1), encoding="utf-8")
     with pytest.raises(ConfigError, match=refusal):
+        P.load(tmp_path / "production.toml")
+
+
+def test_each_profile_finds_its_load_over_a_ladder_of_its_own(tmp_path, doc):
+    assert {name: P.rungs(doc, name) for name in P.PROFILES} == {
+        "coding-agent": (1, 2, 4, 8, 16, 32, 64), "chat": (4, 8, 16, 32, 64), "fixed-size": (1, 2, 4, 8)}
+    assert {doc.profiles[name].ladder.gain for name in P.PROFILES} == {0.05}
+    text = P.PATH.read_text(encoding="utf-8")
+    start = text.index("[profiles.coding-agent.ladder]")
+    (tmp_path / "production.toml").write_text(text[:start] + text[text.index("[profiles.coding-agent.cuts", start):],
+                                              encoding="utf-8")
+    with pytest.raises(ConfigError, match="a timed_trace profile has exactly .*'ladder'"):
         P.load(tmp_path / "production.toml")
 
 
@@ -106,7 +122,8 @@ def test_datasets_bounds_and_shapes_are_serve_taxs(doc, S):
 
 
 def test_a_load_is_a_models_on_one_card_and_not_found_yet_is_refused(doc):
-    assert P.load_point(doc, "coding-agent", "glm53", "h200") == 4
+    with pytest.raises(ConfigError, match="coding-agent on glm53.h200: the load is not found yet"):
+        P.load_point(doc, "coding-agent", "glm53", "h200")
     with pytest.raises(ConfigError, match="no load on card h100; its cards are h200"):
         P.load_point(doc, "coding-agent", "glm53", "h100")
     with pytest.raises(ConfigError, match="chat on glm53.h200: the load is not found yet"):

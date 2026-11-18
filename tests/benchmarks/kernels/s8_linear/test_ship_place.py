@@ -25,6 +25,11 @@ KERNEL = (Path(__file__).resolve().parents[4] / "benchmarks" / "kernels" / "s8_l
 FRAME = KERNEL.parent
 #: the frame's files, which keep their place under a copy's root (ship.sh finds the root from its own)
 FRAME_FILES = ("ship.sh", "ship_nvcc.sh", "ship_probe.sh", "ship_clock.c")
+ROOT = FRAME.parents[1]
+#: what the frame's `machine.py gencode` reads, which a copy holds where the tree does
+MACHINE_FILES = ("benchmarks/kernels/machine.py", "benchmarks/harness/verity_bench", "tools/config/verity_config",
+                 "verity/__init__.py", "verity/channel.py", "verity/device.py", "verity/errors.py",
+                 "calibration/hardware/cards", "calibration/hardware/architectures")
 TOOLKITS = ("/usr/local/cuda-13.0", "/usr/local/cuda")
 
 #: the toolkit a ship build would compile with, by ship.sh's own rule (ship.sh, then the toolkits to try): its path, or
@@ -87,6 +92,12 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
     (root / "benchmarks/kernels").mkdir(parents=True)
     for f in FRAME_FILES:
         shutil.copy(FRAME / f, root / "benchmarks/kernels" / f)
+    for f in MACHINE_FILES:
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        if (ROOT / f).is_dir():
+            shutil.copytree(ROOT / f, root / f, ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
+        else:
+            shutil.copy(ROOT / f, root / f)
     (root / own / beside).mkdir(parents=True)
     assert text.count(f'#include "{header}"') == 1
     (root / own / source).write_text(text.replace(f'#include "{header}"', f'#include "{beside}{header}"'))

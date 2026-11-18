@@ -1688,7 +1688,6 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm import TargetProfile
 
     out = Path(a.out)
@@ -1704,7 +1703,7 @@ def main() -> int:
     elif a.rows_past_keys:
         cap.only = long_rows(cap, a.rows_past_keys)
         print(f"rows past {a.rows_past_keys} keys (token: keys): {cap.only}", flush=True)
-    profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
+    profile = TargetProfile.default().with_overrides(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {},
                     "allreduce_tree": cap.tree or "the registry's GLM53_H200_TREE, not read off this node",
@@ -1801,7 +1800,7 @@ def main() -> int:
             print(f"stage {label}: not staged: {rec.get('why')}", flush=True)
     units = {kv["unit"].id: kv["unit"] for kv in rows_of_kind.values()}
     if units:
-        (out / "units.json").write_bytes(canonical_json(encode_program(P.mixed_population_program([(u, 1) for u in units.values()]))))
+        (out / "units.json").write_bytes(canonical_json(encode_program(a11.listed([(u, 1) for u in units.values()])[0])))
     for f, kv in rows_of_kind.items():
         np.savez(out / f"{f}.npz", **{f"i.{r}": np.asarray(v, dtype=np.uint16) for r, v in kv["rows"].items()},
                  **{f"o.{o}": np.asarray(v, dtype=np.uint16) for o, v in kv["outs"].items()})

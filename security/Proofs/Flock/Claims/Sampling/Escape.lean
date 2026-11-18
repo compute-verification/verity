@@ -61,8 +61,8 @@ Here each is the `Claims.Pr` that a model sample misses `B`:
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
   product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
   samples of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes sampled as strata are one strata sample;
-  `Design.Pa_subset_prod`: a design of subset rules is the product (`Verity.SamplingDesign.prod`) of core's uniform
-  subsets.
+  `Design.Pa_subset_prod`, `Design.Pa_all_prod`, `Design.Pa_bernoulli_prod`: a design of subset, `all` or Bernoulli
+  rules is the product (`Verity.SamplingDesign.prod`) of core's uniform subsets, `all` or Bernoulli designs.
 
 `Live.lean` proves these distributions of the executable sample on uniform bytes, and `Select` of the deployed sampled
 verifier's (`sampleMisses`, and `SampleDesign` from it, `sampleDesign_of_slots`).
@@ -448,5 +448,66 @@ theorem Design.Pa_subset_prod (d : Design) (P : Partition) (B : Finset ℕ) (hl 
     fun i S => Disjoint ((Verity.SamplingDesign.subset _ (K i) (hK i)).draw S)
       (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).trans ?_)
   exact prod_congr rfl fun i _ => Pr_miss_eq (Verity.SamplingDesign.subset _ (K i) (hK i)) _
+
+/-- **A design of `all` rules is a product of core's `all`**: when every class's rule is `all`, `P_a` on the partition
+is the miss probability of the product, by class, of the designs that sample all of the class's proof blocks
+(`Verity.SamplingDesign.all univ`), each missing the members of `B` in its window. -/
+theorem Design.Pa_all_prod (d : Design) (P : Partition) (B : Finset ℕ) (hl : d.rules.length = P.classes.length)
+    (hr : ∀ i : Fin d.rules.length, d.rules.getD i .all = .all) :
+    d.Pa P B = ((Verity.SamplingDesign.prod fun i : Fin d.rules.length =>
+        Verity.SamplingDesign.all (univ : Finset (Fin (strataSizes (P.classes.getD i [])).sum))).missProb
+      (univ.sigma fun i => finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).toReal := by
+  classical
+  have hw : ∀ i : Fin d.rules.length, window (classOff P.classes i) (P.classes.getD i []).flatten.length B ⊆
+      range (strataSizes (P.classes.getD i [])).sum := fun i => by
+    simpa [strataSizes, List.length_flatten] using window_subset (classOff P.classes i) _ B
+  have himg : ∀ N : ℕ, (univ : Finset (Fin N)).image Fin.val = range N := fun N => by
+    ext v
+    simp only [mem_image, mem_univ, true_and, mem_range]
+    exact ⟨fun ⟨a, ha⟩ => ha ▸ a.2, fun h => ⟨⟨v, h⟩, rfl⟩⟩
+  have hE : ∀ i : Fin d.rules.length, classPa d.rules P.classes 0 B i =
+      Pr (fun ω : (Verity.SamplingDesign.all (univ : Finset (Fin (strataSizes (P.classes.getD i [])).sum))).Ω =>
+        Disjoint ((Verity.SamplingDesign.all (univ : Finset (Fin (strataSizes (P.classes.getD i [])).sum))).draw ω)
+          (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))) := by
+    intro i
+    rw [classPa, hr i, zero_add, OneStage.Pa_all _ (hw i)]
+    refine Pr_congr fun _ => ?_
+    rw [← himg]
+    exact disjoint_image_val_iff _ (hw i)
+  rw [Design.Pa_eq_Pr d P B hl _ hE, Verity.SamplingDesign.missProb_prod, ENNReal.toReal_prod]
+  refine (Pr_congr fun _ => by simp).trans ((Pr_pi_forall
+    (Ω := fun i : Fin d.rules.length => (Verity.SamplingDesign.all (univ : Finset (Fin (strataSizes (P.classes.getD i [])).sum))).Ω) univ
+    fun (i : Fin d.rules.length) S => Disjoint ((Verity.SamplingDesign.all (univ : Finset (Fin (strataSizes (P.classes.getD i [])).sum))).draw S)
+      (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).trans ?_)
+  exact prod_congr rfl fun i _ => Pr_miss_eq (Verity.SamplingDesign.all univ) _
+
+/-- **A design of Bernoulli rules is a product of core's Bernoulli designs**: when class `i`'s rule samples each slot
+with probability `num i / den i`, `P_a` on the partition is the miss probability of the product, by class, of core's
+`Verity.SamplingDesign.bernoulli` over the class's proof blocks, each missing the members of `B` in its window. -/
+theorem Design.Pa_bernoulli_prod (d : Design) (P : Partition) (B : Finset ℕ) (hl : d.rules.length = P.classes.length)
+    (num den : Fin d.rules.length → ℕ) [∀ i, NeZero (den i)]
+    (hr : ∀ i : Fin d.rules.length, d.rules.getD i .all = .bernoulli (num i) (den i)) (hn : ∀ i, num i ≤ den i) :
+    d.Pa P B = ((Verity.SamplingDesign.prod fun i : Fin d.rules.length =>
+        Verity.SamplingDesign.bernoulli (strataSizes (P.classes.getD i [])).sum (num i) (den i)).missProb
+      (univ.sigma fun i => finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).toReal := by
+  classical
+  have hw : ∀ i : Fin d.rules.length, window (classOff P.classes i) (P.classes.getD i []).flatten.length B ⊆
+      range (strataSizes (P.classes.getD i [])).sum := fun i => by
+    simpa [strataSizes, List.length_flatten] using window_subset (classOff P.classes i) _ B
+  have hE : ∀ i : Fin d.rules.length, classPa d.rules P.classes 0 B i =
+      Pr (fun ω : (Verity.SamplingDesign.bernoulli (strataSizes (P.classes.getD i [])).sum (num i) (den i)).Ω =>
+        Disjoint ((Verity.SamplingDesign.bernoulli (strataSizes (P.classes.getD i [])).sum (num i) (den i)).draw ω)
+          (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))) := by
+    intro i
+    rw [classPa, hr i, zero_add, OneStage.Pa_bernoulli _ (hn i) (hw i)]
+    exact Pr_congr fun ω => disjoint_image_val_iff _ (hw i)
+  rw [Design.Pa_eq_Pr d P B hl _ hE, Verity.SamplingDesign.missProb_prod, ENNReal.toReal_prod]
+  refine (Pr_congr fun _ => ⟨fun h i _ => h i, fun h i => h i (mem_univ i)⟩).trans ((Pr_pi_forall
+    (Ω := fun i : Fin d.rules.length =>
+      (Verity.SamplingDesign.bernoulli (strataSizes (P.classes.getD i [])).sum (num i) (den i)).Ω) univ
+    fun (i : Fin d.rules.length) S =>
+      Disjoint ((Verity.SamplingDesign.bernoulli (strataSizes (P.classes.getD i [])).sum (num i) (den i)).draw S)
+        (finOf _ (window (classOff P.classes i) (P.classes.getD i []).flatten.length B))).trans ?_)
+  exact prod_congr rfl fun i _ => Pr_miss_eq (Verity.SamplingDesign.bernoulli _ (num i) (den i)) _
 
 end Claims.Sampling

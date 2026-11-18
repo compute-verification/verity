@@ -1,14 +1,16 @@
 # Sourced by the harness's launchers (run_point.sh, benchmarks/<name>/run.sh) from the source tree: the node's pinned-vLLM
 # Python as $VENV, CUDA, and this tree's packages on PYTHONPATH. $VENV is VERITY_BENCH_VENV, which the launch gives
-# (`research run --env VERITY_BENCH_VENV=...`; the environment adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes), and
-# the checkpoint store HF_HOME, where it gives one. CUDA_HOME, where the launch gives none, is the toolkit the run's
+# (`research run --env VERITY_BENCH_VENV=...`; the environment adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes), else
+# the environment the launch already runs in, $VIRTUAL_ENV (`uv run`'s, or an activated one); and the checkpoint store
+# HF_HOME, where it gives one. CUDA_HOME, where the launch gives none, is the toolkit the run's
 # machine's [properties] list first (benchmarks/kernels/machine.py toolkit). `benchmarks` is on the path so a spec
 # names an experimental arm module from there (`served_commit.prof_arm:SERVED_COMMIT_ROWS`), and so is every workspace
 # member's import root.
-VENV=${VERITY_BENCH_VENV:-}
+VENV=${VERITY_BENCH_VENV:-${VIRTUAL_ENV:-}}
 if [ -z "$VENV" ] || [ ! -x "$VENV/bin/python" ]; then
-  echo "verity-bench: no Python at VERITY_BENCH_VENV (${VENV:-unset}): launch with VERITY_BENCH_VENV set to the node's" \
-       "pinned-vLLM environment (adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes one)" >&2
+  echo "verity-bench: no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (${VENV:-both unset}): launch with VERITY_BENCH_VENV" \
+       "set to the node's pinned-vLLM environment (adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes one), or inside" \
+       "one (uv run, or an activated environment)" >&2
   exit 2
 fi
 if [ -z "${CUDA_HOME:-}" ] && [ -n "${RESEARCH_MACHINE:-}" ]; then

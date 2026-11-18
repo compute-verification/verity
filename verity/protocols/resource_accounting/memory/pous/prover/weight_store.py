@@ -43,10 +43,22 @@ from typing import Any
 P2_STORE = Path(__file__).resolve().parent / "p2" / "p2_store"
 
 
+def registered(scheme: str) -> Any:
+    """The registered scheme ``scheme`` (`verifier.schemes`), None when none is."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
+    return pous_schemes.get(scheme) if scheme in pous_schemes.REGISTRY else None
+
+
 def geometry(scheme: str) -> Any:
     """The point's geometry at one segment: the registered scheme's (its width, prime and ``2^16`` blocks a segment)."""
     from verity.protocols.resource_accounting.memory.pous.verifier import schemes as pous_schemes
     return pous_schemes.get(scheme).params
+
+
+def salt(source: bytes, commitment: bytes) -> bytes:
+    """The salt from the auditor's coin ``source``, flipped after ``commitment`` (`setup.sample_salt`)."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import setup
+    return setup.sample_salt(source, commitment)
 
 
 def load_package(name: str, directory: Path) -> None:
@@ -282,6 +294,23 @@ def answer(store: Store | None, index: int) -> bytes:
     if store is None:
         raise RuntimeError("no C* is held: its prover is stopped")
     return store.block(index)
+
+
+def details(store: Store) -> dict[str, Any]:
+    """What ``store``'s setup holds, for a run's summary: its tensors and their bytes, the blocks they use and ``C*``'s, where
+    it is held and how it was encoded and is decoded, and what its point certifies."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import period
+    from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
+
+    q, tensors = store.params, store.layout.tensors
+    device = store.rows.device
+    cert, gaps = period.gaps(store.point)
+    return {"salt_source": store.salt_source, "tensors": len(tensors), "tensor_bytes": sum(p.size for p in tensors),
+            "used_blocks": sum(-(-p.size // q.payload_bytes) for p in tensors), "blocks": q.blocks,
+            "c_star_bytes": q.blocks * q.block_bytes, "device": str(device), "encode": store.encode,
+            "decode": "p2_store.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
+            "certifies": period.certify(store.point), "certificate": None if cert is None else cert.theorem,
+            "gaps": gaps, "experimental": P2.EXPERIMENTAL}
 
 
 def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:

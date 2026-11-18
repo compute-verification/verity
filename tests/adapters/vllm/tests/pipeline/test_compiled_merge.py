@@ -12,6 +12,7 @@ import pytest
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import compiled_merge as cm
+from verity_vllm.pipeline.research_outputs import TOKENS_DIGESTS
 
 COMPILATION: dict[str, Any] = {"compilation_mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "cudagraph_capture_sizes": [1, 2],
                                "enforce_eager": False, "use_inductor_graph_partition": False, "splitting_ops": ["attention"],
@@ -23,9 +24,10 @@ COMMIT: dict[str, Any] = {"commit_pass": True, "run_root": "00", "value_correspo
 def _arm(d: Path, taps: str, *, commit: dict[str, Any] | None = None, kernels: dict[str, Any] = KERNELS) -> Path:
     d.mkdir()
     (d / "versions.json").write_text(json.dumps({"compilation": {**COMPILATION, "compiled_taps": taps, "generated_kernels": kernels}}))
-    rows = [{"wall_s": 1.0 + i, "step_wall_decode_mean_s": 0.5, "step_wall_prefill_s": 0.25, "tokens_digest": "t" * 16,
+    rows = [{"wall_s": 1.0 + i, "step_wall_decode_mean_s": 0.5, "step_wall_prefill_s": 0.25,
              **({"commit": commit} if commit else {})} for i in range(2)]
     (d / "runs.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (d / TOKENS_DIGESTS).write_text("".join(json.dumps({"pair": i, "tokens_digest": "t" * 16}) + "\n" for i in range(2)))
     (d / "verdict.json").write_text(json.dumps({"run_roots": ["00", "00"], "runs_instrumented": 2 if commit else 0, "runs_failed": 0}))
     return d
 

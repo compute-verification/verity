@@ -1,6 +1,6 @@
-"""A row whose device class fixes its whole Build target (`config.TARGET_NUM_SMS`, e.g. `__rtxpro6000__` = cc 12.0 / 188 SMs) Builds
+"""A row whose device class fixes its whole Build target (its card file, `config.target_card`, e.g. `__rtxpro6000__` = cc 12.0 / 188 SMs) Builds
 on a GPU-free host: the target is declared by the row id, the preflight asks no device of a Build-only stage, and the Build selects
-vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before.  The
+vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  A class with no card file Builds on the host's GPU.  The
 platform reports the name of the target's GPU: the row class's, or the one a traced request Build's command passes from φ's target."""
 from __future__ import annotations
 
@@ -39,11 +39,12 @@ def _wl(tmp_path, target=None):
     return str(p)
 
 
-def test_an_rtxpro6000_row_declares_its_whole_target_and_other_classes_keep_the_workload_s(tmp_path):
+def test_a_carded_row_declares_its_whole_target_and_an_uncarded_one_keeps_the_workload_s(tmp_path):
     assert tf.declared_profile(ROW_120, {}) == {"compute_capability": [12, 0], "num_sms": 188}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compilation": "piecewise"}}}) == {"compute_capability": [12, 0], "num_sms": 188, "compilation": "piecewise"}
     assert tf.declared_profile(ROW_120, {"engine": {"target": {"compute_capability": [12, 0], "num_sms": 170}}})["num_sms"] == 170, "the workload's own target wins"
-    assert tf.declared_profile(ROW_89, {}) == {} and tf.declared_profile(ROW_90, {}) == {}
+    assert tf.declared_profile(ROW_89, {}) == {}, "an l40s row has no card file"
+    assert tf.declared_profile(ROW_90, {}) == {"compute_capability": [9, 0], "num_sms": 132}, "the h100 card file is the SXM's"
     assert tf.declared_profile(ROW_H200_1, {"engine": {"target": {"batch_invariant": False}}}) == \
         {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}, "an H200 is 132 SMs, SXM and NVL"
     assert R.declared_target(_wl(tmp_path), row=ROW_120) == '{"compute_capability": [12, 0], "num_sms": 188}'
@@ -242,18 +243,18 @@ def test_a_gpu_free_build_answers_the_device_name_its_row_class_reports(tmp_path
     assert seen["device_name"] == name
 
 
-@pytest.mark.parametrize("name, answered", [("NVIDIA H200", "NVIDIA H200"), (None, "No CUDA GPUs are available")])
+@pytest.mark.parametrize("card, answered", [("h200-sxm-141gb", "NVIDIA H200"), (None, "No CUDA GPUs are available")])
 def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_gpu_free_host(tmp_path, monkeypatch, vllm_without_nvml,
-                                                                                             name, answered):
-    """A request Build `predict.steps.trace_commands` lists has no --workload to name its GPU; the command passes φ's target's
-    `device_name` (`--device-name`), so a host with no visible GPU answers vLLM's `get_device_name` (GLM-5.3's fused-MoE config
-    lookup) with it, and a target stating none traces as before."""
-    target = {"compute_capability": [9, 0], "num_sms": 132, **({"device_name": name} if name else {})}
+                                                                                             card, answered):
+    """A request Build `predict.steps.trace_commands` lists has no --workload to name its GPU; the command passes φ's target,
+    whose card names it (`TargetProfile.device_name`), so a host with no visible GPU answers vLLM's `get_device_name` (GLM-5.3's
+    fused-MoE config lookup) with it, and a target naming no card traces as before."""
+    target = {"compute_capability": [9, 0], "num_sms": 132, **({"card": card} if card else {})}
     phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 8, "rank": 3}, execution="eager")
     [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi, dsa_table_reads=False),
                              str(tmp_path))
     a = cli.parse("build", cmd[2:])
-    assert a.device_name == name and a.workload is None and (a.tp, a.rank, a.dead_free) == (8, 3, True)
+    assert json.loads(a.target).get("card") == card and a.workload is None and (a.tp, a.rank, a.dead_free) == (8, 3, True)
     seen: dict = {}
     _stub_construction(monkeypatch, seen)
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
@@ -261,11 +262,12 @@ def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_g
     assert (seen["platform"], seen["device_count"], seen["device_name"]) == ("NonNvmlCudaPlatform", 8, answered)
 
 
-def test_a_device_name_the_workload_row_s_class_contradicts_is_refused(tmp_path, monkeypatch):
+def test_a_card_the_workload_row_s_class_contradicts_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(B, "_construct", lambda *a, **k: pytest.fail("constructed"))
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     wl = tmp_path / "row.json"
     wl.write_text(json.dumps({"sweep": {"row_id": ROW_H200}}))
-    assert B.main(B.Options(out=str(tmp_path / "out"), workload=str(wl), tp=8, device_name="NVIDIA H100 80GB HBM3")) == 2
+    assert B.main(B.Options(out=str(tmp_path / "out"), workload=str(wl), tp=8, target='{"card": "h100-sxm-80gb"}')) == 2
     res = json.loads((tmp_path / "out" / "result.json").read_text())
-    assert res["exception"] == "ValueError" and "is not the name the --workload row's class reports ('NVIDIA H200')" in res["message"]
+    assert res["exception"] == "ValueError" and ("--target's card 'h100-sxm-80gb' reports 'NVIDIA H100 80GB HBM3', not the name the "
+                                                 "--workload row's class reports ('NVIDIA H200')") in res["message"]

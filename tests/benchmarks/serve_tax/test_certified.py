@@ -289,7 +289,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
     monkeypatch.setattr(S, "served_models", lambda front: ["glm-5.3"])
-    out, t, events, scraped = tmp_path / "out", [1000.0], [], [0]
+    out, private, t, events, scraped = tmp_path / "out", tmp_path / "private", [1000.0], [], [0]
 
     def scrape(port: int) -> dict:
         scraped[0] += 1
@@ -301,10 +301,10 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     def popen(argv, stdout, stderr, env, text):
         assert str(S.ROOT) in env["PYTHONPATH"].split(":") and text
         if argv[1] == str(S.ATTESTER):
-            (out / "certifier" / "deployment.json").write_text(json.dumps({"origin_unix": 1005.0}))
+            (private / "certifier" / "deployment.json").write_text(json.dumps({"origin_unix": 1005.0}))
             events.append(("certifier", int(argv[argv.index("--windows") + 1]), Path(argv[argv.index("--key") + 1])))
             return Proc({"listening": ["127.0.0.1", 4000]}, events, "certifier")
-        assert argv[1] == str(S.SHIM) and argv[argv.index("--deployment") + 1] == str(out / "certifier" / "deployment.json")
+        assert argv[1] == str(S.SHIM) and argv[argv.index("--deployment") + 1] == str(private / "certifier" / "deployment.json")
         events.append(("shim", argv[argv.index("--log") + 1]))
         return Proc({"listening": ["127.0.0.1", 5000]}, events, "shim")
 
@@ -312,16 +312,16 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         if argv[1] == str(S.ATTESTER):
             events.append((argv[2],))
             if argv[2] == "check":
-                assert argv[3:] == ["--run", str(out / "certifier")]
-                sent = json.loads((out / "certifier" / "client.json").read_text())["connections"]
-                (out / "certifier" / "check.json").write_text(json.dumps(
+                assert argv[3:] == ["--run", str(private / "certifier")]
+                sent = json.loads((private / "certifier" / "client.json").read_text())["connections"]
+                (private / "certifier" / "check.json").write_text(json.dumps(
                     {"accepted": True, "problems": [], "summary": {"certified_windows": 9, "requests": len(sent)}}))
             return NS(returncode=0)
         sends = int(argv[argv.index("--num-prompts") + 1])
         events.append(("pass", argv[argv.index("--base-url") + 1], argv[argv.index("--max-concurrency") + 1], sends, t[0]))
         d = Path(argv[argv.index("--result-dir") + 1])
         (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(sends, 6.0)))
-        with (out / "shim.jsonl").open("a") as f:
+        with (private / "shim.jsonl").open("a") as f:
             for k in range(sends):
                 f.write(json.dumps(line(k, "end", 8 - (short and k == 1))) + "\n")
         t[0] += 300.0
@@ -334,14 +334,14 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint=str(tmp_path / "ck"), client=S.BENCH, loads="chat=2", dataset=None,
         pass_prompts="chat=3", reps=3, seed=0, warm_s=20.0, front=18746, cells="window=40", attester_windows=windows,
-        lifetime=None, leave_out=0, out=str(out), side=S.CLIENT)
+        lifetime=None, leave_out=0, out=str(out), private=str(private), side=S.CLIENT)
     rc = S.certified_client(a, run=run, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # the network attester runs windows of 10 s from its origin, and a pass takes 300 s: of 130 windows the warm-up and two
     # reps fit and the third is not sent, of 200 all three are
     reps, end = (2, 2305.0) if windows == 130 else (3, 3005.0)
     key = events[1][2]
-    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(out / "shim.jsonl")), ("waited", 5.0)]
+    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(private / "shim.jsonl")), ("waited", 5.0)]
     assert not key.exists() and not key.is_relative_to(out)
     sent = [x for k in range(reps + 1) for x in (
         ("waited", S.IDLE_S), ("scrape", 18746), ("pass", "http://127.0.0.1:5000", "2", 3, 1011.0 + 306.0 * k),
@@ -366,7 +366,9 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     assert (k["accepted"], k["connections"], k["ended"], k["refused"], k["failed"]) == (True, n, n, 0, 0)
     assert k["short"] == (reps + 1) * short
     assert f"{n} of {n} connections ended, 0 refused, 0 failed, {k['short']} answers short of their length" in said
-    assert len(json.loads((out / "certifier" / "client.json").read_text())["connections"]) == n
+    assert len(json.loads((private / "certifier" / "client.json").read_text())["connections"]) == n
+    assert sorted(x.name for x in out.iterdir() if x.is_file()) == ["attester.log", "check.log", "meta.json", "shim.log"]
+    assert not (out / "certifier").exists()
     rep = json.loads((out / "chat@2" / "rep-2" / "meta.json").read_text())
     assert (rep["load"], rep["rep"], rep["concurrency"], rep["requests"], rep["unfinished"]) == ("chat@2", 2, 2, 3, 0)
     assert rep["schedule"]["prompt_tokens"] == 100.0 and rep["schedule"]["prompt_tokens_cached"] == 1.0

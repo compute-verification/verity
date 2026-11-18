@@ -90,7 +90,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     ROUND0,
     run_matmul,
     salt_session,
-    SCHEDULES,
     Shape,
     traced_as as _traced_as,
     use_int8_arm,
@@ -102,13 +101,15 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity import hooks as H
+from verity.protocols.compose import schemes as declarations
+from verity.protocols.resource_accounting import scheme as RS
 from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals",
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "cuts", "h1_run", "keeps_weight_copy", "linear_types", "pearl_c_salt_key", "refusals",
            "requests"]
 
 NAME = "pouw"
@@ -146,6 +147,20 @@ def schemes() -> tuple[str, ...]:
     return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, *PEARL_C_SCHEMES, H1_SCHEME, LEAD_SCHEME}))
 
 
+def cuts(scheme: str) -> bool:
+    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
+    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
+    return scheme in PEARL_C_SCHEMES
+
+
+def keeps_weight_copy(scheme: str) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
+    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
+    return scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
+
+
 def executes(scheme: str) -> tuple[str, ...]:
     """The sites where `scheme`'s executor replaces the computation: none under H1, whose arm serves its own y."""
     return () if scheme == H1_SCHEME else EXECUTES
@@ -170,7 +185,7 @@ class Settings:
     #: Pearl-C on sm_120: the kernel directory (the run tree's ``verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
-    #: Pearl-C on sm_120: the schedule each pass runs under (`verity.protocols.resource_accounting.compute.pouw.verifier.serving.SCHEDULES`), serial by default
+    #: Pearl-C on sm_120: the schedule each pass runs under (the ``pearl-plus`` scheme's setting ``schedule``), serial by default
     schedule: str = "serial"
     #: ``ncp-v2``: the anchored forward index the install's first pass takes.  A salt's first execution phase starts at 0; a second
     #: served execution phase under the same salt starts at the verifier's `anchors.SaltWindows.next_forward`, so no call index
@@ -246,8 +261,7 @@ class Settings:
         if any(p is not None and not isinstance(p, str) for p in (kernel, cubin)):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
         schedule = raw.get("schedule", "serial")
-        if schedule not in SCHEDULES:
-            raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
+        RS.settings(declarations.get("pearl-plus"), {"schedule": schedule})
         start = raw.get("start_forward", 0)
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")

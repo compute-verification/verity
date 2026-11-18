@@ -57,8 +57,7 @@ def main() -> None:
     defn, n = kv["unit"], min(kv["n"], a.n or kv["n"])
     kv["rows"] = {k: v[:n] for k, v in kv["rows"].items()}
     kv["outs"] = {k: v[:n] for k, v in kv["outs"].items()}
-    program = P.mixed_population_program([(defn, n)])
-    query = P.template_instances_query([defn])
+    program, query = a11.listed([(defn, n)])
     part = P.partition(program, query)
     (_, base, _), = P.ranges(program, query)
     (work / "partition.json").write_text(json.dumps(part, sort_keys=True))

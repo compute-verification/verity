@@ -20,15 +20,17 @@ root node's outputs is one `Spot.Wires.Wire` per row of the reader's port, in cl
 
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
 `[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, and reads exactly one whole return field of
-one member of the writer node, at the field's bits. Across the members a part covers, the row's place in the argument
-moves by the argument's member stride, and the writer leaf it reads by the part's image of that stride; a wire needs
-the writer field to stay the same, so the image is a whole number of writer members.
+one member of the writer node, at the field's bits. A part is a grid (`partLanes`): a row lies in one lane's run, and
+across the members a part covers its place moves by the argument's member stride, inside that run or by whole periods
+of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
+needs the writer field to stay the same, so each step is a whole number of writer members.
 
 The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
 `edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
 root, as reader or writer), `not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row
-across a part's edge, not one whole writer field, or not in closed form: a strided part whose row is not contiguous or
-whose stride the members don't keep, an explicit part naming a non-input node, a reference to a parameter) and
+across a part's edge, not one whole writer field, or not in closed form: a row across runs or not contiguous, members
+whose rows are no mixed radix of the lane's levels, an explicit part naming a non-input node, a reference to a
+parameter) and
 `edge-width` (a reader row's bits are not the field's).
 
 The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block. The
@@ -97,18 +99,73 @@ def membersIn (x0 L len M s0 c : Nat) : Except String (Nat × Nat) :=
     let on := if olo ≤ ohi then ohi - olo + 1 else 0
     if cn != on then .error "edge-rows" else .ok (clo.toNat, cn.toNat)
 
-/-- The writer leaf of the part's in-part index `k0` and the leaf step of a member stride `L` over `n` members, where
-the row of `len` leaves is contiguous in the writer. -/
-def leafOf (q : Part) (k0 L len n : Nat) : Except String (Nat × Bool × Nat × Int) :=
-  match q with
-  | .affine p i b _ => if p then .error "edge-rows" else .ok (i, false, b + k0, (L : Int))
-  | .strided p i b inner os is _ =>
-    if p || !(len == 1 || (is == 1 && k0 % inner + len ≤ inner)) || !(n ≤ 1 || L % inner == 0) then
-      .error "edge-rows"
-    else
-      let l := b + ((k0 / inner : Nat) : Int) * os + ((k0 % inner : Nat) : Int) * is
-      if l < 0 then .error "edge-rows" else .ok (i, false, l.toNat, ((L / inner : Nat) : Int) * os)
-  | .explicit _ => .ok (0, true, 0, 0)
+/-- A lane of a part (`circuits/PROTOCOL.md` §3): its collection `(p, i)`, base `b`, inner stride `e` and levels
+`(radix, step)`, innermost first. -/
+structure Lane where
+  p : Bool
+  i : Nat
+  b : Int
+  e : Int
+  lv : List (Nat × Int)
+  deriving Inhabited
+
+/-- A part's run and lanes, the grid it spells; an explicit part none. -/
+def partLanes : Part → Nat × List Lane
+  | .affine p i b c => (max c 1, [⟨p, i, b, 1, []⟩])
+  | .strided p i b inner os is c =>
+    let T := max 1 ((c + inner - 1) / inner)
+    (inner, [⟨p, i, b, is, if T > 1 then [(T, os)] else []⟩])
+  | .explicit _ => (0, [])
+
+/-- The digits of period `t` in levels `lv`, innermost first, the last unbounded. -/
+def digitsOf (t : Nat) : List (Nat × Int) → List Nat
+  | [] => []
+  | [_] => [t]
+  | (r, _) :: rest => t % r :: digitsOf (t / r) rest
+
+/-- The levels from `a` on whose radices the members' count `n` and their first period `tt` (over those levels) are
+multiples of, as far as they go: the first level not taken and the product of those taken. -/
+def absorb (lv : List (Nat × Int)) (a tt n : Nat) : Nat × Nat := Id.run do
+  let mut h := a
+  let mut P := 1
+  for _ in [0:lv.length] do
+    if h < lv.length && tt % (P * lv[h]!.1) == 0 && n % (P * lv[h]!.1) == 0 then
+      P := P * lv[h]!.1
+      h := h + 1
+  return (h, P)
+
+/-- The rows `k0 + m·L` (`m < n`) of the grid `(run, lanes)`, each `len` references inside one lane's run: the lane's
+collection, its first leaf, and the members' radix and steps in leaves, outermost first; `edge-rows` where a row
+leaves a run or the members' rows are no mixed radix of the lane's levels. -/
+def laneWire (run : Nat) (lanes : List Lane) (k0 L len n : Nat) : Except String (Nat × Nat × List Nat × List Int) := do
+  let g := lanes.length
+  if run == 0 || g == 0 then throw "edge-rows"
+  let t0 := k0 / (g * run)
+  let j := k0 % (g * run) / run
+  let o0 := k0 % (g * run) % run
+  let ln := lanes[j]!
+  if ln.p || o0 + len > run || !(len == 1 || ln.e == 1) then throw "edge-rows"
+  let ds := digitsOf t0 ln.lv
+  let leaf : Int := ln.b + (o0 : Int) * ln.e + ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum
+  if leaf < 0 then throw "edge-rows"
+  if n ≤ 1 || L == 0 then return (ln.i, leaf.toNat, [max n 1], [0])
+  if L % (g * run) != 0 then
+    if g == 1 && o0 + (n - 1) * L + len ≤ run then return (ln.i, leaf.toNat, [n], [(L : Int) * ln.e])
+    throw "edge-rows"
+  let dt := L / (g * run)
+  let m := ln.lv.length
+  let pre := ln.lv.foldl (fun (acc : Array Nat) (r, _) => acc.push (acc.back! * r)) #[1]
+  if m > 0 && dt % pre[m - 1]! == 0 then
+    return (ln.i, leaf.toNat, [n], [((dt / pre[m - 1]! : Nat) : Int) * ln.lv[m - 1]!.2])
+  let some a := (List.range m).find? (pre[·]! == dt) | throw "edge-rows"
+  let (h, P) := absorb ln.lv a (t0 / dt) n
+  let c := n / P
+  let inner := ((List.range (h - a)).map fun x => ln.lv[a + x]!).reverse
+  let levels ← if c == 1 then pure inner
+    else if h < m && ds[h]! + c ≤ ln.lv[h]!.1 then pure ((c, ln.lv[h]!.2) :: inner)
+    else throw "edge-rows"
+  if levels.isEmpty then return (ln.i, leaf.toNat, [1], [0])
+  return (ln.i, leaf.toNat, levels.map (·.1), levels.map (·.2))
 
 /-- Whether root node `k` calls an input. -/
 def isInputNode (P : Prog) (k : Nat) : Bool :=
@@ -139,15 +196,13 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         pure ((t0 / Lb * d) * Lb + t0 % Lb, Lb)
     let (lo, cnt) ← membersIn x0 L len M s0 q.count
     if cnt == 0 then continue
-    let (w, explicit, l0, S) ← leafOf q (x0 + lo * L - s0) L len cnt
-    if explicit then
-      match q with
-      | .explicit it =>
-        if it.any fun r => r.p || r.i ≥ k || !isInputNode P r.i then
-          if it.any fun r => !r.p && r.i ≥ k then throw "not-topological"
-          throw "edge-rows"
-      | _ => pure ()
+    if let .explicit it := q then
+      if it.any fun r => r.p || r.i ≥ k || !isInputNode P r.i then
+        if it.any fun r => !r.p && r.i ≥ k then throw "not-topological"
+        throw "edge-rows"
       continue
+    let (run, lanes) := partLanes q
+    let (w, l0, radix, steps) ← laneWire run lanes (x0 + lo * L - s0) L len cnt
     if w ≥ k then throw "not-topological"
     if isInputNode P w then continue
     let wnode := nodes[w]!
@@ -158,21 +213,13 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let LW := wd.outLeaves
     if LW == 0 then throw "edge-rows"
     let some (f, fl, fb) := fieldAt wd.ret (l0 % LW) | throw "edge-rows"
-    if fl != len || (cnt > 1 && S % (LW : Int) != 0) then throw "edge-rows"
+    if fl != len || (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw "edge-rows"
     if fb != bitsOf ty / cuts then throw "edge-width"
     let wire : Spot.Wires.Wire :=
-      { reader := rt, port := port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := [cnt],
-        base := ((wb + l0 / LW : Nat) : Int), step := [S / (LW : Int)], cut0 := j, cuts := 1 }
+      { reader := rt, port := port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := radix,
+        base := ((wb + l0 / LW : Nat) : Int), step := steps.map (· / (LW : Int)), cut0 := j, cuts := 1 }
     out := out ++ [wire]
   return out
-
-/-- **An explicit part of a root node's argument names a node that is no input node**: an edge the derivation
-refuses (`edge-rows`), which a reader that checks parts before deriving refuses by the same name. -/
-def explicitEdge (P : Prog) : Bool :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  (List.range nodes.size).any fun k => !isInputNode P k && (nodes[k]!).args.any fun a => a.seq.parts.any fun
-    | .explicit it => it.any fun r => !r.p && r.i < nodes.size && !isInputNode P r.i
-    | _ => false
 
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
 cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
@@ -246,14 +293,12 @@ private def refuses (P : Prog) (W : Spot.Wires.Wiring) (code : String) : Bool :=
 #guard gives (toy (.tuple #[v16, v16]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
   [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "B" "A" "o1" 0 [2] 0 [1] 1, wire "A" "B" "o0" 2 [2] 0 [1] 0]
 #guard gives (toy row2 #[.affine false 1 0 2, .affine false 1 2 2]) (toyWiring [])
-  [wire "B" "A" "o0" 0 [1] 0 [1] 0, wire "B" "A" "o0" 1 [1] 1 [1] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
+  [wire "B" "A" "o0" 0 [1] 0 [0] 0, wire "B" "A" "o0" 1 [1] 1 [0] 0, wire "A" "B" "o0" 2 [2] 0 [1] 0]
 #guard refuses (toy row2 #[.affine false 1 0 2, .affine false 1 2 1, .affine false 1 3 1]) (toyWiring [])
   "edge-parts"
 #guard refuses (toy row2 #[.affine false 3 0 4]) (toyWiring []) "not-topological"
-#guard explicitEdge (toy row2 #[.explicit #[⟨false, 1, 0⟩, ⟨false, 1, 1⟩, ⟨false, 1, 2⟩, ⟨false, 1, 3⟩]])
 #guard refuses (toy row2 #[.explicit #[⟨false, 1, 0⟩, ⟨false, 1, 1⟩, ⟨false, 1, 2⟩, ⟨false, 1, 3⟩]]) (toyWiring [])
   "edge-rows"
-#guard !explicitEdge (toy row2 #[.affine false 1 0 4])
 #guard refuses (toy (.tuple #[.value 8, .value 24]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
   "edge-width"
 

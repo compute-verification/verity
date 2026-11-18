@@ -209,7 +209,7 @@ def test_the_launcher_runs_the_point_in_the_venv_the_launch_gives_and_refuses_wi
     python.write_text('#!/bin/sh\necho "$PYTHONPATH"\necho "$@"\n')
     python.chmod(0o755)
     missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
-    assert missing.returncode == 2 and "no Python at VERITY_BENCH_VENV (unset)" in missing.stderr
+    assert missing.returncode == 2 and "no Python at VERITY_BENCH_VENV, else VIRTUAL_ENV (both unset)" in missing.stderr
     nope = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
     assert nope.returncode == 2 and f"{tmp_path}/nope" in nope.stderr
@@ -356,7 +356,7 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
-    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
@@ -374,7 +374,7 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
 
 
 def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
-    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-reps6@rtx-pro-6000")
     assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)

@@ -248,7 +248,7 @@ theorem zk_session_soundJ
         (let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _ (runsZCJ_live I hs.typed dj y₀ wr _ (hs.tagsOkZJ hh) hRec hDraw)) τ
-        (SamplingDesign.subset n kd hkd).miss K₀ +
+        (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)).bindingZ (rsZJ_computes dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)))
@@ -294,7 +294,7 @@ theorem zk_session_soundJ_custody
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJ_live I hs.typed dj y₀ wr _ (hs.tagsOkZJ hh) hCust.1 fun _ => sampleOkZKJ_of_file I hs.typed (hs.parse hh) kd n hdiv dj hCust.2 _)) τ
-        (SamplingDesign.subset n kd hkd).miss K₀ +
+        (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)).bindingZ (rsZJ_computes dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)))
@@ -345,7 +345,7 @@ theorem zk_session_soundJ_custody_json
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJ_live I hs.typed dj y₀ wr _ (hs.tagsOkZJ hh) hRec
           fun _ => sampleOkZKJ_of_file I hs.typed (hs.parse hh) kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
-        (SamplingDesign.subset n kd hkd).miss K₀ +
+        (Verity.SamplingDesign.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)).bindingZ (rsZJ_computes dj y₀ hs.typed (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh)))
