@@ -185,14 +185,14 @@ def regions(path: str, text: str) -> list[tuple[int, int, str]]:
 
 def comment_spans(path: str, text: str) -> list[tuple[int, int]]:
     """The comments and docstrings of ``text`` (file ``path``) whole, what they quote in backticks included; all of a
-    Markdown file, and nothing of a data file or one its lexer can't read."""
+    Markdown file, and nothing of a data file. Refuses (ValueError) a file its lexer can't read."""
     lang = language(path, text)
     if lang in ("markdown", "data"):
         return [(0, len(text))] if lang == "markdown" and text else []
     try:
         spans = {"python": _python, "lean": _lean, "shell": _shell, "c": _c_like}[lang](text)
-    except (SyntaxError, ValueError):
-        return []
+    except (SyntaxError, ValueError) as e:
+        raise ValueError(f"{path}: its {lang} lexer can't read it ({e}), so its comments can't be told from its code") from e
     return [(s, e) for s, e, k in sorted(spans) if k == PROSE]
 
 
@@ -909,7 +909,12 @@ def stale_prose(words: Words, run: L.Run, present: list[str]) -> list[str]:
         if text is None or (pattern := words.rules(p, text)[0]).search(text) is None:
             continue
         held = words.held(p)
-        for s, e in comment_spans(p, text):
+        try:
+            spans = comment_spans(p, text)
+        except ValueError as e:
+            out.append(f"{e}: not searched")
+            continue
+        for s, e in spans:
             out += [f"{p}:{text.count(chr(10), 0, m.start()) + 1}: {re.sub(GAP, ' ', m.group(0))}"
                     for m in pattern.finditer(text, s, e) if m.group(0) not in held]
     return out
@@ -1034,12 +1039,18 @@ def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
         here = Counter()
         keep = record_spans(text) if lock else []
         if prose := words.prose_only(p):
-            spans = comment_spans(p, text)
+            try:
+                spans = comment_spans(p, text)
+            except ValueError as e:
+                raise ValueError(f"{e}: take it out of [rewrite] prose_in") from e
             keep = [(s, e) for s, e in zip([0] + [e for _, e in spans], [s for s, _ in spans] + [len(text)]) if e > s]
         new = words.sub(text, p, keep, counts, here)
         if pattern and not (prose or lock or name in (PINS, posixpath.basename(MANIFEST))):
+            held = words.held(p)
 
             def tail(m: re.Match) -> str:
+                if held & set(re.split(r"[/.]", m.group(0))):
+                    return m.group(0)
                 counts[m.group(0), tails[m.group(0)]] += 1
                 return tails[m.group(0)]
             new = pattern.sub(tail, new)

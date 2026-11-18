@@ -814,6 +814,21 @@ def test_words_in_comments_of_an_excluded_file_are_named_and_prose_in_renames_th
         "/-- Proved by `Spot.Sampling.sound`. -/\ndef Sound : Prop := FlockSoundness.Audit.Holds -- of Spot.Sampling\n"
 
 
+def test_an_excluded_file_its_lexer_cannot_read_is_named_and_refused_in_prose_in(tmp_path, capsys):
+    """Comments can't be told from code in a file that doesn't parse: the report names it as not searched, and [rewrite]
+    prose_in naming it refuses the move, saying to take it out."""
+    bad = "# of FlockSoundness.Audit\ndef f(:\n"
+    root = _repo(tmp_path / "r", {"S/bad.py": bad, "S/A.lean": "def a := FlockSoundness.Audit.x\n"})
+    (tmp_path / "map.toml").write_text('[words]\n"FlockSoundness.Audit" = "Spot.Sampling"\n\n[rewrite]\nexclude = ["S/bad.py"]\n')
+    assert M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root), "--dry-run"]) == 0
+    assert "    S/bad.py: its python lexer can't read it (" in capsys.readouterr().out
+    (tmp_path / "map.toml").write_text('[words]\n"FlockSoundness.Audit" = "Spot.Sampling"\n\n[rewrite]\nexclude = ["S/bad.py"]\n'
+                                       'prose_in = ["S/bad.py"]\n')
+    with pytest.raises(ValueError, match=r"^S/bad\.py: its python lexer can't read it .*: take it out of \[rewrite\] prose_in$"):
+        M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root), "--dry-run"])
+    assert (root / "S/bad.py").read_text() == bad
+
+
 PREPARED = {
     "S/Audit.lean": "namespace FlockSoundness\ndef helper := 1\nend FlockSoundness\n\nnamespace FlockSoundness.Audit\n"
                     "def x := 1\nend FlockSoundness.Audit\n\nnamespace FlockSoundness\nsection Audit\n"
