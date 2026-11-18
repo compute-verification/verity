@@ -57,6 +57,7 @@ def lifetime(out: Path, name: str, seconds: float, *, mode: str | None, decode: 
     (private / "server").mkdir(parents=True)
     with gzip.open(private / "server" / "step_trace.1.jsonl.gz", "wt") as f:
         f.write("".join(json.dumps(r) + "\n" for r in recs))
+    Q.S.public_steps(d)
 
 
 def job(tmp: Path, counters: dict | None, layers: list[dict] | None = None) -> Path:
@@ -89,7 +90,7 @@ def test_at_is_linear_between_shapes_holds_rows_and_extends_keys(tmp_path):
 
 def test_steps_count_decode_rows_past_k_and_their_longest(tmp_path):
     job(tmp_path, None)
-    s, n = Q.steps(tmp_path / "private" / "prod-record.1" / "server" / "step_trace.1.jsonl.gz")
+    s, n = Q.steps(tmp_path / "out" / "prod-record.1" / "server" / "steps.1.jsonl.gz")
     assert n == 6
     assert [(x["rows"], x["keys"]) for x in s] == [(0, 0), (24, 131072), (6, 20000), (6, 5006)]
 
