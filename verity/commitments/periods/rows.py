@@ -909,13 +909,16 @@ def commit(window: Binding, data: Iterable[dict[str, dict[str, Any]]], *,
     outs = {WI.tree(t, o): [m.port(o) for m in chunk] for t, chunk in window.chunks.items() for o, _w in chunk[0].outs}
     for t, qs in outs.items():
         schemas[t] = schemas[qs[0]]
-    tree_rows = {t: np.concatenate([rows[q] for q in qs]) for t, qs in outs.items()}
-    tree_ys = {t: b"".join(ys[q] for q in qs) for t, qs in outs.items()}
+    for t, qs in outs.items():
+        if any(q in given for q in qs):
+            given[t] = b"".join(given.pop(q) if q in given else _row_strings(rows[q], ys[q], schemas[q]) for q in qs)
+    tree_rows = {t: np.concatenate([rows[q] for q in qs]) for t, qs in outs.items() if t not in given}
+    tree_ys = {t: b"".join(ys[q] for q in qs) for t, qs in outs.items() if t not in given}
     mine = {p: r for p, r in rows.items() if p not in given and p in domains and p not in tree_rows}
     roots, bc = commit_ports(domains, {**mine, **tree_rows, **{t.port: rows[t.port] for t in window.row_tables}}, {},
                              {**ys, **tree_ys}, workers=workers, chunk=chunk, schemas=schemas, strings=given)
     for t, qs in outs.items():
-        whole, at = bc.pop(t), 0
+        whole, at = bc.pop(t, None) or given[t], 0
         for q in qs:
             bc[q], at = whole[at:at + counts[q] * BC_BYTES], at + counts[q] * BC_BYTES
     if refd:
