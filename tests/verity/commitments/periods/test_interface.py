@@ -658,7 +658,7 @@ def test_a_port_held_in_its_writers_tree_is_registered_at_the_root_and_rows_the_
     for k, m in enumerate(ms[1:], 1):
         assert CS.shared_ports(doc, k)["x"][2] == tree and m.port("x") not in c.roots
         e, read = CS.shared_entries(tmp_path, doc, k)["x"], files[m.key]["ports"]["x"]
-        assert e["value"] == read["value"] == CS.own_value(tree) and read["root"] == c.roots[tree].hex()
+        assert e["value"] == read["value"] == tree and read["root"] == c.roots[tree].hex()
         assert e["positions"] == w.leaves(m, "x").tolist()
         assert read["tree"] == {"template": GID, "field": "o0"} and read["reads"] == [] and "reads_from" not in read
         for i, path in zip(e["positions"], e["paths"], strict=True):
@@ -2237,15 +2237,14 @@ def _climb(dom: CommitmentDomain, position: int, leaf: bytes, path: bytes) -> by
     return digest
 
 
-@pytest.mark.xfail(strict=True, reason="waits on proofs: rows.own_entries and own_reads of an output held in its template's tree")
 def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_registrations_root(tmp_path):
     """Lean checks a statement against registered reads only when they name every port of its circuit
     (`Flock.Registered.checkComplete`), so `fed_chain`'s chained GEMMs, which read ``w``, are staged with each other port
-    registered as rows of its own tree: the header (`rows.own_entries`) gives row i at position i, its path climbing to
-    the root the registration holds for ``<member>/<port>``, and the verifier's file (`rows.own_reads`) reads that root,
-    unit ``base + i`` row i, as a value no registration port is named (`rows.own_value`). A member reading nothing gains
-    no reads, a port the registration holds no root for is refused, and so is a body whose rows don't make the registered
-    root."""
+    registered: a port held in a (template, field) tree, its output and its wired ``x``, as that tree's rows, the header
+    (`rows.shared_entries`) giving the leaves its rows are and the verifier's file (`rows.own_reads`) a tree port of the
+    tree's value, root and domain, writers included, its reads the verifier's program's; any other port as rows of its
+    own tree (`rows.own_entries`, `rows.own_value`). A member reading nothing gains no reads, a port the registration holds
+    no root for is refused, and so is a body whose rows don't make its header root."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     win = I.Window(circuit, RUN, SAMPLING_DESIGN, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
@@ -2254,33 +2253,41 @@ def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_r
     reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
                          "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
     win.write(c, tmp_path, {"by": "test"}, registrar=reg)
-    doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
-    roots = {m.port(p): {"root": c.roots[m.port(p)].hex(), "domain": c.domains[m.port(p)].domain_id.hex(),
-                         "leaves": c.domains[m.port(p)].count} for m in ms for p, _w in m.all_rows}
+    doc, ms, bw = json.loads((tmp_path / "window.json").read_text()), win.window.members, win.window
+    roots = {q: {"root": r.hex(), "domain": c.domains[q].domain_id.hex(), "leaves": c.domains[q].count} for q, r in c.roots.items()}
     chained = [k for k, m in enumerate(ms) if m.template == GID]
     for k in chained:
         m, mem = ms[k], doc["members"][k]
-        got = CS.own_entries(mem, c.public_body(k), mem["registered"])
-        assert set(got) == {p for p, _w in m.all_rows} - {"w"}
-        for p, e in got.items():
+        shared = CS.shared_entries(tmp_path, doc, k)
+        own = CS.own_entries(mem, c.public_body(k), {*mem["registered"], *shared})
+        assert set(shared) == {"x", *dict(m.outs)} and set(shared) | set(own) == {p for p, _w in m.all_rows} - {"w"}
+        assert all(e["value"] == bw.tree(m, p) and e["positions"] == bw.leaves(m, p).tolist() for p, e in shared.items())
+        for p, e in own.items():
             dom, bc = c.domains[m.port(p)], c.bc[m.port(p)]
             assert e["value"] == CS.own_value(m.port(p)) not in roots and e["positions"] == list(range(m.n))
             leaves = [row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]),
                                m.schema(p)) for i in range(m.n)]
             assert all(_climb(dom, i, leaves[i], bytes.fromhex(x)) == c.roots[m.port(p)] for i, x in enumerate(e["paths"]))
     reads = {ms[k].key: {"format": REG.READS_V1, "ports": {"w": {"value": "w"}}} for k in chained}
-    files = CS.own_reads(reads, win.window, roots, registered=REG)
+    files = CS.own_reads(reads, bw, roots, registered=REG)
     assert set(files) == set(reads)
     for k in chained:
         m = ms[k]
         ports = files[m.key]["ports"]
         assert list(ports) == sorted(p for p, _w in m.all_rows) and ports["w"] == {"value": "w"}
-        assert all(ports[p] == {"value": CS.own_value(m.port(p)), "root": roots[m.port(p)]["root"], "leaves": m.n, "words": n,
-                                "word_bits": 16, "domain": roots[m.port(p)]["domain"], "row_schema": m.schema(p),
-                                "reads": list(range(m.n)), "reads_from": m.base} for p, n in m.rows + m.outs if p != "w")
+        for p, n in m.rows + m.outs:
+            if p == "w":
+                continue
+            t = bw.tree(m, p)
+            field = (GID, p) if p in dict(m.outs) else (bw.wire(m, p).writer, bw.wire(m, p).out) if bw.wire(m, p) else None
+            want = {"value": t if field else CS.own_value(t), "root": roots[t]["root"], "leaves": roots[t]["leaves"],
+                    "words": n, "word_bits": 16, "domain": roots[t]["domain"], "row_schema": m.schema(p),
+                    **({"tree": {"template": field[0], "field": field[1]}, "reads": []} if field else
+                       {"reads": list(range(m.n)), "reads_from": m.base})}
+            assert ports[p] == want, p
     k = chained[0]
     with pytest.raises(ValueError, match="holds no root for it"):
-        CS.own_reads(reads, win.window, {x: e for x, e in roots.items() if x != ms[k].port("x")}, registered=REG)
+        CS.own_reads(reads, bw, {x: e for x, e in roots.items() if x != bw.tree(ms[k], "x")}, registered=REG)
     body = bytearray(c.public_body(k))
     body[len(body) - 4 * ms[k].n * len(ms[k].all_rows) - 1] ^= 1   # the last port's last string: an output row's
     with pytest.raises(ValueError, match="not its frame_v3 root"):

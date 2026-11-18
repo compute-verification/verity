@@ -1424,7 +1424,7 @@ def _doc_strings(d: Path, win: Mapping[str, Any], j: int, p: str) -> np.ndarray:
 def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
                    levels: dict[str, list[list[bytes]]] | None = None) -> dict[str, dict[str, Any]]:
     """Header ``registered`` entries (`registered_header`'s form) for member ``k``'s ports held in shared trees
-    (`shared_ports`): each as rows of the value `own_value` names for its tree, whose root and domain the registration
+    (`shared_ports`): each as rows of its tree, the value ``<template>/<field>``, whose root and domain the registration
     holds, its table's row t at the tree's leaf the wiring gives in closed form, with its path. The tree is made from its
     writers' public bodies under ``window_dir`` under its window domain (cached in ``levels`` by tree); the verifier holds
     its root to the registration's."""
@@ -1440,7 +1440,7 @@ def shared_entries(window_dir: str | Path, win: Mapping[str, Any], k: int,
             levels[tree] = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bytes(bc)), schema)
                                              for i, bc in enumerate(bcs)])
         lv = levels[tree]
-        out[p] = {"value": own_value(tree), "positions": at.tolist(),
+        out[p] = {"value": tree, "positions": at.tolist(),
                   "paths": [b"".join(level[(int(i) >> h) ^ 1] for h, level in enumerate(lv[:-1])).hex() for i in at]}
     return out
 
@@ -1473,8 +1473,9 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
         lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
         if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
             raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
-        tree = WI.tree(mem["template"], p) if j >= int(mem["input_ports"]) else f"{mem['name']}/{p}"
-        out[p] = {"value": own_value(tree), "positions": list(range(rows)),
+        out_port = j >= int(mem["input_ports"])
+        tree = WI.tree(mem["template"], p) if out_port else f"{mem['name']}/{p}"
+        out[p] = {"value": tree if out_port else own_value(tree), "positions": list(range(rows)),
                   "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(rows)]}
     return out
 
