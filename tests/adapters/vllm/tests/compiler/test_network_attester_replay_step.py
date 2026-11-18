@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier.head_check import ands
+from verity.commitments.gates.bits import ands
 
 from verity_vllm.compiler import replay_step as RS
 

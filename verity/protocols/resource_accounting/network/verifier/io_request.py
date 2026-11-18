@@ -63,7 +63,7 @@ from verity.circuits.boolean.forms import OR, ONE, ZERO, add, and_reduce, const_
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
 from verity.commitments.gates.frame_v3 import _part
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
@@ -72,7 +72,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import (ID_BO
                                                     MAX_TOKENS_KEY, u32_field)
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD
 
-BIT, BYTE = HC.BIT, HC.BYTE
+BIT, BYTE = GB.BIT, GB.BYTE
 END = b"]}"
 #: the variable fields of an id request's head: (key, width, kind)
 FIELDS = ((MAX_TOKENS_KEY, ID_DIGITS, "u32"), (b',"temperature":', 8, "ratio"), (b',"top_p":', 8, "ratio"),
@@ -414,7 +414,7 @@ class _Chars:
 
     def eq(self, i: int, v: int):
         if (i, v) not in self.memo:
-            self.memo[i, v] = and_reduce(self.C, [HC._same(self.data[i][b], v >> b & 1) for b in range(8)])
+            self.memo[i, v] = and_reduce(self.C, [GB._same(self.data[i][b], v >> b & 1) for b in range(8)])
         return self.memo[i, v]
 
     def digit(self, i: int):
@@ -436,7 +436,7 @@ def _eq(C, x: Sequence, y: Sequence):
 
 
 def _eq_const(C, x: Sequence, k: int):
-    return and_reduce(C, [HC._same(b, k >> j & 1) for j, b in enumerate(x)]) if k < 1 << len(x) else ZERO
+    return and_reduce(C, [GB._same(b, k >> j & 1) for j, b in enumerate(x)]) if k < 1 << len(x) else ZERO
 
 
 def _gt_const(C, x: Sequence, k: int):
@@ -622,22 +622,22 @@ def _sig_request(S):
 
 
 def _body_request(B, S, row, lanes_):
-    K, cr, lr = HC._Consts(B), HC._refs(row), HC._refs(lanes_)
+    K, cr, lr = GB._Consts(B), GB._refs(row), GB._refs(lanes_)
     oks = []
     for k in range(S.L):
         ln = lr[LANE * k:LANE * (k + 1)]
-        q = HC._coll(Array(32, BIT), ln[0:32])
-        state = HC._coll(Array(STATE, BIT), ln[32:96] + K.bits(0, 2) + K.bits(1, 1))
+        q = GB._coll(Array(32, BIT), ln[0:32])
+        state = GB._coll(Array(STATE, BIT), ln[32:96] + K.bits(0, 2) + K.bits(1, 1))
         for j in range(S.R):
             i = S.R * k + j
-            cell = HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])
-            fo = B.call(bind(IoTieRequestFrame, B=S.B), cell, HC._coll(Array(32, BIT), HC._refs(state)[:32]), q)
+            cell = GB._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])
+            fo = B.call(bind(IoTieRequestFrame, B=S.B), cell, GB._coll(Array(32, BIT), GB._refs(state)[:32]), q)
             state = B.call(bind(IoTieRequestStep), state, fo)
-        oks.append(B.call(bind(IoTieRequestEnd), state, HC._coll(Array(32, BIT), ln[96:128]),
-                          HC._coll(Array(32, BIT), ln[128:160])))
-    bits = [r for o in oks for r in HC._refs(o)]
+        oks.append(B.call(bind(IoTieRequestEnd), state, GB._coll(Array(32, BIT), ln[96:128]),
+                          GB._coll(Array(32, BIT), ln[128:160])))
+    bits = [r for o in oks for r in GB._refs(o)]
     bits += K.bits(1, 2 - len(bits)) if len(bits) < 2 else []
-    return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
+    return B.call(BL.and_gate(len(bits)), GB._coll(Array(len(bits), BIT), bits))
 
 
 IoTieRequest = CompositeDefinition(
@@ -656,7 +656,7 @@ PINS = Path(__file__).with_name("io_request.circuit-check.json")
 
 def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int], qs: Sequence[int]) -> list[list[int]]:
     """`IoTieRequestFrame`'s arguments for a batch of (cell, left, q), each its leaves' bits a row."""
-    return [[HC._bytes_bits(c) for c in cells], [HC._int_bits(x, 32) for x in lefts], [HC._int_bits(x, 32) for x in qs]]
+    return [[GB._bytes_bits(c) for c in cells], [GB._int_bits(x, 32) for x in lefts], [GB._int_bits(x, 32) for x in qs]]
 
 
 def lane_bits(lanes_: Sequence[Lane]) -> list[int]:
@@ -664,14 +664,14 @@ def lane_bits(lanes_: Sequence[Lane]) -> list[int]:
     u32."""
     if any(type(x) is not int or not 0 <= x < 1 << 32 for ln in lanes_ for x in ln):
         raise ValueError(f"a lane is five u32s, not {lanes_!r:.200}")
-    return [b for ln in lanes_ for x in ln for b in HC._int_bits(x, 32)]
+    return [b for ln in lanes_ for x in ln for b in GB._int_bits(x, 32)]
 
 
 def arguments(shape: Shape, inst: Instance) -> list[list[int]]:
     """`IoTieRequest`'s arguments in its signature's order, each its leaves' bits: the row's, then the lanes'."""
     if len(inst.cells) != shape.N or len(inst.lanes) != shape.L:
         raise ValueError(f"a row is N = {shape.N} cells and L = {shape.L} lanes")
-    return [[b for c in inst.cells for b in HC._bytes_bits(c)], lane_bits(inst.lanes)]
+    return [[b for c in inst.cells for b in GB._bytes_bits(c)], lane_bits(inst.lanes)]
 
 
 __all__ = ["BODY_AT", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd", "IoTieRequestFrame",
