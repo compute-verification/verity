@@ -314,7 +314,6 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   if !(s.step < st && st < STEP_LIMIT) then return s.fail t .step
   let N := s.reg.blocks
   let extent := s.extent
-  if s.params.refresh && !s.rotaOk t then return s.fail t .origin
   let plan? := match change, runs with
     | some _, some _ => none
     | some (added, removed), none => s.plan.changed added removed extent
@@ -324,6 +323,7 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   if !s.gone.isEmpty && plan.runs.any fun (f, c) => s.isReleased f c then return s.fail t .plan
   if RECEIPT_LIMIT ≤ s.windows[t]!.receipts + plan.length then return s.fail t .plan
   s := { s with joined := s.joined ++ Array.replicate (s.appends.size - s.joined.size) t }
+  if s.params.refresh && !s.rotaOk t then return s.fail t .origin
   let below := s.staleBelow t
   if below > N && plan.runs.any fun (f, c) => f < below && f + c > N then return s.fail t .lifetime
   if s.params.refresh then
