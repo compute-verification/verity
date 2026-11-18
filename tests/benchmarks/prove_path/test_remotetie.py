@@ -70,6 +70,7 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import Tables, WindowClass
 from verity_vllm.pipeline import serve_tie as TIE
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
@@ -337,7 +338,7 @@ def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_acce
     it to the verifier's own) samples a reader of every table, each table's readers templates of their own; ROOTS1 holds
     W's tables to it, H1 names it as its Commit record, credit's digest of it is one-stage's, and R1-R7 accept it."""
     run, R, W = toy.h1, written.R, toy.h1.W
-    assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
+    assert R["format"] == DM.REGISTRATION and R["previous"] == REG.digest(W)
     assert sorted(e["value"] for e in R["registered"]) == sorted(toy.low.circuit.registered.values)
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
     for (tid, _port, _u), (table, _row) in _reads(toy.low.circuit).items():

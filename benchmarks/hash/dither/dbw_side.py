@@ -29,11 +29,12 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path[:0] = [str(Path(__file__).resolve().parents[3]), str(Path(__file__).resolve().parents[3] / "tools" / "config")]
 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -102,7 +103,8 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    card = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0] if a.lib else None
+    shown = of(__file__).CUDA_VISIBLE_DEVICES
+    card = ("0" if shown is None else shown).split(",")[0] if a.lib else None
     name = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader", "-i", card], capture_output=True,
                           text=True, check=True).stdout.splitlines()[0] if card else "cpu"
     node = subprocess.run([sys.executable, str(ROOT / "benchmarks/kernels/machine.py"), "session-node", name, card or "0"],
