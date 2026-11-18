@@ -3,13 +3,12 @@
 `phi_of` reads φ from a row's DECLARED inputs only (the row id, its workload manifest, the declared target
 `target_family.declared_profile`, the pinned checkpoint's `config.json`), never from a Build output: the traced Programs are
 what a prediction is compared with (`aot`).  `request_component`, `workload_program` and `predict_workload` compose the
-predicted request Programs into GP-01's workload Program, `load_descriptor` reads a traced descriptor, and `code_version` is
+predicted request Programs into GP-01's workload Program, and `code_version` is
 the predictor's code, which a predicted row's record states.
 """
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -125,11 +124,6 @@ def workload_program(phi: Phi, comps: dict | None = None):
 
 
 # ------------------------------------------------------------------------------------------------------------------- a traced descriptor
-
-
-def load_descriptor(path: str) -> dict:
-    with (gzip.open(path, "rt") if path.endswith(".gz") else open(path)) as f:
-        return json.load(f)
 
 
 def _refs_view(a: dict) -> str:
