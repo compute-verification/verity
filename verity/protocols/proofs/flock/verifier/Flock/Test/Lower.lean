@@ -31,6 +31,23 @@ def tmpl : V Tmpl.Tmpl := do
   let some d := P.index["ExampleAdd2_v1"]? | throw "no ExampleAdd2_v1"
   Lower.lower P d #[16] #[16]
 
+/-! The unrolled rows' values, the test's reference. -/
+
+/-- The unrolled template's columns on input bits `x`: the input rows `x`, every other written column `(A·z)(B·z)` in
+column order (each reads earlier columns), the constant 1, and an unwritten column 0. A reference: no verifier runs it. -/
+def solve (t : Tmpl.Tmpl) (x : Array Bool) : V (Array Bool) := do
+  let acc ← Tmpl.Tmpl.rows t
+  let k := t.constPos
+  let sum := fun (z : Array Bool) (r : Array Nat) => r.foldl (fun b c => b != z.getD c false) false
+  return (List.range acc.ra.size).foldl (fun z c =>
+    z.push (if c < x.size then x[c]! else if c == k then true
+      else if acc.set.getD c false then sum z acc.ra[c]! && sum z acc.rb[c]! else false)) #[]
+
+/-- The output rows' bits on input bits `x`. -/
+def outputs (t : Tmpl.Tmpl) (n : Nat) (x : Array Bool) : V (Array Bool) := do
+  let z ← solve t x
+  return (Array.range n).map fun k => z.getD (Lower.outBit t k) false
+
 def bits (v n : Nat) : Array Bool := (Array.range n).map v.testBit
 
 def word (bs : Array Bool) : Nat := bs.foldr (fun b acc => 2 * acc + if b then 1 else 0) 0
@@ -57,15 +74,9 @@ def roundTrip : Bool := match tmpl with
 
 -- every input against the vectors
 #guard match tmpl with
-  | .ok t => WORDS.all fun (x, y, o) => match Lower.outputs t 4 (bits x 2 ++ bits y 2) with
+  | .ok t => WORDS.all fun (x, y, o) => match outputs t 4 (bits x 2 ++ bits y 2) with
     | .ok bs => word bs == o
     | .error _ => false
   | .error _ => false
 
 end Flock.Test.Lower
-open Flock Flock.Test.Lower in
-#eval match tmpl with | .ok t => Lower.render t | .error e => e
-open Flock Flock.Test.Lower in
-#eval match tmpl with | .ok t => (match TmplUnit.read t .lenient with | .ok _ => "ok" | .error e => e) | .error e => e
-open Flock Flock.Test.Lower in
-#eval match tmpl with | .ok t => toString (WORDS.map fun (x, y, o) => (o, (Lower.outputs t 4 (bits x 2 ++ bits y 2)).map word)) | .error e => e

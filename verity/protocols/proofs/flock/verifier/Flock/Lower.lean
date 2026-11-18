@@ -24,8 +24,8 @@ Definition's own structure, in the description's size, and never from unrolled r
   the input rows' words, copies `d`'s returns to the output rows, aligned to the output group's words, and ends with the
   constant, as `Flock.ReadNet.readTmpl` lays a read out. Input bit `i` is port bit `i`, the ports `inPorts` concatenated.
 
-`render` writes the template as `Tmpl.parse` reads it. The lemma owed (`LowerComputes`) is that the unrolled template
-computes the Definition.
+`render` writes the template as `Tmpl.parse` reads it, and `inBit`/`outBit` name port bit `k`'s column. That the
+unrolled template evaluates as the Definition is a named premise of the guarantees over the door, not stated here.
 -/
 
 @[expose] public section
@@ -340,29 +340,12 @@ def render (t : Tmpl.Tmpl) : String := Id.run do
 /-- The lines `render` writes, as `Tmpl.parse` takes them. -/
 def renderLines (t : Tmpl.Tmpl) : Array String := ((render t).splitOn "\n").toArray.pop
 
-/-! ## What the template computes -/
+/-! ## The ports -/
 
-/-- The unrolled template's columns on input bits `x`: the input rows `x`, every other written column `(A·z)(B·z)` in
-column order (each reads earlier columns), the constant 1, and an unwritten column 0. A reference: no verifier runs it. -/
-def solve (t : Tmpl.Tmpl) (x : Array Bool) : V (Array Bool) := do
-  let acc ← t.rows
-  let k := t.constPos
-  let sum := fun (z : Array Bool) (r : Array Nat) => r.foldl (fun b c => b != z.getD c false) false
-  return (List.range acc.ra.size).foldl (fun z c =>
-    z.push (if c < x.size then x[c]! else if c == k then true
-      else if acc.set.getD c false then sum z acc.ra[c]! && sum z acc.rb[c]! else false)) #[]
+/-- Input port bit `i`'s column: the input rows hold bit `i` at column `i`. -/
+def inBit (_t : Tmpl.Tmpl) (i : Nat) : Nat := i
 
-/-- The output rows' bits on input bits `x`. -/
-def outputs (t : Tmpl.Tmpl) (n : Nat) (x : Array Bool) : V (Array Bool) := do
-  let z ← solve t x
-  let o := ((t.outGroups[0]?.map (·.col)).getD 0) * WORD
-  return (Array.range n).map fun k => z.getD (o + k) false
-
-/-- **Owed: the template `lower` returns computes Definition `d`**, the Boolean function `f` on its `paramLeaves` input
-bits (`f`: `Evaluate.evaluateProg` of the one-call program on `d`, its words as bits). Unlisted; `Flock.Test.Lower` checks
-it on PROTOCOL.md §9's program against its vectors. -/
-def LowerComputes (P : Prog) (d : Nat) (inPorts outPorts : Array Nat) (f : Array Bool → Array Bool) : Prop :=
-  ∀ t, lower P d inPorts outPorts = .ok t → ∀ x : Array Bool, x.size = (P.defs[d]!).paramLeaves →
-    outputs t (P.defs[d]!).outLeaves x = .ok (f x)
+/-- Output port bit `k`'s column: the output group's first column, plus `k`. -/
+def outBit (t : Tmpl.Tmpl) (k : Nat) : Nat := ((t.outGroups[0]?.map (·.col)).getD 0) * WORD + k
 
 end Flock.Lower
