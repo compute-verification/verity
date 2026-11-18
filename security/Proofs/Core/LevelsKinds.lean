@@ -57,16 +57,32 @@ theorem exists_firstByKind (L : Levels G) {l : Level G} {ls : List (Level G)} (h
     exact ⟨hb k u, Finset.subset_univ _⟩
   exact ⟨⟨l' :: ls, hn', hi'⟩, ⟨l', ls, rfl, rfl⟩, l', rfl, rfl⟩
 
-/-- **At one level drawn by kind, a set's miss probability is the product over kinds**: for `blockOf` injective, the
-sample misses the blocks of `⋃ₖ {k} × T k` with probability `∏ₖ missProb (D k) (T k)`. -/
-theorem missProb_firstByKind_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) {K : Type} [Fintype K]
+/-- **Drawn by kind, the first level misses as drawn by kind.** -/
+theorem FirstByKind.missesByKind {L : Levels G} {K : Type} [Fintype K] [DecidableEq K] {V : K → Type}
+    {blockOf : (k : K) → V k → Finset G} {D : (k : K) → SamplingDesign (V k)} (h : L.FirstByKind blockOf D) :
+    L.FirstMissesByKind blockOf D := by
+  obtain ⟨l, ls, hL, hd⟩ := h
+  exact ⟨l, ls, hL, fun T => by rw [hd]⟩
+
+/-- **At one level that misses as drawn by kind, a set's miss probability is the product over kinds**: for `blockOf`
+injective, the sample misses the blocks of `⋃ₖ {k} × T k` with probability `∏ₖ missProb (D k) (T k)`. -/
+theorem missProb_firstMissesByKind_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) {K : Type} [Fintype K]
     [DecidableEq K] {V : K → Type} {blockOf : (k : K) → V k → Finset G} {D : (k : K) → SamplingDesign (V k)}
-    (h : L.FirstByKind blockOf D) (hinj : Function.Injective fun u : (k : K) × V k => blockOf u.1 u.2)
+    (h : L.FirstMissesByKind blockOf D) (hinj : Function.Injective fun u : (k : K) × V k => blockOf u.1 u.2)
     (T : (k : K) → Finset (V k)) :
     L.design.missProb ((Finset.univ.sigma T).image fun u => blockOf u.1 u.2) = ∏ k, (D k).missProb (T k) := by
   obtain ⟨l₀, ls, h₀, hd⟩ := h
   obtain ⟨rfl, -⟩ := List.cons.inj (hL.symm.trans h₀)
   rw [L.design_one hL, hd, SamplingDesign.missProb_map_image hinj, SamplingDesign.missProb_prod]
+
+/-- **At one level drawn by kind, a set's miss probability is the product over kinds** (`missProb_firstMissesByKind_one`
+at `FirstByKind.missesByKind`). -/
+theorem missProb_firstByKind_one (L : Levels G) {l : Level G} (hL : L.levels = [l]) {K : Type} [Fintype K]
+    [DecidableEq K] {V : K → Type} {blockOf : (k : K) → V k → Finset G} {D : (k : K) → SamplingDesign (V k)}
+    (h : L.FirstByKind blockOf D) (hinj : Function.Injective fun u : (k : K) × V k => blockOf u.1 u.2)
+    (T : (k : K) → Finset (V k)) :
+    L.design.missProb ((Finset.univ.sigma T).image fun u => blockOf u.1 u.2) = ∏ k, (D k).missProb (T k) :=
+  L.missProb_firstMissesByKind_one hL h.missesByKind hinj T
 
 end Levels
 
