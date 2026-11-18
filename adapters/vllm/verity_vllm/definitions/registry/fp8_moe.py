@@ -84,14 +84,25 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
+from verity.circuits.ops.prims import (
+    F32ToE4m3Sat,
+    HopperE4m3MmaV2Dot32,
+    HopperE4m3QgmmaDot32,
+)
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf, F32Neg
-from verity_vllm.definitions.registry import b1
+
 from verity_vllm.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.fp8 import C448, C_NEG448, E4M3, Fp8RowScale, weight_blocks
+from verity_vllm.definitions.registry.fp8 import (
+    C448,
+    C_NEG448,
+    E4M3,
+    Fp8RowScale,
+    weight_blocks,
+)
 from verity_vllm.definitions.registry.moe import ONE32, NvExpf
 from verity_vllm.definitions.registry.prims import BF16, F32
 

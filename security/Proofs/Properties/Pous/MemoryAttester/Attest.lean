@@ -198,12 +198,6 @@ theorem periodRootContext_ok {d a c : ByteArray} {p l : String} {per n : Nat}
       c = Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++ Lms.lenField l.toUTF8 ++ be64 per.toUInt64 ++
         be64 n.toUInt64 := tail_ok h
 
-theorem livenessContext_ok {d a c : ByteArray} {p l : String} {per b : Nat}
-    (h : Lms.livenessContext d p a l per b = .ok c) :
-    d.size = 64 ∧ per < 2 ^ 64 ∧ b < 2 ^ 64 ∧
-      c = Lms.lenField d ++ Lms.lenField p.toUTF8 ++ Lms.lenField a ++ Lms.lenField l.toUTF8 ++ be64 per.toUInt64 ++
-        be64 b.toUInt64 := tail_ok h
-
 theorem lenField_size (b : ByteArray) : (Lms.lenField b).size = 8 + b.size := by
   simp [Lms.lenField, ByteArray.size_append, be64_size]
 

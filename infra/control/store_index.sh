@@ -8,6 +8,8 @@
 # to the metrics door in the background, under `timeout 60` and without the lock's descriptor; the next pass reaps it. A failed
 # send's reason is said in the log once, with `metrics send rc=1`, while the door answers so ($SENT keeps it); one its timeout
 # killed is `metrics send rc=124` each time. The loop never waits on a send.
+# No --full: each pass lists runs from two days before the newest indexed one (bucket_index.RUNS_MARGIN), past the longest a
+# run's own custody stores it after its start, and every run hourly, so a run stored after a later-started one is still indexed.
 LOG=/data/infra/store-index.log
 CONF=/root/.config/verity
 PASS=/data/infra/store-index-pass.json

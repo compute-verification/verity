@@ -944,7 +944,7 @@ def run(args: argparse.Namespace) -> int:
                                                                "shared": traffic.SHARED, "at_end": traffic.AT_END,
                                                                "gap": traffic.GAP, "caps": traffic.CAPS},
             "versions": versions(), "env": {k: os.environ.get(k) for k in ("CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID",
-                                                                            "GPU_LEASE_WHO", "RESEARCH_RUN_ID")},
+                                                                            "GPU_LEASE_WHO", "RESEARCH_RUN_ID", "FLASHINFER_CUDA_ARCH_LIST")},
             "host": socket.gethostname(), "traces": {}}
     rc = 0
     for name in traces:

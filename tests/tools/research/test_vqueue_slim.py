@@ -27,7 +27,8 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, _took, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
-                                  lends_suites, preferred, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
+                                  lends_suites, preferred, read_step, read_suite, reads, replaced, joined, shard_count,
+                                  shards_registered, start, step_kind,
                                   step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
@@ -179,6 +180,24 @@ def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_pu
     h.run_state["r-1"] = ("running", None, None)
     assert judge(h.d, rec) == Verdict(PENDING)
     assert rec == {"ids": ["r-1"], "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"], "skip": ["lean-agreement"]}
+
+
+def test_shards_registered_gives_each_still_launching_shard_s_run_ids_once_it_printed_them_whatever_the_others_did(
+        world, monkeypatch, tmp_path):
+    """Of a record whose shards launch, each call gives the run ids each shard printed since the last, its launch dropped
+    from it, one that registered no run giving none and one still launching kept as it is."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    dirs = [str(tmp_path / f"train-{k}") for k in (1, 2, 3)]
+    printed: dict[str, tuple[list[str] | None, str]] = {dirs[0]: ([], "train.sh: refused"), dirs[1]: (["r-2"], ""),
+                                                        dirs[2]: (None, "")}
+    h.d.launched = lambda launch: printed[launch["dir"]]
+    rec = {"ids": [], "tip": sha, "base": base, "at": h.clock, "shards": [{"ids": [], "launch": {"dir": d, "pid": 1}} for d in dirs]}
+    assert shards_registered(h.d, rec) == ["r-2"]
+    assert [("launch" in s, s["ids"]) for s in rec["shards"]] == [(False, []), (False, ["r-2"]), (True, [])]
+    assert shards_registered(h.d, rec) == []
+    printed[dirs[2]] = (["r-3"], "")
+    assert shards_registered(h.d, rec) == ["r-3"] and not any("launch" in s for s in rec["shards"])
+    assert shards_registered(h.d, rec) == []
 
 
 def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
