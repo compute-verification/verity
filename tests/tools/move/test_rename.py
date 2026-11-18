@@ -726,3 +726,122 @@ def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, caps
     assert (toy / "CHANGELOG.md").read_text() == "- the certifier landed\n"
     assert (toy / "pinned.md").read_text() == "The prover gateway.\n"
     assert (toy / "Sec/lean-audit.json").read_text() == lock
+
+
+def test_a_lock_below_any_fixtures_directory_of_tests_is_never_read(tmp_path):
+    """The Lean tool's fixture locks sit in `tests/tools/verity/lean/fixtures/`, and `unread`'s holds `reads` of lists:
+    `--moves` reads none of them, wherever the `fixtures` directory sits below `tests/`."""
+    words = M.Words({"words": {"Warden": "NetworkCertifier"}})
+    locks = {"security/lean-audit.json": {"reads": {"M": {"definitions": {"Warden.Obs": "00"}}}},
+             "tests/tools/verity/lean/fixtures/unread/security/lean-audit.json": {
+                 "guarantees": {"Warden.spec": {}}, "reads": {"Warden.spec": ["Warden.helper"]}}}
+    files = _tree(tmp_path, {p: json.dumps(lock) for p, lock in locks.items()})
+    assert M.lock_moves(tmp_path, words, files) == {"Warden": "NetworkCertifier"}
+    assert M.fixture("tests/tools/verity/lean/fixtures/unread/security/lean-audit.json")
+    assert not M.fixture("fixtures/lean-audit.json") and not M.fixture("tests/lean-audit.json")
+
+
+def test_a_moves_prefix_ends_with_the_renamed_run_and_renames_no_name_that_stands(tmp_path):
+    """`FlockSoundness.Audit` to `Spot.Sampling` renames two parts: the entry is that prefix, never `FlockSoundness`, which
+    would rename `FlockSoundness.helper` too. A prefix under which a name stands (read from a file the map excludes) gives
+    way to the renamed names in full, and a rename to fewer parts is cut where both names end alike."""
+    lock = {"guarantees": {"FlockSoundness.Audit.SecurityProofs.sound": {}},
+            "reads": {"Definitions.Audit": {"definitions": {"FlockSoundness.Audit.Partition.unit": "00",
+                                                            "FlockSoundness.helper": "00"}},
+                      "Old.Gates": {"definitions": {"FlockSoundness.Audit.kept": "00"}}}}
+    files = _tree(tmp_path, {"lean-audit.json": json.dumps(lock), "S/Definitions/Audit.lean": "", "S/Old/Gates.lean": ""})
+    two = M.Words({"words": {"FlockSoundness.Audit": "Spot.Sampling"}})
+    assert M.lock_moves(tmp_path, two, files) == {"FlockSoundness.Audit": "Spot.Sampling"}
+    one = M.Words({"words": {"FlockSoundness.Audit": "Sampling"}})
+    assert M.lock_moves(tmp_path, one, files) == {"FlockSoundness.Audit": "Sampling"}
+    kept = M.Words({"words": {"FlockSoundness.Audit": "Spot.Sampling"}, "rewrite": {"exclude": ["S/Old/**"]}})
+    assert M.lock_moves(tmp_path, kept, files) == {
+        "FlockSoundness.Audit.Partition.unit": "Spot.Sampling.Partition.unit",
+        "FlockSoundness.Audit.SecurityProofs.sound": "Spot.Sampling.SecurityProofs.sound"}
+
+
+def test_a_name_after_a_minus_is_renamed_and_one_a_hyphen_joins_stands():
+    words = M.Words({"words": {"FlockSoundness.Audit": "Spot.Sampling", "Proofs/Flock/Audit": "Proofs/Spot/Sampling"}})
+    assert words.sub("Real.exp (-FlockSoundness.Audit.risk k) - FlockSoundness.Audit.x --FlockSoundness.Audit.y", "a.lean") == \
+        "Real.exp (-Spot.Sampling.risk k) - Spot.Sampling.x --Spot.Sampling.y"
+    assert words.sub("see-FlockSoundness.Audit.x, a-Proofs/Flock/Audit/X.lean", "a.md") == \
+        "see-FlockSoundness.Audit.x, a-Proofs/Flock/Audit/X.lean"
+
+
+def _repo(root: Path, texts: dict[str, str]) -> Path:
+    _tree(root, {**texts, M.MOVES: json.dumps({"about": "a toy", "moves": []}, indent=2) + "\n"})
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "tree")
+    return root
+
+
+def test_a_moved_path_named_from_below_a_directory_both_places_share_follows_it(tmp_path, capsys):
+    """A package's script names its files from the package (`Flock/Soundness/Audit/X.lean` under `security/Proofs`), which
+    no word of the map spells: the move rewrites it as `move_check.py` reads it, but not a shorter tail, which leaves the
+    shared directory, nor a tail that names another file too."""
+    root = _repo(tmp_path / "r", {
+        "security/Proofs/Flock/Soundness/Audit/Influence.lean": "", "security/Proofs/Flock/Soundness/Audit/Pin.lean": "",
+        "other/Audit/Pin.lean": "",
+        "tests/generate.sh": 'pkg + "Flock/Soundness/Audit/Influence.lean", "Audit/Influence.lean", "Audit/Pin.lean"\n'})
+    assert M.path_tails([("security/Proofs/Flock/Soundness/Audit/Influence.lean", "security/Proofs/Spot/Sampling/Influence.lean")],
+                        git(root, "ls-files").split()) == {
+        "security/Proofs/Flock/Soundness/Audit/Influence.lean": "security/Proofs/Spot/Sampling/Influence.lean",
+        "Proofs/Flock/Soundness/Audit/Influence.lean": "Proofs/Spot/Sampling/Influence.lean",
+        "Flock/Soundness/Audit/Influence.lean": "Spot/Sampling/Influence.lean"}
+    (tmp_path / "map.toml").write_text('[words]\n"Proofs/Flock/Soundness/Audit" = "Proofs/Spot/Sampling"\n')
+    assert M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root)]) == 0
+    assert (root / "tests/generate.sh").read_text() == \
+        'pkg + "Spot/Sampling/Influence.lean", "Audit/Influence.lean", "Audit/Pin.lean"\n'
+    assert "'Flock/Soundness/Audit/Influence.lean' -> 'Spot/Sampling/Influence.lean'" in capsys.readouterr().out
+
+
+def test_words_in_comments_of_an_excluded_file_are_named_and_prose_in_renames_them_there(tmp_path, capsys):
+    """A file the map excludes keeps every word, so the run names each one left in a comment or docstring; [rewrite]
+    prose_in renames those there and leaves the file's code."""
+    layer = "/-- Proved by `FlockSoundness.Audit.sound`. -/\ndef Sound : Prop := FlockSoundness.Audit.Holds -- of FlockSoundness.Audit\n"
+    root = _repo(tmp_path / "r", {"S/Layer.lean": layer, "S/Limits.lean": layer, "tests/x/fixtures/F.lean": layer})
+    (tmp_path / "map.toml").write_text('[words]\n"FlockSoundness.Audit" = "Spot.Sampling"\n\n[rewrite]\n'
+                                       'exclude = ["S/Layer.lean", "S/Limits.lean", "tests/**/fixtures/**"]\n'
+                                       'prose_in = ["S/Limits.lean"]\n')
+    assert M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root)]) == 0
+    out = capsys.readouterr().out
+    assert "in comments and docstrings of files the map excludes, left as they are ([rewrite] prose_in renames them there): 2" in out
+    assert "    S/Layer.lean:1: FlockSoundness.Audit\n    S/Layer.lean:2: FlockSoundness.Audit\n" in out
+    assert "fixtures" not in out and "S/Limits.lean:" not in out
+    assert (root / "S/Layer.lean").read_text() == layer
+    assert (root / "S/Limits.lean").read_text() == \
+        "/-- Proved by `Spot.Sampling.sound`. -/\ndef Sound : Prop := FlockSoundness.Audit.Holds -- of Spot.Sampling\n"
+
+
+PREPARED = {
+    "S/Audit.lean": "namespace FlockSoundness\ndef helper := 1\nend FlockSoundness\n\nnamespace FlockSoundness.Audit\n"
+                    "def x := 1\nend FlockSoundness.Audit\n\nnamespace FlockSoundness\nsection Audit\n"
+                    "theorem t : FlockSoundness.Audit.x = 1 := rfl\nend Audit\nend FlockSoundness\n",
+    "S/Use.lean": "namespace FlockSoundness.Audit\nopen FlockSoundness\ntheorem u : helper = 1 := rfl\nend FlockSoundness.Audit\n",
+}
+
+
+def test_a_namespace_reached_by_a_shorter_name_is_refused_until_prepared(tmp_path):
+    """Inside `namespace FlockSoundness`, `Audit.x` is `FlockSoundness.Audit.x`, which the word doesn't match; and inside
+    the moved namespace, `helper` is `FlockSoundness.helper`, which `Spot.Sampling` doesn't reach. The move refuses until a
+    commit spells the first in full and opens `FlockSoundness` for the second, naming each place; a section's name is no
+    reference."""
+    root = _repo(tmp_path / "r", {
+        "S/Audit.lean": "namespace FlockSoundness\ndef helper := 1\nnamespace Audit\ndef x := 1\nend Audit\n"
+                        "theorem t : Audit.x = 1 := rfl\nend FlockSoundness\n",
+        "S/Use.lean": "namespace FlockSoundness.Audit\ntheorem u : helper = 1 := rfl\nend FlockSoundness.Audit\n"})
+    (tmp_path / "map.toml").write_text('[words]\n"FlockSoundness.Audit" = "Spot.Sampling"\n')
+    with pytest.raises(SystemExit) as e:
+        M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root)])
+    assert str(e.value).endswith(
+        "\n  S/Audit.lean:3: `Audit` is `FlockSoundness.Audit`, spelled in full"
+        "\n  S/Audit.lean:6: `Audit` is `FlockSoundness.Audit`, spelled in full"
+        "\n  S/Use.lean:2: reads `helper` of `FlockSoundness` inside `FlockSoundness.Audit`: add `open FlockSoundness` after "
+        "its `namespace`")
+    assert "Prepare first, in a commit of its own before the move" in str(e.value)
+    assert git(root, "status", "--porcelain") == ""
+    _tree(root, PREPARED)
+    git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "prepare")
+    assert M.main(["--map", str(tmp_path / "map.toml"), "--root", str(root)]) == 0
+    assert (root / "S/Use.lean").read_text() == "namespace Spot.Sampling\nopen FlockSoundness\ntheorem u : helper = 1 := rfl\nend Spot.Sampling\n"
