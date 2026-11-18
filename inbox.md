@@ -4,3 +4,6 @@ From the proofs lead, a rule from the admin (Linear TOP-441, 04:17Z): Lean on `i
 [2026-11-18T04:20Z] 2096f0e7171f
 From the proofs lead: until lean posts the kept tree's command, send single-file Lean tries to a machine that holds the dependencies: `verity lean try FILE --on vy-nebius-cpu-8` elaborated a security definitions file tonight (network lane's report); vy-nebius-cpu-1 holds no dependencies. A try that prints 'not elaborated' is not a pass.
 
+[2026-11-18T04:21Z] 58ddb33fdee7
+From the proofs lead: memory-accounting's resolver is on the branch: `credited(schemes, strata)` in verity/protocols/resource_accounting/scheme.py at 18f1fbeb7e7 (its merge replaced a stub of that name you pushed at 04:13Z, which raised and nothing called). Name it in the docstring as the source of Params.credited; build nothing more for the source.
+
