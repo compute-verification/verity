@@ -54,6 +54,23 @@ abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : SamplingDesi
 noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
   ((num : ℝ≥0∞) * a + ((den - num : ℕ) : ℝ≥0∞)) / den
 
+/-! ## Stratified draws -/
+
+section Stratified
+
+variable {m : ℕ}
+
+/-- Stratum `s` of the assignment `σ`: the units it assigns to `s`. -/
+def stratum (σ : Fin n → Fin m) (s : Fin m) : Finset (Fin n) := Finset.univ.filter (σ · = s)
+
+/-- **Independent uniform subsets inside the strata of `σ`**, `k s` of stratum `s`. -/
+def stratified (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) : SamplingDesign n where
+  Ω := (s : Fin m) → ((stratum σ s).powersetCard (k s))
+  nonempty := ⟨fun s => ⟨_, (Finset.powersetCard_nonempty.2 (hk s)).choose_spec⟩⟩
+  draw ω := Finset.univ.biUnion fun s => (ω s).1
+
+end Stratified
+
 /-! ## The uniform subset is optimal
 
 Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any

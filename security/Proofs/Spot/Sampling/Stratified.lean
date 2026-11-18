@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Spot.Sampling.SamplingDesign
 public import Proofs.Spot.Sampling.Extraction
 import Mathlib.Algebra.BigOperators.GroupWithZero.Finset
 import Mathlib.Algebra.Order.Module.Field
@@ -39,17 +40,8 @@ namespace SamplingDesign
 
 variable {n m : ℕ}
 
-/-- Stratum `s` of the assignment `σ`: the units it assigns to `s`. -/
-def stratum (σ : Fin n → Fin m) (s : Fin m) : Finset (Fin n) := univ.filter (σ · = s)
-
 theorem mem_stratum {σ : Fin n → Fin m} {s : Fin m} {u : Fin n} : u ∈ stratum σ s ↔ σ u = s := by
   simp [stratum]
-
-/-- **Independent uniform subsets inside the strata of `σ`**, `k s` of stratum `s`. -/
-def stratified (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) : SamplingDesign n where
-  Ω := (s : Fin m) → ((stratum σ s).powersetCard (k s))
-  nonempty := ⟨fun s => ⟨_, (Finset.powersetCard_nonempty.2 (hk s)).choose_spec⟩⟩
-  draw ω := univ.biUnion fun s => (ω s).1
 
 theorem card_coe_filter {α : Type} (P : Finset α) (q : α → Prop) [DecidablePred q] :
     (univ.filter fun x : P => q x.1).card = (P.filter q).card := by
