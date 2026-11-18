@@ -98,18 +98,17 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
     assert P.in_order(win.program, win.query, Q * T.N_RHO)
     assert win.members[0].wired == () and T.WRITERS[0] is None
+    pub = publics(c)
     for t, m in enumerate(win.members[1:], 1):
         w, spans = T.WRITERS[t], tuple(i for i in range(Q) for _ in range(T.N_T[t]))
-        (p, o, writers), = m.wired
-        assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
-        assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
+        (wire,) = m.wired
+        p, wm = wire.port, win.members[w]
+        assert (p, wire.writer, wire.out) == (T.LAYOUT[t][0][0][0], wm.template, "o0")
+        assert win.tree(m, p) == WI.tree(wm.template, "o0") and tuple(win.reads(m, p).tolist()) == spans
         assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
-        assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
-        assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
-    assert set(c.roots) == set(T.CS.expected_ports(win)) == {
-        m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
-    WI.validate(win.members)
-    assert WI.check(win.members, publics(run["it"].committed)) == {}
+        assert dict(m.tables)[p] == wm.n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
+        assert np.array_equal(WI.strings(pub, m, p), WI.strings(pub, wm, "o0")[win.reads(m, p) - win.owns[wm.key]])
+    assert set(c.roots) == set(T.CS.expected_ports(win)) == set(win.trees)
 
 
 def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_boundary_root(run):
@@ -149,17 +148,20 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
         for p, words in m.all_rows:
             if p == T.link(t):
                 continue
-            value, leaves = win.held(m, p), list(win.held_leaves(m, p))
-            assert (value == m.port(p)) == (p not in {x for x, _o, _ws in m.wired})
+            value, wire = win.tree(m, p), win.wire(m, p)
+            assert (value == m.port(p)) == (wire is None and p not in dict(m.outs))
             e, header = reads[m.key]["ports"][p], T.CS.registered_header(head, t)[p]
             n = roots[value]["leaves"]
-            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
+            assert (e["value"], e["root"], e["leaves"], e["domain"]) == (T.CS.own_value(value), roots[value]["root"], n,
                                                                          roots[value]["domain"])
-            assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
-            assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
-            held = rows_bc(c, value, n)
-            assert all(REG.verify_read(c.domains[value], c.roots[value], i, held[i], bytes.fromhex(path), T.V2)
-                       for i, path in zip(range(n), header["paths"], strict=True))
+            if wire is None:
+                assert e["reads"] == win.reads(m, p).tolist() and (e[REG.READS_FROM], e["words"]) == (m.base, words)
+            else:
+                assert (e["tree"], e["reads"], e["words"]) == ({"template": wire.writer, "field": wire.out}, [], words)
+            assert header["positions"] == win.leaves(m, p).tolist()
+            held = rows_bc(c, m.port(p), len(header["positions"]))
+            assert all(REG.verify_read(c.domains[value], c.roots[value], i, x, bytes.fromhex(path), T.V2)
+                       for i, x, path in zip(header["positions"], held, header["paths"], strict=True))
 
 
 def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
@@ -196,9 +198,13 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     body = bytearray(pub[flip.key])
     body[0] ^= 1                                        # unit 0's x string, which the fold unit's output wires
     broken = {**pub, flip.key: bytes(body)}
-    assert set(WI.check(it.window.members, broken)) == {flip.key}
-    assert set(WI.check_drawn(it.window.members, broken, [flip.base])) == {flip.key}
-    assert WI.check_drawn(it.window.members, broken, [flip.base + 1]) == {}
+    p = flip.wired[0].port
+    tree, c = it.window.tree(flip, p), it.committed
+    header = T.CS.registered_header(json.loads((run["tmp"] / "interior" / "window.json").read_text()), 2)[p]
+    pos, path = header["positions"][0], bytes.fromhex(header["paths"][0])
+    honest, bad = (bytes(WI.strings(x, flip, p)[0]) for x in (pub, broken))
+    assert REG.verify_read(c.domains[tree], c.roots[tree], pos, honest, path, T.V2)
+    assert bad != honest and not REG.verify_read(c.domains[tree], c.roots[tree], pos, bad, path, T.V2)
 
 
 @pytest.mark.slow
