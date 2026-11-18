@@ -21,7 +21,7 @@ pytest.importorskip("verity_vllm.definitions.registry.prims")
 from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str((Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "proofs" / "flock" / "prover")))
 
 
 def _low(template, **params):
