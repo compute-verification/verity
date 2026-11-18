@@ -3334,19 +3334,23 @@
   "ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed"
  ],
  "trust_gap": {
-  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
+  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt", "choice:Claims.Finder.Pr"],
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Flock.Guarantees.ReleaseReadsNoStop",
    "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
-   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized",
+   "choice:Claims.Finder.Pr"
   ],
+  "Flock.SecurityProofs.SampledKSLiveV3": ["choice:FlockSoundness.Assumptions.SHA512CRExpected", "choice:FlockSoundness.Assumptions.SHA512CRStrict"],
+  "Flock.SecurityProofs.SampledKSLiveV5": ["choice:FlockSoundness.Assumptions.SHA512CRExpected", "choice:FlockSoundness.Assumptions.SHA512CRStrict"],
   "Flock.SecurityProofs.SessionLoopZKDeployed": [
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Claims.ZKServer.LeanRelease.FillRoundEq",
    "Claims.ZKServer.LeanRelease.LiveRoundEq",
    "Claims.ZKServer.Loop.Src",
-   "Flock.Guarantees.LoopInnerRound0"
+   "Flock.Guarantees.LoopInnerRound0",
+   "choice:Claims.Finder.Pr"
   ],
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed": [
@@ -7365,7 +7369,8 @@
      "Claims.RecGeneric.Server.Binds",
      "Claims.SamplingGeneric.Arg.KS"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.RecGeneric.Compiled.toComp"]
    },
    "type_hash": "7b8e3066e9d3a7f49e21e8bfa5fc99fd4f95c307068ad448c70195603a892e01",
    "unfolded_hash": "86a8ec4238e5e418f35c103d0cdea3912f50579e6047c47c14d063d9cd845cf0"
@@ -7434,7 +7439,8 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.RecGeneric.Compiled.toComp"]
    },
    "type_hash": "1e9dd4183da1fc74e5b9194c0b31209c6e7af23c8106a3d5f79253d4c5c75729"
   },
@@ -7503,7 +7509,8 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.RecGeneric.Compiled.toComp"]
    },
    "type_hash": "d9edf2f4833af28cb52a1f628c5d332bd3c6d5fec4223c1c7a89db9c55fa084d"
   },
@@ -7525,7 +7532,8 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.RecGeneric.Compiled.toComp"]
    },
    "type_hash": "cef3ce4ab292e9ce2e9aec5ee26839a8e0972550b04b29ae05e53fbbae46a5f7"
   },
@@ -9155,7 +9163,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.ExpectedCR", "Claims.Flock.ListWithin", "Claims.StrictBirthday"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "6975d593a94f68fc949af418e85b7e1aa23a4f7c9dd53aa5f6741a7f7e8af9ea"
   },
@@ -9189,7 +9198,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.ExpectedCR", "Claims.Flock.ListWithin", "Claims.StrictBirthday"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "b4b904962d9bacfab0916601149bbaf24b7709b5092e68a7c9eee809adde853d"
   },
@@ -9207,7 +9217,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.ExpectedCR", "Claims.Flock.ListWithin", "Claims.StrictBirthday"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "ee541601bfec684f37962b6cb10ea6c752935814b7fbb2eb323a3d51afd64857"
   },
@@ -9225,7 +9236,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.ExpectedCR", "Claims.Flock.ListWithin", "Claims.StrictBirthday"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "41d8e688d92208370a4baf1170ce9c4df35b4c61ee801b56596cdedd0141f68b"
   },
@@ -9452,7 +9464,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "26fd9d43b1455e9d0427fdaf4a2219f3862d77aefac13f182482b8ad0e98e808"
   },
@@ -9470,7 +9483,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "812aba7e3a39352f282018448631261f71212eb564aae21e05e6232c04a69c4c"
   },
@@ -9506,7 +9520,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "0564a5d0493b1de2b0b173ac5f61bbfdefe4a3b519eb258d3dc4962d4ef8677c"
   },
@@ -9524,7 +9539,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "1c0ea503e8c8bf39352247093d0a6ce6be423294691c522b9325035720bce78d"
   },
@@ -9574,7 +9590,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "f72f21f7dd4b9c32fdc0fe048698639a711b402a22d171d94c69b21b94172b4a"
   },
@@ -9592,7 +9609,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "3cb05d28369a7fa85a158e116d4e711cf29c3cef9c98a3f6d7bddf1251d947bc"
   },
@@ -9610,7 +9628,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ", "Claims.Witness.Flock.ksD"]
    },
    "type_hash": "ae5c51cbe85b1ad2ff9dce3f6712b8eb8862cb73c8bacb5ab0688017ef1c3442"
   },
@@ -9648,7 +9667,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "fab36afedde5034703b785e4ad44f95fc4d922d8d476f879fc3f81dc45b6c3a3"
   },
@@ -9682,7 +9702,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "b0911ea26db86625b2f87acc124a89da8ef454c65e180f85cc5ffb46ebc8cbdf"
   },
@@ -10462,7 +10483,42 @@
     "assumptions": [],
     "domain": [],
     "open": ["RecDeploy.KSFixture"],
-    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.RecGeneric.Compiled.toComp",
+     "Claims.Recursion.Nums.γ",
+     "Claims.Recursion.Nums.κ",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "4ef48176d8b05b78ea14869e30c9d42a2600cffc9acb13c42a1a447988b185c0"
   },
@@ -10493,7 +10549,38 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt", "RecDeploy.KSFixture"],
-    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "d9b8e7b73eac9ecfe5a11f3aac654fa4c7271ac81a31d054620e4857781dd60f"
   },
@@ -10520,7 +10607,41 @@
     "assumptions": [],
     "domain": [],
     "open": ["RecDeploy.KSFixture"],
-    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.RecGeneric.Comp.ofRec",
+     "Claims.Recursion.Nums.γ",
+     "Claims.Recursion.Nums.κ",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "078fcea7906435f1e723c7be0126a9519ac2dc0a3b8a77370880e1f41e1caa80"
   },
@@ -10547,7 +10668,38 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin", "RecDeploy.DenseAt", "RecDeploy.KSFixture"],
-    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"]
+    "reads": ["RecDeploy.DeployedParses", "RecDeploy.PartsInScope", "RecDeploy.setupView"],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "8c1022d265e61c5fa1be988a94787edbc2f67198c94804bac4d48486cee3963a"
   },
@@ -10593,7 +10745,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.Composed.TagsOkZJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.Composed.SampleSetupZJ.tabAt",
+     "FlockSoundness.Discharge.Composed.tableShJ",
+     "FlockSoundness.Discharge.Composed.tableZJ",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Layout.outBitOf",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff",
    "unfolded_hash": "ae6a2264bafb1375519500a1592a7206bba3abcb980d70eb6379fb0bfbc7a646"
@@ -10614,7 +10787,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "6b9c3b10bfa35dd2189691fbf511f15129f63e2b505e3022dfdb9f74ca38b658",
    "unfolded_hash": "050ee1d47b67b9bfd492de571c9758e7f90734948805c9a64393dc27892e715e"
@@ -10631,7 +10825,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "ba87129775fef4d68b47c92ab874798d1b66b3e984ba35fc46b2025f1a7248e7",
    "unfolded_hash": "d9233a898f229f0371b05c44d4b8f02cb840adbb18af939b2dfe5937def00728"
@@ -10652,7 +10867,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "b2ca06e68af366e3abfc6592d5839ffb49342f2614d9a4564f287f7971f7f0b5"
@@ -10669,7 +10905,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "59623c0c66932c16c20cc226edb8964db811fb9fbd661fe784d7a583e270618e",
    "unfolded_hash": "7276871bf2ec58d3eadb6bd33d1bf603897ab569f5efd8f4b9ccd71ef4fb469f"
@@ -10692,7 +10949,28 @@
      "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
    "unfolded_hash": "bbffdd7ce64d78404debedf6cf4e24548486927eef45401e4fe8dfe5e353817f"
@@ -10737,7 +11015,16 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "690948fc561d0eed2f9cd929ce570512b1e479e4b18119c3668cc4a38dbfed44"
   },
@@ -10781,7 +11068,28 @@
      "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
    "unfolded_hash": "ca902a5d68c2068d5e68ebdef083a42dc07cec9dcaa4efd18115bc581cfea797"
@@ -10798,7 +11106,30 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9"
   },
@@ -10814,7 +11145,30 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce"
   },
@@ -10832,7 +11186,28 @@
      "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "f6a6d21a10ac90f1c3221381b60c45d76f8aa3088296441ef0a3cfd41d0c62ee",
    "unfolded_hash": "1269e37baca54a4ba328c1ba4373604cde6cfdd9a9b8523891223110919c6917"
@@ -10851,7 +11226,28 @@
      "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "0f9b48b5155aee0c2506f3ffb4f45a4f8f79e7308956005b6a95c207bc98bea3",
    "unfolded_hash": "5dc61548e7fbb98792163fae2e9c25d8c92d9de6ba4e9cb90368b0e059e2955b"
@@ -10896,7 +11292,16 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "reads": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "690948fc561d0eed2f9cd929ce570512b1e479e4b18119c3668cc4a38dbfed44"
   },
@@ -10934,7 +11339,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.Composed.TagsOkZJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.Composed.SampleSetupZJ.tabAt",
+     "FlockSoundness.Discharge.Composed.tableShJ",
+     "FlockSoundness.Discharge.Composed.tableZJ",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Layout.outBitOf",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "d0c2a9df376e0094475d65709358cbddac9cf3bab402055716aeaf8b32759918",
    "unfolded_hash": "e5327df975eedca646570b45f0c01b73cbb37425be66336e561156043ebcb0e9"
@@ -10951,7 +11377,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
    "unfolded_hash": "e3c54009a128c7f8fd696aa8884f74255159f9b2efcad3848f1c8373baf6699f"
@@ -10968,7 +11415,29 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.LinkFinder.pull",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
    "unfolded_hash": "ad234ab36715dc0d3681bd88817aee6af339781f88cb96f3a8ac1db9b3a6d63f"
@@ -10985,7 +11454,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
    "unfolded_hash": "5e7af6af62415e99ccb499e4c2cdb64717e7aef6d8d0e8c403c4572e26693253"
@@ -11002,7 +11492,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "effbaa6274f63348c2afc2b7d8d77231fabbc026b9aa99a33f699f3705e196c8",
    "unfolded_hash": "f882a770a6790d09b395982cd6e8614ce3a48f3459efaabef16ec1d25c4c3025"
@@ -11019,7 +11530,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "4836e67a7d7b4e4b25021a9eab6091f0a43179a3e4d4d04d5923470a39346edc",
    "unfolded_hash": "d67c6e6da24bbaf9ceaec6c6fd66154c795ea82dc2973b7a6cdec32a48e7c50c"
@@ -11036,7 +11568,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "15ff68be021160ee336f7822ca795062e6c20a74ac33ebf99140bd40d9379cae",
    "unfolded_hash": "ffa7291b4dfc2ea3276eeb1ef45fcc965303428677b5ee1d82233c1dcdde2faa"
@@ -11053,7 +11606,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "c5cb8caeb00526e42f05d4bfa1b9d8a83d36dd062afeb57231912cff5569aef3",
    "unfolded_hash": "fafe51390da1628ff71a93c943af70731fa93b7586cb42afd2a6cf98c44c0c9f"
@@ -11070,7 +11644,29 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.LinkFinder.pull",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "85f2498dabbcff32d4354c88909a1acf03bc698acc260c8cb808aea82b4552d2",
    "unfolded_hash": "04ddd2423027e0f7ea05224ff25ef1ef8beb3db053481a70c369b5e9098ec631"
@@ -11087,7 +11683,29 @@
     ],
     "domain": [],
     "open": [],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "15f293467ff865d921308f6e92d21f0f0a1e80837f20c773c3f8cfd4b2f2079e",
    "unfolded_hash": "1948d380cff18cfc6166776db6090ef09bba70b490cae8c8d8729b5757c84f38"
@@ -11104,7 +11722,29 @@
     ],
     "domain": [],
     "open": [],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
    "unfolded_hash": "11df05bbf7e43f7b6a0cb3b8ef9cb91f22fbaa70d27fe645f77f3376280a3ff1"
@@ -11121,7 +11761,29 @@
     ],
     "domain": [],
     "open": [],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
    "unfolded_hash": "8b66f33895ac6f3b1db35f0b74a22385b5ea55af46130cb2bf0770ec8f09da8d"
@@ -11138,7 +11800,26 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZK"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZKH.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableAtZKH",
+     "FlockSoundness.Discharge.ZkHidden.tableShH",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Game.Sim.deadOf",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
    "unfolded_hash": "78eb4b64fc62cf0a4575f86be2e9f69d060c2d26977c054ffc5372927f95d593"
@@ -11155,7 +11836,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJS"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "921a54325dd06a3a4539f3f974854f0413cd37e51b05d8661599f6ba9506bc2b",
    "unfolded_hash": "6255d30cfce907081307a5d85bb2386be237a0850bedc10c94adfd9c549e151a"
@@ -11172,7 +11874,26 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZK"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZKH.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableAtZKH",
+     "FlockSoundness.Discharge.ZkHidden.tableShH",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Game.Sim.deadOf",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "300ebc2d26f5043399d55d825c59700fe733a8fd32c1a0ceaeb78fc548f09df8",
    "unfolded_hash": "5acb41d4f503b6fddd5d903ebe4c581059ce83cfd75ecf18408e7ed152e7d826"
@@ -11189,7 +11910,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJS"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "4043ec72b4072c9652dae785fc878bef855d453f47f59c4792286de06f6e0c86",
    "unfolded_hash": "dc39c0b1a18d72cf4dbf3b68b9a16962d373c3e1f53d826e0149a4d5adfad28d"
@@ -11327,7 +12069,26 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "8ae2fd10ac92d291c2283d26141b3c31e7f06f2fdb2e5d212280951b15876d7b",
    "unfolded_hash": "7da7b31fc745cf3916021e210ad7423f0aa879a96bf961a4235b4b451f50fc87"
@@ -11340,7 +12101,26 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "aec8d751b0de2a791f975fc2d8b2502008a2ede361823e619595068f469d68d5",
    "unfolded_hash": "49a01dee3ce609390f6a2d33d0b40abda93a9a19fd4fd26f1e0f645e6b0a3cde"
@@ -11374,7 +12154,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Witness.Flock.ksD"]
    },
    "type_hash": "4776a4b9a34b698b42752cabef82f4027a52f5fec3096ffaff8095e6affae58c"
   },
@@ -11386,7 +12167,35 @@
     "assumptions": [],
     "domain": ["Claims.Flock.R"],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "Claims.ZKMal.RefSession.kP",
+     "Claims.ZKMal.RefSession.kT",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "af08708a1578b1ef3007ae701f1a819f3da31d67b642f12780733ac9db9bc738",
    "unfolded_hash": "11ebf382596e202893d196df9abe8241659b5ed5a515601b279f28c37313fdbd"
@@ -11416,6 +12225,36 @@
      "FlockSoundness.Assumptions.HmRowComputes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.S₀",
+     "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.d₀",
+     "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.y₀",
+     "FlockSoundness.Discharge.Recursion.forkPick",
+     "FlockSoundness.Discharge.Recursion.freshName",
+     "FlockSoundness.Discharge.Recursion.zsOf",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.XvalZC",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkReg.outRegZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "127843c8302e3bbea90f0839428dd250efab959ceaa293546d56ac1ebe9ddffa",
@@ -11510,7 +12349,8 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.Flock.Deploy.k", "Claims.Flock.γ", "Claims.Flock.κ"]
    },
    "type_hash": "31aab8ba52132a459f17aa21b3302c05f74b988aeac456d7ceeb792514333067",
    "unfolded_hash": "55eebdb38fc05afc376f5917387ea1e41d7cb013e90850d3b63398d6d574f876"
@@ -11540,6 +12380,37 @@
      "Hash.Assumptions.LmsForger.cost",
      "Hash.Assumptions.LmsForger.mk",
      "Hash.Assumptions.LmsForger.signed"
+    ],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
     ]
    },
    "type_hash": "9b73b88919bb15a1bcfcc8e00e9f5afd9440726ebdcdaa80b26e5136b59e456b",
@@ -11592,7 +12463,38 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin", "RecDeploy.DenseAt"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "51fdb43d2d2c86a0bb2d3ed41009b87a28fe7df24e6e6337b87129d9ba20d475",
    "unfolded_hash": "c7a58aee450c88b82f6a8f55d03e4e788cd01a97a262c84ecbfbf02a4cfd1cf3"
@@ -11605,7 +12507,42 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.RecGeneric.Compiled.toComp",
+     "Claims.Recursion.Nums.γ",
+     "Claims.Recursion.Nums.κ",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "95c1555c3f2dbb085e40b80c38c329198b92f4e201b8e7c14212108b0b5267b4",
    "unfolded_hash": "162969aa91c7e60f32f386b7275a4e7237ba20a389724c2a2857300f470a605a"
@@ -11618,7 +12555,38 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "a593b5f16de693fd90b73a64aabe94764151f7633be9ae62bffeb85d6b825bb2",
    "unfolded_hash": "8d054dd09e0c02971e9c53c1d3aa1ae06e25f28a99b80aa4cbd109bdc3a3ce7d"
@@ -11631,7 +12599,41 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.levelZero",
+     "Claims.Flock.plainThetaD",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.novelInvEquiv",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.plainAgreeR",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.RecGeneric.Comp.ofRec",
+     "Claims.Recursion.Nums.γ",
+     "Claims.Recursion.Nums.κ",
+     "FlockDeploy.KS.CpDep",
+     "FlockDeploy.readRep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "RecDeploy.coinOf",
+     "RecDeploy.coverW",
+     "RecDeploy.pick"
+    ]
    },
    "type_hash": "b0762ee76e540857155f04ce96e2067f673eb3eeb64c5c4e8bc40079397be698",
    "unfolded_hash": "a4fdf17f7e8431732f8b34b3a574606fa957f1d8aed73fa3d80ed872214c345f"
@@ -11650,7 +12652,31 @@
      "FlockSoundness.Discharge.PrivateCircuit.Commit.Binding",
      "FlockSoundness.Discharge.Recursion.InnerSound"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Recursion.forkPick",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkReg.outRegZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "6e4075cb2bdd1b28dc8fd6c03ab6c6686cc4b6a139f0e1bcb643bd5c305fbc86",
    "unfolded_hash": "ef9ed2c8e1053ae7992ef995ad5bb97ee0abdd9732272e7e3775e76e9a4c3175"
@@ -11667,7 +12693,32 @@
      "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ",
      "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Recursion.forkPick",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.XvalZC",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkReg.outRegZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "0773fcb0a771cc58de3b22db973c56703f767c3fc2aa08ec46fd6d4634d76373",
    "unfolded_hash": "c575c66aeacd2dc03c8d689fad64fb47e870e4ca6a5f747c018bdcd47a7f84c8"
@@ -11703,7 +12754,34 @@
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Layout.flatten._f",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "801c4ba493e5fbc8601b27d0f96d173000cb0fc0789a46759017efdc74f4c064",
    "unfolded_hash": "e5568d83b35d855ba7d91daec2caf465ecdb0e60373b5848b76fcd116b83933a"
@@ -11726,7 +12804,34 @@
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Layout.flatten._f",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "01cd51d8c16d9cf4f07cb4cdb7efb7d094ec2b361289ccb48abe014557549133",
    "unfolded_hash": "ac8e7475d2865cfc42f3b99b49e6c1c39aafe550c4ecc491fd585d981baec9ea"
@@ -11744,7 +12849,34 @@
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
      "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Layout.flatten._f",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "6b77627d7bbcda28a2ad839b8b809a7f39cf09a4368cbef902188f0932933bd8",
    "unfolded_hash": "562047f8c797c4518158c1fff641c5f98d9dc3ba375fb88b1eefe080a5e37155"
@@ -11870,7 +13002,34 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Layout.flatten._f",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "32c8bdf6510649ba950ef59ebf347b0770a93163675bdbc57d3c3790e449ba35"
   },
@@ -11979,7 +13138,34 @@
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.ZKMal.Layout.flatten._f",
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "8f779ced6ae5b53ea6584831d95b04ef1639f29493ea756624047832324cf762"
   },
@@ -11995,7 +13181,22 @@
      "Claims.ZKServer.LeanRelease.TrustsStop",
      "Verity.Assumptions.ZkServerOwnUser"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "Claims.ZKMal.RefSession.kP",
+     "Claims.ZKMal.RefSession.kT",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "66ade9408e04a312d697296f1efc522fc77ef392ba98087b7b2c614912edad45"
   },
@@ -12046,7 +13247,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
    "unfolded_hash": "f092aa93f5f9ecb0a0fb14fad262cc6a5031134c8fc4494dcf1c831e64e39a7b"
@@ -12067,7 +13289,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
    "unfolded_hash": "73f7aec126919cc09431301d4776b19b2b3b8cf278ddf00f43b9f3cef398d25a"
@@ -12088,7 +13331,28 @@
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
    "unfolded_hash": "ce9f3f100ae4a2057818362c581a7998c4df4b0a9be05d059385168f72aad12f"
@@ -12105,7 +13369,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
    "unfolded_hash": "8b14ef95010b46ea405a35fa9d60df47fbd8420f79200c334947ac324afadc60"
@@ -12122,7 +13407,29 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "unfolded_hash": "97b4b1f30ed6fc6bbb74b303142c3456b8513d391bcd70a56e59d65092fb7c25"
@@ -12155,7 +13462,35 @@
      "SamplingDeploy.Code.RefusesTwo",
      "SamplingDeploy.SessionsIn"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "259a7259769b94c0a641e7853c38040ab6f43f92a9ed235c267eb615f7f25fe5"
   },
@@ -12238,7 +13573,35 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "f98ccb957d3b91540593f258e56e5b71ed8f60f12bbb4e602e5171246462fcec"
   },
@@ -12295,7 +13658,13 @@
      "Claims.ZKServer.LeanRelease.LiveRoundEq",
      "Flock.Guarantees.LoopInnerRound0"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256"
+    ]
    },
    "type_hash": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862"
   },
@@ -12307,7 +13676,22 @@
     "assumptions": [],
     "domain": ["Claims.ZKMal.RefSession.UnCausal"],
     "open": ["Claims.ZKMal.RefSession.Complete", "Claims.ZKServer.LeanRelease.TrustsStop"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "Claims.ZKMal.RefSession.kP",
+     "Claims.ZKMal.RefSession.kT",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f"
   },
@@ -12356,7 +13740,22 @@
     "assumptions": [],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
-    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"]
+    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"],
+    "choosing": [
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "Claims.ZKMal.RefSession.kP",
+     "Claims.ZKMal.RefSession.kT",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "8aaa6aee24f06bbf5e1f005f689690b3e5b74d6ab694be39c27197da70dab255"
   },
@@ -12374,7 +13773,20 @@
      "Claims.ZKServer.Loop.Src",
      "Flock.Guarantees.LoopInnerRound0"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.ZKMal.Masked.cellAt",
+     "Claims.ZKMal.Masked.dummy",
+     "Claims.ZKMal.Masked.hiEmbOf",
+     "Claims.ZKMal.Masked.zkTab",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Discharge.Composed.treeEquiv",
+     "FlockSoundness.Discharge.ZkHidden.ZkTab.table",
+     "FlockSoundness.Discharge.ZkSession.coords"
+    ]
    },
    "type_hash": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659"
   },
@@ -12398,6 +13810,29 @@
      "FlockSoundness.Assumptions.SHA512CRExpected",
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
@@ -12414,7 +13849,35 @@
      "Claims.SamplingGeneric.CompiledTwo.Scope",
      "SpotFlock.AddressesConnected"
     ],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6"
   },
@@ -12426,7 +13889,31 @@
     "assumptions": [],
     "domain": ["SpotFlock.BuiltWired"],
     "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "Verity.FirstHit.outOfAt"
+    ]
    },
    "type_hash": "542bec717239108d25c9aad4002dae67c607c347ce3ddae3b51c50ae7498324f"
   },
@@ -12438,7 +13925,35 @@
     "assumptions": [],
     "domain": ["SpotFlock.BuiltWired"],
     "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d"
   },
@@ -12450,7 +13965,31 @@
     "assumptions": [],
     "domain": ["SpotFlock.BuiltWired"],
     "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "Verity.FirstHit.outOfAt"
+    ]
    },
    "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372"
   },
@@ -13132,7 +14671,50 @@
      "FlockSoundness.Discharge.ZkReg.OwnReadsH",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "Claims.Flock.levelZero",
+     "Claims.GS.agreeR",
+     "Claims.GS.novelInvEquiv",
+     "Claims.IRS.threshold",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.Composed.SampleSetupZJ.tabAt",
+     "FlockSoundness.Discharge.Composed.tableShJ",
+     "FlockSoundness.Discharge.Composed.tableZJ",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.Exec.plurSL",
+     "FlockSoundness.Discharge.HiddenExec.instOutRowOf",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.HiddenExec.tableAtH",
+     "FlockSoundness.Discharge.Integrate.tableAt",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Layout.outBitOf",
+     "FlockSoundness.Discharge.PlainHJ.tablePHJ",
+     "FlockSoundness.Discharge.PlainJ.tablePJ",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkBind.tableSh",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZKH.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableAtZKH",
+     "FlockSoundness.Discharge.ZkHidden.tableShH",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.SampleSetupZK.tabAt",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.tableAtZK",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Game.Sim.deadOf",
+     "FlockSoundness.Rows.ofNet",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "c27a68a3a851b0ae4402c1038e1d5d1807ee82389c65c7e29096d4aa647af7b5"
   },
@@ -13165,7 +14747,30 @@
      "FlockSoundness.Discharge.FailClosed.ScopeR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsH"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"],
+    "choosing": [
+     "Claims.Flock.levelZero",
+     "Claims.GS.agreeR",
+     "Claims.GS.novelInvEquiv",
+     "Claims.IRS.threshold",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.Exec.plurSL",
+     "FlockSoundness.Discharge.HiddenExec.instOutRowOf",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.HiddenExec.tableAtH",
+     "FlockSoundness.Discharge.Integrate.tableAt",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Layout.outBitOf",
+     "FlockSoundness.Game.Sim.deadOf",
+     "FlockSoundness.Rows.ofNet",
+     "FlockSoundness.xP"
+    ]
    },
    "type_hash": "a6e644aaf2eea0abb5aec46ec540a4219c26acbeb09d608b2cd4e068ccfec7b5"
   },
@@ -14009,7 +15614,35 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "ffb01ba5ec5d700ff49869857d56c0c8812d5dc7961550885a1178f91be0bd1c"
   },
@@ -14095,7 +15728,35 @@
     "assumptions": [],
     "domain": ["NetTiming.FaultyGate"],
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "d21b8c23f0c72ab3d4b16655345111fc2f75bebbd22992fa7d4f7bd27dfcb26c"
   },
@@ -14268,7 +15929,35 @@
     "assumptions": [],
     "domain": ["NetTiming.FaultyGate"],
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "d1e04175352d42e73f4ab7f203374a6f7a4ad09167b7210a5cd2e825d68256e4"
   },
@@ -14625,7 +16314,35 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "295f2c09461e1a89fb759bfb0e6c93b82111b3306c0cfd252a62688b6fa1ce6f",
    "unfolded_hash": "4655852d44b3620067e4a9d6ad29f454a1843a5bb62aa087330b93d1d376779e"
@@ -14692,7 +16409,35 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.SamplingGeneric.Compiled.Scope"],
-    "reads": []
+    "reads": [],
+    "choosing": [
+     "Claims.Flock.Deploy.k",
+     "Claims.Flock.Numbers.weightOf",
+     "Claims.Flock.zkLevelZero",
+     "Claims.Flock.zkThetaD",
+     "Claims.Flock.γ",
+     "Claims.Flock.κ",
+     "Claims.GS.padInvEquiv",
+     "Claims.GS.zkAgreeR",
+     "Claims.IRS.threshold",
+     "Claims.Sampling.Deploy.innerK",
+     "Claims.Sampling.Reference.sessErrAt",
+     "Claims.Sampling.κF",
+     "Claims.SamplingGeneric.Arg.ofFlock",
+     "Claims.SamplingGeneric.ofDeployAt",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.xP",
+     "SamplingDeploy.deployOf"
+    ]
    },
    "type_hash": "38e3d42546976890ba34bcf13bc01890c56bd05f513638b5afe02928264320c3"
   },
@@ -16572,7 +18317,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.ExpectedCR"],
-    "reads": []
+    "reads": [],
+    "choosing": ["ResourceAccounting.TS.HashedOpenings.finder"]
    },
    "type_hash": "7159ff44244c5184bfccd32d8697b00b9cf20baffafa1fb8e91842386f5b9a9c",
    "unfolded_hash": "2d996646eb601c1b4c2b561b65c8cde4f2f98d1a794cc0c9c74c3e86d0606b9c"
@@ -18953,7 +20699,29 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.LinkFinder.pull",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "310ace66072562063a4e1fdc6f26892d8985abd29928d3ebd9b053627c13cebe",
    "unfolded_hash": "1beaf3b836c246ab24ee0a4b77dd2245fd1f4eb497fd38e88ac1fb08179f9e2f"
@@ -18973,7 +20741,28 @@
     ],
     "domain": [],
     "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Rows.ofNet"
+    ]
    },
    "type_hash": "2c5f3ead9428362da4555f75e8976e6ccc47835ce496f1e57780014e1928c7a9",
    "unfolded_hash": "9653e3f950b49ce0dc131ba303237baa598cdc8782c6f9652e73b70576fca082"
@@ -22451,7 +24240,8 @@
     "assumptions": [],
     "domain": [],
     "open": ["Claims.StrictBirthday"],
-    "reads": ["ResourceAccounting.Actual.wordIndex"]
+    "reads": ["ResourceAccounting.Actual.wordIndex"],
+    "choosing": ["ResourceAccounting.Remote.Sample.Receipts.finder"]
    },
    "type_hash": "907b8c31eefd6086963c4d9d589d0bd34338b3443fae32db5489011968b1709f",
    "unfolded_hash": "91ab1f4fdedf92ffceecfadf01b040ea38507ce5cad72a254b1f516a4ba18a13"
@@ -23196,6 +24986,29 @@
      "ResourceAccounting.Assumptions.TS.AcceptedLive",
      "ResourceAccounting.Assumptions.TS.ServedChecksHold",
      "ResourceAccounting.Assumptions.TS.ServedRootsLinked"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "cbe4ca3147cf7e6387372692641d37e499f192624bee4b1981788df35745c280",
@@ -23413,6 +25226,29 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "ResourceAccounting.Assumptions.TS.AcceptedLive"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "1bdc316c3d04246bdc4cf57341524c2cd78b1372468e31e4dd0e64b6699a64e7",
@@ -23439,6 +25275,29 @@
      "ResourceAccounting.Premises.TS.ExecutionPhaseDesigns",
      "ResourceAccounting.Premises.TS.GroupRealizes",
      "ResourceAccounting.Premises.TS.SessionsCR"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "d6ef2d78c472a73f2233a0610e5b03dea6848b14499cf7b37e8651804b5d16af",
@@ -23465,6 +25324,29 @@
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "ResourceAccounting.Premises.TS.ExecutionPhaseDesigns",
      "ResourceAccounting.Premises.TS.SessionsCR"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "b1ca4a72f8e1ef67eef08b1aa59ff40c5947846f196e3bef8abacf6f30c90545",
@@ -23516,6 +25398,29 @@
      "FlockSoundness.Assumptions.SHA512CRExpected",
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "00c690db4fb68e1a0d28c85305039e42d712ad78c3679f7fbd589d7da3475c26",
@@ -23851,6 +25756,29 @@
      "FlockSoundness.Assumptions.SHA512CRStrict",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "ResourceAccounting.Assumptions.TS.AcceptedLive"
+    ],
+    "choosing": [
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.outRowOf",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJ",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rowsOutZC",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Registered.ReadsX.offAt",
+     "FlockSoundness.Rows.ofNet"
     ]
    },
    "type_hash": "ba8a4fe27cf9dc6ea8e4668efe944f3b319ac61d81998cd2d18885babe1428e3",
@@ -23877,7 +25805,8 @@
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected"],
     "domain": [],
     "open": ["Hash.RowLeaf.accepts"],
-    "reads": []
+    "reads": [],
+    "choosing": ["FlockSoundness.Rows.ofNet", "ResourceAccounting.ReadUnit.Reads.finder"]
    },
    "type_hash": "822180bfde11b755b2945830e8c9178e972e5b4cee8ce0b340e14b1a8114220e",
    "unfolded_hash": "780c727e6faac333f212b3e07ed630c3601f0aad375e06a8720b0037b6800511"
@@ -23908,7 +25837,8 @@
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected"],
     "domain": [],
     "open": ["Hash.RowLeaf.accepts"],
-    "reads": []
+    "reads": [],
+    "choosing": ["FlockSoundness.Rows.ofNet", "ResourceAccounting.ReadUnit.Reads.finder"]
    },
    "type_hash": "8dc2a4db509a3c2103548fdc134a884a355cb6f0ef15322104eee423296af0e5"
   },
@@ -25106,6 +27036,10 @@
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
     "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)",
     "  (hFP : I.FamiliesPinned Verity.Registration.Composite.onsite)",
+    "  (hTwo :",
+    "    Verity.Sampled.TwoStageBound",
+    "      (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.onsite reg record recordDigest))",
+    "      Verity.Registration.Composite.onsite)",
     "  (hW : I.base.PouwSound Verity.Registration.Composite.onsite)",
     "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.onsite)",
     "  (hP : I.base.PousSound Verity.Registration.Composite.onsite)",
@@ -25121,6 +27055,7 @@
     "domain": [],
     "open": [
      "Verity.Sampled.Instance.FamiliesPinned",
+     "Verity.Sampled.TwoStageBound",
      "Verity.Vocab.BandwidthAuditSound",
      "Verity.Vocab.InferenceOnlySound",
      "Verity.Vocab.NetworkAttesterSound",
@@ -25144,10 +27079,57 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
+    ],
+    "choosing": [
+     "Claims.Bridge.CustodyZkP.wrA",
+     "Claims.ecrBound",
+     "Flock.Bridge.witDep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.XvalZC",
+     "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ",
+     "FlockSoundness.Discharge.ZkLink.ksStrictZ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rateZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Discharge.ZkSession.εInner",
+     "FlockSoundness.Rows.ofNet",
+     "Verity.Game.avg",
+     "Verity.Game.pickIn",
+     "Verity.Game.revealMode",
+     "Verity.Sampled.Instance.sampledBound",
+     "Verity.Sampled.Live.delta",
+     "Verity.Sampled.Live.hidingTerm",
+     "Verity.Sampled.Live.sampleMiss",
+     "Verity.Sampled.Live.sessionDelta",
+     "Verity.Sampled.Live.twoRun",
+     "Verity.Sampled.coinBytesEquiv",
+     "Verity.Sampled.openingOf"
     ]
    },
-   "type_hash": "3676962ccecf34413033e5dd975311d7b06a736d598716cdfda7bf7fdee92b2c",
-   "unfolded_hash": "014fc46645a11651409f9682cee16df932b38d276d9400f88a05ded15b354cc9"
+   "type_hash": "4b0ddf32868a118d813e21cf7b91924bc3aa9b31c41e98320da52efb0e1eae48",
+   "unfolded_hash": "e224ea2473cfda4f67b9c0a2500797b57bceb7f2b514195c4aacb97f8d619b90"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_honest": {
    "owner": "@soundness",
@@ -25196,7 +27178,8 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
-    ]
+    ],
+    "choosing": ["FlockSoundness.Discharge.HiddenExec.outRowOfP", "FlockSoundness.Rows.ofNet", "Verity.Sampled.liveOf"]
    },
    "type_hash": "fd051a7a5581ddda3ad1d130d4c73439c411c7ca5cd987a5e321e1f5448ca043"
   },
@@ -25223,7 +27206,8 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
-    ]
+    ],
+    "choosing": ["FlockSoundness.Rows.ofNet"]
    },
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
   },
@@ -25236,6 +27220,10 @@
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
     "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)",
     "  (hFP : I.FamiliesPinned Verity.Registration.Composite.remote)",
+    "  (hTwo :",
+    "    Verity.Sampled.TwoStageBound",
+    "      (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.remote reg record recordDigest))",
+    "      Verity.Registration.Composite.remote)",
     "  (hW : I.base.PouwSound Verity.Registration.Composite.remote)",
     "  (hWi :",
     "    (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.remote reg record recordDigest)).WiresSound",
@@ -25251,6 +27239,7 @@
     "open": [
      "Verity.GateARow",
      "Verity.Sampled.Instance.FamiliesPinned",
+     "Verity.Sampled.TwoStageBound",
      "Verity.Vocab.PouwSound",
      "Verity.Vocab.WiresSound"
     ],
@@ -25270,10 +27259,57 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
+    ],
+    "choosing": [
+     "Claims.Bridge.CustodyZkP.wrA",
+     "Claims.ecrBound",
+     "Flock.Bridge.witDep",
+     "FlockLevel3.equivAdj",
+     "FlockLevel3.equivPhi",
+     "FlockLevel3.instFieldGF128",
+     "FlockLevel3.instFieldGF256",
+     "FlockSoundness.Accounting.Level.mcaA",
+     "FlockSoundness.Accounting.Level.padMcaA",
+     "FlockSoundness.Accounting.Level.padQueryError",
+     "FlockSoundness.Accounting.Level.padRadius",
+     "FlockSoundness.Accounting.Level.queryError",
+     "FlockSoundness.Accounting.Level.radius",
+     "FlockSoundness.Audit.Partition.IsRowsUnit.decode",
+     "FlockSoundness.Discharge.DecodeZL.framesOf",
+     "FlockSoundness.Discharge.Exec.capOfRoot",
+     "FlockSoundness.Discharge.HiddenExec.TableHP.acc",
+     "FlockSoundness.Discharge.HiddenExec.outRowOfP",
+     "FlockSoundness.Discharge.Layout.gateAt",
+     "FlockSoundness.Discharge.Tables.coinJ",
+     "FlockSoundness.Discharge.Tables.roundJ",
+     "FlockSoundness.Discharge.Tables.simEndJ",
+     "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt",
+     "FlockSoundness.Discharge.ZkHidden.tableShHJP",
+     "FlockSoundness.Discharge.ZkHidden.tableZHJP",
+     "FlockSoundness.Discharge.ZkLink.XvalZC",
+     "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ",
+     "FlockSoundness.Discharge.ZkLink.ksStrictZ",
+     "FlockSoundness.Discharge.ZkLink.opOfVZC",
+     "FlockSoundness.Discharge.ZkLink.plurSZ",
+     "FlockSoundness.Discharge.ZkLink.rateZ",
+     "FlockSoundness.Discharge.ZkSession.coords",
+     "FlockSoundness.Discharge.ZkSession.εInner",
+     "FlockSoundness.Rows.ofNet",
+     "Verity.Game.avg",
+     "Verity.Game.pickIn",
+     "Verity.Game.revealMode",
+     "Verity.Sampled.Instance.sampledBound",
+     "Verity.Sampled.Live.delta",
+     "Verity.Sampled.Live.hidingTerm",
+     "Verity.Sampled.Live.sampleMiss",
+     "Verity.Sampled.Live.sessionDelta",
+     "Verity.Sampled.Live.twoRun",
+     "Verity.Sampled.coinBytesEquiv",
+     "Verity.Sampled.openingOf"
     ]
    },
-   "type_hash": "3519735b22bf44943e1704c45b0bc77d6b8a6a7939a35a85c4158de460fb9488",
-   "unfolded_hash": "a295448a8afe7a3938ee9fdddc4de2b6bf6f80ad99b5f5e2f64952252aa23295"
+   "type_hash": "e7641de8e4ba869b02a89a2d1c05d7fbee6dcf40cb9d3beb8797ee7ad73ee456",
+   "unfolded_hash": "24f1c8c0fd5e8311b80b78e0cfe6c01e358948947a328410941de3c41724bc36"
   },
   "Verity.Sampled.remote_soundness_deployedReady_honest": {
    "owner": "@soundness",
@@ -25303,7 +27339,8 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
-    ]
+    ],
+    "choosing": ["FlockSoundness.Discharge.HiddenExec.outRowOfP", "FlockSoundness.Rows.ofNet", "Verity.Sampled.liveOf"]
    },
    "type_hash": "529c786bba85eb10cf5b034c7355424d5d32d1142bbd9457a89dc85e0b43982f"
   },
@@ -25330,7 +27367,8 @@
      "Hash.Assumptions.LmsForger.out",
      "Hash.Assumptions.LmsForger.signed",
      "Hash.Assumptions.LmsUnforgeable"
-    ]
+    ],
+    "choosing": ["FlockSoundness.Rows.ofNet"]
    },
    "type_hash": "6b58eb505a9bce5f3e3068ff276b0f6b7f22c5aa2702a1d43cf7b62ffbd757e6"
   },
@@ -26259,7 +28297,8 @@
      "Verity.ZkSystem.ZK"
     ],
     "open": ["Claims.Hm96Hiding"],
-    "reads": []
+    "reads": [],
+    "choosing": ["Claims.ZKMal.Layout.flatten._f", "Claims.ZKMal.progOf", "Claims.ZKMal.stopIdx", "Verity.Rec.slotP"]
    },
    "type_hash": "0727532c5e5c907b9dfd5c3598154e5af9616f7baac95143939ce6bc0b14aaff",
    "unfolded_hash": "87c60bd9ddb8d5eaa18c21221731c4b8af0b2aafe2dc8c1c46cd3d341e680a61"
@@ -60725,5 +62764,627 @@
  },
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
+ },
+ "choosing": {
+  "Claims.Bridge.CustodyZkP.wrA": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.Deploy.k": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.Flock.Numbers.weightOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.levelZero": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.plainThetaD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.zkLevelZero": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.zkThetaD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Flock.γ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Flock.κ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.GS.agreeR": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.novelInvEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.padInvEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.plainAgreeR": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.GS.zkAgreeR": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.IRS.threshold": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.RecGeneric.Comp.ofRec": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.RecGeneric.Compiled.toComp": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Recursion.Nums.γ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Recursion.Nums.κ": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.Sampling.Deploy.innerK": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.Sampling.Reference.sessErrAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Sampling.κF": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "Claims.SamplingGeneric.Arg.ofFlock": {
+   "owner": "@soundness",
+   "issue": "PRF-490",
+   "due": "2026-11-18"
+  },
+  "Claims.SamplingGeneric.ofDeployAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.Witness.Flock.ksD": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Layout.flatten._f": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.cellAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.dummy": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.hiEmbOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.Masked.zkTab": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.RefSession.kP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.RefSession.kT": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.progOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ZKMal.stopIdx": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Claims.ecrBound": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Flock.Bridge.witDep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockDeploy.KS.CpDep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockDeploy.readRep": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.equivAdj": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.equivPhi": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.instFieldGF128": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockLevel3.instFieldGF256": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.mcaA": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padMcaA": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padQueryError": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.padRadius": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.queryError": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Accounting.Level.radius": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Audit.Partition.IsRowsUnit.decode": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.SampleSetupZJ.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.tableShJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.tableZJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Composed.treeEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.DecodeZL.framesOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Exec.capOfRoot": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Exec.plurSL": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.TableHP.acc": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.instOutRowOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.outRowOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.outRowOfP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.HiddenExec.tableAtH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Integrate.tableAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Layout.gateAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Layout.outBitOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.PlainHJ.tablePHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.PlainJ.tablePJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.S₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.d₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.y₀": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.forkPick": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.freshName": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Recursion.zsOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.coinJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.roundJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.Tables.simEndJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkBind.tableSh": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.SampleSetupZHJP.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.SampleSetupZKH.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.ZkTab.table": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableAtZKH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShH": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableShHJP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableZHJ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkHidden.tableZHJP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.SampleSetupZK.tabAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.XvalZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.ksAvgStrictZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.ksStrictZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.opOfVZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.plurSZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.rateZ": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.rowsOutZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkLink.tableAtZK": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkReg.outRegZC": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkSession.coords": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Discharge.ZkSession.εInner": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Game.Sim.deadOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.LinkFinder.pull": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Registered.ReadsX.offAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.Rows.ofNet": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "FlockSoundness.xP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.coinOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.coverW": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "RecDeploy.pick": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "ResourceAccounting.ReadUnit.Reads.finder": {
+   "owner": "@lean",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "ResourceAccounting.Remote.Sample.Receipts.finder": {
+   "owner": "@memory-accounting",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "ResourceAccounting.TS.HashedOpenings.finder": {
+   "owner": "@compute-accounting",
+   "issue": "PRF-490",
+   "due": "2026-11-20"
+  },
+  "SamplingDeploy.deployOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.FirstHit.outOfAt": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.avg": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.pickIn": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Game.revealMode": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Rec.slotP": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Instance.sampledBound": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.delta": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.hidingTerm": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.sampleMiss": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.sessionDelta": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.Live.twoRun": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.coinBytesEquiv": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.liveOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  },
+  "Verity.Sampled.openingOf": {
+   "owner": "@proofs",
+   "issue": "PRF-490",
+   "due": "2026-11-21"
+  }
  }
 }

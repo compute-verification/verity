@@ -6,14 +6,14 @@ description: >
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
   Lean rulings. Use when adding or changing Lean proofs, definitions or packages (security/, Lean under verity/protocols/),
-  when a Lean build or proof is slow or runs out of memory, editing
-  a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
+  when a Lean build or proof is slow or runs out of memory, editing a lean-audit.json or an ASSUMPTIONS.md ledger,
+  bumping a Lean dependency, or preparing a Lean PR.
 ---
 
 # Lean proofs
 
-The rules are AGENTS.md "Lean". The Lean check's outline is `tools/verity/lean/README.md`: its commands, its checks and
-the lock's sections, each naming the docstring with the detail. This is the workflow.
+The rules are AGENTS.md "Lean"; the Lean check's outline (commands, checks, the lock's sections) is
+`tools/verity/lean/README.md`. This is the workflow.
 
 ## Where the work goes
 
@@ -25,8 +25,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   anyone proves a piece. What isn't closed by the deadline is a gap list of exact lemma names, each with a size and an
   owner, with no `sorry` outside them.
 - **Every module is on Lean's module system** (`tests/test_lean_packages.py`): `python3 tools/verity/lean/modules.py
-  FILE` writes a new file's header, and its docstring says what to fix by hand where the module system still refuses
-  the file. A proof's body is private, so an edit to it rebuilds no importer.
+  FILE` writes a new file's header; its docstring says what to fix by hand where the module system refuses a file.
+  A proof's body is private, so an edit to it rebuilds no importer.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine copies its dependencies (never symlinks) from a checkout with the same
   manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. A
@@ -42,18 +42,17 @@ the lock's sections, each naming the docstring with the detail. This is the work
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
-  check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
+  check, `check.py PKG`, runs in the queue's check; run it by hand only on a machine of your own.
 - **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
   can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
-  (the README's commands have the line) regenerates PKG's records and its requirers',
-  with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
+  regenerates PKG's records and its requirers', with the `--update` printout the landing DM carries, without a build.
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
   `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
   delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
-- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
-  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused at once, saying why. Run it where
+  `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -129,16 +128,13 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
   entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
-  them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
-  says.
+  them. It conflicts only where it can't vouch for the merge, and says why: do what it says.
 - Mark with no records run of your own: the candidate's records run commits every stale record. Record first, by the
   fast path, only what it can't write: a hand-written entry a merge warning says took theirs; `shape`; a hand edit to
   the lock (an `exempt` entry deleted while its module is not in `roots` fails the run, and the PR leaves its batch);
   a guarantee that only moved (`--update --moved MOVES.json`, which the run lacks).
 
 ## Standing rulings
-
-Their history is in the decisions log.
 
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
@@ -157,7 +153,8 @@ Their history is in the decisions log.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
-  resistance is applied to `B` alone, outside the theorem.
+  resistance is applied to `B` alone, outside the theorem; a `B` picking its pair by choice voids it, so write `B` as
+  a search of data it holds (the lock's `choosing`).
 - Soundness is stated for the system as deployed: for recursion, challenges fixed at the start, hidden in a commitment
   and revealed round by round, resting on its hiding. The sampled audits' (`SpotSound`, from Flock's live
   chain) may take the generic SHA-512 collision bound at each prover-built finder (`TableCRZ`, `LinkCRZC`), its budget
@@ -168,7 +165,7 @@ Their history is in the decisions log.
   exhibits. For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
 - A PoUW scheme gets new Lean only once its honest overhead γ ≤ 10 at both operating points, as the benchmarks'
-  overhead front door measures it. Measure first, prove second.
+  overhead front door measures it.
 - Every security guarantee has an honest lemma (its hypotheses hold as deployed) and a nontrivial one
   (its conclusion fails at an instance it builds), in the lock as a claim's `meets` and `fails`; failing either, it
   says nothing. `check.py`'s `witness_failures` has their forms: each builds its instance, takes only listed

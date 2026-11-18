@@ -41,6 +41,10 @@ judgement; `check.py` holds the policy.
   unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `recorded` the head unfolds
   through and the bound it ends at, one of `bounds` (`chain`, `headChain`); and each pin's `accept_all`, the verifiers
   accepting everything it applies (`acceptAllOf`).
+- each pin's `finders` (`finderFacts`), when `CONFIG` has `finders` (`finder-walk.json`): each finder its statement hands to
+  a collision premise that reaches a constant picking by choice, with the definition of the repository that names it
+  (`findings`), the definitions unfolded on the way (`unfolds`) and whether the walk finished; and, beside the pins,
+  what of the table the environment does not hold (`finder_table`, `tableFacts`). A pass with no pins walks nothing.
 - each pin's `targets` (`targetsOf`): each error (one of `errors`) a witness `honest` lists for it is bounded by, found
   through the definitions its conclusion unfolds to (`errorsOf`), at its vocabulary, parameters, game and subprotocol,
   the arguments of the types `below_one_head`'s explicit binders take, as printed (null where they are the witness's
@@ -1160,6 +1164,400 @@ def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opt
           (toJson (!d.type.hasFVar))).setObjVal! "outer" (toJson (cs.length == 1 && i < outer)))
     return acc
 
+/-! ## The finder walk
+
+A collision premise says that a finder finds a SHA-512 collision with small probability; a finder that picks its pair by
+choice from a proof that a collision exists always finds one, so of such a finder the premise says nothing. The walk reads
+`finder-walk.json` (`check.py`'s `finders`): each collision premise or event (`heads`) with the positions of its finder
+arguments, the constructors of which only some fields are the finder's output (`fields`), and the constants it refuses
+(`refuse`) and passes (`pass`) by name. -/
+
+/-- The table of `finder-walk.json`. -/
+structure FinderTable where
+  heads : Std.HashMap Name (Array Nat) := {}
+  fields : Std.HashMap Name (Array Name) := {}
+  refuse : NameSet := {}
+  pass : NameSet := {}
+  types : NameSet := {}
+
+def FinderTable.ofJson (j : Json) : FinderTable :=
+  let strs (v : Json) : Array Name := (v.getArr?.toOption.getD #[]).filterMap (·.getStr?.toOption.map String.toName)
+  let obj (k : String) : List (String × Json) :=
+    match j.getObjValD k with | .obj kv => kv.toList | _ => []
+  { heads := (obj "heads").foldl (init := {}) fun m (h, v) =>
+      m.insert h.toName ((v.getArr?.toOption.getD #[]).filterMap (·.getNat?.toOption))
+    fields := (obj "fields").foldl (init := {}) fun m (c, v) => m.insert c.toName (strs v)
+    refuse := (strs (j.getObjValD "refuse")).foldl NameSet.insert {}
+    pass := (strs (j.getObjValD "pass")).foldl NameSet.insert {}
+    types := (strs (j.getObjValD "types")).foldl NameSet.insert {} }
+
+/-- One finding: under the head `head`, at its argument `position`, the finder `finder` (the constant that argument names)
+reaches the site `site` (a definition of the repository whose own value names `via`, a constant from outside it, or a
+refused one of its own, that reaches the refused constant `refuses`). `site` is anonymous where the argument itself names
+`via`: the guarantee is the site. -/
+structure Finding where
+  head : Name
+  position : Nat
+  finder : Name
+  site : Name
+  via : Name
+  refuses : Name
+  deriving BEq, Hashable, Inhabited
+
+/-- The walk's state, shared by every pin's task. The values of definitions form no cycle (the kernel admits none), so a
+memoized answer is exact; `carriers` is found once, before any pin (`carriersOf`). -/
+structure FinderWalk where
+  table : FinderTable
+  ours : Name → Bool
+  carriers : NameSet
+  data : IO.Ref (NameMap (Array Name))
+  reach : IO.Ref (NameMap (Option Name))
+  sites : IO.Ref (NameMap (Array (Name × Name × Name)))
+  closed : IO.Ref (Std.HashMap Expr (Array Finding × Nat))
+
+/-- The bound on the carrier applications one guarantee's walk unfolds: a walk that reaches it is not finished, and its
+guarantee fails. -/
+def unfoldBound : Nat := 200000
+
+/-- A constant's value, for a definition or an opaque constant; none for a theorem and anything else. -/
+def valueOf (env : Environment) (c : Name) : Option Expr :=
+  match env.find? c with
+  | some (.defnInfo v) => some v.value
+  | some (.opaqueInfo v) => some v.value
+  | _ => none
+
+/-- The positions of `ctor`'s fields named `fs` among its arguments, and its arity. -/
+def fieldPositions (env : Environment) (ctor : Name) (fs : Array Name) : Option (Array Nat × Nat) := do
+  let .ctorInfo cv ← env.find? ctor | none
+  let ns := binderNames cv.type
+  return ((Array.range ns.size).filter fun i => fs.contains ns[i]!, ns.size)
+
+/-- The finder type of `ty`'s head or codomain's head: one of `finderTypes`, an `Option` only of a pair. -/
+def finderTypeOf (finderTypes : NameSet) (ty : Expr) : MetaM (Option Name) :=
+  forallTelescope ty fun _ b => do
+    let b ← whnfR b
+    let some c := b.getAppFn.constName? | return none
+    unless finderTypes.contains c do return none
+    if c == ``Option && !(b.getAppNumArgs == 1 && (← whnfR b.appArg!).isAppOf ``Prod) then return none
+    return some c
+
+/-- What `root` reads through the definitions `ours` holds: every constant their values (and the constructors of an
+inductive proposition) name, and each `.proj` as its structure and index. Theorems and types' constructors are not
+read. -/
+def readClosure (ours : Name → Bool) (root : Name) : MetaM (NameSet × Std.HashSet (Name × Nat)) := do
+  let env ← getEnv
+  let projs ← IO.mkRef ({} : Std.HashSet (Name × Nat))
+  let mut seen : NameSet := {}
+  let mut stack := #[root]
+  repeat
+    let some c := stack.back? | break
+    stack := stack.pop
+    if seen.contains c then continue
+    seen := seen.insert c
+    unless ours c do continue
+    let es : Array Expr := match env.find? c with
+      | some (.defnInfo v) => #[v.value]
+      | some (.opaqueInfo v) => #[v.value]
+      | some (.inductInfo v) =>
+        if v.type.getForallBody.isProp then v.ctors.toArray.filterMap fun k => (env.find? k).map (·.type) else #[]
+      | _ => #[]
+    for e in es do
+      e.forEach fun s => do if let .proj n i _ := s then projs.modify (·.insert (n, i))
+      stack := stack ++ e.getUsedConstants
+  return (seen, ← projs.get)
+
+/-- One of `structs` that `ty`'s codomain holds anywhere after `whnfR`: as its head, in a type argument (a pair, an
+`Option`, a list) or in a field of a constructor of its inductive; of a structure `ours` declares, only a field
+`read` holds read (its index). -/
+partial def finderInside (structs : NameSet) (ours : Name → Bool) (read : Name → Nat → MetaM Bool) (ty : Expr)
+    (seen : NameSet := {}) : MetaM (Option Name) :=
+  forallTelescope ty fun _ b => do
+    let b ← whnfR b
+    if b.isForall then return ← finderInside structs ours read b seen
+    let some c := b.getAppFn.constName? | return none
+    if structs.contains c then return some c
+    if seen.contains c then return none
+    let seen := seen.insert c
+    for a in b.getAppArgs do
+      if ← (try isType a catch _ => pure false) then
+        if let some s ← finderInside structs ours read a seen then return some s
+    let some (.inductInfo iv) := (← getEnv).find? c | return none
+    if b.getAppNumArgs < iv.numParams then return none
+    let gated := ours c && isStructure (← getEnv) c
+    for ctor in iv.ctors do
+      let some ci := (← getEnv).find? ctor | continue
+      let cty? : Option Expr ← try
+          pure (some (← instantiateForall (ci.instantiateTypeLevelParams b.getAppFn.constLevels!)
+            (b.getAppArgs.extract 0 iv.numParams)))
+        catch _ => pure none
+      let some cty := cty? | continue
+      let found ← forallTelescope cty fun xs _ => do
+        for h : k in [0:xs.size] do
+          if gated then
+            unless ← read c k do continue
+          if let some s ← finderInside structs ours read (← inferType xs[k]) seen then return some s
+        return none
+      if found.isSome then return found
+    return none
+
+/-- Whether `named` and `projs` (`readClosure`) read field `k` of the structure `s`: by its projection, a `.proj`, or a
+match on `s`. -/
+def readsField (named : NameSet) (projs : Std.HashSet (Name × Nat)) (s : Name) (k : Nat) : MetaM Bool := do
+  let env ← getEnv
+  let fields := getStructureFields env s
+  let proj := if h : k < fields.size then getProjFnForField? env s fields[k] else none
+  let ctor := match env.find? s with
+    | some (.inductInfo v) => v.ctors.any named.contains
+    | _ => false
+  return projs.contains (s, k) || (proj.map named.contains).getD true || ctor ||
+    [`casesOn, `rec, `recOn].any fun x => named.contains (s ++ x)
+
+/-- What of the table Lean does not hold (`check.py`'s `choosing.table`): each name of its rows that is no constant of the
+environment, each field of `fields` its constructor lacks, each position of a head that is no argument of a finder type
+and each argument of a finder type a head's positions leave out, and each of `premises` (the pins' premises and the
+listed assumptions) that takes arguments of every finder type at some head's positions (a whole finder: a structure, or
+a game with its strategy and output map), or an argument whose type holds a `fields` structure anywhere it reads
+(`finderInside`), and is neither a head nor a carrier. A finder type is the structure of a
+constructor `fields` lists (a finder with its coins, output and cost) or a type `types` names (a game and its strategy,
+and the `Option` of a pair an output map returns: `finderTypeOf`). Without it a head renamed, copied or shifted would
+leave the walk nothing to start from, and every entry would read as cured. -/
+def tableFacts (t : FinderTable) (carriers : NameSet) (ours : Name → Bool) (premises : Array Name) : MetaM Json := do
+  let env ← getEnv
+  let rows := t.heads.fold (fun a h _ => a.push h) #[] ++ t.fields.fold (fun a c _ => a.push c) #[] ++
+    t.refuse.toList.toArray ++ t.pass.toList.toArray ++ t.types.toList.toArray
+  let missing := (rows.filter (!env.contains ·)).qsort Name.lt |>.map toString
+  let finderTypes : NameSet := t.fields.fold (init := t.types) fun s c _ =>
+    match env.find? c with | some (.ctorInfo cv) => s.insert cv.induct | _ => s
+  let mut fields := #[]
+  for (c, fs) in t.fields.toArray.qsort (Name.lt ·.1 ·.1) do
+    if let some (.ctorInfo cv) := env.find? c then
+      for f in fs.filter (!(binderNames cv.type).contains ·) do
+        fields := fields.push <| Json.mkObj [("constructor", toJson c.toString), ("field", toJson f.toString)]
+  let mut positions := #[]
+  let mut finders : Array (Array Name) := #[]
+  for (h, idx) in t.heads.toArray.qsort (Name.lt ·.1 ·.1) do
+    let some ci := env.find? h | continue
+    let (whys, kinds) ← forallTelescope ci.type fun xs _ => do
+      let mut out := idx.filterMap fun i =>
+        if i < xs.size then none else some (i, s!"{h} takes {xs.size} arguments")
+      let mut kinds := #[]
+      for i in [0:xs.size] do
+        let ty ← inferType xs[i]!
+        match idx.contains i, ← finderTypeOf finderTypes ty with
+        | true, none => out := out.push (i, s!"its argument {i} is of type {← ppExpr ty}, no finder type")
+        | false, some c =>
+          out := out.push (i, s!"its argument {i} is of the finder type {c}, which its positions leave out")
+        | true, some c => kinds := kinds.push c
+        | _, _ => pure ()
+      return (out, kinds)
+    for (i, w) in whys do
+      positions := positions.push <| Json.mkObj [("head", toJson h.toString), ("at", toJson i), ("why", toJson w)]
+    unless kinds.isEmpty do finders := finders.push kinds
+  let structs : NameSet := t.fields.fold (init := {}) fun s c _ =>
+    match env.find? c with | some (.ctorInfo cv) => s.insert cv.induct | _ => s
+  let mut unheaded := #[]
+  for p in premises do
+    if t.heads.contains p || carriers.contains p then continue
+    let some ci := env.find? p | continue
+    let closure ← IO.mkRef (none : Option (NameSet × Std.HashSet (Name × Nat)))
+    let read (s : Name) (k : Nat) : MetaM Bool := do
+      let (named, projs) ← match ← closure.get with
+        | some r => pure r
+        | none => do let r ← readClosure ours p; closure.set (some r); pure r
+      readsField named projs s k
+    let (kinds, inside) ← forallTelescope ci.type fun xs _ => do
+      let mut kinds : Array (Nat × Name) := #[]
+      let mut inside : Option (Nat × Name) := none
+      for i in [0:xs.size] do
+        let ty ← inferType xs[i]!
+        if let some c ← finderTypeOf finderTypes ty then kinds := kinds.push (i, c)
+        if inside.isNone then
+          if let some s ← finderInside structs ours read ty then inside := some (i, s)
+      return (kinds, inside)
+    if let some f := finders.find? (·.all fun c => kinds.any (·.2 == c)) then
+      let pos := (kinds.find? (f.contains ·.2)).map (·.1) |>.getD 0
+      unheaded := unheaded.push <| Json.mkObj [("premise", toJson p.toString), ("at", toJson pos),
+        ("type", toJson (", ".intercalate (f.toList.map toString)))]
+    else if let some (pos, s) := inside then
+      unheaded := unheaded.push <| Json.mkObj [("premise", toJson p.toString), ("at", toJson pos),
+        ("type", toJson s.toString)]
+  return Json.mkObj [("missing", toJson missing), ("fields", toJson fields), ("positions", toJson positions),
+    ("premises", toJson unheaded)]
+
+/-- The constants `e`'s values name: every subterm but an application of a theorem, a proof, a type (a proposition among
+them) and, of an application of a constructor `fields` names, every argument but those fields. A proposition is only
+tested: the `Decidable` instance beside it is a value, and is read. `Meta.transform` puts each binder in context, so a
+subterm under one is a closed term when it is asked whether it is a proof. -/
+partial def dataConsts (t : FinderTable) (e : Expr) : MetaM (Array Name) := do
+  let out ← IO.mkRef (#[] : Array Name)
+  let seen ← IO.mkRef ({} : NameSet)
+  let rec go (e : Expr) : MetaM Unit := do
+    discard <| Meta.transform e (pre := fun s => do
+      let env ← getEnv
+      if let some h := s.getAppFn.constName? then
+        if env.find? h matches some (.thmInfo _) then return .done s
+        if let some fs := t.fields[h]? then
+          if let some (ix, arity) := fieldPositions env h fs then
+            if s.getAppNumArgs == arity then
+              for i in ix do go (s.getArg! i)
+              return .done s
+      match s with
+      | .fvar _ | .bvar _ | .lit _ | .sort _ | .mvar _ => return .continue
+      | _ => pure ()
+      if ← (try isProof s catch _ => pure false) then return .done s
+      if ← (try isType s catch _ => pure false) then return .done s
+      if let .const n _ := s then
+        unless (← seen.get).contains n do
+          seen.modify (·.insert n)
+          out.modify (·.push n)
+      return .continue)
+  go e
+  out.get
+
+/-- `dataConsts` of the value of `c`, memoized. -/
+def dataOf (w : FinderWalk) (c : Name) : MetaM (Array Name) := do
+  if let some ds := (← w.data.get).find? c then return ds
+  let ds ← match valueOf (← getEnv) c with
+    | some v => dataConsts w.table v
+    | none => pure #[]
+  w.data.modify (·.insert c ds)
+  return ds
+
+/-- The refused constant `c` reaches through the values of definitions, data only, or none: a refused constant reaches
+itself, and a passed one nothing. -/
+partial def reachOf (w : FinderWalk) (path : NameSet) (c : Name) : MetaM (Option Name) := do
+  if w.table.refuse.contains c then return some c
+  if w.table.pass.contains c then return none
+  if let some r := (← w.reach.get).find? c then return r
+  if path.contains c then return none
+  let mut r := none
+  for d in ← dataOf w c do
+    if let some x ← reachOf w (path.insert c) d then
+      r := some x
+      break
+  w.reach.modify (·.insert c r)
+  return r
+
+/-- Whether the walk enters `d` as a constant of the repository: one of its own, neither refused nor passed. -/
+def FinderWalk.enters (w : FinderWalk) (d : Name) : Bool :=
+  w.ours d && !w.table.refuse.contains d && !w.table.pass.contains d
+
+/-- The sites under the repository's constant `c`, each with its `via` and the refused constant that one reaches. -/
+partial def sitesOf (w : FinderWalk) (path : NameSet) (c : Name) : MetaM (Array (Name × Name × Name)) := do
+  if let some r := (← w.sites.get).find? c then return r
+  if path.contains c then return #[]
+  let mut out := #[]
+  for d in ← dataOf w c do
+    if w.enters d then
+      for h in ← sitesOf w (path.insert c) d do
+        unless out.contains h do out := out.push h
+    else if let some x ← reachOf w {} d then
+      unless out.contains (c, d, x) do out := out.push (c, d, x)
+  w.sites.modify (·.insert c out)
+  return out
+
+/-- The findings under a finder argument `a` of `head`'s position `i`. -/
+def argFindings (w : FinderWalk) (head : Name) (i : Nat) (a : Expr) : MetaM (Array Finding) := do
+  let mut out := #[]
+  for d in ← dataConsts w.table a do
+    if w.enters d then
+      for (site, via, x) in ← sitesOf w {} d do
+        out := out.push ⟨head, i, d, site, via, x⟩
+    else if let some x ← reachOf w {} d then
+      out := out.push ⟨head, i, d, .anonymous, d, x⟩
+  return out
+
+/-- The carriers: each head, and each definition or structure of the repository whose value (a structure's: its
+constructors' types) names a head or a carrier. Found backwards from the heads over the constants the repository's
+values name, once, so a cycle among inductive types costs a visit like any other edge. -/
+def carriersOf (env : Environment) (heads : Std.HashMap Name (Array Nat)) (ours : Name → Bool) : NameSet := Id.run do
+  -- only an edge into a head or a constant of the repository can lead to a carrier; `alter` grows each array in place
+  let users : Std.HashMap Name (Array Name) := env.constants.fold (init := {}) fun acc c ci =>
+    if !ours c then acc else
+    let used : Array Name := match ci with
+      | .defnInfo v => v.value.getUsedConstants
+      | .inductInfo v =>
+        v.ctors.toArray.foldl (fun us k => us ++ ((env.find? k).map (·.type.getUsedConstants)).getD #[]) #[]
+      | _ => #[]
+    used.foldl (init := acc) fun acc d =>
+      if ours d || heads.contains d then acc.alter d fun us => some ((us.getD #[]).push c) else acc
+  let mut found : NameSet := heads.fold (fun s h _ => s.insert h) {}
+  let mut todo : Array Name := found.toArray
+  while h : todo.size > 0 do
+    let d := todo[todo.size - 1]
+    todo := todo.pop
+    for c in users.getD d #[] do
+      unless found.contains c do
+        found := found.insert c
+        todo := todo.push c
+  return found
+
+/-- Each finder argument of a head the term `e` applies, with every carrier unfolded at its arguments: a definition's value
+at them, a structure's fields' types at its parameters. A closed carrier application's findings are kept for the next
+walk that meets it; `count` counts the unfoldings. -/
+partial def scanHeads (w : FinderWalk) (acc : IO.Ref (Array Finding)) (count : IO.Ref Nat) (e : Expr) : MetaM Unit := do
+  let env ← getEnv
+  discard <| Meta.transform e (pre := fun s => do
+    if let .letE _ _ v b _ := s then return .visit (b.instantiate1 v)
+    if s.isHeadBetaTarget then return .visit s.headBeta
+    let .const h us := s.getAppFn | return .continue
+    if let some idx := w.table.heads[h]? then
+      let args := s.getAppArgs
+      for i in idx do
+        if hi : i < args.size then
+          acc.modify (· ++ (← argFindings w h i args[i]))
+      return .continue
+    unless w.carriers.contains h do return .continue
+    if (← count.get) ≥ unfoldBound then return .continue
+    let closed := !s.hasFVar && !s.hasLooseBVars && !s.hasMVar
+    if closed then
+      if let some (fs, n) := (← w.closed.get)[s]? then
+        acc.modify (· ++ fs)
+        count.modify (· + n)
+        return .done s
+    count.modify (· + 1)
+    let args := s.getAppArgs
+    match env.find? h with
+    | some (.defnInfo v) =>
+      let body := (v.value.instantiateLevelParams v.levelParams us).beta args
+      if closed then
+        let sub ← IO.mkRef (#[] : Array Finding)
+        let n0 ← count.get
+        scanHeads w sub count body
+        let fs ← sub.get
+        w.closed.modify (·.insert s (fs, (← count.get) - n0))
+        acc.modify (· ++ fs)
+        return .done s
+      return .visit body
+    | some (.inductInfo v) =>
+      if args.size ≥ v.numParams then
+        for k in v.ctors do
+          if let some (.ctorInfo kv) := env.find? k then
+            let ty ← instantiateForall (kv.type.instantiateLevelParams kv.levelParams us) (args.extract 0 v.numParams)
+            forallTelescope ty fun xs _ => do
+              for y in xs do scanHeads w acc count (← inferType y)
+      return .continue
+    | _ => return .continue)
+
+/-- A pin's `finders`: the findings of the walk over its statement (`scanHeads`), each once, an anonymous site written as
+the pin; the unfoldings it took; and whether it finished: within `unfoldBound`, and without an error, which it names. -/
+def finderFacts (w : FinderWalk) (n : Name) (t : Expr) : MetaM Json := do
+  let acc ← IO.mkRef (#[] : Array Finding)
+  let count ← IO.mkRef 0
+  let error ← tryCatchRuntimeEx (do scanHeads w acc count t; pure (none : Option String)) fun ex => do
+    return some (← ex.toMessageData.toString)
+  let unfolds ← count.get
+  let mut seen : Std.HashSet Finding := {}
+  let mut out := #[]
+  for f in ← acc.get do
+    if seen.contains f then continue
+    seen := seen.insert f
+    out := out.push <| Json.mkObj [("head", toJson f.head.toString), ("at", toJson f.position),
+      ("finder", toJson f.finder.toString), ("site", toJson (if f.site.isAnonymous then n else f.site).toString),
+      ("via", toJson f.via.toString), ("refuses", toJson f.refuses.toString)]
+  return Json.mkObj [("findings", toJson out), ("unfolds", toJson unfolds),
+    ("finished", toJson (error.isNone && unfolds < unfoldBound)), ("error", toJson error)]
+
 /-- The applications of one of `errors` in `e` outside a `fun` or a `∀` (an error under a binder, a sum's, is not stated
 at one instance). -/
 partial def errorApps (errors : Array Name) : Expr → Array Expr
@@ -1305,7 +1703,8 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name)
     (honest : Array Name := #[]) (nontrivial : Option Name := none) (errors : Array Name := #[])
-    (below : Name := .anonymous) (belowModule : Name := .anonymous) (belowOne : Array Name := #[]) : MetaM Json := do
+    (below : Name := .anonymous) (belowModule : Name := .anonymous) (belowOne : Array Name := #[])
+    (walk : Option FinderWalk := none) : MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
   let (targets, unread) ← (do
@@ -1368,6 +1767,9 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
         return Json.mkObj (← read (← plain t))) <|> pure Json.null
       return Json.mkObj ((← read ci.type) ++ [("lifted", lifted)])) <|> pure Json.null),
     ("accept_all", toJson (acceptAllOf env ci.type)),
+    ("finders", ← match walk with
+      | some w => finderFacts w n ci.type
+      | none => pure Json.null),
     ("targets", targets), ("targets_unread", unread),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
@@ -1563,6 +1965,15 @@ unsafe def main (args : List String) : IO UInt32 := do
     if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let honest (p : Name) : Array Name := names (cfg.getObjValD "honest") p.toString
+  let walk ← match cfg.getObjValD "finders" with
+    | .null => pure none
+    | j => if pins.isEmpty then pure none else do
+      let ours (c : Name) : Bool := ((env.getModuleIdxFor? c).map fun i => built.contains (moduleName env i)).getD false
+      let table := FinderTable.ofJson j
+      let carriers := carriersOf env table.heads ours
+      lap "carriers" carriers.size
+      pure (some { table, ours, carriers, data := ← IO.mkRef {}, reach := ← IO.mkRef {}, sites := ← IO.mkRef {},
+                   closed := ← IO.mkRef {} : FinderWalk })
   let nontrivial (p : Name) : Option Name :=
     ((cfg.getObjValD "nontrivial").getObjValD p.toString).getStr?.toOption.map String.toName
   let errors := names cfg "errors"
@@ -1572,7 +1983,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
       return (p.toString, ← pinInfo env table meaning recorded bounds premises listed built axioms ranges
-        (readsOf.getD p (#[], #[])) p (honest p) (nontrivial p) errors below belowModule (belowOne p))).toIO
+        (readsOf.getD p (#[], #[])) p (honest p) (nontrivial p) errors below belowModule (belowOne p) walk)).toIO
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
@@ -1588,6 +1999,11 @@ unsafe def main (args : List String) : IO UInt32 := do
     acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
   let assumed := (candidates.foldl (init := (({} : NameSet), #[])) fun (s, out) a =>
     if s.contains a then (s, out) else (s.insert a, out.push a)).2
+  let finderTable ← match walk with
+    | some w => do
+      let (j, _) ← (MetaM.run' (tableFacts w.table w.carriers w.ours assumed)).toIO ctx { env }
+      pure (some j)
+    | none => pure none
   let inScope (m : Name) : Bool := under meaning m || built.contains m
   let walks : Array (Name × Array (Name × Name × ConstantInfo)) := Id.run do
     let tasks := assumed.map fun a => Task.spawn fun _ => (readsWhere env table inScope #[a]).1
@@ -1679,6 +2095,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let doc := if (names vcfg "entries").isEmpty then doc else
     doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
       (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
+  let doc := match finderTable with | some j => doc.setObjVal! "finder_table" j | none => doc
   lap "graph" oleans.size
   let text := doc.compress
   lap "render" text.length

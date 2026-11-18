@@ -1307,6 +1307,8 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "assumptions.no-owner": ({**pol, "assumptions": {"P.Hyp": without(pol["assumptions"]["P.Hyp"], "owner")}}, facts()),
         "open.no-owner": ({**opol, "open": {"P.Sound": without(sound, "owner")}}, now),
         "domain.no-owner": (covered, wfacts),
+        "choosing.passed": ({**pol, "choosing": {"P.gone": {"owner": "@lean", "issue": "LEAN-1", "due": "2026-11-30"}}},
+                            facts()),
     }
 
 
@@ -10672,3 +10674,296 @@ def test_a_dev_cache_setup_restores_the_packages_required_by_path_too(monkeypatc
     assert A.dev_restore(tmp_path / "Proofs", tc, 2, "x", tmp_path / "setup.log") == (2, "x") and calls == []
     monkeypatch.setattr(A, "DEV_CACHE", False)
     assert A.dev_restore(tmp_path / "Proofs", tc, 0, "", tmp_path / "setup.log") == (0, "") and calls == []
+
+
+#: a `choosing` entry
+CHOSEN = {"owner": "@proofs", "issue": "PRF-1", "due": "2030-03-10"}
+
+
+def finding(site="P.pick", head="H.cr", at=1, finder="P.finder", via="Classical.choose", refuses="Classical.choice"):
+    """One finding of `Facts.lean`'s finder walk: under ``head``, at its argument ``at``, ``finder`` reaches ``site``."""
+    return {"head": head, "at": at, "finder": finder, "site": site, "via": via, "refuses": refuses}
+
+
+def walked(*found: dict, finished: bool = True, error: str | None = None) -> dict:
+    """`facts()` with `P.t`'s finder walk finding ``found``."""
+    f = facts()
+    f["pins"]["P.t"] = f["pins"]["P.t"] | {"finders": {"findings": list(found), "unfolds": 2, "finished": finished,
+                                                       "error": error}}
+    return f
+
+
+def test_a_definition_a_finder_picks_by_choice_through_fails_until_a_person_lists_it():
+    """A finder `P.t` hands a collision premise reaches `P.pick`, which picks by choice: the lock fails naming the
+    definition, the constant it reaches choice through, the guarantee, the finder, the head and its position, and the
+    fix.  Neither `--update` nor the lock run's bookkeeping lists it (an update records it in `P.t`'s `premises.choosing`
+    only); listed, the lock passes, and removed again by hand, it fails again."""
+    lock, now = recorded(), walked(finding())
+    fails = A.judge(lock, now, FILES)[0]
+    assert sorted(f.code for f in fails) == ["choosing.unlisted", "guarantees.premises-changed"]
+    said = next(f for f in fails if f.code == "choosing.unlisted")
+    assert said.entry == "P.pick" and all(s in said for s in (
+        "P.pick picks by choice: it names Classical.choose, which reaches Classical.choice", "P.t hands the collision "
+        "premise H.cr as its argument 1 the finder P.finder, which reaches it", "restate P.pick as a search of data the finder holds",
+        "ask soundness to list it under `choosing`"))
+    assert not A.BOOKKEEPING.match(said) and not A.RECORD_DIFFERENCE.match(said) and A.regenerated(lock, now, FILES, fails) is None
+    up_fails, up = A.judge(lock, now, FILES, update=True)
+    assert [f.code for f in up_fails] == ["choosing.unlisted"] and "choosing" not in up
+    assert up["guarantees"]["P.t"]["premises"]["choosing"] == ["P.pick"]
+    fixed = A.repaired(lock, now, FILES, fails, TICKET)
+    assert "choosing" not in fixed and [f.code for f in A.judge(fixed, now, FILES)[0]] == ["choosing.unlisted"]
+    listed = up | {"choosing": {"P.pick": CHOSEN}}
+    assert A.judge(listed, now, FILES)[0] == []
+    assert [(f.code, f.entry) for f in A.judge(up | {"choosing": {}}, now, FILES)[0]] == [("choosing.unlisted", "P.pick")]
+
+
+def test_a_new_finder_over_a_listed_definition_passes_and_its_guarantee_records_it():
+    """A second finder under another head over the listed `P.pick` changes no entry and no record; one over a second
+    listed definition passes too, and its guarantee's record lists both, sorted, which an update writes."""
+    lock = A.judge(recorded(), walked(finding()), FILES, update=True)[1] | {"choosing": {"P.pick": CHOSEN, "P.alt": CHOSEN}}
+    again = walked(finding(), finding(head="H.strict", at=3, finder="P.other"), finding(site="P.alt"))
+    assert [f.code for f in A.judge(lock, again, FILES)[0]] == ["guarantees.premises-changed"]
+    up = A.judge(lock, again, FILES, update=True)[1]
+    assert up["guarantees"]["P.t"]["premises"]["choosing"] == ["P.alt", "P.pick"] and A.judge(up, again, FILES)[0] == []
+    assert up["choosing"] == lock["choosing"]
+
+
+def test_an_entry_no_finder_reaches_is_dropped_and_an_update_writes_no_owner_issue_or_date():
+    """Once `P.pick` is cured the entry fails `choosing.passed` until it drops: `--update` drops it and the lock run's
+    bookkeeping drops it with a warning naming its owner.  An update keeps every other entry as it stands, byte for byte."""
+    kept = {"owner": "@soundness", "issue": "LEAN-9", "due": "2031-01-02"}
+    lock = A.judge(recorded(), walked(finding(), finding(site="P.stays")), FILES, update=True)[1] | {
+        "choosing": {"P.pick": CHOSEN, "P.stays": kept}}
+    now = walked(finding(site="P.stays"))
+    fails = A.judge(lock, now, FILES)[0]
+    assert sorted((f.code, f.entry) for f in fails) == [("choosing.passed", "P.pick"), ("guarantees.premises-changed", "P.t")]
+    passed = next(f for f in fails if f.code == "choosing.passed")
+    assert A.BOOKKEEPING.match(passed) and not A.RECORD_DIFFERENCE.match(passed)
+    up_fails, up = A.judge(lock, now, FILES, update=True)
+    assert up_fails == [] and up["choosing"] == {"P.stays": kept} and json.dumps(up["choosing"]["P.stays"]) == json.dumps(kept)
+    fixed = A.repaired(lock, now, FILES, fails, TICKET)
+    assert fixed["choosing"] == {"P.stays": kept} and A.judge(fixed, now, FILES)[0] == []
+    assert "bookkeeping: P.pick (@proofs): its `choosing` entry dropped: no guarantee's finder reaches it (choosing.passed)" \
+        in A.bookkeeping_warnings(fails, lock, TICKET)
+
+
+def test_a_malformed_entry_or_an_unfinished_walk_always_fails():
+    """An entry is {owner, issue, due} in an open premise's forms, and the section a map of them; a guarantee the walk did
+    not finish on (its bound, or a statement it can't read) fails, and an update then drops no entry.  Neither is
+    bookkeeping or a record difference."""
+    lock = A.judge(recorded(), walked(finding()), FILES, update=True)[1]
+    for bad in ({"owner": "@proofs", "issue": "PRF-1"}, CHOSEN | {"issue": "prf-1"}, CHOSEN | {"due": "soon"},
+                CHOSEN | {"why": "x"}, "PRF-1"):
+        fails = A.judge(lock | {"choosing": {"P.pick": bad}}, walked(finding()), FILES)[0]
+        assert [(f.code, f.entry) for f in fails] == [("choosing.form", "P.pick")], bad
+    assert [f.code for f in A.judge(lock | {"choosing": ["P.pick"]}, walked(finding()), FILES)[0]] == \
+        ["choosing.form", "choosing.unlisted"]
+    for now, why in ((walked(finished=False), "it unfolded 2 definitions, its bound"),
+                     (walked(finished=False, error="unknown constant"), "unknown constant")):
+        fails, up = A.judge(lock | {"choosing": {"P.pick": CHOSEN}}, now, FILES, update=True)
+        assert [f.code for f in fails] == ["choosing.unfinished"] and why in fails[0]
+        assert not A.BOOKKEEPING.match(fails[0]) and not A.RECORD_DIFFERENCE.match(fails[0])
+        assert up["choosing"] == {"P.pick": CHOSEN}, "an unfinished walk drops no entry"
+
+
+def test_a_table_name_lean_does_not_hold_always_fails_and_drops_nothing():
+    """A head renamed in Lean with the table left alone: the walk finds nothing, so `P.pick` would read as cured. The
+    table's name Lean doesn't hold fails `choosing.table` instead, which is no bookkeeping and fails under `--update`
+    too, and no entry is dropped; so do a head's position that is no finder and a field its constructor lacks. A name one
+    environment of the package's holds (a prover's) is in Lean; a package holding no head or `fields` row and listing no
+    entry is not held to the table."""
+    lock = A.judge(recorded(), walked(finding()), FILES, update=True)[1] | {"choosing": {"P.pick": CHOSEN}}
+    stale = walked() | {"finder_table": {"missing": ["H.cr"], "fields": [{"constructor": "F.mk", "field": "out"}],
+                                         "positions": [{"head": "H.strict", "at": 3, "why": "its argument 3 is of type "
+                                                        "ℝ, no finder type"}]}}
+    for update in (False, True):
+        fails, up = A.judge(lock, stale, FILES, update=update)
+        table = [f for f in fails if f.code == "choosing.table"]
+        assert [f.entry for f in table] == ["H.cr", "F.mk", "H.strict"] and "choosing.passed" not in [f.code for f in fails]
+        assert "names H.cr, which is no constant" in table[0] and "names its field out" in table[1]
+        assert "head H.strict at its argument 3: its argument 3 is of type ℝ, no finder type" in table[2]
+        assert not any(A.BOOKKEEPING.match(f) or A.RECORD_DIFFERENCE.match(f) for f in table)
+        assert up["choosing"] == {"P.pick": CHOSEN}
+    held = walked() | {"finder_table": A.joined_tables([{"missing": ["H.cr", "H.x"]}, {"missing": ["H.x"]}])}
+    assert [(f.code, f.entry) for f in A.judge(lock, held, FILES)[0] if f.code == "choosing.table"] == [
+        ("choosing.table", "H.x")]
+    rows = A.finder_table()
+    none_held = walked() | {"finder_table": {"missing": sorted({*rows["heads"], *rows["fields"], *rows["refuse"]})}}
+    assert not [f for f in A.judge(lock | {"choosing": {}}, none_held, FILES)[0] if f.code == "choosing.table"], \
+        "a package holding no head or fields row, and listing no entry, is not held to the table"
+    assert [f for f in A.judge(lock, none_held, FILES)[0] if f.code == "choosing.table"], "one listing an entry is"
+
+
+def test_a_moved_entry_is_carried_only_when_its_definition_is_the_one_its_old_name_recorded():
+    """`--update --moved` renames `P.pick` to `P.newPick`: its `choosing` entry follows the move when the definition,
+    hashed under its old names, is the one the lock's `reads` records for `P.pick`, as the review compares definitions.
+    A body changed in the same move is not carried: `P.newPick` fails `choosing.unlisted` and the update drops the entry.
+    So too where another landing already moved the lock's `reads` to the new name and the entry kept its old one: carried
+    when the definition is the one recorded under the new name."""
+    def built(name: str, h: str, moved: str | None = None, **over) -> dict:
+        f = facts(**over)
+        f["pins"]["P.t"]["reads"].append({"name": name, "module": "P.Defs", "kind": "def", "hash": h, "sha256": sha(h)}
+                                         | ({"moved": {"as": "P.pick", "sha256": sha(moved)}} if moved else {}))
+        f["pins"]["P.t"]["finders"] = {"findings": [finding(site=name)], "unfolds": 2, "finished": True, "error": None}
+        return f
+
+    moves = {"P.pick": "P.newPick"}
+    for recorded_as, at_record in (("P.pick", built("P.pick", "4" * 32)), ("P.newPick", built("P.newPick", "6" * 32))):
+        fails, lock = A.judge(POLICY | {"choosing": {recorded_as: CHOSEN}}, at_record, FILES, update=True)
+        assert fails == [] and A.judge(lock, at_record, FILES)[0] == [] and recorded_as in A.definitions(
+            lock["reads"]["P.Defs"])
+        lock |= {"choosing": {"P.pick": CHOSEN}}
+        moved = {"as": "P.pick", "sha256": A.definitions(lock["reads"]["P.Defs"])[recorded_as]}
+        for new, old, carried in (("6" * 32, "4" * 32, True), ("7" * 32, "5" * 32, False)):
+            fails, up = A.judge(A.renamed_current(lock, moves), built("P.newPick", new, old, moves=moves), FILES, update=True)
+            chose = [(f.code, f.entry) for f in fails if f.code.startswith("choosing")]
+            assert chose == ([] if carried else [("choosing.unlisted", "P.newPick")]), (recorded_as, new)
+            assert up.get("choosing", {}) == ({"P.newPick": CHOSEN | {"moved": moved}} if carried else {}), (recorded_as, new)
+            if carried:
+                plain = [f.code for f in A.judge(up, built("P.newPick", new), FILES)[0]]
+                assert plain == ([] if recorded_as == "P.newPick" else ["choosing.moved"]), recorded_as
+                on_base = built("P.newPick", new) | {"landed": ["P.newPick"]}
+                assert A.judge(up, on_base, FILES)[0] == []
+                assert A.judge(up, on_base, FILES, update=True)[1]["choosing"] == {"P.newPick": CHOSEN}
+
+
+def test_a_moved_field_is_held_to_its_definition_on_every_run():
+    """A `moved` the gate would re-key a dropped entry by is checked against the definition on every run: its hash under
+    `as` passes, as do a `--moved` run's old names; a hash or an old name written by hand fails `choosing.moved`, under
+    `--update` too, as does a `moved` on a definition no guarantee reads.  Once the lock at the base holds the key, the
+    gate no longer reads it, and `--update` drops it."""
+    def built(name: str, h: str, moved: str | None = None) -> dict:
+        f = facts()
+        f["pins"]["P.t"]["reads"].append({"name": name, "module": "P.Defs", "kind": "def", "hash": h, "sha256": sha(h)}
+                                         | ({"moved": {"as": "P.pick", "sha256": sha(moved)}} if moved else {}))
+        f["pins"]["P.t"]["finders"] = {"findings": [finding(site=name)], "unfolds": 2, "finished": True, "error": None}
+        return f
+
+    lock = A.judge(POLICY | {"choosing": {"P.newPick": CHOSEN}}, built("P.newPick", "6" * 32), FILES, update=True)[1]
+    under = A.digest([{"name": "P.pick", "kind": "def", "sha256": sha("6" * 32)}])
+    was = A.digest([{"name": "P.pick", "kind": "def", "sha256": sha("4" * 32)}])
+    def with_moved(m: dict) -> dict:
+        return lock | {"choosing": {"P.newPick": CHOSEN | {"moved": m}}}
+    assert A.judge(with_moved({"as": "P.pick", "sha256": under}), built("P.newPick", "6" * 32), FILES)[0] == []
+    assert A.judge(with_moved({"as": "P.pick", "sha256": was}), built("P.newPick", "6" * 32, "4" * 32), FILES)[0] == []
+    for m in ({"as": "Finders.zzz", "sha256": "deadbeef"}, {"as": "P.pick", "sha256": was},
+              {"as": "P.other", "sha256": under}):
+        for update in (False, True):
+            fails, up = A.judge(with_moved(m), built("P.newPick", "6" * 32), FILES, update=update)
+            assert [(f.code, f.entry) for f in fails] == [("choosing.moved", "P.newPick")], (m, update)
+            assert "drop `moved` and let `check.py --update --moved MOVES` write it" in fails[0]
+            assert not A.BOOKKEEPING.match(fails[0]) and not A.RECORD_DIFFERENCE.match(fails[0])
+    unread = lock | {"choosing": {"P.newPick": CHOSEN, "P.gone": CHOSEN | {"moved": {"as": "P.pick", "sha256": under}}}}
+    assert [(f.code, f.entry) for f in A.judge(unread, built("P.newPick", "6" * 32), FILES)[0]
+            if f.code == "choosing.moved"] == [("choosing.moved", "P.gone")]
+    on_base = built("P.newPick", "6" * 32) | {"landed": ["P.newPick"]}
+    forged = with_moved({"as": "Finders.zzz", "sha256": "deadbeef"})
+    assert A.judge(forged, on_base, FILES)[0] == []
+    assert A.judge(forged, on_base, FILES, update=True)[1]["choosing"] == {"P.newPick": CHOSEN}
+
+
+def test_landed_reads_the_choosing_keys_at_the_merge_base_with_main(tmp_path):
+    """`landed` reads the lock at HEAD's merge-base with main, not at HEAD: an entry the change adds is not on the base."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"choosing": {"P.a": CHOSEN}}))
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("checkout", "-q", "-b", "change")
+    (pkg / A.POLICY).write_text(json.dumps({"choosing": {"P.a": CHOSEN, "P.b": CHOSEN}}))
+    git("commit", "-q", "-am", "change")
+    assert A.landed(pkg, tmp_path) == ["P.a"]
+    assert A.landed(tmp_path / "nowhere", tmp_path) == []
+
+
+def test_a_local_main_that_is_the_change_is_no_base(tmp_path):
+    """A merge-base at HEAD is no base unless HEAD is on `origin/main`: a local main that is the change lands nothing."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True, text=True).stdout
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"choosing": {"P.x": CHOSEN | {"moved": {"as": "X.y", "sha256": "deadbeef"}}}}))
+    git("add", "-A")
+    git("commit", "-q", "-m", "candidate")
+    assert A.landed(pkg, tmp_path) == []
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    assert A.landed(pkg, tmp_path) == ["P.x"]
+
+
+def test_a_reads_hash_the_lock_records_for_a_new_choosing_entry_is_held_to_its_definition():
+    """A new entry's `reads` hash forged as a dropped one's fails `choosing.reads`, under `--update` and regeneration."""
+    def built(name: str, h: str) -> dict:
+        f = facts()
+        f["pins"]["P.t"]["reads"].append({"name": name, "module": "P.Defs", "kind": "def", "hash": h, "sha256": sha(h)})
+        f["pins"]["P.t"]["finders"] = {"findings": [finding(site=name)], "unfolds": 2, "finished": True, "error": None}
+        return f
+
+    k_base = A.judge(POLICY | {"choosing": {"P.k": CHOSEN}}, built("P.k", "4" * 32), FILES, update=True)[1]
+    f = built("P.new", "6" * 32)
+    lock = A.judge(POLICY | {"choosing": {"P.new": CHOSEN}}, f, FILES, update=True)[1]
+    assert A.judge(lock, f, FILES)[0] == []
+    rec = lock["reads"]["P.Defs"]
+    forged = lock | {"reads": lock["reads"] | {"P.Defs": rec | {"definitions": A.definitions(rec) | {
+        "P.new": A.definitions(k_base["reads"]["P.Defs"])["P.k"]}}}}
+    for update in (False, True):
+        fails = A.judge(forged, f, FILES, update=update)[0]
+        assert ("choosing.reads", "P.new") in [(x.code, x.entry) for x in fails], update
+    fails = A.judge(forged, f, FILES)[0]
+    assert A.regenerated(forged, f, FILES, fails) is None
+    assert not [x for x in fails if x.code == "choosing.reads" and A.RECORD_DIFFERENCE.match(x)]
+    assert not [x for x in A.judge(forged, f | {"landed": ["P.new"]}, FILES)[0] if x.code == "choosing.reads"]
+
+
+def test_a_moved_entry_at_a_generated_site_is_carried_by_its_definition_s_group():
+    """An entry at a generated constant (`P.pick._f`) follows its declaration's move when its group is unchanged."""
+    def built(name: str, h: str, moved: str | None = None, **over) -> dict:
+        f = facts(**over)
+        f["pins"]["P.t"]["reads"].append({"name": name, "module": "P.Defs", "kind": "def", "hash": h, "sha256": sha(h)}
+                                         | ({"moved": {"as": "P.pick", "sha256": sha(moved)}} if moved else {}))
+        f["pins"]["P.t"]["finders"] = {"findings": [finding(site=f"{name}._f")], "unfolds": 2, "finished": True,
+                                       "error": None}
+        return f
+
+    moves = {"P.pick": "P.newPick"}
+    fails, lock = A.judge(POLICY | {"choosing": {"P.pick._f": CHOSEN}}, built("P.pick", "4" * 32), FILES, update=True)
+    assert fails == []
+    for new, carried in (("4" * 32, True), ("5" * 32, False)):
+        fails, up = A.judge(A.renamed_current(lock, moves), built("P.newPick", "6" * 32, new, moves=moves), FILES,
+                            update=True)
+        assert [(f.code, f.entry) for f in fails if f.code.startswith("choosing")] == (
+            [] if carried else [("choosing.unlisted", "P.newPick._f")]), new
+        moved = {"as": "P.pick._f", "sha256": A.definitions(lock["reads"]["P.Defs"])["P.pick"]}
+        assert up.get("choosing", {}) == ({"P.newPick._f": CHOSEN | {"moved": moved}} if carried else {}), new
+
+
+def test_a_deployed_guarantee_s_gap_holds_one_choice_item_for_each_head_its_finders_reach_a_listed_definition_under():
+    """A deployed guarantee whose finders reach two listed definitions under one head has one `choice:<head>` item in its
+    gap, and one more for a second head; a guarantee citing it through a domain hypothesis has them too.  An item enters
+    the gap only by a person's hand, and leaves once the last definition under its head is cured (`trust.gap-gone`, which
+    an update drops).  The lock alone keeps the items its entry holds while a record lists a listed definition."""
+    two = walked(finding(site="P.a"), finding(site="P.b"))
+    lock = A.judge(recorded(), two, FILES, update=True)[1] | {
+        "choosing": {"P.a": CHOSEN, "P.b": CHOSEN}, "trust": {"base": HYP}, "deployed": ["P.t"]}
+    fails = A.judge(lock, two, FILES)[0]
+    assert [(f.code, f.entry) for f in fails] == [("trust.gap-new", "P.t")] and "rests on choice:H.cr, outside" in fails[0]
+    held = lock | {"trust_gap": {"P.t": ["choice:H.cr"]}}
+    assert A.judge(held, two, FILES)[0] == [] and A.trust_gaps(held) == {"P.t": ["choice:H.cr"]}
+    heads = walked(finding(site="P.a"), finding(site="P.b", head="H.strict", at=3))
+    assert A.trust_gaps(held, A.choice_items(held, heads)) == {"P.t": ["choice:H.cr", "choice:H.strict"]}
+    cited = {"guarantees": {"G": {"premises": {"domain": ["D.t"]}}, "P.t": held["guarantees"]["P.t"]},
+             "domain": {"D.t": {"why": "P.t's statement", "cites": "P.t"}}, "deployed": ["G"], "choosing": held["choosing"],
+             "trust": {"base": HYP}}
+    assert A.trust_gaps(cited, {"P.t": ["choice:H.cr"]}) == {"G": ["choice:H.cr"]}
+    cured = walked()
+    fails = A.judge(held, cured, FILES)[0]
+    assert {(f.code, f.entry) for f in fails} >= {("trust.gap-gone", "P.t"), ("choosing.passed", "P.a")}
+    up_fails, up = A.judge(held, cured, FILES, update=True)
+    assert up_fails == [] and up["trust_gap"] == {} and up["choosing"] == {}

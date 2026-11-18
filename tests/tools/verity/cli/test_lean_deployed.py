@@ -100,6 +100,33 @@ def test_a_premise_two_locks_list_is_counted_once_with_equal_fields_and_with_two
     assert t["by_owner"]["y"] == {"deployed": 0, "gap_premises": 1, "open": 1, "overdue": 1, "no_honest_witness": 0}
 
 
+def test_a_choice_item_lists_the_definitions_its_guarantee_reaches_with_the_earliest_due():
+    """A deployed guarantee whose `trust_gap` entry holds a `choice:<head>` item keeps it while a record of its closure
+    lists a definition `choosing` lists: the item is of kind `choice`, listed once for each such definition with its
+    owner, issue and due, its `due` the earliest and `overdue` when that is before today.  Cured, the item leaves the gap
+    the lock alone computes, and the held entry differs."""
+    item = "choice:Base.CR"
+    chosen = {"D.late": {"owner": "@proofs", "issue": "X-2", "due": "2030-06-01"},
+              "D.later": {"owner": "@soundness", "issue": "X-3", "due": "2030-07-01"}, "D.other": entry()}
+    out = run({"pkg/lean-audit.json": lock({"P.G": {"assumptions": ["Base.CR"], "choosing": ["D.late", "D.later"]}},
+                                           ["P.G"], {"P.G": [item]}, choosing=chosen)})
+    assert out["guarantees"][0]["gap"] == [item] and out["guarantees"][0]["held_differs"] is None
+    row = premise(out, item)
+    assert (row["kind"], row["owner"], row["issue"], row["due"], row["overdue"], row["in_gap_of"]) == (
+        "choice", None, None, "2030-06-01", True, ["P.G"])
+    assert row["listed"] == [
+        {"lock": "pkg/lean-audit.json", "kind": "choice", "owner": "proofs", "issue": "X-2", "due": "2030-06-01",
+         "definition": "D.late"},
+        {"lock": "pkg/lean-audit.json", "kind": "choice", "owner": "soundness", "issue": "X-3", "due": "2030-07-01",
+         "definition": "D.later"}]
+    assert not run({"pkg/lean-audit.json": lock({"P.G": {"choosing": ["D.late"]}}, ["P.G"], {"P.G": [item]}, choosing=chosen)},
+                   datetime.date(2030, 6, 1))["premises"][0]["overdue"]
+    cured = run({"pkg/lean-audit.json": lock({"P.G": {"assumptions": ["Base.CR"]}}, ["P.G"], {"P.G": [item]},
+                                             choosing=chosen)})
+    assert cured["guarantees"][0]["gap"] == [] and cured["guarantees"][0]["held_differs"] == {
+        "only_held": [item], "only_computed": []}
+
+
 def test_a_lock_that_holds_only_open_premises():
     out = run({"only/lean-audit.json": {"open": {"O.One": entry(), "O.Two": entry()}}})
     assert out["guarantees"] == []
