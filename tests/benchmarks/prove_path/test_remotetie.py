@@ -78,6 +78,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words i
 
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
@@ -225,8 +226,8 @@ def make_toy() -> SimpleNamespace:
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
     low = WC.lower(reg, CLASS, None, WC.Grain(), tables=TABLES)
     fields = _weights(low.fn)
-    state = WRS.standin_state(IB.program_digest(low.circuit), CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)],
-                              window=OPEN)
+    state = WRS.state_value(IB.program_digest(low.circuit), CLASS,
+                            SR.standin_rows(CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)]), window=OPEN)
     values = {**WW.weight_values(reg, fields, None, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])
              for row, _ in WRS.scan_slots(low, state.rows)]
