@@ -1841,22 +1841,34 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
 
 @pytest.mark.parametrize("product", ["onsite", "remote"])
 def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, product):
-    """Every premise a record's development row states, met or not, ends its ``why`` with its runner's phrase on the
-    record's path (`PREMISE_RUNNERS`), and the phrase follows the runner: a met premise never reads as an auditor's."""
-    assert set(S.PREMISE_RUNNERS) == set(BR.PRODUCTS)
+    """Every premise a record's development row states ends its ``why`` with who ran its check on the record's path
+    (`RAN_BY`), and so does each row `RAN_BY` names, at the end of its ``answer_from`` (the ``RECORD`` line's
+    ``answers``): a met premise never reads as an auditor's, and the words follow the table when its runner changes."""
+    assert set(S.RAN_BY) == set(BR.PRODUCTS)
     doc = {"verdict": "accept", "AcceptedLive": {"met": True, "why": S.LIVE_MET},
            "SaltIsLiveCoin": {"met": True, "why": S.SALT_MET}}
-    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc}}
+    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc},
+            **{k: {"verdict": "error", "why": "x"} for k in ("space", "bandwidth", "wipe")}}
+    io = {"verdict": "accept", "format": "verity/inference-only/v1"}
 
-    def stated() -> dict:
-        report, _rec, _line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product)
-        return report["protocols"]["work"]["development"]
+    def stated() -> tuple[dict, dict]:
+        report, _rec, line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product, inference_only=io)
+        return report["protocols"], line["answers"]
 
-    got = stated()
+    got, answers = stated()
+    said = S.RAN_BY[product]
     for p in S.PREMISES:
-        assert got[p]["met"] and got[p]["why"] == f"{doc[p]['why']}; {S.RAN_BY['piece']}"
-    monkeypatch.setitem(S.PREMISE_RUNNERS, product, {**S.PREMISE_RUNNERS[product], "SaltIsLiveCoin": "lean"})
-    assert stated()["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; {S.RAN_BY['lean']}" != got["SaltIsLiveCoin"]["why"]
+        assert got["work"]["development"][p]["met"] and said[p].startswith(S.PIECE)
+        assert got["work"]["development"][p]["why"] == f"{doc[p]['why']}; {said[p]}"
+    assert all((S.ONSITE_UNDECIDED in said[k]) is (product == "onsite") for k in (*S.PREMISES, "space", "bandwidth", "wipe"))
+    kept = [k for k in ("space", "bandwidth", "wipe", "integrity", S.INFERENCE_ONLY_ROW) if got[k]["verdict"] != "dropped"]
+    assert {"integrity", S.INFERENCE_ONLY_ROW} <= set(kept)
+    for k in kept:
+        assert got[k]["answer_from"].endswith(f"; {said[k]}")
+    assert answers["sampled proofs"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
+    assert answers["the inference-only verifier"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
+    monkeypatch.setitem(S.RAN_BY, product, {**said, "SaltIsLiveCoin": "recomputed elsewhere"})
+    assert stated()[0]["work"]["development"]["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; recomputed elsewhere"
     assert doc["SaltIsLiveCoin"]["why"] == S.SALT_MET, "the piece's own document is left as it wrote it"
 
 

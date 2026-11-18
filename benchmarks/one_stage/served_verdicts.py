@@ -1352,25 +1352,48 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
 
 
-#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
-#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
-PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
-                                                    "remote": {p: "piece" for p in PREMISES}}
-#: what a premise's ``why`` says of who ran its check (`ran_by`)
-RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
-          "lean": "recomputed on the compose node by the Lean verifier",
-          "device": "run by an auditor's device"}
+#: a check only the developer's piece runs, as a premise's ``why`` ends (`RAN_BY`)
+PIECE = "run by the developer's piece; no auditor-side entry runs it"
+#: what the onsite path adds to a check only the developer's piece runs: the command line's onsite check
+#: (`verity_cli.served_table`) is where each accept the served node wrote becomes undecided
+ONSITE_UNDECIDED = "the command line's onsite check (verity_cli served_table) holds each accept the served node wrote as undecided"
+#: true of what the verifier accepts today (its main form): the sampled proofs' and the inference-only rows say both
+MAIN_FORM = True
+BLOCKS_ALONE = ("each sampled proof block is proved alone; that a block's inputs are the outputs of the blocks before it "
+                "is assumed, not checked")
+TIED_BY_CONSTRUCTION = ("the circuit the policy was checked on and the circuit the proofs are about are tied by "
+                        "construction only")
+#: who ran the check behind what a row shows, by the record's product, then by premise (`PREMISES`, ending its ``why``)
+#: or by row (ending its ``answer_from``); the compose node's Lean re-run reaches only the sampled proofs' row, which
+#: carries no premise, so every premise is the developer's piece's on both paths
+_ROWS_RAN_BY = {
+    "space": ("its check (period.answer, with setup's tie, and pous-run-protocol) ran by the developer's piece "
+              "(benchmarks/pous/served_piece.py) on the served node; no auditor-side entry runs it"),
+    "bandwidth": ("its check (poub-p2-protocol's replay of the case) ran by the developer's piece "
+                  "(benchmarks/pous/held_bandwidth.py) on the served node; no auditor-side entry runs it; a live verdict "
+                  "on the auditor's device exists (poub-verifier, its bandwidth party) and is not the one this row reads"),
+    "wipe": ("its check (wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) ran by the developer's piece "
+             "(wipe_on_node.py) on the served node; no auditor-side entry runs it; not certified: survivors bounded by "
+             "nothing"),
+}
+_MAIN_FORM_SAYS = f"{BLOCKS_ALONE}; {TIED_BY_CONSTRUCTION}"
+RAN_BY: Mapping[str, Mapping[str, str]] = {
+    product: {**{n: PIECE + tail for n in PREMISES}, **{k: why + tail for k, why in _ROWS_RAN_BY.items()},
+              **({"integrity": _MAIN_FORM_SAYS, INFERENCE_ONLY_ROW: _MAIN_FORM_SAYS} if MAIN_FORM else {})}
+    for product, tail in (("onsite", f"; {ONSITE_UNDECIDED}"), ("remote", ""))}
 
 
-def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
-    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
-    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
-    doc = row.get("development")
-    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
-        return dict(row)
-    runners = PREMISE_RUNNERS[product]
-    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
-                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
+def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """Row ``key`` saying who ran its checks on ``product``'s path (`RAN_BY`): each premise its development document
+    states (`premises`) at the end of its ``why``, the row's own at the end of its ``answer_from``."""
+    said, out = RAN_BY[product], dict(row)
+    if key in said and "answer_from" in out:
+        out["answer_from"] = f"{out['answer_from']}; {said[key]}"
+    doc = out.get("development")
+    if isinstance(doc, Mapping) and any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        out["development"] = {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {said[n]}"}
+                                        for n in PREMISES if isinstance(doc.get(n), Mapping)}}
+    return out
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
@@ -2636,13 +2659,14 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
+    rows = {k: r if k in drops else ran_by(k, r, product) for k, r in rows.items()}
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -2671,9 +2695,11 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev,
              **({"not_covered": {NAMES[k]: FRONT_GROUP for k in apart}} if apart else {})}
-    io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
+    io = {} if inference_only is None else {
+        INFERENCE_ONLY_ROW: ran_by(INFERENCE_ONLY_ROW, inference_only_row(inference_only), product)}
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
+        answers["the inference-only verifier"] = io[INFERENCE_ONLY_ROW]["answer_from"]
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped", BR.REFUSED) and NAMES[k] not in elsewhere)
     if bad:
