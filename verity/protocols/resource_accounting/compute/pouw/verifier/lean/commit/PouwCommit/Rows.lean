@@ -20,8 +20,6 @@ that no key derives. It builds a plain tree only for a caller that says its rows
 -/
 
 @[expose] public section
-set_option backward.privateInPublic true
-set_option backward.privateInPublic.warn false
 
 namespace PouwCommit
 
@@ -30,38 +28,6 @@ open Flock
 def ROW_SCHEMA : String := Domains.POUW_AUDIT_ROW
 def TILE_SCHEMA : String := Domains.POUW_AUDIT_TILE
 def HM96_SALT : Nat := 192
-
-private def rotl (x : UInt32) (n : UInt32) : UInt32 := (x <<< n) ||| (x >>> (32 - n))
-
-private def u32le (b : ByteArray) (o : Nat) : UInt32 :=
-  (b.get! o).toUInt32 ||| ((b.get! (o + 1)).toUInt32 <<< 8) ||| ((b.get! (o + 2)).toUInt32 <<< 16) |||
-    ((b.get! (o + 3)).toUInt32 <<< 24)
-
-/-- ChaCha20's block function, 20 rounds, a 64-bit counter in words 12, 13 and a 64-bit nonce in words 14, 15
-(`audit.chacha20_block`). -/
-def chacha20Block (key : ByteArray) (counter nonce : Nat) : ByteArray := Id.run do
-  let s : Array UInt32 := #[0x61707865, 0x3320646E, 0x79622D32, 0x6B206574] ++ (Array.range 8).map (u32le key <| 4 * ·) ++
-    #[(counter % 2 ^ 32).toUInt32, (counter / 2 ^ 32 % 2 ^ 32).toUInt32, (nonce % 2 ^ 32).toUInt32,
-      (nonce / 2 ^ 32 % 2 ^ 32).toUInt32]
-  let mut x := s
-  let qr (x : Array UInt32) (a b c d : Nat) : Array UInt32 := Id.run do
-    let mut x := x
-    for (p, q, r, n) in [(a, b, d, 16), (c, d, b, 12), (a, b, d, 8), (c, d, b, 7)] do
-      x := x.set! p (x[p]! + x[q]!)
-      x := x.set! r (rotl (x[r]! ^^^ x[p]!) n.toUInt32)
-    return x
-  for _ in [0:10] do
-    x := qr x 0 4 8 12; x := qr x 1 5 9 13; x := qr x 2 6 10 14; x := qr x 3 7 11 15
-    x := qr x 0 5 10 15; x := qr x 1 6 11 12; x := qr x 2 7 8 13; x := qr x 3 4 9 14
-  let mut out := ByteArray.emptyWithCapacity 64
-  for i in [0:16] do
-    let w := x[i]! + s[i]!
-    for j in [0:4] do out := out.push (w >>> (8 * j).toUInt32).toUInt8
-  return out
-
-/-- Leaf `i`'s 192-byte salt in the tree of salt nonce `nonce` (`audit.hm96_salt`). -/
-def hm96Salt (key : ByteArray) (nonce i : Nat) : ByteArray :=
-  chacha20Block key (3 * i) nonce ++ chacha20Block key (3 * i + 1) nonce ++ chacha20Block key (3 * i + 2) nonce
 
 /-- A tree's frame and leaves: a plain frame-v3 tree, or `hm96-sha512`'s, of rows or (`digests`) of tile digests. -/
 structure RowsDomain where

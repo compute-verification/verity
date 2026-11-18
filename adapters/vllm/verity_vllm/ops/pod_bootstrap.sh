@@ -110,8 +110,8 @@ printf '#!%s\nimport sys\nfrom verity_vllm.pipeline.cli import main\nif __name__
 [ "${#OWN_CACHES[@]}" -eq 0 ] || rm -rf "${OWN_CACHES[@]}"
 # the CUDA library headers torch reads, which every tap build below includes: the toolkit's, else the wheels just installed
 if [ "$MODE" = gpu ]; then
-  if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
+  [ -n "${CUDA_HOME:-}" ] || fail CUDA "CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)"
+  export CUDA_HOME
   . verity_vllm/ops/cuda_headers.sh
   cuda_headers "$PY" >"$OUT/cuda_headers.log" 2>&1 || fail HEADERS "$(tail -1 "$OUT/cuda_headers.log")"
   [ -s "$OUT/cuda_headers.log" ] && log "$(cat "$OUT/cuda_headers.log")"

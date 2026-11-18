@@ -221,7 +221,7 @@ class Row:
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
             raise Stop(3)
-        env["PATH"] = f"{os.path.dirname(self.py)}:{self.env.cuda_bin}:{self.env.environ.get('PATH', '')}"
+        env["PATH"] = f"{os.path.dirname(self.py)}:{self.env.cuda_bin or os.path.join(self.env.cuda_home, 'bin')}:{self.env.environ.get('PATH', '')}"
         env["VERITY_TIMELINE"] = self.timeline
 
     def path(self, rel: str) -> str:
