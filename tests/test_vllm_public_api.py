@@ -352,7 +352,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.boolean_fp8_moe",
     "verity_vllm.definitions.registry.boolean_int8",
     "verity_vllm.definitions.registry.boolean_io_shell",
-    "verity_vllm.definitions.registry.boolean_silu",
     "verity_vllm.definitions.registry.boolean_stop_rule",
     "verity_vllm.definitions.registry.cublas_bf16",
     "verity_vllm.definitions.registry.cuda_rmsnorm",
