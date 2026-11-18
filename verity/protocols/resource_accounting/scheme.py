@@ -247,6 +247,26 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
+@dataclass(frozen=True)
+class Circuits:
+    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
+    m, k, n)``, one executed call's circuit (None without one)."""
+
+    schemes: Mapping[str, Any]
+    traced_as: Callable[[str, int, int, int], Any]
+
+
+#: the circuits of each scheme's executed computation, by the name a configuration lists it under
+CIRCUITS: dict[str, Circuits] = {}
+
+
+def register_circuits(name: str, circuits: Circuits) -> Circuits:
+    if name in CIRCUITS:
+        raise KeyError(f"circuits named {name!r} are registered already")
+    CIRCUITS[name] = circuits
+    return circuits
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -280,5 +300,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme",
-           "bound", "credited", "get", "register", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+           "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]
