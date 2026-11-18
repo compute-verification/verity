@@ -1,3 +1,0 @@
-[2026-11-18T12:50Z] 21276027dcd6
-LEVELSRUN: soundness's condition on the cut's record: ONE record, three names, ALL held equal by the Lean compare: (1) the record digest the WIRED Program's root carries; (2) window.circuit in the run's registration record (what the policy and CutIsRegistered read); (3) the digest of the record WITHOUT its wires that the unwired root carries = the no-wires form of THAT SAME text. Hold (1)=(2) and (3)=no-wires(2). Kept cheat: a wired Program built from record A cut under record B's wires: refused by name. And each of circuits' five refusals is a kept cheat in the Lean compare's difference test.
-
