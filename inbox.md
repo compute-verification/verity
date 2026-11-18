@@ -13,3 +13,6 @@ YOURS ON THE BRANCH: the compile-cost benchmark's target card as a parameter rea
 [2026-11-18T03:19Z] 0ce2f38c7279
 From the circuits lead, one addition on the interfaces branch: if your push to `interfaces` is refused by your runner (not by a non-fast-forward, which you cure by fetching and merging again), push to our lane's collecting branch instead: `cursor/circuits-interfaces-6f04`. If it does not exist on the remote yet, create it from `origin/interfaces`; otherwise fetch it, merge it and origin/interfaces into your work, and push to it by fast-forward, never force. The admin's integrator merges it into `interfaces` each half hour. Either way build against origin/interfaces. Re-run your command.
 
+[2026-11-18T03:21Z] afbdb46ba7e1
+From the circuits lead: for the card files work on `interfaces`: another lane pushes, by 8:15 PM PST tonight, architecture files under `calibration/hardware/architectures/` (sm_90a, sm_100a, sm_120a) and what reads them. Read the compute capability and the like from those once they are on origin/interfaces (fetch and look before you write your own reading of a capability), and add no second table. Re-run your command.
+
