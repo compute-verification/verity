@@ -135,4 +135,35 @@ def sw : Circuits.Wire :=
 #guard { sw with cuts := 2 }.leafAt 0 0 == none
 #guard { sw with base := -1 }.leafAt 2 0 == none
 
+-- theta: a registered weight of 4 rows (node 0) read by T's two units (node 1) at rows 1 and 2, and by unit 2 (node 2)
+-- from node 1's output, no registered input
+def r16 : Program.Ty := .value 16
+def rw2 : Program.Ty := .array 2 r16
+def regP : Program.Prog :=
+  let regIn : Program.Defn :=
+    { key := "RegisteredInput16_v1", id := "RegisteredInput16_v1", prim := true, params := #[], ret := rw2,
+      binding := some Program.REGISTRATION, gates := 1, paramLeaves := 0, outLeaves := 2 }
+  let t : Program.Defn :=
+    { key := "T", id := "T", prim := true, params := #[("w", rw2)], ret := r16, gates := 1, paramLeaves := 2,
+      outLeaves := 1 }
+  let nodes : Array Program.Node := #[{ form := .batch, fn := 0, args := #[], out := .array 4 rw2, n := 4 },
+    { form := .batch, fn := 1, out := .array 2 r16, n := 2,
+      args := #[{ ty := .array 2 rw2, seq := Program.Seq.ofParts #[.affine false 0 2 4], dims := some (2, 2) }] },
+    { form := .call, fn := 1, out := r16, args := #[{ ty := rw2, seq := Program.Seq.ofParts #[.affine false 1 0 2] }] }]
+  let root : Program.Defn :=
+    { key := "R", id := "R", prim := false, params := #[], ret := r16, gates := 0, paramLeaves := 0, outLeaves := 1,
+      body := { params := #[], retType := r16, nodes := nodes, ret := default, offsets := #[0, 0, 2] } }
+  { defs := #[regIn, t, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+def theta : Registered.Port := { x with name := "w", value := "theta", leaves := 4 }
+
+#guard ((OneCircuit.pos regP #[0, 1] theta).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 1, some 2], 0)
+#guard ((OneCircuit.pos regP #[1] theta).toOption.map fun r => (r.readsRel, r.readsFrom)) == some (#[some 2], 1)
+-- row 1 of w (`name[i]`), one leaf a row: the weight's 8 rows, leaves 3 and 5
+#guard ((OneCircuit.pos regP #[0, 1] { theta with name := "w1", param := "w[1]", leaves := 8 }).toOption.map
+  (·.readsRel)) == some #[some 3, some 5]
+-- a value of another row count than C's node, a unit reading no registered input, a parameter T lacks
+#guard (OneCircuit.pos regP #[0, 1] { theta with leaves := 3 }).toOption.isNone
+#guard (OneCircuit.pos regP #[2] theta).toOption.isNone
+#guard (OneCircuit.pos regP #[0] { theta with name := "v" }).toOption.isNone
+
 end Flock.Test.WiredPorts
