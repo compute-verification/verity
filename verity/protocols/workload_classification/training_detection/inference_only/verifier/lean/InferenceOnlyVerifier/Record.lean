@@ -606,12 +606,16 @@ theorem lookup_firstsOf (ret : Ty) (off : Nat) : (firstsOf ret).lookup off =
   induction List.range (fieldsOf ret).length with
   | nil => rfl
   | cons f fs ih =>
+    rw [List.filterMap_cons, List.find?_cons]
     by_cases hb : 0 < Spot.Bits.bitsOf (fieldsOf ret)[f]!
-    · by_cases ho : Spot.Edges.fieldWord ret f = off
-      · simp [List.filterMap_cons, hb, ho, List.lookup]
-      · have : (off == Spot.Edges.fieldWord ret f) = false := by simpa using Ne.symm ho
-        simp [List.filterMap_cons, hb, ho, List.lookup, this, ih]
-    · simp [List.filterMap_cons, hb, ih]
+    · rw [if_pos hb]
+      by_cases ho : Spot.Edges.fieldWord ret f = off
+      · simp only [List.lookup, ho, beq_self_eq_true, hb, decide_true, Bool.and_self]
+      · have h1 : (off == Spot.Edges.fieldWord ret f) = false := by simpa using Ne.symm ho
+        have h2 : (Spot.Edges.fieldWord ret f == off) = false := by simpa using ho
+        simp only [List.lookup, h1, h2, Bool.false_and, ih]
+    · rw [if_neg hb]
+      simp only [hb, decide_false, Bool.and_false, ih]
 
 theorem lookup_map_tid {β} (ts : List Tmpl) (v : Tmpl → β) (k : String) :
     (ts.map fun t => (t.tid, v t)).lookup k = (ts.find? (·.tid == k)).map v := by
