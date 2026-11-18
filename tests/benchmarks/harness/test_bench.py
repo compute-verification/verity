@@ -502,6 +502,34 @@ def test_the_config_a_declared_schemes_arm_hands_passes_that_schemes_own_setting
     assert "coins" not in own and settings(scheme, own)["challenger"] == "10.0.0.7:7000"
 
 
+def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found(monkeypatch):
+    """A guard never fails open: an arm serving a declared useful-work scheme whose engine exposes no device run is
+    refused, naming the scheme, and not passed as ``provided`` False; the run Pearl+'s attach holds (``llm.scheme.run``)
+    is the one gated; an arm that serves no declared scheme keeps its unprovided gate."""
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+
+    def engine(arm, scheme):
+        got = object.__new__(E._VllmEngine)
+        got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+        got.llm = SimpleNamespace(protocols=None, scheme=scheme)
+        return got
+
+    for attached in (None, SimpleNamespace(run=None)):
+        gate = engine(arm, attached).custom_gate()
+        assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
+        assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
+    run = object.__new__(PearlCDeviceRun)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r: {"passed": r is run, "provided": True})
+    assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
+    h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
+    assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
+
+
 def test_the_readme_states_the_contract_the_code_keeps():
     """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""

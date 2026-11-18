@@ -53,7 +53,8 @@
       "at": {"type": "object", "required": ["1/100", "1/1000000"], "additionalProperties": false,
              "properties": {"1/100": {"$ref": "#/$defs/at"}, "1/1000000": {"$ref": "#/$defs/at"}}},
       "runs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-      "named_terms": {"$ref": "#/$defs/named_terms"}
+      "named_terms": {"$ref": "#/$defs/named_terms"},
+      "premises": {"oneOf": [{"type": "array", "items": {"type": "string", "minLength": 1}}, {"type": "string", "minLength": 1}]}
      }}
    ]
   }

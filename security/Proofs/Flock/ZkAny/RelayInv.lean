@@ -28,14 +28,14 @@ open _root_.Flock (SessionSpec)
 and placement `pl` at which `P` holds, what the relay read there is the model's next message at a model slot, and `P`
 holds at the next request where the session goes on, with the slot's stream seen and a model slot's message taken,
 `EnvPre` holds from wherever `P` holds. -/
-theorem envPre_inv {spec : SessionSpec} (P : List String → State → Placed → List Env → List Claims.Msg → Prop)
+theorem envPre_inv {spec : SessionSpec} (P : List String → State → Placed → List Env → List Hash.Msg → Prop)
     (hstep : ∀ seen st pl e rest ms k, slot st pl = some k → P seen st pl (e :: rest) ms →
       (isModel k = true → EnvOk spec seen k e (ms.headD [])) ∧
       (((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
           (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true →
         P (seenAfter seen k) (stepK true st pl (some (tagOf k)) (.ok k) e).st
           (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest (if isModel k then ms.tail else ms))) :
-    ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Claims.Msg),
+    ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Hash.Msg),
       P seen st pl es ms → EnvPre spec seen (schedSteps true st pl es) ms
   | [], _, _, _, _, _ => trivial
   | e :: rest, seen, st, pl, ms, hP => by

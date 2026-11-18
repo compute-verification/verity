@@ -373,7 +373,7 @@ end Session
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
 that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
-def ZkSlotAlign (x : Claims.Msg) : Prop :=
+def ZkSlotAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -394,7 +394,7 @@ variable [S : ZkSetup]
 /-- **The simulated fork reaches each cap's slot after its masked fork round**: at every masked statement in scope
 that sets up at a sample, every prover and tape, every table `j` and table of columns, the primed prover at the simulated
 strategy after `Commit` (`zkSimAt`) reaches rep `r`'s level-`ℓ + 1` table node after `zkRd j i` coins (`SlotRSZ`). -/
-def ZkSlotAlign (x : Claims.Msg) : Prop :=
+def ZkSlotAlign (x : Hash.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -415,7 +415,7 @@ variable [S : ZkSetup]
 
 /-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
 position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x := by
+theorem zkForkAlign_of_slot {x : Hash.Msg} (h : ZkSlotAlign x) : ZkForkAlign x := by
   intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
   have ha := advRSZ_le_forkC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ _ r ℓ.val _ _
     (h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u)
@@ -426,7 +426,7 @@ end Gen
 
 /-- **The alignment from the slot's coin count**: `ZkForkAlign` from `ZkSlotAlign` by `advRSZ_le_forkC`, table `j`'s
 position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkForkAlign_of_slot {x : Claims.Msg} (h : ZkSlotAlign x) : ZkForkAlign x :=
+theorem zkForkAlign_of_slot {x : Hash.Msg} (h : ZkSlotAlign x) : ZkForkAlign x :=
   Gen.zkForkAlign_of_slot (S := S₀) (x := x) (h := h)
 
 namespace Gen

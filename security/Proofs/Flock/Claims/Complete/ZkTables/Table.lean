@@ -117,7 +117,7 @@ def TableT (st : Flock.Stmt) (tr : Trace) : Prop :=
 /-- **A rep's inputs** at the tape's row `i`: the table's `--zk` schedule `v`, its masked level-0 commitment `cm` of
 its packed trace, its extra claims `e` at the points `pts`, each of the table's `m_pts`, and its pads' commitment
 `ic`. -/
-structure RepIn (H : Claims.Msg → Claims.Msg) (st : Flock.Stmt) (tr : Trace) (ω : TapeZk) (i : ℕ)
+structure RepIn (H : Hash.Msg → Hash.Msg) (st : Flock.Stmt) (tr : Trace) (ω : TapeZk) (i : ℕ)
     (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ) (ic : InnerCommit) :
     Prop where
   schedule : Zk.schedule (Setup.ofCircuit st).wideLeaf (Setup.ofCircuit st).m = .ok v
@@ -151,7 +151,7 @@ points and the rep's own at the coins `r` (`MaskRank.claimsAt`) have full rank o
 def MaskRankT (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n : ℕ) (prior : Array (List F128)) : Prop :=
   MaskRank.maskRankOk (prior ++ MaskRank.claimsAt st r n) (maskWordsOf st) = true
 
-variable (H : Claims.Msg → Claims.Msg) in
+variable (H : Hash.Msg → Hash.Msg) in
 /-- **Rep `rep` of a table** on its trace `tr`, at the tape's row `i`, from the empty transcript at its domain `d`,
 each ask answered by the coins `r`, its rank check at the earlier claim points `prior` over the words `ws`. -/
 def repT {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace) (ω : TapeZk) (i : ℕ) (d : ByteArray)
@@ -166,7 +166,7 @@ def repT {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace) (ω : Tap
 
 section Props
 
-variable (H : Claims.Msg → Claims.Msg)
+variable (H : Hash.Msg → Hash.Msg)
 
 /-- **The honest masked rep proof fits its shape**, at a table: on its inputs, at most 2,048 extra claims (a good
 case's, `Case.extras_le`), each masked proof the rep returns, at any earlier claim points and words, is `Shaped` at
@@ -185,7 +185,7 @@ def ProverRunsT : Prop :=
   Claims.Out64 H → ∀ (st : Flock.Stmt) (tr : Trace), TableT st tr → ∀ (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
     (ic : InnerCommit), RepIn H st tr ω i v cm pts e rep ic → rep < 2 →
-    (∀ (l : Array Claims.Msg) (prior : Array (List F128)), 0 < l.size → CoinsT st v e r l.size →
+    (∀ (l : Array Hash.Msg) (prior : Array (List F128)), 0 < l.size → CoinsT st v e r l.size →
       MaskRankT st r l.size prior →
         ∃ pt l', (repT H r st tr ω i d v cm e rep ic prior (maskWordsOf st)).go l = (.ok pt, l')) ∧
     ∀ prior ws, Ret (repT H r st tr ω i d v cm e rep ic prior ws) fun pt => pt.2.rounds.size = repRoundsT st v e
@@ -197,8 +197,8 @@ def LigeritoT : Prop :=
   Claims.Out64 H → ∀ (st : Flock.Stmt) (tr : Trace), TableT st tr → ∀ (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
     (ic : InnerCommit), RepIn H st tr ω i v cm pts e rep ic → rep < 2 →
-    ∀ (prior : Array (List F128)) (ws : List ℕ) (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript)
-      (l' : Array Claims.Msg), 0 < l.size →
+    ∀ (prior : Array (List F128)) (ws : List ℕ) (l : Array Hash.Msg) (p : Zk.ZkProof) (t' : Transcript)
+      (l' : Array Hash.Msg), 0 < l.size →
       CoinsT st v e r l.size → (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l') →
     ∀ R : Array Round, Agrees R t'.rounds 0 →
     ∀ q, (Zk.replayWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st)
@@ -215,8 +215,8 @@ def InnerT : Prop :=
   Claims.Out64 H → ∀ (st : Flock.Stmt) (tr : Trace), TableT st tr → ∀ (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
     (ic : InnerCommit), RepIn H st tr ω i v cm pts e rep ic → rep < 2 →
-    ∀ (prior : Array (List F128)) (ws : List ℕ) (l : Array Claims.Msg) (p : Zk.ZkProof) (t' : Transcript)
-      (l' : Array Claims.Msg), 0 < l.size →
+    ∀ (prior : Array (List F128)) (ws : List ℕ) (l : Array Hash.Msg) (p : Zk.ZkProof) (t' : Transcript)
+      (l' : Array Hash.Msg), 0 < l.size →
       CoinsT st v e r l.size → (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l') →
     ∀ R : Array Round, Agrees R t'.rounds 0 →
     ∀ q, (Zk.replayWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st)
@@ -236,7 +236,7 @@ end Props
 
 /-! ## Each table of a good case -/
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **Each table of a good case of the deployed relation and its trace** (`TableT`): table `i`'s share of the witness
 satisfies table `i` alone (`Readable.relS_only`), and its trace is that share's from bit `0` (`traces_getElem`). -/
@@ -408,11 +408,11 @@ theorem Case.maskRankT (c : Case H rel) {q : ℕ} (hq : q < 2 * c.sts.size) {v :
     exact hAt
 
 /-- **A returning masked rep's round `1` is its zerocheck's outer coins**, `m − 13` of them (`repPZk_rs`). -/
-theorem repPZk_round1 (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_round1 (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m)
-    {l : Array Claims.Msg} {P : Zk.ZkProof} {t' : Transcript} {l' : Array Claims.Msg}
+    {l : Array Hash.Msg} {P : Zk.ZkProof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run (Transcript.init #[] dom)).go l = (.ok (P, t'), l')) :
     t'.rounds[1]!.n = st.m - 13 := by
@@ -443,8 +443,8 @@ theorem claimPoints_congr {m kLog : ℕ} {f g : ℕ → ℕ → F128} (h0 : ∀ 
     Array.map_congr_left fun e he => h1 e (by rw [Array.mem_range] at he; exact he)
   simp only [hr, ht, hc]
 
-theorem Recs.getElem {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs →
+theorem Recs.getElem {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg}, Recs resp i rs bs →
       ∀ j (hj : j < rs.length), ∃ b, RoundIs resp (i + j) b rs[j]
   | _, [], [], _, _, hj => absurd hj (by simp)
   | _, _ :: _, b :: _, h, 0, _ => ⟨b, h.1⟩
@@ -457,9 +457,9 @@ theorem Recs.getElem {resp : ℕ → Claims.Msg} :
 /-- **A returning rep's claim points read off its rounds are its claim points at the coins** (`MaskRank.claimsAt`,
 from its first send `l`): each recorded round's coins are its send's (`repPZk_rec`), its round `1` holds the
 zerocheck's `m − 13` outer coins (`repPZk_round1`), and the points read rounds before `m + k_log`. -/
-theorem repT_points (H : Claims.Msg → Claims.Msg) {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace)
+theorem repT_points (H : Hash.Msg → Hash.Msg) {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace)
     (ω : TapeZk) (i : ℕ) (d : ByteArray) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
-    (ic : InnerCommit) (prior : Array (List F128)) (ws : List ℕ) {l l' : Array Claims.Msg} {p : Zk.ZkProof}
+    (ic : InnerCommit) (prior : Array (List F128)) (ws : List ℕ) {l l' : Array Hash.Msg} {p : Zk.ZkProof}
     {t' : Transcript} (hm : 14 ≤ st.m)
     (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l'))
     (hsz : st.m + st.c.kLog ≤ t'.rounds.size) :
@@ -492,9 +492,9 @@ theorem repT_points (H : Claims.Msg → Claims.Msg) {k : ℕ} (r : Fin k → Coi
   · exact key 1 (by omega) a (by omega)
 
 /-- **A returning rep's sends grow by its recorded rounds.** -/
-theorem repT_size (H : Claims.Msg → Claims.Msg) {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace)
+theorem repT_size (H : Hash.Msg → Hash.Msg) {k : ℕ} (r : Fin k → Coin) (st : Flock.Stmt) (tr : Trace)
     (ω : TapeZk) (i : ℕ) (d : ByteArray) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (rep : ℕ)
-    (ic : InnerCommit) (prior : Array (List F128)) (ws : List ℕ) {l l' : Array Claims.Msg} {p : Zk.ZkProof}
+    (ic : InnerCommit) (prior : Array (List F128)) (ws : List ℕ) {l l' : Array Hash.Msg} {p : Zk.ZkProof}
     {t' : Transcript} (hgo : (repT H r st tr ω i d v cm e rep ic prior ws).go l = (.ok (p, t'), l')) :
     l'.size = l.size + t'.rounds.size := by
   unfold repT at hgo
@@ -521,8 +521,8 @@ its rep `0`'s claim points at the coins (`Case.maskRankT`), which are the ones r
 theorem proverRunsAt_of (hPR : ProverRunsT H) (h64 : Claims.Out64 H) (c : Case H Readable.relation) :
     ProverRunsAt c := by
   intro v cm e ic hin l₀ hl₀
-  have hstep : ∀ q < 2 * c.sts.size, ∀ l : Array Claims.Msg, l.size = repStartZk c.spec c.sts q →
-      ∃ x : (Zk.ZkProof × Transcript) × Array Claims.Msg,
+  have hstep : ∀ q < 2 * c.sts.size, ∀ l : Array Hash.Msg, l.size = repStartZk c.spec c.sts q →
+      ∃ x : (Zk.ZkProof × Transcript) × Array Hash.Msg,
         (repRunJ H Readable.relation c (q / 2) (v (q / 2)) (cm (q / 2)) (e (q / 2)) (q % 2) (ic (q / 2) (q % 2))
           (c.priorT q)).go l = (.ok x.1, x.2) ∧ x.2.size = repStartZk c.spec c.sts (q + 1) ∧
         MaskRank.roundPoints c.sts[q / 2]!.m c.sts[q / 2]!.c.kLog x.1.2.rounds =
@@ -546,12 +546,12 @@ theorem proverRunsAt_of (hPR : ProverRunsT H) (h64 : Claims.Out64 H) (c : Case H
       exact repT_points H c.r _ _ _ _ _ _ _ _ _ _ _ _ (by have := hT.1; omega) hgo
         (by rw [hc]; exact repRoundsT_ge _ _ _)
   classical
-  let g : ℕ → Array Claims.Msg → (Zk.ZkProof × Transcript) × Array Claims.Msg := fun q l =>
+  let g : ℕ → Array Hash.Msg → (Zk.ZkProof × Transcript) × Array Hash.Msg := fun q l =>
     if h : q < 2 * c.sts.size ∧ l.size = repStartZk c.spec c.sts q then Classical.choose (hstep q h.1 l h.2)
     else (default, l)
   have hg : ∀ q l (h : q < 2 * c.sts.size ∧ l.size = repStartZk c.spec c.sts q),
       g q l = Classical.choose (hstep q h.1 l h.2) := fun q l h => dite_eq_left h
-  let ls : ℕ → Array Claims.Msg := fun q => Nat.rec (motive := fun _ => Array Claims.Msg) l₀ (fun q l => (g q l).2) q
+  let ls : ℕ → Array Hash.Msg := fun q => Nat.rec (motive := fun _ => Array Hash.Msg) l₀ (fun q l => (g q l).2) q
   have hls : ∀ q, q ≤ 2 * c.sts.size → (ls q).size = repStartZk c.spec c.sts q := by
     intro q
     induction q with
@@ -731,7 +731,7 @@ theorem lgInnerAt_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRun
 share, with error `δc H`, at any number of tables, under the JSON library's specification, from the four premises at
 each table: the rep proofs' shapes (`RepShapedT`), the masked prover's reps (`ProverRunsT`), the masked Ligerito
 (`LigeritoT`) and the inner proof (`InnerT`). -/
-theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (hR : RepShapedT H)
+theorem complete_jsonT (H : Hash.Msg → Hash.Msg) (hR : RepShapedT H)
     (hPR : ProverRunsT H) (hLg : LigeritoT H) (hIn : InnerT H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
   completeRelS H h64 (proverRunsAt_of hPR h64) (repShapedAt_of hR h64) (lgInnerAt_of h64 hR hPR hLg hIn) hMR

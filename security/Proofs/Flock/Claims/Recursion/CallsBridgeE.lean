@@ -208,7 +208,7 @@ theorem streams_sizes_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
 /-- `live_keys_eq` at `verifyWithMK keep` and `keep'`. -/
 theorem live_keys_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record record' : String} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithMK keep' hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ()) :
@@ -264,7 +264,7 @@ decode to sessions with the same rounds on every rep stream as replay reads them
 with the rounds compared after `Round.erase`). -/
 theorem sess_rounds_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record record' : String} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     {sess sess' : RunRecord}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithMK keep' hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
@@ -326,7 +326,7 @@ theorem verifyWithMK_rep (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Se
     exact ⟨c₁, h₁⟩
 
 /-- `next_acc_decide` at `nextE`. -/
-theorem nextE_acc_decide {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextE_acc_decide {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     (h : ((nextE x as cs).eval H).1 = .acc) :
     ∃ s spec sts link c₁ mids f, act false x as cs = .decide s spec sts link c₁ mids f ∧
       Runs H (decisionE s x link c₁ mids f) () (((nextE x as cs).eval H).2.map Prod.fst) := by
@@ -349,7 +349,7 @@ theorem nextE_acc_decide {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} {as : 
 files, or two of their openings collide among the two decisions' calls, or two of their proof files at one position
 differ and decode alike (`plain_calls_tied`'s, at `nextE`). The second file's rep is moved onto the first record's
 session (`Flock.With.verifyRepWith_erase`), where both are accepted as one rep on one stream. -/
-theorem plainE_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plainE_calls_tied {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((nextE x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((nextE x (ms ++ [l']) cs).eval sha512).1 = .acc) :
@@ -450,7 +450,7 @@ theorem plainE_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims
       .ok c' := by
     rw [With.verifyRepWith_erase With.Sim.liftMap_V _ spec st sch _ hy hy' hyy hP (by rw [hB])]
     exact hr₂
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Hash.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

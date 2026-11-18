@@ -54,10 +54,10 @@ compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds:
   incorrect set. -/
 def SampledLeakCarried : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
-    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (H : Hash.Msg → Hash.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
     (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow) (εchk : Claims.Msg → ℝ) (Dj : ℕ),
+    (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow) (εchk : Hash.Msg → ℝ) (Dj : ℕ),
     KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
         (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
         D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) ∧

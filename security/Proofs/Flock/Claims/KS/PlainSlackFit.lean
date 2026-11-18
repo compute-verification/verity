@@ -265,7 +265,7 @@ open Flock
 
 /-- **The plain fork rounds are before the last round**: each is a recorded round, and the last message follows
 them. -/
-theorem plainJ_succ_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plainJ_succ_lt {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {sch : FlockSoundness.Accounting.Schedule}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some sch) (r : Fin 2) (ℓ : Fin sch.levels.length) :
     (plainJ h0 hsch r ℓ).val + 1 < (V false).k x := by
@@ -289,7 +289,7 @@ theorem plainJ_succ_lt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 `FnFork.δN GF128 65536 n` of the coupling at `fnAt` (`forkCoinCoupling_plain`) and a positive revealed length
 `n t ≥ 1` at every round before the last, the slack's escapes' weights at the plain fork rounds total at most level
 0's `2·2^{d₀}·Q₀`, as `slackEsc_fitsFork_plain` and `PlainSimWrPAtD` ask. -/
-theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+theorem plain_slack_fits {x : Hash.Msg} {spec : SessionSpec} {st : Stmt}
     (h0 : (tables false x).head? = some (spec, st)) {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level}
     {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
@@ -311,7 +311,7 @@ theorem plain_slack_fits {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 coins are `Claims.Bridge.Live.fnAt` at a prefix key is at most the accepting fork with a collision there
 (`plainForkEv`) and the slack at the coupling's chances `FnFork.δN GF128 65536 n` (`slack_of_coupling` at
 `forkCoinCoupling_plain`), the fork bound `PlainSimWrPAtD` asks for. -/
-theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
     [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {L : ℕ} (hL : L = (V false).k x)
@@ -330,7 +330,7 @@ theorem plain_fork_le_fnAtK (keep : Bool → Bool) {x : Claims.Msg} {spec : Sess
     (forkCoinCoupling_plainK keep P x ω hL n hk) (plainJ (x := x) (tables_head_one h) hsch r ℓ))
 
 /-- `plain_fork_le_fnAtK` at the deployed plain verifier (`keep := id`). -/
-theorem plain_fork_le_fnAt {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
+theorem plain_fork_le_fnAt {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     {m k0 : ℕ} {l₀ l₁ : FlockSoundness.Accounting.Level} {rest : List FlockSoundness.Accounting.Level} {ext : ℕ}
     (hsch : FlockSoundness.Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {D : Type} [Fintype D]
     [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) {L : ℕ} (hL : L = (V false).k x)

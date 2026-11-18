@@ -48,10 +48,17 @@ def out_refusal(out: str | None, environ: Mapping[str, str] = os.environ) -> str
     if not out:
         return ("--out DIR is required: the serve's private records' directory, outside the run's directory "
                 "(the launchers' SERVE_ROOT); --copy-records-to $OUT mirrors the public records")
+    if why := inside_run("--out", out, environ):
+        return f"{why}: put --out outside it (the launchers' SERVE_ROOT) and mirror the public records with --copy-records-to $OUT"
+    return None
+
+
+def inside_run(what: str, path: str | Path, environ: Mapping[str, str] = os.environ) -> str | None:
+    """Why ``path`` can't hold private files: it is the run's directory or inside it, which a run uploads with no filter by
+    private name; None when it is outside."""
     for name in ("RESEARCH_RUN_DIR", "OUT"):
-        if (run := environ.get(name)) and Path(os.path.realpath(out)).is_relative_to(os.path.realpath(run)):
-            return (f"--out {out} is ${name} ({run}) or inside it, which a run uploads with no filter by private name: put --out "
-                    "outside it (the launchers' SERVE_ROOT) and mirror the public records with --copy-records-to $OUT")
+        if (run := environ.get(name)) and Path(os.path.realpath(path)).is_relative_to(os.path.realpath(run)):
+            return f"{what} {path} is ${name} ({run}) or inside it, which a run uploads with no filter by private name"
     return None
 
 
