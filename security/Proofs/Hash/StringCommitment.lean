@@ -3,6 +3,7 @@ module
 public import Definitions.Hash.StringCommitment
 public import Definitions.Hash.Guarantees
 public import Proofs.Hash.RowBinding
+public import Proofs.Hash.Bytes
 public import Mathlib.Data.Fintype.Pi
 
 /-!
@@ -40,11 +41,6 @@ end Hash.StringCommitment
 
 namespace Hash.SecurityProofs
 
-theorem collisionIn_mono {H : Msg → Digest} {xs ys : List Msg} (h : CollisionIn H xs) (hs : xs ⊆ ys) :
-    CollisionIn H ys := by
-  obtain ⟨x, hx, y, hy, hc⟩ := h
-  exact ⟨x, hs hx, y, hs hy, hc⟩
-
 /-- **The frame-v3 tree of hm96 row leaves binds**, for every hash `H` and verifier `V`: two accepted openings of one
 rank to different rows are a collision of `H` among what the two checks hashed. -/
 theorem rowTree_binds (V : RowLeaf.Verifier) (H : Msg → Digest) : (StringCommitment.rowTree V).Binds H := by
@@ -53,11 +49,11 @@ theorem rowTree_binds (V : RowLeaf.Verifier) (H : Msg → Digest) : (StringCommi
   obtain ⟨hv', ha'⟩ : o'.row = v' ∧ RowLeaf.accepts H H V c p o' := h₂
   rcases Hash.SecurityProofs.RowBinding H H V c p o o' ha ha' with h | h | h
   · exact .inl (hv.symm.trans (h.trans hv'))
-  · refine .inr (collisionIn_mono h ?_)
+  · refine .inr (Hash.BindingProofs.collisionIn_mono ?_ h)
     intro x hx
     simp only [StringCommitment.rowTree, List.mem_append] at hx ⊢
     tauto
-  · refine .inr (collisionIn_mono h ?_)
+  · refine .inr (Hash.BindingProofs.collisionIn_mono ?_ h)
     intro x hx
     simp only [StringCommitment.rowTree, List.mem_append] at hx ⊢
     tauto
