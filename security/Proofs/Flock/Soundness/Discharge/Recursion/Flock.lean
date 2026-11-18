@@ -5,8 +5,10 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Sound
 import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 public import Proofs.Flock.Soundness.Discharge.Recursion.Defs
+public import Proofs.Flock.Soundness.Discharge.Recursion.DrawnRefines
 public import Proofs.Flock.Soundness.Discharge.Recursion.Finds
 public import Proofs.Flock.Soundness.Discharge.Recursion.Off
+public import Proofs.Flock.Soundness.Discharge.Recursion.Vals
 public import Proofs.Flock.Claims.Steps.VStar
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ

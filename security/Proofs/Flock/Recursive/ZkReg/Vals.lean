@@ -49,16 +49,6 @@ open scoped ENNReal
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **The registrant's opening** of each commit string of `vbHJ`: the row and the salt `rd` reads there. -/
-def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
-    (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
-    (rd : FlockSoundness.Registered.ReadsX (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub))
-      (rsShHJS dj y₀ ht hc hscope hU hpub)) :
-    (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Pos → (vbHJ (Reg := Reg) dj y₀ ht hc hscope hU hpub).Opening :=
-  fun p => (p, rd.wv p, rd.ws p)
-
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
 with probability `ε_ks + ε_bind + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
 budgets `qF, qS` for the knowledge finders of `τ`'s simulation (`hCR`) and at budget `qW` for its registered-value finders
