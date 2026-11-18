@@ -250,13 +250,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     messages.current().answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching"))}))
+    from verity_vllm.engine import kv_blocks
+    kv_blocks.attach()
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0
     runner = handle.model_runner(llm) if world == 1 else None
-    if runner is not None:
-        from verity_vllm.engine import runner_step
-        runner_step.add(runner, runner_step.Steps())
     model = runner.get_model() if runner is not None else None
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution)
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes

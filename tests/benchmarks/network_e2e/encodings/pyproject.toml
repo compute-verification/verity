@@ -18,7 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # derived.py builds and charges advice v0 with network attestation's I1
-# (verity.protocols.resource_accounting.network.verifier.advice), which reads the package inits on the way;
+# (verity_vllm.pipeline.advice_code.format), which reads the package inits on the way;
 # cache_vectors.py runs network attestation's CacheStep_v1 (`cache_step`, through `head_check` and the circuits it
 # imports) and writes network attestation's difftest vectors, which a test reads back; test_arith_vectors holds
 # network attestation's arith_encode vectors to what this directory's coders code now.

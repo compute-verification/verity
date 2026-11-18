@@ -94,8 +94,8 @@ class Service:
     def signed(self):
         """The commitment the challenger signed and the roots its signed release log shows, with no ledger."""
         files = R.session_files(self.directory)
-        commitment, received, _ = C.session_of(key(), files["record"], files["log"], files["close"], verify)
-        return commitment, received
+        commitment, log, _ = C.session_of(key(), files["record"], files["log"], files["close"], verify)
+        return commitment, C.by_family(commitment, log)
 
 
 class Ledger:

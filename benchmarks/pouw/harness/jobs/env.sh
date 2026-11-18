@@ -1,4 +1,4 @@
-# Sourced by a harness run on a machine with an NVIDIA driver but no CUDA 12.8+ toolkit (a RunPod pod, a node-2 job):
+# Sourced by a harness run on a machine with an NVIDIA driver but no CUDA 12.8+ toolkit:
 #
 #   . benchmarks/pouw/harness/jobs/env.sh BUILD && "$PY" benchmarks/pouw/harness/bench.py ...
 #
