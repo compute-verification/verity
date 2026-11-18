@@ -973,14 +973,14 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
     """A table's level-0 top registered with the private circuit (``program``, the registration's) at staging: the
     registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, sampled here, once
-    (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
+    (one-stage ``registered_value.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
     ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the circuit registration names
     (`verity_flock.inner_registered.bind`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
 
     rows = top_rows(cap)
     salts = [fresh_salt() for _ in rows]
-    reg = G.Registered.commit(program, table, rows, salts)
+    reg = RV.Registered.commit(program, table, rows, salts)
     return {**_opening(cap, salts), "top": [b.hex() for b in reg.bcs], "entry": reg.entry()}
 
 

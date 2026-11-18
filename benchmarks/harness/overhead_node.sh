@@ -9,8 +9,8 @@
 #   bash benchmarks/harness/overhead_node.sh run --card h200 --scheme S --points points.json --points-art ART [--point P] \
 #     [--cubin FILE --cubin-art ART]
 #
-# VERITY_BENCH_VENV names the Python with torch and vLLM, which the door's launch forwards; the toolkit with nvcc and
-# nsys is CUDA 13.0's, CUDA_HOME's or the run's machine's (benchmarks/kernels/machine.py toolkit 13.0).
+# VERITY_BENCH_VENV names the Python with torch and vLLM, which the door's launch forwards; nsys is CUDA 13.0's, CUDA_HOME's
+# or the run's machine's (benchmarks/kernels/machine.py toolkit 13.0), and the harness's toolkit is identity.TOOLKIT's.
 set -euo pipefail
 : "${RESEARCH_RUN_DIR:?}" "${RESEARCH_RUN_ID:?}" "${GPU_LEASE_UUID:?run it on a GPU lease: gpu-lease 1 --wait -- bash $0 ...}"
 PY=${VERITY_BENCH_VENV:?set VERITY_BENCH_VENV to the Python with torch and vLLM on the node, which the door forwards}/bin/python
@@ -24,14 +24,18 @@ for ((i = 1; i < $#; i++)); do
   if [[ ${!i} == --card ]]; then j=$((i + 1)); card=${!j}; fi
 done
 arch=$("$PY" -c 'import sys; from verity_bench.overhead import card; print(card(sys.argv[1]).arch)' "$card")
-# sass_pins.json pins sm_120a's IEEE sequences under CUDA 12.9.1 (jobs/toolkit.sh assembles it) and sm_90a's under 13.0.1
-lib=lib64
-if [[ $arch == sm_120a ]]; then
-  . benchmarks/pouw/harness/jobs/toolkit.sh
-  lib=lib
-fi
-# the harness loads the cuBLASLt of the toolkit it links (native/build.sh), which the node's own loader path need not hold
-export LD_LIBRARY_PATH=$CUDA_HOME/$lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+# the harness builds with identity.TOOLKIT (native/build.sh): the machine's at that version, else jobs/toolkit.sh assembles it
+harness=$("$PY" -c 'import sys; sys.path[:0] = ["benchmarks/pouw/harness"]; import identity; print(identity.TOOLKIT)')
+listed=0
+home=$("$PY" benchmarks/kernels/machine.py toolkit "$harness") || listed=$?
+case $listed in
+  0) export CUDA_HOME=$home ;;
+  3) . benchmarks/pouw/harness/jobs/toolkit.sh ;;
+  *) exit "$listed" ;;
+esac
+# the harness loads the cuBLASLt of the toolkit it links (native/build.sh, -L$CUDA_HOME/lib64), which the node's own loader
+# path need not hold
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-${XDG_CACHE_HOME:-$HOME/.cache}/pouw-harness-build} \
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB

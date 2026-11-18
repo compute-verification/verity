@@ -117,6 +117,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
+from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -1900,7 +1901,7 @@ def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_arr
     assert tensor.dtype == torch.uint16 and tuple(tensor.shape) == (3, 4)
     of_array = NR.commit(circuit, "v", words, KEY, 7, keep_rows=True)
     of_tensor = NR.commit(circuit, "v", tensor, KEY, 7, keep_rows=True)
-    assert isinstance(of_array, DN.G.Registered) and isinstance(of_tensor, DN.G.Registered)
+    assert isinstance(of_array, RV.Registered) and isinstance(of_tensor, RV.Registered)
     assert of_tensor.root == of_array.root and of_tensor.leaves == 3
     assert [bytes(row) for row in of_tensor.rows] == [bytes(row) for row in of_array.rows]
     for other in (tensor.view(torch.int16), tensor.view(torch.uint8), tensor[0]):
@@ -1923,14 +1924,14 @@ def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and
     no_y: np.ndarray = np.zeros((0, 32), np.int16)
     words = SV.record_words(no_z, no_y, 32, PH.TILE)
     same = NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
+    assert isinstance(same, RV.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
     assert value.root != NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy")).root
     assert not np.count_nonzero(words)
     no_codes: np.ndarray = np.zeros((0, K), np.int8)
     zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
     table = DN.a_value(win, tmp_path, KEY, 0)
     same = NR.commit(circuit, f"h1/a/{K}@0", zero, KEY, SV.nonce(0, "a"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
+    assert isinstance(same, RV.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
     assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
     assert list(tmp_path.iterdir()) == []
 
@@ -1939,7 +1940,7 @@ def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused
     """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
     past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
     value is read."""
-    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
 

@@ -30,6 +30,7 @@ from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
 from verity.circuits.private_circuits import universal as U
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+from verity.commitments import registered_value as RV
 
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
@@ -141,7 +142,7 @@ def _stage(topo, d: Path, wired: bool):
     else:
         honest = _lanes(units, cl, tp, inputs)
         template = descriptor_id(fn)
-        tree = RG.Registered.commit(program_digest(program), f"{template}/out",
+        tree = RV.Registered.commit(program_digest(program), f"{template}/out",
                                    [[p[u] for p in honest[1]] for u in CS.tree_leaves(tp, template)])
         readers = replace(wiring, indices=list(range(N, tp.population)), tree=tree)
         st = {"writers": CS.stage(units, SPEC, shape, cl, _cut(honest, 0, N), d / "writers", packed=True,
