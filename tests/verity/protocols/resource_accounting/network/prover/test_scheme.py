@@ -118,7 +118,7 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     front.emit(H.OutputsComplete("a", 7))
     assert [r for _, r in front.filed if isinstance(r, H.RefuseInput)] == [
         H.RefuseInput("c", f"{A.RELEASE_HEADER}: 0 came twice in run 'r'")]
-    assert A.FeedReader(A.feed_file(str(tmp_path)))() == [
+    assert A.FeedReader(A.FrontFeed(str(tmp_path)).path)() == [
         {"key": "a", "run": "r", "n": 0, "bucket": 3}, {"key": "b", "run": "r", "n": 1, "bucket": 3},
         {"run": "r", "n": 1, "passed": True}]
     assert isinstance(admitter, A.Admitter) and admitter.gate is not None and admitter.front is None

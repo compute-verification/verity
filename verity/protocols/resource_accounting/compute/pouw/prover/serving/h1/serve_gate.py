@@ -56,7 +56,7 @@ class GateSessions:
     def __init__(self, gate: Any, peer: str, steps: int, *, wait: Callable[[float], Any] = time.sleep,
                  listens: Callable[[int], bool] = listening, ahead: Any = None,
                  now: Callable[[], datetime] = _utc_now) -> None:
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         self.gate, self.peer, self.steps, self.wait, self.listens = gate, peer, int(steps), wait, listens
         self.ahead, self.now = ahead, now
@@ -69,8 +69,8 @@ class GateSessions:
         """Window `window`'s session reserved (``reserve --peer PEER --scheme SCHEME --families families(S)``): the gate's
         reserve answer as the pouw setting ``session`` takes it (`pouw_h1_window.reserved_of`). `CoinError` when the gate
         refuses."""
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families",
                                 PHC.families(self.steps))
@@ -86,7 +86,7 @@ class GateSessions:
         """Window `window`'s sampling session, reserved withheld right after its session `session` (``reserve ...
         --withhold``, `pouw_h1_window.reserve_draw`) and held as its ``draw``. `CoinError` when the gate refuses, or
         reserves it plain."""
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         reserved = PHW.reserve_draw(self.gate.call, self.peer)
         self.held_of(session)["draw"] = dict(reserved)
@@ -95,7 +95,7 @@ class GateSessions:
 
     def draw_session(self, session: str) -> dict[str, Any] | None:
         """The pouw setting ``draw_session`` of `session`'s window: its sampling session's reserve (`reserve_draw`)."""
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
+        from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import window as PHW
 
         draw = self.held_of(session).get("draw")
         return None if draw is None else {k: v for k, v in draw.items() if k in ("session", *PHW.RESERVE_FIELDS)}
