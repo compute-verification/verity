@@ -46,7 +46,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     LiveRecord,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 
 #: what else the gate's reserve answer carries beside its ``session`` (H1's and Pearl-C's ``session``, `reserved_of`)
 RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
