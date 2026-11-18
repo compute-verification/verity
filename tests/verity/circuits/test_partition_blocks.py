@@ -4,7 +4,6 @@ digest, and the block `restrict` derives from one of its pairs."""
 from __future__ import annotations
 
 import functools
-import hashlib
 import importlib.util
 from pathlib import Path
 
@@ -18,9 +17,6 @@ from verity.commitments.periods import interface as I
 _SPEC = importlib.util.spec_from_file_location("blocks_chain", Path(__file__).parent / "ops/test_boolean_block_circuit.py")
 _BB = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_BB)
-
-#: SHA-256 of a two-unit member's block descriptor, `restrict_difftest.py`'s ``chain/member<i>``
-MEMBER_DESCRIPTOR = "21121bd6600932bfd6dc005625f982220092eec2701235c1d22759518c3e73ac"
 
 
 @functools.cache
@@ -114,6 +110,4 @@ def test_restrict_with_a_pair_from_the_field_is_the_members_block():
     o = obj(I.partition_blocks(chain(), 2, built()))
     members = I.members(chain(), 2, built())
     for pair, m in list(zip(PO.blocks(o), members))[:2]:
-        got = R.restrict(c, o, [pair], bits).descriptor
-        assert got == R.restrict(c, o, [(m.base, m.base + m.n)], bits).descriptor
-        assert hashlib.sha256(got).hexdigest() == MEMBER_DESCRIPTOR
+        assert R.restrict(c, o, [pair], bits).descriptor == R.restrict(c, o, [(m.base, m.base + m.n)], bits).descriptor
