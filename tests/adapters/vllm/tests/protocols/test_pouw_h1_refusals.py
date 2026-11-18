@@ -151,6 +151,7 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
+from verity.commitments import docket_digest as DD
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -1876,7 +1877,7 @@ def test_a_window_that_holds_no_tree_of_a_rounds_table_has_none_a_named_record_r
 
     def refusal():
         window = CT.registration(run, previous)
-        return CT.reused(run, window, {**record, "previous": CT.REG.digest(window)})
+        return CT.reused(run, window, {**record, "previous": DD.digest(window)})
     ids = served.ids.pop(1)
     assert refusal() == (f"the window registers no round 1's input-ids table, so no Commit record reuses it as "
                          f"{CR.commit_ids(1)}")

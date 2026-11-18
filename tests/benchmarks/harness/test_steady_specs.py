@@ -229,7 +229,7 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert pythonpath.split(":") == [
         f"{root}/benchmarks/harness", f"{root}/tools/config", str(root), f"{root}/tools/research/src",
         str(root), f"{root}/verity/protocols/proofs/flock/prover/python", f"{root}/adapters/vllm",
-        f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
+        f"{root}/adapters/torch", f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
     setup = launcher.run_dir / "out" / "setup"
     assert (work / "build-saw.txt").read_text().splitlines() == [
         "BUILD_ONLY=1 GPU=1", f"{setup}/build", f"{setup}/build/sweep", f"{toolkit}/bin/nvcc", str(root)]

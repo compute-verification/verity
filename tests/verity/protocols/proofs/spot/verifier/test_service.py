@@ -9,6 +9,7 @@ import random
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
@@ -100,7 +101,7 @@ def _lean(accepted=True, sessions=(SESSION,), **extra) -> dict:
 
 
 def _round(stream: S.Stream, accepted=True, n: int = 6) -> S.Outcome:
-    previous = R.digest(stream._entries[-1].docket.record) if stream._entries else None
+    previous = DD.digest(stream._entries[-1].docket.record) if stream._entries else None
     reg = stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
     draw = stream.select(reg)
     assert stream.deliver(draw, [SESSION]) is None
@@ -110,7 +111,7 @@ def _round(stream: S.Stream, accepted=True, n: int = 6) -> S.Outcome:
 def test_round_trip_register_select_deliver_outcome():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
-    assert reg.order == 0 and reg.receipt["received"] == "0" and reg.digest == R.digest(_record())
+    assert reg.order == 0 and reg.receipt["received"] == "0" and reg.digest == DD.digest(_record())
     draw = stream.select(reg)
     assert draw.draw["law"] == "subset" and draw.draw["population"] == 6 and len(draw.units) == 2
     assert all(0 <= u < 6 for u in draw.units) and draw.units == sorted(draw.units)

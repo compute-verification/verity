@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
@@ -337,6 +338,7 @@ def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, mon
     assert not (tmp_path / "log" / "coins.json").exists()
 
 
+@pytest.mark.slow
 @LEAN
 def test_the_challenger_holds_every_item_to_its_own(served):
     """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
@@ -374,7 +376,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
     assert refused(legacy) == {"window-form"}
     assert "x" not in ch.regs
     reg = _held(ch, "honest", rec)
-    assert reg.receipt["registration"] == R.digest(rec) == reg.digest and reg.order == 0
+    assert reg.receipt["registration"] == DD.digest(rec) == reg.digest and reg.order == 0
     assert refused(rec) == {"open"}
 
 
@@ -426,6 +428,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     assert _codes(e) == {"coin"} and "already open" in e.value.verdict.detail["coin"]
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_no_credit(served):
     """Under ``registration_deadline`` (`Pouw.AcceptsBy`'s td, seconds on the challenger's clock), the salt coin's opening
@@ -840,6 +843,7 @@ def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
             SC.pinned_challenger_key(f)
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_refused(served):
     """The challenger re-starts the execution phase's pass's execution phase from its manifest under its own coin commitment: a salt coin of
@@ -871,7 +875,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     assert "no salt coin" in refused({k: v for k, v in man.items() if k not in ("coins", "salt_opening")})
     assert "names no pass" in refused(None)
     assert "not the one the window's parameters name" in refused({**man, "note": "another pass"}, code="manifest")
-    assert _held(_challenger(params), "honest", rec).digest == R.digest(rec)
+    assert _held(_challenger(params), "honest", rec).digest == DD.digest(rec)
 
     bparams, bpublic, _, _ = _window(words, run="r-beacon", recorded=True)
     brec, braw = _register(bparams, bpublic), PASSES[bparams["context"]][1]
@@ -947,6 +951,7 @@ def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None =
                          "opening": {"of_record": False, "accepted": opening, "why": ""}}}
 
 
+@pytest.mark.slow
 @LEAN
 def test_the_outcome_publishes_exactly_the_public_items(served):
     """The outcome over every sampled proof block accepts only when each unit's Lean verdict and opening check accept; PoUW's public
@@ -1181,6 +1186,7 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     record.close()
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_disagreement_rejects_the_session(served, monkeypatch):
     """A Python reference that disagrees with Lean, at each check, refuses the session as ``lean-python-disagree: <check>``
@@ -1341,9 +1347,9 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
     assert json.loads((log / "coins.json").read_text()) == coins.commitment.to_json()
     assert json.loads((tmp_path / "salt.json").read_text()) == man["salt_opening"]
     salt, sampling = (json.loads(x) for x in (log / "openings.jsonl").read_text().splitlines())
-    assert salt == man["salt_opening"] and sampling["label"] == "draw" and sampling["after"] == R.digest(rec)
+    assert salt == man["salt_opening"] and sampling["label"] == "draw" and sampling["after"] == DD.digest(rec)
     d = json.loads((tmp_path / "draw.json").read_text())
-    assert d["units"] == sampled and json.loads((tmp_path / "receipt.json").read_text())["registration"] == R.digest(rec)
+    assert d["units"] == sampled and json.loads((tmp_path / "receipt.json").read_text())["registration"] == DD.digest(rec)
     assert not (tmp_path / "draw2.json").exists() and not (tmp_path / "outcome2").exists()
     o = json.loads((tmp_path / "outcome" / "outcome.json").read_text())
     assert o["accepted"] and set(o["public"]) == {x[0] for x in Wd.PUBLIC} and o["public"]["drawn"] == sampled

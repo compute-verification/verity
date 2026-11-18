@@ -12,6 +12,7 @@ import hashlib
 import pytest
 from poub_fakes import Clock, Entropy
 
+from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import (
     audit,
@@ -22,7 +23,6 @@ from verity.protocols.resource_accounting.memory.poub.verifier import (
 )
 from verity.protocols.resource_accounting.memory.poub.verifier.audit import AuditRun, Params
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import Plan
-from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 8
 SCHEDULE_CAP = 256

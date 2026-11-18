@@ -125,7 +125,8 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     text, program, part = partitioned(staged)
     d = stage(staged, "bound", text=text)
@@ -133,7 +134,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     got = IR.register(d, program=program, partition=part)
     rec, now = IR.bound(d), (d / "circuit.txt").read_text()
     meta = IR.meta(d)
-    assert meta[IR.REGISTRATION_KEY] == R.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
+    assert meta[IR.REGISTRATION_KEY] == DD.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
         json.loads(text.split("\n", 2)[1][5:])
     assert rec == IR.registration_record(program, part, rec["registered"]) and rec["format"] == DM.REGISTRATION
     assert [(e["value"], e["root"]) for e in rec["registered"]] == [(IR.VALUE, got["cs"]["root"])]

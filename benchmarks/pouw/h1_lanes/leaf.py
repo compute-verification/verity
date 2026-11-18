@@ -95,6 +95,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -310,7 +311,7 @@ def world(name: str, ctx: Ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list)
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, SCHEME, [],
                    {"kind": "stand-in", "harness": "h1_lanes", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
-    d = R.digest(rec)
+    d = DD.digest(rec)
     sample = sample_digest(d, 1)
     tree = PP.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree), **{v: PR.rows_of(regs[v]) for v in REGISTERED}}

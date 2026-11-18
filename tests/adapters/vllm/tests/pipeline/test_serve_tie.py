@@ -17,10 +17,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from tests.pipeline.test_serve_day import OTHER, _day, _opts
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
@@ -94,18 +94,18 @@ def test_a_tied_window_names_r_reusing_its_tables_from_w_as_its_commit_record_be
         d = serve / "h1" / f"w{w}"
         reg, rec = (json.loads((d / f).read_text()) for f in (TIE.W_FILE, TIE.R_FILE))
         assert "error" not in out and out["tied"] and out["kept"]["calls"] > 0, out
-        assert reg == CT.registration(runs[w], previous) and rec["previous"] == REG.digest(reg)
-        assert out["commit_record"] == {"named": True, "registration": REG.digest(reg), "record": REG.digest(rec)}
+        assert reg == CT.registration(runs[w], previous) and rec["previous"] == DD.digest(reg)
+        assert out["commit_record"] == {"named": True, "registration": DD.digest(reg), "record": DD.digest(rec)}
         record = json.loads((d / PH.CALLS_FILE).read_text())
         c = record["commitment"]
         assert c["commit"] == canonical_json(rec).hex() and c["draw"]["coin"] is not None and "refused" not in c["draw"]
-        assert CT.digest(c["commit"]).hex() == REG.digest(rec) and c["calls_root"] == runs[w].calls_root().hex()
+        assert CT.digest(c["commit"]).hex() == DD.digest(rec) and c["calls_root"] == runs[w].calls_root().hex()
         assert wc.calls[w] == {"argv": ["bash", "-c", "v3c-window-commit", "_", str(serve), str(w), str(d / TIE.W_FILE),
                                         str(d / TIE.R_FILE), str(tmp_path / "prover" / f"w{w}")], "bound": []}
         assert (d / TIE.COMMAND_LOG).read_text() == "window-commit: committed\n"
-        want += [{"window": w, "kind": "registration", "file": f"w{w}/{TIE.W_FILE}", "digest": REG.digest(reg)},
-                 {"window": w, "kind": "record", "file": f"w{w}/{TIE.R_FILE}", "digest": REG.digest(rec)}]
-        previous = REG.digest(rec)
+        want += [{"window": w, "kind": "registration", "file": f"w{w}/{TIE.W_FILE}", "digest": DD.digest(reg)},
+                 {"window": w, "kind": "record", "file": f"w{w}/{TIE.R_FILE}", "digest": DD.digest(rec)}]
+        previous = DD.digest(rec)
     assert flushed == ["flush"] * len(PROMPTS) and _log(serve) == want
     assert TIE.WindowTie("again", serve).last == previous
     arm.drain()
@@ -164,7 +164,7 @@ def test_a_tied_window_with_no_r_reusing_w_binds_no_record_and_opens_no_coin(tmp
     assert c["commit"] is None and c["draw"]["coin"] is None
     assert [e["kind"] for e in _log(serve)] == logged and len(wc.calls) == len(logged)
     if logged:
-        assert TIE.WindowTie("again", serve).last == REG.digest(json.loads((serve / "h1" / "w0" / TIE.W_FILE).read_text()))
+        assert TIE.WindowTie("again", serve).last == DD.digest(json.loads((serve / "h1" / "w0" / TIE.W_FILE).read_text()))
     arm.drain()
     srv.src.uninstall()
 
@@ -218,14 +218,14 @@ def test_the_command_runs_under_bash_on_the_windows_files_and_a_failure_points_t
                                              str(tmp_path / "prover" / "w3")]
     assert (d / TIE.COMMAND_LOG).read_text() == "rows of window 3\n"
     failing = TIE.WindowTie('printf "%s|" "$@" >&2; echo "row 7 holds 0x1234" >&2; exit 5', serve)
-    assert failing.last == REG.digest(w), "the log's last record is window 3's W: its R was never bound"
+    assert failing.last == DD.digest(w), "the log's last record is window 3's W: its R was never bound"
     failing.sealed(4, {"window": 4, **SEALED})
     with pytest.raises(ValueError) as e:
         failing.record(4, _run(), None, None)
     d4 = serve / "h1" / "w4"
     assert str(e.value) == "--h1-window-commit exited 5: its output is in the serve dir's h1/w4/window-commit.log"
     assert (d4 / TIE.COMMAND_LOG).read_text() == f"{serve}|4|{d4 / TIE.W_FILE}|{d4 / TIE.R_FILE}||row 7 holds 0x1234\n"
-    assert json.loads((d4 / TIE.W_FILE).read_text())["previous"] == REG.digest(w)
+    assert json.loads((d4 / TIE.W_FILE).read_text())["previous"] == DD.digest(w)
 
 
 #: `_run`'s W chained after none and after ``"ef" * 64``, as `pouw_h1_commit.registration` wrote it before ``--day``
@@ -240,7 +240,7 @@ def test_without_day_w_the_window_log_and_the_tie_are_byte_for_byte_as_before(tm
     keys unchanged, the tie's log not made until a window and its description as before."""
     for previous, digest in DEFAULT_W.items():
         w = CT.registration(_run(), previous)
-        assert REG.digest(w) == digest and CT.registration(_run(), previous, None) == w
+        assert DD.digest(w) == digest and CT.registration(_run(), previous, None) == w
         assert sorted(w["window"]) == ["entry", "kind", "open_root", "refused"] and CT.day_of(w) is None
     tie = TIE.WindowTie("true", tmp_path / "serve")
     assert tie.describe() == {"log": "h1/log.jsonl", "window": "h1/w<k>/registration.json", "record": "h1/w<k>/record.json"}
@@ -282,7 +282,7 @@ def test_a_tied_window_names_the_days_declaration_which_the_window_log_registers
         assert reg == CT.registration(runs[w], previous, day.naming()) and reg["previous"] == previous
         assert CT.day_of(reg) == {"day": 0, "declaration": day.digest} and rec["program"] == day.program == AUDITED
         assert CT.reused(runs[w], reg, rec) is None
-        previous = REG.digest(rec)
+        previous = DD.digest(rec)
     assert [x["kind"] for x in _log(serve)] == ["declaration"] + ["registration", "record"] * len(PROMPTS)
     again = TIE.WindowTie("again", serve, day=day)
     assert again.last == previous and [x["kind"] for x in _log(serve)].count("declaration") == 1

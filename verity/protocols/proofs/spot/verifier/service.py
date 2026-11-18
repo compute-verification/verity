@@ -168,6 +168,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
@@ -1715,7 +1716,7 @@ class Stream:
                 raise ValueError(f"the window's program's proof blocks are not one range a template, in the window's "
                                  f"order: its ranges are {got}")
         try:
-            earlier = [(dict(r), R.digest(r)) for r in log]
+            earlier = [(dict(r), DD.digest(r)) for r in log]
             R.held_roots(r for r, _d in earlier)
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             raise ValueError("a stream's earlier log is the prover's records, each a JSON object whose registered "
@@ -2103,7 +2104,7 @@ class Stream:
                       received_at: float | None = None, fanout: int | None = None,
                       rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      DD.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
                                       returned)
 
     def _returned(self, program: Program) -> int | None:
