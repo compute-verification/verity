@@ -31,7 +31,11 @@ from pathlib import Path
 
 import numpy as np
 
+from verity_vllm.config import card_at
 from verity_vllm.definitions.registry.fa2_train_bwd import train_sdpa_backward
+
+#: the SMs of cc 12.0's card, the card the capture ran on
+SMS = int(card_at((12, 0))["sm"]["count"]["value"])
 
 #: name -> (capture case, which of its heads, (B, H), rows)
 ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621)),
@@ -43,7 +47,7 @@ BLOCK = {"l16/unit": ("bwd/l16/det/unit", 3, (2, 16))}
 
 def _head(d, case: str, bh: tuple[int, int]) -> dict:
     """The bindings of the head Definition at the case's shape: its key block `BN` and dQ buffers `NS`."""
-    return train_sdpa_backward(*bh, *d[f"{case}/q"].shape[1:]).bindings
+    return train_sdpa_backward(*bh, *d[f"{case}/q"].shape[1:], SMS).bindings
 
 
 def cut(d) -> dict[str, np.ndarray]:

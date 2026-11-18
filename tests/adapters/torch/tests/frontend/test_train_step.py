@@ -35,6 +35,7 @@ from verity.circuits.ops import scalar as SC
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.config import card_at
 from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.definitions.registry import prims as P
@@ -59,6 +60,9 @@ from verity_torch.frontend.train_step import (
     step_report,
     structure_program,
 )
+
+#: the SMs of cc 12.0's card, the card the capture ran on
+SMS = int(card_at((12, 0))["sm"]["count"]["value"])
 
 aten = torch.ops.aten
 
@@ -931,7 +935,7 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     assert got == want
     heads = TINY_SDPA[0] * TINY_SDPA[1]
     attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
-    assert attention == [(FT.train_sdpa(*TINY_SDPA).id, heads)] * 2 + [(FTB.train_sdpa_backward(*TINY_SDPA).id, heads)] * 2
+    assert attention == [(FT.train_sdpa(*TINY_SDPA).id, heads)] * 2 + [(FTB.train_sdpa_backward(*TINY_SDPA, SMS).id, heads)] * 2
     assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith(("LinearRef_v1", "SoftmaxRef_v1"))]
 
 
