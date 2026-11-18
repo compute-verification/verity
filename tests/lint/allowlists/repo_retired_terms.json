@@ -2923,7 +2923,6 @@
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/pearl_plus_tile.py", "count": 27},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/plan.py", "count": 26},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/tile_units.py", "count": 2},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/prover/circuit/words.py", "count": 3},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_audit.py", "count": 14},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/clear/clear_work.py", "count": 95},
     {"file": "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler/dcap.cu", "count": 2},
@@ -3183,6 +3182,7 @@
     {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/parties.py", "count": 2},
     {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py", "count": 10},
     {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/verifier.py", "count": 10},
-    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py", "count": 2}
+    {"file": "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py", "count": 2},
+    {"file": "verity/circuits/ops/words.py", "count": 3}
   ]
 }

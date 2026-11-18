@@ -133,7 +133,7 @@ SERVE=("$VENV/bin/verity-vllm" serve-openai --model "$MODEL" --revision "$REV" -
   --run-id "fresh-$(date -u +%Y%m%dT%H%M%SZ)" --seal --max-num-batched-tokens 512
   --window-steps 256 --required-manifest "$W/predicted/manifest.json" --hidden-so "$HSO" --norm-tap-so "$NSO" --tap-cap-mb 2048
   --protocols-config "{\"$NA\": {\"order\": \"release-order\"}}" --window-requests 1 --window-gb 4
-  --disk-floor-gb 5 --seal-hold-gb 8 --copy-records-to "$W/records")
+  --disk-floor-gb 5 --seal-hold-gb 8)
 LOAD=("$PY" adapters/vllm/tools/served_run/serve_load.py --port "$PORT" --model "$MODEL" --varied 1 --rate 1000 --max-tokens 4
   --prompt-range 16:24 --seed 1 --out "$W/load.jsonl")
 if [ "$DRY" = 1 ]; then

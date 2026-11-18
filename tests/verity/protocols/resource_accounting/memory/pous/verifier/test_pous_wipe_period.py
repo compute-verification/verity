@@ -22,8 +22,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
-import subprocess
 import sys
 import threading
 from collections.abc import Callable
@@ -35,9 +35,13 @@ from pous_fakes import Clock
 import pous_test_signer as ts
 import wipe_judge
 import wipe_side
+from verity import hooks as H
 from verity.runtime.stream import Side
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
+from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
+from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_store as WS
 from verity.protocols.resource_accounting.memory.pous.verifier.period import decided_by
 from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
@@ -239,15 +243,6 @@ def test_the_split_wipe(how: str) -> None:
         assert answered == 3 and c.ended is None and c.signed is None
 
 
-def test_the_module_run_with_no_side_refuses_and_names_the_start_file(tmp_path) -> None:
-    """An old command, `python -m ...wipe_run --expect accept`, exits non-zero naming the file that starts the wipe,
-    so it never reads as the verdict it expected."""
-    r = subprocess.run([sys.executable, "-m", wipe_run.__name__, "--period", str(tmp_path), "--out", str(tmp_path / "out"),
-                        "--expect", "accept"], capture_output=True, text=True)
-    assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
-    assert "run benchmarks/pous/streamed_wipe/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
-
-
 def test_the_party_follows_period_json(tmp_path) -> None:
     local = Side.of({}, "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
@@ -367,6 +362,23 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
     return period, side_of
 
 
+#: the wipe's facts for `_attach`: the Python's streamer, the challenger bound to `auditor`
+BOUND = {"streamer": "python", "host": "auditor", "address": "auditor:7000", "command": ["true"]}
+
+
+def _attach(tmp_path, side_of, *, pins=..., configuration=CONF, trusted=None, judge=None):
+    """The wipe scheme's attach (`WIPE.attach`) in the engine's process, bound to the challenger on `auditor`, with
+    what a launcher hands it (the configuration's pin of `wipe_side.py`'s key by default); the case and record go under
+    `tmp_path/private`."""
+    private = tmp_path / "private"
+    private.mkdir(exist_ok=True)
+    ctx = {"settings": S.settings(WIPE, {"store": "python"}), **wipe_served.FACTS, **BOUND, "private": private,
+           "process": H.ENGINE, "side_of": side_of,
+           "pins": side_pin() if pins is ... else pins, "configuration": configuration, "trusted": trusted,
+           "node": "n0", "judge": judge}
+    return WIPE.attach(None, ctx), private
+
+
 def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The subprotocol whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
@@ -425,15 +437,15 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
     assert decided_by(None) == {"program": "python", "host": host}
 
 
-def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
-    """The subprotocol with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
-    nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
-    period, side_of = _side(tmp_path, {})
-    out = tmp_path / "out"
-    assert wipe_run.main(["--period", str(period), "--out", str(out), "--node", "n0"], side_of=side_of) == 1
-    s = json.loads(capsys.readouterr().out)
-    assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None)
-    record = json.loads((out / "wipe.json").read_text())
+def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path) -> None:
+    """The wipe attached with no Lean judge (no ``judge``): the Python accepts the honest session, and that decides
+    nothing. The answer is undecided, with no public outputs and no profile, and the report says so."""
+    _, side_of = _side(tmp_path, {})
+    got, private = _attach(tmp_path, side_of)
+    s = got.summary()
+    assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None) and got.answer["verdict"] == "undecided"
+    record = json.loads((private / "wipe.json").read_text())
+    assert record == got.record()
     assert record["answer"]["profile"] is None and record["lean"] is None and record["report"]["ended"] == sw.COMPLETE
 
 
@@ -517,33 +529,34 @@ def test_the_verifier_trusts_the_pinned_key_alone() -> None:
     assert other.report == pinned.report | {"key_pinned": False} and other.case["params"]["trusted"] == []
 
 
-def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_path, monkeypatch, capsys) -> None:
-    """`main` on a period whose challenger, on its own host, signs under another key than the one `wipe.trusted_sha512`
-    pins: the session, honest in every read, is rejected, by a case that trusts no key, and the record and the printed
-    summary say whose key it was and that it wasn't the pinned one."""
+def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_path) -> None:
+    """The wipe attached with a pin of another key than the one its challenger, on its own host, signs under: the
+    session, honest in every read, is rejected, by a case that trusts no key, and the record and the summary say whose
+    key it was and that it wasn't the pinned one."""
     other = hashlib.sha512(b"another key").hexdigest()
-    period, side_of = _side(tmp_path, {"trusted_sha512": other})
-    out = tmp_path / "out"
-    argv = ["--period", str(period), "--out", str(out), "--node", "n0"]
-    assert wipe_run.main(argv, side_of=side_of) == 1
-    s = json.loads(capsys.readouterr().out)
+    _, side_of = _side(tmp_path, {})
+    got, private = _attach(tmp_path, side_of, pins=[side_pin()[0] | {"key-sha512": other}])
+    s = got.summary()
     assert (s["verdict"], s["reason"], s["public"]) == ("reject", UNTRUSTED, None)
     assert (s["key_pinned"], s["key_sha512"]) == (False, wipe_side.key_sha512())
-    assert json.loads((out / "wipe.case.json").read_text())["params"]["trusted"] == []
-    record = json.loads((out / "wipe.json").read_text())
+    assert json.loads((private / "wipe.case.json").read_text())["params"]["trusted"] == []
+    record = got.record()
     assert record["report"]["ended"] == sw.COMPLETE and record["wipe"]["trusted_sha512"] == other
-    assert record["answer"]["verdict"] == "reject" and wipe_run.summary(record) == s
+    assert record["answer"]["verdict"] == got.answer["verdict"] == "reject" and wipe_run.summary(record) == s
 
 
-def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch) -> None:
-    """With no pin the verifier trusts the key the session came with, which only a challenger whose key the run made
-    may be given: one on its own host is refused before its session starts."""
-    period, side_of = _side(tmp_path, {"trusted_sha512": None})
+@pytest.mark.parametrize("pins, why", [
+    (None, "no pin was handed to it (ctx['pins'], the application's [[pin]] entries)"),
+    ([], "the pins handed to it give the memory-challenger no key for the wipe")])
+def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch, pins, why) -> None:
+    """With no pin the verifier would trust the key the session came with, which only a challenger whose key the run
+    made may be given: the attach refuses one on its own host by name before its session starts."""
+    _, side_of = _side(tmp_path, {})
     started = []
     monkeypatch.setattr(wipe_run, "run", lambda *a, **kw: started.append(a))
-    with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory attester on auditor"):
-        wipe_run.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
-    assert not started and not (tmp_path / "out").exists()
+    with pytest.raises(ValueError, match=re.escape(f"wipe: {why}")):
+        _attach(tmp_path, side_of, pins=pins)
+    assert not started and not (tmp_path / "private" / "wipe.case.json").exists()
 
 
 def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypatch) -> None:
@@ -567,14 +580,15 @@ def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypat
 
 
 def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:
-    """The run pins its own challenger's key (`wipe.trusted_sha512`, as `--trusted-sha512` and `WIPE_KEY_SHA512` do), so
-    the verifier accepts its session; the configuration pins no such key for the wipe, so the record
-    says rehearsal, no bound, and leaves the key custody out of the bound."""
-    period, side_of = _side(tmp_path, {})
-    wipe_judge.judge(period, monkeypatch)
-    assert wipe_run.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of) == 0
-    record = json.loads((tmp_path / "out" / "wipe.json").read_text())
+    """The run pins its own challenger's key (the attach's ``trusted``, as `--trusted-sha512` and `WIPE_KEY_SHA512` do),
+    so the verifier accepts its session; the configuration pins no such key for the wipe, so the record says rehearsal,
+    no bound, and leaves the key custody out of the bound."""
+    _, side_of = _side(tmp_path, {})
+    wipe_judge.stand_in(monkeypatch)
+    got, _ = _attach(tmp_path, side_of, pins=[], trusted=wipe_side.key_sha512(), judge="wipe-protocol")
+    record = got.record()
     answer = record["answer"]
+    assert got.answer["verdict"] == "accept", got.answer
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)

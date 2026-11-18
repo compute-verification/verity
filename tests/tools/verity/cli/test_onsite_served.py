@@ -761,13 +761,14 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
 def test_served_wipe_gets_the_configurations_pin_and_no_other(tmp_path, pinned):
     cfg = R.load(NETWORK, REG)
     cmd = T.PIECES["wipe"][T.PROVER].variables(cfg if pinned else {**cfg, "pin": []}, NETWORK_BINDINGS)["WIPE_CMD"]
-    env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path), "WIPE_KEY_SHA512": "f" * 128,
-           "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true", "WIPE_PROTOCOL_EXE": "true",
-           "GPU_LEASE_UUID": "no-such-card"}
+    executable(tmp_path, "ip", IP)
+    env = {"PATH": os.pathsep.join([str(tmp_path), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path),
+           "WIPE_KEY_SHA512": "f" * 128, "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_COMMAND": "true",
+           "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "no-such-card", "PY": sys.executable}
     p = subprocess.run(["bash", "-c", cmd, "_", str(tmp_path / "serve"), "all", str(tmp_path / "wipe")], cwd=ROOT,
                        env=env, capture_output=True, text=True, check=False)
     refused = (tmp_path / "wipe" / "refused.txt").read_text()
-    assert p.returncode == 3
+    assert p.returncode == 3, p.stdout + p.stderr
     assert ("nvidia-smi can't read the card no-such-card" in refused) == pinned
     assert ("no challenger key is pinned" in refused) != pinned
 
@@ -973,46 +974,74 @@ def test_the_onsite_line_names_the_machine_each_memory_attesters_key_and_coins_w
 IDLE = """#!/usr/bin/env bash
 case "$*" in *memory.used*) echo 0 ;; esac
 """
-#: demo.sh's stand-in: its arguments, and the directory its scratch is made in with that directory's mode
-DEMO = ARGS0 + """echo "$TMPDIR $(stat -c %a "$TMPDIR")" > "$(dirname "$0")/tmpdir.txt"
+#: ip's stand-in: the default route's NIC
+IP = "#!/bin/sh\necho '1.1.1.1 via 10.0.0.1 dev eth9 src 10.0.0.2 uid 0'\n"
+#: the launcher's Python, its attach a stand-in: what the launcher handed it, and the directory its scratch is made in
+#: with that directory's mode, written to ``attach.json``; it then refuses, so no wipe runs
+PYTHON = """#!{python}
+import json, os, runpy, stat, sys
+from pathlib import Path
+if sys.argv[1] != "-":
+    sys.argv = sys.argv[1:]
+    runpy.run_path(sys.argv[0], run_name="__main__")
+    raise SystemExit
+sys.argv = sys.argv[1:]
+code = sys.stdin.read()
+from verity_vllm import messages
+
+
+def attach(self, scheme, given, **ctx):
+    tmp = os.environ["TMPDIR"]
+    facts = {{k: ctx[k] for k in ("host", "address", "command", "links", "run_keys")}}
+    Path({log!r}).write_text(json.dumps({{"settings": given, "facts": facts, "trusted": ctx.get("trusted"),
+                                          "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]]}}))
+    raise ValueError("wipe: the stand-in attach")
+
+
+messages.Exchange.attach = attach
+exec(compile(code, "served_wipe.sh", "exec"), {{"__name__": "__main__"}})
 """
 
 
 def served_wipe(tmp: Path, bindings_: dict, **env: str) -> tuple[subprocess.CompletedProcess, Path]:
-    """served_wipe.sh run as the workload runs it on an idle card, with demo.sh's stand-in, its Lean built."""
+    """served_wipe.sh run as the workload runs it on an idle card, its attach a stand-in, its Lean built."""
     cfg = R.load(CONFIG, REG)
     hooks = T.PIECES["wipe"][T.PROVER].variables(cfg, bindings_)
     executable(tmp, "nvidia-smi", IDLE)
-    demo = executable(tmp, "demo.sh", DEMO)
+    executable(tmp, "ip", IP)
+    log = tmp / "attach.json"
+    python = executable(tmp, "python", PYTHON.format(python=sys.executable, log=str(log)))
     run = {"PATH": os.pathsep.join([str(tmp), str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp),
            "VERITY_PINS": json.dumps(cfg["pin"]), "WIPE_PROTOCOL_EXE": "true", "GPU_LEASE_UUID": "card-0",
-           "WIPE_DEMO": str(demo), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
+           "WIPE_CARD": "any", "PY": str(python), **{k: v for k, v in hooks.items() if k != "WIPE_CMD"}, **env}
     p = subprocess.run(["bash", "-c", hooks["WIPE_CMD"], "_", str(tmp / "serve"), "all", str(tmp / "wipe")], cwd=ROOT,
                        env=run, capture_output=True, text=True, check=False)
-    return p, demo
+    return p, log
 
 
 @pytest.mark.parametrize("bound", [True, False])
-def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise_and_served_json_says_which(tmp_path, bound):
+def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bound):
+    """The table's command hands the launcher the bound attester, trusted under the configuration's pin alone, or
+    `--run-keys`: the attester this node's, under a key made in the serve dir's private run-keys (0700), removed after."""
     tables = {"memory-challenger": {"wipe": {"address": "192.0.2.1:7001", "host": "auditor-1",
                                              "command": "ssh auditor-1"}}} if bound else {}
-    p, demo = served_wipe(tmp_path, tables)
-    argv, keys = args0(demo), tmp_path / "serve" / "private" / "run-keys" / "wipe"
-    pinned = argv[argv.index("--trusted-sha512") + 1] if "--trusted-sha512" in argv else None
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads((tmp_path / "wipe" / "served.json").read_text())["key_pin"] == ("configuration" if bound else "run")
-    assert "--run-keys" not in argv and argv[argv.index("--reads") + 1] == "5500"
+    p, log = served_wipe(tmp_path, tables)
+    keys = tmp_path / "serve" / "private" / "run-keys" / "wipe"
+    assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
+    handed = json.loads(log.read_text())
     if bound:
-        assert pinned == WIPE_PIN and argv[argv.index("--challenger") + 1] == "auditor-1"
+        assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
+            "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
+            "links": handed["facts"]["links"]}
     else:
-        assert pinned is None and not {"--challenger", "--challenger-address", "--challenger-command"} & set(argv)
-        assert (tmp_path / "tmpdir.txt").read_text().split() == [str(keys), "700"] and not keys.exists()
+        assert handed["settings"] == {} and handed["facts"]["run_keys"] is True and not handed["facts"]["host"]
+    assert handed["tmpdir"] == [str(keys), "700"] and not keys.exists()
 
 
 @pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
 def test_the_wipes_run_keys_beside_a_pin_or_an_attester_is_refused_before_the_card(tmp_path, name):
-    p, demo = served_wipe(tmp_path, {}, **{name: ""})
-    assert p.returncode == 3 and not Path(f"{demo}.args").exists()
+    p, log = served_wipe(tmp_path, {}, **{name: ""})
+    assert p.returncode == 3 and not log.exists()
     assert f"and {name} is set: unset {name}" in (tmp_path / "wipe" / "refused.txt").read_text()
 
 

@@ -12,6 +12,9 @@ untraced = ["test_pous_wipe_store.py", "test_pous_wipe_stream.py"]
 inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/circuits",
           "verity/protocols/resource_accounting/memory/pous/prover",
+          # the wipe's declaration, whose attach runs the subprotocol (`wipe_served`), and the interface it is declared in
+          "verity/protocols/resource_accounting/memory/pous/scheme.py", "verity/protocols/resource_accounting/scheme.py",
+          "verity/hooks.py",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/channel.py", "verity/runtime", "tests/verity/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/resource_accounting/memory/pous/attester/__init__.py",
           "verity/protocols/resource_accounting/memory/pous/attester/challenger_party.py",
