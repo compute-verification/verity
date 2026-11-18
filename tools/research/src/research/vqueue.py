@@ -32,7 +32,9 @@ to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides 
              that never took a slot, a run that ended before any step, as check.py refusing its own plan does) points at
              the machines or the loop's own configuration, not the members: the check is enqueued again and infra rung from
              `rings` on, and no candidate is split for it, however often; a lone member is set aside for it only after
-             `launch_tries` readings
+             `launch_tries` readings.  A candidate above the lowest whose check ended in such infra alone is enqueued
+             again in that tick, once, so launches that never started rerun side by side rather than one candidate at a
+             time; what follows a second reading waits until it is the lowest
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 A batch with a member that changes Lean, a lock or a spec (`Ready.lean`) has its lock records regenerated before its check, as
@@ -502,6 +504,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
             acts += [Drop(d.sha, BASE_FAILED) for d in chain[k + 1:]]
             chain, rest = chain[:k], [*chain[k:], *rest]
         break
+    acts += [Retry(c.sha) for c in chain if c is not c1 and _reading(c.verdict) == INFRA and _unlaunched(c.verdict)
+             and c.tries < min(s.rings, 2)]
     kept, passed = [], []
     for c in staged:
         first, got = _first(s, c, ready)

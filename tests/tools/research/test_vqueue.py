@@ -598,6 +598,19 @@ def test_without_tree_ejects_infra_that_persists_is_split_on_its_inputs_as_infra
                         Drop("c2", "its base failed"), *rebuilt], (tries, rings)
 
 
+def test_launches_that_never_started_above_the_lowest_are_retried_at_once_side_by_side_and_only_once():
+    """Two candidates above a pending lowest whose launches started none of their steps are both enqueued again in that
+    tick, rather than each waiting to be the lowest; one already enqueued again waits to be the lowest, and an infra error
+    from a step that ran still waits for the lowest's rules."""
+    unrun = (replace(task("quick-tier"), launch=True),)
+    lowest = cand("c1", MAIN, 1)
+    c2, c3 = cand("c2", "c1", 2, state=INFRA, infra=unrun), cand("c3", "c2", 3, state=INFRA, infra=unrun)
+    assert decide(snap(lowest, c2, c3, ready=prs(1, 2, 3))) == [Retry("c2"), Retry("c3")]
+    assert decide(snap(lowest, replace(c2, tries=2), c3, ready=prs(1, 2, 3))) == [Retry("c3")]
+    ran = cand("c2", "c1", 2, state=INFRA, infra=(task("test-file:pkg2/tests/test_reads.py", "pkg2/mod.py"),))
+    assert decide(snap(lowest, ran, ready=prs(1, 2))) == []
+
+
 def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():
     """The loop rings each (candidate, why) once, so the why changes with the erring tasks, in any order, and not with the
     enqueues: five readings ring infra once, and another set of erring tasks rings it again."""
