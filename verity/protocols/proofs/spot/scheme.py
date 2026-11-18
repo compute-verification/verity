@@ -28,7 +28,7 @@ S.register(S.Scheme(
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
-    pieces={"workers": S.Launch(optional=("gate", "peer", "key", "gate-key"), reaches="challenger")},
+    pieces={"workers": S.Launch(optional=("gate", "peer", "key", "gate-key", "loopback", "main-file"), reaches="challenger")},
     record="integrity",
     symbol=CHARGES_NOTHING,
     published=CHARGES_NOTHING,

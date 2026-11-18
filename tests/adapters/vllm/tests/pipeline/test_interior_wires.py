@@ -23,7 +23,7 @@ from verity.circuits.types import Array, Tuple
 from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.definitions.registry import dead_free as DF
@@ -101,7 +101,7 @@ def _first(members):
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                             "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}])
-    reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
+    reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=DK), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)
 

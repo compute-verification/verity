@@ -1742,7 +1742,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
     (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
     (``carried_start``, `audit.session_registered`)."""
-    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_subprotocol.frame_ports
+    a0, a7, P, DK, R, V, frame_ports = M.a0, M.a7, M.P, M.DK, M.R, M.V, M.prove_subprotocol.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:
@@ -1776,7 +1776,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
         {"empty": {CARRY: carry.empty}} if carry and carry.empty else {})
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+    rec = DK.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
                    **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
 

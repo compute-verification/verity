@@ -152,7 +152,7 @@ def _wipe_check_settings(values: Any) -> str | None:
 
 def _wipe_attach(exchange: Any, ctx: Any) -> Any:
     from verity.protocols.resource_accounting.memory.pous.prover import wipe_served
-    return wipe_served.attach(exchange, ctx)
+    return wipe_served.attach(exchange, {**ctx, "party": MEMORY_ATTESTER})
 
 
 WIPE = register(Scheme(
@@ -164,6 +164,7 @@ WIPE = register(Scheme(
     assumptions=("Verity.Vocab.WipeSound", TRUSTED_DEVICE),
     log=(Order("fill", "reveal"),),
     charges=(),
+    # loading the declaration loads no prover file: test_wipe_served holds these to wipe_run.CONFIG and wipe_served.UNSET
     settings={"store": "cuda", "segments": 0, "reserve_bytes": 1 << 30, "tier": "", "limit_ns": wipe_period.LIMIT_NS,
               "reads": 0},
     check_settings=_wipe_check_settings,

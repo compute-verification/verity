@@ -52,7 +52,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits.codec import program_digest
 from verity.commitments import history as HT
 from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
@@ -607,7 +607,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         c = CS.commit(window, data, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
-    rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R,
+    rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=DK,
                           entries=[given[v].entry() for v in IL.values(links)])
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns), tuple(inputs))
@@ -783,7 +783,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
         registered[m.key] = entry
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
-             kind=it.record["window"]["kind"], registered=registered, registrar=R, previous=it.record["previous"],
+             kind=it.record["window"]["kind"], registered=registered, registrar=DK, previous=it.record["previous"],
              entries=it.record.get("registered", ()))
     return json.loads((Path(directory) / "registration.json").read_text())
 

@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 from verity.protocols.registration.verifier import registration
-from verity.protocols.proofs.spot.verifier.one_stage import docket as one_stage
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object
 from verity.circuits.census import census
 from verity.circuits.codec import program_digest
@@ -113,7 +113,7 @@ def test_each_blocks_computed_claim_rests_on_its_proof_blocks_under_the_register
     and no other test reads a registered partition."""
     dc, p = setup
     query = partition_object.query()
-    rec = one_stage.record(PROGRAM, query, {"law": "subset", "k": 8}, "hm96-sha512", [], {"kind": "stand-in"})
+    rec = DK.record(PROGRAM, query, {"law": "subset", "k": 8}, "hm96-sha512", [], {"kind": "stand-in"})
     profile = p.public(Plan(EPOCH), record=rec, query=query)
     assert profile.units == {"a": 32, "b": 32} and profile.partition == "registered" and rec["population"] == 64
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)

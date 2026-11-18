@@ -15,7 +15,8 @@ import pytest
 from verity.circuits.program import Program
 from verity.commitments import row_table as RT
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS, tables as TB
 
@@ -72,7 +73,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
                         sampler=sampler)
 
     def register(coins, i, window_root):
-        rec = CS.registration(c, {"row": 101 + i}, registrar=R)
+        rec = CS.registration(c, {"row": 101 + i}, registrar=DK)
         roots = {r["port"]: r["root"] for r in rec["roots"]}
         held.append(TB.check_row_tables(mine, publics, roots, live))
         s = stream(spec, coins)
@@ -86,7 +87,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     assert out.accepted and honest._entries[0].read and (audit["draw"]["population"], len(units)) == (UNITS, 2)
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
     bare = stream(_spec(mine, table=False), sampler=lambda sampling_design, n: [0, 1])
-    rec = CS.registration(c, {"row": 100}, registrar=R)
+    rec = CS.registration(c, {"row": 100}, registrar=DK)
     assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
     with pytest.raises(ValueError, match="over"):
         S.Value(CS.TABLE_PORT, S.ROOTS, "serve")

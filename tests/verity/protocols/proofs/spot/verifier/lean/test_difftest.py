@@ -80,6 +80,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     registered as G,
     docket as R,
 )
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.prover import produced as PP
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
@@ -441,7 +442,7 @@ def _int(x) -> bool:
 
 def _exactly(j, keys: set[str], what: str) -> None:
     if not isinstance(j, dict) or set(j) != keys:
-        raise D.Reject(f"the keys of {what} are not {sorted(keys)}")
+        raise D.Reject(f"the keys of {what} are not {', '.join(sorted(keys))}")
 
 
 def _obj(j, what: str) -> dict:
@@ -1405,7 +1406,7 @@ def _fixed_audit():
     """One valid audit whose verdicts the `verdict` piece replaces."""
     s = SETUPS[2]
     sampling_design = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], WINDOW,
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], WINDOW,
                    leaf_layer=LEAF)
     d = {"k": 2, "law": "subset", "population": s.population, "units": [1, 4]}
     return rec, R.receipt(rec, "verifier-test", received=RECEIVED), d, sampling_design
@@ -1949,13 +1950,13 @@ def _record_of(s: Setup, values, sampling_design: dict, window: dict, log=(), bi
     sup = s.supplied(values) if isinstance(s, RegisteredSetup) else {}
     entries = s.entries({v: w for v, w in values.items() if v not in sup}, window_root, fixed) if values else []
     entries = [{**e, **output} if output and e["value"] == "W" else e for e in entries]
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries, **kw)
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries, **kw)
     if not sup:
         return rec
     filled = [G.supplied_value(s.program, v, rows, rec, sorted(sup), list(log), binding=binding,
                                schema=s.formats.get(v, RV.SCHEMA)).entry()
               for v, rows in G.sources(sup).items()]
-    return R.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries + filled, **kw)
+    return DK.record(s.program, s.query, sampling_design, SCHEME, roots, window, registered=entries + filled, **kw)
 
 
 def reads(rec: dict) -> dict:
@@ -2013,7 +2014,7 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
             given.append({**s.committed["W", values["W"]].entry(), "value": EARLIER_VALUE, **output})
         elif output:
             roots.append({"port": EARLIER_OUT, "leaves": s.committed["W", values["W"]].entry()["leaves"], **output})
-        log = [R.record(s.program, s.query, named, SCHEME, roots, EARLIER, leaf_layer=LEAF, partition=part,
+        log = [DK.record(s.program, s.query, named, SCHEME, roots, EARLIER, leaf_layer=LEAF, partition=part,
                         work_table=expanded, registered=given)]
     anchors = draw(st.sampled_from([[], ["weights"]]))
     binding = BINDING if _reads_window(sup) or draw(st.booleans()) else None
@@ -2602,7 +2603,7 @@ def test_an_accepted_case_is_compared_whole(server):
         table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if _worked(sampling_design) else None
         named, expanded = service.params_sampling_design(sampling_design, s.program, s.query, table)
         mine = DR.derive(s.program, s.query, named, expanded)
-        rec = R.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+        rec = DK.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                        WINDOW, leaf_layer=LEAF, work_table=expanded)
         units = [0, 3][:mine["k"]] if mine["law"] == "subset" else sorted(
             u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
@@ -2624,7 +2625,7 @@ def test_an_accept_says_whether_every_verdict_ran(server):
     one that is not of record and did not run (its ``accepted`` null or absent), which the accept does not wait on."""
     s, design = SETUPS[3], {"k": 2, "law": "subset"}
     mine = DR.derive(s.program, s.query, design, None)
-    rec = R.record(s.program, s.query, design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=None)
     d = {**mine, "population": s.population, "units": [0, 3]}
     params = {"anchors": [], "delta": "1/20", "law": design, "leaf_layer": LEAF, "log": [], "partition": None,
@@ -2768,7 +2769,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     sampling_design = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
@@ -2856,7 +2857,7 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     `seed`: the docket, the challenger's session, v1's evidence without its ``sessions`` and
     ``verdicts``, and v1's parameters, which v2 reads with ``proofs``."""
     sampling_design = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     ch, d, coins = _challenger_sample(random.Random(seed), s, sampling_design, rec)
     proved = DR.proved(d)
@@ -2985,7 +2986,7 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     `test_challenger_difftest.py` holds the first to Lean's piece."""
     s = SETUPS[3]
     sampling_design = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     for order in ORDERS:
@@ -3044,7 +3045,7 @@ def test_v2_reads_its_sample_from_the_challengers_coins(server_v2):
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
     s, sampling_design = SETUPS[3], {"k": 3, "law": "subset"}
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(DD.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
@@ -4547,7 +4548,7 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
     first_sampling_design = DR.derive(b.program, b.query, service.selection_sampling_design(rule, b.population))
-    rec = R.record(b.program, b.query, first_sampling_design, SCHEME, [{"port": p, "root": BOUNDARY_ROOTS[p], **b.ports[p]} for p in b.ports],
+    rec = DK.record(b.program, b.query, first_sampling_design, SCHEME, [{"port": p, "root": BOUNDARY_ROOTS[p], **b.ports[p]} for p in b.ports],
                    WINDOW, leaf_layer=LEAF)
     sample = []
 
@@ -4567,7 +4568,7 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
     ns = service.replay_cells(Program(BLOCK), i.query)
     ks = service.second_counts(rule.k, [PAIR.id], ns)
     m = len(sample) * sum(ns)
-    irec = R.record(i.program, i.query, {"law": "subset", "k": m}, SCHEME,
+    irec = DK.record(i.program, i.query, {"law": "subset", "k": m}, SCHEME,
                     [{"port": p, "root": ROOTS[p], **i.ports[p]} for p in i.ports],
                     {**WINDOW, "interior": True, "replay_sample": list(sample)}, leaf_layer=LEAF, previous=DD.digest(rec))
     second = {}
@@ -5862,7 +5863,7 @@ def _two_template_interior(c: dict, replay, s: Setup) -> dict:
     file: one replay block `replay`, and the interior docket over `s`'s program, in the run's window after its
     boundary docket."""
     it = c["interior"]
-    rec = R.record(s.program, s.query, {"law": "subset", "k": s.population}, SCHEME,
+    rec = DK.record(s.program, s.query, {"law": "subset", "k": s.population}, SCHEME,
                    [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], it["record"]["window"],
                    leaf_layer=LEAF, previous=it["record"]["previous"])
     return {**c, "interior": {**it, "record": rec, "replay": _json(codec.encode_program(Program(replay))),
@@ -6892,7 +6893,7 @@ def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
     roots, by a verifier bound to `BINDING` that holds the values it doesn't fill across windows (`held`)."""
     sampling_design = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-    earlier = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
+    earlier = DK.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
     rec = _record_of(s, values, sampling_design, {**WINDOW, **BINDING}, [earlier], BINDING, leaf_layer=LEAF, previous=DD.digest(earlier))
     params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": [earlier],
               "held": sorted(set(values) - set(s.supplied(values) or {})), "parameters": s.signature,
@@ -7071,8 +7072,8 @@ def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
         assert theirs["domain"] != mine["domain"]
 
         def case(entry=(), earlier=theirs, drop=(), **change):
-            log = [R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=[earlier])]
-            rec = R.record(s.program, s.query, sampling_design, SCHEME, roots, {**WINDOW, **BINDING}, leaf_layer=LEAF,
+            log = [DK.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=[earlier])]
+            rec = DK.record(s.program, s.query, sampling_design, SCHEME, roots, {**WINDOW, **BINDING}, leaf_layer=LEAF,
                            previous=DD.digest(log[0]),
                            registered=[{**mine, "root": theirs["root"], "domain": theirs["domain"], **dict(entry)}])
             params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": log,
@@ -7144,7 +7145,7 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
     sampling_design = {"k": 1, "law": "subset"}
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-    earlier = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF,
+    earlier = DK.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF,
                        registered=s.entries(values, EARLIER_WROOT, ["W"]))
     rec = _record_of(s, values, sampling_design, WINDOW, [earlier], leaf_layer=LEAF, previous=DD.digest(earlier), window_root=WROOT,
                      fixed=["W"])
@@ -7172,7 +7173,7 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
     # fail closed: with no window root, a log that registered W, which the verifier doesn't hold, refuses its inputs, and
     # so does a fixed-name D the log registered under the domain it takes now, replayed or fresh
     assert codes({**a, "params": {k: v for k, v in unrooted.items() if k != "held"}}) == "reject"
-    plain = R.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
+    plain = DK.record(s.program, s.query, sampling_design, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=s.entries(values))
     for again in (s.entries(values), rec["registered"]):
         b = {"params": {**unrooted, "log": [plain]},
              "record": {**_record_of(s, values, sampling_design, WINDOW, [plain], leaf_layer=LEAF, previous=DD.digest(plain)),
@@ -7281,7 +7282,7 @@ def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
         then `marks`."""
         honest = {R.POOL_RESET: reset, R.POOL_WEEK: week,
                   R.POOL_SPENT: reset or R.pool_spent_before({"week": week}, list(log))}
-        return R.record(s.program, s.query, sampling_design, SCHEME, roots, {**window, **honest, **marks}, leaf_layer=LEAF,
+        return DK.record(s.program, s.query, sampling_design, SCHEME, roots, {**window, **honest, **marks}, leaf_layer=LEAF,
                         previous=DD.digest(log[-1]) if log else None, registered=[pout, *([pin] if pin else [])])
 
     def codes(p, rec):
@@ -7350,7 +7351,7 @@ def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, 
     output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
     w = s.committed["W", 3].entry()
     roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
-    log = [R.record(s.program, s.query, sampling_design, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
+    log = [DK.record(s.program, s.query, sampling_design, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
                     EARLIER, leaf_layer=LEAF, registered=[{**w, "value": EARLIER_VALUE, **output}])]
     d = DD.digest(log[0])
     rec = _record_of(s, values, sampling_design, WINDOW, log, output=output, fixed=["W"], leaf_layer=LEAF, previous=d)
@@ -7409,7 +7410,7 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
                  R.POOL_SPENT: reset or R.pool_spent_before({"week": 0}, list(log))}
 
         def bare(*extra):
-            return R.record(s.program, s.query, sampling_design, SCHEME, roots, {**windows[i], **marks},
+            return DK.record(s.program, s.query, sampling_design, SCHEME, roots, {**windows[i], **marks},
                             leaf_layer=LEAF, previous=DD.digest(log[-1]) if log else None,
                             registered=[ing or stamps[i], *s.entries({"req": 12, "pout": 16}, wroots[i]), *extra])
 
@@ -7673,24 +7674,48 @@ def _base_held(verdicts, docket, window_values=()):
     return audit.less_own_reads(audit.session_registered(verdicts, docket), docket)
 
 
-#: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.
-KEYS_REFUSED = ("params: the keys of the parameters are not", "the keys of the record's input are not")
+#: The refusals whose text names the keys they read, which a `window_values` added to keys already wrong joins.
+KEYS_REFUSED = ("params: the keys of the parameters are not ", "the keys of the record's input are not ")
 
 
-def _same(port, got, unnamed, ok) -> None:
-    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it was given: then it refuses."""
-    reason = json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
-    if got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
-        assert unnamed[0] == got[0], (ok, got, unnamed)
+def _reason(port, got):
+    return json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
+
+
+def _naming_window_values(reason: str) -> str:
+    """A keys refusal (`KEYS_REFUSED`) as it reads with `window_values` among the keys."""
+    head = next(h for h in KEYS_REFUSED if reason.startswith(h))
+    return head + ", ".join(sorted({*reason.removeprefix(head).split(", "), "window_values"}))
+
+
+def _same(port, got, unnamed, ok, changed: bool) -> None:
+    """`unnamed`'s outcome is `got`'s, byte for byte, but where naming no window value `changed` the input and `got`
+    refused the keys it read: then it refuses them with `window_values` among them."""
+    reason = _reason(port, got)
+    if changed and got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+        want = _naming_window_values(reason)
+        if port is ONE_STAGE and got[0] != "error":
+            assert unnamed[0] == got[0] and json.loads(unnamed[1]) == {**json.loads(got[1]), "reason": want}, (
+                ok, got, unnamed)
+        else:
+            assert unnamed == (got[0], want), (ok, got, unnamed)
     else:
         assert unnamed == got, (ok, got, unnamed)
+
+
+def _same_keys_refusal(port, lean, python, ok) -> None:
+    """Where Lean refuses the keys it read (`KEYS_REFUSED`), the mirror refuses them in the same words."""
+    reason = _reason(port, lean)
+    if lean[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+        assert python[0] == lean[0] and _reason(port, python) == reason, (ok, lean, python)
 
 
 def test_naming_no_window_value_changes_no_outcome(server, pieces):
     """Naming no window value changes nothing, reason included: on each sampled one-stage case and record-piece input of
     the agreement tests, the mirror with the key absent gives the line it gives holding the reads as before window
     values (`_base_held`), and Lean and the mirror with `window_values` empty give the lines they give with it absent,
-    but where the input's keys were already refused, a refusal that names them and refuses again."""
+    but where the input's keys were already refused, the same refusal with `window_values` among the keys, in the
+    mirror's words as in Lean's."""
     import hypothesis
     seen: set[str] = set()
 
@@ -7704,10 +7729,14 @@ def test_naming_no_window_value_changes_no_outcome(server, pieces):
         assert ONE_STAGE.python(case) == base and RECORD_PORT.python(j) == base_j
         lean = ONE_STAGE.lean(server, case)
         seen.add(lean[0])
-        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case)
-        _same(ONE_STAGE, base, ONE_STAGE.python(named), case)
-        _same(RECORD_PORT, RECORD_PORT.lean(pieces, j), RECORD_PORT.lean(pieces, _unnamed(j)), j)
-        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j)
+        changed = named != case
+        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case, changed)
+        _same(ONE_STAGE, base, ONE_STAGE.python(named), case, changed)
+        _same_keys_refusal(ONE_STAGE, lean, base, case)
+        lean_j = RECORD_PORT.lean(pieces, j)
+        _same_keys_refusal(RECORD_PORT, lean_j, base_j, j)
+        _same(RECORD_PORT, lean_j, RECORD_PORT.lean(pieces, _unnamed(j)), j, _unnamed(j) != j)
+        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j, _unnamed(j) != j)
         seen.add(f"record {base_j[0]}")
 
     same()
@@ -7719,7 +7748,7 @@ def _accepted_record_case(kind: str, delta: float) -> dict:
     sampling_design = {"law": "bernoulli", "p": "1/2"} if kind == "bernoulli" else {"k": 3, "law": kind}
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if kind == "work" else None
     mine = DR.derive(s.program, s.query, sampling_design, table)
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=table)
     units = {"subset": [0, 3, 4], "bernoulli": [1, 2, 4]}.get(kind) or sorted(
         u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
@@ -7768,7 +7797,7 @@ def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
     table = {t: w for t, w in table.items() if t in s.templates} if kind == "work" else None
     named, expanded = service.params_sampling_design(sampling_design, s.program, s.query, table)
     mine = DR.derive(s.program, s.query, named, expanded) if kind != "bernoulli" else {"k": 3}
-    rec = R.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=expanded)
     params = {"anchors": [], "delta": "1/10", "law": sampling_design, "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports,
               "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME, "work_table": table}
@@ -8960,7 +8989,7 @@ def test_the_audit_reads_its_sample_from_the_challengers_coins(server):
     evidence that carries coins."""
     s, sampling_design = SETUPS[3], {"k": 3, "law": "stratified"}
     mine = DR.derive(s.program, s.query, sampling_design, None)
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(DD.digest(rec))
 
@@ -9089,7 +9118,7 @@ def _covered_case(kind: str, p: str = "1/2") -> tuple[dict, dict, dict]:
            else {"k": 2, "law": "subset"} if kind == "subset" else {"k": 3, "law": "work" if kind == "closure" else kind})
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if sampling_design["law"] == "work" else None
     mine = DR.derive(s.program, s.query, sampling_design, table)
-    rec = R.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = DK.record(s.program, s.query, sampling_design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=table)
     if sampling_design["law"] == "bernoulli":
         units = {Fraction(0): [], Fraction(1): list(range(n))}.get(Fraction(p), [1, 2, 4])
@@ -9124,7 +9153,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         out = server.exchange(case)
-        assert out == answer(case) | {"reason": out["reason"]} and out["verdict"] == "reject", (kind, out)
+        assert out == answer(case) and out["verdict"] == "reject", (kind, out)
         assert out["reason"].startswith(stage) and "soundness statement doesn't cover" in out["reason"], (kind, out)
         circuit, public, record = STAND_IN_CIRCUIT, b"not a public file", b"{}"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
@@ -9150,7 +9179,7 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                 sampling_design = {"law": "bernoulli", "p": p}
                 one, two = {**case, "params": {**params, "law": sampling_design}}, {**v2, "params": {**v2["params"], "law": sampling_design}}
                 out = server.exchange(one)
-                assert out == answer(one) | {"reason": out["reason"]}, (p, out)
+                assert out == answer(one), (p, out)
                 assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
                 out = server_v2.exchange(_json(two))
                 assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)

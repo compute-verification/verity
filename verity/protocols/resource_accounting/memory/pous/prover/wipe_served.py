@@ -20,7 +20,9 @@ of a ``cuda`` store's card in use that counts as idle), and:
   premise never holds (`wipe_party.placement`: a key the run made, or a challenger on the developer's node, reads
   rehearsal), so it never reads as a wipe.
 
-What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and the facts:
+The scheme hands it ``party``, the memory challenger's party name (``MEMORY_ATTESTER``), so that this prover file
+loads no verifier file. What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``private`` and
+the facts:
 
 - ``side_of``: the runtime's `Side.of`, which no protocol imports;
 - ``pins``: the application's ``[[pin]]`` entries, read-only. Its ``memory-challenger`` pin for ``wipe`` is the one
@@ -33,7 +35,7 @@ What else its launcher hands it in ``ctx`` (`LAUNCHER`), beside ``settings``, ``
 - ``ready``: called with the judge's path before the judge answers (`wipe_run.subprotocol`'s ``ready``); `built` by
   default, which waits for a judge its launcher still builds beside the wipe (`served_wipe.sh`).
 
-It refuses, by name, before any session: outside the engine's process (``ctx["process"]``), with no side, with no
+It refuses, by name, before any session: outside its piece's process (``ctx["process"]``), with no side, with no
 private directory, with no pin handed to it, with no challenger binding, and on a busy card. The case and the record
 go to ``ctx["private"]`` (``wipe.case.json``, ``wipe.json``); the report returned (`Wiped`) gives the record and its
 summary. The challenger's run key and session log are in a scratch directory removed before it returns."""
@@ -54,15 +56,16 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_store
-from verity.protocols.resource_accounting.memory.pous.scheme import WIPE
-from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties import CHALLENGER
 
 NAME = "wipe"
 SMI = "nvidia-smi"
+#: the value of each setting or fact that stands for CONFIG's None, which the declaration's and FACTS' defaults read
+UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
 #: the launcher's facts, at the values its launcher hands by default: never in an application
-FACTS = {"device": 0, "streamer": "native", "threads": 0, "links": [], "disk": {}, "dram": {}, "egress_bits": -1,
-         "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False, "simulated": False,
-         "foreign_bytes": 0, "foreign_past_bound": False}
+FACTS = {k: wipe_run.CONFIG[k] for k in ("device", "links", "foreign_bytes")} | {
+    k: UNSET[k] for k in ("threads", "egress_bits", "disk", "dram")} | {
+    "streamer": "native", "idle_mib": 1024, "host": "", "address": "", "command": [], "run_keys": False,
+    "simulated": False, "foreign_past_bound": False}
 #: the facts that make a run a development run, named in its record's ``served.development``
 DEVELOPMENT = ("run_keys", "simulated", "foreign_bytes", "foreign_past_bound")
 BINDING = ("host", "address", "command")
@@ -72,7 +75,7 @@ LAUNCHER = ("side_of", "pins", "configuration", "trusted", "node", "judge", "rea
 
 def period_wipe(settings: Mapping[str, Any]) -> dict[str, Any]:
     """`period.json`'s ``wipe`` for ``settings`` (the declaration's), its key pinned by none (the attach adds the pin's)."""
-    out = {k: None if wipe_run.CONFIG[k] is None and v == (WIPE.settings | FACTS)[k] else v for k, v in settings.items()
+    out = {k: None if k in UNSET and v == UNSET[k] else v for k, v in settings.items()
            if k in wipe_run.CONFIG}
     if settings["foreign_past_bound"]:
         out["foreign_bytes"] = "fM"
@@ -116,9 +119,10 @@ def check(values: Mapping[str, Any]) -> str | None:
     return None
 
 
-def pin_of(pins: Any) -> str | None:
-    """The memory challenger's ``key-sha512`` for the wipe among the application's ``[[pin]]`` entries, or None."""
-    return next((p["key-sha512"] for p in pins if (p.get("party"), p.get("protocol")) == (CHALLENGER, NAME)), None)
+def pin_of(pins: Any, party: str) -> str | None:
+    """The memory challenger's (``party``'s) ``key-sha512`` for the wipe among the application's ``[[pin]]`` entries, or
+    None."""
+    return next((p["key-sha512"] for p in pins if (p.get("party"), p.get("protocol")) == (party, NAME)), None)
 
 
 def busy(device: str, idle_mib: int) -> str | None:
@@ -171,17 +175,19 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
     s = {**ctx["settings"], **facts}
     if why := check(s):
         out.append(why)
-    if ctx.get("process") != H.ENGINE:
-        out.append(f"it runs in the engine's process, before the model loads, not in {ctx.get('process')!r}")
+    if ctx.get("process") != H.PIECE:
+        out.append(f"it runs in its piece's process, before any engine is on the card, not in {ctx.get('process')!r}")
     if ctx.get("side_of") is None:
         out.append("no challenger's side was handed to it (ctx['side_of'], the runtime's Side.of)")
     if ctx.get("private") is None:
         out.append("no private directory was handed to it, where its case goes")
+    if "party" not in ctx:
+        out.append("no party was handed to it (ctx['party'], the memory challenger's, which the scheme hands)")
     if not s["run_keys"]:
         if ctx.get("pins") is None:
             out.append("no pin was handed to it (ctx['pins'], the application's [[pin]] entries)")
-        elif pin_of(ctx["pins"]) is None and not ctx.get("trusted"):
-            out.append(f"the pins handed to it give the {CHALLENGER} no key for the wipe")
+        elif "party" in ctx and pin_of(ctx["pins"], ctx["party"]) is None and not ctx.get("trusted"):
+            out.append(f"the pins handed to it give the {ctx['party']} no key for the wipe")
         if not s["host"]:
             out.append("no challenger binding (host, address, command) and run_keys unset")
         if (t := ctx.get("trusted")) and not re.fullmatch(r"[0-9a-f]{128}", t):
@@ -219,7 +225,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     if card and (why := busy(card, s["idle_mib"])):
         raise ValueError(f"{NAME}: {why}")
     pins = [dict(p) for p in ctx.get("pins") or ()]
-    key = None if s["run_keys"] else ctx.get("trusted") or pin_of(pins)
+    key = None if s["run_keys"] else ctx.get("trusted") or pin_of(pins, ctx["party"])
     node = ctx.get("node") or socket.gethostname()
     doc: dict[str, Any] = {
         "tools": {} if ctx.get("judge") is None else {"wipe-protocol": str(ctx["judge"])},
@@ -239,12 +245,12 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         answer = wipe_run.subprotocol(period, node, private,
                                       side_of=ctx["side_of"], ready=ctx.get("ready") or built)
     (private / "wipe.case.json").chmod(0o600)
-    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins) else "run",
+    served = {"server": node, "card": card, "key_pin": "configuration" if key and key == pin_of(pins, ctx["party"]) else "run",
               "development": [k for k in DEVELOPMENT if s[k]]}
     record = json.loads((private / "wipe.json").read_text()) | {"served": served}
     (private / "wipe.json").write_text(json.dumps(record, indent=1, sort_keys=True))
     return Wiped(answer, record)
 
 
-__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
+__all__ = ["BINDING", "DEVELOPMENT", "FACTS", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "built", "busy", "card_of", "check", "check_settings", "facts_of",
            "period_wipe", "pin_of", "refusals"]

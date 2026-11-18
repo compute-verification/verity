@@ -62,7 +62,7 @@ from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.commitments import randomness as RND
 from verity.commitments import registered_value as RV
@@ -472,7 +472,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
                                       run_id=x.run_id, served=served, grain=grain, forge_digest=a.forge_digest)
         bad = win.mismatches(kernel="auto")
         Path(a.registration_out).write_text(json.dumps(registration, indent=1, sort_keys=True) + "\n")
-        win.write(win.close(), a.out, {"tie": TIE_TAG, "program": t.program, "model": t.model, "shards": t.shards}, registrar=R)
+        win.write(win.close(), a.out, {"tie": TIE_TAG, "program": t.program, "model": t.model, "shards": t.shards}, registrar=DK)
         rec = json.loads((Path(a.out) / "registration.json").read_text())
         print(json.dumps({"circuit": rec["window"]["circuit"], "run": t.run, "units": t.units(), "members": len(win.window.members),
                           "mismatched": {k: len(v) for k, v in bad.items()}, "registration": DD.digest(rec),
