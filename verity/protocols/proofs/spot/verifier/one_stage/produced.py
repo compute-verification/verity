@@ -43,8 +43,9 @@ from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
+from verity.commitments.domains import REGISTRATION_PRODUCED
 
-FORMAT = "verity/registration/produced/v1"
+FORMAT = REGISTRATION_PRODUCED
 KEYS = ("draw", "format", "openings", "produced", "registration")
 PRODUCED_KEY = RV.PRODUCED_KEY
 _HEX = re.compile(r"[0-9a-f]+")

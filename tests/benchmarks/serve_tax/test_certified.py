@@ -13,7 +13,7 @@ from types import SimpleNamespace as NS
 import pytest
 import serve_tax as S
 import servetax_plugin as P
-from verity_bench import kit
+from verity import ports
 
 ARM = "tick-certifier"
 
@@ -195,7 +195,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     (tmp_path / "tick_plugin.py").touch()
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
     monkeypatch.setattr(S, "corpus", lambda: NS(TICK_BUCKET_MS=100))
-    monkeypatch.setattr(kit, "free_port", lambda: 8100)
+    monkeypatch.setattr(ports, "free_port", lambda: 8100)
     monkeypatch.setattr(S, "signal", NS(signal=lambda *a: None, SIGTERM=15))
     monkeypatch.setattr(S, "open_files", lambda: 4096)
     monkeypatch.setattr(S, "source_commit", lambda: "c0ffee")
