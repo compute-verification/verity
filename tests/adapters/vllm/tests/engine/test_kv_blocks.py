@@ -1,6 +1,7 @@
 """The KV block hook (`engine.kv_blocks`) on vLLM's KV cache manager, block pool and scheduler under the stand-in for
-vLLM: the events in the order vLLM acts, each at its step and an allocation for its request, ReuseOldestFreed's reuse
-order, a prefix-cache hit as a reused allocation, a step's writes, and one set of patches for every subscriber."""
+vLLM: the events on the exchange in the order vLLM acts, each at its step and an allocation for its request,
+ReuseOldestFreed's reuse order, HoldResident's held blocks, a prefix-cache hit as a reused allocation, a step's writes,
+and one set of patches for every attachment."""
 from __future__ import annotations
 
 from collections import deque
@@ -9,9 +10,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, ReuseOldestFreed, StepBegan, StepEnded
+from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangeWritten, ReuseOldestFreed, StepBegan,
+                          StepEnded)
 
 from tests import fake_vllm
+from verity_vllm import messages
 from verity_vllm.engine import hooks, kv_blocks
 
 PAGES, SLOTS = 6, 16
@@ -98,17 +101,24 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
 
 @pytest.fixture
 def subscribe():
-    """Subscribes a test's listeners, and cancels each when the test ends, so no patch outlives its test."""
-    made: list[kv_blocks.Subscription] = []
+    """A fresh exchange; each call attaches the hook (after the test installed the stand-in) and subscribes a listener
+    to both hooks, filing ``requests`` first.  The hook comes off and the exchange closes when the test ends, so no
+    patch or request outlives its test."""
+    messages.close()
+    ex, offs = messages.current(), []
 
     def make(*requests) -> list:
         heard: list = []
-        made.append(kv_blocks.subscribe(heard.append, *requests))
+        offs.append(kv_blocks.attach())
+        for r in requests:
+            ex.request("test", r)
+        offs.extend(ex.subscribe("test", hook, heard.append) for hook in ("memory", "steps"))
         return heard
 
     yield make
-    for s in made:
-        s.cancel()
+    for off in offs:
+        off()
+    messages.close()
 
 
 def test_the_events_come_in_vllms_order_each_at_its_step_and_for_its_request(monkeypatch, subscribe):
@@ -134,25 +144,39 @@ def test_the_events_come_in_vllms_order_each_at_its_step_and_for_its_request(mon
     assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 4, 5]
 
 
-def test_installed_the_patches_are_one_set_for_every_subscriber_and_the_last_cancel_takes_them_off(monkeypatch):
+def test_the_patches_are_one_set_for_every_attachment_and_the_last_detach_takes_them_off(monkeypatch):
     v = kv_classes(fake_vllm.install(monkeypatch))
-    one, two = [], []
-    s1 = kv_blocks.subscribe(one.append)
+    messages.close()
+    heard: list = []
+    off = messages.current().subscribe("test", "memory", heard.append)
+    d1 = kv_blocks.attach()
     entries = [e for e in hooks.live(kv_blocks.TAG)]
     assert {(e.owner, e.name) for e in entries} == set(v.sites)
-    s2 = kv_blocks.subscribe(two.append)
+    d2 = kv_blocks.attach()
     assert len(hooks.live(kv_blocks.TAG)) == len(entries)
     pool = v.pool()
     pool.get_new_blocks(1)
-    assert one == two == [RangeAllocated((1,), step=0)]
-    s1.cancel()
-    s1.cancel()
+    d1()
+    d1()
     pool.get_new_blocks(1)
-    assert len(one) == 1 and len(two) == 2 and hooks.live(kv_blocks.TAG)
-    s2.cancel()
+    assert heard == [RangeAllocated((1,), step=0), RangeAllocated((2,), step=0)] and hooks.live(kv_blocks.TAG)
+    d2()
     assert hooks.live(kv_blocks.TAG) == () and all(vars(cls)[n] is own for (cls, n), own in v.sites.items())
-    with pytest.raises(TypeError, match="takes"):
-        kv_blocks.subscribe(one.append, "fifo")
+    off()
+    messages.close()
+
+
+def test_with_no_subscriber_the_hook_still_keeps_the_step(monkeypatch):
+    v = kv_classes(fake_vllm.install(monkeypatch))
+    messages.close()
+    off, sched = kv_blocks.attach(), v.scheduler()
+    try:
+        sched.schedule()
+        sched.schedule()
+        assert messages.current().step == 1
+    finally:
+        off()
+        messages.close()
 
 
 @pytest.mark.parametrize("hold", [False, True])
@@ -177,3 +201,20 @@ def test_a_prefix_cache_hit_is_a_reused_allocation_and_a_block_in_use_is_none(mo
     pool.free_blocks(got[2:])
     assert pool.touch([got[2], got[0]]) == "touched"
     assert heard[1:] == [RangeFreed((3,), step=0), RangeAllocated((3,), reused=True, step=0)]
+
+
+def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkeypatch, subscribe):
+    """vLLM's free of a block a scheme holds resident (`HoldResident`) is withheld, and the block freed, with its
+    RangeFreed, when the scheduler begins the step the hold ends at."""
+    v = kv_classes(fake_vllm.install(monkeypatch))
+    heard = subscribe(HoldResident(2, 2))
+    pool, sched = v.pool(), v.scheduler()
+    got = pool.get_new_blocks(2)
+    sched.schedule()
+    pool.free_blocks(got)
+    assert heard[-1] == RangeFreed((1,), step=0) and [x.block_id for x in pool.free_block_queue.q] == [1, 3, 4, 5]
+    sched.schedule()
+    assert heard[-1] == StepBegan(1, (), 0) and got[1].ref_cnt == 1
+    sched.schedule()
+    assert heard[-2:] == [RangeFreed((2,), step=2), StepBegan(2, (), 0)] and got[1].ref_cnt == 0
+    assert [x.block_id for x in pool.free_block_queue.q] == [2, 1, 3, 4, 5]

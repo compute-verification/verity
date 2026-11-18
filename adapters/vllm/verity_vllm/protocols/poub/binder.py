@@ -1,14 +1,16 @@
 """`Binder`: the store's hooks into one in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, so the scheduler and
 the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.  The
-KV blocks' and the steps' events are the adapter's (`verity_vllm.engine.kv_blocks`), which the binder subscribes to.
+KV blocks' and the steps' events are the adapter's (`verity_vllm.engine.kv_blocks`), which the binder subscribes to on
+the exchange (`verity_vllm.messages`) under `NAME`.
 
 ~~~text
 GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
 GPUModelRunner.initialize_kv_cache  after, unless profiling: the KV pool, a region per attention layer, every page filler
                                     (with kv=False, unregistered)
 RangeAllocated                      kv_alloc of the pages (with kv=False, none)
-RangeFreed                          kv_free of the pages (with kv=False, none); the subscription asks ReuseOldestFreed,
-                                    so a page freed inside a window is reused as late as the pool allows
+RangeFreed                          kv_free of the pages (with kv=False, none); with fifo, the binder files
+                                    ReuseOldestFreed, so a page freed inside a window is reused as late as the pool
+                                    allows
 RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
 RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
 StepBegan                           a verifier's message since the last pass ends the window, the next challenge begins
@@ -50,8 +52,9 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.hooks import RangeAllocated, RangeWritten, ReuseOldestFreed, StepBegan, StepEnded
+from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, ReuseOldestFreed, StepBegan, StepEnded
 
+from verity_vllm import messages
 from verity_vllm.engine import kv_blocks
 from verity_vllm.engine.hooks import Hooks
 
@@ -59,6 +62,9 @@ if TYPE_CHECKING:
     from verity.protocols.resource_accounting.memory.poub.verifier.audit import Tiles
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
+
+#: the binder's name on the exchange (`messages.current`)
+NAME = "poub"
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
@@ -350,8 +356,8 @@ class Binder:
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 
-    def on_event(self, e: kv_blocks.Event) -> None:
-        """One of the adapter's KV block events (`verity_vllm.engine.kv_blocks`)."""
+    def on_event(self, e: Any) -> None:
+        """One of the exchange's ``memory`` or ``steps`` events (`verity_vllm.engine.kv_blocks` emits them)."""
         if isinstance(e, StepBegan):
             self.on_step(e)
         elif isinstance(e, StepEnded):
@@ -361,7 +367,7 @@ class Binder:
                 self._writes.append(Append(e.range, e.offset, e.count))
         elif isinstance(e, RangeAllocated) and e.reused:
             raise NotImplementedError("the store's binder runs without prefix caching")
-        elif self.kv:
+        elif self.kv and isinstance(e, RangeAllocated | RangeFreed):
             (self.store.kv_alloc if isinstance(e, RangeAllocated) else self.store.kv_free)(list(e.ranges))
 
     def on_step(self, step: StepBegan) -> None:
@@ -429,9 +435,15 @@ class Binder:
 
             h.wrap(cls, "load_model", load)
             h.wrap(cls, "initialize_kv_cache", init_kv)
-        h.service("kv-blocks", lambda: kv_blocks.subscribe(self.on_event, *([ReuseOldestFreed()] if self.fifo else [])),
-                  kv_blocks.Subscription.cancel)
+        h.service("kv-blocks", self._subscribe, lambda offs: [off() for off in reversed(offs)])
         return self
+
+    def _subscribe(self) -> list[Callable[[], None]]:
+        ex = messages.current()
+        if self.fifo:
+            ex.request(NAME, ReuseOldestFreed())
+        return [ex.subscribe(NAME, "memory", self.on_event), ex.subscribe(NAME, "steps", self.on_event),
+                kv_blocks.attach()]
 
     def uninstall(self) -> None:
         if self.hooks is not None:

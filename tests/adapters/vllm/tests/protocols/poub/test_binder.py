@@ -30,6 +30,7 @@ from verity.hooks import RangeAllocated, RangeFreed, RangeWritten, StepBegan, St
 
 from tests import fake_vllm
 from tests.engine.test_kv_blocks import kv_classes
+from verity_vllm import messages
 from verity_vllm.engine import kv_blocks
 from verity_vllm.engine.hooks import Hooks, Patch, Service, live
 from verity_vllm.protocols.poub.binder import (
@@ -489,7 +490,8 @@ def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) ->
 @pytest.fixture
 def binder():
     """Makes a test's binders (`Binder`'s arguments) and uninstalls each when the test ends, pass or fail, so a test
-    that fails with its binder installed leaves no live hook behind it."""
+    that fails with its binder installed leaves no live hook behind it, on an exchange of its own."""
+    messages.close()
     made: list[Binder] = []
 
     def make(store: NodeMemory, **kw) -> Binder:
@@ -499,6 +501,7 @@ def binder():
     yield make
     for b in made:
         b.uninstall()
+    messages.close()
 
 
 @pytest.mark.parametrize("first_runner", [False, True])
@@ -521,6 +524,8 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
     assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-store") for cls, name in v.sites}
     assert [(e.name, e.tag) for e in hooks.entries if isinstance(e, Service)] == [("kv-blocks", "verity-store")]
     assert {(e.owner, e.name) for e in live(kv_blocks.TAG)} == set(v.kv_sites)
+    ex = messages.current()
+    assert ex.oldest_freed_first() and ex.wants("memory") and ex.wants("steps")
     for i, cls in enumerate(v.runners):
         r = cls()
         r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
@@ -530,7 +535,7 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
     assert [x.name for x in s.layout().regions] == [f"{i}.weight" for i in range(len(v.runners))]
     b.uninstall()
     assert all(vars(cls)[name] is own for (cls, name), own in sites.items()) and hooks.entries == ()
-    assert live(kv_blocks.TAG) == ()
+    assert live(kv_blocks.TAG) == () and not ex.wants("memory") and not ex.wants("steps")
     Binder(NodeMemory()).uninstall()
 
 
