@@ -409,11 +409,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from verity_vllm import messages
     from verity_vllm.engine.build import hooked
-    from verity.protocols.resource_accounting.memory.poub.scheme import POUB
+    from verity.protocols.compose import schemes
 
     serving, NodeMemory = provers()
     store = NodeMemory()
-    binder = messages.current().attach(POUB, None, store=store, binder={"passes": False})
+    binder = messages.current().attach(schemes.get("poub"), None, store=store, binder={"passes": False})
     with tempfile.TemporaryDirectory() as work:
         built, _, detach = hooked(lambda: engine(Path(work)))
         trace = Trace(built)

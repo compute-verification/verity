@@ -622,7 +622,7 @@ def main() -> None:
     if args.store:
         from verity_vllm import messages
         from verity.protocols.resource_accounting.memory.poub.prover.binder import Every
-        from verity.protocols.resource_accounting.memory.poub.scheme import POUB
+        from verity.protocols.compose import schemes
         from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
@@ -630,7 +630,7 @@ def main() -> None:
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = messages.current().attach(POUB, None, store=NodeMemory(),
+        binder = messages.current().attach(schemes.get("poub"), None, store=NodeMemory(),
                                            binder={"weights": lambda v: store_weights(v, install, args), **window})
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
