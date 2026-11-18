@@ -276,7 +276,6 @@
     {"file": "verity_vllm/pipeline/poub_session.py", "kind": "T201", "symbol": "commit_session", "detail": "`print` found"},
     {"file": "tests/compiler/test_network_attester_compile_slice_v7.py", "kind": "E741", "symbol": "test_the_length_term_at_powers_of_two", "detail": "Ambiguous variable name: `O`"},
     {"file": "tests/pipeline/served_experts.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
-    {"file": "verity_vllm/compiler/compile_slice_v6.py", "kind": "E741", "symbol": "_cut_head", "detail": "Ambiguous variable name: `O`"},
     {"file": "verity_vllm/compiler/replay_step.py", "kind": "E741", "symbol": "Req", "detail": "Ambiguous variable name: `O`"},
     {"file": "verity_vllm/pipeline/cut_plugin.py", "kind": "SIM115", "symbol": "Cut.__init__", "detail": "Use a context manager for opening files"}
   ]
