@@ -27,6 +27,8 @@ from tests.program.predict.test_window_circuit import (
     _checkpoint,
     _label,
     held,
+    wired,
+    wired_matches_by_hand,
 )
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.model import INT8_EXACT_QUANT
@@ -55,7 +57,7 @@ def _unwired(reg):
 
 
 def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words():
-    """Each int8 linear is its quantizer and its `ScaledMmS8_v1{K, N}` in slices of 512 // (K / 2) columns (an s8 weight row
+    """Each int8 linear is its quantizer and its `ScaledMmS8_v3{K, N}` in slices of 512 // (K / 2) columns (an s8 weight row
     is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``w`` and ``sw`` registered reads of the linear's s8
     rows and f32 row scales (layer 0's q/k/v, o and gate/up, each its own weight and scales from row 0, a slice a row on:
     512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`. Each quantizer is one `Int8RowQuant_v3{K, R}`
@@ -74,10 +76,10 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Int8", "ScaledMmS8", "Gemm"))} == {
         "Int8RowQuant_v3{K=64,R=1}": 40, "Int8RowQuant_v3{K=64,R=4}": 20, "Int8RowQuant_v3{K=128,R=1}": 20,
-        "ScaledMmS8_v1{K=64,N=16}": 560, "ScaledMmS8_v1{K=128,N=8}": 160,
+        "ScaledMmS8_v3{K=64,N=16}": 560, "ScaledMmS8_v3{K=128,N=8}": 160,
         "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
     assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1568, (), {})
-    mm = ids["ScaledMmS8_v1{K=64,N=16}"]
+    mm = ids["ScaledMmS8_v3{K=64,N=16}"]
     reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
     assert {(WB.weight_param(f"{w}.{t}", n), p, 0, n) for w in layer for t, p, n in (("weight", "w", 512),
@@ -119,6 +121,17 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert [p for p in pins if pins[p] != roots[p]] == [f"{WC.WEIGHTS}/{param}"]
     got, alone = IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN}), _alone(doc, f"{WC.WEIGHTS}/{param}")
     assert (got["registered"], got["free"]) == (held_["registered"] - alone, held_["free"] + alone) and alone > 0
+
+
+@pytest.mark.slow
+def test_the_int8_class_wired_program_reads_the_s8_weights_as_registered_words_and_is_its_members_fed_by_hand():
+    """Each s8 slice reads its weight rows and row scales as the u16 words the weights registration commits
+    (`ScaledMmS8_v3`), so the class circuit is one wired Program with no free row. Slow (about two minutes): only the
+    whole int8 class holds the s8 reads."""
+    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, provable=False)
+    prog, _ = wired(circuit)
+    assert prog.annotations["free"] == []
+    wired_matches_by_hand(circuit, prog)
 
 
 def test_a_word_is_whole_leaves_of_one_byte_width():

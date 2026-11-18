@@ -40,11 +40,11 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit `Int8RowQuant_v3{K, R}` (v1 with
   ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj; v5 at the K of H1's tables, below),
-  and its product `ScaledMmS8_v1{K, N}`,
-  ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
-  is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
-  ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
-  aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
+  and its product `ScaledMmS8_v1{K, N}`, ⌈N / n⌉ slices `ScaledMmS8_v3{K, n}` at the same weight words a slice (n =
+  ``grain.gemm_words`` // (K / 2): an s8 weight row is K / 2 words), each reading its s8 weight rows and their f32 row scales
+  as the weights record's u16 words, and the quantizer's codes ``x`` and scale ``sx`` whole. Words are laid out by each
+  field's leaf width (`_spans`): a weight or node output whose leaves aren't one byte width filling whole u16 words, and a
+  read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
 - `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut: each head's Calls (`AttentionHead_v19`'s
   body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,

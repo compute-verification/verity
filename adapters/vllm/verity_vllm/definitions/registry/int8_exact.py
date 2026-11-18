@@ -302,6 +302,12 @@ def scaled_mm(K: int, N: int):
     return bind(GEMM.ScaledMmS8, K=K, N=N, **GEMM.GEMM_SM120_S8)
 
 
+def scaled_mm_words(K: int, N: int):
+    """`ScaledMmS8_v3{K, N, DOT=BlackwellS8ImmaDot32_v1}`: `scaled_mm` with W's rows and scales the u16 words a class circuit's
+    unit reads them as."""
+    return bind(GEMM.ScaledMmS8V3, K=K, N=N, **GEMM.GEMM_SM120_S8)
+
+
 @composite("Int8Linear", 1, ["K", "N"],
            lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, V8))), ("sw", Array(S.N, F32))),
                       Tuple(Array(S.K, V8), F32, Array(S.N, BF16))), conformance=_CONF)
