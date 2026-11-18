@@ -107,24 +107,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
 
-#: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
-#: environment variable sets.
-MACHINE: dict[str, str] = {
-    "RunEnv.py": "/workspace/venv312/bin/python",
-    "RunEnv.sweep_dir": "/workspace/cp/sweep",
-    "RunEnv.hf_home": "/workspace/hf",
-    "RunEnv.native_collect_default": "/workspace/cp/nc_build",
-    "RunEnv.hidden_so_fa2": "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so",
-    "RunEnv.hidden_so_fa3": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so",
-    "RunEnv.hidden_so_fa2_guarded": "/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so",
-    "RunEnv.hidden_so_fa3_guarded": "/workspace/cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
-    "RunEnv.norm_tap_so": "/workspace/cp/norm_tap/build/verity_norm_tap.so",
-    "RunEnv.router_tap_so": "/workspace/cp/router_tap/build/verity_router_tap.so",
-    "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
-    "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
-}
-
-
 def usage() -> str:
     w = max(map(len, COMMANDS))
     lines = [f"usage: {PROG} COMMAND [SUBCOMMAND] [options]", "", "commands:"]
@@ -149,8 +131,6 @@ def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[st
             raise TypeError(f"{cls.__name__}.{f.name} is not a config.option")
         flags, kw, env = f.metadata["flags"], dict(f.metadata["kw"]), f.metadata["env"]
         positional = not flags[0].startswith("-")
-        if f"{cls.__name__}.{f.name}" in MACHINE:
-            kw["default"] = MACHINE[f"{cls.__name__}.{f.name}"]
         if env is not None:
             value = environ.get(env)
             if value is not None and (value != "" or f.metadata["env_empty"]):
