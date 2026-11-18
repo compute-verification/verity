@@ -494,9 +494,9 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     # security/Proofs replayed beside pytest, suites: 282 + 15%, over the replay's floor (`reserve.json`'s REPLAY_ARKLIB_GIB)
     (("lean-audit:security/Proofs",), 330),
     # circuit-check, off the merge gate, runs in what `cc_mem_gb` leaves beside the rest and is granted the slot once alone
-    # (`grant_when_alone`), so it books no more than the cap
+    # (`grant_when_alone`), so it books no more than 230
     (("circuit-check",), 230),
-    # ci.toml's groups of lean-suites where no row above holds them, at the cap: their workers fit what `groups` gives
+    # ci.toml's groups of lean-suites where no row above holds them, at 230: their workers fit what `groups` gives
     # lean-suites at their worker_gb
     (("lean-suites:verity-flock:1/6",), 230),                    # beside pytest, Flock's first two sixths, vLLM's first third
     (("lean-suites:verity-flock:3/6",), 230),                    # beside lean-build, Flock's other four sixths
