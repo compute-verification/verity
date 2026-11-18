@@ -414,6 +414,45 @@ def test_the_verifier_runs_on_c_s_and_never_on_the_statements_own_circuit_file(t
     assert why is None and ran == [circuit.read_bytes()], (why, ran)
 
 
+def _tmpl(d: Path, **meta) -> Path:
+    c = d / "tmpl.txt"
+    head = {"format": PF.TMPL_FORMAT, "statement": PF.TMPL_STATEMENT, "layout": {}, **meta}
+    c.write_text(f"{PF.TMPL_FORMAT} u\nMETA {json.dumps(head)}\nTEMPLATE 1\nflock-ir-tmpl/v2\n")
+    return c
+
+
+def test_the_templated_reader_refuses_a_flat_file_and_a_meta_naming_a_definition(tmp_path):
+    """`tmpl_why`, `HmOut.parseTmpl`'s refusals on a file's head: a flat file, and META's ``definition``."""
+    flat, _public = _files(tmp_path)
+    assert PF.tmpl_why(flat) == PF.TMPL_FLAT_WHY
+    assert PF.tmpl_why(_tmpl(tmp_path, statement=PF.STATEMENT)) == PF.TMPL_FLAT_WHY
+    assert PF.tmpl_why(_tmpl(tmp_path, definition="Gemm_v2")) == PF.TMPL_DEFINITION_WHY
+    assert PF.tmpl_why(_tmpl(tmp_path)) is None
+
+
+@pytest.mark.parametrize("switch, want", [(None, PF.STATEMENT), ("0", PF.STATEMENT), ("1", PF.TMPL_STATEMENT)])
+def test_the_served_default_is_the_flat_statement_until_the_switch(monkeypatch, switch, want):
+    if switch is None:
+        monkeypatch.delenv(PF.TMPL_SWITCH, raising=False)
+    else:
+        monkeypatch.setenv(PF.TMPL_SWITCH, switch)
+    assert PF.statement() == want
+
+
+def test_the_door_under_the_templated_statement_refuses_a_flat_file(tmp_path, monkeypatch):
+    """Under `TMPL_SWITCH` the door sets up only the templated statement: a flat base circuit is refused before the
+    verifier runs."""
+    circuit, public = _files(tmp_path)
+    _derived(monkeypatch, circuit)
+    monkeypatch.setenv(PF.TMPL_SWITCH, "1")
+    monkeypatch.setattr(PF, "executable", _never)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), program=RUN_ONLY, partition={"program": "p"},
+                         block=0, registered=None)
+    assert got is None and why == ("circuit", PF.TMPL_FLAT_WHY), why
+
+
 def test_a_members_own_units_are_refused_and_its_block_is_the_partitions():
     """A member's units are its block of the partition object's ``blocks`` (`one_circuit.block`): units its parameters
     hand it are refused, and a partition naming no blocks gives it none."""

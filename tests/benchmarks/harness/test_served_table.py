@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from bench_standins import CPUS, QUIET
 
 from verity_bench import served_render, served_table
 from verity_bench.cli import main
@@ -40,8 +41,8 @@ FORMER_H100 = "llama32-1b-1gpu-pouw-protocol-served-h100"
 
 
 class ScaledEngine:
-    def __init__(self, arm, scale, gpu):
-        self.arm, self.scale, self.reps = arm, scale, 0
+    def __init__(self, arm, scale, gpu, load=QUIET["loadavg_1m"]):
+        self.arm, self.scale, self.reps, self.load = arm, scale, 0, load
         self.identity = {"vllm_version": "0.fake+gd9105ea80", "kernel_digest": None, "engine_overrides": {}, "kv_cache_tokens": 1,
                          "gpu": gpu}
 
@@ -61,43 +62,45 @@ class ScaledEngine:
         tpot = self.scale * SCALE[self.arm.id] * (1 + self.reps / 10)
         return {"token_digest": _token_digest({f"{point.id}-0": (7, 9)}),
                 "metrics": {"time_per_output_token_s": tpot, "decode_time_per_token_s": 0.8 * tpot,
-                            "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot, "peak_gpu_memory_bytes": 1.0}}
+                            "time_to_first_token_s": 1.0, "tokens_per_s": 1 / tpot, "peak_gpu_memory_bytes": 1.0},
+                "host": {**QUIET, "loadavg_1m": self.load}}
 
     def close(self):
         pass
 
 
 class ScaledFactory:
-    def __init__(self, commit_scale, gpu):
-        self.commit_scale, self.gpu = commit_scale, gpu
+    def __init__(self, commit_scale, gpu, load=QUIET["loadavg_1m"]):
+        self.commit_scale, self.gpu, self.load = commit_scale, gpu, load
 
     def create(self, arm, preset, *, resident):
-        return ScaledEngine(arm, self.commit_scale if arm.id.startswith(("commit", "bandwidth")) else 1.0, self.gpu)
+        return ScaledEngine(arm, self.commit_scale if arm.id.startswith(("commit", "bandwidth")) else 1.0, self.gpu,
+                            self.load)
 
 
 RTX, H200, H100 = "NVIDIA RTX PRO 6000 Blackwell Server Edition", "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 
 
-def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX) -> dict:
+def _result(point_id: str, commit_scale: float, reps: int = 2, gpu: str = RTX, load: float = QUIET["loadavg_1m"]) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm("commit", control="stock-fp8"), Arm("stock-fp8@compiled"),
             Arm("commit@compiled", control="stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=reps,
-                         factory=ScaledFactory(commit_scale, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(commit_scale, gpu, load), git_commit="c" * 40, cpus=CPUS)
 
 
 def _audit(point_id: str, scale: float, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8@compiled"), Arm("bandwidth-audit", control="stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
-                         factory=ScaledFactory(scale, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(scale, gpu), git_commit="c" * 40, cpus=CPUS)
 
 
 def _pouw(point_id: str, gpu: str) -> dict:
     [point] = [p for p in expand_sweep("quick") if p.id == point_id]
     arms = (Arm("stock-fp8"), Arm(POUW_ARM), Arm("stock-fp8@compiled"))
     return run_benchmark(resolve_spec(COMMIT_SPEC).preset, arms, (point,), sweep="quick", reps=2,
-                         factory=ScaledFactory(1.0, gpu), git_commit="c" * 40)
+                         factory=ScaledFactory(1.0, gpu), git_commit="c" * 40, cpus=CPUS)
 
 
 class Producer:
@@ -317,6 +320,32 @@ def test_a_labelled_run_is_its_protocols_row_over_a_newer_unlabelled_one(tmp_pat
     assert [(row["point"], row["run"]) for row in table["rows"] if row["protocol"] == "of record"] == [
         ("b8-p512-mixed", "r20261024-020000-0001")]
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-030000-0002"
+
+
+def test_a_run_of_record_on_a_loaded_host_is_passed_over_naming_its_host_quiet_gate_and_prints_no_ratio(tmp_path):
+    """A point timed on a loaded host keeps no timed points and its run fails validation, as the point command writes
+    it: its record's row prints no ratio, and the passed-over list says it was the host-quiet gate."""
+
+    loaded = _result("b8-p512-mixed", 1.0, load=21.0)
+    [gate] = {g["kind"]: g for g in loaded["gates"] if not g["passed"]}.values()
+    assert (gate["kind"], gate["bound"], gate["loadavg_1m_max"], loaded["points"]) == ("host-quiet", CPUS / 2, 21.0, [])
+    producer = Producer(tmp_path)
+    run = "r20261024-020000-0001"
+    producer.ran(run, COMMIT_SPEC, "b8-p512-mixed", loaded, validation="failed", rc=3)
+    producer.label(run, "run_of_record", "commit", "2026-10-24T05:00:00Z")
+    of_record = served_table.Protocol("of record", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit",
+                                      record="commit")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda _: None, protocols=(of_record,), factors=BY_SPEC["factors"], breakdowns=())
+    [row] = table["rows"]
+    assert (row["point"], row["run"], row["over_served"]) == ("—", None, None)
+    [skipped] = table["skipped"]
+    assert skipped["run"] == run and skipped["why"].endswith(": its host-quiet gate failed")
+    markdown = served_render.render(table)
+    [line] = [line for line in markdown.splitlines() if line.startswith("| of record |")]
+    assert "×" not in line
+    assert f"{run}" in markdown.split("Passed over")[1] and "its host-quiet gate failed" in markdown.split("Passed over")[1]
 
 
 def test_a_labelled_trial_is_left_out_of_its_record_and_the_live_rows_with_why(tmp_path):

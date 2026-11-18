@@ -1555,7 +1555,7 @@ def test_a_network_row_over_the_fronts_group_says_so_and_reaches_no_block_record
     (None, "why", "error")], ids=["accept", "lean-refuses", "undecided", "no-verdict"])
 def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_combined_verdict_does_not_read(
         tmp_path, said, why, verdict):
-    io = {"format": "verity-bench/inference-only-verdict/v5", "verdict": said, "reason": why,
+    io = {"format": "verity-bench/inference-only-verdict/v6", "verdict": said, "reason": why,
           "c": 1, "k": 2, "n": 3, "sealed": 4, "theta": {"inputs": ["0.w"], "by": "chosen"}}
     bare, bare_rec, bare_line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",

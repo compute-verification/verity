@@ -90,7 +90,7 @@ def test_a_layout_mode_is_one_the_verifier_reads():
 @pytest.mark.slow
 def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(monkeypatch):
     """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
-    ``statement`` and ``layout``; its template section the unit's template, which `tmpl.unroll` takes to the flat file's
+    ``statement`` and ``layout``, without ``subcircuit`` or ``unit_sha256``; its template section the unit's template, which `tmpl.unroll` takes to the flat file's
     unit section line for line; its other sections the flat file's but the unit's; its unit range's slot the laid-out unit's
     (a layout one column past the flat unit's slot moves ``unit_log`` and the range to the next); and a size class's
     ``definition`` is refused."""
@@ -98,7 +98,9 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)
     assert tm.text.split("\n", 1)[0] == f"{FC.TMPL_FORMAT} {args[1]}" and flat.text.split("\n", 1)[0] == f"{FC.FORMAT} {args[1]}"
     assert (tm.meta["format"], tm.meta["statement"], tm.meta["layout"]) == (FC.TMPL_FORMAT, FC.TMPL_STATEMENT, MODE)
-    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == ["format", "layout", "statement"]
+    assert sorted(k for k in set(flat.meta) | set(tm.meta) if flat.meta.get(k) != tm.meta.get(k)) == [
+        "format", "layout", "statement", "subcircuit", "unit_sha256"]
+    assert "subcircuit" not in tm.meta and "unit_sha256" not in tm.meta
     sections = _sections(flat.text)
     assert _sections(tm.text) == {k: v for k, v in sections.items() if k != "unit"}
     t = T.parse(FC.template_of(tm.text))

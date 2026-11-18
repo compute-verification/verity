@@ -1435,18 +1435,21 @@ _ENTRY_FIELDS = ("template", "at", "radix", "axes", "step")
 @dataclass(frozen=True)
 class InferenceEntry:
     """Template ``template``'s units ``[at, at + prod(radix))``: unit ``at + i`` has ``i``'s digits in mixed radix ``radix``
-    (the first the slowest, as a `Wire`'s), ``axes`` names each digit (`AXES`), and the unit's inference block is (its slot
-    digit, ``step`` + its step digit). One digit is the slot, at most one the step."""
+    (the first the slowest, as a `Wire`'s), ``axes`` names each digit (`AXES`), and the unit's inference block is (``slot`` +
+    its slot digit, ``step`` + its step digit). One digit is the slot, at most one the step. A record carries ``slot`` only
+    where it isn't 0: an entry of a served window's circuit covers the slots that lower its units, which need not be all."""
     template: str
     at: int
     radix: tuple[int, ...]
     axes: tuple[str, ...]
     step: int
+    slot: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "radix", tuple(self.radix))
         object.__setattr__(self, "axes", tuple(self.axes))
-        if (not isinstance(self.template, str) or not _ints(self.at, self.step, *self.radix) or self.at < 0 or self.step < 0
+        if (not isinstance(self.template, str) or not _ints(self.at, self.step, self.slot, *self.radix) or self.at < 0
+                or self.step < 0 or self.slot < 0
                 or not self.radix or min(self.radix) < 1 or len(self.axes) != len(self.radix)
                 or not all(a in AXES for a in self.axes) or self.axes.count("slot") != 1 or self.axes.count("step") > 1):
             raise ValueError(f"inference entry {self.doc()}: a template, a first unit and a step, naturals, and one axis of "
@@ -1468,14 +1471,16 @@ class InferenceEntry:
         return i // math.prod(self.radix[k + 1:]) % self.radix[k]
 
     def doc(self) -> dict[str, Any]:
-        return {"template": self.template, "at": self.at, "radix": list(self.radix), "axes": list(self.axes), "step": self.step}
+        return {"template": self.template, "at": self.at, "radix": list(self.radix), "axes": list(self.axes), "step": self.step,
+                **({"slot": self.slot} if self.slot else {})}
 
     @classmethod
     def of(cls, d: Any) -> InferenceEntry:
-        if not isinstance(d, Mapping) or set(d) != set(_ENTRY_FIELDS) or not isinstance(d["radix"], list) \
-                or not isinstance(d["axes"], list):
-            raise ValueError(f"an inference entry is {{{', '.join(_ENTRY_FIELDS)}}}, its radix and axes lists, not {d!r}")
-        return cls(*(d[k] for k in _ENTRY_FIELDS))
+        if not isinstance(d, Mapping) or set(d) - {"slot"} != set(_ENTRY_FIELDS) or d.get("slot", 1) == 0 \
+                or not isinstance(d["radix"], list) or not isinstance(d["axes"], list):
+            raise ValueError(f"an inference entry is {{{', '.join(_ENTRY_FIELDS)}}} and its slot where it isn't 0, its radix "
+                             f"and axes lists, not {d!r}")
+        return cls(*(d[k] for k in _ENTRY_FIELDS), d.get("slot", 0))
 
 
 @dataclass(frozen=True)
@@ -1496,16 +1501,29 @@ class Blocks:
         if self.plan is not None and not (isinstance(self.plan, str) and _PLAN.fullmatch(self.plan)):
             raise ValueError(f"a plan's digest is SHA-256 or SHA-512 in hex, not {self.plan!r}")
 
+    @property
+    def uniform(self) -> bool:
+        """Every entry's slot digit is every slot: each slot lowers the same units, a class circuit's blocks."""
+        return all(e.slot == 0 and e.radix_of("slot") == self.slots for e in self.inference)
+
     def check(self, units: Mapping[str, int]) -> None:
         """Refuse (ValueError) entries that name no template of ``units`` (each template's unit count), don't tile each
-        template's units exactly once, or have a slot digit of another radix than ``slots`` or a step at or past ``steps``.
-        The work is per entry, never per unit."""
+        template's units exactly once, or have slots past ``slots`` or a step at or past ``steps``, or leave a slot with no
+        unit. The work is per entry, never per unit."""
         by: dict[str, list[InferenceEntry]] = {}
+        free = 0
+        for e in sorted(self.inference, key=lambda e: e.slot):
+            if e.slot > free:
+                break
+            free = max(free, e.slot + e.radix_of("slot"))
+        if free < self.slots:
+            raise ValueError(f"slot {free} is in no inference entry: each of the class's {self.slots} slots lowers units")
         for e in self.inference:
             if e.template not in units:
                 raise ValueError(f"inference entry {e.doc()}: names no template of the circuit")
-            if e.radix_of("slot") != self.slots:
-                raise ValueError(f"inference entry {e.doc()}: its slot digit's radix is the class's {self.slots} slots")
+            if e.slot + e.radix_of("slot") > self.slots:
+                raise ValueError(f"inference entry {e.doc()}: slots [{e.slot}, {e.slot + e.radix_of('slot')}), each below "
+                                 f"the circuit's {self.slots}")
             if e.step + e.radix_of("step") > self.steps:
                 raise ValueError(f"inference entry {e.doc()}: steps [{e.step}, {e.step + e.radix_of('step')}), each below the "
                                  f"class's {self.steps}")
@@ -1541,7 +1559,7 @@ class Blocks:
             e = es[k]
             a, b = max(lo, e.at), min(hi, e.at + e.units)
             i = np.arange(a - e.at, b - e.at, dtype=np.int64)
-            slot[a - lo:b - lo], step[a - lo:b - lo] = e.digit("slot", i), e.step + e.digit("step", i)
+            slot[a - lo:b - lo], step[a - lo:b - lo] = e.slot + e.digit("slot", i), e.step + e.digit("step", i)
             k += 1
         return slot, step
 
@@ -1645,12 +1663,13 @@ class Circuit:
         """Each template's unit count, by descriptor id."""
         return {tid: n for tid, (_, n) in zip(self.ids, self.templates)}
 
-    def blocks_record(self) -> dict[str, Any] | None:
-        """The record's ``blocks`` (`Blocks.doc`), its proof block the circuit's units and partition digest, or None."""
+    def blocks_record(self, cap: int) -> dict[str, Any] | None:
+        """The record's ``blocks`` (`Blocks.doc`), its proof block the circuit's units and the digest of its partition into
+        its members at ``cap`` (`partition_blocks`), or None."""
         if self.blocks is None:
             return None
-        program, query = self.program()
-        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(program, query)))
+        built = self.program()
+        return self.blocks.doc(sum(self.units.values()), PO.digest(PO.build(*built, partition_blocks(self, cap, built))))
 
     @functools.cached_property
     def _ids(self) -> tuple[str, ...]:
@@ -2287,7 +2306,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
-    part = PO.build(program, query)
+    part = PO.build(program, query, partition_blocks(circuit, cap, (program, query)))
     sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
         i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))
@@ -2479,6 +2498,44 @@ def _listed_count(doc: Mapping[str, Any], pins: Mapping[str, str] | str | None =
     window = listed_ingress(members, doc["templates"], ingress)
     return {"units": sum(int(n) for _t, n in doc["templates"]), "inputs": inputs, "wired": wired, "registered": registered,
             "ingress": 0, WINDOW_INGRESS: window, "free": inputs - wired - registered}
+
+
+#: the position-free registered file the door reads (`Flock.Registered.FORMAT`): no ``reads`` and no ``reads_from``, the
+#: door computing each proof block's position from C (`Flock.OneCircuit.pos`)
+REGISTERED_FILE = "verity/registered-reads/v2"
+
+
+def registered_file(doc: Mapping[str, Any], w: CS.Binding, pins: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    """The door's ``--registered`` file (`REGISTERED_FILE`) of each member reading a registered parameter, by member key,
+    from the record ``doc`` and its period ``w`` (`window_of_record`'s), but for each parameter's entry from ``pins``
+    (``{param: entry}``, the value's ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned
+    them before the run): each read port names its parameter's value, root, rows and domain, and no position. Refused
+    (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's in that width."""
+    _wires, _cuts_, reg, _ingress = declarations(doc)
+    reads = committed_reads(reg)
+    if not reads:
+        return {}
+    pins = {**pins, **{v: x.entry() for v, x in supplied(reg, pins, w.partition_digest).items()}}
+    out: dict[str, dict[str, Any]] = {}
+    index = _ReadIndex(reads)
+    for m, a in zip(w.members, own_units(w.members, ranges_of(doc["templates"], order_of(doc)))):
+        got = _reads_of(m.template, a, m.n, index, dict(m.rows + m.outs))
+        if not got:
+            continue
+        ports = {}
+        for p, (param, _positions, _refs) in sorted(got.items()):
+            e = pins.get(param)
+            words = dict(m.rows + m.outs)[p]
+            if e is None:
+                raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
+            n, bits, want = e.get("words"), e.get("word_bits", RV.WORD_BITS), value_format(reg, param)[1]
+            if bits != want or type(n) is not int or n * bits != 16 * words or e.get("value") != param:
+                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {n} {bits}-bit leaves, not "
+                                 f"the port's {words} 16-bit words in {want}-bit leaves")
+            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": n, "word_bits": bits,
+                        "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p)}
+        out[m.key] = {"format": REGISTERED_FILE, "ports": ports}
+    return out
 
 
 def _frozen(x: Any) -> Any:

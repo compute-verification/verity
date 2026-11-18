@@ -82,6 +82,13 @@ EXE = "verity-verify-proof"
 VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
+#: the door's templated statement (`Tags.byName`), the one statement the door sets up under `TMPL_SWITCH`
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
+TMPL_FORMAT = "flock-circuit/tmpl"
+#: the environment variable that, at ``1``, puts the door on `TMPL_STATEMENT`; unset, the served default stays `STATEMENT`
+TMPL_SWITCH = "VERITY_DOOR_TMPL"
+TMPL_FLAT_WHY = "a circuit file that is not templated (its head is not flock-circuit/tmpl) under the templated statement"
+TMPL_DEFINITION_WHY = "a templated circuit whose META names a definition (a proof-block class has no templated statement)"
 #: an input bound at docket (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 #: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
@@ -180,6 +187,30 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
                 return (m, f.readline().decode().split()) if isinstance(m, dict) else None
             for _ in range(int(head[2])):
                 f.readline()
+    return None
+
+
+def statement() -> str:
+    """The statement the door sets up: `TMPL_STATEMENT` where `TMPL_SWITCH` is ``1``, else `STATEMENT`."""
+    return TMPL_STATEMENT if os.environ.get(TMPL_SWITCH) == "1" else STATEMENT
+
+
+def tmpl_why(circuit: Path) -> str | None:
+    """The templated reader's refusals (`HmOut.parseTmpl`) on the circuit file's head: a file not in the templated form
+    (`TMPL_FLAT_WHY`: its format line and META's ``format`` and ``statement`` not the templated ones), and a META naming
+    a ``definition`` (`TMPL_DEFINITION_WHY`); None when neither applies."""
+    with open(circuit, "rb") as f:
+        fmt = f.readline().decode(errors="replace").split(" ")[0]
+        line = f.readline().decode(errors="replace")
+    try:
+        meta = json.loads(line[len("META "):]) if line.startswith("META ") else None
+    except ValueError:
+        meta = None
+    if fmt != TMPL_FORMAT or not isinstance(meta, dict) or meta.get("format") != TMPL_FORMAT \
+            or meta.get("statement") != TMPL_STATEMENT:
+        return TMPL_FLAT_WHY
+    if "definition" in meta:
+        return TMPL_DEFINITION_WHY
     return None
 
 
@@ -449,20 +480,23 @@ def verify(proof: Proof, *, program: bytes, partition: Mapping[str, Any], block:
         return None, ("proof", "the statement's proof files are not a public file and at least one session directory "
                                "holding its session.json")
     try:
-        OC.lower(derived)
+        base = OC.lower(derived)
     except OC.NotDerived as e:
         return None, ("circuit", str(e))
+    name = statement()
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
-        files = {"circuit": Path(d, "circuit.json"), "program": Path(d, "program.json"),
+        files = {"circuit": Path(d, "circuit.txt"), "program": Path(d, "program.json"),
                  "partition": Path(d, "partition.json"), "registered": Path(d, "registered.json")}
-        files["circuit"].write_bytes(derived)
+        files["circuit"].write_bytes(base)
+        if name == TMPL_STATEMENT and (why := tmpl_why(files["circuit"])) is not None:
+            return None, ("circuit", why)
         files["program"].write_bytes(program)
         files["partition"].write_text(json.dumps(partition))
         reads = []
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(files["circuit"]),
+        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", name, "--circuit", str(files["circuit"]),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
