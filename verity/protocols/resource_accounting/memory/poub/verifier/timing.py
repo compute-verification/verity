@@ -32,6 +32,7 @@ is a session's, and `grind_compressions` what one grinding try costs.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -106,6 +107,11 @@ class Figures:
 
     def to_json(self) -> dict:
         return {f: dict(getattr(self, f)) if f == "gpu_squarings_per_s" else getattr(self, f) for f in FIGURES}
+
+    def sha512(self) -> str:
+        """SHA-512 of `to_json` as canonical JSON (sorted keys, no spaces), hex: what a verifier's configuration pins
+        the figures by and its record names them by."""
+        return hashlib.sha512(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     @classmethod
     def of_json(cls, j: object) -> Figures:

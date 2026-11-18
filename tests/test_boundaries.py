@@ -1042,7 +1042,6 @@ def _adapter_importers(texts: dict[str, str], modules: tuple[str, ...], shared: 
 #: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
 RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/acquire/h1_commit.py",
-    "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
@@ -1050,7 +1049,6 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
@@ -1062,6 +1060,7 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py",
 )
 
 
@@ -1238,10 +1237,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/instructions.py":
         "circuits: each instruction's source string cites the probe run that measured it",
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
-    "protocols/proofs/spot/prover/cost/inputs.py":
-        "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/proofs/spot/prover/cost/transformer.py":
-        "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }
 
 

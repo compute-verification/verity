@@ -10,8 +10,7 @@ name.  A row whose target declares no protocols never reaches this module: `prot
 first.
 
 The Commit binds what it commits to once its roots are final (`Composition.bind`): the run roots, the Program digest and
-the required-value manifest's digest.  Its one setting, ``cut``, names the executor whose sites the window's circuit is
-cut at (`protocol_options.CUT`): serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose stage is ``commit``.
+the required-value manifest's digest.  It takes no settings.
 """
 from __future__ import annotations
 
@@ -25,8 +24,6 @@ DEFAULT_SCHEME = step_rows.NAME
 RECORDED = recorded_scheme.NAME
 DESIGN = ("every replay stratum drawn, and a uniform min(k, size)-subset of its units with k = the Commit's "
        "--replay-per-stratum (commit.challenge.stratum_picks)")
-#: its settings: ``cut``, the executor whose sites the window's circuit is cut at (`protocol_options.CUT`)
-KEYS = ("cut",)
 
 
 def schemes() -> tuple[str, ...]:
@@ -40,12 +37,8 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if scheme == RECORDED:
         return ((f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
                  f"{DEFAULT_SCHEME}, so declare {NAME}:{DEFAULT_SCHEME}"),)
-    own = ctx.settings_of(NAME)
-    if stray := sorted(set(own) - set(KEYS)):
-        return (f"the {NAME} settings {stray} are none of its ({', '.join(KEYS)})",)
-    if "cut" in own and not (isinstance(own["cut"], str) and own["cut"] in ctx.enabled):
-        return ((f"the {NAME} setting 'cut' is the enabled executor's entry (name:scheme) whose sites the window's circuit is "
-                 f"cut at, not {own['cut']!r} (enabled: {', '.join(ctx.enabled)})"),)
+    if own := sorted(ctx.settings_of(NAME)):
+        return (f"the {NAME} settings {own}: it takes none",)
     return ()
 
 
