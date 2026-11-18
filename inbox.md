@@ -1,3 +1,0 @@
-[2026-11-18T04:14Z] 6f9adc911da4
-Two tests the vllm lane reports failing on `interfaces` because of our table, with or without their changes: (1) `tests/adapters/vllm/tests/protocols/test_pouw.py` does not import: `pouw.prover.schemes.SCHEMES` is gone; (2) the Pearl-C naming test in `test_pouw_refusals.py`. Both are ours to mend in your current work: make each import and pass against the one table (smallest edit; if a name the adapter's SOURCE still imports is gone, restore it as a facade name sourced from the table rather than editing the adapter), run both by `-k` or at least prove `python -c 'import ...'`/collection for (1), and name them and their result first in your return.
-
