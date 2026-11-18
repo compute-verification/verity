@@ -307,7 +307,7 @@ theorem block_gates {j tr : Json} {c : InferenceOnlyVerifier.Record.Case} (h : I
   obtain ⟨P, doc, W, Sw, rs, at_, hdec, -, -, -, -, -, -, -, hrs, -, -, -, -, -, hL, -, hDiv⟩ := hd
   have hPc : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   subst hPc
-  obtain ⟨-, -, -, -, hown, -⟩ := program_of_read h
+  obtain ⟨-, -, -, -, hown, -⟩ := InferenceOnlyVerifier.Record.SecurityProofs.program_of_read h
   have hO := ownRows_holds (readProg_of_read h)
     (InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hown hNE) hrs
   obtain ⟨f, pin, hf, hc⟩ := read_front h
