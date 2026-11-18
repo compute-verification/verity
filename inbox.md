@@ -1,3 +1,0 @@
-[2026-11-18T23:17Z] 2313d5912b30
-From the circuits lead, for your deletion of the class road: by another worker reading on one-circuit, the class road in adapters/vllm/verity_vllm/program/predict/ is class_window.py (595 lines), class_select.py (67), class_masked.py (44), with their three test files; only tests import class_window; class_window imports the rank-window modules (node_window_*), not the reverse; test_class_window.py imports four rank-window modules and goes with it. The rank window (node_window*.py, node_window_join.py, step_needs.py) STAYS: the multi-GPU model returns next week. Say in your return whether your deletion covers exactly those three files and their tests, with lines counted, or what else it takes.
-
