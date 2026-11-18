@@ -10,9 +10,11 @@ build.sh's (setting ``cubin``, default the directory's cubin).  This module owns
 torch's current stream, in the device's primary context:
 
 * **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
-  over a row's SHA-512 row digest and the row's salt.  The kernels still derive A's, B's and the tiles' salts from the
-  install's key (`weight_roots`' and the run's ``salt_key``) until hash_h3.cuh's leaves take fresh salts as data; a
-  retained pass ends at that seam (`ends`), and y's salts are fresh and kept beside its tree (`served_y_device`).
+  over a row's SHA-512 row digest and the row's salt.  The kernels derive no salt: each tree's are bytes in its
+  ``salts_<tree>`` buffer.  B's are the weights' registration's (``weight_salts``, `pearl_c.weight_row_salts`; a bench's
+  `fresh_weight_salts`), put once a weight; A's are fresh operating-system bytes a call, written before the call's launches
+  or its graph's replay (`host.fresh_into`); the tiles' are fresh at the pass's end (`ends`); y's are fresh and kept
+  beside its tree (`served_y_device`).  A retained pass keeps every salt beside the rows it salts.
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
   into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
   and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
@@ -64,6 +66,7 @@ lines, the leaves and the records, for the time split.  ``hashing`` may change b
 from __future__ import annotations
 
 import itertools
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -71,6 +74,7 @@ from typing import Any
 from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+    HM96_SALT,
     Workload,
     rows_domain,
     weight_binding,
@@ -119,6 +123,7 @@ from verity_torch.pouw.pearl_c.host import (
     _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as callers read it
+    fresh_into,
     memmove,
     write_manifest,  # noqa: F401 - kept importable here, as callers read it
 )
@@ -138,7 +143,7 @@ from verity_torch.pouw.pearl_c.screen import (
     screen_into,
 )
 
-__all__ = ["PearlCDeviceRun", "PearlCExecutor", "weight_roots"]
+__all__ = ["PearlCDeviceRun", "PearlCExecutor", "fresh_weight_salts", "weight_roots"]
 
 
 @dataclass
@@ -150,6 +155,7 @@ class _Weight:
     root: bytes
     excluded: tuple[int, ...]
     tensor: Any                    # the layer's own weight, for the retained transcript
+    salts: bytes                   # B's rows' salts, `HM96_SALT` bytes a row, kept for the retained transcript
 
 
 @dataclass
@@ -179,10 +185,25 @@ class _Shape:
         return self.keys if name == "keys" else self.b[name]
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_names("pearl-c")[0], salt_key: bytes | None = None) -> dict[int, bytes]:
+def fresh_weight_salts(weights: dict[int, Any]) -> dict[int, bytes]:
+    """Each weight's B-row salts for weights no registration committed (a bench's, a test's): fresh operating-system bytes,
+    `HM96_SALT` a row, which the caller keeps and hands to `weight_roots` and its run alike."""
+    return {w: os.urandom(HM96_SALT * t.shape[0]) for w, t in weights.items()}
+
+
+def _weight_salts(weight_salts: dict[int, bytes], w: int, n: int) -> bytes:
+    got = weight_salts.get(w)
+    if got is None or len(got) != HM96_SALT * n:
+        raise ValueError(f"weight {w}'s {n} B rows take {HM96_SALT * n} bytes of salts ({HM96_SALT} a row), "
+                         f"not {'none' if got is None else len(got)}: its registration's (`pearl_c.weight_row_salts`)")
+    return got
+
+
+def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_names("pearl-c")[0], *,
+                 weight_salts: dict[int, bytes]) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
-    `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  The trees' hm96
-    salts are the prover's, from `salt_key` (the install's, which its run is given too)."""
+    `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  B's rows are
+    salted with `weight_salts`' (each weight's, `HM96_SALT` bytes a row: its registration's), which its run is given too."""
     import torch
     s = pouw_schemes.get(scheme)
     variant, hash = s.device.name, hash_format(s).tree_hash
@@ -191,7 +212,9 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_n
     for w, weight in weights.items():
         n, k = weight.shape
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
-        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
+        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b",
+                                                                  "salts_b")}
+        _put(b["salts_b"], _weight_salts(weight_salts, w, n))
         keys, const = _zeros(128, weight.device), _constants(weight.device)
         _put(keys[64:], rows_domain(weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
@@ -244,11 +267,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  coins: SaltCoins, opening: SaltOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
-                 flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
+                 flag_rows: int = FLAG_ROWS, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
                  pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
-                 whole_shape_joins: bool = False, whole_pd_shared: bool = False):
-        """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor device, and `opening`
+                 whole_shape_joins: bool = False, whole_pd_shared: bool = False, *, weight_salts: dict[int, bytes]):
+        """`weight_salts` is each weight's B-row salts (`HM96_SALT` bytes a row, as `weight_roots` was given them).
+        `coins` is the epoch's coin commitment, held in this process or a live session's on the auditor device, and `opening`
         its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
         which raises `DomainError` otherwise): the salt is the coin's.
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`
@@ -258,7 +282,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
                       whole_prefetch_b, whole_shape_joins, whole_pd_shared)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
+        self.nb, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, None, 0, {}
+        self.weight_salts = {w: _weight_salts(weight_salts, w, t.shape[0]) for w, t in weights.items()}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
         self.whole_tree_sm, self.whole_prefetch_b, self.whole_shape_joins = whole_tree_sm, whole_prefetch_b, whole_shape_joins
@@ -389,6 +414,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         _put(keys, kk["line_b"].ljust(64, b"\0") + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         seg = _zeros(size["segdig_b"], weight.device)
+        _put(b["salts_b"], self.weight_salts[w])
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0, "segdig_b": seg.data_ptr()},
                          xb.data_ptr(), {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **self.const_keys},
                          variant=self.variant)
@@ -399,7 +425,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             raise ValueError(f"{self.entry}: weight {w}'s rows on the device root at {root.hex()[:16]}, not the committed "
                              f"{self.roots[w].hex()[:16]}")
         _run(K, pipe, JOB_STEPS, stream)
-        return _Weight(n, k, b, keys, root, excluded(*screen(xb, b["alpha_b"], b["aux_b"]), xb), weight)
+        return _Weight(n, k, b, keys, root, excluded(*screen(xb, b["alpha_b"], b["aux_b"]), xb), weight, self.weight_salts[w])
 
     # ---- calls ------------------------------------------------------------------------------------------------------
 
@@ -466,7 +492,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups
         (`_side_groups`; A's commitment split where A's tree goes there, or where a deferred-a whole capture forks it,
         `_split_whole`).  The pipeline's ``lane_cuts`` are how many of the main lane's steps are its per-row keying, which A's
-        tree reads, and how many of the side lane's are A's tree; its ``main_names`` name the main lane's steps."""
+        tree reads, and how many of the side lane's are A's tree; its ``main_names`` name the main lane's steps.  A pipeline
+        whose calls replay as graphs (`_graphed`) has A's salts of its own (``salts_a``): a forward captured whole replays
+        every weight's call at once, and the shape's buffer is every weight's of that shape; any other reads the shape's
+        (`salts_a`)."""
         side_groups = self._side_groups(sh)
         aside = "a_tree" in side_groups
         split = aside or self._split_whole(sh)
@@ -475,11 +504,15 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
                     "leaves": 0, "pd_count": sh.count.data_ptr()}
+            own = _zeros(sh.size["salts_a"], self.device) if self._graphed(sh.m16) else None
+            if own is not None:
+                bufs["salts_a"] = own.data_ptr()
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
                              split_a=split)
+            pipe.salts_a = own
             names = self._call_names(pipe)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
@@ -575,7 +608,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             if cur.retain is not None:
                 if "a_tree" in self._side_groups(sh) and sh.done[sh.j] is not None:   # A's tree is the call's side lane's
                     self.torch_stream(self.stream()).wait_event(sh.done[sh.j])
-                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe), y=y[:m])
+                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe), self.salts_a(sh, pipe), y=y[:m])
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
         return out.reshape(*lead, wt.n)

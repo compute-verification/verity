@@ -445,7 +445,7 @@ theorem treeLine_head (b : ByteArray) :
   treeLine_plain (head_canon b) (head_plain b)
 
 /-- **A log `releasedLogOf` accepts at the coin commitment `c` opens with `c`'s line.** -/
-theorem head_of_log {c : LiveCommitment} {log : List String} {entries : Log} (h : releasedLogOf c log = .ok entries) :
+theorem head_of_log {c : LiveCommitment} {log : List String} {entries : Spot.Challenger.Log} (h : releasedLogOf c log = .ok entries) :
     log.head? = some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}") := by
   by_cases hc : (log.head? == some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}")) = true
   · exact beq_iff_eq.1 hc
@@ -513,7 +513,7 @@ theorem pending_none {a : String} (ha : Verity.Sampled.rootOf a = none) {ls : Li
 
 /-- **v2's read of a log `releasedLogOf` accepts is `readTail`'s of the lines after its head**: the head is the coin
 commitment's line (`head_of_log`), no coin tree's (`treeLine_head`). -/
-theorem readLog_head {c : LiveCommitment} {log : List String} {entries : Log} (h : releasedLogOf c log = .ok entries)
+theorem readLog_head {c : LiveCommitment} {log : List String} {entries : Spot.Challenger.Log} (h : releasedLogOf c log = .ok entries)
     {ξ : ByteArray} : readLog label after recs ξ log = readTail label after recs log.tail [] none ξ := by
   have hh := head_of_log h
   cases log with
@@ -1050,8 +1050,8 @@ theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
-  obtain ⟨c, roots, -, hroots⟩ := id hcr
-  rw [readLog_head hroots] at h
+  obtain ⟨c, entries, -, hentries⟩ := id hcr
+  rw [readLog_head hentries] at h
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
   refine read_prints hp .nil (hrecs.sub fun _ hl => List.mem_of_mem_tail hl) ?_

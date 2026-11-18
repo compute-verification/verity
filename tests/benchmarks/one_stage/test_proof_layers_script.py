@@ -130,6 +130,19 @@ def test_a5_keep_that_is_not_a_new_directory_outside_work_is_refused(keep, tmp_p
     assert 'cp -a "${w[0]}" "$A5_KEEP"' in TEXT and TEXT.index('cp -a "${w[0]}"') < TEXT.index('rm -rf "$WORK"')
 
 
+@pytest.mark.parametrize("keep, refused", [("{out}/kept", True), ("{out}", True), ("{tmp}/kept", False)])
+def test_a5_keep_under_out_is_refused(keep, refused, tmp_path):
+    """The kept window holds private files, and only the public-files filter puts a file under --out."""
+    lines = [x for x in TEXT.splitlines() if x.startswith(('RESULTS=$(realpath', '[ -z "$A5_KEEP" ] || case'))]
+    assert len(lines) == 2
+    keep = keep.format(out=tmp_path / "out", tmp=tmp_path)
+    script = ('refuse() { echo "proof_layers.sh: $1" >&2; exit 2; }\n'
+              f"RESULTS={tmp_path / 'out'}; A5_KEEP={keep}\n" + "\n".join(lines))
+    run = subprocess.run(["bash", "-c", script], cwd=ROOT, capture_output=True, text=True)
+    assert run.returncode == (2 if refused else 0)
+    assert run.stderr.startswith(f"proof_layers.sh: A5_KEEP={keep} is under --out") == refused
+
+
 @pytest.mark.parametrize("windows", [0, 1, 2])
 def test_a5_keep_copies_the_one_sampling_window_and_counts_the_windows_it_found(windows, tmp_path):
     lines = TEXT.splitlines()
