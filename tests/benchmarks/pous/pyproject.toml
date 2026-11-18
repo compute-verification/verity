@@ -21,6 +21,8 @@ untraced = [
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py", "verity/protocols/resource_accounting/memory/pous",
+          # served_piece.py reads PoUS's declaration through the schemes' one table
+          "verity/protocols/compose/__init__.py", "verity/protocols/compose/schemes.py",
           "verity/protocols/interface", "verity/protocols/resource_accounting/memory/pous/prover",
           "verity/protocols/proofs/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
@@ -64,7 +66,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           # (`kit.datasheet_bandwidth`), which loads the card files by `verity.device`
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
-          "verity/device.py", "calibration/hardware/cards",
+          "verity/device.py", "calibration/hardware/cards", "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py", "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
