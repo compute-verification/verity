@@ -628,7 +628,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",

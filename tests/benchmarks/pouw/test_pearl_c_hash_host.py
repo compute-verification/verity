@@ -466,6 +466,28 @@ def test_served_y_refuses_a_wrong_count_or_size_of_salts(host, monkeypatch):
             SYD.y_tree(run, y, index, torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8))
 
 
+def test_device_trees_refuse_a_wrong_count_or_size_of_salts_before_any_launch(host, monkeypatch):
+    """The device path (`DeviceTrees`, whose kernels read `R.HM_SALT` bytes a leaf from the salts' address with no length)
+    refuses a salt too few, one too many, a short salt, and salts not contiguous uint8 on y's device, each before any
+    launch: its width's pipeline is built first, and every launch after it fails."""
+    n, m, index = 1024, 5, 3
+    torch, _, _, trees = y_trees(host, monkeypatch)
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(0)).to(torch.bfloat16)
+    raw = salts_of("y-device-count", m + 1)
+    trees.pipe(n, index)
+
+    def launched(*a, **kw):
+        raise AssertionError("a launch")
+    monkeypatch.setattr(host, "launch", launched, raising=False)
+    wrong = [torch.frombuffer(bytearray(raw[:size]), dtype=torch.uint8)
+             for size in (R.HM_SALT * (m - 1), R.HM_SALT * (m + 1), R.HM_SALT * m - 1)]
+    whole = torch.frombuffer(bytearray(raw[:R.HM_SALT * m]), dtype=torch.uint8)
+    wrong += [whole.view(torch.int8), torch.frombuffer(bytearray(raw[:2 * R.HM_SALT * m]), dtype=torch.uint8)[::2]]
+    for salts in wrong:
+        with pytest.raises(ValueError, match=f"y's {m} rows take {m} salts of {R.HM_SALT} bytes, contiguous uint8"):
+            trees(y, index, salts)
+
+
 def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
     """A width's first device tree is held to `commit_y` over a fixed 129-row y under the same fresh salts, so a tree with a
     node off is refused, naming the node, and the width's pipeline isn't kept: the next call checks again.  A tree left as

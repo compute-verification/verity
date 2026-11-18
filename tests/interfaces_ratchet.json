@@ -59,7 +59,6 @@
  },
  "scheme_name_tables": {
   "adapters/vllm/verity_vllm/config.py": 1,
-  "adapters/vllm/verity_vllm/observe/fold/patterns/pouw.py": 1,
   "adapters/vllm/verity_vllm/pipeline/serve_h1.py": 5,
   "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py": 2,
   "benchmarks/datacenter/datacenter/binding.py": 1,
