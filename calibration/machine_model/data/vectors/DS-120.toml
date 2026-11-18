@@ -3,6 +3,7 @@
 # reads ε with the measured facets replaced by the axioms, beside the current vector's measured reading.
 name = "DS-120"
 epoch = "DS-120"
+catch_all = "NOROW"      # A2's catch-all: the class every warp instruction no other class names counts in
 summary = "sm_120 on the data sheet alone: DS_issue, DS_tensor, DS_imad, DS_lop, DS_xu, DS_shfl, DS_smem"
 rows = ["DS_issue", "DS_tensor", "DS_imad", "DS_lop", "DS_xu", "DS_shfl", "DS_smem"]
 credits = []
