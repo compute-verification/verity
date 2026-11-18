@@ -48,8 +48,10 @@ inputs = [
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
-# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check), while the suite's workers together hold under 6 GB
+# each: `--mem-gb` books one worker at worker_gb and each other at typical_worker_gb (suites.py's `workers_gb`)
 worker_gb = 16
+typical_worker_gb = 6
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # check runs it as six parts by test id (`lean-suites:verity-flock:K/6`, `suites.py`'s `id_part_of`), each collecting every

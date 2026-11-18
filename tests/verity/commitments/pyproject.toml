@@ -11,3 +11,4 @@ inputs = ["verity", "verity/circuits", "verity/circuits/kernels", "adapters/vllm
           "verity/protocols/resource_accounting/memory/poub/verifier", "tests/verity/commitments/fixtures/commit-slots-v1.json"]
 parallel = true
 worker_gb = 8
+typical_worker_gb = 5

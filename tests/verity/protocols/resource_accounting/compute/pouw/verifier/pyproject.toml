@@ -13,6 +13,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "verity/circuits/kernels",
           "verity/protocols/resource_accounting/compute/pouw/prover/clear"]
 parallel = true
+worker_gb = 3
 
 [tool.pytest.ini_options]
 testpaths = ["."]

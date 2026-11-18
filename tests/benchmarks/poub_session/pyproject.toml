@@ -78,7 +78,10 @@ inputs = ["verity/protocols/resource_accounting/memory/poub/prover/poub_session/
           "verity/protocols/compose/verifier/live_challenger/__init__.py",
           # test_vllm_serve.py: serve.py proves by PoUB's node store (`provers`: serving.prove, NodeMemory), which its
           # CPU test loads without the adapter
-          "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session"]
+          "verity/protocols/resource_accounting/memory/poub/prover/node_store", "benchmarks/poub_session",
+          # keep.py: the private names it refuses, the vLLM integration's one list, and the one matcher it loads by path
+          "adapters/vllm/verity_vllm/pipeline/private_names.json", "adapters/vllm/verity_vllm/pipeline/private_names.py",
+          "adapters/vllm/verity_vllm/pipeline/research_outputs.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
