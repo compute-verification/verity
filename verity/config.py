@@ -25,8 +25,8 @@ What a protocol declares (`Component`: its id, the workload hooks it needs, the 
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
 sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s,
 its parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
-name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
-needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
+name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or are
+listed after it, or whose needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
 
 A pin is the key the auditor pinned for one of its devices: the party as the configuration names it (never a host,
@@ -209,7 +209,10 @@ def declared(components: Sequence[Component],
 def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
           workloads: Mapping[str, Workload]) -> dict[str, Any]:
     """``cfg`` checked against the declarations (by subprotocol name and by workload name), or `Refused` by name; the
-    checked configuration, each parameter table as its schema normalizes it over its defaults."""
+    checked configuration, each parameter table as its schema normalizes it over its defaults.
+
+    The order of ``protocols`` means two things. A subprotocol another requires is listed earlier than it (``order``).
+    Where two schemes wrap one site, the earlier-listed is the outer."""
     _keys("the configuration", cfg, TOP, REQUIRED)
     _plain("the configuration", cfg)
     fmt = _str("format", cfg["format"])
@@ -226,6 +229,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     for c in listed:
         if missing := [r for r in c.requires if r not in names]:
             raise Refused("requires", f"{c.name} requires {', '.join(missing)}, which protocols doesn't list")
+    for i, c in enumerate(listed):
+        if later := [r for r in c.requires if names.index(r) > i]:
+            raise Refused("order", f"{c.name} requires {', '.join(later)}, so protocols lists {', '.join(later)} "
+                                   f"before {c.name}")
     composite(names, components)
     _keys("[workload]", cfg["workload"], ("name", "params"), ("name",))
     wname = _str("workload.name", cfg["workload"]["name"])

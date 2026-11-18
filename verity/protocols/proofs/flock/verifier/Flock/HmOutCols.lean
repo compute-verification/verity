@@ -15,6 +15,9 @@ namespace Flock
 
 namespace HmOut
 
+/-- The input rows: the rows before one output row per run of output ports (`outRowPorts`). -/
+def nIn (c : Circuit) : Nat := c.ports.size - c.outRowPorts.size
+
 /-- `outCol`'s tables: each output word's unit and its place among that unit's outputs, and the unit's and the last
 stage's output columns. -/
 structure OutColTab where

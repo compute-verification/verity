@@ -13,11 +13,12 @@ Tree ports: a link row read by path in its writer template's output field's tree
 unit's leaf in its template's trees (`HmLinks.treeLeaf`) is its rank among the template's units in root order, counted
 from the nodes, and a unit's writer (`HmLinks.writerOf`) is the unit whose output it reads. A tree port states no reads,
 a statement's reads come from the program (`withTrees`), the honest reader's positions pass `badInstance` and a reader
-that refers to another writer's row (the shared-tree toy's `ra`) does not; a link row passes `checkLinked` only as a tree
-port. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
+that refers to another writer's row (the shared-tree toy's `ra`) does not; a link row passes `checkLinked` only as a
+tree port, and a tree port names its rows' words; a linked statement checked as an inner statement's description is
+refused. On a registered tree of two real leaves, a reader's table rows open it only as committed: a row with one bit
 flipped (the toy's `rb`), the writer's value under a fresh salt (`mc`) and the rows' paths swapped (`rd`) are refused by
-`badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each reader unit the leaf
-of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are not one a digit.
+`badRow`. A wire strided on the reader's side too (`Circuits.Wire.leafAt` with reader steps) gives each reader unit the
+leaf of the one index reading it, and refuses a unit read twice, a cut, a row past 0 and steps that are not one a digit.
 -/
 
 @[expose] public section
@@ -45,9 +46,9 @@ def fnOf (v : Nat) : Option Nat := (unitAt ns v).map fun (k, _) => ((prog.defs[p
 
 def hex64 : Json := Json.str (String.ofList (List.replicate 128 'a'))
 
-def portJ (reads : List (Option Nat)) (tree : Option Json) : Json :=
+def portJ (reads : List (Option Nat)) (tree : Option Json) (words : Option Nat := some 4) : Json :=
   Json.mkObj ([("value", Json.str "rope/out"), ("root", hex64), ("leaves", toJson 16), ("domain", hex64),
-    ("reads", toJson reads)] ++ (tree.map fun t => [("tree", t)]).getD [])
+    ("reads", toJson reads)] ++ (words.map fun w => [("words", toJson w)]).getD [] ++ (tree.map fun t => [("tree", t)]).getD [])
 
 def treeJ : Json := Json.mkObj [("template", Json.str "rope"), ("field", Json.str "out")]
 
@@ -63,6 +64,7 @@ def refused (j : Json) : Bool := (ofJson j).toOption.isNone
 #guard x.tree == some ("rope", "out") && x.readsRel.isEmpty
 #guard refused (fileJ [("x", portJ [some 0] (some treeJ))])
 #guard refused (fileJ [("x", portJ [] (some (Json.mkObj [("template", Json.str "rope")])))])
+#guard refused (fileJ [("x", portJ [] (some treeJ) none)]) && !refused (fileJ [("x", portJ [] none none)])
 
 -- without tree ports the registered reads are as given; a tree port needs the verifier's program
 #guard ((withTrees default default none (some #[{ x with tree := none }])).toOption.join.map (·.size)) == some 1
@@ -93,6 +95,10 @@ def ok? (r : V Unit) : Bool := r.toOption.isSome
 -- without registered reads, a statement that declares links is refused, and one that declares none is not
 #guard !ok? (Registered.check linked default none false)
 #guard ok? (Registered.check { linked with metaJ := Json.null } default none false)
+-- an inner statement's description reads no row by path: a linked one is refused by name
+#guard match checkDescription linked default #[x] with
+  | .error e => e.startsWith "registered reads: link row x reads another unit's outputs"
+  | .ok _ => false
 -- a link row reads its writer's whole output row: a tree port of another field is refused by name
 #guard match treeReads linked prog #[] { x with tree := some ("rope", "aux") } with
   | .error e => e.startsWith "registered reads: tree port x reads rope's aux tree"

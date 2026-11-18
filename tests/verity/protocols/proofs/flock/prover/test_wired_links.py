@@ -4,7 +4,9 @@ u's output row): layer 0's statement (``writers``) opens its output rows at thei
 them, each link row the writer's leaf by path (a tree port). The honest staging's link rows have their writers' output rows'
 `b || c`; a prover that gives layer 1 a made-up input, and one that commits the right value under a salt of its own, stage the
 same circuit with link rows that differ, as do a reader whose read is moved to another unit's leaf (``other_leaf``) and one
-whose link row is a row of other words under its writer's salt (``other_words``). The Lean verifier
+whose link row is a row of other words under its writer's salt (``other_words``); the honest reader's link may start at
+a word of its writer's row where no return field starts (``wrong_offset``), its tree port a width other than its writer
+row's or none, and it may be staged as an inner statement with plain leaves (``plain_leaves``). The Lean verifier
 (`verity-verify-proof statement --program --registered`, when a Lean toolchain is present) accepts the writers and the
 honest readers and refuses every cheat, a linked statement without its program, and one without registered reads, and
 accepts a reader of one return field of a two-field writer (``field``), whose link row is the writer's whole row, the
@@ -181,6 +183,13 @@ def _stage(topo, d: Path, wired: bool, unit=U.UniversalUnit):
         st["mixed"] = CS.stage(units, SPEC, shape, cl, honest, d / "mixed", packed=True, wiring=wiring)
         port = _meta(d / "honest")["links"][0]["port"]
         _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
+        _edit_meta(d / "honest", d / "wrong_offset", lambda m: m["links"][0].update({"at": 1}))
+        plain, CS.LEAF_SCHEME = CS.LEAF_SCHEME, FC.LEAF_SCHEME_PLAIN
+        try:
+            CS.stage(units, SPEC, shape, cl, _cut(honest, N, tp.population), d / "plain_leaves", packed=True, wiring=readers,
+                     salts=shared)
+        finally:
+            CS.LEAF_SCHEME = plain
         st["other_words"] = CS.stage(units, SPEC, shape, cl, _cut(_lanes(units, cl, tp, inputs, {N: flip[N]}), N, tp.population),
                                      d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
         for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
@@ -188,6 +197,11 @@ def _stage(topo, d: Path, wired: bool, unit=U.UniversalUnit):
         wrong = json.loads(json.dumps(st["honest"]["registered_reads"]))
         wrong[port]["tree"]["field"] = "aux"
         (d / "wrong_field.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wrong}))
+        wide = json.loads(json.dumps(st["honest"]["registered_reads"]))
+        wide[port]["words"] += 64
+        (d / "wrong_width.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wide}))
+        del wide[port]["words"]
+        (d / "no_words.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wide}))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
@@ -206,6 +220,23 @@ def _edit(src: Path, dst: Path, n: int, port: str, refs: dict) -> None:
         at = o + 4 * (i * len(names) + j)
         body[at:at + 4] = r.to_bytes(4, "little")
     (dst / f"pub-{n}.bin").write_bytes(head + b"\n" + bytes(body))
+
+
+def _edit_meta(src: Path, dst: Path, edit) -> None:
+    """``src``'s statement with its circuit's META changed by ``edit`` (in place on the parsed object) and the circuit's
+    digest and class restated wherever the statement names them, every other byte unchanged."""
+    shutil.copytree(src, dst)
+    old = (src / "circuit.txt").read_text()
+    head, line, rest = old.split("\n", 2)
+    meta = json.loads(line[5:])
+    edit(meta)
+    compact = '": ' not in line
+    new = "\n".join([head, "META " + json.dumps(meta, separators=(",", ":") if compact else None), rest])
+    (dst / "circuit.txt").write_text(new)
+    for was, now in ((FC.digest(old), FC.digest(new)), (FC.class_digest(old), FC.class_digest(new))):
+        for f in dst.iterdir():
+            if f.is_file() and f.name != "circuit.txt" and was.encode() in (b := f.read_bytes()):
+                f.write_bytes(b.replace(was.encode(), now.encode()))
 
 
 @pytest.fixture(scope="module")
@@ -357,6 +388,23 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     bad, out = at("honest", *bound, reads="wrong_field.reads.json")
     print("wrong_field", out.strip().splitlines()[-1])
     assert bad is None and "reads its writer's whole output row" in out, out
+    # a link reads one whole return field of its writer, from the field's first word (the unit's one field, at 0), and
+    # nothing else (HmLinks.checkUnit)
+    bad, out = at("wrong_offset", *bound)
+    print("wrong_offset", out.strip().splitlines()[-1])
+    assert bad is None and f"read unit 0's outputs [1, {1 + N_OUT}), which are not one whole return field" in out, out
+    # a link row is its tree port's registered row, whose width the port names (Registered.checkPort's Port.fits)
+    port = _meta(d / "honest")["links"][0]["port"]
+    bad, out = at("honest", *bound, reads="wrong_width.reads.json")
+    print("wrong_width", out.strip().splitlines()[-1])
+    assert bad is None and f"registered reads: port {port}'s rows are" in out, out
+    bad, out = at("honest", *bound, reads="no_words.reads.json")
+    print("no_words", out.strip().splitlines()[-1])
+    assert bad is None and "a tree port names its rows' words" in out, out
+    # an inner statement's description reads no row by path: a linked one is refused by checkLinked's name
+    bad, out = at("plain_leaves", *bound, "--statement", "verity/flock-circuit+plain-leaves")
+    print("plain_leaves", out.strip().splitlines()[-1])
+    assert bad is None and NO_TREE in out, out
     # without registered reads every linked statement is refused, the honest one included: one whose header names
     # registered rows as reading no root, and one that names none (layers 0 and 1 in one statement) by checkLinked's name
     for name, why, n in (("honest", NO_ROOTS, N), ("made_up", NO_ROOTS, N), ("wrong_salt", NO_ROOTS, N),
