@@ -403,13 +403,9 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        NCP_CIRCUIT_SCHEMES as SCHEMES,
-    )
+    from verity_vllm import protocols as PO
 
-    from verity_vllm.protocols import pouw
-
-    return next((e for e in entries if e.split(":", 1)[0] == pouw.NAME and e.split(":", 1)[1] in SCHEMES), None)
+    return next((e for e in entries if PO.has_circuit(e)), None)
 
 
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
