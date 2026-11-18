@@ -1176,10 +1176,11 @@ case "$*" in *memory.used*) echo 0 ;; esac
 """
 #: ip's stand-in: the default route's NIC
 IP = "#!/bin/sh\necho '1.1.1.1 via 10.0.0.1 dev eth9 src 10.0.0.2 uid 0'\n"
-#: the launcher's Python, its attach a stand-in: what the launcher handed it, and the directory its scratch is made in
-#: with that directory's mode, written to ``attach.json``; it then refuses, so no wipe runs
+#: the launcher's Python, its attach a stand-in: what the launcher handed it, the directory its scratch is made in with
+#: that directory's mode, and the streamer handed with the labels it streams under the zero key (as the memory attester's
+#: gate runs it), written to ``attach.json``; it then refuses, so no wipe runs
 PYTHON = """#!{python}
-import json, os, runpy, stat, sys
+import json, os, runpy, stat, subprocess, sys
 from pathlib import Path
 if sys.argv[1] != "-":
     sys.argv = sys.argv[1:]
@@ -1193,8 +1194,12 @@ from verity_vllm import messages
 def attach(self, scheme, given, **ctx):
     tmp = os.environ["TMPDIR"]
     facts = {{k: ctx[k] for k in ("host", "address", "command", "links", "run_keys")}}
+    stream = ctx.get("wipe_stream")
+    labels = stream and subprocess.run([stream, "check", "--start", "0", "--count", "2"], input="0" * 64 + "\\n",
+                                       capture_output=True, text=True, check=True).stdout.splitlines()[1:]
     Path({log!r}).write_text(json.dumps({{"settings": given, "facts": facts, "trusted": ctx.get("trusted"),
-                                          "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]]}}))
+                                          "tmpdir": [tmp, oct(stat.S_IMODE(os.stat(tmp).st_mode))[2:]],
+                                          "wipe_stream": stream, "labels": labels}}))
     raise ValueError("wipe: the stand-in attach")
 
 
@@ -1233,9 +1238,25 @@ def test_the_wipes_key_is_the_pin_when_bound_and_the_runs_otherwise(tmp_path, bo
         assert handed["trusted"] == WIPE_PIN and handed["settings"] == {"reads": 5500} and handed["facts"] == {
             "host": "auditor-1", "address": "192.0.2.1:7001", "command": ["ssh", "auditor-1"], "run_keys": False,
             "links": handed["facts"]["links"]}
+        assert handed["wipe_stream"] is None
     else:
         assert handed["settings"] == {} and handed["facts"]["run_keys"] is True and not handed["facts"]["host"]
     assert handed["tmpdir"] == [str(keys), "700"] and not keys.exists()
+
+
+def test_the_runs_streamer_is_built_and_run_outside_the_serve_dir(tmp_path):
+    """With the memory attester the run's, its native streamer is built into a directory of its own and handed to the
+    attach (`wipe_stream`), so nothing under the serve dir, which may be mounted noexec (/dev/shm), is run: the key stays
+    under it (TMPDIR), the streamer runs from outside it and derives `streamed_wipe.label`'s labels, and both are gone
+    when the wipe ends."""
+    from verity.protocols.resource_accounting.memory.pous.verifier import streamed_wipe as sw
+    p, log = served_wipe(tmp_path, {})
+    assert p.returncode == 3 and "the stand-in attach" in (tmp_path / "wipe" / "refused.txt").read_text(), p.stdout + p.stderr
+    handed, serve = json.loads(log.read_text()), tmp_path / "serve"
+    stream = Path(handed["wipe_stream"])
+    assert handed["facts"]["run_keys"] is True and not stream.resolve().is_relative_to(serve.resolve())
+    assert b"".join(bytes.fromhex(x) for x in handed["labels"]) == sw.labels(bytes(32), 0, 2)
+    assert not stream.parent.exists() and not (serve / "private" / "run-keys" / "wipe").exists()
 
 
 @pytest.mark.parametrize("name", ["WIPE_KEY_SHA512", "WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"])
