@@ -36,6 +36,8 @@ CORE_PKG = REPO / "verity"
 #: the scanned packages: the integration's
 LIBRARY = (PKG,)
 ALLOWLISTS = HERE / "allowlists"
+#: the command that prunes every allowlist here, or those named, to what its lint finds (`pruned`), from the repository root
+PRUNE = (HERE / "prune.py").relative_to(REPO).as_posix()
 #: the integration's tests, which its lints name ``tests/...`` (`rel`, `path_of`), and the argument naming them for a tool
 #: run from ``ROOT``
 TESTS = HERE.parent
@@ -312,6 +314,17 @@ def stale_entries(name: str, violations: Iterable[Violation]) -> list[str]:
     return out
 
 
+def pruned(doc: dict, found: Counter, sized: bool = False) -> dict:
+    """Allowlist ``doc`` with each entry lowered to what ``found`` holds of its key and one it holds none of deleted, in its
+    order; nothing is added or raised (``sized``: an entry's count is a recorded size, kept while its key is found)."""
+    out = []
+    for e in doc["entries"]:
+        k, n = (e["file"], e["kind"], e["symbol"], e["detail"]), e.get("count", 1)
+        if keep := (n if sized else min(n, found.get(k, 0))) if found.get(k, 0) else 0:
+            out.append({x: v for x, v in {**e, "count": keep}.items() if x != "count" or v != 1})
+    return {**doc, "entries": out}
+
+
 def assert_no_new(name: str, violations: Iterable[Violation], rule: str, fix: str) -> None:
     new = new_violations(name, violations)
     assert not new, (f"{rule}: {len(new)} violation(s) not in allowlists/{name}.json. {fix} "
@@ -321,4 +334,5 @@ def assert_no_new(name: str, violations: Iterable[Violation], rule: str, fix: st
 def assert_no_stale(name: str, violations: Iterable[Violation], rule: str) -> None:
     stale = stale_entries(name, violations)
     assert not stale, (f"{rule}: {len(stale)} entr(y/ies) in allowlists/{name}.json no longer match anything: the "
-                       "violation is gone, so delete the entry (allowlists only shrink):\n" + "\n".join(stale))
+                       "violation is gone, so delete the entry (allowlists only shrink; "
+                       f"`uv run python {PRUNE} {name}` does it):\n" + "\n".join(stale))

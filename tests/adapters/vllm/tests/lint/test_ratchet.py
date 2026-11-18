@@ -61,6 +61,22 @@ def test_new_and_stale_entries(tmp_path, monkeypatch) -> None:
     assert R.new_violations("x", found[:2]) == [] and R.stale_entries("x", found[:2] + found[3:]) != []
 
 
+def test_a_pruned_allowlist_only_shrinks_to_what_is_found_in_its_order(tmp_path, monkeypatch) -> None:
+    a, b, c = (("a.py", "k", "f", "d"), ("b.py", "k", "<module>", "gone"), ("c.py", "k", "g", "d"))
+    doc = {"rule": "X", "entries": [{"file": "c.py", "kind": "k", "symbol": "g", "detail": "d", "count": 3},
+                                    {"file": "a.py", "kind": "k", "symbol": "f", "detail": "d", "count": 2},
+                                    {"file": "b.py", "kind": "k", "symbol": "<module>", "detail": "gone"}]}
+    assert R.pruned(doc, R.Counter({a: 5, c: 1, ("new.py", "k", "h", "d"): 1})) == {"rule": "X", "entries": [
+        {"file": "c.py", "kind": "k", "symbol": "g", "detail": "d"},
+        {"file": "a.py", "kind": "k", "symbol": "f", "detail": "d", "count": 2}]}
+    assert R.pruned(doc, R.Counter({c: 1, b: 1}), sized=True)["entries"] == [doc["entries"][0], doc["entries"][2]]
+    monkeypatch.setattr(R, "ALLOWLISTS", tmp_path)
+    (tmp_path / "x.json").write_text(json.dumps(doc))
+    with pytest.raises(AssertionError, match=f"uv run python {R.PRUNE} x"):
+        R.assert_no_stale("x", [], "X")
+    assert (R.REPO / R.PRUNE).is_file()
+
+
 def test_the_served_definitions_are_scanned_as_the_package() -> None:
     p = R.PKG / "definitions" / "registry" / "a.py"
     assert R.rel(p) == "verity_vllm/definitions/registry/a.py" and R.module_name(p) == "verity_vllm.definitions.registry.a"
