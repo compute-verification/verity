@@ -148,10 +148,11 @@ def partials(x: dict) -> np.ndarray:
     return np.array(out, np.uint16)
 
 
-def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, RV.Registered]) -> RV.Registered:
+def receipt_value(win: dict, salts: Any, call: int, trees: dict[str, RV.Registered]) -> RV.Registered:
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
-    and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
+    and roots), under the prover's kept salts (`pouw_h1_prover.salts_of`) at ``RECEIPT_NONCE`` + c, bound to the window's
+    root."""
     # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
     # loads, and a reader of the table by id (`windows.interface.resolve`) answers for them from then on.  So it is imported
     # here, where a value is rebuilt: importing this module alone leaves the table as it was.
@@ -163,8 +164,8 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, RV.Register
         x = operands(win, u, trees)
         rc, _ok = Z.reference(x["a"], x["b"], x["sa"], x["sw"], x["zy"], x["salt"], u, x["roots"])
         rows.append(receipt_words(rc))
-    return NR.commit(win["program"], f"{win['shape']['prefix']}{LL.RECEIPT}@{call}", np.array(rows, np.uint16), key,
-                     SV.RECEIPT_NONCE + call, keep_rows=True, window=win["root"])
+    return NR.commit(win["program"], f"{win['shape']['prefix']}{LL.RECEIPT}@{call}", np.array(rows, np.uint16),
+                     salts.at(SV.RECEIPT_NONCE + call, len(rows)), keep_rows=True, window=win["root"])
 
 
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:

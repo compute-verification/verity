@@ -75,7 +75,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits import partition_object as PO, refs as RF
-from verity.commitments import domains as DM, hm96, registered_value as RV, row_table as RT
+from verity.commitments import docket_digest as DD, domains as DM, hm96, registered_value as RV, row_table as RT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
@@ -1477,9 +1477,8 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
     """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
     every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
     registration's entries by tree), unit ``m.base + i`` reading the leaf of the tree holding it (`Binding.tree`) the
-    wiring gives in closed form (`Binding.reads`); a wired port is a tree port (``"tree": {"template", "field"}``, its
-    reads empty: the verifier's program gives them, `Flock.Registered.treeReads`), its circuit's row a link row (META
-    ``links``, `Flock.Registered.checkLinked`): Lean refuses a statement checked
+    wiring gives in closed form (`Binding.reads`), a wired port's the leaves of its writer template's field tree, as the
+    served route's Program has its wires cut to input rows (`interface.served_program`): Lean refuses a statement checked
     against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
     a member's outputs read opens a root registered before any coin. A member with ports in shared trees
     (`Binding.shared`) gets these reads with no file of its own. The prover's header gives the paths (`own_entries`,
@@ -1501,11 +1500,9 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 raise ValueError(f"{m.key} {p}: the registration holds no root for it")
             if port == m.port(p) and int(e["leaves"]) != m.n:
                 continue
-            wire = w.wire(m, p)
             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
-                        "word_bits": RV.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        **({"reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base} if wire is None else
-                           {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
+                        "reads": w.reads(m, p).tolist(), RV.READS_FROM: m.base}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
 
@@ -1758,7 +1755,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
            "domain_tag": DOMAIN_TAG, "registration": DM.REGISTRATION if entries else DM.REGISTRATION_V1,
-           "registration_digest": registrar.digest(rec),
+           "registration_digest": DD.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "192 fresh bytes from the os generator a row", "seconds": c.seconds, **(extra or {})}

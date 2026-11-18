@@ -26,6 +26,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import archs  # noqa: E402
+
 CENSUS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
 ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
@@ -189,7 +192,7 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
     (the MMA waiting on its own commit, no read) bounds any program's tcgen05 words from above."""
     census = _module("dc_census", HERE / "census.py")
     analyze = census.analyze
-    dev = census.Device("sm100", census_dirs)
+    dev = census.Device(archs.of("sm_100a").family, census_dirs)
     base = dev.model()
     region = list(base["tmem_points"]) + [(r["slots_per_clk"] / rho5, r["committed_words_per_clk"] / rho5)
                                           for r in rates if r["arm"] in (1, 2) and r["L"] == 32]

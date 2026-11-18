@@ -5,7 +5,9 @@ proof-block boundary of a partition of the program and registers the commitment 
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with
 probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
-applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
+applied to its committed inputs. On a served run, that holds of each sampled block on its own inputs; the wires between
+blocks are not held, a limit that stands until the registered circuit carries its wires as edges.
+The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
@@ -409,7 +411,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 ### The docket
 
 A docket fixes everything a sampled proof block's statement can depend on before the verifier samples. Its record,
-`verity/registration/v1` (`one_stage.docket.record`), names the program, query and partition digests, the
+`verity/registration/v1` (`prover.docket.record`), names the program, query and partition digests, the
 population, the sampling design expanded over the verifier's program and query, the commitment scheme, each port's root
 with its leaf count and domain, the leaf layer, the anchors, the run (`window`: its provenance, `served` or `stand-in`, the
 stream and prover it is bound to, and its seed salt) and `previous`, the digest of this prover's last record. A record
@@ -564,8 +566,8 @@ One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.ch
 "complete", "per_template", "proved"}` and the sample's units under the integrity profile's key for them. `complete`
 is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
-complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
-is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
+complete audit reads `complete`, never the verdict alone; the stop audit's verdict record (`verdict_record`) words
+an accept whose record is not complete `not complete`. A two-stage
 outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
 goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
 is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is

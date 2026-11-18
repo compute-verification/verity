@@ -10,6 +10,7 @@
 set -uo pipefail
 export O=${OUT:?}
 CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/tprobe.XXXXXX); trap 'rm -rf "$B"' EXIT
@@ -22,7 +23,7 @@ echo "$DFILL_COINS" > "$O/coins.txt"
 for b in $TP_BUILDS; do
   n=${b%%:*} f=${b#*:}
   # shellcheck disable=SC2086
-  nvcc -O3 -std=c++17 ${f//,/ } -gencode arch=compute_120a,code=sm_120a -Xptxas -v -o "$B/dcap-$n" $K/dcap.cu \
+  nvcc -O3 -std=c++17 ${f//,/ } -gencode "$GENCODE" -Xptxas -v -o "$B/dcap-$n" $K/dcap.cu \
     -lcublasLt -lnvidia-ml -ldl > "$O/build-$n.log" 2>&1 &
 done
 wait

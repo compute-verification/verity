@@ -3,7 +3,9 @@ verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor device's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
-* **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
+* **Checking** (`trusted_rounds_reason`, and `session_reason` without a trusted ledger): the verifier's program, run by
+  the developer's side (`pouw_h1_gpu --check-challenger`, from `served_verdicts pouw`; no entry of the auditor's runs it
+  yet), reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
@@ -72,7 +74,7 @@ verifier's check that a served window's coins are that challenger's.
   ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
-  credited. Both verdicts are the Lean's (`PouwCheck.Credit.window`, `Credit.periodCredit`), core's Python their twin
+  credited. Both verdicts are the Lean's (`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`), core's Python their twin
   and a disagreement a refusal (`verifier.of_record`). The serving process's gate-passed count
   (`pouw_h1.H1Run.credit`) is never credit.
 """

@@ -225,7 +225,7 @@ def test_a_stand_in_reads_the_ranks_programs_under_the_build_root_when_one_is_na
         "partition_file": str(tmp_path / "p.json"), "programs": p.progs, "bmap": {"m": 1}, "committed": ("opened", made.store, made.run),
         "weights": weights, "manifest": None, "run_root": f"{ROOT.hex()}/rank1", "row": "the row", "arrivals": p.arrivals, "program_dirs": p.dirs,
         "digests": p.digs, "committer": {"from": "replay bundle", "pair": 0, "source": "c0de"}, "workers": 3, "tp": tp,
-        "index": {"attention_paths": p.attn_paths, "tp": p.tp}, "reuse": (p.index,), "stand_in": SRT.stand_in(tp, "5a" * 32),
+        "index": {"attention_paths": p.attn_paths, "tp": p.tp}, "reuse": (p.index,), "stand_in": SRT.stand_in(tp),
         "binding": {"compiler": "c"}, "transfer_gates": ("g",), "tables": None})
 
 

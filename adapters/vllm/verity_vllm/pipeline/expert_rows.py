@@ -419,8 +419,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
             g = json.dumps(x[2]["args"][arg])
             if held is None or held[0] != g:
                 held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
-            out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), bytes(32), 0,
-                                           keep_rows=True, row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
+            out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), ys,
+                                           keep_rows=True, schema=SCHEMA_HM96_SHA512_ROW_SEG)
     return _registered(out, committer)
 
 
@@ -461,7 +461,7 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     ys = _salts(committer, param)
     at = (str(committer["salts"]), str(committer["program"]), param)
     if at not in _BNK:
-        v = registered_commit(at[1], param, bnk_words(field()), bytes(32), 0, keep_rows=True, row_salts=ys)
+        v = registered_commit(at[1], param, bnk_words(field()), ys, keep_rows=True)
         _BNK[at] = _registered({param: v}, committer)[param]
     return _BNK[at]
 
@@ -490,8 +490,8 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
             if words is None:
                 words = shard()
             V, start = committer["vocab"][param]
-            new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), bytes(32), 0, keep_rows=True,
-                                        row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
+            new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), ys, keep_rows=True,
+                                        schema=SCHEMA_HM96_SHA512_ROW_SEG)
         out[param] = _SHARDS.get(at) or new[at]
     _registered({at[2]: v for at, v in new.items()}, committer)
     _SHARDS.update(new)

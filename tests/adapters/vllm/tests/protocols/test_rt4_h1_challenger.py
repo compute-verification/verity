@@ -12,8 +12,7 @@ challenger's signed close, sealed under its ledger.
 * the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early sample, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
-* a window whose coins were held in the serving process is no challenge phase's and credits nothing; ncp-v2
-  takes the auditor device's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
+* a window whose coins were held in the serving process is no challenge phase's and credits nothing.
 * a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * the release log is the only evidence that a round's coin followed its root, so an unsigned log would pass roots chosen
   after every coin once it was rewritten to name them. The challenger's signed close signs it and the auditor's ledger
@@ -27,7 +26,6 @@ import shutil
 import socket
 import threading
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -40,11 +38,11 @@ else:
 
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import salt_of
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import (
@@ -54,6 +52,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
+from tests.protocols.pouw_h1_salts import Seeded
 from verity_vllm.protocols import pouw
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
@@ -814,7 +813,7 @@ def test_a_sample_from_another_family_off_its_root_or_never_opened_is_refused(tm
 def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(monkeypatch):
     """Round s's root, the one round s's coin follows, changes with the A the window serves (its A and z
     tables are in the step's manifest rows), is the same for the same A, and changes with round s - 1's receipts."""
-    monkeypatch.setattr(PH.os, "urandom", lambda n: bytes(n))
+    monkeypatch.setattr(PV, "RunSalts", Seeded)
     served = [_serve(T._settings(), seed) for seed in (9, 10, 9)]
     roots = [[r["root"] for r in c["rounds"]] for c in served]
     assert roots[0] == roots[2] and len(roots[0]) == 3
@@ -827,7 +826,7 @@ def test_round_roots_commit_the_windows_a_and_z_and_the_receipts_before_them(mon
     def window(receipt):
         rng = np.random.default_rng(12)
         torch.manual_seed(12)
-        run = PH.H1Run("t", T.SALT, {0: "q", 1: "o"}, [(32, T.K), (40, T.K)], 32, 2, rounds=T._rounds(2), key=T.KEY)
+        run = PH.H1Run("t", T.SALT, {0: "q", 1: "o"}, [(32, T.K), (40, T.K)], 32, 2, rounds=T._rounds(2), salts=Seeded())
         run.record(0, *T._tap(rng, 3, 32))
         with pytest.raises(RuntimeError, match="call 0's receipt before round 0's coin"):
             run.receipt(0, bytes(64))
@@ -870,43 +869,6 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     auditor.client.close()
     assert auditor.ended() is None
     assert "coins from a challenger the verifier doesn't hold" in (auditor.trusted(local) or "")
-
-
-@pytest.mark.slow
-def test_ncp_v2_takes_the_auditor_hosts_challenger():
-    """The pouw settings ``challenger`` and ``session`` are where ncp-v2's salt comes from, one never without the
-    other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
-    def refused(entry, settings):
-        return T.PO.refusals(T.PO.Context(stage="serve", enabled=(entry,), settings=settings))
-    remote = {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION}}
-    assert not any("challenger" in r or "session" in r for r in refused("pouw:ncp-v2", remote))
-    assert any("needs 'session'" in r for r in refused("pouw:ncp-v2", {"pouw": {"challenger": T.AUDITOR}}))
-    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2," in r for r in refused("pouw:ncp-v1", remote))
-
-
-class _NcpLinear:
-    def __init__(self, weight):
-        self.weight, self.quant_method = weight, SimpleNamespace(apply=lambda layer, x, bias=None: None)
-
-
-def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
-    """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor device's salt coin, opened
-    after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
-    host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
-    monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
-    w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()
-    layer = _NcpLinear(w)
-    model = SimpleNamespace(modules=lambda: iter([layer]), named_modules=lambda: iter([("up", layer)]))
-    ctx = T.PO.Context(stage="serve", enabled=("pouw:ncp-v2",), settings={"pouw": {"challenger": T.AUDITOR,
-                                                                                   "session": T.SESSION}})
-    with T.PO.install(model, ctx) as comp:
-        c = comp.get("pouw").commitment()
-    assert host.ended() is None and c["coin_source"] == PH.CHALLENGER and c["session"] == T.SESSION
-    received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
-    weights = bytes.fromhex(c["weights_root"])
-    assert received[Wd.SALT] == (weights,)
-    opening = LC.LiveOpening.from_json(c["salt_opening"])
-    assert c["salt"] == salt_of(host.challenger.commitment, opening.coin, weights).hex()
 
 
 def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():

@@ -40,7 +40,7 @@ from __future__ import annotations
 import math
 import struct
 
-from verity.circuits.defs import PrimitiveDefinition, bind, composite
+from verity.circuits.defs import REGISTRY, PrimitiveDefinition, bind, composite
 from verity.circuits.ops.fp32 import F32AddFtz, F32Mul
 from verity.circuits.ops.mufu import DivFullRcp, DivFullScaleA
 from verity.circuits.ops.prims import Bf16ToF32, const
@@ -495,6 +495,10 @@ def bit_at(width: int) -> PrimitiveDefinition:
                                    doc=bit_at.__doc__ or "", conformance="exact-model-tested")
         _BIT_ATS[int(width)] = prim
     return prim
+
+
+REGISTRY.add_family(r"BitAtx(\d+)_v1", bit_at)
+REGISTRY.add_family(r"TopPMaskWordx(\d+)_v1", topp_mask_word)
 
 
 @composite("TopPMaskStep", 1, ["V"], lambda S: ((("i", I32), ("x", F32), ("keep", Value(S.V))), Tuple(I32, F32)),

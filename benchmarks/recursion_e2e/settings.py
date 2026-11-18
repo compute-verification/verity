@@ -22,15 +22,16 @@ from typing import Any
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
 
-#: the steps job.sh repeats, each of which REPEAT_<STEP> may set (job.sh's ``reps``)
-REPEATED = ("icheck", "vstage", "vcap", "oreplay", "lean")
+#: the steps job.sh repeats, each of which REPEAT_<STEP> may set (job.sh's ``reps``): those whose medians the metrics read
+#: (``rec_profile.summary``); icheck and oreplay run once
+REPEATED = ("vstage", "vcap", "lean")
 
 S = Setting
 REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     # ---- the job's own (job.sh)
     S("STEPS", csv, ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean", "negative"), VALUE,
       "the steps the job runs, in rec_profile.ORDER's order"),
-    S("REPEAT", int, 3, VALUE, "each CPU step's invocations"),
+    S("REPEAT", int, 3, VALUE, "each repeated step's invocations (REPEATED)"),
     *(S(f"REPEAT_{s.upper()}", int, None, VALUE, f"the {s} step's invocations; unset, REPEAT") for s in REPEATED),
     S("MODES", csv, ("zk_server",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
     S("OPROVE_WARM", int, 0, VALUE, "warm releases per V* statement, untimed"),

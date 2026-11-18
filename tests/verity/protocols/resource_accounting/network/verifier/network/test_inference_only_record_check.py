@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -96,6 +97,31 @@ def _written(args: list[str], out: Path, name: str, *more: str) -> tuple[dict, d
     assert script.main([*args, "--out", str(out), "--name", name, *more]) == 0
     return (json.loads((out / f"{name}.case.json").read_text()),
             json.loads((out / f"{name}.reference.json").read_text()))
+
+
+def _recut(nodes: list, desc: dict) -> None:
+    """The root's input node, a batch of 32 `Input16_v1`, as 16 of `Input32_v1`, its reader's references unchanged:
+    each 16-bit leaf it reads is half of a 32-bit gate (`refs.recut`)."""
+    desc["callees"].append("Input32_v1")
+    desc["definitions"]["Input32_v1"] = {"form": "primitive", "id": "Input32_v1", "params": [], "ret": ["Value", 32]}
+    desc["types"] += [t for t in (["Value", 32], ["Array", 16, ["Value", 32]]) if t not in desc["types"]]
+    nodes[0].update(fn=len(desc["callees"]) - 1, n=16, out=desc["types"].index(["Array", 16, ["Value", 32]]))
+
+
+def test_a_read_at_another_width_is_refused_recut_unread():
+    """`read_in_leaves`, taken as built; with its input node read at another width it is refused `recut-unread`,
+    expanded and form-only, where the whole-leaf reading would resolve each 16-bit leaf to a whole gate."""
+    rng = random.Random(1)
+    c = vectors.read_in_leaves()
+    roots = {p: vectors._hex(rng) for p in c.params}
+    made = vectors.finish(rng, c, {p: vectors._registered(roots[p], c.params[p], 16) for p in c.params}, roots, [],
+                          policy={})
+    inst, tr = made["case"]["instance"], made["case"]["trusted"]
+    assert ref.check_detail(inst, tr)["complies"]
+    vectors._reroot(made, _recut)
+    assert ref.reference.desc_program(inst["program"]).root.body.recut == {0: 2}
+    for form_only in (False, True):
+        assert ref.check_detail(inst, tr, form_only) == {"error": "recut-unread", "message": ref.RECUT_UNREAD}
 
 
 def test_the_script_reads_a_runs_files_as_the_case_they_make(shaped, tmp_path):

@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
@@ -31,7 +32,6 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
@@ -109,7 +109,7 @@ def test_w_names_a_declared_day_in_its_header_only_where_the_serve_declared_one(
     naming = {"day": 3, "declaration": "5d" * 64}
     plain = PWR.write(tmp_path / "w.json", passes, [2, 3], "ab" * 64)
     named = PWR.write(tmp_path / "named.json", passes, [2, 3], "ab" * 64, naming)
-    assert named == {**plain, "window": {**plain["window"], **naming}} and REG.digest(named) != REG.digest(plain)
+    assert named == {**plain, "window": {**plain["window"], **naming}} and DD.digest(named) != DD.digest(plain)
     assert json.loads((tmp_path / "named.json").read_text()) == named
     assert (PWR.naming_of(named), PWR.naming_of(plain), PWR.naming_of({}), PWR.NAMING) == (naming, None, None,
                                                                                         ("day", "declaration"))

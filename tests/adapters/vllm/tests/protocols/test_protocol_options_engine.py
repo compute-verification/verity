@@ -2,7 +2,7 @@
 composition's hooks taken off before its close, an option closed before its composition, a Match capture's install, a
 Commit's install, and which entry binds a row's Build.
 
-CPU only.  The PoUW and PoUS adapters are `test_protocol_options`'s stand-ins over its toy linear layers; SPOT's
+CPU only.  PoUW's adapter and ``hold`` are `test_protocol_options`'s stand-ins over its toy linear layers; SPOT's
 adapter is the real one.
 """
 from __future__ import annotations
@@ -15,7 +15,8 @@ from tests.protocols.test_protocol_options import (
     ALL,
     Model,
     _fake_adapter,
-    _pous,
+    _hold,
+    _hold_between,  # noqa: F401  (autouse: `hold` in its place in config.PROTOCOLS)
     _pouw,
     _serve,
 )
@@ -25,14 +26,14 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.protocols import spot
 from verity_vllm.protocols.interface import BUILD_BOUND
 
-POUW, POUS, SPOT = ALL
+POUW, HOLD, SPOT = ALL
 CAPTURED = TargetProfile.default().with_overrides(protocols=(POUW, SPOT), compilation="piecewise")
 
 
 def _both(monkeypatch, log):
     """The two stand-in adapters, each under the scheme `ALL` names."""
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=(POUW.partition(":")[2],))
-    return pouw, _fake_adapter(monkeypatch, "pous", _pous(log), schemes=(POUS.partition(":")[2],))
+    return pouw, _fake_adapter(monkeypatch, "hold", _hold(log), schemes=(HOLD.partition(":")[2],))
 
 
 def test_the_engine_fills_only_an_adapter_that_reads_it_and_another_entry_keeps_its_settings(monkeypatch):
@@ -46,12 +47,12 @@ def test_the_engine_fills_only_an_adapter_that_reads_it_and_another_entry_keeps_
     pouw.from_engine = from_engine
     llm = object()
     own = {"rounds": 7, "steps": 2}
-    ctx = _serve(POUW, POUS, settings={"pouw": own, "pous": {"key": "k"}}, filled={"pouw": ("runner",)})
+    ctx = _serve(POUW, HOLD, settings={"pouw": own, "hold": {"key": "k"}}, filled={"pouw": ("runner",)})
     got = PO.from_engine(ctx, llm, epoch=3)
     assert asked == [("ncp-v1", own, llm, 3)]
     # what the adapter returns is taken, over the caller's where both name a key
-    assert got.settings == {"pouw": {"rounds": 9, "steps": 2, "runner": "r"}, "pous": {"key": "k"}} and got.filled == {}
-    assert (got.stage, got.enabled) == ("serve", (POUW, POUS)) and ctx.settings["pouw"] == {"rounds": 7, "steps": 2}
+    assert got.settings == {"pouw": {"rounds": 9, "steps": 2, "runner": "r"}, "hold": {"key": "k"}} and got.filled == {}
+    assert (got.stage, got.enabled) == ("serve", (POUW, HOLD)) and ctx.settings["pouw"] == {"rounds": 7, "steps": 2}
 
 
 @pytest.mark.parametrize("error", [RuntimeError, AttributeError, ValueError])
@@ -59,13 +60,13 @@ def test_an_engine_that_cannot_supply_an_adapters_settings_is_refused_naming_eve
     def from_engine(scheme, settings, llm, epoch):
         raise error(f"no runner for {scheme}")
 
-    pouw, pous = _both(monkeypatch, [])
-    pouw.from_engine = pous.from_engine = from_engine
+    pouw, hold = _both(monkeypatch, [])
+    pouw.from_engine = hold.from_engine = from_engine
     with pytest.raises(PO.Refused) as e:
-        PO.from_engine(_serve(POUW, POUS, filled={"pouw": ("runner", "coins")}), object())
+        PO.from_engine(_serve(POUW, HOLD, filled={"pouw": ("runner", "coins")}), object())
     assert e.value.reasons == (
         f"{POUW}: its settings ['runner', 'coins'] come from the built engine, which doesn't supply them: no runner for ncp-v1",
-        f"{POUS}: its settings [] come from the built engine, which doesn't supply them: no runner for band-chain/d12/v1")
+        f"{HOLD}: its settings [] come from the built engine, which doesn't supply them: no runner for band-chain/d12/v1")
 
 
 def test_an_error_of_another_kind_from_an_adapters_read_of_the_engine_is_raised_as_it_is(monkeypatch):
@@ -75,23 +76,23 @@ def test_an_error_of_another_kind_from_an_adapters_read_of_the_engine_is_raised_
     pouw, _ = _both(monkeypatch, [])
     pouw.from_engine = from_engine
     with pytest.raises(KeyError, match="^'runner'$"):
-        PO.from_engine(_serve(POUW, POUS), object())
+        PO.from_engine(_serve(POUW, HOLD), object())
 
 
 def test_unhook_takes_every_options_hooks_off_and_leaves_each_release_to_the_close(monkeypatch):
     log: list[str] = []
     _both(monkeypatch, log)
     model, before = Model(), hooks.live()
-    with PO.install(model, _serve(POUW, POUS)) as comp:
+    with PO.install(model, _serve(POUW, HOLD)) as comp:
         layer = model.layers[0]
-        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x") and log == ["pouw", "responder up", "pous"]
+        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x") and log == ["pouw", "responder up", "hold"]
         comp.unhook()
         assert log[3:] == ["responder down handle"]                          # its service stopped, nothing released
         assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
         assert layer.quant_method.apply(layer, "x") == ("gemm", 2, "x")
-        assert not comp.closed and comp.entries == (POUW, POUS) and not any(opt.closed for opt in comp.installed)
+        assert not comp.closed and comp.entries == (POUW, HOLD) and not any(opt.closed for opt in comp.installed)
         comp.unhook()                                                        # nothing is left to take off
-    assert log[3:] == ["responder down handle", "pous released"] and hooks.live() == before
+    assert log[3:] == ["responder down handle", "hold released"] and hooks.live() == before
 
 
 def test_unhook_tries_every_options_hooks_and_raises_the_first_error(monkeypatch):
@@ -99,14 +100,14 @@ def test_unhook_tries_every_options_hooks_and_raises_the_first_error(monkeypatch
         raise RuntimeError("the responder did not stop")
 
     def install(scheme, target):
-        h = target.hooks(f"pous:{scheme}")
+        h = target.hooks(f"hold:{scheme}")
         h.service("responder", lambda: "handle", stop)
-        return PO.Option(name=f"pous:{scheme}", hooks=h)
+        return PO.Option(name=f"hold:{scheme}", hooks=h)
 
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=(POUW.partition(":")[2],))
-    _fake_adapter(monkeypatch, "pous", install, schemes=(POUS.partition(":")[2],))
+    _fake_adapter(monkeypatch, "hold", install, schemes=(HOLD.partition(":")[2],))
     model, before = Model(), hooks.live()
-    with PO.install(model, _serve(POUW, POUS)) as comp:                      # its close: a stop that raised is not tried again
+    with PO.install(model, _serve(POUW, HOLD)) as comp:                      # its close: a stop that raised is not tried again
         with pytest.raises(RuntimeError, match="^the responder did not stop$"):
             comp.unhook()
         assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
@@ -116,13 +117,13 @@ def test_an_option_closed_before_its_composition_is_released_once(monkeypatch):
     log: list[str] = []
     _both(monkeypatch, log)
     model, before = Model(), hooks.live()
-    with PO.install(model, _serve(POUS)) as comp:
-        opt = comp.get("pous")
+    with PO.install(model, _serve(HOLD)) as comp:
+        opt = comp.get("hold")
         opt.close()
-        assert opt.closed and log == ["responder up", "pous", "responder down handle", "pous released"]
+        assert opt.closed and log == ["responder up", "hold", "responder down handle", "hold released"]
         assert hooks.live() == before
         opt.close()
-    assert log.count("pous released") == 1 and log.count("responder down handle") == 1
+    assert log.count("hold released") == 1 and log.count("responder down handle") == 1
 
 
 def test_a_capture_installs_its_set_without_spot_on_the_engines_model_and_says_so(monkeypatch, capsys):
@@ -146,8 +147,8 @@ def test_a_capture_installs_nothing_for_a_target_with_no_such_protocol_or_a_set_
     model, before = Model(), hooks.live()
     assert PO.at_capture(None, model) is None and PO.at_capture(TargetProfile.default(), model) is None
     with pytest.raises(PO.Refused) as e:
-        PO.at_capture(CAPTURED, model, {"pous": {}})
-    assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
+        PO.at_capture(CAPTURED, model, {"hold": {}})
+    assert e.value.reasons == ("the protocols config names ['hold'], which this run does not enable",)
     assert capsys.readouterr().out == "" and hooks.live() == before
     assert all("apply" not in vars(m.quant_method) for m in model.layers)
 
@@ -156,13 +157,13 @@ def test_a_commit_installs_its_set_on_its_model_records_it_in_the_versions_and_s
     _both(monkeypatch, [])
     model, before = Model(), hooks.live()
     versions: dict[str, Any] = {"engine_kwargs": {}}
-    comp = PO.at_commit(TargetProfile.default().with_overrides(protocols=(POUS, SPOT)), model, versions)
+    comp = PO.at_commit(TargetProfile.default().with_overrides(protocols=(HOLD, SPOT)), model, versions)
     try:
-        assert capsys.readouterr().out == f"[delta] protocol options installed beside the committers: ['{POUS}', '{SPOT}']\n"
-        assert (comp.context.stage, comp.entries) == ("commit", (POUS, SPOT))
-        assert [e.tag for e in hooks.live()[len(before):]] == [POUS] * 3
-        assert versions == {"engine_kwargs": {}, "protocols": {"entries": [POUS, SPOT], "info": comp.info()}}
-        assert versions["protocols"]["info"][POUS] == {"entries": 3}
+        assert capsys.readouterr().out == f"[delta] protocol options installed beside the committers: ['{HOLD}', '{SPOT}']\n"
+        assert (comp.context.stage, comp.entries) == ("commit", (HOLD, SPOT))
+        assert [e.tag for e in hooks.live()[len(before):]] == [HOLD] * 3
+        assert versions == {"engine_kwargs": {}, "protocols": {"entries": [HOLD, SPOT], "info": comp.info()}}
+        assert versions["protocols"]["info"][HOLD] == {"entries": 3}
     finally:
         comp.close()
     assert hooks.live() == before
@@ -173,7 +174,7 @@ def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeyp
     _both(monkeypatch, [])
     model, before = Model(), hooks.live()
     versions: dict[str, Any] = {"engine_kwargs": {}}
-    declared = TargetProfile.default().with_overrides(protocols=(POUS, SPOT))
+    declared = TargetProfile.default().with_overrides(protocols=(HOLD, SPOT))
     assert PO.at_commit(None, model, versions) is None and PO.at_commit(TargetProfile.default(), model, versions) is None
     with pytest.raises(PO.Refused) as e:
         PO.at_commit(declared, model, versions, {"pouw": {}})
@@ -182,7 +183,7 @@ def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeyp
     def install(scheme, target):
         raise RuntimeError(f"no device for {scheme}")
 
-    _fake_adapter(monkeypatch, "pous", install, schemes=(POUS.partition(":")[2],))
+    _fake_adapter(monkeypatch, "hold", install, schemes=(HOLD.partition(":")[2],))
     with pytest.raises(RuntimeError, match="no device for band-chain/d12/v1"):
         PO.at_commit(declared, model, versions)
     assert capsys.readouterr().out == "" and versions == {"engine_kwargs": {}} and hooks.live() == before
@@ -191,6 +192,6 @@ def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeyp
 
 def test_spot_binds_a_rows_build_and_an_adapter_that_does_not_say_binds_none(monkeypatch):
     _both(monkeypatch, [])
-    ctx = PO.Context(stage="commit", enabled=(POUS, SPOT))
+    ctx = PO.Context(stage="commit", enabled=(HOLD, SPOT))
     assert spot.requests(SPOT.partition(":")[2], ctx) == (BUILD_BOUND,)
     assert [e for e, r in PO.requests(ctx) if r.fixes] == [SPOT]

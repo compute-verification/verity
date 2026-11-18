@@ -55,5 +55,4 @@ stacking verdict and no carrier, and reports the most any pass held in probation
 guarantee's coin of a slot is the coin of the append that fills it, which the Lean statement takes as a coupling,
 rather than a coin the challenger keys by slot.
 
-[`DESIGN.md`](DESIGN.md) holds the entry points, which side is the definition and why the Lean decides alone, replaying a
-recorded session, and what each module does.
+Why the Lean verifier decides alone is in `session/verifier.py`, and replaying a recorded session in its `--transcript`.

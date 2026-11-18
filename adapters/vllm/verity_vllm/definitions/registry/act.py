@@ -114,3 +114,7 @@ def GeluErfBf16(x: int) -> int:
 def GeluErf(B, S, x):
     """`out[j] = GeluErfBf16(x[j])` over one row of N bf16 words."""
     return B.batch(GeluErfBf16, x, axes=(0,))
+
+
+# Last: boolean_silu reads this module's Definitions; loading act registers SiluMul_v2's Boolean form (SiluMulBf16_v4).
+from verity_vllm.definitions.registry import boolean_silu as _boolean_silu  # noqa: E402,F401

@@ -39,8 +39,8 @@ STATEMENTS=${STATEMENTS:-"4096:1 4096:8 14336:1"}; CPU_STATEMENTS=${CPU_STATEMEN
 PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEMENTS:-}; DRAW=${DRAW:-}
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
-. verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh
-CUDA_TK=${CUDA_TK:-$(python3 benchmarks/kernels/machine.py toolkit 13.3)} || { echo "no CUDA 13.3 (machine.py, above)" >&2; exit 1; }
+. benchmarks/one_stage/toolkit.sh
+cuda_13_3 /dev/stderr || { echo "no CUDA 13.3 (machine.py and cuda-13.3.sh, above)" >&2; exit 1; }
 . verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}

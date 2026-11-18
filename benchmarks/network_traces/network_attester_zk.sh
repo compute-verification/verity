@@ -35,7 +35,7 @@ log "wzk: network-certifier-serve rehearsal (fake endpoint, requests ${WZ_REQUES
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }
 mkdir -p "$OUT/run"
-"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json"
+"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json" || { log "wzk: the publisher (auditor.py publish) exited $? on $RUN"; exit 6; }
 log "wzk: proving, units ${WZ_UNITS:-16}${WZ_DRY:+, dry}"
 "$PY" benchmarks/network_traces/zk_drivers.py network_attester_zk prove --run "$RUN" --bin "$BIN" --lean "$LEAN" --out "$W/wzk" \
   --units "${WZ_UNITS:-16}" ${WZ_DRY:+--dry} 2>&1 | tee -a "$OUT/wzk.log" | cut -c1-4000

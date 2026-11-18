@@ -119,10 +119,10 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
     runner = REPO / "benchmarks" / "overhead" / "run.py"
     metrics = runpy.run_path(str(runner))["METRICS"]
-    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
-                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L",
-                       "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C",
-                       "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L"}
+    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own",
+                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L own",
+                       "benchmarks/pearl-plus-gamma-c": "pearl-plus/h100/C members",
+                       "benchmarks/pearl-plus-gamma-l": "pearl-plus/h100/L members"}
     h200 = {n: metrics[n] for n in metrics if n.endswith("-h200")}
     words = {w: model for model, w in R.MEMBER_MODEL.items()}
 
@@ -149,7 +149,7 @@ def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(
         *((n, w) for n in h200 for w in (None, MEMBER)),
         *((n, w) for n in metrics if n not in h200 for w in ("llama-3.1-70b-h100", "llama-3.2-1b-h100"))]
     for m in got["measurements"]:
-        _, card, point = metrics[m["name"]].split("/")
+        _, card, point, _ = R.metric_row(metrics[m["name"]])
         assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
         on = f" on {words[m['member'].rsplit('-', 1)[0]]}" if m.get("member") else ""
         assert m["why"] == (f"no γ of record: no labelled run times pearl-plus at {card}'s {point}{on} "
@@ -222,7 +222,7 @@ def test_the_1b_points_launch_on_one_named_gpu_and_cpus_and_their_gamma_is_each_
     head, _, tail = printed.partition(f"\n## {SMALL}\n\n")
     assert f"| {seventy} |" in head and one not in head and f"| {one} |" in tail and O.covers(SMALL) in tail
     rows = {(r["model"], r["point"]): r for r in table["rows"]}
-    written = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C"})
+    written = R.measurements(table, {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C own"})
     assert [(m.get("member"), m["value"], m["inputs"]) for m in written] == [
         (None, rows["llama3.1-70b", "C"]["gamma"]["gamma"], [seventy, big]),
         (MEMBER, rows[SMALL, "C"]["gamma"]["gamma"], [one, small])]

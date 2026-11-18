@@ -413,9 +413,10 @@ check() {
     echo "memory scope: NONE (this node makes no user scope): the audit's and the compose's node must" > "$OUT/scope.txt"
   fi
   local WANT_CLASS=${CLASS:-}  # a class the caller names, which the settings must serve
-  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+  local TREE S=$OUT/steps.txt failed=0 scratch PY D CLASS SCHEME=${SCHEME:-}
   TREE=$(cd "$HERE/../.." && pwd)
   cd "$TREE" || exit 3
+  SCHEME=${SCHEME:-$(python3 -m verity.protocols.compose.schemes pearl-plus option)} || exit 3; SCHEME=${SCHEME#*:}
   SETTINGS=${SETTINGS:-${RESEARCH_RUN_DIR:-.}/inputs/record.env}
   CLASS=$(settings_class "$SETTINGS")
   step() {  # NAME LIMIT CMD...

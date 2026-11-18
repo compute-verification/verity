@@ -1626,7 +1626,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         from verity_flock import ir_sampling as S
 
         def build():
-            return S.lane_circuit(int(sub.params["V"]))
+            return S.lane_circuit(d)
         C = None
     if C is None:
         C, root = _traced(build)

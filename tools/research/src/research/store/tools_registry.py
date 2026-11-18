@@ -24,7 +24,6 @@ REGISTRY: dict[str, str] = {
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
-    "flock_pure": "verity.protocols.proofs.flock.prover.tool:FLOCK_PURE",
     "flock_agreement": "verity.protocols.proofs.flock.prover.agreement.tool:FLOCK_AGREEMENT",
     "flock_class_sweep": "verity.protocols.proofs.flock.prover.tool:FLOCK_CLASS_SWEEP",
     "check": "tools.check.tool:CHECK",

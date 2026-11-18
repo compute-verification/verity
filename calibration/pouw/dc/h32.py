@@ -1,8 +1,10 @@
 """H32 on the H200 (sm_90a): the timed H32 probes (probes/sm90_h32*.cu) in MH100's unit, as a `Prices100` table.
 
+  bash emp.sh run h32                    # on the card: build, time, then this into h32.txt, h32.json and h32.lean
   python3 h32.py RUN_OUT... [--json OUT] [--lean OUT]
 
-RUN_OUT is `emp.sh time`'s output, each binary's rows.jsonl under RUN_OUT/<binary>/. A probe's note names its class and
+RUN_OUT is `emp.sh run h32`'s output (or `emp.sh time`'s), each binary's rows.jsonl under
+RUN_OUT/<binary>/. A probe's note names its class and
 the 32-bit registers one warp instruction of each counted pattern writes a lane:
 
   c=CLASS [s=SHAPE] w=PATTERN:REGS,...

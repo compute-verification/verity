@@ -94,7 +94,7 @@ def test_a_fixed_load_runs_every_request_at_each_of_the_windows_steps_and_times_
     out = tmp_path / "load.jsonl"
     with _Endpoint(engine, n) as port:
         a = SL.parser().parse_args(["--port", str(port), "--model", "m", "--fixed", str(n), "--prompt-range", "16:24",
-                                    "--release", "run", "--seed", "1", "--out", str(out)])
+                                    "--release", "0f", "--seed", "1", "--out", str(out)])
         assert SL.run_varied(a, clock=lambda: float(next(ticks)), wall=lambda: 1.7e9, sleep=lambda s: None) == 0
         drawn = SL.varied(port, "m", n, rate=1.0, prompt_tokens=(16, 24), max_tokens=16, seed=1)
         fixed = SL.fixed(port, "m", n, window_steps=16, prompt_tokens=(16, 24), seed=1)
@@ -110,7 +110,7 @@ def test_a_fixed_load_runs_every_request_at_each_of_the_windows_steps_and_times_
     assert [(r["user"], r["release"], r["at_s"], r["max_tokens"]) for r in rows] == [(f"fixed.{j:05d}", j, 0.0, 16) for j in range(n)]
     assert all(r["response"] == {"token_ids": list(range(500, 516)), "finish_reason": "length"} for r in rows)
     doc = json.loads(SL.timings_path(out).read_text())
-    assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
+    assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("0f", 1.7e9)
     t = doc["requests"]
     assert [(e["user"], e["release"], e["at_s"], e["tokens"], e["ok"]) for e in t] == [(r["user"], r["release"], 0.0, 16, True) for r in rows]
     assert all(set(e) == {"user", "release", "at_s", "send_s", "first_token_s", "done_s", "tokens", "ok"} for e in t)

@@ -32,13 +32,13 @@ IN=${RESEARCH_RUN_DIR:-.}/inputs
 KERNEL=$(cd "${PEARLC_KERNEL:-verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120}" && pwd); K=$(basename "$KERNEL")
 export PEARLC_KERNEL=$KERNEL PEARLC_CUBIN=${PEARLC_CUBIN:-$IN/$K.cubin}
 case $K in
-  pearl_c_sm90) GPU_NAME="H100|H200"; GPU_CC=9.0
+  pearl_c_sm90)
     ARMS=${ARMS:-stock-fp8@compiled,pouw-pearl-c-whole}; SPEC=${SPEC:-llama31-8b-1gpu-pearl-c-whole-served} ;;
-  *) GPU_NAME="RTX PRO 6000 Blackwell"; GPU_CC=12.0
+  *)
     ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC=${SPEC:?"served Pearl-C on sm_120 (pouw:pearl-c-sm120-v1-h3) is no declared scheme: declaring one is compute-accounting's"} ;;
 esac
 POINT=${POINT:-b8-p512-mixed}; NSYS=${NSYS:-1}
-export ARMS SPEC POINT NSYS GPU_NAME GPU_CC
+export ARMS SPEC POINT NSYS
 LEASE=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
 load() { { echo "== $1 $(date -u +%FT%TZ) loadavg $(cat /proc/loadavg)"; "$LEASE" status 2>&1 || true; } >> "$OUT/load.txt"; }
 
@@ -82,7 +82,11 @@ fi
 UUID=${GPU_LEASE_UUID:?run under gpu-lease}; UUID=${UUID%%,*}
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" \
   > "$OUT/identity.csv"
-grep -Eq "$GPU_NAME" "$OUT/identity.csv" && grep -q ", $GPU_CC," "$OUT/identity.csv" || { echo "identity: not $K's GPU" >&2; exit 3; }
+# the card file naming the device, and the kernel directory its card takes (`bench_arm.kernel_directory`): $K's, or refused
+TAKES=$(PYTHONPATH=${PYTHONPATH:-}:$PWD/benchmarks/pouw/pearl_c_vllm:$PWD/benchmarks/harness "$VENV/bin/python" -c 'import sys
+from bench_arm import kernel_directory; from e2e import SCHEME; from verity_bench.kit import card_short
+print(kernel_directory(sys.argv[1] or SCHEME, card_short(sys.argv[2].strip())).name)' "" "$(cut -d, -f2 "$OUT/identity.csv")") || { echo "identity: no card file names $(cat "$OUT/identity.csv")" >&2; exit 3; }
+[ "$TAKES" = "$K" ] || { echo "identity: not $K's GPU: its card takes $TAKES ($(cat "$OUT/identity.csv"))" >&2; exit 3; }
 rc=0
 for entry in ${ARMS//,/ }; do
   arm=${entry%%+*}; SET=(); [ "$arm" = "$entry" ] || IFS=+ read -ra SET <<< "${entry#*+}"

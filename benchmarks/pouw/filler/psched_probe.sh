@@ -11,8 +11,9 @@ if [ -z "${NVCC:-}" ]; then  # else the machine's toolkit at 13.0's nvcc
   NVCC=$CUDA_HOME/bin/nvcc
 fi
 export PATH="$(dirname "$NVCC"):$PATH"
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") || exit 4
 B=$(mktemp -d /tmp/psched-probe.XXXXXX)
-FL=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v)
+FL=(-O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v)
 LIBS=(-lcublasLt -lnvidia-ml -ldl)
 for n in ${PROBE_BINS:-dscore pscore}; do
   "$NVCC" "${FL[@]}" -o "$B/$n" "benchmarks/pouw/filler/$n.cu" "${LIBS[@]}" >> "$O/build.log" 2>&1 || { echo "build $n failed"; exit 4; }

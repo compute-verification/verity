@@ -161,7 +161,7 @@ PAGE_SECTIONS = ("## The problem", "## Background", "## The design the rules wan
                  "## Sources")
 REPLY_CALLOUT = ('<callout icon="✍️" color="yellow_bg">\n'
                  "\t**Your reply.** Write below this line: a decision, a question or a change. "
-                 "Top relays it to the lane, which answers under your text starting with its handle.\n"
+                 "Top relays it to the lane, which answers in a comment starting with its handle.\n"
                  "</callout>\n")                                 # top's asks relay reads the text after the bold line
 SKILL_ASKING = ".agents/skills/asking-daniel/SKILL.md"
 WAIT_EVERY_S = 30

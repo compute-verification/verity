@@ -136,7 +136,7 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
     for b, param, what, n in tables:
         words_of = rows(b, what, n)
         ys = os.urandom(len(words_of) * SF.SALT_BYTES)
-        v = registered_commit(digest, param, words_of, bytes(32), 0, row_salts=ys,
+        v = registered_commit(digest, param, words_of, ys,
                               schema=SCHEMA_HM96_SHA512_ROW_V2 if what == "bnk" else SCHEMA_HM96_SHA512_ROW_SEG)
         out[param], salts[param] = v.entry(), ys
     return out, salts

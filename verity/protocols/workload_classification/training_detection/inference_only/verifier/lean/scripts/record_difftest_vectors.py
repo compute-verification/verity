@@ -19,8 +19,7 @@ reading some of its parameters' leaves (directly, through a call and through a b
 of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a callee inside a callee, a batch member or a
 scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
 among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
-each from an output of the row's bits whose leaves' width divides the reader's (the same width, or bits under a
-word) or, into a closed row, from any output of the row's bits, written unit by unit and merged into runs
+each from an output of the row's bits and its leaves' width, written unit by unit and merged into runs
 (`verity.commitments.periods.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; row formats (`formats`): 32-bit leaves, of either schema, of
@@ -37,8 +36,7 @@ record; and the negative vectors of a pinned reader's layout (the form's `layout
 among the opening's ports, another row named the key, the root or the domain id read in another row, an opened row
 left out or out of order, another output named the verdict, and a pinned reader whose rows are in no layout's order
 or that has one output, with the same records under no pin. Then a wire's leaves: the served shape with its token a
-word into a key of 32 one-bit leaves that only gates of its reader read, a closed row, and 32 one-bit leaves into a
-key of one word, both taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
+32-bit word on both sides of its wires, taken; a template that passes on one bit of each of sixteen 16-bit gates, read as one 16-bit
 leaf by a unit of another slot (`passed_on`), refused however it passes them on (itself, with no gate of its own at
 all, through a call, a callee inside a callee, a batch member or a scan, or to an output no wire reads), refused
 where it passes on one of them alone through a scan's carry or the other fifteen as a scan's outputs, refused too
@@ -72,10 +70,10 @@ its members each, side by side and with `Gemm`'s node between, each taken with t
 numbered across the two; and the record stating one unit fewer than their sum, refused with its templates.
 Then the edges (`EDGED`): toys whose root's units read earlier units' outputs, the record stating no wire, each
 under no pin, the largest limits and a log of no registered value. Taken: an edge member to member at one and at
-two slots, across slots, into a call, and from a writer's second output in one strided part and in two parts.
+two slots, across slots, into a call, from a writer's second output in one strided part and in two parts, and one
+template in two root nodes with an edge each way, its order stated or not, a chain of units in the root's node order.
 Refused: a broadcast edge (`own-rows`), a row half its own input and half an edge (`own-rows`), an edge into a
-port the record cuts, a partial row, and one template in two root nodes with an edge each way, its order stated or
-not (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
+port the record cuts and a partial row (`wires`), a row of another width, and an edge from an output of leaves other than its row's, of two widths
 into one leaf, of 8 bits into 16, of 31 bits into 32 one-bit leaves and of 16 bits into 16 one-bit leaves, the
 mismatches a wire's leaves were refused for (`program`: no Program states them), ingress or a registered read onto an edge's row (`inputs`), and
 a reference to a later node (`not-topological`).
@@ -102,7 +100,7 @@ from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.program import Program
-from verity.circuits.refs import array_of, record_of, tuple_of
+from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.periods.edges import INPUT_ID
 
@@ -525,7 +523,7 @@ def random_circuit(rng, seed: int) -> Circuit:
     """A random circuit (the module docstring)."""
     S = rng.choice([1, 2, 2, 3, 4])
     c = Circuit(f"record{seed}", S, 2)
-    specs, shut = [], {}
+    specs = []
     for j in range(rng.randint(1, 4)):
         if rng.random() < 0.2:
             params = [("tok", Value(16)), ("root", DIGEST), ("domain", DIGEST), ("row", Array(2, Value(16))),
@@ -542,7 +540,6 @@ def random_circuit(rng, seed: int) -> Circuit:
             params, outs = list(fn.params), [fn.ret]
         tid = c.add(fn, _layout(rng, S))
         specs.append((tid, params, outs))
-        shut[tid] = closed(fn)
         for p, t in params:
             ks = [k for k in range(2, 7) if isinstance(t, Array) and t.n % k == 0 and _words(t) % k == 0]
             if ks and rng.random() < 0.5:
@@ -556,7 +553,7 @@ def random_circuit(rng, seed: int) -> Circuit:
             k = c.cuts.get(tid, {}).get(p, 1)
             row = _words(t) // k
             writers = [(wt, f"o{x}") for wt, _, outs in specs[:j] for x, o in enumerate(outs)
-                       if _bits(o) == 16 * row and (p in shut[tid] or _leaf(t) % _leaf(o) == 0)]
+                       if _bits(o) == 16 * row and _leaf(t) == _leaf(o)]
             if opening and p != "tok" or not writers or rng.random() < 0.3:
                 continue
             wt, out = rng.choice(writers)
@@ -621,7 +618,7 @@ READER = ("tok", "root", "domain", "row", "salt", "path")
 
 
 def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forged: bool = False,
-            key_wired: bool = True, rows: tuple[str, ...] = READER, verdict: bool = True, bits: str | None = None) -> Circuit:
+            key_wired: bool = True, rows: tuple[str, ...] = READER, verdict: bool = True, word: bool = False) -> Circuit:
     """A circuit in the shape of a served class of `S` slots and `T` positions (the module docstring), E = 2 words a
     hidden row: `Scan` (one unit a slot, its state a registered read of `scan-state`, the phase's own input), `Embed`
     (a table opening at the token), `Norm`, `Gemm` (per position and slot, two rows of the query weights then four of
@@ -631,14 +628,11 @@ def lowered(S: int, T: int, *, cross: bool = False, root_read: bool = True, forg
     `root_read`, no table read of the root; with `forged`, `Embed` is another Definition under the same name, its
     verdict a constant 1 that reads no port. Without `key_wired`, no wire fills `Embed`'s token. `rows` is the order of
     `Embed`'s parameters, a layout's by default; without `verdict`, `Embed` has the one output, the row, which its
-    opening names as its verdict. `bits` makes the token 32 bits, a word on one side of its wires and 32 one-bit
-    leaves on the other: `"reader"`, `Embed`'s key the bits and `Scan`'s and `Feed`'s token the word; `"writer"`,
-    their token the bits and `Embed`'s key the word."""
+    opening names as its verdict. `word` makes the token a 32-bit word, `Scan`'s and `Feed`'s and `Embed`'s key alike."""
     c = Circuit(f"lowered{S}x{T}", S, T)
     E, v16 = 2, Value(16)
-    row, word = Array(E, v16), {None: (v16, v16), "reader": (Array(32, Value(1)), Value(32)),
-                                "writer": (Value(32), Array(32, Value(1)))}[bits]
-    key, tok = word
+    row = Array(E, v16)
+    key = tok = Value(32) if word else v16
 
     def make(name: str, params: list, outs: list, used: dict[int, list[int]], constant: tuple[int, ...] = ()):
         """A template whose gates, one an output leaf, read between them the leaves `used` names (parameter: leaves);
@@ -1054,9 +1048,8 @@ def shaped() -> list[dict]:
 
     def units(nodes: list) -> list:
         return [n for n in nodes if n["args"]]
-    for seed, side in ((23, "reader"), (24, "writer")):
-        pin = [ref.closure_digest(json.loads(lowered(2, 3, bits=side).program()[0]), EMBED)]
-        first(f"2x3 the key's {side} bits, the other side a word", lowered(2, 3, bits=side), seed, pins=pin, policy={})
+    pin = [ref.closure_digest(json.loads(lowered(2, 3, word=True).program()[0]), EMBED)]
+    first("2x3 the key a 32-bit word, its writers' too", lowered(2, 3, word=True), 23, pins=pin, policy={})
     def twice(nodes: list, _desc: dict) -> None:
         """`Norm`'s weights' row handed the input gates its `x` has."""
         norm = units(nodes)[2]
@@ -1064,41 +1057,51 @@ def shaped() -> list[dict]:
 
     def shared(nodes: list, desc: dict) -> None:
         """`Feed`'s selection not mapped: every unit handed the first unit's input gates."""
-        _share(units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
+        _share(nodes, units(nodes)[-1], 0, desc["types"].index(["Value", 16]))
 
     def computed(nodes: list, _desc: dict) -> None:
         """`Select`'s row handed `Norm`'s output, computed gates, in place of input gates."""
         select = units(nodes)[-2]
-        count = select["args"][0]["refs"]["affine"][3]
+        count = _refs(nodes, select["args"][0]["refs"]).count
         select["args"][0]["refs"] = {"affine": ["n", nodes.index(units(nodes)[2]), 0, count]}
 
     def split(apart: bool):
         """`Norm`'s batch split into two root nodes of half its members each, the second right after the first or,
-        `apart`, after `Gemm`'s: one template in two root nodes, its units numbered across them."""
+        `apart`, after an input node no node up to `Norm` reads, moved between them: one template in two root nodes,
+        its units numbered across them, every reference re-pointed."""
         def edit(nodes: list, desc: dict) -> None:
+            body = desc["definitions"][desc["root"]]["body"]
             norm = units(nodes)[2]
             k, n = nodes.index(norm), norm["n"]
             h = n // 2
+            cut = len(_leaves(desc["types"][norm["out"]])) // n * h
+            before = list(nodes)
+            reads = [[_refs(nodes, a["refs"]) for a in x["args"]] for x in before]
+            ret = _refs(nodes, body["ret"])
             second = copy.deepcopy(norm)
+            halves = []
             for node, m in ((norm, h), (second, n - h)):
                 node["n"] = m
+                lo = [refs.count // n * h if node is second else 0 for refs in reads[k]]
+                halves.append((node, [r.slice(b, b + r.count // n * m) for r, b in zip(reads[k], lo, strict=True)]))
                 for a in node["args"]:
-                    _, src, start, count = a["refs"]["affine"]
-                    per = count // n
-                    a["refs"]["affine"] = ["n", src, start + (per * h if node is second else 0), per * m]
                     a["type"] = _halved(desc, a["type"], m)
                 node["out"] = _halved(desc, node["out"], m)
-            at = k + 2 if apart else k + 1
-            nodes.insert(at, second)
-            moved = {i: i + (i >= at) for i in range(len(nodes))}
-            ret = desc["definitions"][desc["root"]]["body"]["ret"]["concat"]
-            for j, r in reversed(list(enumerate(ret))):
-                _, i, start, count = r["affine"]
-                if i == k:
-                    ret[j:j + 1] = [{"affine": ["n", k, start, count * h // n]},
-                                    {"affine": ["n", at, start, count * (n - h) // n]}]
-                else:
-                    r["affine"][1] = moved[i] if i > k else i
+            order = list(range(k + 1))
+            if apart:
+                read = {i for x in reads[:k + 1] for r in x for s, i, _ in r if s == "n"}
+                w = max(i for i, x in enumerate(before[:k]) if not x["args"] and i not in read)
+                order.remove(w)
+                order.append(w)
+            order += [None] + list(range(k + 1, len(before)))
+            pos = {i: p for p, i in enumerate(order)}
+            nodes[:] = [second if i is None else before[i] for i in order]
+            moved = [(x, r) for x, r in zip(before, reads, strict=True) if x is not norm] + halves
+            for x, refs in moved:
+                for a, r in zip(x["args"], refs, strict=True):
+                    a["refs"] = _spelled(_repointed(r, k, cut, pos))
+            body["ret"] = _spelled(_repointed(ret, k, cut, pos))
+            _split_reads(desc, moved, ret, k, cut, pos)
         return edit
 
     first("2x3 one input run handed to two rows", lowered(2, 3), 27, reroot=twice, broken="own-rows")
@@ -1297,12 +1300,12 @@ def _without(stage: str | None):
         setattr(ref, name, whole)
 
 
-def _program_wires(text: str, tids, cuts) -> list[dict] | None:
-    """The wires the Program `text`'s root states (`reference.program_wires`), None where it refuses them."""
+def _program_wires(text: str, tids, cuts) -> list[dict] | Exception:
+    """The wires the Program `text`'s root states (`reference.program_wires`), or what it raised refusing them."""
     try:
         return ref.program_wires(json.loads(text), tids, cuts)
-    except (ValueError, KeyError, TypeError):
-        return None
+    except (ValueError, KeyError, TypeError) as e:
+        return e
 
 
 def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
@@ -1319,7 +1322,7 @@ def spot_of(c: Circuit, text: str, doc: dict) -> dict | None:
         return None
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in c.templates}
     wires = _program_wires(text, lays, doc.get("cuts", {}))
-    if wires is None:
+    if isinstance(wires, Exception):
         return None
     return {"templates": {t: {"units": n, "rows": {p: [w, o] for (p, w), o in zip(lay.rows, lay.outer, strict=True)},
                               "outs": dict(lay.outs)} for t, (lay, n) in lays.items()},
@@ -1467,12 +1470,80 @@ def _leaves(t: list) -> list[int]:
     return _leaves(t[2]) * t[1] if t[0] == "Array" else [w for f in t[1] for w in _leaves(f)]
 
 
-def _share(node: dict, j: int, member: int) -> None:
+def _refs(nodes: list, j: dict):
+    """A body's references `j` in any part form the Program writes, an alias resolved to the earlier argument's."""
+    if "alias" in j:
+        k, a = j["alias"]
+        return _refs(nodes, nodes[k]["args"][a]["refs"])
+    if "concat" in j:
+        return concat([_refs(nodes, x) for x in j["concat"]])
+    return refs_from_json(j)
+
+
+def _spelled(refs) -> dict:
+    """`refs` with each part in the first form that spells it (`refs.spell`)."""
+    out = [spell(*as_grid(p)).to_json() for p in (refs.parts if isinstance(refs, Concat) else [refs])]
+    return out[0] if len(out) == 1 else {"concat": out}
+
+
+def _run(nodes: list, j: dict) -> Affine | None:
+    """`j`'s references where they are one run of one root node's leaves, else None."""
+    p = _refs(nodes, j)
+    p = None if isinstance(p, Concat) else spell(*as_grid(p))
+    return p if isinstance(p, Affine) and p.space == "n" else None
+
+
+def _moved(ref: tuple, k: int, cut: int, pos: dict) -> tuple:
+    s, i, j = ref
+    if s != "n":
+        return ref
+    return (s, pos[None], j - cut) if i == k and j >= cut else (s, pos[i], j)
+
+
+def _repointed(refs, k: int, cut: int, pos: dict):
+    out = []
+    for p in refs.parts if isinstance(refs, Concat) else [refs]:
+        later = [s == "n" and i == k and j >= cut for s, i, j in p]
+        lo = 0
+        for x in range(1, len(later) + 1):
+            if x == len(later) or later[x] != later[lo]:
+                piece = p.slice(lo, x)
+                for q in piece.parts if isinstance(piece, Concat) else [piece]:
+                    run, lanes = as_grid(q)
+                    out.append(spell(run, tuple(
+                        (s, pos[None], b - cut, e, lv) if later[lo] and s == "n" and i == k else
+                        (s, pos[i] if s == "n" else i, b, e, lv) for s, i, b, e, lv in lanes)))
+                lo = x
+    return concat(out)
+
+
+def _split_reads(desc: dict, reads: list, ret, k: int, cut: int, pos: dict) -> None:
+    body = desc["definitions"][desc["root"]]["body"]
+    nodes = body["nodes"]
+    leaves = [len(_leaves(desc["types"][x["out"]])) for x in nodes]
+    for x, rs in reads:
+        where = next(w for w, y in enumerate(nodes) if y is x)
+        for a, r in zip(x["args"], rs, strict=True):
+            _same_reads(nodes, leaves, f"node {where}", where, a["refs"], r, k, cut, pos)
+    _same_reads(nodes, leaves, "the return", len(nodes), body["ret"], ret, k, cut, pos)
+
+
+def _same_reads(nodes: list, leaves: list, what: str, below: int, j: dict, old, k: int, cut: int, pos: dict) -> None:
+    got = list(_refs(nodes, j))
+    want = [_moved(r, k, cut, pos) for r in old]
+    if got != want:
+        raise AssertionError(f"split: {what} reads {len(got)} references, not the {len(want)} it read re-pointed")
+    for s, i, j_ in got:
+        if s == "n" and not (i < below and 0 <= j_ < leaves[i]):
+            raise AssertionError(f"split: {what} reads leaf {j_} of node {i}, past its {leaves[i]} leaves or not before it")
+
+
+def _share(nodes: list, node: dict, j: int, member: int) -> None:
     """A batch's argument `j` no longer mapped: every member handed the first member's leaves, of the type at
     `member` of the descriptor's types."""
-    at, count = node["args"][j]["refs"]["affine"][1::2]
+    refs = _refs(nodes, node["args"][j]["refs"])
     node["axes"][j] = None
-    node["args"][j].update(type=member, refs={"affine": ["n", at, 0, count // node["n"]]})
+    node["args"][j].update(type=member, refs=_spelled(refs.slice(0, refs.count // node["n"])))
 
 
 def _commit(case: dict, record: str, program: str | None = None) -> None:
@@ -1490,7 +1561,7 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
-        case["spot"] = None if wires is None else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
+        case["spot"] = None if isinstance(wires, Exception) else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
                                                    "wires": wires}
 
 
@@ -1632,7 +1703,8 @@ def _break(rng, made: dict, how: str) -> bool:
         desc = json.loads(inst["program"])
         nodes, types = desc["definitions"][desc["root"]]["body"]["nodes"], desc["types"]
         #: every argument of every unit's node, an input node's leaves: (node, argument, input node, leaves)
-        runs = [(k, j, *a["refs"]["affine"][1::2]) for k, n in enumerate(nodes) for j, a in enumerate(n["args"])]
+        runs = [(k, j, r.idx, r.count) for k, n in enumerate(nodes) for j, a in enumerate(n["args"])
+                if (r := _run(nodes, a["refs"])) is not None]
         if how == "row-twice":
             found = [(a, b) for a in runs for b in runs if a[:2] != b[:2] and nodes[a[2]]["fn"] == nodes[b[2]]["fn"]
                      and b[3] <= a[3]]
@@ -1659,7 +1731,7 @@ def _break(rng, made: dict, how: str) -> bool:
                 half = rng.randint(1, count - 1)
                 arg["refs"] = {"concat": [{"affine": ["n", at, 0, half]}, {"affine": ["n", at, 0, count - half]}]}
             elif how == "row-broadcast":
-                _share(nodes[k], j, other)
+                _share(nodes, nodes[k], j, other)
             elif how == "row-computed":
                 arg["refs"] = {"affine": ["n", other, 0, count]}
             elif how == "row-explicit":
@@ -2049,9 +2121,10 @@ EDGED = {
     "an edge from a writer's second output, in two parts": (lambda: _ab(_second, writer=EA2), None, None, None),
     "an edge into a port the record cuts": (lambda: _ab(_mapped), None,
                                             lambda d: d.update(cuts={"EdgeB_v1": {"y": 2}}), "wires"),
+    #: the edge each way is between templates, not units: in the root's node order the units form a chain, no cycle
     "one template in two root nodes, an edge each way, the record's order unread": (_two_nodes, None, lambda d: d.update(
-        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), "wires"),
-    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, "wires"),
+        order=[["EdgeA_v1", 0, 2], ["EdgeB_v1", 0, 2], ["EdgeA_v1", 2, 2]]), None),
+    "one template in two root nodes, an edge each way, no order": (_two_nodes, None, None, None),
     "a partial row": (lambda: _ab(_first_two, n=3, m=2), _repoint(["n", 2, 2, 8], 3), None, "wires"),
     "a row of another width": (_narrow, _repoint(["n", 3, 4, 4], 4), None, "program"),
     "an edge from an output of two widths into one 32-bit leaf": (
@@ -2075,6 +2148,17 @@ EDGED = {
         "reads": [{"reader": "EdgeB_v1", "port": "y", "param": "weights/w", "at": 1, "radix": [1], "base": 0,
                    "step": [0]}]}), "inputs"),
     "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "not-topological"),
+    "an edge read through a grid, each run twice": (lambda: _ab(_mapped),
+                                                    _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 4]]]]], 3, form="grid"),
+                                                    None, "wires"),
+    "a grid of two lanes, an edge's and an input's": (lambda: _ab(_mapped), _repoint(
+        [2, [["n", 2, 0, 1, [[2, 4]]], ["n", 0, 2, 1, [[2, 4]]]]], 3, form="grid"), None, "own-rows"),
+    "a grid of radix 1": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[1, 4]]]]], 3, form="grid"), None,
+                          "program"),
+    "a grid an affine part spells": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[4, 2]]]]], 3, form="grid"),
+                                     None, "program"),
+    "a grid past its node": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 8]]]]], 3, form="grid"),
+                             None, "program"),
 }
 
 

@@ -60,6 +60,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.circuits import boolean as BL
@@ -69,7 +70,6 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
@@ -214,7 +214,7 @@ def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list
 def value_port(v: RV.Registered, reads_from: int = 0) -> dict:
     """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
     `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
-    return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
+    return RV.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
         ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
@@ -233,9 +233,10 @@ def _statement():
 
 def _one_stage():
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
+    from verity.protocols.proofs.spot.prover import docket as DK
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, R=R, V=V)
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, DK=DK, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:
@@ -255,7 +256,7 @@ def public_header(out: Path, n: int) -> dict:
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     """The statement program and partition (one template, n proof blocks) and the proof block's stager."""
     defn = bind(WardenRowIdentity, B=B)
-    program = M.P.mixed_population_program([(defn, n)])
+    program = PN.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
     out.mkdir(parents=True, exist_ok=True)
@@ -344,7 +345,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     """Member m registered (its frame ports and its committed value's root, `committed_roots`), sampled by the
     verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own registered
     reads. Writes what the verifier received under ``out / "verifier"``."""
-    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
+    a0, a7, P, R, V, DK = M.a0, M.a7, M.P, M.R, M.V, M.DK
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
     want, roots = committed_roots(m)
@@ -360,7 +361,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
            "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
-    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
+    rec = DK.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
               f"statement/{name}": a7.statement_checks(m, rec, want), "registered": registered_roots(m, rec)}

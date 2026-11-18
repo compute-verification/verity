@@ -55,7 +55,6 @@ from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_ranks as PHR
 
 ROWS, STEPS = 32, 3
-KEY = hashlib.sha512(b"key").digest()[:32]
 #: step 0 admits a and b, step 1 decodes one row of each, step 2 is past the last served one
 SCHEDULE = (_so(*((q, p, 4) for q, p in PROMPTS.items())), _so(running={"a": 1, "b": 1}))
 
@@ -107,7 +106,7 @@ def _window(monkeypatch, edits=(None, None), ids=lambda tp, s, x: x, served=None
     executor = Executor(workers)
     served = served or SV.Served(PH.TILE, _unit(), window=hashlib.sha512(b"w").digest())
     holder = PHR.install(None, executor=executor, rows=ROWS, steps=STEPS, coins=Challenger(0, random.Random(0).randbytes),
-                         rounds=_rounds(), key=KEY, entry="t", admission=RQ.ROUND0, served=served,
+                         rounds=_rounds(), entry="t", admission=RQ.ROUND0, served=served,
                          commit={"cp": {"repo": "r", "revision": "v"}, "run_id": "t"})
     if negative is not None:
         executor.collective_rpc(RG._w_edit, kwargs={"kind": negative, "tp": 1})
@@ -214,7 +213,7 @@ def test_install_refuses_a_periods_weights_across_ranks_and_a_commit_without_ser
     Commit without ``served``, whose tables its values tie to."""
     executor = Executor([Rank(0), Rank(1)])
     kw = {"executor": executor, "rows": ROWS, "steps": STEPS, "coins": Challenger(0, random.Random(0).randbytes),
-          "rounds": _rounds(), "key": KEY, "entry": "t"}
+          "rounds": _rounds(), "entry": "t"}
     with pytest.raises(ValueError, match="registers its own b/<K>"):
         PHR.install(None, served=SV.Served(weights=SimpleNamespace()), **kw)
     with pytest.raises(ValueError, match="it needs served"):

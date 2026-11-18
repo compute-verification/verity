@@ -18,7 +18,9 @@ ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``,
 - ``toolkit_paths``: a tracked text file writing a toolkit's directory (``CUDA``: ``/usr/local/cuda``, ``/opt/cuda``, a
   ``cuda-<version>`` directory anywhere, pip's toolkit) outside `calibration/hardware/` and the kit (``KIT``).
 - ``card_names_in_code``: a Python or shell file outside `calibration/hardware/` and every ``/cards/`` that compares
-  against or keys a mapping by a card, node or architecture name, case-insensitively.
+  against or keys a mapping by a card, node or architecture name, case-insensitively; and a shell file's every line, not
+  a comment, that writes an architecture or a card's printed name whatever its shape (``SHELL_CARD``: a compiler flag,
+  a case arm, a test, a match on what the driver prints). A card's id, which names its file, is no such name.
 - ``lean_reexports``: a Lean ``export Verity ...`` or ``export Hash ...``, or a one-line ``abbrev N ... := Q.N x y``
   whose body is another namespace's ``N`` applied to bare names only (a specialization, ``Verity.Coins (Pub N)``, is not).
 - ``lean_old_names``: ceilings on the number of Lean files naming each old name, and of `security/` files defining a
@@ -52,6 +54,9 @@ OLD_SCHEMES = ("pouw", "certifier", "network-certifier")
 TO_DECLARE = ("sampled-proofs", "inference-only")
 CARD_NAMES = ("H200", "H100", "B200", "RTX PRO 6000", "sm_90", "sm_100", "sm_120", "sm90", "sm100", "sm120")
 SCRIPT = (".py", ".sh")
+#: an architecture (`sm_120a`, `sm90`, or one built by hand, `sm_$SM`) or a card's printed name in a shell line; not a
+#: card's id (`h100-sxm-80gb`), and not a longer name holding one (`pearl_c_sm90`, `sm90_wgmma.cu`, `pearl-c-sm120-v1`)
+SHELL_CARD = re.compile(r"(?<![\w-])sm_?\d{2,3}a?(?![\w-])|(?<![\w-])sm_\$\{?\w|\b(?:H100|H200|B200)\b|RTX PRO 6000")
 SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
                            r"|experimental\.dither)\b")
 SCHEME_IMPORTERS = ("benchmarks/", "calibration/", "tools/", "applications/")
@@ -103,7 +108,8 @@ INTERFACE = {
     "messages_one_sided": "a message of `verity.hooks` exists because two sides use it; a scheme's own need is a declared "
                           "field or a port of its `Scheme`",
     "toolkit_paths": TOOLKIT,
-    "card_names_in_code": "`verity.device.load_card` and the card, node and architecture files under `calibration/hardware/`",
+    "card_names_in_code": "`verity.device.load_card` and the card, node and architecture files under `calibration/hardware/` "
+                          "(from a shell: `benchmarks/kernels/machine.py arch CARD`, then `gencode ARCH`)",
     "lean_reexports": "the core's own name (`Verity.X`, `Hash.X`), read where it is defined",
     "lean_old_names": "the core's own name (`Hash.Msg`, `Hash.Collision`, `Verity.Game`, `Verity.Scheme`, the core's "
                       "partition)",
@@ -159,6 +165,11 @@ def _shell_hits(text: str, names: Iterable[str], fold: bool = False) -> set[int]
             if not line.lstrip().startswith(("#", "for ")) and any(p.search(line) for p in patterns)}
 
 
+def _shell_card_lines(text: str) -> set[int]:
+    return {i for i, line in enumerate(text.splitlines(), 1)
+            if not line.lstrip().startswith("#") and SHELL_CARD.search(line)}
+
+
 _OPEN = {")": "(", "]": "[", "}": "{"}
 _GETTERS = {"get", "pop", "setdefault"}
 #: the names the one table is imported under: `schemes.get("pous")` is its own reader, never an offender
@@ -178,10 +189,9 @@ def _python_hits(text: str, names: frozenset[str], fold: bool = False) -> set[in
     for i, t in enumerate(toks):
         if t.type != tokenize.STRING:
             continue
-        try:
-            value = ast.literal_eval(t.string)
-        except (ValueError, SyntaxError):
-            continue
+        if "f" in t.string[:t.string.index(t.string.lstrip("rRbBuUfF")[:1])].lower():
+            continue  # an f-string is one STRING token before Python 3.12, and no literal
+        value = ast.literal_eval(t.string)
         if not isinstance(value, str) or (value.lower() if fold else value) not in names:
             continue
         prev = toks[i - 1].string if i else ""
@@ -230,8 +240,8 @@ def _hooks_names(text: str, path: str, classes: Iterable[str]) -> set[str]:
     name it is imported as (``H.Name``, ``hooks.Name``, ``verity.hooks.Name``)."""
     try:
         tree = ast.parse(text, path)
-    except SyntaxError:
-        return set()
+    except SyntaxError as e:
+        raise AssertionError(f"{path} doesn't parse, so the classes of `verity.hooks` it names can't be read: {e}") from e
     classes = set(classes)
     top = path.count("/") == 1 and path.startswith("verity/")
     aliases, found, dotted = set(), set(), False
@@ -302,10 +312,13 @@ def scan(files: dict[str, str]) -> Scan:
             names = schemes - NOT_SCHEMES.get(path, set())
             s.add("scheme_name_tables", path, (_python_hits(text, names) if path.endswith(".py")
                                                else _shell_hits(text, names)), text)
-        if script and not path.startswith(HARDWARE) and "/cards/" not in f"/{path}" \
-                and card_pre.search(text.lower()):
-            s.add("card_names_in_code", path, (_python_hits(text, cards, fold=True) if path.endswith(".py")
-                                               else _shell_hits(text, cards, fold=True)), text)
+        if script and not path.startswith(HARDWARE) and "/cards/" not in f"/{path}":
+            hits: set[int] = set()
+            if card_pre.search(text.lower()):
+                hits = _python_hits(text, cards, fold=True) if path.endswith(".py") else _shell_hits(text, cards, fold=True)
+            if path.endswith(".sh"):
+                hits |= _shell_card_lines(text)
+            s.add("card_names_in_code", path, hits, text)
         if path.endswith(".py") and path.startswith(SCHEME_IMPORTERS) and "verity.protocols." in text:
             s.add("scheme_package_imports", path,
                   (i for i, line in enumerate(text.splitlines(), 1) if SCHEME_IMPORT.match(line)), text)
@@ -453,6 +466,15 @@ def _flagged(ratchet: str, files: dict[str, str]) -> dict[str, int]:
     ("card_names_in_code", "benchmarks/a.py", 'x = peak["RTX PRO 6000"]\nif arch.startswith("sm_120"):\n    pass\n', 2),
     ("card_names_in_code", "benchmarks/a.py", 'CARD = "h200-sxm-141gb"\nc = load_card(CARD)\n"""card == "h200"."""\n', 0),
     ("card_names_in_code", "benchmarks/cards/a.py", 'if card == "h200":\n    pass\n', 0),
+    ("card_names_in_code", "benchmarks/run.sh",
+     'nvcc -gencode arch=compute_120a,code=sm_120a x.cu\ncase $A in sm_90a) F=sm90 ;; esac\n[ "$ARCH" = sm_100a ] || exit 2\n', 3),
+    ("card_names_in_code", "benchmarks/run.sh", 'case $name in "NVIDIA H100"*|"NVIDIA H200"*) ;; esac\nG="RTX PRO 6000 Blackwell"\n', 2),
+    ("card_names_in_code", "benchmarks/run.sh",
+     '# an H100 only: sm_90a\nA=$(python3 benchmarks/kernels/machine.py arch h100-sxm-80gb)\n'
+     'G=$(python3 benchmarks/kernels/machine.py gencode "$A")\nnvcc $G pearl_c_sm90/sm90_wgmma.cu\n', 0),
+    ("card_names_in_code", "benchmarks/cards/run.sh", "nvcc -gencode arch=compute_90a,code=sm_90a x.cu\n", 0),
+    ("card_names_in_code", "benchmarks/run.sh",
+     'FLAGS=(-gencode "arch=compute_$SM,code=sm_$SM")\nOUT=${1:-/tmp/pearl-c-sm120-ship}\nS=pearl-c-h100-v1-h3\n', 1),
     ("lean_reexports", "security/A.lean", "export Verity (Game)\nabbrev Msg := Hash.Msg\n"
                                           "abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v\n", 3),
     ("lean_reexports", "security/A.lean", "export Claims.Json (Same)\nabbrev Coins (N : ℕ) : Type := Verity.Coins (Pub N) N\n"

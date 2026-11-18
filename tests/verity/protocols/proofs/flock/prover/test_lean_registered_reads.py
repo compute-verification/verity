@@ -389,7 +389,7 @@ def test_a_row_v1_port_is_refused_a_bit_row_registration(staged):
     for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
         code, out = _statement(staged, public, _own(staged, f"own-{schema[-6:].replace('/', '-')}",
                                                     lambda ps, schema=schema: ps["cs"].update(row_schema=schema)))
-        assert code == 1 and (f"port cs is a {G.SCHEMA} row, and {VALUE}'s registered rows are {schema} rows") in out, out
+        assert code == 1 and (f"port cs is a {RV.SCHEMA} row, and {VALUE}'s registered rows are {schema} rows") in out, out
 
 
 def test_a_registered_output_row_must_be_the_registered_row(staged):

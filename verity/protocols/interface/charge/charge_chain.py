@@ -16,17 +16,15 @@ each window has a produced value `VALUE` of two rows, its carry-in and its carry
 **The row**, `ROW_BITS` = 96 bits, six u16 words: n0 3×15 | n1 3×15 | run 1×2, each element least significant bit
 first, then four zero bits (`arith_encode._CARRY`'s fields in order).
 
-**The carry.** Window w's row 0 is window w − 1's row 1 under the same salt (`charge_rows.commit_window(carry=…)`), so its opening
-b‖c is the same, and the verifier checks they're equal (`network.verifier.charge_check.check_chain`). Window 0's row 0 is the priors' row under its
-public salt (`charge_rows.start_salt`), whose opening the verifier computes (`charge_check.start_opening`). Row 1 is under a fresh salt.
+**The carry.** The honest prover commits window w's row 0 as window w − 1's row 1 under the same salt
+(`charge_rows.commit_window(carry=…)`), so its opening b‖c is the same, and window 0's row 0 as the priors' row under
+its public salt (`charge_rows.start_salt`, opening `charge_check.start_opening`). Row 1 is under a fresh salt.
 
-**Why a restart is refused.** The verifier holds window 0's carry-in to the priors (`CH-first`) and each later
-window's to the last one's carry-out (`CH-carry`), on every session, and the proof block holds each window's carry-out
-to its charge's carry' from its carry-in (ok). So, window by window, the carry each window is charged from is the one
-`code_v1` carries over the whole session. A prover that restarts the counts mid-session, at the priors or at counts
-fitted to the window, either breaks the chain, which `network.verifier.charge_check.check_chain` refuses, or claims a proof block whose ok is 0, which
-fails that proof block's proof as any false proof block does. A carry row's padding needs no check: window 0's is the
-priors' row, and every later one a proved proof block's carry-out.
+**A restart is not refused.** The proof block holds each window's carry-out to its charge's carry' from its carry-in
+(ok) and takes any carry-in. `charge_check.check_chain` holds window 0's carry-in to the priors (`CH-first`) and each
+later window's to the last one's carry-out (`CH-carry`), and no verifier calls it: no verifier holds one window's
+carry-out row to the next window's carry-in, so the chain is the honest prover's and not a checked fact, and the coded
+charge is not established as a bound for any period.
 
 **Why a value of its own.** `ReplayLoad` (`verity_vllm.compiler.replay_chain`) writes the window row and checks it in
 full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad to leave a field

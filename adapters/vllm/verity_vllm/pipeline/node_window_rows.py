@@ -1,7 +1,6 @@
 """A rank's node window on the served path: its values (`served_values`), its commitment through `interface.Window`
-(`commit_rank_window`), and the joined record's two fields read on our side: ``ranks`` (`rank_records`, each rank's window
-by its H, `window_replay.window_digest`) and ``free`` (`check_free`, refused before the serve registers the record, as
-round 1 refuses it). Built: `commit_rank_window`; each other body raises `NotImplementedError` naming the goal."""
+(`commit_rank_window`), and the joined record's ``ranks`` read on our side (`rank_records`, each rank's window by its H,
+`window_replay.window_digest`). Built: `commit_rank_window`; each other body raises `NotImplementedError` naming the goal."""
 from __future__ import annotations
 
 import json
@@ -106,7 +105,7 @@ def commit_rank_window(rank: Rank, values: Rows, *, run: str, law: Mapping[str, 
                    [_elements(outs[p], w) for (p, _), w in zip(lay.outs, lay.widths[len(lay.rows):])])
     committed = win.close()
     d = Path(out)
-    res = win.write(committed, d, {}, registrar=SRW.R)
+    res = win.write(committed, d, {}, registrar=SRW.DK)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (d / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     (d / "partition.json").write_text(json.dumps(SRW.partition_doc(win.window, {}), indent=1) + "\n")
@@ -130,12 +129,4 @@ def rank_records(joined: Mapping[str, Any], records: Sequence[Mapping[str, Any]]
     raise NotImplementedError(f"{GOAL}: the served path commits no rank window yet, so no rank record is read")
 
 
-def check_free(joined: Mapping[str, Any]) -> None:
-    """Refuse (ValueError) a joined record that names free rows (`interface.free_of`: each ``{reader, port, at, units,
-    kind}``, with ``cut`` ``[c0, C]`` where it is some of its port's rows), naming each row's kind, before the serve
-    registers it: round 1 refuses such a record. `tp.serving_rows.require` calls it on the request's ``joined``, before
-    the engine starts."""
-    raise NotImplementedError(f"{GOAL}: the served path registers no joined record yet")
-
-
-__all__ = ["GOAL", "KEYS", "Rows", "check_free", "commit_rank_window", "rank_records", "served_values"]
+__all__ = ["GOAL", "KEYS", "Rows", "commit_rank_window", "rank_records", "served_values"]

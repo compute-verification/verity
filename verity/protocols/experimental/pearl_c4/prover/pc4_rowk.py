@@ -20,7 +20,7 @@ from verity.circuits.ops.scalar import F32Neg
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 from . import pc4
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.rowk import (BF16, CARRY4, E2M1, F32, HEAD4, HEAD4_OUT, OK, R, U8, _HIDDEN, _col, _flat, _head_out, _ports, _rows,
                    _slices)
 

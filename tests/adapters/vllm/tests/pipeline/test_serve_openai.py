@@ -17,12 +17,14 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from verity import hooks as H
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
+from verity.protocols.resource_accounting.scheme import Lacks
 
 from tests.pipeline import predicted
 from verity_vllm.commit import served_record as SR
@@ -31,6 +33,7 @@ from verity_vllm.compiler import served_rows as SRW
 from verity_vllm.engine import served_seed
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, derived
 from verity_vllm.engine.step_trace import scheduler_config
+from verity_vllm import messages as M
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
@@ -195,6 +198,66 @@ def test_an_out_in_the_runs_directory_is_refused_by_name_and_none_names_the_flag
     for inside in (run, run / "serve", run / "out"):
         assert refusal("--out", str(inside)).startswith(f"--out {inside} is $RESEARCH_RUN_DIR ({run}) or inside it"), inside
     assert refusal("--out", str(tmp_path / "serve")) is None
+
+
+def _stand_in(name: str, log: list) -> SimpleNamespace:
+    """A declared scheme's stand-in: its attach files a kernel that logs entering and leaving each block it wraps, and
+    returns a report whose release logs."""
+    def kernel(due, inner):
+        log.append(("in", name))
+        out = inner(None)
+        log.append(("out", name))
+        return out
+
+    def attach(ex, ctx):
+        log.append(("attach", name, dict(ctx["settings"])))
+        ex.request(name, H.ComputeBlockWith(kernel))
+        return SimpleNamespace(release=lambda: log.append(("release", name)))
+    return SimpleNamespace(name=name, option="", settings={"k": 0}, depends=(), resource=Lacks("a stand-in"), check_settings=lambda own: None, attach=attach,
+                           requests=lambda ctx: (), messages=())
+
+
+def _listing(monkeypatch, tmp_path, protocols: str, log: list) -> Any:
+    stand = {n: _stand_in(n, log) for n in ("a", "b")}
+    monkeypatch.setattr(declarations, "DECLARATIONS", dict.fromkeys(stand, "stand-in"))
+    monkeypatch.setattr(declarations, "get", stand.__getitem__)
+    return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--protocols", protocols,
+                                      "--protocols-config", json.dumps({"a": {"k": 1}})], environ={})
+
+
+def test_a_serve_attaches_each_listed_scheme_by_name_the_earlier_outer_and_releases_each(monkeypatch, tmp_path):
+    """``--protocols a,b`` attaches both declared schemes, each with its settings under its own name, through
+    `messages.attach_listed`; at a block both wrap, ``a``, listed first, is the outer; shutdown's `write_reports`
+    releases both."""
+    from verity_vllm.pipeline.scheme_plugin import write_reports
+
+    log: list = []
+    found = so.listed(_listing(monkeypatch, tmp_path, "a,b", log), tmp_path)
+    assert [(s.name, given) for s, given in found] == [("a", {"k": 1}), ("b", {})]
+    ex = M.Exchange()
+    assert [r.release is not None for r in M.attach_listed(ex, found)] == [True, True]
+    assert ex.attached == {"b": {"k": 0}, "a": {"k": 1}}
+    log.clear()
+    ex.compute(H.BlockDue("l0", 0, {}, "bf16", {}), lambda inputs: log.append(("block",)))
+    assert log == [("in", "a"), ("in", "b"), ("block",), ("out", "b"), ("out", "a")]
+    log.clear()
+    write_reports(ex, tmp_path)
+    assert sorted(log) == [("release", "a"), ("release", "b")]
+    with pytest.raises(M.Refused, match="a is listed 2 times"):
+        M.attach_listed(M.Exchange(), so.listed(_listing(monkeypatch, tmp_path, "a,a", log), tmp_path))
+
+
+def test_a_listed_scheme_that_is_not_declared_is_refused_by_name(monkeypatch, tmp_path):
+    with pytest.raises(cli.UsageError, match="--protocols a,nope: nope names no declared scheme"):
+        so.listed(_listing(monkeypatch, tmp_path, "a,nope", []), tmp_path)
+
+
+def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path),
+                                      "--protocols", "pouw:pearl-c-h100-v1-h3"])
+    with pytest.raises(cli.UsageError, match="pouw:pearl-c-h100-v1-h3 is pearl-plus's option: list it as --protocols "
+                                             "pearl-plus, its settings under 'pearl-plus'"):
+        so.listed(opts, tmp_path)
 
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
@@ -881,8 +944,9 @@ def test_each_window_opens_and_closes_as_an_execution_phase_and_its_root_follows
     """Each Commit window is an execution phase on the exchange's ``steps``: `PhaseOpened` before any of its values is
     committed, `PhaseClosed` with the committer's Program digest before the next opens, then `PhaseCommitted` with its
     finalize's run root (empty for a window that committed no step)."""
-    from verity import hooks as H
     from verity_vllm import messages
+
+    from verity import hooks as H
 
     messages.close()
     heard: list = []

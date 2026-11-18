@@ -6,8 +6,8 @@ engine step, each `replay_step.ReplayStep_v1` (the replay's step): the committed
 arrivals and the next A decisions in, the step's rows and the next state out. A window is many steps, so the state
 passes between proof blocks as
 rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
-`Row`, `QueueRow`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
-the windows join (`check_chain`), and the three Boolean parts it puts in the units, `ReplayAdvance` beside each step,
+`Row`, `QueueRow`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the check of how the
+windows join (`check_chain`, which no verifier calls), and the three Boolean parts it puts in the units, `ReplayAdvance` beside each step,
 `ReplayLoad` once a window and `ReplayClose` once a session, with `advance`, `load` and `close` their specifications.
 
 **Why a window has a row of its own.** The step reads its arrivals and decisions at the scan's cursors, which move by
@@ -64,8 +64,9 @@ one row `produced.shared` holds them to. Steps past the window's n are idle (`st
 the proof block's rows are dropped (`ReplayAdvance`'s `active` = 0).
 
 - **The carry.** Window w's state row 0 is window w − 1's state row P + 1, and its window row 0 is window w − 1's
-  window row 1, each committed under the same salt (`commit_window(carry=…)`), so its opening b‖c is the same, and the
-  verifier checks they're equal (`check_chain`). The load refuses a state row 0 that left steps to run, so each window
+  window row 1, each committed under the same salt (`commit_window(carry=…)`), so their openings b‖c are equal for the
+  honest prover; the check of it (`check_chain`, `C-carry`) is called by no verifier and held by no Lean, so the carry
+  between windows is not held. The load refuses a state row 0 that left steps to run, so each window
   runs exactly its own. Decisions left unread carry: the load writes the window's after the last window row's unread
   ones, as it does the queue's arrivals, since A5 ("The windows") can charge a decision up to two windows before its
   step's (at T = 20, 5 of async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15). A decision is then read
@@ -73,8 +74,9 @@ the proof block's rows are dropped (`ReplayAdvance`'s `active` = 0).
 - **The end.** `ReplayClose` reads the session's last state row (its last window's P + 1) and window row (that
   window's 1) and refuses a session that ends with a decision unread or a step to run (`close`).
 - **The start.** The session's first rows are the empty state (`empty`: nothing held, NB − 1 free blocks, vLLM's block
-  0 being its null block) and the empty window, each under its public salt (`empty_salts`), so the verifier computes
-  their openings (`empty_openings`).
+  0 being its null block) and the empty window, each under its public salt (`empty_salts`), so their openings are
+  computable (`empty_openings`); the check of the session's first rows against them (`check_chain`, `C-first`) is
+  called by no verifier.
 
 **Cost** (`size`). Per step: `ReplayAdvance`'s ANDs (the two fronts, about (Q + A·QW)·(1 + IW + 2·LW) and D + A·DW, and
 about 2·width for the idle select and the equality), three reads and one state row. Per window: P steps, one
@@ -488,7 +490,7 @@ def _opening(words: Sequence[int], salt: bytes) -> bytes:
 
 
 def empty_openings(program: str, S: Shape) -> tuple[bytes, bytes]:
-    """b‖c of the empty state row and the empty window row under `empty_salts`, which the verifier computes."""
+    """b‖c of the empty state row and the empty window row under `empty_salts`."""
     s, w = empty_salts(program)
     return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(QueueRow(), S)), w)
 
@@ -546,8 +548,8 @@ def openings(value: Committed) -> tuple[list[bytes], list[bytes]]:
 
 
 def check_chain(windows: Sequence[tuple[Sequence[bytes], Sequence[bytes]]], program: str, S: Shape) -> str | None:
-    """The verifier's check of a session's windows, given each window's state row and window row openings b‖c in
-    order: None, or why not. `C-rows`: a window isn't P + 2 state rows and 2 window rows; `C-first`: the session
+    """The check of a session's windows, which no verifier calls and no Lean holds, given each window's state row and
+    window row openings b‖c in order: None, or why not. `C-rows`: a window isn't P + 2 state rows and 2 window rows; `C-first`: the session
     doesn't start in the empty rows under their public salts; `C-carry`: a window doesn't start with the previous
     window's last state row and its window row."""
     for w, (st, wi) in enumerate(windows):

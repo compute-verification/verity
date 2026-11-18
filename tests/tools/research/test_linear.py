@@ -35,7 +35,7 @@ class FakeLinear:
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
         self.subscribers, self.authors, self.comments, self.moved = {}, {}, [], []
-        self.state_type = "backlog"
+        self.state_type, self.full = "backlog", False
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key, self.issue_labels = None, "INF", []
         self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
@@ -136,6 +136,8 @@ class FakeLinear:
             self.authors["I1"] = self._author(user, v["i"], "creator")
             return {"data": {"issueCreate": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1"}}}}
         if "commentCreate" in q:
+            if self.full:
+                return {"errors": [{"message": "quota exceeded", "extensions": {"code": "QUOTA_EXCEEDED", "meta": {"quota": "max-comments-per-issue"}}}]}
             self.comments.append(self._author(user, v["i"], "user"))
             self.subscribers["I1"] = sorted({*self.subscribers["I1"], user})
             return {"data": {"commentCreate": {"success": True}}}
@@ -219,6 +221,16 @@ def test_the_client_credentials_token_is_cached_private_until_near_expiry_and_re
     other = {**APP, "LINEAR_CLIENT_ID": "dummy-other-app"}                                     # another app never reads this one's
     linear.Linear(other, fake, now=lambda: t[0], cache=cache).team("infra")
     assert fake.grants == 4
+
+
+def test_a_comment_on_a_full_issue_says_it_is_full_and_what_to_do(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(KEY, fake, cache=tmp_path / "tok")
+    issue = lin.file("infra", "comms", "x")
+    fake.full = True
+    with pytest.raises(linear.LinearError, match="this issue is full .*2,000 comments.*nothing was posted.*the issue that continues it"):
+        lin.comment(issue["id"], "comms", "a reply")
+    assert fake.comments == []
 
 
 def test_a_personal_key_unsubscribes_its_owner_after_filing_and_after_each_comment(tmp_path):

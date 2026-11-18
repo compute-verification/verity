@@ -122,7 +122,7 @@ class Gpu:
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
-#: the GPUs the door measures on, each by its node file; the first's card is the kernel points' (`kernel_card`)
+#: the GPUs the door measures on, each by its node file
 DOOR = (
     Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
     Gpu("h100-sxm-80gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
@@ -135,10 +135,6 @@ def cards() -> dict[str, Gpu]:
     """The door's GPUs by their card's `short`, the `--card` that names one."""
     return {card.gpu: card for card in DOOR}
 
-
-def kernel_card() -> str:
-    """The kernel points' card's `short`: `DOOR`'s first GPU's."""
-    return DOOR[0].gpu
 
 class Shape(NamedTuple):
     """A model's decoder: its layer count and one layer's linears, (n, k) each: qkv's n is the query width and two KV
@@ -158,8 +154,8 @@ SHAPES = {
 }
 #: the door's models by its `--model`: one layer's linears each
 MODELS = {"llama3.1-70b": SHAPES["llama-3.1-70b"].linears, "llama3.2-1b": SHAPES["llama-3.2-1b"].linears}
-#: the kernel points' model, whose γ on the kernel card (`kernel_card`) is each metric's own reading; every other model's,
-#: and every model's on another card, is a member of it
+#: the kernel points' model, whose γ on a metric's card is the metric's own reading where its row says it has one
+#: (`overhead_records.metric_row`); every other model's is a member of it
 KERNEL_MODEL = "llama3.1-70b"
 #: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
 LEFT_OUT = {"llama3.1-70b": ("the LM head",), "llama3.2-1b": ("the LM head",)}

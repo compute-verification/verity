@@ -73,7 +73,9 @@ from dataclasses import dataclass
 from functools import reduce
 
 from verity.circuits import boolean as BL
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.population import wired_population_program
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
 from verity.circuits.boolean import trace as TR
@@ -744,8 +746,8 @@ def statement(sh: Shape, n: int):
     sh = _shape(sh)
     t0 = time.perf_counter()
     defn = definition(sh.NU, sh.ELL, sh.S_LOG, sh.T_LOG)
-    program = P.population_program(defn, n)
-    part = P.partition(program, P.template_instance_query(defn))
+    program, query = wired_population_program([(defn, n)], {"templates": [[descriptor_id(defn), n]]})
+    part = P.partition(program, query)
     prog = P.program_sha512(program)
     low, sub = lowering(sh), subcircuit(sh)
     text = FC.compose(low, sub, partition=P.digest(part), program=prog)

@@ -93,9 +93,10 @@ where it doesn't.
 `python3 tools/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(the verified queue's checks of a candidate and its records run, rank 0: `research.landing.AFTER_LANDING_SLOT_RANK`), priority
-waiters go by rank, then arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked:
-the runs `main` waits on take the next slot, ahead of priority checks that came first.
+(the verified queue's: a candidate's quick tier and its records run at rank 0, `research.landing.AFTER_LANDING_SLOT_RANK`; every
+part of a candidate's check at rank 1, `research.landing.CHECK_SLOT_RANK`), priority waiters go by rank, then arrival, and a
+priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked: the runs `main` waits on take the next
+slot, ahead of priority checks that came first, and the short ones ahead of the checks.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot

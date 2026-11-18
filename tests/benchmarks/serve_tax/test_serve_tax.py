@@ -13,6 +13,7 @@ import pytest
 import serve_tax as S
 
 from verity.protocols.resource_accounting.network.prover import admission as NA
+from verity_vllm.pipeline.research_outputs import PRIVATE
 
 
 def rec(i: int, send: float, ttft: float, gap: float, n: int, status: int = 200) -> dict:
@@ -173,7 +174,7 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
     # the run states what it keeps on the node: each private directory and the names none of its own files has
     assert json.loads((tmp_path / "run" / S.PRIVATE_PATHS).read_text()) == {
-        "schema": "private-paths/v1", "private": [str(kept)], "names": list(S.PRIVATE_NAMES)}
+        "schema": "private-paths/v1", "private": [str(kept)], "names": list(PRIVATE)}
     # none given, under vLLM's client (a cost's run, whose kept files nothing reads afterwards): a fresh directory for an
     # arm that keeps something and records nothing, gone when the arm stops; none for the others; an arm that records
     # (its step trace, served ids, edges' outputs) is refused, since later stages read what it records

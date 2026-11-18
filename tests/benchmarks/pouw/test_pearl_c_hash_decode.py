@@ -165,14 +165,14 @@ def test_a_pd_launchs_dynamic_shared_memory_size_is_read_only_as_a_floor():
 
 def salts_into(host, bufs: dict[str, int], sizes: dict[str, int]) -> dict[str, bytes]:
     """Each tree's hm96 salts for a test (any bytes: the kernels only read them), written into its ``salts_<tree>`` buffer,
-    which is allocated where `bufs` has none: by tree, `R.HM_SALT` bytes a leaf in leaf order."""
+    which is allocated where `bufs` has none and is stated there as (address, bytes): by tree, `R.HM_SALT` bytes a leaf in leaf order."""
     out = {}
     for name, size in sizes.items():
         if name.startswith("salts_"):
             out[name[6:]] = hashlib.shake_256(f"pearl-c-test-salts/{name}/{size}".encode()).digest(size)
-            if name not in bufs:
-                bufs[name] = host.alloc(size)
-            host.array(bufs[name])[:size] = np.frombuffer(out[name[6:]], np.uint8)
+            at = bufs.get(name) or host.alloc(size)
+            bufs[name] = (at, size)
+            host.array(at)[:size] = np.frombuffer(out[name[6:]], np.uint8)
     return out
 
 

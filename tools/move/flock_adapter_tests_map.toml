@@ -1,0 +1,61 @@
+# The Flock tests that import the vLLM adapter out of Flock's suite into a suite of their own: what
+# `tools/move/layout.py --map tools/move/flock_adapter_tests_map.toml` moves and rewrites. Nothing is split, edited or
+# deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", slowdown = "benchmarks/slowdown/slowdown" }
+
+[paths]
+"tests/verity/protocols/proofs/flock/prover/test_boolean_export.py" = "tests/adapters/vllm/flock/test_boolean_export.py"
+"tests/verity/protocols/proofs/flock/prover/test_circuit.py" = "tests/adapters/vllm/flock/test_circuit.py"
+"tests/verity/protocols/proofs/flock/prover/test_class_statement.py" = "tests/adapters/vllm/flock/test_class_statement.py"
+"tests/verity/protocols/proofs/flock/prover/test_derive.py" = "tests/adapters/vllm/flock/test_derive.py"
+"tests/verity/protocols/proofs/flock/prover/test_flock_rows.py" = "tests/adapters/vllm/flock/test_flock_rows.py"
+"tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py" = "tests/adapters/vllm/flock/test_ir_lowering.py"
+"tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py" = "tests/adapters/vllm/flock/test_ir_sampling.py"
+"tests/verity/protocols/proofs/flock/prover/test_lean_typed_statement.py" = "tests/adapters/vllm/flock/test_lean_typed_statement.py"
+"tests/verity/protocols/proofs/flock/prover/test_partition_units.py" = "tests/adapters/vllm/flock/test_partition_units.py"
+"tests/verity/protocols/proofs/flock/prover/test_stage_typed.py" = "tests/adapters/vllm/flock/test_stage_typed.py"
+"tests/verity/protocols/proofs/flock/prover/test_topp_word.py" = "tests/adapters/vllm/flock/test_topp_word.py"
+"tests/verity/protocols/proofs/flock/prover/test_typed_statement.py" = "tests/adapters/vllm/flock/test_typed_statement.py"
+"tests/verity/protocols/proofs/flock/prover/test_fmaxf_commit.py" = "tests/adapters/vllm/flock/test_fmaxf_commit.py"
+"tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py" = "tests/adapters/vllm/flock/test_ir_lowering_bench.py"
+"tests/verity/protocols/proofs/flock/prover/test_rolled_lowering.py" = "tests/adapters/vllm/flock/test_rolled_lowering.py"
+"tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py" = "tests/adapters/vllm/flock/test_tmpl_statement.py"
+"tests/verity/protocols/proofs/flock/prover/test_unit_range.py" = "tests/adapters/vllm/flock/test_unit_range.py"
+
+[retired]
+paths = ["tests/verity/protocols/proofs/flock/prover/test_boolean_export.py", "tests/verity/protocols/proofs/flock/prover/test_circuit.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py", "tests/verity/protocols/proofs/flock/prover/test_derive.py", "tests/verity/protocols/proofs/flock/prover/test_flock_rows.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py", "tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py", "tests/verity/protocols/proofs/flock/prover/test_lean_typed_statement.py", "tests/verity/protocols/proofs/flock/prover/test_partition_units.py", "tests/verity/protocols/proofs/flock/prover/test_stage_typed.py", "tests/verity/protocols/proofs/flock/prover/test_topp_word.py", "tests/verity/protocols/proofs/flock/prover/test_typed_statement.py", "tests/verity/protocols/proofs/flock/prover/test_fmaxf_commit.py", "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py", "tests/verity/protocols/proofs/flock/prover/test_rolled_lowering.py", "tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py", "tests/verity/protocols/proofs/flock/prover/test_unit_range.py"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was, files whose bytes a digest pins, `move_check.py` and its test, `tests/tree.toml`,
+# and circuit-check's checks, which @circuits owns.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**", "archive/**",
+           "tools/check/tests/test_move_check.py", "tools/check/move_check.py",
+           "tools/research/src/research/store/moves.json", "tests/tree.toml",
+           "tools/verity/circuit_check/src/circuit_check/checks.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+"tests.verity.protocols.proofs.flock.prover.test_boolean_export" = "tests.adapters.vllm.flock.test_boolean_export"
+"tests.verity.protocols.proofs.flock.prover.test_circuit" = "tests.adapters.vllm.flock.test_circuit"
+"tests.verity.protocols.proofs.flock.prover.test_class_statement" = "tests.adapters.vllm.flock.test_class_statement"
+"tests.verity.protocols.proofs.flock.prover.test_derive" = "tests.adapters.vllm.flock.test_derive"
+"tests.verity.protocols.proofs.flock.prover.test_flock_rows" = "tests.adapters.vllm.flock.test_flock_rows"
+"tests.verity.protocols.proofs.flock.prover.test_fmaxf_commit" = "tests.adapters.vllm.flock.test_fmaxf_commit"
+"tests.verity.protocols.proofs.flock.prover.test_ir_lowering" = "tests.adapters.vllm.flock.test_ir_lowering"
+"tests.verity.protocols.proofs.flock.prover.test_ir_lowering_bench" = "tests.adapters.vllm.flock.test_ir_lowering_bench"
+"tests.verity.protocols.proofs.flock.prover.test_ir_sampling" = "tests.adapters.vllm.flock.test_ir_sampling"
+"tests.verity.protocols.proofs.flock.prover.test_lean_typed_statement" = "tests.adapters.vllm.flock.test_lean_typed_statement"
+"tests.verity.protocols.proofs.flock.prover.test_partition_units" = "tests.adapters.vllm.flock.test_partition_units"
+"tests.verity.protocols.proofs.flock.prover.test_rolled_lowering" = "tests.adapters.vllm.flock.test_rolled_lowering"
+"tests.verity.protocols.proofs.flock.prover.test_stage_typed" = "tests.adapters.vllm.flock.test_stage_typed"
+"tests.verity.protocols.proofs.flock.prover.test_tmpl_statement" = "tests.adapters.vllm.flock.test_tmpl_statement"
+"tests.verity.protocols.proofs.flock.prover.test_topp_word" = "tests.adapters.vllm.flock.test_topp_word"
+"tests.verity.protocols.proofs.flock.prover.test_typed_statement" = "tests.adapters.vllm.flock.test_typed_statement"
+"tests.verity.protocols.proofs.flock.prover.test_unit_range" = "tests.adapters.vllm.flock.test_unit_range"

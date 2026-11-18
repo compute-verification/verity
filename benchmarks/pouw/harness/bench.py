@@ -1381,7 +1381,7 @@ def main(argv: list[str] | None = None) -> int:
         sass = SG.SassChecker(log, tools=SG.find_tools(Path(kit.toolkit(HARNESS_TOOLKIT)) / "bin"))
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
-            build = a.build({"device": dev, "arch": card["arch"], "out_dir": str(args.out.parent),
+            build = a.build({"device": dev, "arch": card["arch"], "card": card["short"], "out_dir": str(args.out.parent),
                              "passes_dir": str(args.passes), "transcripts_dir": str(args.passes / "transcripts")})
             verifier = A.check_verifier(a.name, build)
             if verifier is None:

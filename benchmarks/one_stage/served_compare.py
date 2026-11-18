@@ -25,6 +25,8 @@ The seal's B-OF-RECORD (`served_verdicts.sh`) holds each sealed record to PRED's
 verdict can't read fails that verdict, naming the file. Each verdict prints a line; the last, ``SERVED-COMPARE: EQUAL``
 or ``NOT EQUAL``, is the line the record names (`served_verdicts.py record --served-compare`), kept with the verdicts in
 DIR/served_compare.json. Exit 0 iff EQUAL.
+Its lowerings don't refuse a class no proof block takes (`check_provable`): it compares facts and proves nothing, and
+``prove_path.py``'s class-circuit and window-commit refuse that class before any proof.
 """
 from __future__ import annotations
 

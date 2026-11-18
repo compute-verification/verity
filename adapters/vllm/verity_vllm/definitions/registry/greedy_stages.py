@@ -8,6 +8,27 @@ every unit's outputs and the token, and `GreedySelect_v1` is the tree as one Def
                               and high 16 bits, from the last of the K = V / N chunks (its lanes) and the other chunks' results
     GreedySelect_v1{V,N}      (logits: bf16[V]) -> Array<2, Value<16>>: the same two words; its body is the plan's units
 
+A class's selects (one Program for every request of a size class, its decode steps past the stop switched off by a bit each
+step hands the next): the combine's token, and the step's bit and count, at O the class's served ids, k = log2(O) + 1 the
+count's bits (least significant first, the bit form of a ``Value<k>``), and ``request`` the request row's first four u32
+fields (``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``):
+
+    GreedyCombineFirst_v1{V,N,O,STOP,MAX_MODEL_LEN}
+        (logits: bf16[N], r0, .., r{K-2}, request: Array<4, i32>)
+        -> (o0: Array<2, Value<16>>, o1: bit, o2: Array<k, bit>, o3: Array<2, Value<16>>)
+    GreedyCombineLive_v1{V,N,O,STOP,MAX_MODEL_LEN}
+        (logits: bf16[N], r0, .., r{K-2}, request: Array<4, i32>, count: Array<16, bit>, live: Array<16, bit>)
+        -> the same four
+
+An output field of fewer than 16 bits is one u16 word of its row, zero-padded, and a parameter is whole u16 words
+(`interface.layout`), so ``count`` and ``live`` are one word each (`WORD_BITS`), wired from the step before's ``o2`` and
+``o1``: the select reads the count's low k bits and the bit's bit 0, and no other bit of either word.
+
+``o0`` the served id, the token ANDed with ``live``; ``o1`` the next step's bit, ``live`` AND the token ends no rule AND
+count + 1 is below O; ``o2`` the next step's count, count + 1 where the step is live and below O, else ``count``; ``o3`` the
+next step's key, the token ANDed with ``o1``.  The first select is the second at ``live`` = 1 and ``count`` = 0, constants
+of its body, so it has neither parameter (`class_step`; `class_reference` is its function).
+
 **Every chunk is whole.**  N divides V, so each unit reads N lanes that start at a multiple of N, in one row and in several
 rows end to end (a replay block of several tokens: `spot.verifier.second_stage` links a unit's argument to the block's logits
 only at such a start), and a chunk's three words and the token's two are each one return field, which it wires or links as one
@@ -47,6 +68,7 @@ new value's XOR one AND each and a chunk lowers to a circuit linear in N.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
 
@@ -55,12 +77,13 @@ from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.ops.argmax import U16, SelectU16, U16Add
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitNot
-from verity.circuits.refs import array_of
-from verity.circuits.types import Array
+from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.types import Array, Tuple
 
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
-from verity_vllm.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry.prims import BF16, BIT, I32
+from verity_vllm.definitions.registry.topp_word_gates import BitXor
 
 #: the chunks a served row is cut into, a number: any divisor of V is a plan of the same Definitions (`plan`'s K).  More chunks
 #: are smaller chunk blocks, a Definition more each, and a larger combine, which reads a row a chunk, an hm96 slot of its block
@@ -188,6 +211,153 @@ def GreedyCombine(B, S, logits, *results):
 STAGE_DEFINITIONS = [GreedyChunk, GreedyCombine]
 
 
+# --- a class's selects ---------------------------------------------------------------------------------------------------------
+
+#: `b.request`'s first four fields, the limits a class's selects and its length check read, in this order
+LIMIT_FIELDS = ("lp", "max_tokens", "min_tokens", "ignore_eos")
+#: the type of a step's ``count`` and ``live`` parameters: one u16 word of a row, since a unit's parameter is whole u16
+#: words (`interface.layout`); a reader reads the count's low `count_bits` bits and the bit's bit 0, and no other
+WORD_BITS = Array(16, BIT)
+
+
+def count_bits(O: int) -> int:
+    """The bits of a class's count, which holds 0 to O: log2(O) + 1."""
+    return O.bit_length()
+
+
+def refuse_class(S: dict) -> str | None:
+    """A class's statics with no select: O no power of two in [2, 2^30] (the count's bits and its i32 compares), and STOP
+    and MAX_MODEL_LEN as `stop_check.refuse` refuses them.  Only the statics bound so far."""
+    from verity_vllm.definitions.registry import stop_check as SC
+
+    o = S.get("O", 2)
+    if not (type(o) is int and 2 <= o <= 1 << 30 and o & (o - 1) == 0):
+        return f"O is a class's served ids, a power of two in [2, 2^30] (got O={o!r})"
+    return SC.refuse({k: S[k] for k in ("STOP", "MAX_MODEL_LEN") if k in S})
+
+
+def _class_ret(S):
+    two = Array(2, U16)
+    return Tuple(two, BIT, Array(count_bits(S.O), BIT), two)
+
+
+def _first_sig(S):
+    sig, _token = _combine_sig(S)
+    return (*sig, ("request", Array(4, I32))), _class_ret(S)
+
+
+def _live_sig(S):
+    sig, _token = _combine_sig(S)
+    return (*sig, ("request", Array(4, I32)), ("count", WORD_BITS), ("live", WORD_BITS)), _class_ret(S)
+
+
+def count_word(o, count, k: int):
+    """The count's k bits, least significant first, as an i32 word: the sum of 2^j where bit j is 1."""
+    acc = o.isel(count[0], o.word(1), o.word(0))
+    for j in range(1, k):
+        acc = o.iadd(acc, o.isel(count[j], o.word(1 << j), o.word(0)))
+    return acc
+
+
+def is_stop(B, o, token, STOP: tuple[int, ...], ignore_eos):
+    """Whether the token, its (low, high) words, is one of STOP and ``ignore_eos`` is 0, a bit; None with no STOP.  Each word
+    compares as its widening (`Bf16ToF32_v1`, a word shifted up 16 bits, exactly), as `greedy_stop` compares them."""
+    if not STOP:
+        return None
+    lo, hi = B.call(P.Bf16ToF32, token[0]), B.call(P.Bf16ToF32, token[1])
+    los = {w: o.ieq(lo, o.word(w << 16)) for w in sorted({s & 0xFFFF for s in STOP})}
+    his = {w: o.ieq(hi, o.word(w << 16)) for w in sorted({s >> 16 for s in STOP})}
+    hit = None
+    for s in STOP:
+        h = o.band(los[s & 0xFFFF], his[s >> 16])
+        hit = h if hit is None else o.bor(hit, h)
+    return o.band(o.ieq(ignore_eos, o.word(0)), hit)
+
+
+def _masked(B, bit, token, zero):
+    """The token's two words ANDed with ``bit``: each ``bit ? word : 0``."""
+    return array_of([B.call(SelectU16, bit, token[0], zero), B.call(SelectU16, bit, token[1], zero)])
+
+
+def class_step(B, S, logits, results, request, count=None, live=None):
+    """A class's select at a step (the module docstring): its four outputs from the combine's token over ``logits`` and
+    ``results``, the limits ``request``, and the step's ``count`` and ``live``, or, both None, the first step's, count 0 and
+    live 1, constants that fold.  The rule is `stop_rule.StopRule_v1`'s at the length L = count + 1 the token makes: it ends
+    there where ``max_tokens`` is at least 1 and the token is a stop id (none under ``ignore_eos``) or L reaches the length
+    limit (`stop_rule.length_limit`)."""
+    from verity_vllm.definitions.registry import stop_rule as X
+
+    o, k, first = X.word_ops(B), count_bits(S.O), live is None
+    token = B.call(bind(GreedyCombine, V=S.V, N=S.N), logits, *results)
+    lp, max_tokens, ignore_eos = request[0], request[1], request[3]
+    c = None if first else count_word(o, count, k)
+    L = o.word(1) if first else o.iadd(c, o.word(1))
+    reached = o.ile(X.length_limit(o, max_tokens, lp, o.word(S.MAX_MODEL_LEN)), L)
+    hit = is_stop(B, o, token, S.STOP, ignore_eos)
+    ends = o.band(o.ile(o.word(1), max_tokens), reached if hit is None else o.bor(hit, reached))
+    zero = B.call(const(16, 0))
+    if first:
+        nxt = o.bnot(ends)
+        served = token
+        bits = [B.call(const(1, int(j == 0))) for j in range(k)]
+    else:
+        live = live[0]
+        step = o.band(live, o.ile(c, o.word(S.O - 1)))
+        nxt = o.band(o.band(step, o.bnot(ends)), o.ile(L, o.word(S.O - 1)))
+        served = _masked(B, live, token, zero)
+        bits, carry = [], step
+        for j in range(k):
+            bits.append(B.call(BitXor, count[j], carry))
+            if j < k - 1:
+                carry = o.band(count[j], carry)
+    key = _masked(B, nxt, token, zero)
+    ret = _class_ret(S)
+    return Coll(ret, concat([served.refs, nxt.refs, array_of(bits).refs, key.refs]))
+
+
+_CLASS_CONF = "model-untested: StopRule_v1's rule step by step, and GreedyCombine_v2's token"
+
+
+@composite("GreedyCombineFirst", 1, ["V", "N", "O", "STOP", "MAX_MODEL_LEN"], _first_sig, refuse=refuse_class,
+           conformance=_CLASS_CONF)
+def GreedyCombineFirst(B, S, logits, *rest):
+    """A class's first select: `GreedyCombineLive_v1` at its step's bit 1 and count 0, constants of this body, so neither is a
+    parameter.  ``o0`` the token, the first served id; ``o1`` the next step's bit, the token ends no rule at one id; ``o2``
+    the count 1, a constant; ``o3`` the token ANDed with ``o1``, the next step's key (the module docstring)."""
+    *results, request = rest
+    return class_step(B, S, logits, results, request)
+
+
+@composite("GreedyCombineLive", 1, ["V", "N", "O", "STOP", "MAX_MODEL_LEN"], _live_sig, refuse=refuse_class,
+           conformance=_CLASS_CONF)
+def GreedyCombineLive(B, S, logits, *rest):
+    """A class's decode-step select: `GreedyCombine_v2`'s token over its logits and results, taking its step's bit ``live``
+    and ``count``, the ids written before it, and writing two ids and the next step's bit and count.  Its ANDs are this
+    Definition's own: ``o0``, the served id, is the token ANDed with ``live`` (0 past the stop); ``o3``, the next step's
+    key, is the token ANDed with ``o1``, the next bit (0 from the stopping step on, so the step after the stop reads token
+    0).  ``o1`` is ``live`` AND count is below O AND the token ends no rule at count + 1 ids AND count + 1 is below O: once
+    off, off.  ``o2`` is count + 1 where ``live`` is 1 and count is below O, else ``count``: a step off writes the count it
+    read, and the count never passes O (the module docstring)."""
+    *results, request, count, live = rest
+    return class_step(B, S, logits, results, request, count, live)
+
+
+def class_reference(token: int, request: Sequence[int], O: int, STOP: Sequence[int], MAX_MODEL_LEN: int,
+                    count: int = 0, live: int = 1) -> tuple[int, int, int, int]:
+    """A class's select's function on its token (the combine's, `twin`'s) and i32 limits: (o0, o1, o2, o3), the ids as
+    integers (their two words' value) and ``o2`` the count.  The first select's is this at count 0 and live 1."""
+    from verity_vllm.definitions.registry import stop_rule as X
+
+    lp, max_tokens, _min_tokens, ignore_eos = (int(x) & X.M32 for x in request)
+    mt, room = X._signed(max_tokens), X._signed(int(MAX_MODEL_LEN) - lp)
+    most = max(1, min(mt, room))
+    L = count + 1
+    ends = mt >= 1 and ((ignore_eos == 0 and token in set(STOP)) or L >= most)
+    step = bool(live) and count < O
+    nxt = int(step and not ends and L < O)
+    return (token if live else 0), nxt, (L if step else count), (token if nxt else 0)
+
+
 # --- the plan ------------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -300,5 +470,6 @@ def twin(V: int, logits, K: int | None = None) -> tuple[int, dict[tuple, list[np
     return token, words
 
 
-__all__ = ["UNITS", "GreedyChunk", "GreedyCombine", "GreedySelect", "STAGE_DEFINITIONS", "Unit", "carries", "carry", "cut",
-           "plan", "select", "twin", "units", "width"]
+__all__ = ["LIMIT_FIELDS", "UNITS", "GreedyChunk", "GreedyCombine", "GreedyCombineFirst", "GreedyCombineLive", "GreedySelect",
+           "STAGE_DEFINITIONS", "Unit", "carries", "carry", "class_reference", "class_step", "count_bits", "count_word", "cut",
+           "is_stop", "plan", "refuse_class", "select", "twin", "units", "width"]

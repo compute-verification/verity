@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import tokenize
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -342,6 +344,31 @@ def test_the_online_panel_names_each_running_vm_with_its_class_lane_rate_and_bus
     assert by["gone"]["busy"] is None and "new" not in by and "No rate registered, so left out: new." in p["note"]
     assert F.hardware({"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}) == "8× RTX PRO 6000"
     assert F.machine_class("gpu-rtx6000") == F.machine_class("gpu-rtx6000-a") == "RTX PRO 6000"
+
+
+def test_every_registered_platform_names_its_card_and_fleet_holds_no_platform_table():
+    """The machine class comes from the cards' registry (tools/config's gpus.toml): every Nebius platform of every card names
+    that card, a platform it doesn't name is named from its own, and fleet.py's source holds no platform name of its own."""
+    registry = Path(__file__).resolve().parents[3] / "tools" / "config" / "verity_config" / "registry" / "gpus.toml"
+    assert F.GPU_REGISTRY == registry
+    cards = tomllib.loads(registry.read_text())["gpu"]
+    pairs = [(p, card["display_name"]) for card in cards for p in card["nebius_platforms"]]
+    assert {p for p, _ in pairs} >= {"gpu-h200-sxm", "gpu-rtx6000", "gpu-rtx6000-a"}
+    assert [(p, F.machine_class(p)) for p, _ in pairs] == pairs
+    assert F.machine_class("gpu-l40s-a") == "L40S" and F.machine_class("cpu-d3") == "CPU"
+    with open(F.__file__, "rb") as f:
+        literals = [t.string for t in tokenize.tokenize(f.readline) if t.type == tokenize.STRING]
+    assert [s for s in literals if re.search(r"\bgpu-[a-z0-9]", s)] == []
+
+
+def test_without_the_registry_each_gpu_is_named_from_its_platform(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(F, "GPU_REGISTRY", tmp_path / "gpus.toml")
+    F.gpu_classes.cache_clear()
+    try:
+        assert F.machine_class("gpu-h200-sxm") == "H200" and F.machine_class("gpu-rtx6000-a") == "RTX6000"
+        assert "gpus.toml unread, so each GPU is named from its platform" in capsys.readouterr().err
+    finally:
+        F.gpu_classes.cache_clear()
 
 
 def test_hourly_and_daily_panels_price_each_sample_and_weight_busy_by_cost(tmp_path, monkeypatch):

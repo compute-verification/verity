@@ -152,7 +152,8 @@ def test_a_tree_of_wide_rows_is_the_verifiers(host):
     keys = {"dom_b": host.put(dom.domain_id), "hm": host.put(audit.hm96_kernel_constants())}
     HH.fast_heads(host)
     p = SimpleNamespace(dev=host, k=n, sha="fast", keys=keys,
-                        b={"tree_b": poisoned(host, 64 * (2 * width - 1)), "rs_heads_w": states(host, n), "salts_b": host.put(salts)})
+                        b={"tree_b": poisoned(host, 64 * (2 * width - 1)), "rs_heads_w": states(host, n), "salts_b": host.put(salts)},
+                        salt_bytes={"b": len(salts)})
     dig, seg = poisoned(host, 64 * count), poisoned(host, 64 * segs * chunk)
     for _, f in R.Pipeline.tree_setup(p, "b", count, "dom_b"):
         f()

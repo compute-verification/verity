@@ -2,7 +2,6 @@ module
 
 public import Definitions.Core.Assumptions
 public import Definitions.Certifier.Assumptions.RegisteredInputs
-public import Definitions.Certifier.Carried
 public import Definitions.Certifier.Guarantees.SampledCharge
 public import Definitions.Certifier.MonitoringPeriodChecked
 public import Definitions.Certifier.MonitoringPeriodConditions

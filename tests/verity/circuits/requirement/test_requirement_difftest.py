@@ -33,14 +33,14 @@ import numpy as np
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
+from verity_vllm.definitions.registry import b1
 
+from verity.circuits import requirement as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ops import fp32
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
-from verity.circuits import requirement as R
-from verity.circuits.ops import fp32
-from verity_vllm.definitions.registry import b1
 
 LEAN = (Path(__file__).resolve().parents[4] / "verity" / "circuits" / "requirement")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

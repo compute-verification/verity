@@ -19,12 +19,11 @@ evidence measured on sm_89 — this pod is sm_80 (A100), so every table-backed p
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 from verity.circuits.defs import PrimitiveDefinition, primitive
 
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
+from verity.circuits.ops.fp32 import f32_silu_bits as _silu_f32_bits
 from verity.circuits.ops.fp32 import (
     BF16_NAN_F2FP,
     BF16_NAN_TORCH,
@@ -110,22 +109,6 @@ from verity.circuits.types import Array, Value
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
 
 np.seterr(all="ignore")
-
-
-def _silu_f32_bits(g_f32_bits: int) -> int:
-    """The registered stand-in for the CUDA `silu` (expf + division): RN32 of the exact real value
-    g / (1 + e^-g). Total: NaN -> NaN, +inf -> +inf, -inf -> -0 (exact limit)."""
-    c, v = _decode(g_f32_bits)
-    if c == 2:
-        return F32_NAN
-    if c == 1:
-        return 0x7F800000
-    if c == -1:
-        return 0x80000000
-    g = float(v)
-    if g < -80.0:
-        return bits_of(np.float32(g * math.exp(g)))  # underflows to -0 well before this
-    return bits_of(np.float32(g / (1.0 + math.exp(-g))))
 
 
 @primitive("SiluMulBf16", 1, [("g", BF16), ("u", BF16)], BF16, conformance="exact-model-tested",

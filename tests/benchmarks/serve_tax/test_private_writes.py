@@ -4,10 +4,12 @@ listed here by its file, function and path as public (in the run's record: count
 apart (a scratch, site or edge directory, never the run's record). A new writer, whatever its file's name, fails until
 it is listed."""
 import ast
+import fnmatch
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
+from verity_vllm.pipeline.research_outputs import PRIVATE
 
 ROOT = Path(__file__).resolve().parents[3]
 DIRS = ("benchmarks/serve_tax", "benchmarks/prod_repro", "benchmarks/replay_ladder")
@@ -215,6 +217,14 @@ def test_every_write_is_under_the_private_directory_or_listed(rel: str) -> None:
                           "public or apart:\n  " + "\n  ".join(unlisted))
     stale = sorted(set(listed) - {(fn, t) for _, fn, t in found})
     assert not stale, f"WRITES lists writes {rel} no longer makes: remove {stale}"
+
+
+def test_no_public_write_has_a_private_name() -> None:
+    named = [f"{rel} in {fn}: {t}" for rel, w in WRITES.items() for (fn, t), kind in w.items() if kind == "public"
+             for c in ast.walk(ast.parse(t, mode="eval")) if isinstance(c, ast.Constant) and isinstance(c.value, str)
+             and any(fnmatch.fnmatchcase(PurePosixPath(c.value).name, p) for p in PRIVATE)]
+    assert not named, ("these public writes have a name the adapter's private list (private_names.json) calls "
+                       "private: write them under the private directory:\n  " + "\n  ".join(named))
 
 
 def test_the_registry_names_only_files_it_scans_and_kinds_it_knows() -> None:

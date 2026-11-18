@@ -108,11 +108,11 @@ def _tanh_rn_table():
 
 
 def _gelu_table():
-    """``GeluTanhMulBf16_v1``'s activation word ``dense.gelu_tanh_bf16_bits(g)`` for every bf16 word g."""
+    """``GeluTanhMulBf16_v1``'s activation word ``fp32.bf16_gelu_tanh_bits(g)`` for every bf16 word g."""
     import numpy as np
-    from verity_vllm.definitions.registry import dense
+    from verity.circuits.ops import fp32
 
-    return np.array([dense.gelu_tanh_bf16_bits(g) for g in range(1 << 16)], np.uint32)
+    return np.array([fp32.bf16_gelu_tanh_bits(g) for g in range(1 << 16)], np.uint32)
 
 
 _DERIVED = {"tanh_mufu": _mufu_tanh_table, "tanh_rn": _tanh_rn_table, "gelu_tanh_bf16": _gelu_table}

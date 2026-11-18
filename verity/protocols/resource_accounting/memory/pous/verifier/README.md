@@ -30,12 +30,16 @@ commitment = setup.commit(params, w)                                   # the ser
 salt = setup.sample_salt(b"verifier-secret", commitment)                 # the verifier
 C = [params.codec.encode_segment(params, prims, salt, s, g)             # the server encodes C*
      for s, g in enumerate(codec.split(params, w))]
-vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # the verifier decodes C*, checks the commitment
+vk = setup.verifier_setup(params, prims, commitment, salt, encoded=C)   # setup's check: decode C*, match the commitment
 blocks = [b for seg in C for b in seg]
 assert decode_tensor(layout, prims, salt, "w1", blocks.__getitem__) == bytes(200)
 v = audit.UnsignedRounds(vk, audit.challenge_key(b"audit-secret", vk))  # k = 111 timed rounds
 print(audit.run_timed(v, blocks.__getitem__).accepted)                  # True
 ~~~
+
+In a served run, setup's check is run by no auditor-side entry: the tie (`period.answer`'s Python and
+`pous-run-protocol`'s `SetupProtocol.check`) runs only in the prover's piece on the developer's node
+(`benchmarks/pous/served_piece.py`), so every verdict rests on setup checked by the developer, not the auditor.
 
 ## The codecs
 
@@ -46,5 +50,6 @@ print(audit.run_timed(v, blocks.__getitem__).accepted)                  # True
 | P2, `p2-16448/v4` | Experimental and never the default, but what a period runs. |
 | P3 | The fast research codec. |
 
-[`DESIGN.md`](DESIGN.md) states what each codec and the wipe rest on, word for word, and holds the entry points, the
-lifecycle through the generic protocol, the memory attester's records and P2's construction.
+What each codec rests on is its certificate in its module (`band.py`, `dense.py`, `schemes/p2.py`, `scheme.py`). The
+lifecycle is `protocol.py`'s, the memory attester's records are `../attester/memory_attester.py`'s, and the wipe's are
+`streamed_wipe.py`'s.

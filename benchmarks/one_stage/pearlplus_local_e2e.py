@@ -45,12 +45,14 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from verity.protocols.compose import schemes
+
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 LANE, PEER, HOST = "vllm", "local", "local-challenger"
 #: the scratch challenger key's LMS (W, H): 2^6 signatures, over the ledger's and both sessions' few dozen
 PARAMS = (4, 6)
-SCHEME = "pearl-c-h100-v1-h3"
+SCHEME = schemes.get("pearl-plus").option.partition(":")[2]
 PERIOD = "pearlplus-e2e"
 #: the toy row's one refusal, after every other condition of record held: a test instance's passes credit nothing
 TOY_ROW = "the Lean verdict credits 0 MACs over {tiles} tiles: nothing"
@@ -319,10 +321,14 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
+            from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
             pkg = TREE / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
-            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
-            log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
-            exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
+            try:
+                exe = str(V.executable("pouw-pearlplus", pkg))
+                log.append({"step": "lean build", "rc": 0})
+            except V.LeanError as e:
+                exe = "none"
+                log.append({"step": "lean build", "rc": 1, "stderr": str(e)[-3000:]})
         _cli(log, "lean", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "lean", "--passes", str(served), "--verify",
                            str(piece / "verify.json"), "--exe", exe, "--out", str(piece / S.PEARLPLUS_LEAN)])
         del report["stand_ins"]["lean"]

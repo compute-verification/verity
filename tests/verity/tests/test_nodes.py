@@ -24,9 +24,10 @@ import pytest
 
 from verity.errors import InvalidArtifact
 from verity import device as S
-from verity.device import (MARKS, NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
-                           HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host, check,
-                           clock_drift, node_figures, refusal)
+from verity.device import (MARKS, OUTSIDE, SCHEMES, TIERS, Auditor, ClockPremise, HostFigures, Link, Loc, Malformed,
+                           Sheet, auditor_host, clock_drift, node_figures)
+from verity.protocols.registration.verifier.site_log import (NO_LINE_RATE, STORAGE_PATH, Entry, Refused, Registration,
+                                                             check, of_log, refusal)
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
@@ -256,7 +257,7 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_att
     certified = replace(entry, links=tuple(k for k in entry.links if OUTSIDE not in k.ends or ATTESTER[0] in k.ends))
     for e, mediated in ((stored, False), (certified, True)):
         assert refusal(Registration("onsite"), e, auditor(kind, **keys)) is None
-        assert Site.of_log([e]).mediated is mediated
+        assert of_log([e]).mediated is mediated
         with pytest.raises(Refused) as refused:
             check(Registration("onsite", (e,)), auditor(kind, **keys))
         assert (refused.value.name, refused.value.entry) == ("inventory", 1) and ports[0] in refused.value.detail
@@ -773,7 +774,7 @@ def test_a_attester_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) 
     cert, vm = ATTESTER[0], VM[0]
     premise = clock_drift(vm, S.load_card(TIMEBASE, directory=CARD_FILES))
     log, held = _clocked(kind, S.load_card(TIMEBASE, directory=CARD_FILES))
-    site = Site.of_log(log)
+    site = of_log(log)
     assert (site.loc(vm).timebase, site.loc(vm).drift, held.drift) == (TIMEBASE, None, ())
     assert (site.loc(cert).parent, site.clock(cert), site.drift(cert), site.loc(cert).drift) == (vm, vm, None, None)
     assert check(log, held) == site
@@ -784,7 +785,7 @@ def test_a_attester_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) 
             check(log, other)
         assert (e.value.name, e.value.entry) == ("owner", 0)
     log, held = _clocked(kind, _marked("ceiling"))
-    site = Site.of_log(log)
+    site = of_log(log)
     assert (site.loc(vm).drift, site.drift(cert), site.loc(cert).drift) == (Fraction(1, 2000), Fraction(1, 2000), None)
     assert held.drift == ((vm, Fraction(1, 2000)),)
     assert check(log, held) == site
@@ -799,7 +800,7 @@ def test_a_attester_at_the_site_reads_no_clock() -> None:
     already holds is not registered twice."""
     kind = WIRED[0]
     node, cert = S.load_node(kind, directory=NODE_FILES, cards_directory=CARD_FILES), ATTESTER[0]
-    site = Site.of_log(log_of(kind, "remote", ATTESTER))
+    site = of_log(log_of(kind, "remote", ATTESTER))
     assert (site.loc(cert).parent, site.clock(cert), site.drift(cert)) == ("site", None, None)
 
     def entry(log: Registration, host: str = HOST, **given: object):
@@ -817,4 +818,4 @@ def test_a_attester_at_the_site_reads_no_clock() -> None:
     log = log.append(entry(log, attester=ATTESTER, attester_host=vm))
     second = entry(log, "host1", attester=("attester1", "dummy-attester1-key", SCHEME), attester_host=vm)
     assert [x.id for x in second.locs if x.kind == "auditor-host"] == []
-    assert Site.of_log(log.append(second)).clock("attester1") == VM[0]
+    assert of_log(log.append(second)).clock("attester1") == VM[0]

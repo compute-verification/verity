@@ -16,6 +16,7 @@ package = false
 inputs = [
     "adapters/vllm/verity_vllm/__init__.py",
     "adapters/vllm/verity_vllm/definitions",
+    "calibration/hardware/cards",
 ]
 
 [tool.pytest.ini_options]

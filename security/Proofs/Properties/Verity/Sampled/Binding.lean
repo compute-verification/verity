@@ -506,7 +506,7 @@ theorem accepted_lines {s : Sent} {p : Spot.OneStageZk.Params} {c : Spot.OneStag
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
 challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
-coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
+coin commitment's (`releasedLogOf`), with that run's released coins as the sample's, on the records the evidence
 names, which give each round the run's log opens the coins its line shows (`coinTreesOf`, `Lines.TreeLines`), in
 either form of v2's check (`accepted_lines`); or one of the run's v2 records under the parameters' key carries a
 break. -/
@@ -516,7 +516,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
     (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
       ∃ (d : Draws) (e : Spot.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
         OpensOn dev d.key.pub d.window r.id ∧
-        (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
+        (∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
         ∃ ts, coinTreesOf r.log = .ok ts ∧ Lines.TreeLines recs r.log := by

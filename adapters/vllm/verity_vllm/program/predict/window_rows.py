@@ -715,8 +715,8 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], *
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {16 * SS.words(cls.scan)} "
                          f"bits, not {bits.shape}")
     words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return registered_commit(program, SS.SCAN_STATE, words, bytes(32), 0, keep_rows=True,
-                             row_salts=os.urandom(cls.buckets * CS.SALT_BYTES), window=window)
+    return registered_commit(program, SS.SCAN_STATE, words, os.urandom(cls.buckets * CS.SALT_BYTES), keep_rows=True,
+                             window=window)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "Served", "Slot", "positions", "scan_slots",

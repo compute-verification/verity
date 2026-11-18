@@ -231,7 +231,7 @@ def _rows(windows: list[Window]) -> list[list[tuple[int, int, int]]]:
     return [[(i, start, n) for _, i, _, start, n in o.rows] for w in windows for _c, _s, _t, o, _i in w.steps if o.rows]
 
 
-@pytest.mark.parametrize("name", ["chosen-quiet", "several-unqueued"])
+@pytest.mark.parametrize("name", ["chosen"])
 @TT.BOTH
 def test_a_two_window_chain_carries_the_replays_clock(name: str, asy: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     """The replay of the plan under the rule, its executed steps cut into two windows at a step that starts mid-bucket:
@@ -290,7 +290,7 @@ def test_a_window_that_ends_mid_bucket_and_the_next_that_starts_there(asy: bool)
     """Request 0's last step takes T past bucket 1's close to 220,000 and leaves the engine drained; the first window
     ends there, 20,000 into bucket 2, with request 0's arrival alone. The second starts at that row and loads requests 1
     and 2: request 1, released in bucket 1, is given at once, and the two windows give the replay's rows and T."""
-    rule = TC.RULES["today-quiet"]
+    rule = TC.RULES["today"]
     released = [0, 1, 2]
     e, ios, st_, St, steps, rp = _small(asy, rule, [(4, 2 if asy else 3, True), (4, 6, True), (4, 2, True)], released)
     cut = next(k for k, (st, _i, _o) in enumerate(steps) if st.step == RS.empty(St) and st.clock)
@@ -311,7 +311,7 @@ def test_several_buckets_pass_on_a_window_boundary(asy: bool) -> None:
     1 is released in bucket 7, so the second window's first step jumps T to bucket 7's close, six buckets on. A step that
     carries several: under the several-bucket rule the first window ends on a step that carries two buckets, and the
     second goes on from its row with both requests running. Both give the replay's rows and T."""
-    rule = TC.RULES["today-quiet"]
+    rule = TC.RULES["today"]
     released = [0, 7]
     e, ios, st_, St, steps, rp = _small(asy, rule, [(4, 2, True), (4, 2, True)], released)
     cut = next(k for k, (st, _i, _o) in enumerate(steps) if st.step == RS.empty(St) and st.clock)
@@ -323,7 +323,7 @@ def test_several_buckets_pass_on_a_window_boundary(asy: bool) -> None:
     assert _clocks(windows) == rp.clock and _rows(windows) == [s.rows for s in rp.steps]
     held(Sc, st_, windows)
 
-    rule = TC.RULES["several-quiet"]
+    rule = TC.RULES["several"]
     released = [0, 0]
     e, ios, st_, St, steps, rp = _small(asy, rule, [(10, 6, True), (8, 5, True)], released)
     cut = 1 + next(k for k, (st, _i, o) in enumerate(steps)
@@ -344,7 +344,7 @@ def test_the_chain_refuses_a_window_that_starts_at_another_clock() -> None:
     committed under the carried row's salt opens to another b‖c, so `check_chain` refuses the session (C-carry), and
     `TickLoad_v1` refuses a state row 1 whose clock isn't row 0's, as `TickAdvance_v1` refuses a next row whose clock
     isn't the step's."""
-    rule = TC.RULES["today-quiet"]
+    rule = TC.RULES["today"]
     released = [0, 1, 2]
     e, ios, st_, St, steps, _rp = _small(False, rule, [(4, 3, True), (4, 6, True), (4, 2, True)], released)
     cut = next(k for k, (st, _i, _o) in enumerate(steps) if st.step == RS.empty(St) and st.clock)

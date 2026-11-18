@@ -133,7 +133,7 @@ def weight_value(program: str, param: str, words: Any, salts: bytes | None = Non
     opens them)."""
     rows = _rows(param, words)
     ys = os.urandom(len(rows) * SF.SALT_BYTES) if salts is None else bytes(salts)
-    return registered_commit(program, param, rows, bytes(32), 0, keep_rows=keep_rows, row_salts=ys,
+    return registered_commit(program, param, rows, ys, keep_rows=keep_rows,
                              schema=SCHEMA_HM96_SHA512_ROW_SEG if _param(param)[2] else SCHEMA_HM96_SHA512_ROW_V2)
 
 
@@ -154,7 +154,7 @@ def _weights(registered: Any, grain: Grain, served_params: Any = ()) -> tuple[An
     window's record's, ``weights/<label>@<words>``: its slice units' rows of a weight, `pipeline.weight_rows`) with their
     words, wired or not, and those by field. Refused (ValueError) for a served parameter of no field, or of a table."""
     r, fields = _fields(registered)
-    every = lower(registered, WEIGHTS_CLASS, None, grain, provable=False).circuit.registered.params
+    every = lower(registered, WEIGHTS_CLASS, None, grain).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
     words = {n: int(np.prod(s, dtype=np.int64)) * int(b) // 16 for n, s, b in fields}
     for p in served_params:

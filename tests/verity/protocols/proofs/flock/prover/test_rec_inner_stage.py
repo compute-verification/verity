@@ -33,7 +33,7 @@ def test_the_inner_statement_binds_the_partition_object_beside_it(tmp_path):
     program = json.loads((out / "program.json").read_text())
     assert meta["partition"] == {"rule": P.FORMAT, "digest": P.digest(part)} and meta["program_sha512"] == part["program"]
     assert program_digest(program) == part["program"]
-    assert part["query"] == {"name": "Q_template_instance", "version": 0, "params": {"template": next(iter(meta["program_digests"]))}}
+    assert part["query"] == {"name": "Q_template_instances", "version": 0, "params": {"templates": [next(iter(meta["program_digests"]))]}}
     assert (res["partition_digest"], res["program_sha512"]) == (P.digest(part), part["program"])
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")

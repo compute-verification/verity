@@ -2,16 +2,16 @@
 window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 
-* **What it keeps.** `keep_key`: the run's hm96 salt key (`KEY`, 32 bytes), from which the salt of every hiding leaf of
-  the window is sampled: its request, slot, A and z tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows
-  (`audit.hm96_salt` at `pouw_h1_served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
+* **What it keeps.** `RunSalts.keep`: the salt of every hiding leaf of the window, 192 fresh operating-system bytes a
+  row, as the salt file `SALTS` (`verity.commitments.salt_file`), one parameter a nonce: its request, slot, A and z
+  tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows (at `pouw_h1_served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
   records (`pouw_h1_records`, one a proof block), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
   rows and its z table zero records. A handed-off window (`pouw_h1_handoff`) also keeps its saved state in `STATE`: its
   round log, request entries, slot owners, and each call's A codes and each linear's weight codes (the window's ``a/<K>``
   and ``b/<K>`` rows).
 * **Opening a sampled proof block.** Proof block u of the window is proof block u - base of the call whose manifest row has base ≤ u < base +
   units (`locate`). `open_call` rebuilds that call's A table and z table from the kept rows, scales and records under the
-  key, the Program salt (from the record's salt coin, `pouw_h1_challenger.program_salt_of`) and the call's
+  kept salts, the Program salt (from the record's salt coin, `pouw_h1_challenger.program_salt_of`) and the call's
   nonces, and refuses either whose root isn't the one its manifest row carries, which its round's root commits. Then
   ``z.open(u - base)`` is the proof block's record (z then y) with its salt and path, and ``a.open(i)`` slot i's A row and scale
   (the proof block's row tile is slots 32·r .. 32·r + 31). Its ``a/<K>`` rows are its call's block of the window's A value
@@ -39,12 +39,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import hm96, salt_file
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.tensors import tensors
 
-KEY = "key"
+SALTS = "salts"
 CALLS = "calls"
 STATE = "state"
 #: where each array of a call starts in a `Writer`'s ring: a multiple of this many bytes
@@ -64,15 +65,47 @@ def _write(path: Path, data: bytes) -> None:
         f.write(data)
 
 
-def keep_key(directory: str | Path, key: bytes) -> Path:
-    """The run's salt key, kept as `KEY` (0600) in the prover's directory."""
-    path = private(directory) / KEY
-    _write(path, bytes(key))
-    return path
+class RunSalts:
+    """A window's row salts by the nonce that names each of its tables and values (`pouw_h1_served.nonce`,
+    `pouw_h1_requests.TABLES_NONCE`, ...): row j's at nonce u is `hm96.SHA512.salt_bytes` fresh operating-system bytes,
+    drawn the first time a table or value at u asks for row j and the same at every later ask, so the device and the host
+    commit a value under one set of salts and the prover opens it under them (`salts_of`). Read from the prover's directory
+    (``fresh`` False) it draws none: a row it doesn't hold is refused."""
+
+    def __init__(self, kept: Mapping[int, bytes] | None = None, fresh: bool = True) -> None:
+        self._by = {int(u): bytes(s) for u, s in (kept or {}).items()}
+        self.fresh = fresh
+
+    def at(self, nonce: int, n: int) -> bytes:
+        """Rows 0 .. n - 1's salts at ``nonce``, concatenated."""
+        size = hm96.SHA512.salt_bytes
+        have = self._by.get(int(nonce), b"")
+        if len(have) < size * n:
+            if not self.fresh:
+                raise ValueError(f"the prover's salt file holds {len(have) // size} rows' salts at nonce {nonce}, not {n}")
+            have = self._by[int(nonce)] = have + os.urandom(size * n - len(have))
+        return have[:size * n]
+
+    def held(self, nonce: int) -> bytes:
+        """Every row's salt drawn so far at ``nonce``, concatenated (none: empty)."""
+        return self._by.get(int(nonce), b"")
+
+    def adopt(self, salts: Mapping[int, bytes]) -> None:
+        """Another process's salts at its own nonces (a rank's call tables, `pouw_h1_ranks`), held as if drawn here:
+        refused at a nonce drawn here already."""
+        if clash := sorted(int(u) for u in salts if int(u) in self._by):
+            raise ValueError(f"salts at nonces {clash[:4]} were drawn here already: each nonce's salts are one process's")
+        self._by.update({int(u): bytes(s) for u, s in salts.items()})
+
+    def keep(self, directory: str | Path) -> Path:
+        """Every salt drawn so far, as the salt file `SALTS` in the prover's directory."""
+        return salt_file.write(private(directory) / SALTS, {str(u): s for u, s in self._by.items() if s})
 
 
-def key_of(directory: str | Path) -> bytes:
-    return (Path(directory) / KEY).read_bytes()
+def salts_of(directory: str | Path) -> RunSalts:
+    """The salts `RunSalts.keep` kept in the prover's directory."""
+    path = Path(directory) / SALTS
+    return RunSalts({int(u): salt_file.read(path, u) for u in salt_file.params(path)}, fresh=False)
 
 
 #: the zip records ``np.savez`` writes through `zipfile`: a member's local header, its ZIP64 extra field (``np.savez`` forces
@@ -359,14 +392,14 @@ class Opened:
 
 
 def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt: bytes) -> Opened:
-    """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
-    the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
+    """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory (its
+    rows and kept salts) under the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import requests as RQ
 
     row = record["calls"][index]
-    key, t, k, m = key_of(directory), int(row["rows"]), int(row["k"]), int(row["served"])
+    salts, t, k, m = salts_of(directory), int(row["rows"]), int(row["k"]), int(row["served"])
     path = Path(directory) / CALLS / f"{index}.npz"
     if m:
         with np.load(path) as kept:
@@ -375,8 +408,8 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
         a, s_a, records = np.zeros((0, k), np.int8), np.zeros(0, "<f4"), np.zeros((int(row["units"]), ZR.ZY_BYTES), np.uint8)
 
     def table(name: str, leaves: list[bytes]) -> Any:
-        tree = RQ.hiding_rows(tagged(RQ.TABLE_TAGS[name], salt, index), index, leaves, key,
-                              RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name])
+        tree = RQ.hiding_rows(tagged(RQ.TABLE_TAGS[name], salt, index), index, leaves,
+                              salts.at(RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name], len(leaves)))
         if tree.commitment.root.hex() != RQ.table_root(row, name):
             raise ValueError(f"call {index}'s {name} table, rebuilt from the prover's directory, is not the one its "
                              "manifest row carries")
@@ -387,5 +420,5 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     return Opened(index, at, z)
 
 
-__all__ = ["ALIGN", "CALLS", "KEY", "Opened", "STATE", "Writer", "keep_call", "keep_key", "kept_bytes", "key_of", "locate",
-           "open_call", "private", "savez", "writer_of"]
+__all__ = ["ALIGN", "CALLS", "Opened", "RunSalts", "SALTS", "STATE", "Writer", "keep_call", "kept_bytes", "locate",
+           "open_call", "private", "salts_of", "savez", "writer_of"]

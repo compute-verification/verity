@@ -71,6 +71,7 @@ import served_verdicts as SV  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 from benchmarks.network_traces import network_attester_chain as WC  # noqa: E402
 from verity import device as S  # noqa: E402
+from verity.protocols.registration.verifier import site_log as L  # noqa: E402
 from verity.protocols.registration.verifier import registration as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -85,8 +86,8 @@ PUBLIC = {"K": 756 + 756 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, 
 K = PUBLIC["K"]
 #: the period's one compute audit's docket, V3c's class window's, which binds no advice or compiler
 NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64}}
-#: the run's advice registration as `served_verdicts.py public-registration` publishes it, its advice committed padded to
-#: its compiler's cap ℓ_a = 2^23 (`advice_windows.pad`)
+#: the run's advice registration as `served_verdicts.py public-registration` publishes it, its compiler's cap ℓ_a = 2^23
+#: stated in place of its advice's length
 PUBLISHED = SV.public_registration({"row_bits": 256, "rows": 2 ** 23 // 256,
                                     "binding": {"advice": {"root": "ab" * 64, "bits": 2 ** 23}},
                                     "compiler": {"name": "c", "digest": "d", "cap_bits": 2 ** 23}})
@@ -132,7 +133,7 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
     ``held`` for its network attester cert0, and the log placing cert0, its key ``placed`` (``held`` unless given), on
     node0's uplink."""
     log = REG.chain(composite, [REG.site(
-        locs=(S.Loc("site0", "site", time_unit=S.TIME_UNIT), S.Loc("node0", "host", "site0", chip=NODE0.chip),
+        locs=(S.Loc("site0", "site", time_unit=L.TIME_UNIT), S.Loc("node0", "host", "site0", chip=NODE0.chip),
               S.Loc("cert0", "certifier", "site0", "auditor", key=held if placed is None else placed,
                     scheme=S.SCHEMES[0])),
         links=(S.Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
@@ -573,7 +574,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
 
 def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_no_tight_K_is_beside_it(tmp_path, capsys):
     """The served shape: one V3c audit, its class window binding no advice, tied to the one phase's scan, and the run's
-    advice registration published padded to its compiler's cap ℓ_a = 2^23. With neither check held, the figure of
+    advice registration published with its compiler's cap ℓ_a = 2^23. With neither check held, the figure of
     record charges ℓ_a + 1 beside ℓ_{a,j}, and every cell is that figure's; no tighter figure is beside it, in the
     record or its line, only the line saying how it tightens in its place (`TIGHT`): ℓ_a + 1 in place of ℓ_{a,j} under
     the cut lemma and its check, and K alone once padding-out-of-free is in the lock."""
@@ -693,7 +694,7 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
 
 #: COINS lines' sampled-proofs parts that name no live challenger, as served_verdicts.sh says them
 DEVELOPMENT = {
-    "served": (f"a local development challenger session on {NODE}, the served node, not an auditor's (PP_CHALLENGER "
+    "served": ("a local development challenger session on the served node, not an auditor's (PP_CHALLENGER "
                "local)"),
     "deferred": ("a local development challenger session on the follow-on's node, where step 6 defers V3c's audit, not "
                  "an auditor's (PP_CHALLENGER local)"),
@@ -1079,7 +1080,7 @@ def test_the_tied_audits_the_charge_reads_are_the_ones_each_scan_names(tmp_path)
 
 def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figure_of_record(tmp_path):
     """ℓ_a is the cap of the run's published advice registration (`REGISTRATION`), never 0 for want of one: with none
-    the figure of record is missing, and one whose advice isn't padded to its compiler's cap is its error. The tight K
+    the figure of record is missing, and one whose advice length field isn't its compiler's cap is its error. The tight K
     stays the bound's."""
     rec = record(accepted(tmp_path / "none", registration=None))
     assert rec["bound"]["of_record"] == rec["advice_charge"]["cap"] == {"missing": OR.NO_REGISTRATION}
@@ -1087,7 +1088,7 @@ def test_a_run_that_published_no_advice_registration_or_one_unpadded_has_no_figu
     unpadded = {**PUBLISHED, "binding": {"advice": {"root": "ab" * 64, "bits": 392}}}
     rec = record(accepted(tmp_path / "unpadded", registration=unpadded))
     assert rec["bound"]["of_record"] == {
-        "error": f"{OR.REGISTRATION}: ValueError: its advice's length 392 isn't padded to its compiler's cap {2 ** 23}"}
+        "error": f"{OR.REGISTRATION}: ValueError: its advice length field states 392, not its compiler's cap {2 ** 23}: not the published copy"}
 
 
 @pytest.mark.parametrize("registration, cap", [
@@ -2304,6 +2305,21 @@ def test_pouw_credits_no_freed_compute_whatever_its_row_states_and_is_not_claime
     assert all(x in OR.POUW for x in ("OnsiteFreed", "noFoldRound", "eps1-sm120-h1fx1", "credits nothing", "Pearl+"))
 
 
+def test_a_verdict_carries_its_rows_stated_source_so_pouws_says_what_no_auditor_side_entry_checks(tmp_path):
+    """PoUW's accepted row whose stated source ends with what its declaration says no auditor-side entry checks
+    (`served_verdicts.declared_unchecked`, Pearl+'s coins' signatures): the onsite record's PoUW verdict carries that
+    source."""
+    said = f"{SV.PEARLPLUS_FROM}; coins' signatures checked on the served node only; not checked by the auditor"
+    work = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None,
+            "answer_from": said}
+    out = served_out(tmp_path, work=work, coins=None)
+    (out / "verdicts.txt").write_text(f"COINS sampled proofs: {GATE}; {H1_SERVED}; the bandwidth audit's: "
+                                      "vy-auditor-2's bw_party, inside PoUS's piece\n" + coins_line(GATE) + "\n")
+    assert main([str(out)]) == 0
+    v = json.loads((out / "record" / "onsite.json").read_text())["verdicts"]["PoUW"]
+    assert (v["verdict"], v["answer_from"]) == ("accept", said)
+
+
 @pytest.mark.parametrize("work, verdict", [
     ({"verdict": "missing", "why": "development run, credits nothing: toy", "development": {"verdict": "accept"}},
      {"verdict": "missing", "why": "development run, credits nothing: toy", "development": True}),
@@ -2494,7 +2510,7 @@ def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):
 
 
 def published(cap: int) -> dict:
-    """The run's advice registration as published, its advice padded to its compiler's cap ℓ_a = ``cap``."""
+    """The run's advice registration as published, its compiler's cap ℓ_a = ``cap`` in place of its advice's length."""
     return SV.public_registration({"row_bits": 256, "rows": -(-cap // 256),
                                    "binding": {"advice": {"root": "ab" * 64, "bits": cap}},
                                    "compiler": {"name": "c", "digest": "d", "cap_bits": cap}})

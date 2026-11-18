@@ -1,7 +1,6 @@
 """The harness kit: the calls benchmarks' runners share, each written once.
 
 - `lease(gpus, minutes, on=None, cores=None)`: the `gpu-lease` argv a job's command follows, with its bound.
-- `free_port()`: a loopback port the system has free now, for a server a runner starts.
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `card_short(name)`: the card's name in a measurement's member, from the one card record under `cards_directory()` whose
@@ -33,14 +32,17 @@
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
-directory: under a research run, the run's). Each
-measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
-95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
-computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and, under a research
-run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
+directory: under a research run, the run's). Each measurement is the form a reader of numbers takes, `value`, `unit`,
+`commit` and `run`, with its `name`, its `mark`, its metric's `version` (`kit_report.VERSIONS`, 1 where it gives
+none), its 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the
+`inputs` it was computed from (other measurements' names, run or `art:` ids), the `host` stamp it was written under and,
+under a research run, the `command` the run was launched as (its `job.json`'s, a list of words), so a reader can tell a metric's own
 command's measurement from any other run's; a measurement with
 no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
-benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
+benchmark's own (`extra`), such as what its number rests on. Each held only where given, `parameters` names the
+security parameters its value depends on, each by name with its `value`, `from` (the application's file or name it
+was read from) and, where given, its `basis`, and `calibration` the calibration numbers it uses, each its `path` under
+`calibration/` and the `key` read; a metric `kit_report.NEEDS` lists needs them. **A mark** says how the value was had, one of `MARKS`,
 which every measurement gives, one with no value the mark it would have had: ``"measured"``, computed from a run of
 record's own records (its timings, its verifier's output, the registered parameters it ran at); ``"modeled"``, from a
 model or stated figures no run measured, or scaled past what a run covered; ``"partial"``, measured on part of what its
@@ -80,7 +82,6 @@ import platform
 import re
 import shlex
 import shutil
-import socket
 import statistics
 import subprocess
 import sys
@@ -124,6 +125,14 @@ KIND = re.compile(r"[a-z0-9][a-z0-9-]*/v[0-9]+")
 #: the variable that makes a run a trial, and the file a trial's measurements go to in place of its result
 TRIAL, TRIAL_FILE = "VERITY_BENCH_TRIAL", "trial-measurements.json"
 TRIAL_LINE = "a trial run ({var}): its {n} measurements are in {path}, and none reaches a metric's line"
+#: what a metric's `needs` (`kit_report.NEEDS`) may list, each with the measurement's field that names it and its form
+NEEDED = {"parameter": "parameters", "calibration": "calibration"}
+NEEDS_FIX = {"parameter": "{NAME: {'value': V, 'from': 'applications/APP.toml'}} (the security parameter's value, from "
+                          "the application it is read from)",
+             "calibration": "[{'path': 'calibration/...', 'key': 'KEY'}] (each calibration number it uses, by its file "
+                            "and the key read)"}
+#: the directory every calibration number a measurement names is under
+CALIBRATION = "calibration/"
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -143,12 +152,6 @@ def lease(gpus: int, minutes: float, *, on: str | None = None, cores: str | None
             "--max-min", str(math.ceil(minutes)), "--"]
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 # ---- the host stamp ----------------------------------------------------------------------------------------------------------
 
 
@@ -162,13 +165,13 @@ def _run(argv: Sequence[str]) -> tuple[int, str]:
     return r.returncode, r.stdout if r.returncode == 0 else r.stderr or r.stdout
 
 
-def _commit() -> str | None:
-    """The commit of the tree the job runs: the one `research run` shipped, else this checkout's HEAD; None where neither
-    says."""
+def commit(root: Path | None = None) -> str | None:
+    """The commit of the tree the job runs: the one `research run` shipped, else the HEAD of the checkout at `root` (this
+    file's where None); None where neither says."""
 
     if sha := settings.RESEARCH_SOURCE_SHA:
         return sha
-    rc, out = _run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"])
+    rc, out = _run(["git", "-C", str(root or Path(__file__).resolve().parent), "rev-parse", "HEAD"])
     return out.strip() or None if rc == 0 else None
 
 
@@ -211,7 +214,7 @@ def host_stamp() -> dict:
         "card": ", ".join(dict.fromkeys(g["name"] for g in gpus)) or "none",
         "gpus": [{"uuid": g["uuid"], "sm_mhz": _mhz(g["clocks.sm"]), "mem_mhz": _mhz(g["clocks.mem"])} for g in gpus],
         "driver": ", ".join(dict.fromkeys(g["driver_version"] for g in gpus)) or None,
-        "cuda": cuda, "node": platform.node(), "commit": _commit()}
+        "cuda": cuda, "node": platform.node(), "commit": commit()}
     if why:
         stamp["why"] = why
     return stamp
@@ -444,14 +447,17 @@ def toolkit(version: str) -> str:
     """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
     is set and its ``version.json``, where it has one, is that version; else the one the run's machine's properties
     (`machine_properties()`) list at exactly that version, the version asked for and not the first listed. Refused by name
-    otherwise, as `NotListed` where the properties list none."""
+    otherwise, as `NotListed` where the properties list none, and where ``$CUDA_HOME``'s ``version.json`` gives no
+    ``cuda.version``."""
     from verity_config.settings import SHARED
 
     if home := SHARED.get("CUDA_HOME"):
-        try:
-            said = json.loads((Path(home) / "version.json").read_text())["cuda"]["version"]
-        except (OSError, ValueError, KeyError, TypeError):
+        if not (said_in := Path(home) / "version.json").is_file():
             return home
+        try:
+            said = json.loads(said_in.read_text())["cuda"]["version"]
+        except (ValueError, KeyError, TypeError) as e:
+            raise SystemExit(f"CUDA_HOME={home}: {said_in} gives no cuda.version ({type(e).__name__}: {e})") from None
         if said == version or said.startswith(f"{version}."):
             return home
     try:
@@ -601,11 +607,58 @@ def _inside(rel: Any) -> bool:
     return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
 
 
+def _text(x: Any) -> bool:
+    return isinstance(x, str) and bool(x.strip())
+
+
+def _parameters(name: str, given: Any) -> dict:
+    shape = ("{NAME: {'value': a number or a string, 'from': the application's file or name it was read from, "
+             "'basis': how it was had, where given}}")
+    if not isinstance(given, Mapping) or not given:
+        raise ValueError(f"{name}'s parameters are {shape}, not {given!r}")
+    out = {}
+    for p, v in given.items():
+        if not (_text(p) and isinstance(v, Mapping) and {"value", "from"} <= set(v) <= {"value", "from", "basis"}
+                and _text(v["from"]) and (_text(v["value"]) or (not isinstance(v["value"], bool) and isinstance(
+                    v["value"], numbers.Real) and math.isfinite(v["value"]))) and ("basis" not in v or _text(v["basis"]))):
+            raise ValueError(f"{name}'s parameter {p!r} is {shape}, not {v!r}")
+        out[p] = dict(v)
+    return out
+
+
+def _calibration(name: str, given: Any) -> list[dict]:
+    shape = (f"a list of {{'path': a file under {CALIBRATION}, 'key': the key read in it, a census id where it is "
+             "one}}")
+    if isinstance(given, (str, bytes, Mapping)) or not isinstance(given, Sequence) or not given:
+        raise ValueError(f"{name}'s calibration is {shape}, not {given!r}")
+    for c in given:
+        if not (isinstance(c, Mapping) and set(c) == {"path", "key"} and _inside(c["path"])
+                and c["path"].startswith(CALIBRATION) and _text(c["key"])):
+            raise ValueError(f"{name}'s calibration is {shape}, not {given!r}: {c!r} isn't one")
+    return [dict(c) for c in given]
+
+
+def _needs(entry: Mapping[str, Any]) -> None:
+    name = entry.get("name")
+    missing = [n for n in kit_report.NEEDS.get(name, ()) if not entry.get(NEEDED[n])]
+    if missing:
+        raise ValueError(f"{name}'s metrics.toml row needs {' and '.join(missing)} ({', '.join(kit_report.NEEDS[name])}), "
+                         f"and the measurement names none: pass {' and '.join(NEEDED[n] + '=' + NEEDS_FIX[n] for n in missing)}")
+
+
 def is_trial(environ: Mapping[str, str] | None = None) -> bool:
     """Whether a run is a trial: `TRIAL` set to anything but ``0`` in `environ` (an attempt's ``params.env``), else in
     this process's environment."""
 
     return (settings.get(TRIAL, environ) or "0") != "0"
+
+
+def superseded(store: Any, target: str) -> list[str]:
+    """What supersedes a record's run or art: the values of its `served_table.SUPERSEDED_BY` labels, empty where none."""
+
+    from verity_bench.served_table import SUPERSEDED_BY
+
+    return [str(lab.value) for lab in store.labels(target, key=SUPERSEDED_BY)]
 
 
 def trial_attempt(attempt: Mapping[str, Any]) -> bool:
@@ -675,13 +728,15 @@ class Writer:
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
                     why: str | None = None, *, mark: str | None = None, period: str | None = None,
                     over: str | None = None, member: str | None = None,
-                    extra: Mapping[str, Any] | None = None) -> dict:
+                    extra: Mapping[str, Any] | None = None, parameters: Mapping[str, Mapping[str, Any]] | None = None,
+                    calibration: Sequence[Mapping[str, str]] | None = None) -> dict:
         """Appends one measurement to `out/result.json` and returns it, the one way a benchmark writes a number (what it
-        holds and refuses: `_entry`). It also refuses a name, period, `over` and member the result already holds, and a
-        result of another run."""
+        holds and refuses: `_entry`). It also refuses a name, period, `over` and member the result already holds, a
+        result of another run, and, a trial's too, a measurement of a metric `kit_report.NEEDS` lists that names none of
+        what it needs."""
 
         entry = self._entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
-                           member=member, extra=extra)
+                           member=member, extra=extra, parameters=parameters, calibration=calibration)
         self._append([entry], (name, period, over, member))
         return entry
 
@@ -692,6 +747,8 @@ class Writer:
         self._append([dict(e) for e in entries])
 
     def _append(self, entries: list[dict], key: tuple | None = None) -> None:
+        for e in entries:
+            _needs(e)
         with self._open() as (path, doc):
             place = self.trial_file() if self.trial else path
             if not self.trial:
@@ -717,20 +774,25 @@ class Writer:
     def _entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
                why: str | None = None, *, mark: str | None = None, period: str | None = None,
-               over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+               over: str | None = None, member: str | None = None, extra: Mapping[str, Any] | None = None,
+               parameters: Mapping[str, Mapping[str, Any]] | None = None,
+               calibration: Sequence[Mapping[str, str]] | None = None) -> dict:
         """One measurement as `measurement` appends it: `value` in `unit` (None where the benchmark has no finite value
         to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the result
-        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
-        against that target, and the `inputs` it was computed from, with this run, its commit, the host stamp and, where
-        the writer has it, the run's `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        holds as `ci95`, the key `paired` gives it under, its metric's `version`, 1 unless `name` is in
+        `kit_report.VERSIONS`, which no caller gives, its `target`, the `verdict` of its check against that target, and the
+        `inputs` it was computed from, with this run, its commit, the host stamp and, where the writer has it, the run's
+        `command`, and beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
         is required, a value of None's too, which takes the mark its value would have had. It is also the first of
         `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
         console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
         say what span of time and of compute the value is over, and `member` which member of a set it is for, each its own
-        field where given. It refuses what isn't a measurement (a value that isn't a number, a verdict with no target or
+        field where given, as are `parameters` and `calibration` (`_parameters`, `_calibration`). It refuses what isn't a
+        measurement (a value that isn't a number, a verdict with no target or
         in a verdict of record's or a seal's words, a `why` beside a value), a missing or unknown mark and a first input
-        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string, and
-        an `extra` key the entry already has a meaning for or a value that isn't JSON."""
+        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string,
+        parameters or calibration not in their form, and an `extra` key the entry already has a meaning for or a value
+        that isn't JSON."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -770,15 +832,21 @@ class Writer:
             interval = [low, high]
         spans = {key: x for key, x in (("period", period), ("over", over), ("member", member)) if x is not None}
         entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit, "mark": mark,
-                 **spans, "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
+                 **spans, "version": kit_report.VERSIONS.get(name, 1), "commit": self.stamp["commit"], "run": self.run,
+                 "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        if parameters is not None:
+            entry["parameters"] = _parameters(name, parameters)
+        if calibration is not None:
+            entry["calibration"] = _calibration(name, calibration)
         if self.command is not None:
             entry["command"] = list(self.command)
         for key, held in (extra or {}).items():
-            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command"):
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member", "command",
+                                                                     *NEEDED.values()):
                 raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
             try:
                 json.dumps(held, allow_nan=False)

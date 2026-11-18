@@ -5,7 +5,8 @@
   python served_step.py table ARM_DIR... [--base stock-fp8_compiled] --out breakdown.json
 
 ``run`` builds the arm's engine as verity-bench's worker does (`engine._VllmEngine` with the spec's preset, arm settings and
-the arm's execution), runs its own gate, then ``--warmups`` and ``--reps`` runs of the point (`_VllmEngine.measure`: the
+the arm's execution), runs ``--warmups`` runs of the point, then its own gate (Pearl+'s device run opens at the first
+step with tokens), then ``--reps`` runs of the point (`_VllmEngine.measure`: the
 harness's own metrics, ``reps.json``), and records every engine step's host phases (``steps.json``): its wall time, the
 tokens and requests it scheduled, the model runner's ``execute_model`` and ``sample_tokens``, and inside them the Pearl-C
 run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and uploads), its pass ends (``pend``:
@@ -124,19 +125,16 @@ def _patch_engine(llm) -> None:
         runner.sample_tokens = _timed(runner.sample_tokens, "sample")
 
 
-def _pearl_c(entry: str) -> bool:
-    """Whether a protocol entry ``name:scheme`` names a Pearl-C kernel (``pouw:pearl-c-*``)."""
-    return entry.startswith("pouw:pearl-c-")
-
-
 def undeclared(entries) -> str | None:
-    """Why a protocol arm of ``entries`` can't run: the first Pearl-C entry that isn't Pearl+'s option (`pouw.scheme`),
-    as the RTX PRO 6000's isn't, which no served path serves; None when there is none."""
-    from verity.protocols.resource_accounting.compute.pouw.scheme import OPTION
+    """Why a protocol arm of ``entries`` can't run: the first entry that is no declared scheme's name
+    (`compose.schemes`), as the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when
+    there is none."""
+    from verity.protocols.compose import schemes
 
+    names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
-        if _pearl_c(e) and e != OPTION:
-            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+        if e not in names:
+            return (f"{e} is no declared scheme's name ({', '.join(names)}), so no served arm runs it; its kernel's own "
                     "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
@@ -146,6 +144,7 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.presets import load_spec, resolve_spec, served
     from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
+    from verity.protocols.compose import schemes
     spec = load_spec(spec_name)
     preset, eager = served(resolve_spec(spec_name).preset, spec.eager)
     names = list(spec.arms) + ([arm_id] if arm_id not in spec.arms else [])
@@ -153,7 +152,7 @@ def _engine(spec_name: str, arm_id: str):
     arm = next(x for x in arms if x.id == arm_id)
     if why := undeclared(arm.protocols):
         raise SystemExit(f"served_step.py: {why}")
-    if settings.PEARLC_CHALLENGER_GATE and any(_pearl_c(e) for e in arm.protocols):
+    if settings.PEARLC_CHALLENGER_GATE and "pearl-plus" in arm.protocols:
         raise SystemExit("served_step.py: PEARLC_CHALLENGER_GATE is set, but an engine attaches Pearl+ with its coins "
                          "in-process and no challenger gate; unset it here, or serve a live session with served_passes.py serve")
     preset, eager = arm_execution(arm, preset, eager)
@@ -174,13 +173,14 @@ def run(a) -> int:
     held = getattr(engine.llm, "scheme", None)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    _PHASE.update(name="gate")
-    gate = engine.custom_gate()
-    reps = []
+    reps, gate = [], {}
     try:
         for i in range(a.warmups):
             _PHASE.update(name="warmup", rep=i)
             engine.warmup(point)
+        # after a step with tokens: Pearl+ attached by name opens its device run there, and a gate before it is refused
+        _PHASE.update(name="gate")
+        gate = engine.custom_gate()
         torch.cuda.synchronize()
         torch.cuda.profiler.start()
         for i in range(a.reps):

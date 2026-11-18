@@ -18,12 +18,10 @@ BASH = shutil.which("bash")
 
 
 def _tools(tmp_path: Path) -> str:
-    """A PATH of only the programs env.sh runs, so no `lake` installed on this machine is on it."""
+    """A PATH of none of this machine's programs (env.sh runs only the launch's Python), so no `lake` installed here is
+    on it."""
     tools = tmp_path / "tools"
-    if not tools.is_dir():
-        tools.mkdir()
-        for name in ("awk", "tr"):
-            (tools / name).symlink_to(shutil.which(name))
+    tools.mkdir(exist_ok=True)
     return str(tools)
 
 
@@ -31,8 +29,8 @@ def _sourced(tmp_path: Path, *names: str, path: str | None = None) -> dict[str, 
     path = path or _tools(tmp_path)
     venv = tmp_path / "venv"
     (venv / "bin").mkdir(parents=True, exist_ok=True)
-    (venv / "bin" / "python").write_text("#!/bin/sh\n")
-    (venv / "bin" / "python").chmod(0o755)
+    if not (venv / "bin" / "python").exists():
+        (venv / "bin" / "python").symlink_to(sys.executable)
     env = {"PATH": path, "HOME": str(tmp_path), "VERITY_BENCH_VENV": str(venv), "CUDA_HOME": str(tmp_path)}
     printed = " ".join(f'"${n}"' for n in names)
     ran = subprocess.run([BASH, "-c", f". benchmarks/harness/env.sh && printf '%s\\n' {printed}"], cwd=ROOT, env=env,

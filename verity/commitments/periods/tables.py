@@ -73,7 +73,7 @@ def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, regist
             raise ValueError(f"{m.key}: {t.port}'s rows do not hold among the members' strings: {bad}")
         port = {"value": t.port, "root": RT.RowTable(window.table_domain(k), ss).root.hex(), "leaves": t.n, "words": t.words,
                 "word_bits": RV.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(),
-                registered.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
+                RV.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
                 RV.READS_FROM: m.base}
         out[m.key] = {"format": registered.READS_V1, "ports": {CS.LINKED: port}}
     return out

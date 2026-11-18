@@ -23,6 +23,7 @@ import pytest
 
 import certified_salt as CS
 import epoch_coins as E
+from verity.commitments import docket_digest as DD
 from verity.commitments.crypto import lms
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import seeds as SD
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import ncp
@@ -54,7 +55,7 @@ def registration(p: int, ctx: str | None = None, window: dict | None = None) -> 
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}
-    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), DD.digest(record), p)
 
 
 def attester(windows: int, records: dict[int, bytes] | None = None) -> tuple[CS.Certifier, dict[int, bytes]]:

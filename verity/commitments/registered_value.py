@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +19,9 @@ REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
 READS_FROM = "reads_from"
 #: a registered value's row formats, each a Flock port's (`Flock.Registered.SCHEMAS`)
 SCHEMAS = (SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
+SCHEMA = SCHEMA_HM96_SHA512_ROW
+#: the reads-file key a value of another format than `SCHEMA` adds
+SCHEMA_KEY = "row_schema"
 #: the default leaf width, which the domain and the entry name only by leaving `word_bits` out
 WORD_BITS = 16
 WIDTHS = (16, 32)
@@ -56,6 +59,21 @@ def known_schema(schema: str) -> str:
     if schema not in SCHEMAS:
         raise ValueError(f"a registered value's rows are {', '.join(SCHEMAS)} rows, not {schema!r}")
     return schema
+
+
+def schema_entry(schema: str) -> dict[str, str]:
+    """`{"row_schema": schema}`, or nothing for the default `hm96-sha512/row/v1`: what a reads-file port adds."""
+    return {} if known_schema(schema) == SCHEMA else {SCHEMA_KEY: schema}
+
+
+def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = SCHEMA) -> dict[str, Any]:
+    """The Lean verifier's ``--registered`` port (`verity/registered-reads/v1`) reading ``value`` at ``rows`` (one per
+    proof block, None where the proof block doesn't read it): ``e`` its entry (``leaves``, ``words``, ``domain``, and
+    ``word_bits`` unless 16) and ``root`` the accepted record's. Refused (ValueError) for rows of another format than
+    `SCHEMAS`."""
+    return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
+            "word_bits": int(e.get("word_bits", WORD_BITS)), "domain": e["domain"], **schema_entry(schema),
+            "reads": list(rows)}
 
 
 def window_root(window: str | None) -> str | None:
@@ -196,6 +214,6 @@ class Registered:
                 {"value": self.value, "positions": [int(p) for p in positions], "paths": [self.path(p).hex() for p in positions]})
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMAS",
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "domain", "known_schema", "leaf",
-           "row_digest", "row_words", "supplied_salts", "width_entry", "window_root"]
+           "port", "row_digest", "row_words", "schema_entry", "supplied_salts", "width_entry", "window_root"]

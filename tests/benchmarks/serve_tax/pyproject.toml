@@ -17,11 +17,13 @@ untraced = ["test_serve_tax.py", "test_profile.py"]
 # virtual clock, whose package imports the circuit language, the commitments and SPOT's verifier; the arm
 # behind the network attester names the network attester's program by its file in this tree, which its test (tests/test_certified.py,
 # both sides on stand-ins for the processes they start) checks is there
-inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py",
+inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.py", "verity/ports.py",
     "verity/circuits",
     "verity/commitments",
     # the record entry (`Record`): SPOT's challenger imports it, and the network attester's `active` imports SPOT's verifier
     "verity/channel.py",
+    # the release formats the network attester writes and the shim reads
+    "verity/release.py",
     "verity/protocols/__init__.py",
     "verity/protocols/resource_accounting/__init__.py",
     "verity/protocols/resource_accounting/network",
@@ -100,6 +102,26 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # the names a run's private-paths.json states and no public write may have: the adapter's private list, its reader
+    # and the modules the reader imports
+    "adapters/vllm/verity_vllm/pipeline/private_names.json",
+    "adapters/vllm/verity_vllm/pipeline/private_names.py",
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/check/__init__.py",
+    "adapters/vllm/verity_vllm/check/match/__init__.py",
+    "adapters/vllm/verity_vllm/check/match/rank_match.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/engine/collectives/__init__.py",
+    "adapters/vllm/verity_vllm/engine/collectives/collective_sites.py",
+    "adapters/vllm/verity_vllm/engine/collectives/fused_norm.py",
+    "adapters/vllm/verity_vllm/engine/profiles/layer_classes.py",
+    "adapters/vllm/verity_vllm/log.py",
+    "adapters/vllm/verity_vllm/program/__init__.py",
+    "adapters/vllm/verity_vllm/program/compact.py",
+    "adapters/vllm/verity_vllm/query/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/format.py",
     # every write the serve tax, prod_repro and the replay ladder make is under the private directory or in the
     # registry of writers (tests/test_private_writes.py), which reads their every file
     "benchmarks/prod_repro",
@@ -112,6 +134,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # check (serve_tax.components): the served table and what it imports; the scheme plugin's table of schemes
     "tools/verity/cli/verity_cli/__init__.py",
     "tools/verity/cli/verity_cli/served_table.py",
+    # which takes `run`'s Start and the CLI's machine settings
+    "tools/verity/cli/verity_cli/run.py", "tools/verity/cli/verity_cli/settings.py",
     "verity/config.py",
     "verity/party.py",
     "verity/runtime",

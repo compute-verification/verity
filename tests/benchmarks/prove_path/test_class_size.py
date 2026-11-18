@@ -53,7 +53,7 @@ def _project(probe: dict[str, int], at: WindowClass, cls: WindowClass) -> dict[s
 
 
 def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict[str, int]:
-    return CZ.census(class_circuit(_registered(config), cls, 1, grain, provable=False))
+    return CZ.census(class_circuit(_registered(config), cls, 1, grain))
 
 
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():
@@ -70,7 +70,7 @@ def test_first_blocks_of_value_slices_project_as_the_exact_lowering():
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
     reg, at = Registered.of(phi, default_seed=7), WindowClass(1, 5, 3)
-    probe, exact = (CZ.census(class_circuit(reg, c, 1, provable=False)) for c in (PROBE, at))
+    probe, exact = (CZ.census(class_circuit(reg, c, 1)) for c in (PROBE, at))
     assert {lab for lab in exact if lab.startswith("AttnBlockFirst")} == {
         f"AttnBlockFirst_v2{{D=64,NVIS={t},BN=192,VS=32}}" for t in range(1, at.positions + 1)}
     assert _project(probe, PROBE, at) == exact

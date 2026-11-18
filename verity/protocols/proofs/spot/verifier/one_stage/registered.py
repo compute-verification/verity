@@ -70,7 +70,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
 from verity.circuits.codec import canonical_json, jcs_domain_error
 from verity.circuits.partition_object import TemplatePartition
 from verity.circuits.program import Program
@@ -87,11 +87,8 @@ READS = REGISTERED_READS_V0
 READS_V1 = REGISTERED_READS_V1
 #: the `READS_V1` key naming the ports bound to the window's committed values, each `{"root", "domain"}` (`Flock.RegBound`)
 BOUND = "bound"
-SCHEMA = SCHEMA_HM96_SHA512_ROW
 SCHEMA_V2 = SCHEMA_HM96_SHA512_ROW_V2
 SCHEMA_SEG = SCHEMA_HM96_SHA512_ROW_SEG
-#: the reads-file key a value of another format than `SCHEMA` adds
-SCHEMA_KEY = "row_schema"
 #: a SHA-512 digest as a circuit's `Digest` holds it: eight words of 64 one-bit leaves (`digest_leaves`)
 DIGEST = Array(8, Array(64, Value(1)))
 #: the reads-file key of a port not named after the template parameter it reads: that parameter's `reads` key, which the
@@ -104,11 +101,6 @@ SOURCES = ("port", "value", "bytes", "position", "window")
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
 _DEC = re.compile(r"0|[1-9][0-9]*")
-
-
-def schema_entry(schema: str) -> dict[str, str]:
-    """`{"row_schema": schema}`, or nothing for the default `hm96-sha512/row/v1`: what a reads-file port adds."""
-    return {} if RV.known_schema(schema) == SCHEMA else {SCHEMA_KEY: schema}
 
 
 def width(program: Program, value: str) -> int:
@@ -154,11 +146,11 @@ def _gates(program: Program, pi: int) -> range | None:
     return None if first is None or end == first else range(first, end)
 
 
-def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
+def row_leaves(program: Program, value: str, words: int, schema: str = RV.SCHEMA) -> int:
     """The parameter's leaves in one registered row of `words` leaves: `words` under `SCHEMA`, each parameter leaf its own
     registered leaf; under a bit-row schema the row's `words * word_bits` bits, as many parameter leaves of the parameter's
     own width as they hold (H1's A: K int8 codes of one-bit leaves, K/2 u16 words)."""
-    if RV.known_schema(schema) == SCHEMA or words < 1:
+    if RV.known_schema(schema) == RV.SCHEMA or words < 1:
         return words
     word_bits = width(program, value)
     w = dict(program.fn.signature()[0])[value].homogeneous_width()
@@ -168,7 +160,7 @@ def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -
     return words * word_bits // w
 
 
-def shape(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
+def shape(program: Program, value: str, words: int, schema: str = RV.SCHEMA) -> int:
     """The rows of `value` read `words` leaves at a time, in `schema`'s rows (`row_leaves`)."""
     n, k = len(parameter_gates(program, value)), row_leaves(program, value, words, schema)
     if k < 1 or n % k:
@@ -185,7 +177,7 @@ def table(reads: Sequence[int]) -> tuple[list[int], list[int]]:
     return list(order), refs
 
 
-def verify_read(dom: CommitmentDomain, root: bytes, position: int, bc: bytes, path: bytes, schema: str = SCHEMA) -> bool:
+def verify_read(dom: CommitmentDomain, root: bytes, position: int, bc: bytes, path: bytes, schema: str = RV.SCHEMA) -> bool:
     """`bc`, as the registered value's row at `position`, opens `root` under the verifier's own domain `dom` through
     `path`, its leaf framed under `schema`: the check the Lean verifier makes for each table row of a registered port."""
     depth = merkle_depth(dom.count)
@@ -227,10 +219,10 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     tp = P.evaluate(program, query)
     if not isinstance(tp, TemplatePartition):
         raise ValueError("a registered value is read by a template query's instances, not by a Q_word or Q_call unit")
-    per_row = {v: row_leaves(program, v, w, (schemas or {}).get(v, SCHEMA)) for v, w in values.items()}
+    per_row = {v: row_leaves(program, v, w, (schemas or {}).get(v, RV.SCHEMA)) for v, w in values.items()}
     spans = []
     for v, w in values.items():
-        shape(program, v, w, (schemas or {}).get(v, SCHEMA))
+        shape(program, v, w, (schemas or {}).get(v, RV.SCHEMA))
         spans.append((parameter_gates(program, v), v))
 
     def owner(gate: int) -> tuple[str, int] | None:
@@ -291,7 +283,7 @@ def registered_entries(program: Program, values: Mapping[str, int], schemas: Map
     prog = P.program_digest(program)
     out = {}
     for v, w in values.items():
-        n, b = shape(program, v, w, (schemas or {}).get(v, SCHEMA)), width(program, v)
+        n, b = shape(program, v, w, (schemas or {}).get(v, RV.SCHEMA)), width(program, v)
         out[v] = {"leaves": n, "words": int(w), "word_bits": b,
                   "domain": RV.domain(prog, v, w, n, b, None if v in fixed else window).domain_id.hex()}
     return out
@@ -450,7 +442,7 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
 def _in_format(program: Program, value: str, got: list[list[int]], word_bits: int, schema: str) -> list[list[int]]:
     """Supplied rows of the parameter's leaves as rows of `schema`: themselves under `SCHEMA`, else each packed into
     `word_bits`-bit leaves (`bit_words`)."""
-    if RV.known_schema(schema) == SCHEMA:
+    if RV.known_schema(schema) == RV.SCHEMA:
         return got
     w = dict(program.fn.signature()[0])[value].homogeneous_width()
     return [bit_words(r, w, word_bits) for r in got]
@@ -458,7 +450,7 @@ def _in_format(program: Program, value: str, got: list[list[int]], word_bits: in
 
 def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                   want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
-                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> str:
+                  prog: str | None = None, binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA) -> str:
     """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
     `leaves` (`registered_entries`), each the parameter's leaves of one row of its `words` leaves in `schema`
     (`row_leaves`), committed in `schema` under `registered_value.supplied_salts` at its `word_bits`. `prog`: `program`'s digest
@@ -475,7 +467,7 @@ def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[st
 
 def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
                    supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None,
-                   binding: Mapping[str, str] | None = None, schema: str = SCHEMA) -> RV.Registered:
+                   binding: Mapping[str, str] | None = None, schema: str = RV.SCHEMA) -> RV.Registered:
     """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
     entry will do: no row reads it), the log and the binding under the public salts, in `schema` (the row format the
     verifier names for it), whose `entry()` the record registers and whose `statement` opens a proof block's reads like
@@ -515,7 +507,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
         read_as[port] = name
         out[port] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
                      "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
-                     **schema_entry((schemas or {}).get(r["value"], SCHEMA)), "reads": list(r["rows"]),
+                     **RV.schema_entry((schemas or {}).get(r["value"], RV.SCHEMA)), "reads": list(r["rows"]),
                      **({PARAM_KEY: name} if port != name else {})}
     return {"format": READS, "ports": out}
 
@@ -538,8 +530,8 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
     return {**file, BOUND: {p: {"root": roots[p]["root"], "domain": roots[p]["domain"]} for p in free}}
 
 
-__all__ = ["BOUND", "DIGEST", "PARAM_KEY", "READS", "SCHEMA", "SCHEMA_KEY", "SCHEMA_SEG", "SCHEMA_V2",
+__all__ = ["BOUND", "DIGEST", "PARAM_KEY", "READS", "SCHEMA_SEG", "SCHEMA_V2",
            "SOURCES", "WINDOW_SALT", "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests",
            "half_leaves", "held_gates", "leaves_of", "log_base", "parameter_gates", "reads", "reads_file",
-           "registered_entries", "row_leaves", "schema_entry", "shape", "sources", "supplied_root", "supplied_rows",
+           "registered_entries", "row_leaves", "shape", "sources", "supplied_root", "supplied_rows",
            "supplied_value", "table", "verify_read", "width", "window_salt"]

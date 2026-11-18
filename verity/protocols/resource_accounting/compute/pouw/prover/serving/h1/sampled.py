@@ -12,7 +12,7 @@ is its CLI, which reads ``--checkpoint`` with the live challenger's model regist
 
 SERVE_DIR is serve-openai's ``--out`` (`served_verdicts.sh`'s D): the window's record ``h1/w<WINDOW>/pouw-h1-calls.json``,
 the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``draw_k``, else ``--k``); the
-prover's state is ``private/h1/w<WINDOW>`` (`prover`: its salt key and each served call's A codes, scales and z/y
+prover's state is ``private/h1/w<WINDOW>`` (`prover`: its kept salts and each served call's A codes, scales and z/y
 records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest binds each K's circuit file to the Program.
 
 ``stage``:
@@ -26,12 +26,12 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    receipt table ``receipt@<c>`` (serve-openai ``--h1-receipts``), else the stage is refused.
 3. The values those ports read are rebuilt as serve-openai committed them (`served.Served.commit`): step s's
    ``a/<K>@<s>`` its calls of K's codes over M slots (`Served.a_words`) at `served.nonce` of its first call, call c's
-   ``zy@<c>`` its records (`zy_words`) at c's, both under the prover's key and bound to the window's root, and ``b/<K>``
+   ``zy@<c>`` its records (`zy_words`) at c's, both under the prover's kept salts and bound to the window's root, and ``b/<K>``
    K's linears' weight rows (`chunk_words`, from ``--checkpoint``'s safetensors through ``checkpoint_weights``, or
    ``--weights``) at ``B_NONCE`` plus K's place under the auditor's key (``--weights-key``, or the gate's ``model-key
    --model ROLE --circuit C``; a server with neither kept no key); then call c's ``receipt@<c>``, each of its units'
    receipt as J10-R's word reference computes it on those rows (`receipt_table`), at ``RECEIPT_NONCE`` + c under the
-   prover's key. Each must have credit's root and domain, else the stage is refused; ``pub@<c>`` and ``ok`` are credit's
+   prover's kept salts. Each must have credit's root and domain, else the stage is refused; ``pub@<c>`` and ``ok`` are credit's
    own (`credit.public_table`, `credit.ok_table`).
 4. Each call is staged as a shared-row statement (`statement_tables`) on --circuits' ``k<K>`` file, whose SHA-512 must be
    the manifest's (the one the period-open committed), read and never composed (`stagers.FileStager`: the K 2048 J10-R
@@ -278,7 +278,7 @@ def _kept(prover: Path, row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray |
         return x["a"].reshape(m, k), x["s_a"].reshape(-1).astype("<f4"), x["records"]
 
 
-def a_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
+def a_value(win: dict, prover: Path, salts: PV.RunSalts, call: int) -> RV.Registered:
     """Call `call`'s step's ``a/<K>@<s>`` as `Served.commit` registered it: its step's calls of K, each its served codes
     over M slots (`Served.a_words`), at the first one's ``a`` nonce, bound to the window's root."""
     # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
@@ -298,13 +298,14 @@ def a_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
         full, sc = np.zeros((lay["m"], k), np.int8), np.zeros(lay["m"], "<f4")
         full[:len(codes)], sc[:len(codes)] = codes, scales
         words.append(SV.chunk_words(full, sc, Wt.chunks(k)))
-    return NR.commit(win["program"], f"{prefix}a/{k}@{s}", np.concatenate(words), key, SV.nonce(mine[0], "a"),
+    words = np.concatenate(words)
+    return NR.commit(win["program"], f"{prefix}a/{k}@{s}", words, salts.at(SV.nonce(mine[0], "a"), len(words)),
                      keep_rows=True, window=win["root"])
 
 
-def zy_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
+def zy_value(win: dict, prover: Path, salts: PV.RunSalts, call: int) -> RV.Registered:
     """Call `call`'s ``zy@<c>`` as `Served.commit` registered it (`zy_words` of its records over M slots, zeros for an
-    empty call), at its ``zy`` nonce, bound to the window's root."""
+    empty call), under the prover's kept salts at its ``zy`` nonce, bound to the window's root."""
     # imported here for `a_value`'s reason: `served` loads the live circuit
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
@@ -316,7 +317,8 @@ def zy_value(win: dict, prover: Path, key: bytes, call: int) -> RV.Registered:
         words = SV.record_words(np.zeros((0, n), "<i4"), np.zeros((0, n), np.int16), lay["m"], tile)
     else:
         words = SV.zy_words(records, int(row["rows"]), n, lay["m"], tile)
-    return NR.commit(win["program"], f"{win['shape']['prefix']}zy@{call}", np.asarray(words), key, SV.nonce(call, "zy"),
+    words = np.asarray(words)
+    return NR.commit(win["program"], f"{win['shape']['prefix']}zy@{call}", words, salts.at(SV.nonce(call, "zy"), len(words)),
                      keep_rows=True, window=win["root"])
 
 
@@ -348,8 +350,8 @@ def b_value(win: dict, k: int, key: bytes, checkpoint: Path | None, weights: Pat
     lin = [tuple(x) for x in win["layout"]["linears"]]
     words = np.concatenate([SV.chunk_words(c, s, Wt.chunks(k)) for c, s in linear_weights(lin, k, checkpoint, weights, read)])
     ks = sorted({kk for _n, kk, _x in lin})
-    return NR.commit(win["program"], f"{win['shape']['prefix']}b/{k}", words, key, SV.B_NONCE + ks.index(k),
-                     keep_rows=True)
+    return NR.commit(win["program"], f"{win['shape']['prefix']}b/{k}", words,
+                     SV.model_salts(key, SV.B_NONCE + ks.index(k), len(words)), keep_rows=True)
 
 
 def weights_key(a: Any, win: dict) -> tuple[bytes, str]:
@@ -443,10 +445,11 @@ def call_receipts(z: dict, win: dict, k: int, roots: tuple[bytes, bytes],
     return outputs(z, win, k, roots)["o0"]
 
 
-def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: dict[str, RV.Registered]) -> RV.Registered:
+def receipt_table(win: dict, salts: PV.RunSalts, k: int, call: int, reg: dict,
+                  values: dict[str, RV.Registered]) -> RV.Registered:
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt (`call_receipts` of the unit's A rows, B rows and record at the rows credit's file `reg` reads them, in
-    `values`), at ``RECEIPT_NONCE`` + c under the prover's key `key`, bound to the window's root."""
+    `values`), under ``salts`` at ``RECEIPT_NONCE`` + c, bound to the window's root."""
     # imported here for `a_value`'s reason: `served` loads the live circuit
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 
@@ -459,8 +462,9 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
             z[f"w_{port}"] = np.array([values[e["value"]].rows[CC.port_reads(e)[u]] for u in units], np.uint16)
     roots = (bytes.fromhex(reg["ports"][f"a_k{k}_0"]["root"]), bytes.fromhex(reg["ports"][f"b_k{k}_0"]["root"]))
     e = reg["ports"][CR.RECEIPT_PORT]
-    return NR.commit(win["program"], e["value"], call_receipts(z, win, k, roots), key, SV.RECEIPT_NONCE + call,
-                     keep_rows=True, window=win["root"])
+    rows = call_receipts(z, win, k, roots)
+    return NR.commit(win["program"], e["value"], rows, salts.at(SV.RECEIPT_NONCE + call, len(rows)), keep_rows=True,
+                     window=win["root"])
 
 
 def given(a: Any, name: str) -> Any:
@@ -571,7 +575,7 @@ def stage(a: Any) -> int:
     if manifest.get("program") != win["program"]:
         raise Refused(f"--circuits' manifest is for Program {str(manifest.get('program'))[:16]}..., not the window's "
                       f"{win['program'][:16]}...")
-    pkey = PV.key_of(prover)
+    psalts = PV.salts_of(prover)
     bkey, bwhose = weights_key(a, win)
     lay, ks = win["layout"], {name: k for name, k, _n in win["layout"]["linears"]}
     by_k: dict[int, list[int]] = {}
@@ -590,13 +594,13 @@ def stage(a: Any) -> int:
         if CR.form_of(manifest.get("files", {}), k) == "lanes":
             def rebuild(v: str, call: int, k: int = k, values: dict = values) -> RV.Registered:
                 if v == LL.A:
-                    return a_value(win, prover, pkey, call)
+                    return a_value(win, prover, psalts, call)
                 if v == LL.B:
                     return b_value(win, k, bkey, a.checkpoint and Path(a.checkpoint), a.weights and Path(a.weights),
                                    a.checkpoint_weights)
                 if v == LL.ZY:
-                    return zy_value(win, prover, pkey, call)
-                return receipt_value(win, pkey, call, values)
+                    return zy_value(win, prover, psalts, call)
+                return receipt_value(win, psalts, call, values)
             produced += stage_leaves(a, win, k, sorted(u for c in calls for u in drawn[c]), values, rebuild, work,
                                      Path(a.circuits), manifest, plan)
             continue
@@ -636,13 +640,13 @@ def stage(a: Any) -> int:
                                           a.checkpoint_weights), e, f"the served weights under {bwhose}")
                     values[v] = b
                 elif name == f"zy@{c}":
-                    values[v] = held(zy_value(win, prover, pkey, c), e, "the prover's records")
+                    values[v] = held(zy_value(win, prover, psalts, c), e, "the prover's records")
                 elif name.startswith(f"a/{k}@"):
-                    values[v] = held(a_value(win, prover, pkey, c), e, "the prover's A codes")
+                    values[v] = held(a_value(win, prover, psalts, c), e, "the prover's A codes")
                 else:
                     raise Refused(f"call {c}'s statement reads {v} at port {port}, which drawn doesn't rebuild")
             e = reg["ports"][CR.RECEIPT_PORT]
-            values[e["value"]] = held(receipt_table(win, pkey, k, c, reg, values), e,
+            values[e["value"]] = held(receipt_table(win, psalts, k, c, reg, values), e,
                                       "the word reference's receipts of the call's units")
         print(f"REBUILT K = {k}: {sorted(values)} at the window's roots", flush=True)
         for c in calls:

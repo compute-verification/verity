@@ -154,11 +154,11 @@ def beside(hash_fn: Callable, busy_fn: Callable, n_busy: int, hs: torch.cuda.Str
     return {"commit_done_ms": round(statistics.median(hd), 4), "busy_done_ms": round(statistics.median(bd), 4)}
 
 
-def raw_rate(tmp: Path, arch: str) -> dict:
+def raw_rate(tmp: Path, gencode: str) -> dict:
     """`commit_gpu.cu`'s `sha` mode (each thread chains compressions) built for this device."""
     exe = tmp / "commit_gpu"
     stubs = [f"-L{os.environ['CUDA_HOME']}/lib64/stubs"] if os.environ.get("CUDA_HOME") else []
-    rc, log = nvcc(["-O3", "-std=c++17", f"-gencode=arch=compute_{arch},code=sm_{arch}", "-o", str(exe), str(COMMIT_GPU), *stubs,
+    rc, log = nvcc(["-O3", "-std=c++17", f"-gencode={gencode}", "-o", str(exe), str(COMMIT_GPU), *stubs,
                     "-lcublasLt", "-lnvidia-ml"])
     if rc:
         return {"build_rc": rc, "log": log[-2000:]}
@@ -180,12 +180,15 @@ def main() -> None:
     forms = [int(x) for x in os.environ.get("MINB", "1 2 3").split()]
     caps = [int(x) for x in os.environ.get("CAPS", "").split()]
     beside_rows = [int(x) for x in os.environ.get("BESIDE", str(step_rows.ROW_BYTES)).split()]
+    from verity_bench import kit
+
     prop = torch.cuda.get_device_properties(0)
+    gencode = kit.card_gencode(prop.name)
     arch = f"{prop.major}{prop.minor}"
     res: dict[str, Any] = {"device": prop.name, "sms": prop.multi_processor_count, "arch": arch, "window_bytes": window,
                            "cuda_cflags": list(CUDA_CFLAGS), "forms": {}}
     tmp = Path(tempfile.mkdtemp(prefix="rows-floor-"))
-    res["raw"] = raw_rate(tmp, arch)
+    res["raw"] = raw_rate(tmp, gencode)
     print("raw", json.dumps(res["raw"]), flush=True)
 
     hs, hs_hi, bs = torch.cuda.Stream(), torch.cuda.Stream(priority=-100), torch.cuda.Stream()   # -100: clamped to the highest
@@ -203,7 +206,7 @@ def main() -> None:
     data = torch.randint(0, 256, (window,), dtype=torch.uint8, device="cuda")
     for minb in forms:
         so = tmp / f"rows_minb{minb}.so"
-        rc, log = nvcc([*CUDA_CFLAGS, "-std=c++17", "-shared", "-Xcompiler", "-fPIC", f"-gencode=arch=compute_{arch},code=sm_{arch}",
+        rc, log = nvcc([*CUDA_CFLAGS, "-std=c++17", "-shared", "-Xcompiler", "-fPIC", f"-gencode={gencode}",
                         "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", f"-I{KERNELS}", str(SRC), "-o", str(so)])
         form: dict[str, Any] = {"build_rc": rc, "ptxas": ptxas(log)}
         res["forms"][f"minb{minb}"] = form

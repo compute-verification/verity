@@ -1430,7 +1430,7 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     w = PC.of_run(h1, served)
     units = [u for c in sorted(made.kept) for u in (w.u0(c), w.u0(c) + CR.call_work(w.layout)[c][0] - 1)]
     got = PC.check(w, units, lambda c: (made.kept[c]["a"].numpy(), made.kept[c]["b"].numpy()),
-                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._key)
+                   lambda c: SV.receipt_words(made.kept[c]["receipts"]), h1._salts)
     got["s"], got["lines"] = round(time.monotonic() - t0, 1), PC.lines(got)
     got["weights"] = [{x: e[x] for x in ("value", "leaves", "words")} for e in w.entries
                       if e["value"].startswith(f"{w.prefix}b/")]

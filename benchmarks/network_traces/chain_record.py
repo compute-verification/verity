@@ -69,6 +69,8 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from verity.protocols.resource_accounting.network.prover import released_keys as RK
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
@@ -233,20 +235,15 @@ def endpoint_step(e: dict | None) -> dict:
 
 
 def endpoint_advice(b: dict) -> dict:
-    """What the record keeps of the endpoint's advice (`chain.bits`): whether it is bound and rebuilt, and how many of its
-    Commit windows are; its whys and its rows, which name requests and count each window's, stay in the report."""
-    windows = b.get("commit_windows") or []
-    return {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "commit_windows": len(windows),
-            "bound_windows": sum(bool(c.get("bound") and c.get("rebuilt")) for c in windows)}
+    """What the record keeps of the endpoint's advice (`chain.bits`): whether it is bound and rebuilt. Its Commit windows'
+    count, whys and rows, which name requests and count each window's, stay in the endpoint's report."""
+    return {"bound": b.get("bound"), "rebuilt": b.get("rebuilt")}
 
 
 def advice_bits(b: dict) -> dict:
-    """The advice's bits over the run's windows (`chain.bits`): v0's encoding, and the residual's (what the advice says
-    beyond what the walk derives from the attested I/O), None unless the advice was rebuilt from it."""
-    runs = [w for w in b.get("windows") or [] if w.get("in_run")]
-    derived = [w.get("derived_bits") for w in runs]
-    return {"v0_total": b.get("v0_total"), "T": b.get("T"),
-            "derived": sum(derived) if runs and None not in derived and b.get("rebuilt") else None}
+    """What the record keeps of the advice's bits (`chain.bits`): the egress window's T buckets alone. Its lengths, v0's
+    and the residual's, are functions of what was served: private, in the endpoint's report."""
+    return {"T": b.get("T")}
 
 
 #: `verity-vllm advice`, as network-e2e runs it
@@ -258,6 +255,10 @@ def network_attester_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     cells (`network_attester_chain.io`)."""
     from benchmarks.network_traces import network_attester_chain as WC
 
+    if not (ep / "advice_trace.jsonl").is_file():
+        raise SystemExit(f"{ep} holds no advice_trace.jsonl: the endpoint step reads the endpoint's private records (its "
+                         f"serve dir, or served_session.py endpoint's --keep records/), not its art, whose report.json "
+                         f"is public (CR_ENDPOINT=<the art> reads that report alone)")
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
 
@@ -291,20 +292,53 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     return out | {"advice": info, "chain": {"bits": bits}}
 
 
+ENDPOINT_PUBLIC_FORMAT = "network-attester-endpoint-step/1"
+
+#: The endpoint step's public document (`served_session.py endpoint`'s art): each field it may hold, by its path, with
+#: its public kind, as released_keys.json's list of that name declares it. `endpoint_public` writes these and nothing
+#: else, so a field not there is never published.
+ENDPOINT_LIST = "the endpoint step's public document"
+ENDPOINT_PUBLIC = next(x for x in RK.load().lists if x.name == ENDPOINT_LIST).keys
+
+
+def endpoint_public(step: dict) -> dict:
+    """`ENDPOINT_PUBLIC`'s fields of ``step`` (`network_attester_endpoint_step`'s), each a scalar; refuses any other value."""
+    doc: dict = {}
+    for path in ENDPOINT_PUBLIC:
+        *up, name = path.split("/")
+        src, dst = step | {"format": ENDPOINT_PUBLIC_FORMAT}, doc
+        for k in up:
+            src, dst = src.get(k) if isinstance(src.get(k), dict) else {}, dst.setdefault(k, {})
+        if name in src:
+            if src[name] is not None and not isinstance(src[name], (bool, int, float, str)):
+                raise ValueError(f"the endpoint step's {path} is a {type(src[name]).__name__}, not a scalar: "
+                                 f"ENDPOINT_PUBLIC publishes scalars only")
+            dst[name] = src[name]
+    return doc
+
+
 def network_attester_endpoint_step(e: dict | None) -> dict:
-    """`network_attester_endpoint`'s report: accepted when the network attester's attested I/O reads whole off its cells and the
-    endpoint's own advice is bound to it and rebuilt from it, in the clear."""
+    """`network_attester_endpoint`'s report, or its public document (`endpoint_public`): accepted when the network
+    attester's attested I/O reads whole off its cells and the endpoint's own advice is bound to it and rebuilt from it."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
                 "in_the_clear": CLEAR["warden_endpoint"]}
-    b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
-    advice = endpoint_advice(b)
-    io = {"accepted": io.get("accepted"), "violations": len(io.get("violations") or [])}
+    if e.get("format") == ENDPOINT_PUBLIC_FORMAT:
+        p = endpoint_public(e)
+        io, advice, bits = p.get("io") or {}, p.get("advice") or {}, p.get("advice_bits") or {}
+        if missing := [k for k in ENDPOINT_PUBLIC if k != "why" and k.split("/")[-1] not in
+                       (p if "/" not in k else p.get(k.split("/")[0]) or {})]:
+            raise ValueError(f"the endpoint's public document lacks {', '.join(missing)}: rerun `served_session.py "
+                             f"endpoint`, or pass the private keep's report.json (--keep)")
+    else:
+        b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
+        advice, bits = endpoint_advice(b), advice_bits(b)
+        io = {"accepted": io.get("accepted"), "violations": len(io.get("violations") or [])}
     why = (f"the network certifier's certified I/O doesn't read whole off its cells: {io['violations']} violation(s)"
            if not io["accepted"] else None if advice["bound"] and advice["rebuilt"]
            else "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
-            "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
+            "advice": advice, "advice_bits": bits, "at": e.get("at"),
             "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}
 
 
@@ -641,12 +675,12 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
-    """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the attested I/O), each window's declared sync, log2 #Σ_sync,
-    and no cell: no connection passes the attester but the link, whose counts the advice fixes."""
-    bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
-    advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
-    return {"advice": advice, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
+    """The network's own terms of K, charged once a period: the advice's, each window's declared sync, log2 #Σ_sync,
+    and no cell: no connection passes the attester but the link, whose counts the advice fixes. The advice's term is
+    None, not established: its charge is the registered compiler's cap ℓ per Commit window, and the advice's own length
+    is private, so no endpoint document's length is read."""
+    syncs = cert.get("sync_bits")
+    return {"advice": None, "syncs": None if syncs is None else math.ceil((cert.get("windows") or 0) * syncs),
             "cells": 0}
 
 
@@ -660,7 +694,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     network = network_terms(cert, endpoint or {})
     steps = windows * (cert.get("window_buckets") or 0)
     if None in network.values():
-        k = {"open": f"the network's terms aren't all computed: {network}"}
+        k = {"open": "not established: the network's term "
+                     + ", ".join(sorted(t for t, v in network.items() if v is None)), "network": network}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and sample the K counts", "network": network}

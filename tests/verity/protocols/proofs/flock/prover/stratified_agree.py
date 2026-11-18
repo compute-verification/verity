@@ -28,6 +28,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from verity.circuits import population as PN
 
 A4_SIZES = (287, 6_171_648, 11_480, 287, 287, 587_776)
 
@@ -163,7 +164,7 @@ def main() -> int:
     bad, checked, mutations, refusals, tables_checked = [], 0, 0, 0, 0
     res: dict = {}
     for label, members, ks in cases:
-        prog = P.mixed_population_program(members)
+        prog = PN.mixed_population_program(members)
         tids = list(dict.fromkeys(P.template_id(t) for t, _ in members))
         q = P.template_instance_query(tids[0]) if len(tids) == 1 else P.template_instances_query(tids)
         desc, part = out / f"{label}.desc", out / f"{label}.partition.json"
@@ -244,7 +245,7 @@ def main() -> int:
             if p.returncode == 0 or not core_refuses:
                 bad.append((label, k, "k out of range not refused"))
     # the frequency check: each unit's inclusion over samples on fresh streams against k_s / n_s
-    prog = P.mixed_population_program([(T[0], 3), (T[1], 5), (T[0], 2)])
+    prog = PN.mixed_population_program([(T[0], 3), (T[1], 5), (T[0], 2)])
     q = P.template_instances_query([P.template_id(T[0]), P.template_id(T[1])])
     sampling_design = D.derive(prog, q, RND.parse_design("stratified:4"))
     (out / "freq.desc").write_bytes(canonical_json(encode_program(prog)))

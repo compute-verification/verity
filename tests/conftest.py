@@ -40,7 +40,7 @@ BOOKKEEPING = {
     "tests/test_lean_vocabulary.py": ("test_every_hit_is_canonical_or_listed", "test_known_shrinks_by_count",
                                       "test_known_reasons_name_their_owner", "test_canonical_entries",
                                       "test_mirrors_name_their_port"),
-    "tests/test_metrics_registry.py": ("test_the_pinned_command_allowance_only_falls",),
+    "tests/test_metrics_registry.py": ("test_the_pinned_command_allowance_only_falls", "test_no_pin_outlives_its_row"),
     "tests/test_module_strings.py": ("test_the_exemptions_are_current",),
     "tests/test_no_keyed_salts.py": ("test_allowed_only_shrinks", "test_every_ruling_is_stated_in_the_tree",
                                      "test_written_only_shrinks"),

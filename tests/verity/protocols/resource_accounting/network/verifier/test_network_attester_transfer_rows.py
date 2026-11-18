@@ -97,7 +97,7 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
     with pytest.raises(ValueError, match="registration's word_bits is 32" if word_bits == 32 else "registration's row_schema"):
         TR.check_registration(doc, public(), signers.SESSION, **expect(t))
     port = TR.port(t.head, [3, 0])
-    assert (port["word_bits"], port.get("row_schema", G.SCHEMA)) == (word_bits, schema)
+    assert (port["word_bits"], port.get("row_schema", RV.SCHEMA)) == (word_bits, schema)
     got, salts, entry = t.statement([3, 0])
     bcs = [TR.bc(r, s, word_bits, schema) for r, s in zip(got, salts)]
     assert all(G.verify_read(dom, t.root, p, b, bytes.fromhex(path), schema)
@@ -105,12 +105,12 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
     with pytest.raises(ValueError, match="are 16 or 32 bits, not 8"):
         TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=8)
     with pytest.raises(ValueError, match="rows, not 'hm96-sha512/row/v1'"):
-        TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, schema=G.SCHEMA)
+        TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, schema=RV.SCHEMA)
 
 
 @pytest.mark.parametrize("field,value", [("link", "s1/uplink"), ("direction", "egress"), ("window", 4), ("kind", "wire"),
                                          ("value", "w"), ("program", "00" * 64), ("words", 2), ("rows", 2),
-                                         ("word_bits", 32), ("row_schema", G.SCHEMA), ("domain", "00" * 64)])
+                                         ("word_bits", 32), ("row_schema", RV.SCHEMA), ("domain", "00" * 64)])
 def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, value):
     t, cert, _issuer = attested(tmp_path)
     doc = TR.registration(t.head, cert) | {field: value}

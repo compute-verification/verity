@@ -25,12 +25,14 @@ else:
     torch = pytest.importorskip("torch")
 
 from torch import nn
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1window as HW
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as PH
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import challenger as PHC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as Wt
@@ -541,7 +543,7 @@ def _reusing(window, edit):
                  "partition": "02" * 64, "population": 4, "law": {"law": "subset", "k": 1}, "scheme": "hm96-sha512",
                  "roots": [], "leaf_layer": None, "anchors": [], "window": {"kind": "served", "run": "ef" * 64},
                  "registered": [own, *({**theirs[v], "value": name} for name, v in tables)],
-                 "previous": REG.digest(window)})
+                 "previous": DD.digest(window)})
 
 
 class _Named:
@@ -576,10 +578,10 @@ def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_t
     assert window["registered"] == c["served"]["entries"]
     for e in window["registered"]:
         want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(RV.WIDTH_KEY, RV.WORD_BITS)}
-        assert REG._earlier([window], REG.digest(window), "value", e["value"], want) == e
+        assert REG._earlier([window], DD.digest(window), "value", e["value"], want) == e
     assert c["commit"] == canonical_json(rec).hex() == CT.record_of(run) != run.served.tap.hex(run.served)
-    assert CT.digest(c["commit"]).hex() == REG.digest(rec)
-    assert run.details["commit_record"] == {"named": True, "registration": REG.digest(window), "record": REG.digest(rec)}
+    assert CT.digest(c["commit"]).hex() == DD.digest(rec)
+    assert run.details["commit_record"] == {"named": True, "registration": DD.digest(window), "record": DD.digest(rec)}
     assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
     assert c["draw"]["coin"] is not None and "refused" not in c["draw"]
     assert all(v["credit"] for v in run.gated().values())
@@ -656,10 +658,10 @@ def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
 def test_the_audited_circuits_tables_are_the_windows_registration_of_them(tmp_path, monkeypatch):
     """`reuse`: the audited circuit's tables, given as the rows its proof blocks make of each (here H1's own: each step's A
     table as the window committed it, each round's input-ids table its served ids), are the window's registration W's
-    tables: each salted under H1's key at its nonce and W's entry's domain (round 0's input-ids binding the session), its
+    tables: each salted under H1's salts at its nonce and W's entry's domain (round 0's input-ids binding the session), its
     entry W's but in name, the Commit's (`credit.commit_rows`, `credit.commit_ids`), so a record registering them reuses
     W's. Each is asked for at its rows, with its empty row (zero codes of scale 0, `EMPTY_ID`). Refused by name where a
-    table's rows aren't W's, H1's key is another, or W registers no such table."""
+    table's rows aren't W's, H1's salts are another window's, or W registers no such table."""
     kept = _kept_tables(monkeypatch)
     _record, run, _tap = _window(tmp_path, monkeypatch)
     w, served = CT.registration(run), run.served
@@ -673,7 +675,7 @@ def test_the_audited_circuits_tables_are_the_windows_registration_of_them(tmp_pa
     def rows_of(name, n, empty):
         asked.append((name, n, list(empty)))
         return words[name]
-    got = CT.reuse(w, layout, STEPS, run._key, rows_of)
+    got = CT.reuse(w, layout, STEPS, run._salts, rows_of)
     theirs = {e["value"]: e for e in w["registered"]}
     assert CT.shape(layout, STEPS) == (K, served.m, 2)
     assert {n: r.entry() for n, r in got.items()} == {n: {**theirs[h], "value": n} for n, h in names}
@@ -683,17 +685,19 @@ def test_the_audited_circuits_tables_are_the_windows_registration_of_them(tmp_pa
         (n, served.m, [0xFFFF, 0xFFFF]) for n, _ in names[STEPS:]]
     r = got[CR.commit_ids(0)]
     assert r.salts[3] == served.ids[0].salts[3] and r.path(3) == served.ids[0].path(3)
-    with pytest.raises(ValueError, match=f"{CR.commit_rows(0, K)}: .* or H1's key is another"):
-        CT.reuse(w, layout, STEPS, bytes(32), rows_of)
+    with pytest.raises(ValueError, match=f"{CR.commit_rows(0, K)}: .* or H1's salts are another window's"):
+        CT.reuse(w, layout, STEPS, PV.RunSalts(), rows_of)
+    with pytest.raises(ValueError, match="the prover's salt file holds 0 rows' salts"):
+        CT.reuse(w, layout, STEPS, PV.RunSalts(fresh=False), rows_of)
     with pytest.raises(ValueError, match=f"registers no {SV.PREFIX}ids@1, which the audited circuit reads as "
                                          f"{CR.commit_ids(1)}"):
         CT.reuse({**w, "registered": [e for e in w["registered"] if e["value"] != f"{SV.PREFIX}ids@1"]}, layout, STEPS,
-                 run._key, rows_of)
+                 run._salts, rows_of)
     words[CR.commit_rows(1, K)] = words[CR.commit_rows(1, K)].copy()
     words[CR.commit_rows(1, K)][3, 0] ^= 1
     with pytest.raises(ValueError, match=f"{CR.commit_rows(1, K)}: the rows the audited circuit's proof blocks make of it "
                                          f"are not the window's registration's {SV.PREFIX}a/{K}@1"):
-        CT.reuse(w, layout, STEPS, run._key, rows_of)
+        CT.reuse(w, layout, STEPS, run._salts, rows_of)
 
 
 @pytest.mark.parametrize("layout, steps, why", [

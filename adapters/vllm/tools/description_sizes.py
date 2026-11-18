@@ -4,8 +4,9 @@ the record (`description_sizes.json`, one entry a template) that `tests/tools/te
 What the served partitions name (`served`): every template a partition file names (`PARTITIONS`, GLM-5.3's at TP 8, each
 step's), and the units of the DSA indexer's long row as its cut names them (`dsa_topk_reads.cut`), at the longest class the
 mask's cut leaves whole (`dsa_topk_mask_cut.WHOLE_MAX`) and at the history table's capacity, which no partition file
-reaches yet.  A template's description is ``canonical_json(encode_program(population_program(template, 1)))``: every
-Definition it reaches, a traced body gate by gate, so its size is what a verifier that reads the description pays.
+reaches yet.  A template's description is the canonical JSON of its one unit's wired Program (`wired_population_program`,
+a record of the template alone): every Definition it reaches, a traced body gate by gate, so its size is what a verifier
+that reads the description pays.
 
     python tools/description_sizes.py list     each template and what names it, one JSON line each (nothing is built)
     python tools/description_sizes.py one T    measure template T; its entry as JSON on stdout
@@ -87,10 +88,11 @@ def definition(t: str) -> Any:
 
 
 def description(fn: Any) -> dict:
-    from verity.circuits.codec import encode_program
-    from verity.circuits.population import population_program
+    from verity.circuits.codec import descriptor_id, encode_program
+    from verity.circuits.population import wired_population_program
 
-    return encode_program(population_program(fn, 1))
+    program, _ = wired_population_program([(fn, 1)], {"templates": [[descriptor_id(fn), 1]]})
+    return encode_program(program)
 
 
 def size(desc: dict) -> int:

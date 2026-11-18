@@ -34,11 +34,12 @@ closes a window once its steps have committed that many
 bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
 sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
 yet absorbed); a request may still span windows. ``disk`` (`serve_guard.DiskFloor`) refuses the seal of a window that would take the
-filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`Mirror`) copies the records
-into the run's ``$OUT`` after each close and each seal.
+filesystem under its floor, and ``on_floor`` then hears why (the server stops). ``mirror`` (`serve_mirror.Mirror`) copies into the
+run's ``$OUT``, after each close and each seal, the fields `serve_mirror.PUBLIC` names of the records it lists, and nothing else.
 
-With ``served`` (the statics of the compile slice the windows are proved by, `SERVED_SLICE`; `served_statics`) each close
-also commits the step rows the window ran
+With ``served`` (the statics of the compile slice built to prove the windows, `SERVED_SLICE`; `served_statics`; no
+session of the compile slice runs and no proof of it runs, so today the rows registered at serve time are the prover's
+word) each close also commits the step rows the window ran
 (`verity_vllm.compiler.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
@@ -50,8 +51,6 @@ from __future__ import annotations
 
 import functools
 import json
-import os
-import shutil
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -71,8 +70,9 @@ from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 from verity_vllm.pipeline.spans import commit_s_of, end_lap, gc_of, phases_of
 
-#: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
-#: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
+#: The compile slice built to prove the served windows, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
+#: rows and schedule, which state the charge of the window's decisions and each certified arrival's output length; no
+#: session of it runs and no proof of it runs. The serve path commits
 #: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
 #: Why a window the certified tick admitted (order ``tick``) names no slice: its served rows record's ``no_slice``, and
@@ -93,61 +93,9 @@ def user_of(body: Any) -> str | None:
     return None if u is None else str(u)
 
 
-#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
-#: request value (the network attester's users are request indexes, ``user-<i>``), so it can leave the node with
-#: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  ``user`` is
+#: the body's as the client sent it, a request value, so the file is private and stays in the serve dir with requests.jsonl.
 REQUEST_USERS = "request_users.jsonl"
-
-#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
-#: traces, which hold request values, and the session's memory map, whose d_j digest the KV payloads, stay in the serve dir with
-#: the served rows' salts, and what reads them runs there
-MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json")
-
-
-class Mirror:
-    """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
-
-    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
-        self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
-        self.errors: list[str] = []
-        self._lock = threading.Lock()
-
-    def __call__(self) -> None:
-        with self._lock:
-            self.dst.mkdir(parents=True, exist_ok=True)
-            for name in self.names:
-                try:
-                    self._one(self.src / name, self.dst / name)
-                except OSError as e:
-                    self.errors.append(f"{name}: {type(e).__name__}: {e}"[:300])
-
-    @staticmethod
-    def _one(s: Path, d: Path) -> None:
-        if not s.is_file():
-            return
-        if s.suffix != ".jsonl":
-            part = d.with_name(d.name + ".part")
-            shutil.copyfile(s, part)
-            os.replace(part, d)
-            return
-        have = d.stat().st_size if d.is_file() else 0
-        with open(s, "rb") as f:
-            size = os.fstat(f.fileno()).st_size
-            have = have if have <= size else 0          # the serve dir's file is not the one copied so far: copy it again whole
-            f.seek(have)
-            data = f.read(size - have)
-        data = data[:data.rfind(b"\n") + 1]
-        if data or not have:
-            with open(d, "ab" if have else "wb") as g:
-                g.write(data)
-
-
-def records_mirror(out: Path, dst: str | None) -> Mirror | None:
-    """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
-    if not dst or Path(dst).resolve() == Path(out).resolve():
-        return None
-    return Mirror(out, dst)
 
 
 def ingress_of(brought: Mapping[str, Any], params: Any, rule: str) -> dict[str, Any]:

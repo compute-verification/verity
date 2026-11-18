@@ -29,8 +29,13 @@
 # Kept in $OUT/sczk: the driver's summary (each answer's verdict and public part) and each round's Program
 # (verifier/program.json). What the verifier received stays in $W: the registrations (the network attester's with
 # their wiring), the openings, the registered reads and the sessions, as do answers.json and every prover's file.
-# What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`); its records, heads and salts (the
-# prover's) and its request values (traffic.json's requests, client.json's responses) nowhere.
+# What the gate publishes of a rehearsal goes in $OUT/warden (`auditor.py publish`, the job failing when it does); its
+# records, heads and salts (the prover's) and its request values (traffic.json's requests, client.json's responses)
+# nowhere.
+# With SC_KEEP=DIR (outside the run dir; scan_period.sh's and benchmarks/scan_cost/run.sh's), what they read goes to
+# DIR, 0700 with 0600 files: the network attester run's certified.jsonl and deployment.json (DIR/warden) and the
+# driver's answers.json, summary.json, joint/program.json, each round's registration.json and each session's prove.log
+# and lean-verify.log (DIR/sczk), a child's logs, witness like the rest. Its owner removes it.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -90,7 +95,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/warden" "$OUT/warden" > "$OUT/warden/outcome.json"
+  "$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/warden" "$OUT/warden" > "$OUT/warden/outcome.json" || { log "sczk: the publisher (auditor.py publish) exited $? on the rehearsal"; exit 6; }
   SC_WARDEN_RUN=$W/warden
 fi
 CH=()
@@ -116,5 +121,18 @@ rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
 (cd "$W/sczk" && find . -type f \( -path ./summary.json -o -path './*/verifier/program.json' \) -print0 \
   | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
+if [ -n "${SC_KEEP:-}" ]; then
+  case $(realpath -m "$SC_KEEP")/ in "$(realpath -m "$RESEARCH_RUN_DIR")"/*)
+    log "sczk: SC_KEEP=$SC_KEEP is under the run dir, which custody publishes: give a directory outside it"; exit 4;; esac
+  (umask 077 && mkdir -p "$SC_KEEP/warden" "$SC_KEEP/sczk" && chmod 700 "$SC_KEEP" || exit
+   if [ -n "${SC_WARDEN_RUN:-}" ]; then
+     for f in certified.jsonl deployment.json; do
+       for d in "$SC_WARDEN_RUN" "$SC_WARDEN_RUN/witness"; do [ -f "$d/$f" ] && { cp "$d/$f" "$SC_KEEP/warden/" || exit; break; }; done
+     done
+   fi
+   cd "$W/sczk" && find . -type f \( -path ./answers.json -o -path ./summary.json -o -path ./joint/program.json \
+     -o -regex '\./[^/]*/registration\.json' -o -regex '\./[^/]*/session-[^/]*/\(prove\|lean-verify\)\.log' \) -print0 | xargs -0 -r -I{} cp --parents {} "$SC_KEEP/sczk/") \
+    || { log "sczk: keeping what a later step reads in $SC_KEEP failed"; [ "$rc" = 0 ] && rc=5; }
+fi
 log "sczk: done, rc $rc"
 exit "$rc"

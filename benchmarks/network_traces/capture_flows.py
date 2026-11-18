@@ -443,7 +443,7 @@ def record_counts(run: Path) -> dict:
     from verity.protocols.resource_accounting.network.verifier.link_frame import DATA
     from verity.protocols.resource_accounting.network.verifier.certificate import record_head
     from verity.protocols.resource_accounting.network.verifier.grid import row_count
-    from verity.protocols.resource_accounting.network.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+    from verity.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
     from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())

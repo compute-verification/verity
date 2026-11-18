@@ -6,11 +6,11 @@
 #   cd <tree>/adapters/vllm && bash verity_vllm/ops/pod_fa3_tap.sh          # ~15-30 min first time (nvcc 12.4, sm_90a)
 #   -> prints  FA3-TAP-OK <sha256> hdims=<mask> <path>   (or FA3-TAP-FAIL <reason>, exit 1)
 #
-# (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at $FA_SRC (default: beside $FA2, /workspace/cp/vllm-flash-attn; cloned if absent); (2) copied to
+# (1) pinned vllm-project/flash-attention @ 506341a1 (+ cutlass) at $FA_SRC (default: beside $FA2, <build root>/vllm-flash-attn; cloned if absent); (2) copied to
 # $FA2/trees/fa3tap and patched by fa3_tap_src/apply_fa3_tap.py; (3) built by fa3_tap_src/build_fa3_ext.py into $FA2/build/fa3_matReq;
 # (4) verified: loads, exposes fwd + verity_set_tap_v9 / verity_tap_hdims, mode 3 / src 59 / layout 9, hdims mask covers the request.
 # Exactness is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).  Env: VENV (/workspace/venv-cu129), CUDA_HOME
-# (required), CARD_SKU (required: the card file the tap compiles for), FA2 (/workspace/cp/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1,
+# (required), CARD_SKU (required: the card file the tap compiles for), FA2 (<build root>/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1,
 # FA3_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa3_matReqG.so` in $FA2/build/fa3_matReqG: the same tree with VERITY_ROW_GUARD=1,
 # ROW word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
@@ -18,7 +18,8 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
-FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${FA3_TAP_HDIMS:-64,128}
+[ -n "${FA2:-}" ] || FA2=${VERITY_BUILD_ROOT:-$("$PY" -c "from verity_vllm.pipeline.cli import MACHINE; print(MACHINE[\"RunEnv.build_root\"])")}/fa2 || { echo "FA3-TAP-FAIL no build root (VERITY_BUILD_ROOT)"; exit 1; }
+HDIMS=${FA3_TAP_HDIMS:-64,128}
 FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa3_tap_src

@@ -66,8 +66,9 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   response's length is held (``length_held``) only when the record accepted and is complete.
 * **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
   one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
-  own, so it is false while any entry above is null; else a reject of the stop docket. A reader that wants a
-  complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
+  own, so it is false while any entry above is null; else a reject of the stop docket. A complete audit of the stop
+  population is read from ``summary.json``'s ``complete``, never its ``accepted`` alone: the verdict record
+  (`verdict_record`) words an accept that is not complete ``not complete``.
 * **The reason** (`reason`): ``summary.json``'s ``reason`` is one word for what Lean's verdict of record refused, read
   from that verdict and from nothing else. It is ``stop_word`` where Lean's own verdict on the stop blocks' session
   refused the proof it read at its inner check's batched constraint (`UNSATISFIED`), the check that holds a proof to
@@ -107,14 +108,16 @@ import a0  # noqa: E402
 import prove_subprotocol as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
 import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
@@ -241,15 +244,13 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
     the sampled ``units`` (`a0.session`, behind the ZK server when ``zk_server`` names its binary), then Lean's
     verdict of record on it (`a0.lean_verify`). ``forged``: the prover's self-check is skipped. -> what `decide` takes:
     the session's records' SHA-512, the units it served and proved, its instances, the verdicts and its timing."""
-    from verity_bench import kit
-
     out.mkdir(parents=True, exist_ok=True)
     n, local = st["n"], sorted(int(u) for u in units)
     (out / "sample.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
                                               sort_keys=True))
     env = {**a0.prover_env(zk_server, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
     t = time.time()
-    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", kit.free_port(), out, sample_file=out / "sample.json",
+    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", free_port(), out, sample_file=out / "sample.json",
                               zk=True, env=env, prove_timeout=timeout)
     seconds = round(time.time() - t, 1)
     lv = a0.lean_verify(lean, st, n, out, zk=True)
@@ -313,7 +314,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
     root = TS.first_root(handoff)
     first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
-    layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
+    layout, logged = first.layout, {DD.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
@@ -328,7 +329,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
     want = BS.stop_record(handoff["commit"], check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
-    if R.digest(want) != R.digest(s["record"]):
+    if DD.digest(want) != DD.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
                           schemas=held.schemas, window_root=root)
@@ -350,7 +351,7 @@ def reads(r: Resumed) -> dict[str, Any]:
     mine = L.stop_ports()[BR.STOP]
     ports = dict(r.held.file["ports"])
     ports[OUT] = {"value": CS.own_value(BR.STOP), "root": stop["root"], "leaves": mine["leaves"], "words": L.words(BR.STOP),
-                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], REG.SCHEMA_KEY: BR.SCHEMA,
+                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], RV.SCHEMA_KEY: BR.SCHEMA,
                   "reads": list(range(L.spans))}
     return {**r.held.file, "ports": dict(sorted(ports.items()))}
 
@@ -564,7 +565,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
 def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
     """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
     `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
-    verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
+    verdict, so an accept whose record left an entry null says so. Else a
     reject of the stop docket, naming the record's checks that failed and its verdicts that did not accept, or
     that the stream refused the outcome and wrote no record."""
     audit = got.get("audit") or {}

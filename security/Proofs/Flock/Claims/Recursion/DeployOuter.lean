@@ -154,6 +154,11 @@ def VO : Claims.Verifier Coin where
     | none => 1
   next := nextO
 
+/-- The outer verifier has at least one message, the last. -/
+theorem VO_k_pos (x : Hash.Msg) : 0 < VO.k x := by
+  simp only [VO]
+  split <;> omega
+
 /-! ## Its steps against `H` -/
 
 theorem nextO_rej (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}

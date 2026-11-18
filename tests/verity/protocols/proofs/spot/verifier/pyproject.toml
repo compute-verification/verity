@@ -56,6 +56,8 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
           # the vLLM adapter, which test_pearltie and test_remotetie load, and the PyTorch adapter it loads
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
+          # the RTX PRO 6000's card, which the vLLM adapter's definitions registry reads in test_proofs
+          "calibration/hardware/cards/rtx-pro-6000-server.toml",
           "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py",
           # test_pearltie holds the window's tie to Pearl+'s verdict, `verify_run.tie`, which has no home outside
           # `benchmarks/` yet (a verifier's suite reading `benchmarks/`, to be cut): the script, its sibling `fast_tile`,

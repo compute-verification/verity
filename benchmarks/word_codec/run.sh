@@ -27,6 +27,8 @@ WC=benchmarks/word_codec
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 B=$(mktemp -d /tmp/word-codec.XXXXXX); trap 'rm -rf "$B"' EXIT
 LIBS=()
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") ||
+  { echo "no build target: the run's machine's record names no card with an architecture file (machine.py, above)"; exit 4; }
 for f in ${KV_FIELDS:-512 768}; do
   n=${f%%[a-z]*} tag=${f#"${f%%[a-z]*}"} flags=()
   lib=p$n${tag:+-$tag}
@@ -37,7 +39,7 @@ for f in ${KV_FIELDS:-512 768}; do
   [[ $tag == *p0* ]] && flags+=(-DKV_OCC_PF=0)
   [[ $tag == *m* ]] && flags+=(-DKV_MASK=1)
   [[ $tag == *f6* ]] && flags+=(-DKV_FOLD6=1)
-  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
+  nvcc -O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
     "${flags[@]}" -o "$B/kv-$lib.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
   LIBS+=(--lib "$lib=$B/kv-$lib.so")
 done

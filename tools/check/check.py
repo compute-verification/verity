@@ -1226,7 +1226,37 @@ def agreement_preflight(pin: dict, bins: list[Path], w: Path | None = None) -> s
 
 def lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None = None) -> int:
     """Unpack the pinned upstream build and inputs, check every binary against the pin and that this machine can run them, and
-    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof)."""
+    run `ci.py` on every replayable set with ``verify`` (default: this tree's build of verity-verify-proof).  The run directory
+    keeps its verdicts and records (`agreement_prune`), not the gigabytes of work tree beside them."""
+    rc = 1
+    try:
+        rc = _lean_agreement(out, upstream, inputs, verify)
+    finally:
+        agreement_prune(out / "flock-agreement", red=rc != 0)
+    return rc
+
+
+def agreement_prune(w: Path, red: bool) -> None:
+    if not w.is_dir():
+        return
+    for p in (w / "upstream", w / "inputs"):
+        shutil.rmtree(p, ignore_errors=True)
+    for p in [p for p in w.rglob("archive") if p.is_dir()]:
+        shutil.rmtree(p, ignore_errors=True)
+    cases = sorted(p for p in w.rglob("*") if p.is_file() and (p.name == "session.json" or p.suffix == ".bin"))
+    if red and cases:
+        with tarfile.open(w / "cases.tar.gz", "w:gz", compresslevel=6) as t:
+            for p in cases:
+                t.add(p, arcname=str(p.relative_to(w)))
+    for p in cases:
+        p.unlink()
+    kept = [p for p in w.rglob("*") if p.is_file()]
+    print(f"check: lean-agreement: kept {len(kept)} files ({sum(p.stat().st_size for p in kept) >> 10} KiB) of its work tree in "
+          f"{w}: the pinned build and inputs and their copies are fetched again by art id, and each case's session and circuits "
+          + ("are in cases.tar.gz" if red and cases else "are dropped on a pass"), flush=True)
+
+
+def _lean_agreement(out: Path, upstream: Path, inputs: Path, verify: Path | None) -> int:
     import tarfile
 
     pin = json.loads(UPSTREAM_PIN.read_text())
@@ -1906,7 +1936,7 @@ OPT_IN = {
             "pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
             "pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
             "pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
-            "pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
+            "pipeline/test_interior_table.py::test_a_table_reads_interior_registers_the_same_root_and_domain_each_commit",
             "pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
             "pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
             "pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),

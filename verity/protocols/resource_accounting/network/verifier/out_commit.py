@@ -1,8 +1,6 @@
 """The network attester's output value: the output it relayed, committed by the attester as a registered value
-(`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
-that attestation alone (`check_out`), so every output proof block's row is a registered read of it, opened against
-the attester's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
-clear.
+(`one_stage.registered`) and its head signed with its key, never by the prover. `check_out` checks the record (its key,
+session, execution phase, shape, domain and LMS signature), and no verifier calls `check_out` or reads the record.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit
 it, under the attester's salts: `rows` rows of `words` leaves of `word_bits` bits in the row format `schema` (by
@@ -27,19 +25,19 @@ Its attestation is `Issuer.sign`'s of the out digest for the egress execution ph
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the network attester cells'
 digests are under other tags, so none verifies as another.
 
-**The record** (`AttestedOut.public`) is the head and its attestation as one public JSON object, what the auditor
+**The record** (`AttestedOut.public`) is the head and its attestation as one public JSON object, which no party
 receives:
 
     {"format": RECORD, "link", "direction", "window", "session", "value", "program", "words", "rows", "word_bits",
      "row_schema", "domain", "root", "certificate": {"key", "digest", "signature"}}
 
-`check_out` is the verifier's read of it: the root to pin (`registration.check`'s `pinned`), or `OutRefused` naming the
+`check_out` checks it: the root it gives (`registration.check`'s `pinned`), or `OutRefused` naming the
 check that fails (`REFUSALS`).
 
 **The shape** (`OutShape`) is what both sides take from the reading program's registration, never from a flag: the
 value's program, name, `words` leaves a row (the row width of the port every read of the value names), `rows`, the
-leaves' `word_bits` and the row `schema`. The attester commits at it (`commit_out`), and the verifier holds a record
-to it (`check_out`): another width, word size or row schema is `out-width`, another row count `out-rows`.
+leaves' `word_bits` and the row `schema`. The attester commits at it (`commit_out`), and `check_out` holds a record
+to it: another width, word size or row schema is `out-width`, another row count `out-rows`.
 """
 
 from __future__ import annotations

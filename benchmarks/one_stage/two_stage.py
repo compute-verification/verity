@@ -900,7 +900,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
                 raise ValueError(f"{m.template}'s {p!r} reads {x.value}, which the interior registration doesn't register")
             e = values[x.value]
             ports[p] = {"value": x.value, "root": e["root"], "leaves": int(e["leaves"]), "words": int(words),
-                        "word_bits": RV.WORD_BITS, "domain": e["domain"], REG.SCHEMA_KEY: m.schema(p),
+                        "word_bits": RV.WORD_BITS, "domain": e["domain"], RV.SCHEMA_KEY: m.schema(p),
                         "reads": [s * x.per + a for s in range(q) for a in x.at], RV.READS_FROM: m.base}
         out[m.key] = LK.reads_file(ports, registered=REG)
     return out
@@ -937,7 +937,7 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
         reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.tree(m, p)), "words": int(words),
-                                   "word_bits": RV.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
+                                   "word_bits": RV.WORD_BITS, RV.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,

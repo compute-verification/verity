@@ -35,7 +35,7 @@ RUN=$W/run
 mkdir -p "$RUN" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/${N2_RUN:?}" -C "$RUN" || { log "n2zk: no run in $N2_RUN"; exit 7; }
 log "n2zk: the run from $N2_RUN: $(ls "$RUN" | tr '\n' ' ')"
 mkdir -p "$OUT/run"
-"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json"
+"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$RUN" "$OUT/run" > "$OUT/run/outcome.json" || { log "n2zk: the publisher (auditor.py publish) exited $? on $RUN"; exit 6; }
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run "$RUN" \
   --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \

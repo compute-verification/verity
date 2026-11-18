@@ -1,6 +1,4 @@
-// `ncp-v2`'s committed values, one unit at a time, as functions that compile for the host (g++, the CPU gate) and the device
-// (nvcc, `ncp2_kernels.cu`). Each is `pouw_native`'s computation of the same values; `pouw_device.first_difference` holds
-// the two to the same leaves. Hashes: SHA-256 and SHA-512 (FIPS 180-4), Keccak-p[1600, n_r] with SHAKE256 (FIPS 202) and
+// `ncp-v2`'s committed values, one unit at a time, as functions that compile for the host (g++) and the device (nvcc); the row-table and registered-row kernels build on its hashes. Hashes: SHA-256 and SHA-512 (FIPS 180-4), Keccak-p[1600, n_r] with SHAKE256 (FIPS 202) and
 // TurboSHAKE128 (RFC 9861). Floating point: every step is one IEEE binary32 operation, rounded to nearest, without
 // contraction (the host builds with -ffp-contract=off; the device uses the _rn intrinsics).
 #pragma once
@@ -260,7 +258,7 @@ using Shake256 = Sponge<24, 136>;
 using TurboShake128 = Sponge<12, 168>;
 constexpr uint8_t SHAKE_DS = 0x1F;
 
-// ---- ncp-v2 (`verity.protocols.accounting.pouw.prover.circuit.ncp2`'s docstring; `pouw_native`) --------------------------------------------------------
+// ---- ncp-v2 (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2`'s docstring) --------------------------------------------------------
 
 // Tags, as `ncp2` and `pouw_circuit` spell them (the unit tag's and the node tag's NUL included).
 #define NCP2_TAG_ROW "ncp2-row"
@@ -417,7 +415,7 @@ HD void unit_leaf_bytes(Sha256& h, const uint8_t* b, size_t n) {
   for (size_t i = 0; i < n; ++i) sha256_u32le(h, b[i]);
 }
 
-// A digest unit's outputs are its big-endian words (`pouw_native._be`).
+// A digest unit's outputs are its big-endian words.
 HD void unit_leaf_digest(const uint8_t d[64], uint8_t out[32]) {
   Sha256 h;
   unit_leaf_begin(h);
@@ -517,7 +515,7 @@ HD void tree_node(const uint8_t* left, const uint8_t* right, uint8_t out[64]) {
 
 // The RFC 6962 tree over strips lo … hi − 1 (`ncp2.rfc6962`): nodes appended to ``nodes`` (64 bytes each) in emission order
 // (after both subtrees), ``*count`` of them; returns the root, a strip's own digest or a node's. Iterative, so the device
-// stack stays static: a frame per level, for at most 2^19 strips (`ncp2_commit` refuses more).
+// stack stays static: a frame per level, for at most 2^19 strips.
 HD const uint8_t* rfc6962(const uint8_t* strips, int lo, int hi, uint8_t* nodes, int* count) {
   struct Frame { int lo, hi, split; const uint8_t* left; };
   Frame st[21];

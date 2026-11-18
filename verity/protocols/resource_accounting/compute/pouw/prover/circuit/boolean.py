@@ -61,7 +61,7 @@ from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compr
                                      or_reduce, shl_window, sub)
 from verity.circuits.boolean.trace import definition
 
-from . import words as W
+from verity.circuits.ops import words as W
 
 __all__ = ["PouwBf16Neg", "PouwBlackwellE4m3SaltDead", "PouwBlackwellE4m3Window", "PouwChi32", "PouwETilde", "PouwF32SqrtRn",
            "PouwHopperE4m3SaltDead", "PouwHopperE4m3Window", "PouwRotl64Hi", "PouwRotl64Lo", "PouwSqAcc", "PouwSqCeil",

@@ -62,7 +62,7 @@ done
 "$PY" -m verity.protocols.resource_accounting.network.attester.network_attester_serve rehearse --fake --watermark --out "$W/run" ${form[@]+"${form[@]}"} "$@"
 rehearsed=$?
 mkdir -p "$OUT/run"
-"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/run" "$OUT/run" > "$OUT/run/outcome.json"
+"$PY" -m verity.protocols.compose.verifier.live_challenger.auditor publish "$W/run" "$OUT/run" > "$OUT/run/outcome.json" || { log "the publisher (auditor.py publish) exited $? on $W/run"; exit 6; }
 
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing
 size=-1

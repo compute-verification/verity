@@ -38,6 +38,7 @@ from collections.abc import Callable, Mapping, Sequence
 from types import SimpleNamespace
 from typing import Any
 
+from verity.commitments.live_coin import CoinError, LiveOpening
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     REPLY_FIELDS,
@@ -50,11 +51,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 )
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
 from verity.protocols.proofs.spot.verifier.challenger import remote
-from verity.protocols.proofs.spot.verifier.challenger.challenger import (
-    CoinError,
-    LiveOpening,
-    live_reason,
-)
+from verity.protocols.proofs.spot.verifier.challenger.challenger import live_reason
 from verity_vllm.config import option
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"

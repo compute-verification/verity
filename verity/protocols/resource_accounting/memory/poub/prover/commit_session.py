@@ -53,7 +53,7 @@ class CommitSession:
                  the session's requests (`requests`: one GPU, synchronous steps, no
                  prefix caching, the KV pool at ``kv_pages`` ranges, None: the engine's own, at the row's
                  gpu_memory_utilization), which the build answers or refuses, and
-                 ``binder.Binder(store, passes=False, kv=False)``, subscribed to the
+                 its binder under the session's settings (`settings`: no passes, the KV outside), subscribed to the
                  workload's memory and steps events, registering weight tensors up to
                  ``weight_blocks`` blocks.  The KV pool stays outside
                  the registration (served writes do, and live KV is uncredited for chat),
@@ -113,11 +113,15 @@ class CommitSession:
         attach files under the scheme's name."""
         return list(POUB.requests(self.ctx()))
 
+    def settings(self) -> dict[str, Any]:
+        """`POUB`'s settings under the session: a binder that runs no pass of its own, the KV pool outside the
+        registration, and the session's ``weight_blocks`` (none or 0: every tensor)."""
+        return {"passes": False, "kv": False, "weight_blocks": self.weight_blocks or 0}
+
     def ctx(self) -> dict[str, Any]:
         """What the session hands `POUB.attach` beside its settings and the build's key: its store, that it is a
-        session in lockstep, its pool's ranges, and the binder's keywords."""
-        return {"store": self.store, "session": True, "ranges": self.kv_pages,
-                "binder": {"passes": False, "weight_blocks": self.weight_blocks, "kv": False}}
+        session in lockstep, and its pool's ranges."""
+        return {"store": self.store, "session": True, "ranges": self.kv_pages}
 
     def target(self, target: Any) -> None:
         """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
@@ -134,7 +138,7 @@ class CommitSession:
             raise NotImplementedError(f"{GOAL}: the process {PROCESS!r} is handed the exchange of the build it attaches "
                                       "to (exchange=, called here); this adapter passed none")
         ex = self.exchange()
-        self.binder = ex.attach(POUB, None, **self.ctx())
+        self.binder = ex.attach(POUB, self.settings(), **self.ctx())
         ex.subscribe(POUB.name, "declared", self._on_declared)
 
     def _on_declared(self, declared: H.Declared) -> None:

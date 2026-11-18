@@ -262,11 +262,6 @@ def test_unknown_set_and_bad_range_are_refused() -> None:
 
 
 def _gpu_compute_capability() -> str | None:
-    try:
-        if not Path(IH.P.cuda_bin("nvcc")).is_file():
-            return None
-    except SystemExit:
-        return None
     if os.environ.get("CUDA_VISIBLE_DEVICES") == "":     # nvidia-smi lists the host's GPUs; this process may use none of them
         return None
     try:
@@ -274,6 +269,8 @@ def _gpu_compute_capability() -> str | None:
     except OSError:
         return None
     if smi.returncode != 0 or not smi.stdout.strip():
+        return None
+    if not Path(IH.P.cuda_bin("nvcc")).is_file():        # a GPU host with no toolkit on record raises here, with the fix
         return None
     return smi.stdout.strip().splitlines()[0].strip()
 

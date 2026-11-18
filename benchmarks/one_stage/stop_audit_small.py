@@ -46,8 +46,9 @@ sys.path.insert(0, str(HERE))
 
 import stop_audit as SA  # noqa: E402
 import two_stage as TS  # noqa: E402
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 SERVE = "stop-audit-small"
@@ -72,7 +73,7 @@ def committed(v: int = 128, outputs: int = 32, spans: int = 6, nonce: str = SERV
     """The class's commitment: ``spans`` requests under `stop_rule`, alternately ended at the stop id and at
     ``max_tokens``, in the window of the serve ``nonce``. ``check``: another check template than `TokenSelect_v4{V}`."""
     check = BR.check_template(template(v)) if check is None else check
-    L = BR.Layout(check, 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0), stop=stop_rule(outputs), held=True)
+    L = BR.Layout(check, 0, 1, len(PROMPT), outputs, spans, BR.run_root(nonce, 0), stop=stop_rule(outputs), held=True)
     return BR.commit([BR.Span(f"r{i}", PROMPT, SAMPLING, *ENDS[i % len(ENDS)]) for i in range(spans)], L, 0)
 
 
@@ -105,7 +106,7 @@ def unlogged(handoff: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
     check = TS.template_fn(pub["check"]) if check is None else check
     other = {**handoff["record"], "previous": "5a" * 64}
     record = BS.stop_record(pub, check, BS.Stop.of(pub["stop"]), s["record"]["law"], other)
-    assert record["previous"] == R.digest(other) != handoff["registration"]
+    assert record["previous"] == DD.digest(other) != handoff["registration"]
     return {**handoff, "stop": {**s, "record": record}}
 
 

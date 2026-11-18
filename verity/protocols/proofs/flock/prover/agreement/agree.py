@@ -36,7 +36,10 @@ misses an expectation.
 import argparse, hashlib, json, os, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from verity.commitments.domains import FLOCK_NETLIST
+
+#: `verity.commitments.domains.FLOCK_NETLIST`, as bytes: the agreement scripts import the standard library alone
+#: (`test_domains.STDLIB_COPIES` holds the two equal)
+FLOCK_NETLIST = "verity/flock-netlist/v1"
 
 
 def reads(a, s):

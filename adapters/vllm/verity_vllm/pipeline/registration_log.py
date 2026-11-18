@@ -28,9 +28,9 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.types import Array, RecordType, Tuple, Type
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity_vllm.commit import registered_rows as RR
 
@@ -90,7 +90,7 @@ def record(program_digest: str, params: Sequence[tuple[str, Type]], theta: Seque
                              f"{e.get('word_bits', 16)}-bit leaves, its type is {t.leaves} of {word_bits(t)}")
     rec = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "program": program_digest, "window": dict(window),
            "registered": [dict(entries[n]) for n in names], "roots": [], "previous": None}
-    d = REG.digest(rec)
+    d = DD.digest(rec)
     return {"record": rec, "digest": d,
             "trusted": {"log": [rec], "run": d, "params": [[n, t.to_json()] for n, t in params]},
             "provenance": [{"kind": "registered", "registration": d, "value": nodes[k][0], "root": entries[nodes[k][0]]["root"]}

@@ -25,9 +25,22 @@ from verity.protocols.resource_accounting.memory.pous.verifier.schemes import RE
 
 ROOT = Path(__file__).resolve().parents[7]
 sys.path.insert(0, str((ROOT / "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py").parents[1]))
+from p2_store.load import (  # noqa: E402, F401
+    COLUMNS,
+    LEAD,
+    MATRICES,
+    PARAMS,
+    PARTS,
+    PAYLOAD,
+    ROW,
+    SPEC,
+    StoreLayout,
+    Tensor,
+    blocks_of,
+    matrix_name,
+)
+
 from verity.protocols.resource_accounting.memory.pous.verifier.p2_v1 import reference as R  # noqa: E402
-from p2_store.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout,  # noqa: E402, F401
-                           Tensor, blocks_of, matrix_name)
 
 SCHEMA = "verity-pous/p2-store-layout/v1"
 #: the store's coding scheme, by its name in PoUS's registry: the one registered at the store's `PARAMS`

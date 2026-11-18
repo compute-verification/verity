@@ -29,6 +29,8 @@ from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -37,13 +39,9 @@ from verity.circuits.program import Program
 from verity.commitments.domains import FLOCK_CIRCUIT_BINDING, HM96_SHA512_ROW_V1
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import (
-    audit,
-    partition as P,
-    docket as R,
-    served as SV,
-    verifier as V,
-)
+from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
+from verity.protocols.proofs.spot.prover import served as SV
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import file_sha512 as sha512_file, verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
@@ -769,7 +767,7 @@ def main() -> int:
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": sampling_design, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
-    program = P.population_program(template, n)
+    program = PN.population_program(template, n)
     query = P.template_instance_query(template)
     bind = None
     if a.bind:
@@ -791,7 +789,7 @@ def main() -> int:
     fv = header["frame_v3"]
     want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
     leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
-    rec = R.record(program, query, sampling_design, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
+    rec = DK.record(program, query, sampling_design, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer).to_json(),
               "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
@@ -799,7 +797,7 @@ def main() -> int:
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
         checks["bindings"] = bindings(st["meta"], header, rec, proof_block_class(a.set, a.m0_pythonpath, out))
-    summary["registration_digest"] = R.digest(rec)
+    summary["registration_digest"] = DD.digest(rec)
     summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
@@ -836,7 +834,7 @@ def main() -> int:
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, RND.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, previous=R.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    v = V.check(dict(rec, previous=DD.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -871,7 +869,7 @@ def main() -> int:
         key = "prover-ignores-the-draw (M0 selftest)" if case == "unit_draw_ignored_refused" else "m0-selftest-unit-draw-session"
         neg[key] = {"refused" if case == "unit_draw_ignored_refused" else "passed": bool(res and res.get("pass")), "case": res}
     tn = 8
-    tprog = P.population_program(template, tn)
+    tprog = PN.population_program(template, tn)
     tpart = P.partition(tprog, query)
     tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
     tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
@@ -880,7 +878,7 @@ def main() -> int:
     theader = public_header(tst["dir"], tn)
     tlaw = RND.parse_design("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
-    trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
+    trec = DK.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},
                     leaf_layer=sha512_file(tst["dir"] / f"pub-{tn}.bin"))
     trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")

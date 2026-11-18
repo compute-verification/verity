@@ -178,7 +178,7 @@ def test_a_registration_in_another_format_is_refused(staged):
             ps[port].pop("row_schema")
             ps[port].update({} if schema is None else {"row_schema": schema})
         code, out = _statement(staged, _own(staged, f"own-{port}-{schema and schema[-6:].replace('/', '-')}", edit))
-        want = f"port {port} is a {SCHEMAS[value]} row, and {value}'s registered rows are {schema or G.SCHEMA} rows"
+        want = f"port {port} is a {SCHEMAS[value]} row, and {value}'s registered rows are {schema or RV.SCHEMA} rows"
         assert code == 1 and want in out, (port, schema, out)
 
 

@@ -799,12 +799,11 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
     (d / "raw").mkdir(parents=True, exist_ok=True)
-    for p in (ROOT / "benchmarks/harness", ROOT / "tools/config"):
-        if str(p) not in sys.path:
-            sys.path.insert(0, str(p))
-    from verity_bench import kit
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from verity.ports import free_port
 
-    port = kit.free_port()
+    port = free_port()
     argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS,
             "--async-scheduling" if async_scheduling else "--no-async-scheduling", *server_args,

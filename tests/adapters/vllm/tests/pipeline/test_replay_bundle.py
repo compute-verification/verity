@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -219,20 +218,6 @@ def test_keys_both_in_the_bundle_and_its_private_part_or_in_neither_are_refused_
     (b / RB.PRIVATE[0]).unlink()
     there.unlink()
     with pytest.raises(ValueError, match="is not in its private directory"):
-        RB.open_bundle(b)
-
-
-def test_a_manifest_that_lists_no_salt_or_key_file_is_refused_by_name_at_sealing_and_opening(tmp_path):
-    m = _sealed(tmp_path)
-    RB.partial(tmp_path / "o", 1).mkdir(parents=True)
-    with pytest.raises(ValueError, match="lists no salt or key file"):
-        RB.seal(tmp_path / "o", 1, {"pair": 1}, None)
-    b = Path(m["path"])
-    man = json.loads((b / RB.MANIFEST).read_text())
-    (b / RB.PRIVATE[0]).unlink()
-    del man["files"][RB.PRIVATE[0]]
-    (b / RB.MANIFEST).write_text(json.dumps(man))
-    with pytest.raises(ValueError, match="lists no salt or key file"):
         RB.open_bundle(b)
 
 

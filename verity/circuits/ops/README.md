@@ -26,8 +26,8 @@ NaN result: a registered id denotes one function, so the GPU's NaN came as a new
 The families: integer, bit and comparison operations; FP32 and BF16 arithmetic, with the FTZ family of
 FlashAttention-2's fast-math build; the special-function unit's approximations, from measured tables; the tensor-core
 accumulator steps and the BF16, E4M3 and FP32 casts; the GEMM coordinate; exact s8 matmul and the s8 quantizer of a
-W8A8 linear's activations; `ncp-v2` dequantization; a padded MoE layer's routed expert GEMMs; greedy argmax; row
-composites; and a KV-cache append's BF16 to E4M3 conversion. Each module registers one family, and its docstring lists
+W8A8 linear's activations; `ncp-v2` dequantization; PoUW's word primitives (`words`); a padded MoE layer's routed
+expert GEMMs; greedy argmax; row composites; and a KV-cache append's BF16 to E4M3 conversion. Each module registers one family, and its docstring lists
 what it registers.
 
 `ops.boolean` holds their Boolean versions, the same functions on bits. The terms are

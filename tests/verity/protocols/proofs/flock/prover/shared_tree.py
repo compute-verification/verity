@@ -62,13 +62,13 @@ def program(n: int) -> tuple[Program, dict]:
 
 def port(reg: RV.Registered, reads: dict[int, int], units: int) -> dict:
     """The verifier's own entry for a port reading `reg`: unit u reads row `reads[u]`, other units none."""
-    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(RV.SCHEMA),
             "reads": [reads.get(u) for u in range(units)]}
 
 
 def tree_port(reg: RV.Registered, template: str, field: str) -> dict:
     """The verifier's own entry for a link row reading the tree of (`template`, `field`): its reads the program's."""
-    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(RV.SCHEMA),
             "tree": {"template": template, "field": field}, "reads": []}
 
 

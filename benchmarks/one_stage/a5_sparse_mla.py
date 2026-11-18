@@ -47,7 +47,7 @@ import a5  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.periods import rows as CS  # noqa: E402
 
@@ -73,7 +73,7 @@ def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.
     ``of``, committed by ``module``."""
     c = CS.commit(w, TS.held_values(w, got))
     CS.write(c, out, {"of": of, "committer": {"module": module}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
-             kind="stand-in", registrar=R)
+             kind="stand-in", registrar=DK)
     return w
 
 

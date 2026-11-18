@@ -106,7 +106,7 @@ released of each family after each root the coins `log` shows (`Sampled.Device.h
 theorem run_facts {S : RunSetup} {log : List Release} {pk : ByteArray} {r : Properties.Challenger.Run}
     (hr : r ∈ runsAt S log pk) :
     Verity.Sampled.Lines.Prints [] r.log.tail log ∧ (∃ ts, coinTreesOf r.log = .ok ts) ∧
-      ((∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) →
+      ((∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) →
         ∀ label after, Verity.Sampled.Lines.Holds (r.released label after)
           (Verity.Sampled.Lines.freshOf label after log)) := by
   obtain ⟨hr, ht⟩ := List.mem_filter.1 hr

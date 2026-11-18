@@ -112,7 +112,7 @@ def check_openings(pub: dict, u: int, opening: dict, reg: dict) -> list[str]:
                        **({"session": pub["session"]} if e["value"].endswith(f"{LR.REQUESTS}@0") else {"window": pub["window"]}))
         if op is None or op["value"] != e["value"] or op["index"] != e["reads"][u] or dom.domain_id.hex() != e["domain"] or \
                 not G.verify_read(dom, bytes.fromhex(e["root"]), op["index"], bytes.fromhex(op["bc"]),
-                                  bytes.fromhex(op["path"]), e.get(G.SCHEMA_KEY, G.SCHEMA)):
+                                  bytes.fromhex(op["path"]), e.get(RV.SCHEMA_KEY, RV.SCHEMA)):
             bad.append(f"{label(pub, u)}: port {port}'s opened row is not row {e['reads'][u]} of {e['value']}'s registered root")
     return bad
 

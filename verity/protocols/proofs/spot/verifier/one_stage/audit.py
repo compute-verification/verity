@@ -33,7 +33,7 @@ from verity.protocols.proofs.spot.verifier.profile import (Bernoulli, IntegrityP
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, sampling_design_of
-from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as registration_digest
+from verity.commitments.docket_digest import digest as registration_digest
 
 FORMAT = DM.ONE_STAGE_AUDIT
 PROFILE = DM.INTEGRITY_PROFILE
@@ -153,7 +153,7 @@ def less_own_reads(opened: Mapping[str, Any] | None, docket: Mapping[str, Any]) 
     return {v: r for v, r in opened.items() if not (v in roots and _jeq(roots[v], r))}
 
 
-#: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
+#: the public output of an accept that says whether every verdict ran (`answer`)
 COMPLETE = "complete"
 
 
@@ -175,14 +175,6 @@ def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
                        "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
                        "proved": sorted(record["proved_units"])},
             "reason": None, "verdict": "accept"}
-
-
-def answer_complete(answer: Any) -> bool:
-    """Whether `answer` is an accept that says every verdict ran: its verdict is ``accept`` and its public `COMPLETE`
-    is true. An answer without the field, as one written before the field was, is not complete, and neither is a
-    reject or an undecided, which has no public outputs."""
-    public = answer.get("public") if isinstance(answer, Mapping) else None
-    return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
 
 
 def _field(j: Any, k: str) -> Any:

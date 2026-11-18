@@ -12,12 +12,15 @@ from collections.abc import Mapping
 
 import pytest
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
+from verity.protocols.proofs.spot.prover import docket as DK
 
 import fake_challenger as FC
 
@@ -86,12 +89,12 @@ def _record(program: Program, query, sizes: Mapping[str, int], sampling_design, 
     ports = {v: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, n, RUN)}
              for v, n in sizes.items()}
     roots = [{"port": v, "root": f"{row:02x}{i + 1:02x}" * 32, **ports[v]} for i, v in enumerate(sizes)]
-    return R.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
+    return DK.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
                     previous=previous, registered=list(registered)), ports
 
 
 def _window(row: int, previous: str | None, registered=()) -> tuple[dict, dict]:
-    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
+    return _record(PN.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
 
 
 def _left(rec: Mapping, port: str = "next") -> dict:
@@ -143,11 +146,11 @@ def test_a_window_reads_the_state_an_earlier_window_left():
     stream = _stream()
     prev = _three_windows(stream)
     w0 = stream.log[0]
-    out = {"state": {"record": R.digest(w0), "port": "next"}}
+    out = {"state": {"record": DD.digest(w0), "port": "next"}}
     cand, ports = _window(3, prev, [_left(w0)])
 
     def check(log: list) -> V.Verdict:
-        return V.check(cand, P.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
+        return V.check(cand, PN.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
                        {"state": 2}, window_root=FC.WINDOW["root"], outputs=out)
 
     assert stream._earlier(cand) == [stream.log[-1]] and check(stream._earlier(cand)).codes[0] == "R7-output"
@@ -173,7 +176,7 @@ def test_the_run_of_record_reads_the_output_values(monkeypatch):
     prev = _three_windows(stream)
     w0 = stream.log[0]
     cand, ports = _window(3, prev, [_left(w0)])
-    reg = stream.register(cand, ports, registered={"state": 2}, outputs={"state": {"record": R.digest(w0), "port": "next"}})
+    reg = stream.register(cand, ports, registered={"state": 2}, outputs={"state": {"record": DD.digest(w0), "port": "next"}})
     run = V.run
     monkeypatch.setattr(S.V, "run", lambda *a, value_outputs=None, **kw: run(*a, **kw))
     outcome = _close(stream, reg, {"state": _left(w0)["root"]})
@@ -200,7 +203,7 @@ def test_a_stream_takes_the_verifiers_certified_entries():
     assert outcome.accepted and outcome.verdict.codes == () and stream.records[-1]["audit"]["accepted"]
 
     w0 = stream.log[0]
-    out = {"state": {"record": R.digest(w0), "port": "next"}}
+    out = {"state": {"record": DD.digest(w0), "port": "next"}}
     later, ports = _window(1, reg.digest, [_left(w0), ROWS_ENTRY])
     assert _refused(lambda: stream.register(later, ports, registered={"state": 2}, outputs=out)) == ("R7-values",)
     reg = stream.register(later, ports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
@@ -247,13 +250,13 @@ def _two_stage(spec: S.Spec):
     interior's record and ports registering the entries it is given."""
     stream = _stream(spec, replay=BLOCK)
     m = Q * N_RHO
-    boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
+    boundary, bports = _record(PN.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
                                {"law": "subset", "k": Q}, 0, None)
     reg = stream.register(boundary, bports)
     first = stream.select(reg)
 
     def interior(registered):
-        return _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
+        return _record(PN.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
                        0, reg.digest, registered, interior=True, replay_sample=D.proved(first.draw))
     return stream, boundary, reg, first, {"state": {"record": reg.digest, "port": "carry"}}, interior
 
@@ -268,7 +271,7 @@ def test_an_interior_registration_takes_no_certified_entries():
     with pytest.raises(TypeError):
         stream.register_interiors(first, with_rows, iports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
     own, iports = interior([_left(boundary, "carry")])
-    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == R.digest(own)
+    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == DD.digest(own)
 
 
 def test_an_interior_registration_reads_a_port_of_its_boundary():

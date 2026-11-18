@@ -49,14 +49,15 @@ class Grain:
 
 def _spans(what: str, fields: Sequence[tuple[str, Any]]) -> list[tuple[int, int, int]]:
     """``fields`` laid end to end as u16 words: each one's ``(first leaf, first word, leaf bits)``, then ``(leaves, words, 0)``;
-    refused where a field isn't leaves of one whole-byte width filling whole words (an s8 weight's are two a word)."""
+    refused where a field isn't leaves of one whole-byte width, or bits (`interface.layout`'s Boolean-profile words, low bit
+    first), filling whole words (an s8 weight's are two a word)."""
     out, leaf, word = [], 0, 0
     for label, ty in fields:
         ws = ty.width_set()
         bits = next(iter(ws))
-        if len(ws) != 1 or bits % 8 or ty.leaves * bits % 16:
-            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole u16 "
-                                "words")
+        if len(ws) != 1 or bits % 8 and bits != 1 or ty.leaves * bits % 16:
+            raise Unexpressible(f"{what} {label}'s {ty.leaves} leaves are {sorted(ws)} bits, not one byte width filling whole "
+                                "u16 words, nor bits filling them")
         out.append((leaf, word, bits))
         leaf, word = leaf + ty.leaves, word + ty.leaves * bits // 16
     return out + [(leaf, word, 0)]
@@ -132,9 +133,6 @@ def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
 class _Builder:
     grain: Grain
     programs: int = 1
-    #: refuse at `settle` every unit Flock's composer wouldn't prove (`interface.check_proof_block`); off only for a
-    #: probe's census and for tests of the lowering at a class too small to prove
-    provable: bool = True
     fns: dict[str, Any] = field(default_factory=dict)
     units: dict[str, int] = field(default_factory=dict)
     local: dict[tuple[int, str], int] = field(default_factory=dict)
@@ -247,9 +245,7 @@ class _Builder:
         """Each port read as m writer rows cut m ways (`interface.Layout.cut`: row j its outer elements
         [j·n/m, (j+1)·n/m), each writer row one of them), and every feed wired. Refused at once, naming each
         (`Unexpressible`): a port read at two row counts (a port is cut one way), rows that aren't its outer elements cut
-        that many ways, a unit of more than ``grain.rows`` rows in and out, and, unless not ``provable``, a unit Flock's
-        composer wouldn't prove (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its
-        block)."""
+        that many ways and a unit of more than ``grain.rows`` rows in and out."""
         counts: dict[tuple[str, str], set[int]] = {}
         widths: dict[tuple[str, str], set[int]] = {}
         for f in self.feeds:
@@ -271,13 +267,6 @@ class _Builder:
                 if (k := _rows(fn, self.cuts.get(tid))) > self.grain.rows]
         if why:
             raise Unexpressible(f"{len(why)} templates the window can't hold, each port cut once a writer row: " + "; ".join(why))
-        for tid, fn in self.fns.items() if self.provable else ():
-            try:
-                IF.check_proof_block(fn, self.cuts.get(tid))
-            except ValueError as e:
-                why.append(str(e))
-        if why:
-            raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 
@@ -287,6 +276,19 @@ class _Builder:
                        lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
                 _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict, x.row),
                        lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n, x.row)))
+
+
+def check_provable(circuit: IF.Circuit) -> None:
+    """Refuse (`Unexpressible`), naming each, every template of ``circuit`` whose unit Flock's composer wouldn't prove
+    (`interface.check_proof_block`: past 256 rows, no row past 111 bytes, or rows past its block)."""
+    why = []
+    for fn, _ in circuit.templates:
+        try:
+            IF.check_proof_block(fn, circuit.cuts.get(descriptor_id(fn)))
+        except ValueError as e:
+            why.append(str(e))
+    if why:
+        raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:

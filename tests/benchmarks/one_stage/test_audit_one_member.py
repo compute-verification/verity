@@ -25,7 +25,8 @@ import pytest
 
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 
 import test_audit_two_members as T
@@ -58,7 +59,7 @@ def _window(d: Path) -> Path:
     sx, sw = ((np.abs(rng.standard_normal(N)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
     win.record(t, ins, [np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=DK)
     return d
 
 

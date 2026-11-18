@@ -117,6 +117,7 @@ theorem names_sub (q : Part) (x : Bool × ℕ) (h : x ∈ BodiesOk.partNames q) 
     · exact h
     · simp at h
   | explicit it => exact h
+  | grid _ lanes => exact h
 
 /-- What `InferenceOnlyCheck.Desc.inputsAtRoot` says: no node calls the root, and only the root's are input nodes. -/
 theorem inputsAtRoot_spec (P : Prog) (h : InferenceOnlyVerifier.Desc.inputsAtRoot P = true) :

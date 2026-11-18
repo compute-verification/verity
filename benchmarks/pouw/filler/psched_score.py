@@ -230,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         SC.build(bdir, out)
         log = out / "build.log"
-        rc = SC.sh([SC.nvcc(), *SC.NVFLAGS, "-o", str(bdir / "pscore"), str(HERE / "pscore.cu"), *SC.LIBS], out=log, err=log)
+        rc = SC.sh([SC.nvcc(), *SC.nvflags(), "-o", str(bdir / "pscore"), str(HERE / "pscore.cu"), *SC.LIBS], out=log, err=log)
         if rc:
             raise SystemExit(f"build of pscore failed (rc {rc}); see {log}")
         sass = subprocess.run(["cuobjdump", "-sass", str(bdir / "pscore")], capture_output=True, text=True,

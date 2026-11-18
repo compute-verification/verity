@@ -68,8 +68,10 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
     (r"RTX\s*4090", {"bf16": 165.2e12, "e4m3": 330.3e12, "nvfp4": None}, "NVIDIA Ada GPU Architecture whitepaper, RTX 4090 dense, FP32 accumulate; Ada has no FP4"),
     (r"A100-SXM4", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (SXM4 80GB), BF16 dense; Ampere has no FP8"),
     (r"A100.*PCIe", {"bf16": 312.0e12, "e4m3": None, "nvfp4": None}, "NVIDIA A100 Tensor Core GPU datasheet (PCIe 80GB), BF16 dense; Ampere has no FP8"),
-    (r"H100.*(SXM|HBM3)", {"bf16": 989.4e12, "e4m3": 1978.9e12, "nvfp4": None},
-     "NVIDIA Hopper architecture whitepaper, H100 SXM5 dense (BF16 1978.9 / FP8 3957.8 TFLOPS with sparsity, halved), FP32 accumulate; Hopper has no FP4"),
+    (r"H100.*(SXM|HBM3)", {"bf16": tensor_reading("h100-sxm-80gb", "bf16"), "e4m3": tensor_reading("h100-sxm-80gb", "e4m3"),
+                           "nvfp4": None},
+     "calibration/hardware/cards/h100-sxm-80gb.toml at the tensor pipe's reading: 2 x sm.count x rate.tensor x clock.tensor / weight.<dtype> "
+     "(the NVIDIA Hopper architecture whitepaper's H100 SXM5 dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"H100.*PCIe", {"bf16": 756.0e12, "e4m3": 1513.0e12, "nvfp4": None}, "NVIDIA H100 PCIe datasheet, dense (sparse figures halved), FP32 accumulate; Hopper has no FP4"),
     # H200 SXM: its card at the tensor pipe's reading, the reading the data sheet's dense figures are at (census has no H200
     # line); the H200 NVL's peaks are lower.
@@ -79,10 +81,12 @@ SPEC_PEAKS: list[tuple[str, dict[str, float | None], str]] = [
      "(the NVIDIA H200 data sheet's H200 SXM dense figures, sparse halved), FP32 accumulate; Hopper has no FP4"),
     (r"L40S", {"bf16": 362.05e12, "e4m3": 733.0e12, "nvfp4": None},
      "NVIDIA L40S GPU datasheet, dense (BF16 733 / FP8 1,466 TFLOPS with sparsity, halved); Ada has no FP4"),
-    # calibration/census/hardware.json rtx-pro-6000-server/{bf16,e4m3,e2m1}.  The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
-    (r"RTX\s*PRO\s*6000.*Server", {"bf16": 500.0e12, "e4m3": 1000.0e12, "nvfp4": 2000.0e12},
-     "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, dense (FP16 | BF16 1 / FP8 2 / FP4 4 PFLOPS with sparsity, halved); "
-     "FP32 accumulate at the FP16-accumulate rate (RTX PRO Blackwell whitepaper v1.1, Table 4)"),
+    # The Workstation Edition's peaks differ (a 2617 MHz boost clock), hence "Server".
+    (r"RTX\s*PRO\s*6000.*Server", {"bf16": tensor_reading("rtx-pro-6000-server", "bf16"),
+                                    "e4m3": tensor_reading("rtx-pro-6000-server", "e4m3"),
+                                    "nvfp4": tensor_reading("rtx-pro-6000-server", "nvf4")},
+     "calibration/hardware/cards/rtx-pro-6000-server.toml at the tensor pipe's reading: 2 x sm.count x rate.tensor x clock.tensor / "
+     "weight.<dtype> (the RTX PRO Blackwell whitepaper v1.1's Table 4 per-clock rates), FP32 accumulate at the FP16-accumulate rate"),
     (r"RTX\s*5090", {"bf16": 209.5e12, "e4m3": 419.0e12, "nvfp4": 1676.0e12},
      "NVIDIA RTX Blackwell GPU Architecture whitepaper, Appendix A, RTX 5090 dense with FP32 accumulate (FP4: 1676 dense, 3352 sparse)"),
 ]
@@ -325,9 +329,9 @@ def measure_size(n: int, dtype: str, device: str, warmup: int, reps: int, sustai
 HERE = Path(__file__).resolve().parent
 
 
-def nvcc_bin() -> str | None:
+def nvcc_bin() -> str:
     """nvcc on PATH, else the machine's toolkit at 13.0 (`verity_bench.kit.toolkit`: $CUDA_HOME, else the run's machine's
-    record); None where neither has one."""
+    record); FileNotFoundError, saying why, where neither has one."""
     if found := shutil.which("nvcc"):
         return found
     harness = str(HERE.parents[1] / "benchmarks" / "harness")
@@ -337,17 +341,17 @@ def nvcc_bin() -> str | None:
 
     try:
         nvcc = Path(kit.toolkit("13.0")) / "bin" / "nvcc"
-    except SystemExit:
-        return None
-    return str(nvcc) if nvcc.is_file() else None
+    except SystemExit as e:
+        raise FileNotFoundError(f"nvcc not on PATH, and no toolkit at 13.0: {e}") from e
+    if not nvcc.is_file():
+        raise FileNotFoundError(f"nvcc not on PATH, and the toolkit at 13.0 has no {nvcc}")
+    return str(nvcc)
 
 
 def build_nvfp4(out: Path) -> tuple[Path, str]:
     """nvcc the microbenchmark for sm_120a (compute_120a PTX named explicitly, as the probe does: ptxas refuses `.block_scale`
     on plain sm_120); returns (path of the .so, nvcc version line)."""
     nvcc = nvcc_bin()
-    if nvcc is None:
-        raise FileNotFoundError("nvcc not found (PATH, or the machine's toolkit at 13.0)")
     so = out / f"lib{Path(NVFP4_SOURCE).stem}_{NVFP4_ARCH}.so"
     ver = subprocess.run([nvcc, "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc, "-O2", f"-gencode=arch=compute_{NVFP4_ARCH[3:]},code={NVFP4_ARCH}", "-Xcompiler", "-fPIC", "-shared", "-o", str(so),
@@ -358,8 +362,7 @@ def build_nvfp4(out: Path) -> tuple[Path, str]:
 def nvfp4_sass(so: Path) -> dict:
     """`cuobjdump -sass` on the microbenchmark: the MMA opcodes and their static count in the loop body (NSETS x NACC = 32 in
     the unrolled body + nothing else that is an MMA).  The same opcode name the probe records (OMMA.16864.F32.E2M1.E2M1.UE4M3)."""
-    nvcc = nvcc_bin()
-    cuobjdump = str(Path(nvcc).parent / "cuobjdump") if nvcc else shutil.which("cuobjdump")
+    cuobjdump = str(Path(nvcc_bin()).parent / "cuobjdump")
     if not cuobjdump or not Path(cuobjdump).is_file():
         return {"sass": "not captured", "opcodes": [], "mma_count": 0, "error": "cuobjdump not found"}
     text = subprocess.run([cuobjdump, "-sass", str(so)], capture_output=True, text=True, check=True).stdout
@@ -739,8 +742,11 @@ def main(argv: list[str] | None = None) -> int:
         major, minor = torch.cuda.get_device_capability(idx)
         if (major, minor) != (12, 0):
             skipped = f"the sm_120 mma.sync kind::mxf4nvf4 instruction needs cc 12.0; this card is sm_{major}{minor} ({envd['device']})"
-        elif nvcc_bin() is None:
-            skipped = "nvcc not found (PATH, or the machine's toolkit at 13.0): cannot build mma_peak_fp4.cu"
+        else:
+            try:
+                nvcc_bin()
+            except FileNotFoundError as e:
+                skipped = f"cannot build mma_peak_fp4.cu: {e}"
 
     files: list[str] = []
     results: list[dict] = []

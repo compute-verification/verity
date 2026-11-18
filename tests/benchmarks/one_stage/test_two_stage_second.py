@@ -140,7 +140,7 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
                                      lambda S_: (mask.signature()[0], positions.signature()[1].fields[1]),
                                      lambda B, S_, *a: B.call(positions, B.call(mask, *a))[1], register=False))
     ids = [BR.descriptor_id(t) for t in (mask, positions)]
-    layout = BR.Layout(check, 0, 1, 4, o, N, BR.run_root("test-serve", 0), True)
+    layout = BR.Layout(check, 0, 1, len(SM.PROMPT), o, N, BR.run_root("test-serve", 0), True)
     c = BR.commit([BR.Span(f"r{i}", SM.PROMPT, {**SM.GREEDY, "max_tokens": o}, (7, i), "length") for i in range(N)], layout, 0)
     d = TS.design(layout)
     assert d.cells == (o, o) and [(w.template, w.port, w.writer, w.wport) for w in d.wires] == [(ids[1], "mask", ids[0], "o0")]

@@ -137,7 +137,8 @@ def served_rows(PP: Any, run: Path, data: bytes, cls: Any, tables: Any, builds: 
 
 
 def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> dict[str, Any]:
-    """CUT (module docstring), W written to `w`."""
+    """CUT (module docstring), W written to `w`. Its lowering sizes W's values and doesn't refuse a class no proof block
+    takes (`check_provable`): ``rehearsal_limits.py`` and ``prove_path.py``'s class-circuit refuse that class."""
     import served_compare as SC
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR

@@ -17,7 +17,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
+from verity.protocols.resource_accounting import scheme as S  # noqa: E402
 from verity.protocols.resource_accounting.network.prover import block_attester as BC  # noqa: E402
+from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS
@@ -42,12 +44,9 @@ def _block_leg(run: str, delta: str) -> dict:
     return BC.block_leg(ANSWERS[run]["answers"][delta], server=ANSWERS[run]["node"], runs=[run], owner=OWNER)
 
 
-def _held(value: int) -> dict:
-    return {"holds": True, "value": value, "epsilon": None, "by": "run"}
-
-
-def _not_held(eps: str, delta: str) -> dict:
-    return {"holds": False, "why": f"the run established it except with {eps}, more than {delta}"}
+def _not_held() -> dict:
+    """No δ holds while the scheme's bound is refused: the why is that refusal's sentence."""
+    return {"holds": False, "why": str(S.unbounded(NETWORK_ATTESTER))}
 
 
 def test_a_period_answer_is_the_block_records_attester_leg():
@@ -59,10 +58,9 @@ def test_a_period_answer_is_the_block_records_attester_leg():
     assert "scans" in rows["answer"]["public"] and rows["quantity"] == {"symbol": "K", "value": 12200606,
                                                                          "unit": "bits", "windows": 1}
     assert (rows["error"], rows["error_from"]) == ("1/50", "quantity.eps")
-    assert rows["at"] == {"1/100": _not_held("1/50", "1/100"), "1/1000000": _not_held("1/50", "1/1000000")}
+    assert rows["at"] == {"1/100": _not_held(), "1/1000000": _not_held()} and rows["unbounded"]["why"] == _not_held()["why"]
     rows6 = _block_leg(ROWS_RUN, "1/1000000")
-    assert rows6["error"] == "1/500000" and rows6["at"] == {"1/100": _held(12202528),
-                                                            "1/1000000": _not_held("1/500000", "1/1000000")}
+    assert rows6["error"] == "1/500000" and rows6["at"] == {"1/100": _not_held(), "1/1000000": _not_held()}
     answer = ANSWERS[ROWS_RUN]["answers"]["1/100"]
     with pytest.raises(ValueError, match="certifies no K"):
         BC.block_leg(answer | {"verdict": "reject", "reason": "certificates: an execution phase"}, server="n",
@@ -98,4 +96,4 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
         rec["monitoring_period"]["deployment"], Fraction(composed["joint_horizon"]["error_sum"]))}
     jsonschema.Draft202012Validator(schema).validate(mine)
     assert B.check(mine) == {}
-    assert composed["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["certifier"]
+    assert composed["joint_horizon"]["at"]["1/100"]["not_established"] == ["bandwidth", "certifier", "pous"]

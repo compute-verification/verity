@@ -15,6 +15,7 @@ import json
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value
@@ -30,7 +31,7 @@ PAIR = bind(CompositeDefinition("MembersRunPair", 0, (), lambda S: ((("x", Array
                                 lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
 TRIPLE = bind(CompositeDefinition("MembersRunTriple", 0, (), lambda S: ((("x", Array(3, Value(8))),), Value(8)),
                                   lambda B, S, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
-PROGRAM = P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
+PROGRAM = PN.mixed_population_program([(PAIR, 2), (TRIPLE, 3)])
 QUERY = P.template_instances_query([PAIR.id, TRIPLE.id])
 PARTITION = P.partition(PROGRAM, QUERY)
 A, B = "a/c0", "b/c0"
@@ -390,7 +391,7 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         with pytest.raises(M.Outside, match="per-member form"):
             w.run(params=params, evidence=evidence)
     with pytest.raises(M.Outside, match="partition object"):
-        w.run(program=P.population_program(PAIR, 5))
+        w.run(program=PN.population_program(PAIR, 5))
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
     with pytest.raises(M.Outside, match="wiring"):

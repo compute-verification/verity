@@ -25,10 +25,10 @@ from typing import Any, BinaryIO, Protocol, TypeVar
 from verity.protocols.resource_accounting.memory.poub.scheme import BANDWIDTH
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts, wire
-from verity.protocols.resource_accounting.memory.pous.prover.period_prover import records
 from verity.protocols.resource_accounting.memory.poub.verifier import coins as C
 from verity.protocols.resource_accounting.memory.poub.verifier import period as P
 from verity.protocols.resource_accounting.memory.poub.verifier.verifier_party import _recv, _send
+from verity.protocols.resource_accounting.memory.pous.prover.period_prover import records
 
 
 class Local:

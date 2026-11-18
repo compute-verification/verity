@@ -123,4 +123,4 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
         problems.append(f"driver {driver!r}, need {min_driver} or later")
     if problems:
         raise IdentityError("not the card: " + "; ".join(problems))
-    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch}
+    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch, "short": card["short"]}

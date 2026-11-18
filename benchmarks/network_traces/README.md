@@ -99,9 +99,10 @@ staging at its default, which that exclusion needs. Its `requests.jsonl` and `ad
 endpoint step runs there: `io` writes the kept network attester run's attested I/O to a 0600 file in the kept fetch's
 directory, and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace
 against it in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's
-`engine_id` and its network attester user) and the attested I/O. Its art is the step's report, `windows.jsonl` and
-`serve.json`; it writes nothing unless `serve.json` shows the endpoint's flags and no published file holds a prompt's
-ids, a trace's arrive, step or finish record, or a request-valued field. `chain` reads that report as the served node's.
+`engine_id` and its network attester user) and the attested I/O. Its art is one file, `report.json`, the step's public
+document: the fields `chain_record.ENDPOINT_PUBLIC` lists, each with its public kind, and no other; the whole report
+stays in `--keep`. It writes nothing unless `serve.json` shows the endpoint's flags. `chain` reads that document as the
+served node's.
 The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle
 less `witness/` and the session's outcome. `chain` runs the chain's network attester path on the kept fetch, and only
 from a tree with the record's leak

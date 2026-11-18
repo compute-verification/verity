@@ -117,8 +117,8 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
         words, window, bound = slot_words(run.owners.get(r, []), run.rows), served.root, None
     v = value(served, name, r)
     if name == LR.REQUESTS:
-        reg = NR.commit(served.program_digest, v, words, run._key, nonce(base, name, r), True, schema=LR.REQUEST_SCHEMA,
-                        session=bound)
+        reg = NR.commit(served.program_digest, v, words, run._salts.at(nonce(base, name, r), len(words)), True,
+                        schema=LR.REQUEST_SCHEMA, session=bound)
     else:
         reg = served._tree(run, v, words, nonce(base, name, r), window, bound)
     served.live[v] = reg
@@ -251,8 +251,8 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
 
 
 def _salts(reg: Any) -> np.ndarray:
-    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, sampled in one pass where its salts are sampled on
-    read (`pouw_h1_registered.Salts.at`)."""
+    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, gathered at once where its salts gather
+    (`pouw_h1_registered.Salts.at`)."""
     got = reg.salts.at(range(reg.leaves)) if hasattr(reg.salts, "at") else b"".join(reg.salts)
     return np.frombuffer(got, np.uint8).reshape(reg.leaves, 1, -1)
 

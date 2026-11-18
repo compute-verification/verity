@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import array_of, coll_concat
@@ -48,10 +49,10 @@ def _design(check: SpecializedDefinition, tokens: int, q: int) -> tuple[list[Spe
     and rows it derives from the block."""
     replay = _inlined(check, tokens)
     key = codec.descriptor_id(replay)
-    program = P.population_program(replay, 8)
+    program = PN.population_program(replay, 8)
     templates = list({P.template_id(n.fn): n.fn for n in check.body.nodes}.values())
     cells = [tokens * sum(1 for n in check.body.nodes if n.fn is t) for t in templates]
-    interior = P.mixed_population_program([(t, q * n) for t, n in zip(templates, cells, strict=True)])
+    interior = PN.mixed_population_program([(t, q * n) for t, n in zip(templates, cells, strict=True)])
     parts = SS.parts(q, P.strata(interior, P.template_instances_query(templates)))
     return templates, parts, SS.Own(
         tuple(range(q)), parts, {}, {}, (), links=SS.replay_links(program, key, None),

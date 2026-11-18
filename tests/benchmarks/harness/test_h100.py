@@ -41,3 +41,36 @@ def test_the_h100_pouw_spec_runs_its_one_point_in_a_one_card_lease(monkeypatch):
     assert jobs.dispatch(plan, name, root=root, execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     assert len(commands) == len(plan.points) == 1
     assert commands[0][:3] == ["gpu-lease", "1", "--wait"]
+
+
+def test_the_whole_step_spec_on_the_h100_is_the_pouw_point_there_with_one_arm_beside_in_a_one_card_lease(monkeypatch):
+    """`llama32-1b-1gpu-pearl-c-whole-served@h100`, which was the file `...-whole-served-h100`: the H100 is its one card,
+    its settings there are the PoUW spec's on the H100 with one arm and that arm's module beside, a stored run under
+    the former id reads as it, and its one point waits for one card in a lease of its own."""
+
+    from verity_config import ConfigError
+
+    from verity_bench import served_table
+    from verity_bench.vllm import presets
+
+    root, whole, former = Path(__file__).resolve().parents[3], "llama32-1b-1gpu-pearl-c-whole-served", \
+        "llama32-1b-1gpu-pearl-c-whole-served-h100"
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none"})
+    on, pouw = resolve_spec(f"{whole}@h100"), resolve_spec(f"{POUW}@h100")
+    assert on == resolve_spec(whole) and on.preset.gpu_id == "h100"
+    with pytest.raises(ConfigError, match=rf"spec '{whole}' runs on h100, not the h200"):
+        resolve_spec(f"{whole}@h200")
+    assert on.arms[:-1] == pouw.arms and len(on.arm_modules) == 1 and not pouw.arm_modules
+    assert dataclasses.replace(on, id=pouw.id, arms=pouw.arms, arm_modules=pouw.arm_modules,
+                               preset=dataclasses.replace(on.preset, id=pouw.preset.id)) == pouw
+    assert presets.former_specs()[former] == (whole, "h100") and presets.current_spec(former) == whole
+    assert served_table.spec_path(former) in served_table.spec_paths(f"{whole}@h100")
+    monkeypatch.setattr(jobs, "lease_host", lambda: True)
+    for variable in ("GPU_LEASE_UUID", "GPU_LEASE_ON", "GPU_LEASE_CORES"):
+        monkeypatch.delenv(variable, raising=False)
+    plan = jobs.make_plan(f"{whole}@h100", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands: list[list[str]] = []
+    assert jobs.dispatch(plan, f"{whole}@h100", root=root,
+                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == len(plan.points) == 1
+    assert commands[0][:3] == ["gpu-lease", "1", "--wait"]

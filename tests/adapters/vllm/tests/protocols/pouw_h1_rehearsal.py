@@ -49,8 +49,9 @@ period opened with a ``--weights-root`` no registration has (refused at the open
 itself (a period of their own), opened on the bare weights' root and on another window's root with the window's other
 coins after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
-under its round's root (``a_roots``), its served layout is the declared one's, the salt key is kept past the close in
-the prover's own directory and published nowhere under ``$OUT`` (``key_custody``), and every red-team case is refused.
+under its round's root (``a_roots``), its served layout is the declared one's, the run's salts are kept past the close
+in the prover's own directory and published nowhere under ``$OUT`` (``salt_custody``), and every red-team case is
+refused.
 Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``window``,
 ``calls``, ``eps``), which credits nothing until each sampled call's statement (its proof files) exists.
 
@@ -320,21 +321,24 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     return {**doc, "rc": doc["serving_rc"] or doc["close_rc"]}
 
 
-def key_custody(prover: Path, published: Path) -> dict[str, Any]:
-    """The salt key past the close: kept in `prover` (owner-only), and neither its bytes nor its hex in any file under
-    `published` (the run's ``$OUT``)."""
+def salt_custody(prover: Path, published: Path) -> dict[str, Any]:
+    """The run's salts past the close: kept in `prover`'s salt file (owner-only), and none of the first row's salt at
+    each of up to 64 of its nonces, raw or in hex, in any file under `published` (the run's ``$OUT``)."""
     import os
     import stat
 
+    from verity.commitments import salt_file
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import (
         prover as PV,
     )
-    path = prover / PV.KEY
-    if not path.is_file():
+    path = prover / PV.SALTS
+    if not (path / salt_file.INDEX).is_file():
         return {"kept": False, "ok": False}
-    key = path.read_bytes()
-    modes = {"directory": oct(stat.S_IMODE(os.stat(prover).st_mode)), "key": oct(stat.S_IMODE(os.stat(path).st_mode))}
-    needles, found = (key, key.hex().encode()), []
+    salts = PV.salts_of(prover)
+    firsts = [salts.at(u, 1) for u in sorted(int(p) for p in salt_file.params(path))[:64]]
+    modes = {"directory": oct(stat.S_IMODE(os.stat(prover).st_mode)),
+             "salts": sorted({oct(stat.S_IMODE(os.stat(f).st_mode)) for f in path.iterdir()})}
+    needles, found = [n for y in firsts for n in (y, y.hex().encode())], []
     for f in sorted(p for p in published.rglob("*") if p.is_file()):
         with open(f, "rb") as fh:
             tail = b""
@@ -342,9 +346,9 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
                 if any(n in tail + chunk for n in needles):
                     found.append(str(f.relative_to(published)))
                     break
-                tail = chunk[-128:]
+                tail = chunk[-512:]
     return {"kept": True, "modes": modes, "published_in": found,
-            "ok": not found and modes == {"directory": "0o700", "key": "0o600"}}
+            "ok": bool(firsts) and not found and modes == {"directory": "0o700", "salts": ["0o600"]}}
 
 
 def evidence(gate: Gate, session: str, d: Path, draw: str | None = None) -> dict[str, Any]:
@@ -603,7 +607,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     sid, dsid = reserved["session"], drawn["session"]
     doc["stages"] = serve(a, gate, reserved, out / "serve", circuit, drawn)
     doc["serve_rc"] = doc["stages"]["rc"]
-    doc["key_custody"] = key_custody(Path(doc["stages"]["prover"]["directory"]), out)
+    doc["salt_custody"] = salt_custody(Path(doc["stages"]["prover"]["directory"]), out)
     for s, unit in ((sid, "unit"), (dsid, "draw_unit")):
         if gate("status", s).get("open") is not None:
             doc[unit] = gate("wait", s) if a.gate is None else _poll_end(gate, s)
@@ -650,7 +654,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
     doc["credit"] = {"gate_passed": ((doc.get("serve") or {}).get("gate") or {}).get("gate_passed"),
                      **{k: cr.get(k) for k in ("credit", "calls", "manifest", "window", "k", "eps")}}
     doc["ok"] = bool(doc.get("serve", {}).get("ok") and (v.get("session") or {}).get("ok") and (v.get("trusted") or {}).get("ok")
-                     and str(doc["serve"].get("a_roots")).startswith("bound") and doc["key_custody"]["ok"]
+                     and str(doc["serve"].get("a_roots")).startswith("bound") and doc["salt_custody"]["ok"]
                      and (doc.get("red_team") or {}).get("all_refused")
                      and (doc["serve"].get("declared") or {}).get("layout_matches", not a.served))
     return doc
@@ -728,7 +732,7 @@ def main(argv: list[str] | None = None) -> int:
     rt = doc.get("red_team") or {}
     print(f"POUW-H1-REHEARSAL {'OK' if doc.get('ok') else 'FAIL'} serve={doc.get('serve', {}).get('ok')} "
           f"session={(doc.get('verify') or {}).get('session')} trusted={(doc.get('verify') or {}).get('trusted')} "
-          f"red_team_all_refused={rt.get('all_refused')} key_custody={(doc.get('key_custody') or {}).get('ok')} "
+          f"red_team_all_refused={rt.get('all_refused')} salt_custody={(doc.get('salt_custody') or {}).get('ok')} "
           f"credit={json.dumps(doc.get('credit'), default=str)}", flush=True)
     return 0 if doc.get("ok") else 1
 

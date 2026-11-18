@@ -8,7 +8,8 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            the GPU reads over its own PCIe link. Segment s holds blocks base_s … base_s + n_s − 1, and every position,
            leaf and node index is the store's, so the tree is `receipts.tree` over the whole store in block order
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
-payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
+payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024; a 64-byte p512
+           word whose top byte that leaves is at least p = 2^512 − 569 with probability 569/2^512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
            store `poub.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
            `store_salt(key, PAYLOAD_LABEL, j)`, key the store's own from the operating system, never sent or written;
@@ -1290,7 +1291,7 @@ class GpuBackend:
         torch.cuda.synchronize()
         self.gpus = [Gpu(torch, g) for g in range(count)]
         self.rng = np.random.default_rng(seed)
-        self.rng.bytes(32)  # the draw that once made the salt key: the seeded draws after it stay as they were
+        self.rng.bytes(32)  # the sample that once made the salt key: the seeded samples after it stay as they were
         self.salt_key = secrets.token_bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
@@ -1659,7 +1660,7 @@ class GpuBackend:
 
 def add_arguments(ap) -> None:
     ap.add_argument("--lib", required=True, help="session.so")
-    ap.add_argument("--kv", required=True, help="kv.so at the registration's codec (p1024 masked)")
+    ap.add_argument("--kv", required=True, help="kv.so at the registration's codec's width and masking (run.sh's KV_DEFS)")
     ap.add_argument("--gib", type=float, default=16.0,
                     help="the store's size across every GPU, rounded down to whole --chunk-blocks (need not be a power "
                          "of two; the GPUs' shards differ by at most a chunk)")

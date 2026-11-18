@@ -4,19 +4,24 @@ scratch and is removed with it. Stdlib only; run.sh's PY runs it.
 
     keep.py row SRC DST     # each file of ROW that SRC holds, copied to DST under its relative path
 
-A name private by the vLLM integration's list (`private_names.json` beside `verity_vllm.pipeline.research_outputs`, read
-here as plain data: one list for every keeper and for custody) is refused by name, exit 3, before anything is copied.
+A name private by the vLLM integration's list (`private_names.json`, one list for every keeper and for custody) is
+refused by name, exit 3, before anything is copied. The matcher is the integration's own, `private_names.py` beside the
+list, loaded by path: it needs only the standard library, and run.sh's PY need not hold `verity_vllm`.
 """
 from __future__ import annotations
 
-import fnmatch
-import json
+import importlib.util
 import shutil
 import sys
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PRIVATE_NAMES = ROOT / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "private_names.json"
+_MATCHER = ROOT / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "private_names.py"
+_spec = importlib.util.spec_from_file_location("verity_private_names", _MATCHER)
+names = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(names)
+PRIVATE_NAMES = names.LIST
+private = names.private
 
 #: the row's records a served line keeps, each with the public kind it is (AGENTS.md's four)
 ROW = {
@@ -49,24 +54,11 @@ def checks_kept(checks: dict | None) -> dict | None:
             "probe": {side: [len(t) for t in probe.get(side) or []] for side in ("plain", "decoded")}}
 
 
-def private_names(path: Path = PRIVATE_NAMES) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """(kept_apart, private): the directory prefixes and the file name patterns no keeper keeps."""
-    doc = json.loads(path.read_text(encoding="utf-8"))
-    return tuple(doc["kept_apart"]), tuple(doc["private"])
-
-
-def private(rel: str, names: tuple[tuple[str, ...], tuple[str, ...]] | None = None) -> bool:
-    """Whether `rel` is private by the list: under a kept-apart directory, or a file a private pattern names."""
-    kept_apart, patterns = names if names is not None else private_names()
-    parts = PurePosixPath(rel).parts
-    return any(p.startswith(kept_apart) for p in parts) or any(fnmatch.fnmatchcase(parts[-1], q) for q in patterns)
-
-
 def keep(src: Path, dst: Path, rels: list[str]) -> list[str]:
     """Copy each of `rels` that `src` holds to `dst`; the copied ones. Refused (ValueError, naming them) where any is
     private, before anything is copied."""
-    names = private_names()
-    refused = [r for r in rels if private(r, names)]
+    listed = names.load()
+    refused = [r for r in rels if private(r, listed)]
     if refused:
         raise ValueError(f"refused: {', '.join(refused)} private by {PRIVATE_NAMES.relative_to(ROOT)}: never kept")
     kept = []

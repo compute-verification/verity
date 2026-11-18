@@ -15,7 +15,8 @@ from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.pipeline import chain_rows as CH, serving_rows as SRW, weight_rows as WT
 from verity_vllm.program.predict import window_weights as WW
 
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
@@ -124,7 +125,7 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
         k: (e["in1"]["positions"], roots[e["in1"]["value"]]) for k, e in entries.items()}
     valued = WT.valued(window, got)
     res = CS.write(CS.commit(valued, CH.held_rows(valued, got)), tmp_path, {"registered_roots": roots}, {}, registered=entries,
-                   registrar=R)
+                   registrar=DK)
     assert [m["registered"]["in1"] for m in res["members"]] == [{"value": e["in1"]["value"], "positions": e["in1"]["positions"]}
                                                                  for e in entries.values()]
     assert all(m["value_rows"] == ["in1"] for m in res["members"]) and set(res["registered_paths"]) == set(roots)

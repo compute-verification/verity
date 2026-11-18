@@ -1,6 +1,8 @@
 """`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by SPOT.
 
-* `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
+PoUW's word primitives are `verity.circuits.ops.words` (every output at most 32 bits but `pc8`'s exact squares, which stay
+inside a row unit).
+
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
   as Boolean Definitions (`_v2`, the same functions on bits).
 * `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
@@ -52,11 +54,10 @@
   derivation and its tile's checked words as registered Definitions, each with its Boolean version, which
   `pearl_plus_tile`, Pearl+'s tile check, calls.
 
-`traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
-is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the sample layout; None for any other scheme, which stays refused beside SPOT.  The verifier builds these
-Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
-compares an offered one's digest with its own.
+`traced_as(scheme, m, k, n)` is the verifier's build of ``ncp-v2``'s circuit for one PoUW linear and its weight: the
+Programs, their partition queries, the served outputs and the sample layout; None for any other scheme.  Nothing serves
+``ncp-v2`` and no composition registers it.  The verifier builds these Programs itself, from (scheme, m, k, n) and its own
+anchors, and never takes a prover's descriptor: `Traced.check_descriptor` compares an offered one's digest with its own.
 """
 from __future__ import annotations
 
@@ -65,7 +66,6 @@ from types import MappingProxyType
 from typing import Any, Sequence
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import of_family
-from verity.protocols.resource_accounting.scheme import Circuits, register_circuits
 
 #: the schemes that have a circuit here, each with the permutation P it pins: the kernel schemes' ``ncp-v2`` family
 SCHEMES = MappingProxyType({k.name: k.parameters["perm"] for k in of_family("ncp-v2")})
@@ -194,7 +194,7 @@ class Traced:
 
 
 def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
-    """The circuit SPOT traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
+    """The circuit of one PoUW linear of shape m × k → n under ``scheme``, as the verifier builds it, or None when the scheme has
     no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
     scheme's, never the caller's."""
     if scheme not in SCHEMES:
@@ -205,7 +205,5 @@ def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
     return Traced(scheme, shape, ncp2.linear(shape, kind), partition.query(shape, kind), m * n, ncp2.weight(shape, kind),
                   partition.weight_query(shape, kind))
 
-
-register_circuits("pouw", Circuits(SCHEMES, traced_as))
 
 __all__ = ["LINKED", "SCHEMES", "Traced", "traced_as"]

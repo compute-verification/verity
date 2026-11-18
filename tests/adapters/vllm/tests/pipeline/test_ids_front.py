@@ -26,7 +26,7 @@ from tests.pipeline import test_serve_openai as served
 from verity.protocols.resource_accounting.network.prover import id_relay as R
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
@@ -226,12 +226,12 @@ class Fronted:
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
     """`ids_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
-    attester forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
+    attester forwards it (the release, the run and the bucket); why not, in other cells, cut short, or changed by a byte."""
     for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
         assert idp.id_request_fields(request, P) == FIELDS
-    assert idp.id_request_fields(released(), P + 1) is None and idp.id_request_fields(released()[:-1], P) is None
-    assert idp.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
-    assert idp.id_request_fields(b"", P) is None
+    for other, p in ((released(), P + 1), (released()[:-1], P), (released().replace(b'"stream":true', b'"stream":True'), P),
+                     (b"", P)):
+        assert isinstance(idp.id_request_fields(other, p), str)
 
 
 def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
@@ -351,6 +351,22 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(len(sent), False, why)]
 
 
+@pytest.mark.parametrize("field, name", [(b"x-verity-release: 4x", "x-verity-release"),
+                                         (b"x-verity-release: 4\r\nx-verity-release-run: zz", "x-verity-release-run"),
+                                         (b"x-verity-release: 4\r\nx-verity-release-bucket: -1", "x-verity-release-bucket")])
+def test_an_id_request_with_a_malformed_release_is_refused_by_name_and_the_front_goes_on(field, name):
+    """A malformed release header on an id request (`release.release_of`'s refusal) is no release: the front answers
+    nothing, opens no server connection for it and records the refusal's name as why; the next request is served."""
+    request = served.id_request(P).replace(b"\r\n", b"\r\n" + field + b"\r\n", 1)
+    server = Scripted(STREAM + chunked(event(choice([7], " a")), event(b"[DONE]")))
+    with Fronted(server.address) as f:
+        assert f.send(request) == b""
+        assert f.send(released()) == IT.id_event(7, P) + IT.TRAILER
+    server.join()
+    assert len(server.requests) == 1
+    assert [(r["n"], r["ended"], r["why"] and r["why"].split(":")[0]) for r in f.log] == [(None, False, name), (4, True, None)]
+
+
 @pytest.mark.parametrize("answer, sent", [
     (b"", []),                                                              # the server holds the request and says nothing
     (STREAM, []),                                                           # its 200 head and no chunk
@@ -414,12 +430,14 @@ def test_a_relayed_connection_whose_client_has_ended_its_sending_gets_the_server
 
 def test_a_server_that_is_not_there_closes_the_connection():
     """With nothing listening at the server's address, an id request's connection and any other's are closed with
-    nothing sent; the id request's record says a connection broke."""
+    nothing sent; the id request's record says a connection broke, and the other's break record names the server."""
     with socket.create_server(("127.0.0.1", 0)) as gone:
         address = gone.getsockname()[:2]
     with Fronted(address) as f:
         assert f.send(released()) == b"" and f.send(b"GET /v1/models HTTP/1.1\r\n\r\n") == b""
-    assert [(r["ended"], r["why"]) for r in f.log] == [(False, "a connection broke (ConnectionRefusedError)")]
+    ids, other = f.log
+    assert (ids["ended"], ids["why"]) == (False, "a connection broke (ConnectionRefusedError)")
+    assert (other["broken"], other["error"], set(other)) == ("server", "ConnectionRefusedError", {"broken", "error", "at"})
 
 
 def test_the_command_is_registered_with_the_scans_payload_as_its_default():

@@ -20,14 +20,15 @@ from pathlib import Path
 import pytest
 
 import verity
+from verity.commitments import docket_digest as DD
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
+from verity.protocols.resource_accounting.network.prover import n2_tie_zk as N2T
 from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_request as Q, service as SVC, \
     tie_service as TS, network_attester as W, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 
 import standin
@@ -88,7 +89,7 @@ class Run:
                       for w, rec in enumerate(served.records)]
 
     def sample(self, w):
-        reg = self.tie.register(self.stream, self.tie.registration(self.cells[w].head, self.previous))
+        reg = self.tie.register(self.stream, N2T.registration(self.tie, self.cells[w].head, self.previous))
         self.previous = reg.digest
         return self.stream.select(reg)
 
@@ -129,7 +130,7 @@ def test_an_honest_link_is_tied(tmp_path):
     assert [r.cells for r in SERVED.releases] == [(0, 1), (0, 1, 1), (0, 1)]
     assert run.link(inputs) == [True, True]
     verdict = run.verdict(inputs)
-    regs = tuple(R.digest(r) for r in run.stream.log)
+    regs = tuple(DD.digest(r) for r in run.stream.log)
     assert verdict == TS.IoTieVerdict(LINK, regs, TS.digest(inputs), (True, True))
     assert run.stream.records[-1]["public"] == {"verdict": 1, "inputs": TS.digest(inputs)}
     assert run.stream.log[0]["roots"][0]["root"] == run.cells[0].root.hex()
@@ -198,7 +199,7 @@ def test_the_tie_source_gives_the_verdict_only_on_its_own_link_and_stream(tmp_pa
     run = Run(tmp_path / "honest")
     assert run.link(inputs) == [True, True]
     ties = TS.Ties(run.tie, run.stream, SERVED.releases)
-    assert ties.registrations(LINK) == tuple(R.digest(r) for r in run.stream.log)
+    assert ties.registrations(LINK) == tuple(DD.digest(r) for r in run.stream.log)
     assert ties.verdict(LINK, inputs, PROFILE) == run.verdict(inputs) and all(run.verdict(inputs).accepted)
     with pytest.raises(ValueError, match="not 'another'"):
         ties.verdict("another", inputs, PROFILE)
@@ -298,10 +299,10 @@ def test_a_short_stream_one_out_of_order_or_one_past_the_inputs_refuses_every_wi
     assert run.verdict(inputs).accepted == (False,)
 
     run = Run(tmp_path / "order")
-    reg = run.stream.register(run.tie.registration(run.cells[1].head), run.tie.ports(1))
+    reg = run.stream.register(N2T.registration(run.tie, run.cells[1].head), run.tie.ports(1))
     assert reg.record["window"] == run.tie.provenance(1)
     with pytest.raises(S.Refused):
-        run.tie.register(run.stream, run.tie.registration(run.cells[0].head, reg.digest))
+        run.tie.register(run.stream, N2T.registration(run.tie, run.cells[0].head, reg.digest))
     assert run.verdict(inputs).accepted == (False,)
 
     run = Run(tmp_path / "past")

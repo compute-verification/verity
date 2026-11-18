@@ -92,7 +92,7 @@ def _count(q) -> int:
 
 def _keys(q) -> list:
     if q[0] == "g":
-        return [(p, i) for p, i, *_x in q[2]]
+        return [(q[2][0][0], q[2][0][1])]
     return [(q[1][0][0], q[1][0][1]) if q[1] else None]
 
 

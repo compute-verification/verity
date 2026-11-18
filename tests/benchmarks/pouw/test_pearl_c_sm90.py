@@ -275,6 +275,7 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
     pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.pd, pipe.split_a, pipe.stamps, pipe.k, pipe.m, pipe.m_real = 851, True, 0, 4096, 64, 16
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 16}
     for marked in (True, False):
         pipe.dev, pipe.rows_bf16 = D(marked), None
         assert pipe.reads_bf16() is marked
@@ -352,6 +353,7 @@ def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
     pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes", "salts_a"), 16)
     pipe.keys = dict.fromkeys(("unit", "dom_a", "hm"), 2)
     pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    pipe.salt_bytes = {"a": RUN.HM_SALT * 32}
     for pipe.pd in RUN.PD_SERVED:
         for pipe.stamps in (0, 9):
             got = {}
@@ -488,6 +490,19 @@ def test_sass_gate_allows_local_memory_only_in_the_reference_row_digest(monkeypa
     assert not S.gate(PTXAS_OK + rows, sass)[1]
     assert S.gate(PTXAS_OK + rows.replace("8 bytes stack", "24 bytes stack"), sass)[1]
     assert S.gate(PTXAS_OK.replace("0 bytes spill stores", "4 bytes spill stores") + rows, sass)[1]
+
+
+def test_the_build_says_its_one_target_with_no_toolkit():
+    """`build.sh --arch` prints the target the tree's kernels are built for, one word that names an architecture file, with
+    no toolkit and no GENCODE: `benchmarks/kernels/smoke_h100.sh` asks it before any step and holds the machine's record
+    and the held card's to it, so a build.sh that stops answering fails here rather than on a card.  (The smoke script
+    is no input of this suite, so the test reads the build's side alone.)"""
+    env = {k: v for k, v in os.environ.items() if k not in ("CUDA_HOME", "GENCODE")}
+    r = subprocess.run(["bash", str(HERE / "build.sh"), "--arch"], capture_output=True, text=True, env=env)
+    assert r.returncode == 0 and r.stderr == "", r.stderr
+    assert re.fullmatch(r"[a-z]+_[0-9]+[a-z]?\n", r.stdout), r.stdout
+    arch = r.stdout.strip()
+    assert (HERE.parents[7] / "calibration" / "hardware" / "architectures" / f"{arch}.toml").is_file()
 
 
 @pytest.mark.skipif(not of(__file__).VERITY_POUW_NVCC, reason="VERITY_POUW_NVCC names a CUDA >= 12.8 toolkit (about 30 s)")
@@ -1035,9 +1050,9 @@ n, rows, chunk = (int(x) for x in sys.argv[3:6])
 dev = R.Dev(open(sys.argv[2], "rb").read())
 dev.open()
 keys = {name: dev.alloc(R.TIMING_KEYS[name]) for name in ("dom_b", "hm")}
-p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0, bufs={"tree_b": 0, "segdig_b": 0})
+p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0,
+               bufs={"tree_b": 0, "segdig_b": 0, "salts_b": (dev.alloc(R.HM_SALT * rows), R.HM_SALT * rows)})
 p.b["tree_b"] = dev.alloc(R.NB * (2 * R.pow2(rows) - 1))
-p.b["salts_b"] = dev.alloc(R.HM_SALT * rows)
 dig, seg = dev.alloc(64 * rows), dev.alloc(64 * (n // 256) * chunk)
 for _, f in p.tree_setup("b", rows, "dom_b"):
     f()

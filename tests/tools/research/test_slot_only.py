@@ -547,7 +547,7 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
     assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
-        "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
+        "/usr/local/sbin/vy-verifier-tunnel", "/usr/local/sbin/vy-verifier-figures", "/etc/systemd/system/vy-verifier@.service",
         "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",
         "/etc/ssh/sshd_config.d/12-vy-verifier.conf", "/etc/vy/verifier.json")}
     for unit in ("vy-challenger@.service", "vy-certifier@.service"):

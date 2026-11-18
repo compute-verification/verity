@@ -6,6 +6,8 @@
   "ssh": "-i /var/lib/vy-verifier/.ssh/vy-challenger-gate -o IdentitiesOnly=yes research@{{vy-challenger-1:host}}"
  },
  "peers": {
-  "vy-nebius-2": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9}
+  "vy-nebius-2": {"node": "rtx-pro-6000-server-x8", "figures": "/etc/vy/figures/rtx-pro-6000-server-x8.json",
+                  "figures_sha512": "6b0d5771a2ba2f459a12b6d1618f058cd1fec06b27858bb3bcc832e5967ac9773f674f9be313c411aefd688251001f52ad95fd1feadc25b5631d11a3e2ed0c14",
+                  "ingress_bytes_per_s": 4.4e9}
  }
 }

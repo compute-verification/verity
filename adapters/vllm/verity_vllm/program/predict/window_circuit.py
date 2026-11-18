@@ -116,8 +116,8 @@ int8 linears of the tables' K aren't their calls a round, with Pearl+'s what `wi
 would read more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's
 peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose
 leaves aren't whole u16 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port
-read at two row counts or as rows that aren't its outer elements cut that many ways, a unit of more than ``grain.rows``
-rows, and then a unit Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only:
+read at two row counts or as rows that aren't its outer elements cut that many ways and a unit of more than ``grain.rows``
+rows. A unit Flock's composer wouldn't prove is `check_provable`'s to refuse, after lowering. The circuit is completeness only:
 that it computes what serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -145,7 +145,7 @@ from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, check_provable, inference
 from .window_class import (
     CLASS_OF_RECORD,
     GREEDY,
@@ -192,19 +192,18 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  provable: bool = True, tables: FixedLoad | None = None) -> IF.Circuit:
+                  tables: FixedLoad | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`), and with ``tables`` H1's
     tables (`Tables`) or Pearl+'s (`PearlTables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
-    (`class_size`). Each unit is a proof block Flock's composer proves (`_Builder.settle`) unless not ``provable`` (a probe's,
-    or a test's of too small a class)."""
-    return lower(registered, cls, programs, grain, provable=provable, tables=tables).circuit
+    (`class_size`)."""
+    return lower(registered, cls, programs, grain, tables=tables).circuit
 
 
 def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-          provable: bool = True, tables: FixedLoad | None = None) -> Lowered:
+          tables: FixedLoad | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`). With ``tables``,
     refused unless the class is one boundary; with H1's, unless round 0's rows (each slot's prompt) fit a table's ``m`` rows
     a call and every position has ``tables.calls`` int8 linears of K = ``tables.k``; with Pearl+'s, unless every position's
@@ -222,8 +221,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
-    b, fn = _Builder(grain, programs, provable), class_program(registered, cls).program.fn
-    layout = linears(fn, tables.words, grain.rows, provable) if isinstance(tables, PearlTables) else None
+    b, fn = _Builder(grain, programs), class_program(registered, cls).program.fn
+    layout = linears(fn, tables.words, grain.rows) if isinstance(tables, PearlTables) else None
     progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry, tables, layout) for k in range(programs)]
     for (j, node), r in product(enumerate(fn.body.nodes), progs):
         r.lower(j, node)
@@ -259,7 +258,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
-                   placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
+                   placed: Sequence[tuple[int, int | None]] | None = None,
                    tables: FixedLoad | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
     its traffic, refused where the class's slots don't take the window: nothing of the window reaches the circuit.
@@ -268,9 +267,9 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
     tables read (`Tables`) or the circuit cut at its linears (`PearlTables`), refused unless the window is the fixed load."""
     takes(compiled, cls, placed, tables)
-    return class_circuit(registered, cls, None, grain, provable, tables)
+    return class_circuit(registered, cls, None, grain, tables)
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "PearlTables", "Row", "Tables", "WEIGHTS",
-           "WindowClass", "class_circuit", "class_program", "lower", "stop_ids", "takes",
+           "WindowClass", "check_provable", "class_circuit", "class_program", "lower", "stop_ids", "takes",
            "window_circuit"]

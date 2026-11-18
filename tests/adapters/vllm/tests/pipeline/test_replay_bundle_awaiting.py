@@ -58,7 +58,6 @@ def test_only_the_bundle_of_a_run_that_awaits_its_replay_is_sealed(tmp_path: Pat
     for pair in (1, 2, 3):
         (RB.partial(tmp_path, pair) / "store").mkdir(parents=True)
         (RB.partial(tmp_path, pair) / "store" / "store.json").write_text("{}")
-        (RB.partial(tmp_path, pair) / RB.PRIVATE[0]).write_bytes(bytes(64))
     (tmp_path / "binding_map_p1.json").write_text('{"entries": []}')
     rows = [{"pair": 1, "arm": "instrumented", "commit": dict(AWAITING)}, {"pair": 2, "arm": "instrumented"} | row,
             {"pair": 3, "arm": "control", "commit": dict(AWAITING)}]
@@ -70,10 +69,10 @@ def test_only_the_bundle_of_a_run_that_awaits_its_replay_is_sealed(tmp_path: Pat
     opened = RB.open_bundle(sealed)
     assert opened["context"] == {"schema": RB.SCHEMA, "pair": 1, "run_root": "ab" * 32, "row": rows[0], "verdict": {"commit_pass": None}}
     assert verdict == {"commit_pass": None, "replay_deferred": {"pending_pairs": [1], "bundles": [{
-        "pair": 1, "path": str(sealed), "manifest_sha256": opened["manifest_sha256"], "bytes": opened["manifest"]["bytes"], "files": 4}]}}
+        "pair": 1, "path": str(sealed), "manifest_sha256": opened["manifest_sha256"], "bytes": opened["manifest"]["bytes"], "files": 3}]}}
     assert tl.calls == [("closure.replay_bundle", {"pair": 1})]
     assert [r.getMessage() for r in caplog.records if r.name == RB.__name__] == [
-        f"[delta] REPLAY BUNDLE (pair 1): {sealed} sealed, 4 files, 0 MiB, manifest sha256 {opened['manifest_sha256'][:16]}"]
+        f"[delta] REPLAY BUNDLE (pair 1): {sealed} sealed, 3 files, 0 MiB, manifest sha256 {opened['manifest_sha256'][:16]}"]
 
 
 def test_a_commit_that_deferred_nothing_seals_nothing_and_its_verdict_names_no_bundle(tmp_path: Path) -> None:

@@ -218,8 +218,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Mapping, NamedTuple, Sequence
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers, network_attester_zk as WZ
-from verity.circuits import boolean as BL
+from verity.circuits import boolean as BL, partition_query as PQ, population as PN
 from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
@@ -245,8 +246,8 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.proofs.spot.verifier.challenger import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.resource_accounting.network.verifier.scan_answer import _found, window_answer
@@ -604,7 +605,7 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": tree_domain(reg).domain_id.hex()}
-    port = produced.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
+    port = RV.port(value(kind), e, reg.root.hex(), reads, _schema(reg))
     return port | ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
@@ -1330,10 +1331,10 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
         if old is not None:
             out["explicit-older"] = (
                 {**rec, "registered": [{**entry, "root": old["root"], "domain": old["domain"]}]},
-                {**check, "outputs": {CARRY: {"record": RG.digest(log[-2]), "port": CARRY_PORT}}}, None)
+                {**check, "outputs": {CARRY: {"record": DD.digest(log[-2]), "port": CARRY_PORT}}}, None)
         return out
 
-    return SimpleNamespace(check=check, record={"previous": RG.digest(log[-1]) if log else None, "registered": [entry]},
+    return SimpleNamespace(check=check, record={"previous": DD.digest(log[-1]) if log else None, "registered": [entry]},
                            root=root, domain=dom, empty=empty, negatives=negatives)
 
 
@@ -1436,7 +1437,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], T: int, out: Path) -> 
     counts = counts_of(members)
     nb, scan = T // cls.EVERY, templates == TEMPLATES
     prog = scan_program(cls, templates, T) if scan else \
-        M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+        PN.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
     if scan:
@@ -1741,7 +1742,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     opens a start that is the empty state's (``empty``); its outcome carries the record's changed forms' codes
     (``registration_negatives``) and the root the verdicts of record opened the start unit's ``sin`` against
     (``carried_start``, `audit.session_registered`)."""
-    a0, a7, P, R, V, frame_ports = M.a0, M.a7, M.P, M.R, M.V, M.prove_subprotocol.frame_ports
+    a0, a7, P, DK, R, V, frame_ports = M.a0, M.a7, M.P, M.DK, M.R, M.V, M.prove_subprotocol.frame_ports
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:
@@ -1775,7 +1776,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
     win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
         {"empty": {CARRY: carry.empty}} if carry and carry.empty else {})
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+    rec = DK.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
                    **(carry.record if carry else {}))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
 
@@ -1800,7 +1801,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     stream = None
     if coins is None:
         p = a0.challenger_sample(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
-                                        "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                        "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
@@ -1927,12 +1928,12 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
 def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | None:
     """An accepted audit's terms (prove_path's `charge_terms`): ε, at most ``wrong_units.bound`` of its ``of`` proof
     blocks wrong except with probability δ; λ_δ (``location_bits``), β_δ (``harm_bound``: each template's proof blocks
-    weighing the bits one of its proof blocks commits, `partition._template_bits`) and ``exfiltration_bound`` = β_δ +
+    weighing the bits one of its proof blocks commits, `partition_query._template_bits`) and ``exfiltration_bound`` = β_δ +
     λ_δ. None where the audit isn't accepted, which bounds nothing."""
     if not result.get("accepted"):
         return None
     p = AU.profile(result["registration"], result["draw"], delta)
-    bits = {M.P.template_id(m["defn"]): float(M.P._template_bits(m["defn"])) for m in members}
+    bits = {M.P.template_id(m["defn"]): float(PQ._template_bits(m["defn"])) for m in members}
     wu = result.get("wrong_units") or {}
     return {"delta": delta, "wrong_units": wu, "epsilon": wu["bound"] / wu["of"] if wu.get("of") else None,
             "template_bits": bits, "location_bits": location_bits(p), "harm_bound": p.harm_bound(bits),

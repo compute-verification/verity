@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import (
@@ -46,7 +47,7 @@ def run(tmp_path_factory):
     u = T.ingress(N)
     bc = T.boundary(u, Q)
     brec = T.write(bc, tmp / "boundary", {"toy": "boundary"}, index_salt=b"\x01" * 192)
-    digest = R.digest(brec)
+    digest = DD.digest(brec)
     it = T.interior(bc, digest, SAMPLE)
     irec = T.write(it.committed, tmp / "interior", {"interior": True, "boundary": digest, "replay_sample": list(SAMPLE)},
                    previous=digest, registered=it.registered, index_salt=b"\x02" * 192)
@@ -128,7 +129,7 @@ def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_bound
         assert file["format"] == REG.READS_V1 and list(file["ports"]) == [x for x, _ in m.all_rows]
         e = file["ports"][p]
         assert e["value"] == value == links[(m.template, p)] and e["reads"] == list(SAMPLE) and e[RV.READS_FROM] == m.base
-        assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
+        assert (e["leaves"], e["domain"], e[RV.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
         assert e["words"] == dict(m.all_rows)[p] == port.words
         header = T.CS.registered_header(head, t)[p]
         assert header["value"] == value and header["positions"] == list(SAMPLE)

@@ -521,6 +521,7 @@ def partSources : Flock.Program.Part → List (Bool × Nat)
   | .affine p i _ _ => [(p, i)]
   | .strided p i _ _ _ _ _ => [(p, i)]
   | .explicit items => items.toList.map fun r => (r.p, r.i)
+  | .grid _ lanes => lanes.toList.map fun l => (l.p, l.i)
 
 /-- What reference `s` reads: its parts' (`partSources`). -/
 def sources (s : Flock.Program.Seq) : List (Bool × Nat) := s.parts.toList.flatMap partSources

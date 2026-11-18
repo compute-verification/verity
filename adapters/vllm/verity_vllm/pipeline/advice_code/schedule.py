@@ -146,15 +146,14 @@ class Tick:
 
 @dataclass(frozen=True)
 class Rule:
-    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0 and ``quiet``. A step with
-    rows also advances T by ``token`` for each token it schedules that is not a draft. With ``quiet`` T jumps to the next
-    arrival's bucket close only when nothing runs or waits, else whenever nothing waits."""
+    """The tick's constants in the clock's unit, a `Tick`'s being microseconds with ``token`` 0. A step with rows also
+    advances T by ``token`` for each token it schedules that is not a draft. T jumps to the next arrival's bucket close
+    only when nothing runs or waits."""
 
     bucket: int
     sat: int
     free: int
     token: int = 0
-    quiet: bool = True
 
     def close(self, a: int) -> int:
         return (a + 1) * self.bucket

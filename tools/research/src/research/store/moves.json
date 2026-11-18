@@ -5454,6 +5454,42 @@
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/served.py": "verity/protocols/proofs/spot/prover/served.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/compute/pouw/prover/circuit/words.py": "verity/circuits/ops/words.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/charge_check.py": "verity/protocols/resource_accounting/network/prover/charge_check.py"
+      }
+    },
+    {
+      "paths": {
+        "tests/verity/protocols/proofs/flock/prover/test_boolean_export.py": "tests/adapters/vllm/flock/test_boolean_export.py",
+        "tests/verity/protocols/proofs/flock/prover/test_circuit.py": "tests/adapters/vllm/flock/test_circuit.py",
+        "tests/verity/protocols/proofs/flock/prover/test_class_statement.py": "tests/adapters/vllm/flock/test_class_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_derive.py": "tests/adapters/vllm/flock/test_derive.py",
+        "tests/verity/protocols/proofs/flock/prover/test_flock_rows.py": "tests/adapters/vllm/flock/test_flock_rows.py",
+        "tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py": "tests/adapters/vllm/flock/test_ir_lowering.py",
+        "tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py": "tests/adapters/vllm/flock/test_ir_sampling.py",
+        "tests/verity/protocols/proofs/flock/prover/test_lean_typed_statement.py": "tests/adapters/vllm/flock/test_lean_typed_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_partition_units.py": "tests/adapters/vllm/flock/test_partition_units.py",
+        "tests/verity/protocols/proofs/flock/prover/test_stage_typed.py": "tests/adapters/vllm/flock/test_stage_typed.py",
+        "tests/verity/protocols/proofs/flock/prover/test_topp_word.py": "tests/adapters/vllm/flock/test_topp_word.py",
+        "tests/verity/protocols/proofs/flock/prover/test_typed_statement.py": "tests/adapters/vllm/flock/test_typed_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_fmaxf_commit.py": "tests/adapters/vllm/flock/test_fmaxf_commit.py",
+        "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py": "tests/adapters/vllm/flock/test_ir_lowering_bench.py",
+        "tests/verity/protocols/proofs/flock/prover/test_rolled_lowering.py": "tests/adapters/vllm/flock/test_rolled_lowering.py",
+        "tests/verity/protocols/proofs/flock/prover/test_tmpl_statement.py": "tests/adapters/vllm/flock/test_tmpl_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_unit_range.py": "tests/adapters/vllm/flock/test_unit_range.py"
+      }
     }
   ]
 }

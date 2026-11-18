@@ -55,6 +55,7 @@ def _module(name: str, path: Path):
 
 
 analyze = _module("dc_analyze", HERE / "analyze.py")
+archs = analyze.archs
 eps1 = _module("dc_eps1", HERE.parent / "opcode_probe" / "eps1.py")
 rowsmod = _module("dc_rows", HERE.parent / "opcode_probe" / "rows.py")
 
@@ -62,7 +63,6 @@ __all__ = ["analyze", "census", "Device", "JI_ROW", "kept", "main", "OWN_ROW", "
 
 MARGIN = analyze.MARGIN
 SMSPS = 4
-HONEST = {"sm90": "IGMMA_S8_N256", "sm100": "UTCIMMA_M128_N256"}
 LD_HONEST = "LDTM_32X32B_X32"
 #: mma.sync probes: (kind, depth). sync_e4m3_k32 is emulated on sm_90 (2 HMMA.16816 + 4 FADD): no kind of its own.
 SYNC = {"imma_s8_k32": ("IMMA16832_S8", 32), "imma_s8_k16": ("IMMA16816_S8", 16), "sync_b1_k256": ("BMMA168256_B1", 256),
@@ -141,6 +141,7 @@ class Device:
 
     def __init__(self, family: str, outs: list[Path]) -> None:
         self.family = family
+        self.arch = archs.of_family(family)
         self.runs = [run_id(d) for d in outs]
         self.analyses = [analyze.analyze(family, d) for d in outs]
         self.clocks = {r: smi_clocks(d) for r, d in zip(self.runs, outs)}
@@ -148,7 +149,7 @@ class Device:
         for run, a in zip(self.runs, self.analyses):
             for name, f in a["forms"].items():
                 tk = tensor_kind(name, f)
-                lk = ld_kind(name) if family == "sm100" else None
+                lk = ld_kind(name) if self.arch.tmem else None
                 if tk:
                     kind, per, depth = tk
                     self._add(kind, f["slots"] / per, run, {"tensor": True, "slots_per": per, "depth": depth,
@@ -178,11 +179,11 @@ class Device:
     def rho_T(self) -> tuple[float, str]:
         """The most slots/SM/clk over every tensor form, and its form (the honest one when it ties within 0.01%)."""
         rho, form = max((v["rate"] * v["slots_per"], k) for k, v in self.tensor().items())
-        h = self.kinds[HONEST[self.family]]
-        return (rho, HONEST[self.family]) if h["rate"] * h["slots_per"] >= rho * (1 - 1e-4) else (rho, form)
+        h = self.kinds[self.arch.honest_kind]
+        return (rho, self.arch.honest_kind) if h["rate"] * h["slots_per"] >= rho * (1 - 1e-4) else (rho, form)
 
     def honest_rate(self) -> float:
-        return self.kinds[HONEST[self.family]]["rate"]
+        return self.kinds[self.arch.honest_kind]["rate"]
 
     def issue_max(self) -> float:
         """The most warp instructions a SM-clock any scalar probe issued (its loops' sum)."""
@@ -197,7 +198,7 @@ class Device:
         for run, a in zip(self.runs, self.analyses):
             for name, f in a["forms"].items():
                 tk = tensor_kind(name, f)
-                if tk and tk[0] == HONEST[self.family] and f["issue"]:
+                if tk and tk[0] == self.arch.honest_kind and f["issue"]:
                     r = f["slots"] / tk[1]
                     pts.append((r / SMSPS, (sum(f["issue"]) - r) / SMSPS, f"{name}@{run}"))
         for run, name, j in self.joints:
@@ -237,9 +238,9 @@ class Device:
 
     def model(self) -> dict | None:
         """sm_100's TMEM model (analyze.tmem_model) over every run's joint points."""
-        if self.family != "sm100":
+        if not self.arch.tmem:
             return None
-        rho5 = self.kinds[HONEST["sm100"]]["rate"] * self.kinds[HONEST["sm100"]]["slots_per"]
+        rho5 = self.kinds[self.arch.honest_kind]["rate"] * self.kinds[self.arch.honest_kind]["slots_per"]
         ld_alone = max(v["rate"] * v["words_per"] for v in self.kinds.values() if v.get("ld"))
         rho_sync = max(v["rate"] * v["slots_per"] for k, v in self.tensor().items() if k.startswith("IMMA"))
         joints = {f"{n}@{r}": j for r, n, j in self.joints}
@@ -279,8 +280,8 @@ def tight(f: dict) -> str:
 def census(dev: Device, carried: frozenset[str] = frozenset()) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """(census.csv lines, rows.csv lines) of one device; `carried`, kinds no run prices that the old census gave the
     joint issue rows' scalar coefficient (NOROW), get it on the new rows."""
-    fam, sfx = dev.family, dev.family[2:]
-    honest = HONEST[fam]
+    sfx = dev.family[2:]
+    honest = dev.arch.honest_kind
     lines: list[dict[str, str]] = []
     rows: list[dict[str, str]] = []
     every = " ".join(dev.runs)
@@ -322,7 +323,7 @@ def census(dev: Device, carried: frozenset[str] = frozenset()) -> tuple[list[dic
     row("I", "measured", every, f"IMAD {dev.kinds['IMAD']['rate']:.4f} /SM/clk")
     row("SHFL", "measured", every, f"SHFL.BFLY {dev.kinds['SHFL']['rate']:.4f} /SM/clk")
 
-    if fam == "sm100":
+    if dev.arch.tmem:
         for k in sorted(k for k, v in dev.kinds.items() if v.get("ld")):
             lines.append(rate_line(k, "TL", dev.kinds[k]["rate"], dev.runs_of(k)))
         best = max((v["rate"] * v["words_per"], k) for k, v in dev.kinds.items() if v.get("ld"))
@@ -371,7 +372,7 @@ def rows_csv(rows: list[dict[str, str]]) -> str:
 
 def tables(dev: Device) -> str:
     fam = dev.family
-    honest = HONEST[fam]
+    honest = dev.arch.honest_kind
     rho, rho_form = dev.rho_T()
     out = [f"## {fam}: runs {' '.join(dev.runs)}", ""]
     for r, c in dev.clocks.items():
@@ -401,7 +402,7 @@ def tables(dev: Device) -> str:
     rho_h, d_h = h["rate"] * h["slots_per"], h["depth"]
     out += ["", f"T1: rho_T = {rho:.2f} slots/SM/clk ({rho_form}); honest {honest} rho_H = {rho_h:.2f}, depth {d_h}."]
     model = dev.model()
-    if fam == "sm90":
+    if not dev.arch.tmem:
         out.append(f"- L = 32: eps_tensor <= 1 - (rho_H/rho_T)(d_H/L) = {max(0.0, 1 - rho_h / rho * d_h / 32):.4f}; "
                    "honest holds rho_T at L = 32 (N >= 64)")
     else:
@@ -427,7 +428,7 @@ def tables(dev: Device) -> str:
         for f in non_axis(pts) if len(pts) > 2 else []:
             out.append(f"- {lane} pipe beside the tensor: {honest} {f['MMA']:.3f} + {LANE_PIPE[lane][0]} {f['X']:.3f} "
                        f"(tight at {tight(f)})")
-    if fam == "sm100":
+    if dev.arch.tmem:
         for f in non_axis(dev.ld_points()):
             out.append(f"- TMEM: {honest} {f['MMA']:.3f} + {LD_HONEST} {f['X']:.3f} (tight at {tight(f)})")
     sp = dev.sync_points()
@@ -439,7 +440,7 @@ def tables(dev: Device) -> str:
     lane_words = h["slots_per"] / 32
     q = c_m / lane_words
     out += ["", f"q*: c_M {c_m:.3f} SMSP-cycles over {lane_words:.0f} words a lane = {q:.4f}"]
-    if fam == "sm100":
+    if dev.arch.tmem:
         c_x = fs[0]["X"] if fs else 1.0
         # 32 lanes x 32 words a tcgen05.ld 32x32b.x32; tcgen05.wait::ld is a scoreboard wait in SASS, no instruction
         n_ld = h["slots_per"] / (32 * 32)
@@ -504,7 +505,7 @@ def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("family", choices=tuple(HONEST))
+    p.add_argument("family", choices=archs.FAMILIES)
     p.add_argument("outs", type=Path, nargs="+")
     p.add_argument("--write", type=Path, help="the device directory (machine_model's data/devices/sm_90 or sm_100)")
     a = p.parse_args(argv)

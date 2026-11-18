@@ -18,13 +18,13 @@ sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/resource_accounting/
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
-
 import engine  # noqa: E402
 import store_layout as sl  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from test_session import run  # noqa: E402
+
+from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier import timing  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 
 FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
 FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))

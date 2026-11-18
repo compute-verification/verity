@@ -578,7 +578,7 @@ def local_model(name: str, hf_home: Path) -> str:
 
 
 def run(args: argparse.Namespace) -> int:
-    from verity_bench import kit
+    from verity.ports import free_port
 
     start = clock()
     deadline = start + 60 * args.minutes
@@ -592,7 +592,7 @@ def run(args: argparse.Namespace) -> int:
                          "warmup_s": args.warmup_s, "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS,
                                                              "frame_bytes": FRAME_BYTES}}
     meta["member"] = member(args.model, meta["gpu"]["name"], args.mode)
-    port, served, server, offline = kit.free_port(), "served", None, args.mode in OFFLINE
+    port, served, server, offline = free_port(), "served", None, args.mode in OFFLINE
     model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
     server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
                    "--served-model-name", served, "--host", "127.0.0.1", "--port", str(port), "--seed", "0",

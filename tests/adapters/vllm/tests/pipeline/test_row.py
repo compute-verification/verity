@@ -98,10 +98,13 @@ def test_a_row_without_a_cuda_toolkit_is_refused_by_name(tmp_path, capsys):
 
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
-    o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf"})
-    assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == cli.MACHINE["RunEnv.norm_tap_so"] and o.env.sweep_dir == str(tmp_path)
+    o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf", "VERITY_BUILD_ROOT": ""})
+    assert o.env.hf_home == "/elsewhere/hf" and o.env.build_root == cli.MACHINE["RunEnv.build_root"] and o.env.sweep_dir == str(tmp_path)
+    assert o.env.norm_tap_so == f"{cli.MACHINE['RunEnv.build_root']}/norm_tap/build/verity_norm_tap.so"
     assert _opts(tmp_path, "--hf-home", "/flag/hf", environ={"HF_HOME": "/elsewhere/hf"}).env.hf_home == "/flag/hf"
     assert o.env.environ["HF_HOME"] == "/elsewhere/hf"
+    r = _opts(tmp_path, "--build-root", "/r", "--router-tap-so", "/x/rt.so").env
+    assert (r.hidden_so_fa3_guarded, r.router_tap_so) == ("/r/fa2/build/fa3_matReqG/verity_fa3_matReqG.so", "/x/rt.so")
 
 
 def test_the_stage_flags_of_every_row_subcommand_are_one_set(tmp_path):

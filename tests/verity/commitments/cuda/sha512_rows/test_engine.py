@@ -11,9 +11,21 @@ import pytest
 from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.sha512_rows import check
 from verity.commitments.cuda.sha512_rows import engine as E
+from verity.device import compute_capability, gpu_card_reporting
 
 #: the engine's build cache for the tests, the one the benchmarks' settings default to
 BUILD = Path.home() / ".cache" / "verity" / "sha512_rows"
+
+#: the GPU card files (`verity.device`), whose ``arch`` is the target the device library is built for
+CARD_FILES = Path(__file__).resolve().parents[5] / "calibration/hardware/cards"
+
+
+def arch(name: str) -> str:
+    """The target a library is built for on the device reporting ``name`` (torch's ``get_device_name``): its card file's
+    ``arch`` (`verity.device.gpu_card_reporting`) without ``sm_``, such as ``90a``; a device no card file names is refused."""
+    card = gpu_card_reporting(name, directory=CARD_FILES)
+    compute_capability(card)
+    return card["arch"].removeprefix("sm_")
 
 
 def _cuda() -> bool:
@@ -33,7 +45,10 @@ class TorchEngine(E.Engine):
 
 
 def _engine(device: str) -> E.Engine:
-    return (E.Engine if device == "host" else TorchEngine)(device, build=BUILD)
+    if device == "host":
+        return E.Engine(device, build=BUILD)
+    import torch
+    return TorchEngine(device, arch(torch.cuda.get_device_name(device)), build=BUILD)
 
 
 #: one layer of commit_slots' frozen H200 layout, the benchmarks' too (bench.h200_rows)
@@ -50,6 +65,27 @@ def engine(request: pytest.FixtureRequest) -> E.Engine:
 def test_a_cuda_device_needs_a_runtime_verity_does_not_import() -> None:
     with pytest.raises(NotImplementedError, match="kernels/gpu-code-out-of-benchmarks"):
         E.Engine("cuda", build=BUILD)
+
+
+def test_a_cuda_device_needs_the_target_its_caller_names() -> None:
+    class Runtime(E.Engine):
+        def runtime(self) -> Any:
+            return SimpleNamespace()
+
+    with pytest.raises(ValueError, match="gpu_card_reporting"):
+        Runtime("cuda", build=BUILD)
+
+
+@pytest.mark.parametrize(("name", "target"), [
+    ("NVIDIA H100 80GB HBM3", "90a"), ("NVIDIA H200", "90a"), ("NVIDIA B200", "100a"),
+    ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "120a")])
+def test_the_target_is_the_card_files(name: str, target: str) -> None:
+    assert arch(name) == target
+
+
+def test_a_device_no_card_file_names_is_refused_by_name() -> None:
+    with pytest.raises(KeyError, match="NVIDIA Tesla T4"):
+        arch("NVIDIA Tesla T4")
 
 
 def test_row_digests_match_the_reference_at_edge_sizes(engine: E.Engine) -> None:

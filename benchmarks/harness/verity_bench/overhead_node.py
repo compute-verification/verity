@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_bench import kit, nsys
+from verity_bench.kit_report import PIECE
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
@@ -266,7 +267,9 @@ def epsilon_at(sch: O.Scheme, card: O.Gpu, m: int, model: str) -> dict:
 
 
 def verified(result: dict, arm: str | None, m: int, model: str) -> dict:
-    """Each linear's verdict from the arm's reference verifier (`verify.py --every-row`), as the row carries it."""
+    """Each linear's verdict from the arm's reference verifier (`verify.py --every-row`), as the row carries it: this job
+    runs it on this node over the node's own transcript, so the verdict is the developer's side's (`checked_by`
+    `piece`), not the auditor's."""
 
     if arm is None:
         return {}
@@ -392,6 +395,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             for name, m in at.items():
                 p = O.layer_gamma(result, busy, card, m, sch, model)
                 p["verified"] = verified(result, arm, m, model)
+                p["checked_by"] = None if arm is None else PIECE
                 p["epsilon"] = epsilon_at(sch, card, m, model)
                 p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
                 g = (p.get("gamma") or {}).get("gamma")

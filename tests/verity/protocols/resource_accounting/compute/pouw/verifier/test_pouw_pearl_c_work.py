@@ -515,7 +515,7 @@ def test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho(monkeypatch):
     assert CW.check_opened(h3, rec, tile, a, b, ops).startswith("the replayed debit")
 
 
-def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
+def test_census_row_inert_share_leaves_k_from_k_min_unchanged(monkeypatch):
     """At every k >= k_min the row cap stays ρ, byte for byte: the multiple is 1 on the census scheme and on every scheme
     without census ks, and at k = 1,024 a row over ρ is refused with the (C2) message, while at k = 256 the same row
     shape, under 4ρ, passes."""
@@ -525,7 +525,8 @@ def test_census_row_inert_share_leaves_k_from_k_min_unchanged():
         assert h3.row_inert_share_at(k) == h3.cap and CW.row_inert_share_multiple(h3, k) == 1
     for s in (S, C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), get("pearl-c-sm120-v1-h3")):
         assert s.census_ks == () and all(CW.row_inert_share_multiple(s, k) == 1 for k in (128, 256, 1024))
-    rec, tile, a, b, ops = _census_tile(h3, [30.0] + [None] * (m - 1), 1024)
+    keyed_salts(monkeypatch, bytes(32), 1, 0)
+    rec, tile, a, b, ops = _census_tile(h3, [20.0] + [None] * (m - 1), 1024)
     d, c = CW._inert_work_and_bound(h3, rec, tile, ops, [0], [0, 1, 2, 3])
     assert c < d < 4 * c
     assert CW.check_opened(h3, rec, tile, a, b, ops) == (

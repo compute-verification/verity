@@ -8,7 +8,8 @@ hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hoo
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port network attestation's
-served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
+served-rows tie's Definition reads; no proof of it runs, so today the rows registered at serve time are the
+prover's word) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
 It writes the engine's rotary table to ``OUT/private/cos_sin_cache.npy`` (`match_capture.dump_cos_sin`), which no record copies:
 the words the committer's weights registration roots it at (``prove_path.py weights-registration``) before the first request.
@@ -290,9 +291,10 @@ def port_identities(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
     """The identities the row's Programs read that the step-input port's tensors bind as, (op_path, member) by port name: its
     ids the manifest's one input-ids identity (``c00.input/ids`` on the compiled path, the embedding's ``<module>/in`` on the
     eager one), its positions ``c00.input/positions`` where the manifest has it. An eager row's Programs read no committed
-    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one), compiled
-    from the advice's rows, and the served-rows tie holds the port's positions to the window's served rows. A manifest naming
-    two ids identities is refused."""
+    positions: RoPE's are static structure of the Program (`rules.profile.RotaryEmbeddingRule` refuses a computed one),
+    compiled from the advice's rows, and the served-rows tie states that the port's positions are the window's served
+    rows; no proof of it runs, so today the rows registered at serve time are the prover's word. A manifest naming two
+    ids identities is refused."""
     from verity_vllm.query.manifest.format import SERVED_IDS, SERVED_POSITIONS
 
     fam: dict[tuple[str, str], str] = {}

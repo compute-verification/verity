@@ -2,8 +2,9 @@
 
 Class G is the one registered: GLM-5.3 at TP8, eager or compiled (vLLM's breakable CUDA graphs over the eager kernels at fixed
 capture sizes, `CLASS_G_EXECUTIONS`), on H200 (`predict.dsa`'s domain).  A registration states each of its engine limits, at most
-`CLASS_G_LIMITS`: steps of up to 8,192 tokens and 256 sequences, positions up to 131,072, and a long-prefill threshold of at most 256
-rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank, and the prefix cache on or off.  The step compiler admits
+`CLASS_G_LIMITS`: steps of up to 8,192 tokens and 1,024 sequences, positions up to 131,072, and a long-prefill threshold of at most
+256 rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank, or 0, vLLM's no clamp a request (its rows a step then
+only the step's), and the prefix cache on or off.  The step compiler admits
 such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at the launch it ran in, and
 a prefix-cache hit or a request a Commit window carries as the request's Program after its history, and refuses by name, request by
 request, a launch `predict.dsa` doesn't write, such as an all-reduce no capture covers (`tp_allreduce.covered`: at vLLM's
@@ -15,7 +16,7 @@ order, the canonical row an engine under `DSA_TOPK_ENV` serves, so the served `m
 written, at the context limit its launch states (N positions, or -1: the longest request the engine's KV pool holds, which vLLM
 fits when the engine starts), which the class doesn't fix: an engine serves past the 131,072 positions a registration may
 state, and the step compiler refuses that engine's registration by name; and
-up to its 256 sequences a step, with `options`, the prefix cache off, under `DSA_TOPK_ENV`, which its build sets over the process's
+up to its 1,024 sequences a step, with `options`, the prefix cache off, under `DSA_TOPK_ENV`, which its build sets over the process's
 (`env`) and a built engine that doesn't carry is refused (`effective_refusals`); its admission (`engine.class_admission`) refuses as it serves
 a prompt over the built engine's `max_model_len`, and a request in flight when a Commit window closes, since the served Commit doesn't
 commit the window's edge ports (`workload.Edge`), which a carried request's history reads.
@@ -26,17 +27,38 @@ import json
 from typing import Any
 
 from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.config import row_world, stored_workloads
 from verity_vllm.engine.profiles.devices import class_device_name
 from verity_vllm.errors import Refused
+from verity_vllm.target_family import device_token_of_row
 
+
+def rows_device_name(checkpoint: str, world: int) -> str:
+    """The name the one card reports that the stored rows of ``checkpoint`` (their ids' first two fields) at TP ``world`` name
+    (`config.stored_workloads`, each id's target token, `devices.class_device_name`); `Refused` where they name none or several,
+    or a card no GPU card file states one reported name of."""
+    rows = [n.removesuffix(".json") for n in stored_workloads() if n.startswith(f"{checkpoint}__")]
+    tokens = {device_token_of_row(r) for r in rows if row_world(r) == world}
+    if len(tokens) != 1:
+        raise Refused(f"the stored rows of {checkpoint} at TP{world} name the cards {sorted(map(str, tokens))}, not one",
+                      what="an engine class's card")
+    token = str(tokens.pop())
+    if (name := class_device_name(token)) is None:
+        raise Refused(f"the stored rows of {checkpoint} at TP{world} name {token!r}, which no GPU card file states one reported name "
+                      "of: add its `short` and `driver` to its card file", what="an engine class's card")
+    return name
+
+
+#: class G's rows: the stored workloads of this checkpoint at its world, whose ids name its card
+CLASS_G_CHECKPOINT = "glm53__fp8"
 #: class G's registration: the model type, tensor-parallel world, default execution label and device name (`predict.steps.launch_class`)
-CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": class_device_name("h200")}
+CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": rows_device_name(CLASS_G_CHECKPOINT, 8)}
 #: the execution labels class G serves, each with the target compilation it runs at: compiled is vLLM's breakable CUDA graphs over
 #: the eager kernels, the one compiled execution vLLM serves glm_moe_dsa at (`TargetProfile.COMPILATIONS`, `predict.dsa`)
 CLASS_G_EXECUTIONS: dict[str, str | None] = {"eager": None, "compiled": "breakable"}
 #: class G's engine limits: a registration states each, at most these.  Its `max_model_len` is the step compiler's alone, the
 #: positions the Definitions a request's rows bind are circuit-checked to; a served engine's is its launch's (`CLASS_G_SERVED`)
-CLASS_G_LIMITS = {"max_num_batched_tokens": 8192, "max_model_len": 131072, "long_prefill_token_threshold": 256, "max_num_seqs": 256}
+CLASS_G_LIMITS = {"max_num_batched_tokens": 8192, "max_model_len": 131072, "long_prefill_token_threshold": 256, "max_num_seqs": 1024}
 #: the engine limits a served class-G engine runs at, its `max_num_seqs` at most the class's: within `CLASS_G_LIMITS`, steps of
 #: at most 2,048 tokens, a long prompt prefilled in chunks of at most 256 rows; its `max_model_len` is the launch's
 CLASS_G_SERVED = {"max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256}
@@ -130,5 +152,5 @@ def check_model(name: str, model: str, revision: str) -> None:
         raise Refused(f"{model}@{revision} is a {got!r} checkpoint, not the class's {want!r}", what=f"engine class {name}")
 
 
-__all__ = ["CLASSES", "CLASS_G", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "DSA_TOPK_ENV", "ENVS",
-           "EXECUTIONS", "check_model", "compilation", "effective_refusals", "env", "max_num_seqs", "of", "options"]
+__all__ = ["CLASSES", "CLASS_G", "CLASS_G_CHECKPOINT", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "DSA_TOPK_ENV", "ENVS",
+           "EXECUTIONS", "check_model", "compilation", "effective_refusals", "env", "max_num_seqs", "of", "options", "rows_device_name"]

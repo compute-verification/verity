@@ -162,13 +162,14 @@ def slot_owner(leaf: bytes) -> int | None:
     return n - 1 if n else None
 
 
-def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[RequestEntry], key: bytes) -> Any:
+def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[RequestEntry], salts: Any) -> Any:
     """Round r's request table: `rows` (T) hiding leaves, the entries the round admits in admission order, then
-    `EMPTY_REQUEST`. Each admitted request schedules a token row in the step that admits it, so a step admits at most T."""
+    `EMPTY_REQUEST`, salted by the run's salts (`pouw_h1_prover.RunSalts`) at ``REQUESTS_NONCE`` + r. Each admitted
+    request schedules a token row in the step that admits it, so a step admits at most T."""
     if len(entries) > rows:
         raise ValueError(f"round {r} admits {len(entries)} requests, past its {rows} leaves")
     values = [e.row() for e in entries] + [EMPTY_REQUEST] * (rows - len(entries))
-    return hiding_rows(requests_binding(salt, r), r, values, key, REQUESTS_NONCE + r)
+    return hiding_rows(requests_binding(salt, r), r, values, salts.at(REQUESTS_NONCE + r, len(values)))
 
 
 def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, int]]) -> list[int | None]:
@@ -181,11 +182,11 @@ def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, i
     return out
 
 
-def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], key: bytes) -> Any:
+def slot_table(salt: bytes, r: int, rows: int, owners: Sequence[int | None], salts: Any) -> Any:
     """Round r's slot table: `rows` (T) hiding leaves, leaf i naming the request whose row is slot i of step r's A tables
-    (`owners`, in the step's batch order), `EMPTY_SLOT` past them."""
+    (`owners`, in the step's batch order), `EMPTY_SLOT` past them, salted by the run's salts at ``SLOTS_NONCE`` + r."""
     values = [slot_leaf(o) for o in owners[:rows]] + [EMPTY_SLOT] * (rows - min(len(owners), rows))
-    return hiding_rows(slots_binding(salt, r), r, values, key, SLOTS_NONCE + r)
+    return hiding_rows(slots_binding(salt, r), r, values, salts.at(SLOTS_NONCE + r, len(values)))
 
 
 def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[bytes]:
@@ -226,18 +227,18 @@ class HidingTable:
         return Opening(position, self._values[rank], tuple(path))
 
 
-def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> HidingTable:
-    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts computed as one
-    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce
-    (`hm96.batch.salts`).
-    The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call. The leaves are
+def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], salts: bytes) -> HidingTable:
+    """``audit.commit_rows(binding, owner, values, hash=HM96, salts=...)`` of ``salts``, leaf i's at bytes
+    [192 i, 192 i + 192): the caller's fresh bytes (`pouw_h1_prover.RunSalts`). The leaves are
     hashed as `pouw_h1_registered`'s NumPy path hashes a table's (`Hm96Domain.leaf`'s bytes): each distinct preimage's
     ``row-seg`` digest once, every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and
     nodes from their constant prefixes, since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request
     table each round."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
     n = len(values)
-    y = batch.salts(key, nonce, np.arange(n))
+    y = bytes(salts)
+    if len(y) != HM96_SALT * n:
+        raise ValueError(f"{len(y)} bytes of salts for {n} leaves, not {HM96_SALT} a leaf")
     domain = rows_domain(binding, owner, n, HM96)
     rows = [v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)]
     if not n:

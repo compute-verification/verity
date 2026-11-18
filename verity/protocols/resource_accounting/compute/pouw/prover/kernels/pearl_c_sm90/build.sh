@@ -16,10 +16,12 @@
 # ship.sh adds the check and what the card runs it with.  Needs no uv.
 # Usage: bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh [OUT]   (default /tmp/pearl-c-sm90-ship; CUDA_HOME names the toolkit and
 #        GENCODE the target, which callers read from the machine and its card; a card of another target is refused)
+#        bash .../build.sh --arch   prints the target the tree's kernels are built for and builds nothing (needs no toolkit)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../../../../../../.." && pwd)
-CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA toolkit of nvcc 12.8 or later}; OUT=${1:-/tmp/pearl-c-sm90-ship}
 ARCH=sm_90a   # pearl_c_sm90.cu's and debit_sm90.cu's kernels are this target's alone (sass_gate.py holds its MMA forms)
+[ "${1:-}" = --arch ] && { echo "$ARCH"; exit 0; }
+CUDA=${CUDA_HOME:?set CUDA_HOME to a CUDA toolkit of nvcc 12.8 or later}; OUT=${1:-/tmp/pearl-c-sm90-ship}
 GENCODE=${GENCODE:?set GENCODE to the -gencode value of the target (benchmarks/kernels/machine.py gencode ARCH)}
 case $GENCODE in *,code=$ARCH) ;; *) echo "pearl_c_sm90 is $ARCH's: GENCODE=$GENCODE is another card's target" >&2; exit 2 ;; esac
 [ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA" >&2; exit 1; }

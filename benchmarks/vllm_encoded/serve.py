@@ -333,16 +333,15 @@ class DeviceWords:
     decode = encode
 
 
-def store_weights(values, install: Install, args) -> list:
-    """The store's weight regions: every registered value left after the install (identity), and each encoded linear's
-    words."""
-    from verity.protocols.resource_accounting.memory.poub.prover.binder import WeightRegion, model_weights
-    out = model_weights(values)
+def store_regions(install: Install, args) -> list:
+    """The store's weight regions beside the registered values left after the install: each encoded linear's words, as
+    PoUB's attach takes them (``regions``): ``(name, tensor, source, codec)``."""
+    out = []
     for name, lin in install.linears:
         nbytes = lin.store.numel() * lin.store.element_size()
         words = getattr(lin, "words", None) or lin.store.numel()
         codec = DeviceWords(f"{args.arm}-p{getattr(lin, 'bits', 0)}-k{lin.k}", nbytes // words)
-        out.append(WeightRegion(f"{name}.store", lin.store, f"{codec.name}:{name}@{lin.base}", codec=codec))
+        out.append((f"{name}.store", lin.store, f"{codec.name}:{name}@{lin.base}", codec))
     return out
 
 
@@ -621,17 +620,13 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm import messages
-        from verity.protocols.resource_accounting.memory.poub.prover.binder import Every
         from verity.protocols.compose import schemes
-        from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
         window = {}
         if args.store_window:
-            from verity.protocols.resource_accounting.memory.poub.verifier.audit import NoiseTiles
-            sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
-            window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
-                      "tiles": NoiseTiles()}
-        binder = messages.current().attach(schemes.get("poub"), None, store=NodeMemory(),
-                                           binder={"weights": lambda v: store_weights(v, install, args), **window})
+            window = {"challenge": lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32],
+                      "reader": lambda segments: bytes(64)}
+        binder = messages.current().attach(schemes.get("poub"), {"window": args.store_window or 0},
+                                           regions=lambda values: store_regions(install, args), **window)
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:

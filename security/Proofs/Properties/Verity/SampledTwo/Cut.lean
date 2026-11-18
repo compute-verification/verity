@@ -329,7 +329,7 @@ reads as its coin commitment's, it released of each family after each root the c
 def PrintsOn (dev : History) (w : String) (log : List Release) : Prop :=
   ∀ pk r, r ∈ dev.runs pk → OpensOn dev pk w r.id →
     Verity.Sampled.Lines.Prints [] r.log.tail log ∧ (∃ ts, coinTreesOf r.log = .ok ts) ∧
-      ((∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) →
+      ((∃ c entries, r.commitment = some c ∧ releasedLogOf c r.log = .ok entries) →
         ∀ label after, Verity.Sampled.Lines.Holds (r.released label after)
           (Verity.Sampled.Lines.freshOf label after log))
 

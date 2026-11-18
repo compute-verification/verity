@@ -22,8 +22,8 @@ spec's setup exports) as serve-openai's ``--protocols-config`` takes them for th
 the scheme's own settings alone, the server setting each epoch's coins and its transcript dir itself.
 
 ``serve`` builds the spec's preset (`verity_bench`'s ``engine_args``) with its Pearl-C arm's declared scheme attached by
-name on the build's exchange (`pearl_c_arm`: ``--arm``, else the spec's one, whose entry is the scheme's option,
-`messages.option`; `scheme_settings`), one epoch for the run, its salt coin the in-process challenger's, and its
+name on the build's exchange (`pearl_c_arm`: ``--arm``, else the spec's one, whose entry is the scheme's name,
+`messages.named`; `scheme_settings`), one epoch for the run, its salt coin the in-process challenger's, and its
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
 ``DIR/coins.json`` once the scheme is released.  With ``PEARLC_CHALLENGER_GATE``, ``PEARLC_CHALLENGER_PEER`` and
 ``PEARLC_PRIVATE`` set the epoch's salt coin is a live session's on the auditor device instead (the scheme reserves it
@@ -114,10 +114,10 @@ of one salt and, but under ``--test-instance`` (a test instance's passes, whose 
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at the scheme's named assumption (TT_OUT rev1) at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
+PouwVerifier).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
 last replayed tile, on the node it ran on and in how many processes.
 
-``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
+``lean`` is the Lean verdict of record on the run `verify` judged (`PouwVerifier.PearlPlus`, ``--exe`` its ``pouw-pearlplus``,
 or ``build``: built first in its package, `LEAN_PACKAGE`, where a build that fails answers nothing):
 the passes ``verify --out``'s document (``--verify``) names, read as `verify` reads them (``--manifest`` as it named them)
 and held to the names and SHA-256s
@@ -151,7 +151,7 @@ are its ``macs``, and their ``credited`` is at least its ``credited`` and at mos
 padding takes off past the totals' credit is the cause ``grid``.
 
 ``case`` writes, from the Lean verdict of record ``lean`` wrote (``--lean``), the parts of the run's case in the form
-remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
+remote's composite of record reads it (`PouwVerifier.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
 record's four fields the protocol's params name (`CASE_RECORD`); the retained manifests, in order; the window, the
@@ -187,9 +187,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.wi
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
-#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm, Pearl+'s ``pouw:pearl-c-h100-v1-h3`` on an
-#: H100 or H200
-ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
 DRAWS = 459
@@ -205,12 +202,12 @@ OVER_INERT_BOUND = ("reject", "uncredited")
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
-#: the fields of the Lean `PouwCheck.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
+#: the fields of the Lean `PouwVerifier.PearlPlus` printout `lean` holds to the Python's verdict, as its difftest does
 #: (`benchmarks/pouw/pearlplus_lean`'s ``answer``)
 LEAN_HELD = ("verdict", "reason", "refused", "commitment", "source", "over_cap", "verdicts", "work", "exact_work")
 #: `lean`'s record of both verdicts, beside its answer
 LEAN_CHECK = "pearlplus-lean-check.json"
-#: ``lean --exe build``: PouwCheck.PearlPlus's Lake package, built there, and the executable the build makes
+#: ``lean --exe build``: the Lake package `pouw_pearlplus` (`PouwVerifier.PearlPlus`), built there, and the executable the build makes
 BUILD = "build"
 LEAN_PACKAGE = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
 LEAN_EXE = LEAN_PACKAGE / ".lake" / "build" / "bin" / "pouw-pearlplus"
@@ -219,7 +216,7 @@ LEAN_SCHEMA = "verity-pouw/pearl-plus-lean-check/v1"
 LEAN_DISAGREES = "the Lean verdict and the Python's disagree, so no Lean answer is written"
 #: `case`'s parts of the run's case, and its directory of the files they name, each under the SHA-512 of its bytes
 CASE_SCHEMA = "verity-pouw/pearl-plus-case-parts/v1"
-#: the coin record's fields the protocol's params name (`PouwCheck.PearlPlus.Protocol.recordKeys`)
+#: the coin record's fields the protocol's params name (`PouwVerifier.PearlPlus.Protocol.recordKeys`)
 CASE_RECORD = ("commitment", "draw", "schema", "source")
 CASE_PARTS, CASE_BLOBS = "parts.json", "blobs"
 #: why `retain` and `volunteer` refuse once the verifier's coin is flipped
@@ -248,33 +245,34 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 
 
 def undeclared(entries) -> str | None:
-    """Why a served arm of ``entries`` can't run: the first Pearl-C entry that is no declared scheme's option
-    (`messages.option`), as the RTX PRO 6000's is none, which no served path serves; None when there is none."""
-    from verity_vllm import messages as M
+    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`compose.schemes`), as
+    the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when there is none."""
+    from verity.protocols.compose import schemes
 
+    names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
-        if e.startswith(ARM_PREFIX) and M.option(e) is None:
-            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+        if e not in names:
+            return (f"{e} is no declared scheme's name ({', '.join(names)}), so no served arm runs it; its kernel's own "
                     "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
 def pearl_c_arm(spec, name: str | None = None):
-    """The spec's PoUW Pearl-C arm (`ARM_PREFIX`) ``name``, else its one; SystemExit naming them when it has none, several
-    or not ``name``, naming its entry when it is no declared scheme's option (`undeclared`), and naming its entries
+    """The spec's arm ``name`` that attaches schemes (``protocols``), else its one; SystemExit naming them when it has none, several
+    or not ``name``, naming its entry when it is no declared scheme's name (`undeclared`), and naming its entries
     unless they are one, the scheme it attaches by name."""
     from verity_bench.vllm import arms as A
 
     got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-           if a.protocols and all(e.startswith(ARM_PREFIX) for e in a.protocols)]
+           if a.protocols]
     picked = [a for a in got if name is None or a.id == name]
     if len(picked) != 1:
-        want = name or f"a spec's one {ARM_PREFIX}* arm"
+        want = name or "a spec's one arm that attaches schemes"
         raise SystemExit(f"served_passes.py serves {want}; {spec.id} has {[a.id for a in got] or 'none'}")
     if why := undeclared(picked[0].protocols):
         raise SystemExit(f"served_passes.py: {why}")
     if len(picked[0].protocols) != 1:
-        raise SystemExit(f"served_passes.py: a served arm attaches one declared scheme by its option; {picked[0].id} is "
+        raise SystemExit(f"served_passes.py: a served arm attaches one declared scheme by its name; {picked[0].id} is "
                          f"{list(picked[0].protocols)}")
     return picked[0]
 
@@ -288,8 +286,8 @@ def scheme_settings(arm, scheme, transcript_dir: Path | None) -> tuple[dict, dic
     from verity_bench.vllm import arms as A
 
     # read with no protocol enabled, so no in-process challenger flips coins the scheme samples per epoch itself
-    pouw = A.protocols_config(dataclasses.replace(arm, protocols=()), os.environ).get("pouw", {})
-    own = {k: v for k, v in pouw.items() if k in scheme.settings}
+    given = A.protocols_config(dataclasses.replace(arm, protocols=()), os.environ).get(scheme.name, {})
+    own = {k: v for k, v in given.items() if k in scheme.settings}
     if transcript_dir is not None:
         own["transcript_dir"] = str(transcript_dir)
     if not settings.PEARLC_CHALLENGER_GATE:
@@ -338,7 +336,7 @@ def serve(args: argparse.Namespace) -> int:
 
     spec = P.resolve_spec(args.spec)
     arm = pearl_c_arm(spec, args.arm)
-    scheme = M.option(arm.protocols[0])
+    scheme = M.named(arm.protocols[0])
     preset = spec.preset
     engine = RN.engine_args(preset, arm.precision or preset.precision, resident=False, eager=True)
     if args.max_num_batched_tokens:
@@ -608,11 +606,11 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+        from verity.commitments import docket_digest as DD
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
         try:
-            before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
+            before = DD.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
             day = json.loads(Path(args.day_declaration).read_text()) if args.day_declaration else None
             w = PWR.write(args.window_record, served["passes"], rounds, before,
                           None if day is None else {k: day[k] for k in PWR.NAMING})
@@ -620,7 +618,7 @@ def retain(args: argparse.Namespace) -> int:
             print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
-              f"values, digest {REG.digest(w)[:16]}…, chained after "
+              f"values, digest {DD.digest(w)[:16]}…, chained after "
               f"{'nothing' if before is None else before[:16] + '…'}"
               + ("" if day is None else f", naming day {day['day']}'s declaration {day['declaration'][:16]}…"), flush=True)
     return 0
@@ -675,12 +673,12 @@ def arm(args: argparse.Namespace) -> int:
     from verity_vllm import messages as M
 
     picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
-    scheme = M.option(picked.protocols[0])
+    scheme = M.named(picked.protocols[0])
     # read with no protocol enabled, so no in-process challenger flips coins the server samples per epoch itself
-    pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
-    doc = {"pouw": {k: v for k, v in pouw.items() if k in scheme.settings}}
+    given = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get(scheme.name, {})
+    doc = {scheme.name: {k: v for k, v in given.items() if k in scheme.settings}}
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
-    print(f"arm {picked.id}: --protocols-config {args.out}, pouw {sorted(doc['pouw'])}", flush=True)
+    print(f"arm {picked.id}: --protocols-config {args.out}, {scheme.name} {sorted(doc[scheme.name])}", flush=True)
     return 0
 
 
@@ -768,15 +766,11 @@ def lean(args: argparse.Namespace) -> int:
     if named != doc.get("passes"):
         return done("the retained passes are not the ones the Python verdict read, by name and SHA-256", 2)
     if args.exe == BUILD:
+        from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
         try:
-            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=LEAN_PACKAGE, capture_output=True, text=True,
-                               check=False)
-        except OSError as e:
-            return done(f"pouw-pearlplus can't be built here: {type(e).__name__}: {e}", 2)
-        if b.returncode:
-            return done(f"pouw-pearlplus doesn't build (lake exited {b.returncode}): "
-                        f"{(b.stdout + b.stderr).strip()[-400:]}", 2)
-        exe = LEAN_EXE
+            exe = V.executable(LEAN_EXE.name, LEAN_PACKAGE)
+        except (OSError, V.LeanError) as e:
+            return done(f"pouw-pearlplus doesn't build: {type(e).__name__}: {e}", 2)
         rec["exe"] = str(exe)
     if not exe.is_file():
         return done(f"no Lean executable at {exe}", 2)
@@ -909,7 +903,7 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the Lean verdict is not on the coin record's run and source")
     if any(k not in coin for k in CASE_RECORD):
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     try:
         if not doc.get("tie_record"):
@@ -918,7 +912,7 @@ def case(args: argparse.Namespace) -> int:
     except (OSError, ValueError):
         return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
                       "case's commitment names W")
-    if not isinstance(w, dict) or REG.digest(w) != (doc.get("tie") or {}).get("record"):
+    if not isinstance(w, dict) or DD.digest(w) != (doc.get("tie") or {}).get("record"):
         return refuse("the window record W is not the one the Python verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
     loaded = [VR.load(p, coins) for p in paths]
@@ -957,7 +951,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
     s.add_argument("--spec", type=Path, default=SPEC)
-    s.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm to serve (default: its one)")
+    s.add_argument("--arm", help="the spec's arm that attaches schemes to serve (default: its one)")
     s.add_argument("--passes", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--requests", type=int, default=32)
@@ -1020,7 +1014,7 @@ def main(argv: list[str] | None = None) -> int:
                    "other than 64 x 64, and the verdict credits nothing")
     a = sub.add_parser("arm")
     a.add_argument("--spec", type=Path, default=SPEC)
-    a.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm (default: its one)")
+    a.add_argument("--arm", help="the spec's arm that attaches schemes (default: its one)")
     a.add_argument("--out", required=True)
     n = sub.add_parser("lean")
     n.add_argument("--passes", required=True)

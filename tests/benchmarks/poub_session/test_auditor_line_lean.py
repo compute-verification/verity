@@ -24,12 +24,13 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
+
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, line, receipts  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RECORDED_DISK = 4.4e9

@@ -17,7 +17,7 @@ def definition(subcircuit):
 def frame_lowering(subcircuit):
     from verity_flock import ir_sampling
 
-    return ir_sampling.lane(int(subcircuit.params["V"]))
+    return ir_sampling.lane(subcircuit.definition())
 
 
 def lowering(subcircuit):

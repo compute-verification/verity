@@ -31,17 +31,17 @@
    "generate": ["python3", "scripts/count_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "InferenceOnlyVerifier.DescDifftestMain": {
-   "why": "4,082 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past InferenceOnlyVerifier.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by InferenceOnlyVerifier.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which a draft of the liveness test gave InferenceOnlyVerifier mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's three pinned ones, the third a declaration with a constant gate) on which InferenceOnlyVerifier.Desc.check gives what scripts/inference_only_reference.py's check_desc computes, and, on each one it gives a verdict on, what InferenceOnlyVerifier.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "4,092 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past InferenceOnlyVerifier.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by InferenceOnlyVerifier.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which a draft of the liveness test gave InferenceOnlyVerifier mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, 10 read through grid parts no older form spells (each run read three times then the next, two parameters' lanes interleaved, a node's output, a batch mapped over such a read, and one read backwards), every Call in one IU or each in its own, then the unrolled difftest's three pinned ones, the third a declaration with a constant gate) on which InferenceOnlyVerifier.Desc.check gives what scripts/inference_only_reference.py's check_desc computes, and, on each one it gives a verdict on, what InferenceOnlyVerifier.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "4082"
+    "4092"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "cf79ae2df12a6fc032d1d573a8d5947f8eb5cfce3d023c987664699df48c0f2b",
-    "desc_difftest/instances.jsonl": "ec114442418c21c536ed2df66d43bc57834c8b092ae7870d3c2d1669a0e9939b",
-    "desc_difftest/python.jsonl": "a92352db25e8a2792f15423f5450b00a1c5954cccd07f03f1077b7d604b3402c"
+    "desc_difftest/expanded.jsonl": "8a8410f458a5ceaab8b961a3f465a4cd69cbe07d163d0201e2de2ad878563e5b",
+    "desc_difftest/instances.jsonl": "23440b7eab0fd3f90bafe113244e6b489388c58f2bb10f2549bc86dded80f16a",
+    "desc_difftest/python.jsonl": "0291bd49772da2f2c72343dadf6adfe6ce5665fe980808c2f2f326910890e5ef"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },

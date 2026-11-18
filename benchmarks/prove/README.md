@@ -57,7 +57,8 @@ verity bench prove layers --flock R --zk R --sampling R --recursion R
   steady-state types' median seconds a witness bit. A total is called measured only when every block type is measured
   at steady state. When a block type has no figure the totals leave its proving out and are called partial, naming each
   such type with its share of the blocks, and of the MACs where the census holds them (a type with no time has no
-  share of the proving time). Otherwise a total is modeled. The proof server's verifier's seconds are given where a
+  share of the proving time). A total that prices a block type at a larger block's rate (`bounded_by`) is partial too:
+  measured rows and an upper bound on the rest, which its line says. Otherwise a total is modeled. The proof server's verifier's seconds are given where a
   steady-state row holds them, and "not measured" where none does. The served MACs the census holds in no proof block
   are in no figure, and the totals give their share.
 - **The share of the proving time that rests on rows timed above the host's cores:** the types priced from a row
@@ -109,9 +110,11 @@ verity bench prove layers --flock R --zk R --sampling R --recursion R
   k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
-- **Under `--system spot`, SPOT's resampling holes in the code that ran**, over the runs among its inputs (not its
-  arts): the label (`SPOT`, or `SPOT soundness` only when both holes are closed), each hole's status, and the theorem
-  with its open premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
+- **Under `--system spot`, SPOT's holes in the code that ran**, over the runs among its inputs (not its arts): the
+  label (`SPOT`, or `SPOT soundness` only when every hole is closed), each hole's status, and the theorem with its open
+  premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON). The holes are the two
+  resampling holes and the wires between proof blocks, open until the registered circuit carries its wires; while it
+  is open, the audit's limit: each sampled block on its own inputs; the wires between blocks are not held.
 
 `--system flock` proves every block. `--system spot` takes the same costs at the blocks a sampling plan samples: a
 system is a `prove.ProofSystem`, a census in and a table out, and SPOT wraps one with a plan.
@@ -152,8 +155,17 @@ Definition's and each gap's rows and each phase's tokens (`prove.summed`).
 `llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager`) is a workload whose census is printed first
 (`verity_bench/prove_census.py`): each block type's proof blocks in each request and summed, its AND gates where the
 census gives a block's, and the steady-state rate of record that rates it at the stated provers and cores, or `none`.
+A block type's rate is its own Definition id's; else, where the census names the Definition on bits its proof is
+(`proved_as`, which the table prints beside the block), that one's; else, where it names its kind's largest block in the
+census (`bounded_by`), that one's, printed `bounded by` it: a larger block's rate, an upper bound on the type's cost and
+not a measurement of it. The rated count says how many types it includes so bounded, and a total that includes one is
+`partial`, an upper bound (`prove.rated_as` is the one lookup, for the table, the refusal and the totals).
 Then the gaps: Definitions whose served rows no block of the cut holds, each with its rows in each request and why,
-counted in no block total. Its totals are given only when every block type with blocks has a steady-state rate (under
+counted in no block total. The text prints a run of one family's Definitions that differ only in one static (as
+`Attention_v4{T=22..48,...}`) as one line, with how many it holds and their summed served rows, and names the gaps in
+the refusal by family and reason; the stored table keeps every Definition. A run's block types share one rate, so a
+run bounded by a larger block says `bounded by` once, and names its Definitions on bits as a run too. Its totals are
+given only when every block type with blocks has a steady-state rate (under
 the cut of record), the census holds no gap and every other slot is labelled (`cut`, `flock-single`,
 `spot-sampling`, `lean-verify`, `flock-warm`). Otherwise the command refuses them by name, each block type with no
 rate, each gap and each slot with the label that would fill it, and exits 1. Under a research run it writes the census
@@ -381,7 +393,8 @@ The table's columns, after the layer and its workload:
   last (the smallest δ): `at most 3 of 500 incorrect proof blocks except with probability 0.5; at most 40 except with
   probability 1e-9 (summary.json epsilon, the first and last of its 6 pairs)`. Without one, the audit's `wrong_units` (a
   `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
-  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
+  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`. Under a table with such a bound, the line `- ε at δ:`
+  gives its limit: each sampled block on its own inputs; the wires between blocks are not held.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
   another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
   block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four

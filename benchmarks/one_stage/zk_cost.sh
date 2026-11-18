@@ -40,7 +40,7 @@ if [ ! -x "$PY" ]; then
   (exec 8>"$FLOCK_WORK/flock-circuit/venv.lock"; flock 8; [ -x "$PY" ] || { "$UV" venv -q --python 3.12 "$FLOCK_WORK/flock-circuit/py" \
     && "$UV" pip install -q --python "$PY" numpy blake3; })
 fi
-export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python:$REPO/benchmarks/harness:$REPO/tools/config
+export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/adapters/torch:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
@@ -55,14 +55,9 @@ if [ -n "${ZK_UNITS:-}" ]; then
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
-# CUDA 13.3: CUDA_TK where given, else the machine's toolkit at 13.3 (benchmarks/kernels/machine.py), else the one
-# verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks under FLOCK_WORK without root (an R580 driver
-# runs 13.3), one unpacking at a time
-[ -n "${CUDA_TK:-}" ] || CUDA_TK=$(python3 benchmarks/kernels/machine.py toolkit 13.3 2> "$O/cuda-unpack.log") \
-  || { CUDA_TK=; (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh) \
-         >> "$O/cuda-unpack.log" 2>&1 && . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda-unpack.log" 2>&1; }
-[ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
-export CUDA_TK; C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+. benchmarks/one_stage/toolkit.sh
+cuda_13_3 "$O/cuda-unpack.log" "$FLOCK_WORK/cuda-root.lock" || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
+C13=$CUDA_TK; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 
 log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK and $PT_WORK"
 OUT=$O/build bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &

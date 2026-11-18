@@ -46,6 +46,7 @@ import ctypes
 
 import numpy as np
 
+from verity_vllm.definitions.numerics import _jit
 from verity_vllm.definitions.numerics import fa2_model as _fa2
 from verity_vllm.definitions.numerics.fa2_model import (  # noqa: F401  (the shared pieces: tables, scale, build)
     HEAD_DIM,
@@ -126,8 +127,7 @@ def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
         L = _fa2.lib()
-        L.fa3_rows.restype = None
-        L.fa3_rows.argtypes = L.fa2_rows.argtypes
+        _jit.declare(L, "fa3_rows", _fa2.ROWS_ARGTYPES)
         _lib = L
     return _lib
 

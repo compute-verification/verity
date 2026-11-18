@@ -2,6 +2,7 @@ module
 
 public import InferenceOnlyVerifier.Desc
 public import InferenceOnlyVerifier.Difftest
+meta import InferenceOnlyVerifier.Desc
 
 /-!
 # The difftest of the description-sized check: against the unrolled one, and against the Python reference
@@ -55,5 +56,10 @@ def main (args : List String) : IO UInt32 := do
   for d in found.take 50 do IO.eprintln d
   IO.println s!"desc difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
+
+-- A grid part of two lanes of 524,289 periods each, 1,048,578 pieces, is refused by name before anything is summarized.
+#guard match Json.parse r#"{"program":"{\"annotations\":{},\"callees\":[\"RegisteredInput8_v1\",\"Op8_v1\",\"F_v1\"],\"definitions\":{\"F_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[{\"refs\":{\"affine\":[\"p\",0,0,1]},\"type\":0}],\"fn\":1,\"form\":\"primitive\",\"out\":0}],\"params\":[[\"x0\",[\"Array\",1048578,[\"Value\",8]]]],\"ret\":{\"affine\":[\"n\",0,0,1]},\"ret_type\":[\"Value\",8]},\"form\":\"composite\",\"id\":\"F_v1\"},\"Op8_v1\":{\"form\":\"primitive\",\"id\":\"Op8_v1\",\"params\":[[\"a0\",[\"Value\",8]]],\"ret\":[\"Value\",8]},\"R_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[],\"fn\":0,\"form\":\"primitive\",\"out\":0},{\"args\":[{\"refs\":{\"grid\":[1,[[\"n\",0,0,0,[[524289,0]]],[\"n\",1,0,0,[[524289,0]]]]]},\"type\":1}],\"fn\":2,\"form\":\"call\",\"out\":0}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",8]},\"form\":\"composite\",\"id\":\"R_v1\"},\"RegisteredInput8_v1\":{\"form\":\"primitive\",\"id\":\"RegisteredInput8_v1\",\"params\":[],\"ret\":[\"Value\",8]}},\"program_fn\":\"R_v1\",\"root\":\"R_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Value\",8],[\"Array\",1048578,[\"Value\",8]]]}","theta":[],"owner":["input","input",0],"gamma":10,"alpha":[8,1]}"# with
+  | .ok j => (Desc.check j).getObjValD "error" == Json.str "unwalked"
+  | .error _ => false
 
 end InferenceOnlyVerifier.DescDifftest

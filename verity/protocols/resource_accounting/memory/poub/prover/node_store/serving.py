@@ -59,8 +59,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
+from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry import NodeMemory
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts as rb

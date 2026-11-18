@@ -8,7 +8,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from verity_bench.kit import free_port
+from verity.ports import free_port
 
 pytest.importorskip("verity.protocols.resource_accounting.memory.pous.verifier")
 

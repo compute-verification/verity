@@ -66,6 +66,14 @@ namespace Partition
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
+theorem input_iff (g : Fin C.N) : P.unit g = none ↔ (C.op g).isInput = true :=
+  Verity.Partition.input_iff P g
+
+theorem Refines.sub {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (R : Refines Pf Pc)
+    (g : Fin C.N) :
+    Pc.unit g = (Pf.unit g).map R.parent :=
+  Verity.Partition.Refines.sub R g
+
 theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ (C.op h).args) (hne : P.unit h ≠ P.unit g) :
     g ∈ P.committed := by
   classical

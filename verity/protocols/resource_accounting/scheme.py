@@ -77,11 +77,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
-from verity.channel import Schema
-from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -105,8 +103,13 @@ class Lacks:
 
 
 UNDECLARED = Lacks()
-#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
-VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
+
+
+class Kernels(Protocol):
+    """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
+    ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
+
+    def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -116,6 +119,7 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
+_ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
 
 
 @dataclass(frozen=True)
@@ -236,6 +240,23 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Launch:
+    """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
+    the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
+    bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``."""
+
+    binds: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    development: str = ""
+    reaches: str = ""
+    starts: tuple[str, ...] = ()
+    starts_optional: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Reading:
     """What a scheme's ``reader`` reads of the row its run left: its certified quantity's ``value``, in the unit it
     publishes (``published``); the ``error`` the run established it except with, and ``error_from``, the key of the
@@ -263,8 +284,9 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
-    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    `verity.protocol.VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of
+    each message its channels carry that has one, by its type, which this module types by name only, so it loads
+    neither module; ``colocated``, the pairs of its parties on one machine; ``needs``, what
     the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
     ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
@@ -282,9 +304,13 @@ class Scheme:
     products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
     FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
     commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
-    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
-    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
-    otherwise.
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
+    name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
+    cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
+    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
+    that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
+    parameters an application that ties its workload to this scheme states over its settings' defaults.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -302,6 +328,7 @@ class Scheme:
     charges: tuple[Charge, ...]
     settings: Mapping[str, Any] = field(default_factory=dict)
     check_settings: Callable[[Mapping[str, Any]], str | None] = _no_settings_check
+    tie: Mapping[str, Any] = field(default_factory=dict)
     option: str = ""
     hooks: tuple[str, ...] = ()
     requires: Mapping[str, str] = field(default_factory=dict)
@@ -315,14 +342,14 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
-    parties: tuple[Role, ...] | Lacks = UNDECLARED
-    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    parties: tuple[Any, ...] | Lacks = UNDECLARED
+    channels: tuple[Any, ...] | Lacks = UNDECLARED
     colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
     needs: frozenset[str] | Lacks = UNDECLARED
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    channel_schemas: tuple[Any, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
@@ -332,7 +359,10 @@ class Scheme:
     product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
-    kernels: Callable[..., str] | Lacks = UNDECLARED
+    kernels: Kernels | Lacks = UNDECLARED
+    keeps_weight_copy: bool | Lacks = UNDECLARED
+    pieces: Mapping[str, Launch] | Lacks = UNDECLARED
+    answers: str | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -371,7 +401,28 @@ class Scheme:
             if not unit or type(per) is not Fraction or per <= 0:
                 raise ValueError(f"{self.name}: published is (the record's unit, a positive Fraction from its own "
                                  f"unit), not {self.published!r}")
+        if not isinstance(self.pieces, Lacks):
+            principal = {} if isinstance(self.parties, Lacks) else {r.name: r.principal for r in self.parties}
+            for party, p in self.pieces.items():
+                if principal.get(party) != "developer":
+                    raise ValueError(f"{self.name}: its pieces are its declared developer-side parties' "
+                                     f"{sorted(n for n, k in principal.items() if k == 'developer')}, not {party!r}")
+                if p.development and p.development not in (*p.binds, *p.optional):
+                    raise ValueError(f"{self.name}: {party}'s development binding {p.development!r} is one of its "
+                                     "binds or optional")
+                if p.reaches and principal.get(p.reaches) != "auditor":
+                    raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+                if extra := sorted(set(p.starts) - {*p.binds, *p.optional}):
+                    raise ValueError(f"{self.name}: what {party}'s start writes is among its binds or optional, "
+                                     f"not {extra}")
+                if extra := sorted(set(p.starts_optional) - set(p.starts)):
+                    raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
+                                     f"not {extra}")
+            object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
+        if not isinstance(self.answers, Lacks) and not _ENTRY.fullmatch(self.answers):
+            raise ValueError(f"{self.name}: answers is an entry, module:attribute, not {self.answers!r}")
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
+        object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
     @property
@@ -506,6 +557,29 @@ def declared(scheme: Scheme, name: str) -> Any:
     return value
 
 
+@dataclass(frozen=True)
+class Answers:
+    """What answers a scheme's kept session with no exchange and no store: ``held``, the file the session keeps;
+    ``binding``, ``decide``, ``missing`` and ``line``; ``request`` and its defaults ``session``; and ``key_of``."""
+
+    held: str
+    binding: Callable[..., bytes]
+    decide: Callable[..., Mapping[str, Any]]
+    missing: Callable[..., Mapping[str, Any]]
+    line: Callable[[Mapping[str, Any]], str]
+    request: Callable[..., Mapping[str, Any]]
+    session: Mapping[str, Any]
+    key_of: Callable[..., str | None]
+
+
+def answering(scheme: Scheme) -> Answers:
+    """``scheme``'s `Answers`, its entry's mapping loaded; refused by name (`declared`) where it lacks one."""
+    from importlib import import_module
+
+    module, _, name = declared(scheme, "answers").partition(":")
+    return Answers(**getattr(import_module(module), name))
+
+
 def layout(scheme: Scheme, port: str, shape: Mapping[str, int]) -> Layout:
     """``port``'s `Layout` at ``shape``, as ``scheme`` declares it; KeyError naming the scheme's ports, or ValueError when
     the port declares no layout."""
@@ -541,24 +615,28 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
     return start
 
 
-@dataclass(frozen=True)
-class Circuits:
-    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
-    m, k, n)``, one executed call's circuit (None without one)."""
-
-    schemes: Mapping[str, Any]
-    traced_as: Callable[[str, int, int, int], Any]
-
-
-#: the circuits of each scheme's executed computation, by the name a configuration lists it under
-CIRCUITS: dict[str, Circuits] = {}
-
-
-def register_circuits(name: str, circuits: Circuits) -> Circuits:
-    if name in CIRCUITS:
-        raise KeyError(f"circuits named {name!r} are registered already")
-    CIRCUITS[name] = circuits
-    return circuits
+def order_refusals(listed: Sequence[Scheme]) -> list[str]:
+    """Every reason ``listed``, a configuration's schemes in its order, can't attach in that order, from what each
+    declares, each as `verity.channel.Refused` prints it; empty: it attaches in its own order, which nothing reorders.
+    A scheme is listed after each listed one it ``depends`` on (``order``, as `verity.config.check` names it; one not
+    listed is the configuration's ``requires``, since a serve attaches only part of it), and storage (``needs`` the
+    workload's ``store``) before useful work (``resource`` compute): where two listed schemes wrap one site the
+    earlier listed is the outer, and storage hands useful work the weight (``outer``)."""
+    names = [s.name for s in listed]
+    out = []
+    for i, s in enumerate(listed):
+        if isinstance(s.depends, Lacks):
+            out.append(f"depends: {s.name}'s declaration does not say which schemes it depends on (depends is undeclared)")
+        elif later := [d for d in s.depends if d in names and names.index(d) > i]:
+            out.append(f"order: {s.name} requires {', '.join(later)}, so protocols lists {', '.join(later)} before {s.name}")
+    work = [i for i, s in enumerate(listed) if s.resource == "compute"]
+    for i, s in enumerate(listed):
+        if s.resource == "memory" and not isinstance(s.needs, Lacks) and "store" in s.needs:
+            if before := [names[j] for j in work if j < i]:
+                out.append(f"outer: {s.name} is storage (it needs the workload's store) and is listed after {', '.join(before)}, "
+                           f"useful work (resource compute); where both wrap one site the earlier listed is the outer, so "
+                           f"protocols lists {s.name} before {', '.join(before)}")
+    return out
 
 
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
@@ -588,7 +666,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded", "bound",
-           "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
+__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "bound",
+           "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]

@@ -17,16 +17,17 @@ covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
 composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
-deployment with an id of its own (`UNACCEPTED`), whose verdict `verity run` records as undecided unless the table
-says who combined it, and refuses any other set (``composite``), H1's development composite's among them.
+``pearl-plus``, which is onsite's work too). Protocol soundness covers only those two. `check` also reads onsite's two
+smaller sets, each a deployment with an id of its own (`UNACCEPTED`), whose verdict `verity run` records as undecided
+unless the table says who combined it, and refuses any other set (``composite``), H1's development composite's among
+them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
 sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s,
 its parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
-name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
-needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
+name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or are
+listed after it, or whose needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
 
 A pin is the key the auditor pinned for one of its devices: the party as the configuration names it (never a host,
@@ -72,16 +73,16 @@ SCHEMES = ("lms-sha512/n64-w1-h20/v0",)
 AUDITOR = "auditor"
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
-#: Pearl+'s run verdict its work), the only two protocol soundness covers
-COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
-                                    "wipe"),
+#: Pearl+'s run verdict the work of each), the only two protocol soundness covers
+COMPOSITES = {"verity/onsite/v1": ("bandwidth", "inference-only", "network-attester", "pearl-plus", "pous",
+                                    "sampled-proofs", "wipe"),
               "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
 #: onsite's two smaller sets, by id (`applications/onsite_network.toml`, `applications/onsite_compute.toml`): each a deployment of its
 #: own with its own claim, so that an accepted one is never read as onsite. No composite `Core.Composites.ofIds` accepts
 #: is one, so `check` reads and hashes them and `verity run` records each one's verdict under its id as undecided
 #: unless the table says who combined it
-UNACCEPTED = {"verity/onsite-network/v0": ("certifier", "sampled-proofs", "wipe"),
-              "verity/onsite-compute/v0": ("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")}
+UNACCEPTED = {"verity/onsite-network/v0": ("network-attester", "sampled-proofs", "wipe"),
+              "verity/onsite-compute/v0": ("inference-only", "network-attester", "pouw", "sampled-proofs", "wipe")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _SHA512 = re.compile(r"[0-9a-f]{128}")
@@ -209,7 +210,10 @@ def declared(components: Sequence[Component],
 def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
           workloads: Mapping[str, Workload]) -> dict[str, Any]:
     """``cfg`` checked against the declarations (by subprotocol name and by workload name), or `Refused` by name; the
-    checked configuration, each parameter table as its schema normalizes it over its defaults."""
+    checked configuration, each parameter table as its schema normalizes it over its defaults.
+
+    The order of ``protocols`` means two things. A subprotocol another requires is listed earlier than it (``order``).
+    Where two schemes wrap one site, the earlier-listed is the outer."""
     _keys("the configuration", cfg, TOP, REQUIRED)
     _plain("the configuration", cfg)
     fmt = _str("format", cfg["format"])
@@ -226,6 +230,10 @@ def check(cfg: Mapping[str, Any], components: Mapping[str, Component],
     for c in listed:
         if missing := [r for r in c.requires if r not in names]:
             raise Refused("requires", f"{c.name} requires {', '.join(missing)}, which protocols doesn't list")
+    for i, c in enumerate(listed):
+        if later := [r for r in c.requires if names.index(r) > i]:
+            raise Refused("order", f"{c.name} requires {', '.join(later)}, so protocols lists {', '.join(later)} "
+                                   f"before {c.name}")
     composite(names, components)
     _keys("[workload]", cfg["workload"], ("name", "params"), ("name",))
     wname = _str("workload.name", cfg["workload"]["name"])

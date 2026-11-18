@@ -21,11 +21,11 @@ import json
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.protocol import place, site_of
 from verity.party import Identity, Received
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Message, Refused
 
 ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]
@@ -49,7 +49,7 @@ def proof(i: int) -> bytes:
 
 
 def interior(i: int) -> bytes:
-    return json.dumps({"block": i, "previous": R.digest(json.loads(docket(i))), "root": "cd" * 64},
+    return json.dumps({"block": i, "previous": DD.digest(json.loads(docket(i))), "root": "cd" * 64},
                       sort_keys=True).encode()
 
 
@@ -58,7 +58,7 @@ def second(i: int) -> bytes:
 
 
 def digest(raw: bytes) -> str:
-    return R.digest(json.loads(raw))
+    return DD.digest(json.loads(raw))
 
 
 class Host:
@@ -144,7 +144,7 @@ def test_an_honest_run_samples_proves_and_audits_each_block_in_order_and_accepts
     assert r.status == "completed", r.outcomes
     lines = lines_of(r)
     assert lines == [{"block": i, "coins": "simulated", "reason": None,
-                      "registration": R.digest(json.loads(docket(i))), "verdict": "accept"} for i in (0, 1)]
+                      "registration": DD.digest(json.loads(docket(i))), "verdict": "accept"} for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "draw"] == [("draw", i, docket(i), ADDRESS) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "prove"] == [("prove", i, replay(i), sample(i), ADDRESS) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "audit"] == [("audit", i, docket(i), ADDRESS, sample(i), proof(i))

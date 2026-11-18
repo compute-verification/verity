@@ -13,22 +13,22 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
-from functools import cache
 import json
 import shutil
 import socket
 import subprocess
 import sys
 import threading
+from functools import cache
 from pathlib import Path
 
 import pytest
 
+from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
+from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_lean, p2_parties, receipts
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.verifier import setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.resource_accounting.memory.poub.prover import p2_party_prover, p2_prover
-from verity.protocols.resource_accounting.memory.poub.verifier import coins, p2, p2_lean, p2_parties, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -331,9 +331,8 @@ def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> No
     for lie in (lambda _req, got: got | {"units": got["units"] + 1},
                 lambda _req, got: got | {"session": got["session"] | {"samples": 1}}):
         for auditor in (p2_parties.SESSION, TOY):
-            with p2_lean.Lean(exe) as lean:
-                with pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
-                    p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
+            with p2_lean.Lean(exe) as lean, pytest.raises(ValueError, match=p2_parties.DISAGREEMENT):
+                p2_parties.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
     with p2_lean.Lean(exe) as lean:
         seen = Lying(lean, "p2_hold", lambda _req, got: got)
         p2_parties.hold(seen, data, auditor=TOY)

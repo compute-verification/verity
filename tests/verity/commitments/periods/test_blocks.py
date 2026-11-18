@@ -216,7 +216,8 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
     """The class circuit's units with one inference block, the plan's layer-0 QKᵀ entry at step p
     ``{at: L·S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
     and the request) no input row is free, the response on its writer being an output-row read that fills none."""
-    assert list(circuit.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S, (T - NP) * S, H * T * S]
+    assert dict(circuit.units) == {EID: H * T * S, QID: 12 * T * S, KID: 2 * QK_LAYER, OID: 2 * H * T * S, HID: O * S,
+                                   BID: (T - NP) * S, WID: H * T * S}
     assert {"template": KID, "at": LAYERS * S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in circuit.blocks.inference]
     count = I.input_count(json.loads(json.dumps(circuit.description())), **held("positions", "weights", "request"))

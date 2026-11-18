@@ -278,12 +278,14 @@ def unpriced_counts(family: str, census: dict) -> dict[str, int]:
 
 def record(out: Path) -> int:
     """Writes dump.sh's run result from OUT: its validation (every binary of corpus.tsv counted, none in failed.txt) and,
-    when it passed, `METRIC`, the (family, dotted opcode) pairs in `UNPRICED` over the families with a device census.
-    Returns 1 when the validation failed."""
+    when it passed, `METRIC`, the (family, dotted opcode) pairs in `UNPRICED` over the families with a device census,
+    with the binaries whose count was read from the cache (cached.tsv). Returns 1 when the validation failed."""
     from verity_bench import kit
 
     w = kit.writer(out)
     corpus = [ln.split("\t")[0] for ln in (out / "corpus.tsv").read_text().splitlines() if ln]
+    cached = (out / "cached.tsv").read_text().splitlines() if (out / "cached.tsv").exists() else []
+    from_cache = sorted(Path(ln.split("\t")[1]).name + "@" + ln.split("\t")[0] for ln in cached if ln)
     failed = (out / "failed.txt").read_text().splitlines() if (out / "failed.txt").exists() else []
     uncounted = [sha for sha in corpus if not (out / "counts" / f"{sha}.json").is_file()]
     if failed or uncounted or not corpus:
@@ -296,10 +298,10 @@ def record(out: Path) -> int:
     unit = "opcodes"
     if not by:
         w.measurement(METRIC, None, unit, mark="measured", why="no binary holds SASS of a family with a device census",
-                      extra={"binaries": len(corpus)})
+                      extra={"binaries": len(corpus), "from_cache": from_cache})
     else:
         w.measurement(METRIC, sum(map(sum, (c.values() for c in by.values()))), unit, mark="measured",
-                      extra={"binaries": len(corpus), "by_family": by})
+                      extra={"binaries": len(corpus), "by_family": by, "from_cache": from_cache})
     return 0
 
 

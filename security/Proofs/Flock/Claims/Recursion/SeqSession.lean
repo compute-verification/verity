@@ -155,11 +155,6 @@ open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
 open FlockSoundness.Discharge
 open scoped NNReal
 
-/-- The outer verifier has at least one message, the last. -/
-theorem VO_k_pos (x : Hash.Msg) : 0 < VO.k x := by
-  simp only [VO]
-  split <;> omega
-
 /-- **The round count at the outer record**: a committed-coin protocol of `VO.k − 1` coins has `VO`'s messages and
 `Hello` before them. -/
 theorem deployZkRec_proto_k (rel : Readable.Parsed → Readable.Relation) (G : Proto Claims.Flock.Wit)

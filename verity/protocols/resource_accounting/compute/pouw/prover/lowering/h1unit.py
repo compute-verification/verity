@@ -398,7 +398,7 @@ def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: 
             raise ValueError(f"unit {u}'s ok port reads {value}, not the Program's output {OK_VALUE}")
     doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": RV.WORD_BITS,
                         "domain": registered_domain(prog, OK_VALUE, T, window_root).domain_id.hex(),
-                        **G.schema_entry(G.SCHEMA_V2),
+                        **RV.schema_entry(G.SCHEMA_V2),
                         **CC.call_reads(u0, rows), "known": known_ok(window, T)}
     return doc
 

@@ -21,7 +21,7 @@ from tests.compiler.test_network_attester_compile_slice_w212 import (
     _load,
 )
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 

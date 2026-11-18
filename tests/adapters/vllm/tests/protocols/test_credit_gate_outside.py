@@ -57,7 +57,7 @@ def _window(no_z: int) -> str:
     """Two steps of `T`'s three linears through H1's hooks (`traced` apply, `observer` observe), linear ``no_z`` handing
     over no z, with a retaining run: its manifest, call tables, commits, served entries and digest, and verdicts as JSON."""
     rng, g = np.random.default_rng(0), torch.Generator().manual_seed(0)
-    run = PH.H1Run("t", T.SALT, T.MODULES, T.SHAPES, T.T, T.STEPS, retain=1, key=bytes([1]) * 32,
+    run = PH.H1Run("t", T.SALT, T.MODULES, T.SHAPES, T.T, T.STEPS, retain=1, salts=T.Seeded(1),
                    served=SV.Served(T.TILE, T._unit(), T.BLOCKS, window=T.W1, weights=T._period(T._weights())))
     ws = T._weights()
 

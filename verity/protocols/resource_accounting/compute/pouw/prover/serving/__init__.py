@@ -33,7 +33,6 @@ _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, read from it at every lookup (never cached here), so an import inside a
 #: function sees the module's current attribute
 _LAZY = {
-    "quantize": (f"{_SERVING}.operands", "quantize"),
     "use_int8_arm": (f"{_SERVING}.int8_arm", "use"),
     "use_tensors": (f"{_SERVING}.tensors", "use"),
     "use_h1_device": (f"{_SERVING}.tensors", "use_h1"),
@@ -59,7 +58,7 @@ _LAZY = {
     "H1_CHALLENGER": (f"{_SERVING}.h1", "CHALLENGER"),
     "H1_SCHEME": (f"{_SERVING}.h1", "SCHEME"),
     "H1_TILE": (f"{_SERVING}.h1", "TILE"),
-    "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
+    "H1_WEIGHT_SALTS": (f"{_SERVING}.h1", "WEIGHT_SALTS"),
     "HM96": (f"{_POUW}.verifier.audit", "HM96"),
     "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
     "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
@@ -79,11 +78,11 @@ _LAZY = {
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.coins.window", "finish"),
     "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
+    "epoch_open_root": (f"{_POUW}.verifier.salt", "epoch_open_root"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.coins.window", "in_process_draw"),
     "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
     "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
-    "ncp_scheme": (f"{_PROVER}.schemes", "get"),
     "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
@@ -94,7 +93,6 @@ _LAZY = {
     "reserved_of": (f"{_SERVING}.coins.window", "reserved_of"),
     "salt_session": (f"{_SERVING}.coins.window", "salt_session"),
     "session_setting": (f"{_SERVING}.coins.window", "session_setting"),
-    "traced_as": (f"{_PROVER}.circuit", "traced_as"),
     "weight_binding": (f"{_POUW}.verifier.audit", "weight_binding"),
     "weights_root": (f"{_POUW}.verifier.audit", "weights_root"),
     "window_refusals": (f"{_SERVING}.coins.window", "refusals"),
@@ -133,7 +131,6 @@ _LAZY = {
     "prover_private": (f"{_SERVING}.h1.prover", "private"),
     "register_weights": (f"{_SERVING}.h1.served", "register_weights"),
     "registered_commit": (f"{_SERVING}.h1.registered", "commit"),
-    "registered_salts": (f"{_SERVING}.h1.registered", "salts"),
     "served_declared": (f"{_SERVING}.h1.served", "declared"),
     "session_of": (f"{_SERVING}.coins.challenger", "session_of"),
     "unit_of": (f"{_SERVING}.h1.served", "unit_of"),
@@ -155,7 +152,7 @@ _LAZY = {
 }
 
 #: each exported name that lists a family of PoUW's kernel schemes (`verifier.kernel_schemes.names`), by that family
-_FAMILIES = {"NCP_CIRCUIT_SCHEMES": "ncp-v2", "PEARL_C_SCHEMES": "pearl-c"}
+_FAMILIES = {"PEARL_C_SCHEMES": "pearl-c"}
 
 
 class MatmulRun(Protocol):
@@ -210,15 +207,6 @@ def ready_verifier() -> Any:
     return verifier.executable()
 
 
-def pearl_c_salt_key(scheme: str) -> bytes:
-    """Refused: Pearl+ keys no salt.  B's rows are salted from the weights' registration (`pearl_c.weight_row_salts`) and
-    every other leaf with fresh bytes, which the device run takes as data (``weight_roots``' and ``PearlCDeviceRun``'s
-    ``weight_salts``)."""
-    raise NotImplementedError(f"{scheme}: Pearl+ keys no salt.  This name stays only for vLLM's adapter, which imports it "
-                              "(adapters/vllm/verity_vllm/protocols/pouw/__init__.py, its Pearl-C arm, @vllm), and goes "
-                              "with that arm's deletion")
-
-
 def __getattr__(name: str) -> Any:
     if name in _FAMILIES:
         from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names
@@ -234,5 +222,5 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_FAMILIES})
 
 
-__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "pearl_c_salt_key",
-           "ready_verifier", "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]
+__all__ = ["MatmulObserver", "MatmulRun", "in_process_coins", "observe_matmul", "ready_verifier",
+           "run_matmul", "verifier_coins", *_LAZY, *_FAMILIES]

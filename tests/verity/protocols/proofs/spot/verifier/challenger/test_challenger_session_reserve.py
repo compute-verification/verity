@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch, coins as CC
@@ -48,7 +49,7 @@ def template(i: int):
 def window(counts: list[int]):
     """A window of one toy template a count: its population program, query and N."""
     defs = [template(i) for i in range(len(counts))]
-    return P.mixed_population_program(list(zip(defs, counts))), P.template_instances_query(defs), sum(counts)
+    return PN.mixed_population_program(list(zip(defs, counts))), P.template_instances_query(defs), sum(counts)
 
 
 def sampling_design_of(rule: str, counts: list[int]) -> dict:

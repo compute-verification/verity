@@ -1126,8 +1126,10 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
     ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
     ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
-    ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
-    ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
+    ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256 or 0 (no clamp)"),
+    ({"long_prefill_token_threshold": -1}, {}, "engine arg long_prefill_token_threshold -1, not a stated value of at most 256 or 0 (no clamp)"),
+    ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 1024"),
+    ({"max_num_seqs": 1025}, {}, "engine arg max_num_seqs 1025, not a stated value of at most 1024"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),
     ({}, {"tp": {"world": 4}}, "world 4, not 8"),
     ({}, {"target": {"card": "h100-sxm-80gb"}}, "device_name 'NVIDIA H100 80GB HBM3', not 'NVIDIA H200'"),
@@ -1187,6 +1189,15 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
 def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(session, engine, fact, tmp_path):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         plan_steps(_class_g(tmp_path, engine=engine), *session)
+
+
+def test_class_g_reads_a_long_prefill_threshold_of_0_as_no_clamp(tmp_path):
+    """vLLM clamps a request's rows a step to its long_prefill_token_threshold only when that is above 0: at 0 a 300-row prefill
+    chunk is in its registration, at 256 it is refused."""
+    session = _session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]])
+    assert plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 0}), *session, partial=True).refused == {}
+    with pytest.raises(Unexpressible, match="step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"):
+        plan_steps(_class_g(tmp_path, engine={"long_prefill_token_threshold": 256}), *session, partial=True)
 
 
 def _hit_chunked() -> tuple[I1.Advice, dict]:

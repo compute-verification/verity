@@ -15,7 +15,7 @@ from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import ncp2, traced_as
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import partition as P
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.hashes import Emit, keccak_lanes, shake256
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import DomainError
 

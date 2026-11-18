@@ -1,6 +1,6 @@
 """The node's store: one registry of everything the prover registers for PoUB, the small interface a protocol driver
 talks to, and the session that serves it. A serving system's adapter keeps it current (vLLM's:
-`verity_vllm.protocols.poub`).
+PoUB's binder, `prover.binder`, on its exchange).
 
 Terms are the design's (store, block, tier, registration, receipt, pass, window, commitment, opening):
 
@@ -18,3 +18,5 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
 - `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested
   against.
 """
+
+__all__: list[str] = []

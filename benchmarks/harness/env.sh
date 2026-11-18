@@ -30,21 +30,12 @@ export PATH=${CUDA_HOME:+$CUDA_HOME/bin:}$VENV/bin:$PATH
 # The in-process challenger builds its Lean coins with `lake`, which elan puts in ~/.elan/bin (tools/verity/lean/setup.sh).
 if ! command -v lake >/dev/null && [ -x "${HOME:-}/.elan/bin/lake" ]; then export PATH=$HOME/.elan/bin:$PATH; fi
 ROOT=$PWD
-# Every workspace member's import root, the parent of each package its wheel names (`members` under the root
-# pyproject.toml's [tool.uv.workspace], `packages` under a member's [tool.hatch.build.targets.wheel]), since a pinned-vLLM
-# environment made without the workspace has none of them installed.
-toml_list() {  # FILE SECTION KEY: the strings of a list of strings, on one line or several
-  awk -v s="[$2]" -v k="$3" '/^\[/ { in_s = ($0 == s) } in_s && $0 ~ "^" k " *=" { on = 1; sub(/^[^=]*=/, "") }
-    on { print; if (/\]/) on = 0 }' "$1" | tr -d '[]",'
-}
-ROOTS=
-for m in $(toml_list "$ROOT/pyproject.toml" tool.uv.workspace members); do
-  for p in $(toml_list "$ROOT/$m/pyproject.toml" tool.hatch.build.targets.wheel packages); do
-    r=$ROOT/$m/$p
-    r=${r%/*}
-    case ":$ROOTS:" in *":$r:"*) ;; *) ROOTS=${ROOTS:+$ROOTS:}$r ;; esac
-  done
-done
+# Every workspace member's import root, by research's reader of the workspace declaration (research.pythonpath, which
+# `research run --source` sets PYTHONPATH from), since a pinned-vLLM environment made without the workspace has none of
+# them installed.
+ROOTS=$("$VENV/bin/python" -c 'import sys; root = sys.argv[1]; sys.path[:0] = [f"{root}/tools/research/src"]
+from research.pythonpath import import_roots_dir
+print(":".join(f"{root}/{r}" for r in import_roots_dir(root)["roots"]))' "$ROOT")
 if [ -z "$ROOTS" ]; then
   echo "verity-bench: no workspace member names a package in $ROOT/pyproject.toml's members (run from the source tree's root)" >&2
   exit 2

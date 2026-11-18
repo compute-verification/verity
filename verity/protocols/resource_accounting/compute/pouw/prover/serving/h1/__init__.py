@@ -67,7 +67,6 @@ from __future__ import annotations
 
 import bisect
 import json
-import os
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
@@ -211,20 +210,21 @@ def units(k: int, n: int, m: int) -> int:
     return (mp // TILE[0]) * (np_ // TILE[1])
 
 
-#: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
-#: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
-#: a tensor-parallel rank samples its own, since each commits only the weights it holds
-WEIGHT_KEY = os.urandom(32)
+#: this process's weight trees' leaf salts (`weight_root`), fresh from the OS a row the first time a weight's root is taken
+#: (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store; a
+#: tensor-parallel rank draws its own, since each commits only the weights it holds
+WEIGHT_SALTS = PV.RunSalts()
 
 
-def weight_root(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+def weight_root(w: int, rows: np.ndarray, salts: PV.RunSalts | None = None) -> bytes:
     """The epoch's commitment to weight `w`, which the salt coin is opened after (`audit.weights_root`): its int8 rows [n, k]
-    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, key, HM96_WEIGHTS + w)`` (`requests.hiding_rows`,
-    the same tree), so the root says nothing of the rows to anyone without ``key`` (`WEIGHT_KEY` when None). Not root(B),
-    which is compute accounting's."""
-    key = WEIGHT_KEY if key is None else key
+    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, salts=...)`` (`requests.hiding_rows`, the same
+    tree) under ``salts`` at ``HM96_WEIGHTS + w`` (`WEIGHT_SALTS` when None), so the root says nothing of the rows to anyone
+    without them. Not root(B), which is compute accounting's."""
+    salts = WEIGHT_SALTS if salts is None else salts
     rows = np.ascontiguousarray(rows, dtype=np.int8)
-    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows], key, HM96_WEIGHTS + w).commitment.root
+    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows],
+                          salts.at(HM96_WEIGHTS + w, len(rows))).commitment.root
 
 
 def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
@@ -308,9 +308,11 @@ class H1Run:
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
     `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
-    ``key`` is the prover's hm96 salt key for the request, slot and call tables, sampled for the run (`os.urandom`) unless
-    given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
-    served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
+    Every hiding leaf's salt (the request, slot and call tables', and ``served``'s trees') is fresh from the OS
+    (``salts``, a `pouw_h1_prover.RunSalts` of its own unless given, at the table's or value's nonce), drawn as the leaf
+    is committed. ``prover`` (else
+    ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps those salts (at `close`) and each served
+    call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
     open only while the run is held (`open_request`, `open_slot`). ``admission`` is `pouw_h1_requests.ROUND0` (admit in round 0 only) or ``PER_ROUND``; ``coin_source`` is
     `CHALLENGER` only for coins from the auditor device's challenger, and any other credits nothing. With ``served``
     (`pouw_h1_served.Served`) each call's z/y table, its step's A table of K, and the weights' B, are also registered values
@@ -321,7 +323,7 @@ class H1Run:
 
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
-                 rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
+                 rounds: Any = None, salts: PV.RunSalts | None = None, draw: Any = None, admission: str = RQ.ROUND0,
                  coins_from: str = "in-process", opener: Opener | None = None, served: Any = None,
                  prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
                  commit_record: CT.CommitRecord | None = None) -> None:
@@ -347,15 +349,13 @@ class H1Run:
         self._recorded: tuple[Call, Any, tuple[Any, Any, Any] | None] | None = None
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
-        self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
+        self.rounds, self._salts, self.served = rounds, salts if salts is not None else PV.RunSalts(), served
         self.draw, self.admission, self.coins_from, self.commit_record = draw, admission, coins_from, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
         self._ids0: bytes | None = None
         self.prover = prover if prover is not None else getattr(served, "prover", None)
-        if self.prover is not None and commit:
-            PV.keep_key(self.prover, self._key)
         #: each call's table roots (`tables`), the calls whose tables the GPU is still hashing, and each call's receipt root
         self._roots: dict[int, dict[str, str | None]] = {}
         self._hashing: deque[tuple[int, Any]] = deque()
@@ -413,7 +413,7 @@ class H1Run:
                 raise RuntimeError(f"{self.entry}: the window's salt was refused ({self._unopened}), and a "
                                    "window opens it once")
             table = self._tables[0] = (self._live("requests", 0)
-                                       or RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key))
+                                       or RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._salts))
             requests = self._requests0(table.commitment.root)
             try:
                 if self._opener is None:
@@ -537,10 +537,10 @@ class H1Run:
             salt = self.salt
             if r not in self._tables:
                 self._tables[r] = ((r == 0 and self._live("requests", 0))
-                                   or RQ.request_table(salt, r, self.rows, self.admitted.get(r, []), self._key))
+                                   or RQ.request_table(salt, r, self.rows, self.admitted.get(r, []), self._salts))
             table = self._tables[r]
             slots = self._slot_tables[r] = (self._live("slots", r)
-                                            or RQ.slot_table(self.salt, r, self.rows, owners, self._key))
+                                            or RQ.slot_table(self.salt, r, self.rows, owners, self._salts))
             calls = RQ.step_digest(self.salt, r, self._rows([c for c in self.calls if c.step == r]))
             receipts = self.receipts_of(r - 1) if r else RQ.NO_RECEIPTS
             if self.served is not None:
@@ -665,6 +665,8 @@ class H1Run:
             self.served.close(self)
             if self.served.tap is not None:
                 self.details["roots1"] = CT.roots1(self)
+        if self.prover is not None:
+            self._salts.keep(self.prover)
         unbound = RQ.tables_reason(self.salt, self.round_log, self.manifest())
         self.details["requests"] = {"admitted": len(self.requests), "refused": self.refused_requests,
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
@@ -805,4 +807,4 @@ class H1Run:
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM",
            "PROGRAM_META", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root",
            "check_tiles", "compiled", "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "units", "utilization", "weight_root", "WEIGHT_KEY"]
+           "units", "utilization", "weight_root", "WEIGHT_SALTS"]

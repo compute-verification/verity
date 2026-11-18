@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
-public import Proofs.Certifier.Carried
 public import Proofs.Certifier.Checked
 public import Proofs.Certifier.SampledAuditAccepted
 public import Proofs.Certifier.SampledCharge
@@ -66,9 +65,9 @@ which `CheckedWitness` at `certifierRun` bounds (`monitoringPeriodChecked_first`
 
 **The count.** A window that meets `ExecutionPhaseGoodChecked`, whose observations the network attester registers, has them
 among the sequences `AccSeqsChecked` counts at its registration (`mem_accSeqsChecked_of_executionPhaseGoodChecked`). A period's
-records whose every window is such a sequence, each window's operator reading the windows before it, are, at the
-incorrect sets they are accepted with, runs over the empty pool that restart at no window, which `encard_carried_le`
-counts with the checked inputs left out; over the windows' possible incorrect sets they number at most `executionPhasesCount`
+records whose every window is such a sequence, each window's operator reading the windows before it, are counted at
+the incorrect sets they are accepted with by `encard_chain_le` over `encard_acceptedChecked_le`, with the checked inputs
+left out; over the windows' possible incorrect sets they number at most `executionPhasesCount`
 at `reg ∪ chk` (`encard_monitoringPeriodChecked_le`). The client's view reads back from the records under a registered parameter
 (`RecordFormat.ReadsBy`), so the views, and the secrets they decode to, number at most `#Θ` times that
 (`monitoringPeriodChecked_second`).
@@ -128,8 +127,7 @@ theorem RecordFormat.readsBy_read {κ Cell Ob : Type} (f : RecordFormat κ Cell 
 /-- **The count of a period's records, with the checked inputs left out.** The records whose every window is a
 sequence its registered Program accepts with a valid run (`AccSeqsChecked`), window `i`'s operator reading the windows
 before it, number at most `executionPhasesCount` at `reg ∪ chk`. At the incorrect sets `F i` its windows are accepted with,
-such a record is a run over the empty pool that restarts at no window (`leakAtCarried_of_leakAtChecked`), and
-`encard_carried_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
+`encard_chain_le` over `encard_acceptedChecked_le` counts those at each family `F`; the families are the product of the windows' possible incorrect
 sets, and the sum over them of the per-family products is the product of the per-window sums
 (`Finset.prod_univ_sum`), each at most `#incorrectSets_i · 2^β_i` times the window's other factors. -/
 theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
@@ -144,20 +142,19 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
         (op i (runsBefore o i)) Dj}.encard ≤
       ((executionPhasesCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
   classical
-  have hcls : ∀ i, CheckedClosing (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
-      (valid (sw i)) [] := fun _ => by unfold CheckedClosing; intros; rfl
   let c : Fin n → ℕ := fun i =>
     2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card
+  let A : (Fin n → Finset ℕ) → Fin n → List (List (Obs L K S)) → Set (List (Obs L K S)) := fun F i l =>
+    {x | x.length = k (sw i) ∧ (∀ y ∈ x, y.jitter < Dj) ∧ AcceptedChecked (sw i).prog (Pw i) (lay (sw i)) (k (sw i))
+      (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) (F i) (op i l) x}
   let Sq : (Fin n → Finset ℕ) → Set (Fin n → List (Obs L K S)) := fun F =>
-    {o | ∃ rin rout : Fin n → Hash.Row, PoolChained (fun _ => false) (fun _ => []) rin rout ∧
-      ∀ i, LeakAtCarried lay k reg valid (fun _ => []) (fun _ => []) Dj (sw i) (Pw i) (ρ i)
-        (op i (runsBefore o i)) (rin i) (rout i) (F i) (o i)}
-  have hSq : ∀ F, (Sq F).encard ≤
-      ((∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) : ℕ) : ℕ∞) := fun F => by
-    have h := encard_carried_le lay k reg chk valid (fun _ => []) (fun _ => []) Dj sw Pw ρ op hchk hcls
-      (fun _ => false) (fun _ => []) F
-    simp only [List.toFinset_nil, Finset.union_empty] at h
-    exact h
+    {o | ∀ i, o i ∈ A F i (runsBefore o i)}
+  have hSq : ∀ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ), (Sq F).encard ≤
+      ((∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) : ℕ) : ℕ∞) := fun F hF =>
+    encard_chain_le (A F) _ fun i l =>
+      encard_acceptedChecked_le (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (hfits i) (chk (sw i))
+        (valid (sw i)) (hchk i) (reg (sw i)) (ρ i) (F i)
+        (disjoint_of_mem_incorrectSets (Fintype.mem_piFinset.1 hF i)) (op i l) Dj
   have hsub : {o : Fin n → List (Obs L K S) | ∀ i, o i ∈ AccSeqsChecked (sw i).prog (Pw i) (sw i).design
         (lay (sw i)) (k (sw i)) (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) δ
         (op i (runsBefore o i)) Dj} ⊆
@@ -168,10 +165,7 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
           (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) (valid (sw i)) F
           (op i (runsBefore o i)) (o i) := fun i => ho i
     choose hl hj F hF hacc using ho'
-    exact Set.mem_iUnion₂.2 ⟨F, Fintype.mem_piFinset.2 hF, fun _ => [], fun _ => [], fun _ => by simp [poolOpen],
-      fun i => leakAtCarried_of_leakAtChecked
-        (show LeakAtChecked lay k reg valid Dj (sw i) (Pw i) (ρ i) (op i (runsBefore o i)) (F i) (o i) from
-          ⟨hfits i, disjoint_of_mem_incorrectSets (hF i), hl i, hj i, hacc i⟩)⟩
+    exact Set.mem_iUnion₂.2 ⟨F, Fintype.mem_piFinset.2 hF, fun i => ⟨hl i, hj i, hacc i⟩⟩
   have hi : ∀ i, ∑ F ∈ incorrectSets (sw i).design (Pw i) δ,
         c i * (2 ^ faultyBits (sw i).prog (Pw i) F * Dj ^ k (sw i)) ≤
       c i * (incorrectSets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i) := fun i =>
@@ -194,7 +188,7 @@ theorem encard_monitoringPeriodChecked_le {L K S n : ℕ} (lay : AuditStatement 
         encard_biUnion_le _ _
     _ ≤ ∑ F ∈ Fintype.piFinset (fun i => incorrectSets (sw i).design (Pw i) δ),
           ((∏ i, c i * (2 ^ faultyBits (sw i).prog (Pw i) (F i) * Dj ^ k (sw i)) : ℕ) : ℕ∞) :=
-        Finset.sum_le_sum fun F _ => hSq F
+        Finset.sum_le_sum fun F hF => hSq F hF
     _ ≤ _ := by exact_mod_cast hnat
 
 section Compiled

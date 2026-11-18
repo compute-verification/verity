@@ -96,6 +96,17 @@ const Params AMPERE_BF16{AMPERE_GROUPS, 2, 25, -132, 16};
 // gpu/tc-hopper): ONE group of 16 products + accumulator, 26-bit adder, exponent floor -133.  Used by fa3_rows.
 const int HOPPER_GROUPS[1] = {16};
 const Params HOPPER_BF16_WGMMA{HOPPER_GROUPS, 1, 26, -133, 16};
+// the step each entry point is compiled with, which fa_s_words reads too
+const Params* const FA2_STEP = &AMPERE_BF16;
+const Params* const FA3_STEP = &HOPPER_BF16_WGMMA;
+
+// One S word: the D/16-step chain of tensor-core step P from a zero accumulator over q and a key row.
+float s_word(const Params& P, const uint16_t* q, const uint16_t* krow, int ksteps) {
+    Term acc{false, 0, 0};
+    for (int i = 0; i < ksteps; ++i)
+        if (tc_step<true>(acc, q + 16 * i, krow + 16 * i, P)) break;
+    return f32(pack_fp32(acc));
+}
 
 struct Fa2Cfg {
     int D;            // head dim (128)
@@ -137,11 +148,7 @@ void fa2_row(const Fa2Cfg& C, const uint16_t* q, const uint16_t* K, const uint16
         for (int c = 0; c < BN; ++c) {
             int col = nb * BN + c;
             if (col < col_limit) {
-                Term acc{false, 0, 0};
-                const uint16_t* krow = K + (long)col * kv_stride;
-                for (int i = 0; i < ksteps; ++i)
-                    if (tc_step<true>(acc, q + 16 * i, krow + 16 * i, *C.tc)) break;
-                s[c] = f32(pack_fp32(acc));
+                s[c] = s_word(*C.tc, q, K + (long)col * kv_stride, ksteps);
                 chk(s[c]);
             } else {
                 s[c] = -INFINITY;
@@ -212,7 +219,7 @@ extern "C" {
 void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, int D, const int* kvh,
               const int* col_limit, const int* n_block_max, int nrows, int kBlockN, float scale_log2,
               const uint32_t* ex2_tab, const uint32_t* rcp_tab, uint16_t* out, uint32_t* out_f32, uint8_t* flags) {
-    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, &AMPERE_BF16, 1.f};
+    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, FA2_STEP, 1.f};
 #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < nrows; ++i) {
         const uint16_t* Kh = K + (long)kvh[i] * D;
@@ -247,7 +254,7 @@ void fa3_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
         if (flags) for (int i = 0; i < nrows; ++i) flags[i] = 2;
         return;
     }
-    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, &HOPPER_BF16_WGMMA, 0.f};
+    Fa2Cfg C{D, kBlockN, scale_log2, ex2_tab, rcp_tab, FA3_STEP, 0.f};
 #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < nrows; ++i) {
         const uint16_t* Kh = K + (long)kvh[i] * D;
@@ -255,6 +262,14 @@ void fa3_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
         fa2_row(C, Q + (long)i * D, Kh, Vh, (long)KVH * D, col_limit[i], n_block_max[i], out + (long)i * D,
                 out_f32 ? out_f32 + (long)i * D : nullptr, flags ? flags + i : nullptr);
     }
+}
+
+// The S words fa2_rows (hopper 0) or fa3_rows (hopper 1) computes: S[i * nkeys + c] for query row i of Q [nrows, D] and
+// key row c of K [nkeys, D], with that entry point's step.
+void fa_s_words(int hopper, const uint16_t* Q, const uint16_t* K, int nrows, int nkeys, int D, uint32_t* S) {
+    const Params& P = hopper ? *FA3_STEP : *FA2_STEP;
+    for (int i = 0; i < nrows; ++i)
+        for (int c = 0; c < nkeys; ++c) S[(long)i * nkeys + c] = u32(s_word(P, Q + (long)i * D, K + (long)c * D, D / 16));
 }
 
 // Elementwise helpers exposed for tests / stage checks.

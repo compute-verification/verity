@@ -221,7 +221,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(handed, tm
             C.check_registration(changed, key, signers.SESSION, *args)
 
     for k, v in [("format", "x"), ("link", "requests"), ("window", 0), ("parameters", PLAIN.digest.hex()),
-                 ("word_bits", 32), ("row_schema", G.SCHEMA), ("tables", [lengths]), ("tables", [fails, lengths]),
+                 ("word_bits", 32), ("row_schema", RV.SCHEMA), ("tables", [lengths]), ("tables", [fails, lengths]),
                  ("tables", [lengths, fails, fails]), ("tables", {"lengths": lengths, "fails": fails}),
                  ("tables", [lengths, "fails"])]:
         refused({**doc, k: v})

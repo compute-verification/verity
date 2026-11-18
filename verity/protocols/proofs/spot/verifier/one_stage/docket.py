@@ -145,6 +145,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
@@ -156,7 +157,6 @@ from verity.commitments import registered_value as RV
 from .verdict import Verdict, _Collect
 
 RECEIPT = DM.REGISTRATION_RECEIPT
-KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
 #: the window's field naming the reset serving chose for its pool (Pool chain)
@@ -182,38 +182,6 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
-           window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
-           previous: str | None = None, partition: Mapping[str, Any] | None = None,
-           work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
-    `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
-    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`registered_value.Registered.entry`),
-    which make the record v2."""
-    part = dict(partition) if partition is not None else P.partition(program, query)
-    rec = {"format": DM.REGISTRATION if registered else DM.REGISTRATION_V1, "protocol": DM.ONE_STAGE_PROTOCOL, "program": part["program"],
-           "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
-           "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
-           "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
-           "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
-    if registered:
-        rec["registered"] = [{**{k: (int(e[k]) if k in ("leaves", "words") else e[k]) for k in RV.ENTRY_KEYS},
-                              **RV.width_entry(int(e.get(RV.WIDTH_KEY, RV.WORD_BITS)))} for e in registered]
-    return rec
-
-
-def record_digest(tag: str, canon: bytes) -> bytes:
-    """The one docket digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
-    over the bytes it was handed (`pouw.core_check.digest`)."""
-    return hashlib.sha512(tag.encode() + b"\0" + canon).digest()
-
-
-def digest(rec: Mapping[str, Any]) -> str:
-    """`SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag."""
-    tag = DM.REGISTRATION if rec.get("format") == DM.REGISTRATION else DM.REGISTRATION_V1
-    return record_digest(tag, canonical_json(dict(rec))).hex()
-
-
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
     """`{(value, domain): root}` for every value an earlier record of the log registered, the root of its first
     docket under that domain: R7 holds a value to the root registered under the domain it takes now, so a
@@ -227,7 +195,7 @@ def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
 
 def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) -> dict[str, Any]:
     """The verifier's own log entry for a record it accepted, with its own clock; the sample names it."""
-    return {"format": RECEIPT, "registration": digest(rec), "verifier": verifier,
+    return {"format": RECEIPT, "registration": DD.digest(rec), "verifier": verifier,
             "received": received or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
@@ -378,7 +346,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     else:
         if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
-    if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
+    if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in DD.KINDS:
         c.fail("window", rec["window"])
     # R2
     part = dict(partition) if partition is not None else P.partition(program, query)
@@ -427,7 +395,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("R5-anchors", rec["anchors"])
     # R6
     earlier = list(log)
-    if rec["previous"] != (digest(earlier[-1]) if earlier else None):
+    if rec["previous"] != (DD.digest(earlier[-1]) if earlier else None):
         c.fail("R6-previous", rec["previous"])
     if any(e.get("window") == rec["window"] for e in earlier):
         c.fail("R6-window", rec["window"])
@@ -530,7 +498,7 @@ def last_digest(log: Sequence[Mapping[str, Any]]) -> str:
     if not log:
         return ""
     try:
-        return digest(log[-1])
+        return DD.digest(log[-1])
     except (TypeError, ValueError):
         return ""
 
@@ -581,7 +549,7 @@ def _output_port(log: Sequence[Mapping[str, Any]], record: str, port: str, key: 
     `key="registered", name="value"`, its `registered` entry for the value `port`."""
     for r in log:
         try:
-            d = digest(r)
+            d = DD.digest(r)
         except (TypeError, ValueError):
             continue
         if d != record:
@@ -781,7 +749,7 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
     if len(log) < lag:
         return False
     try:
-        d = digest(log[len(log) - lag])
+        d = DD.digest(log[len(log) - lag])
     except (TypeError, ValueError):
         return False
     return refused(pool["verdicts"], d)
@@ -921,7 +889,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             continue
         try:
             root = G.supplied_root(program, v, supplied[v], rec, want, sorted(supplied), log, prog, binding,
-                                   (schemas or {}).get(v, G.SCHEMA))
+                                   (schemas or {}).get(v, RV.SCHEMA))
         except ValueError as err:
             c.fail("R7-supplied", {"value": v, "verifier": str(err)})
             continue
@@ -986,7 +954,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
-           "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
-           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
+__all__ = ["NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+           "WINDOW_DOMAIN", "check", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
+           "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

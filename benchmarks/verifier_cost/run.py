@@ -44,8 +44,9 @@ METRIC = "proofs/verifier-seconds-served-description"
 
 
 def built(exe: Path) -> Path:
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
     if not exe.exists():
-        subprocess.run(["lake", "build", exe.name], cwd=exe.parents[3], check=True)
+        V.executable(exe.name, exe.parents[3])
     return exe
 
 sys.path.insert(0, str(HERE))

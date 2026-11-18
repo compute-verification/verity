@@ -151,6 +151,19 @@ def test_no_launch_path_takes_a_former_id(old, monkeypatch, capsys):
         assert f"`{spec}@{card}`" in said, argv
 
 
+def test_a_former_arm_id_is_a_declared_schemes_name_now_and_typed_by_hand_is_refused_naming_it():
+    from verity_bench.vllm.arms import resolve_arms
+
+    former = tomllib.loads(FORMER_IDS.read_text())["former_arms"]
+    assert former == {"pouw:pearl-c-h100-v1-h3": "pearl-plus"}
+    for old, now in former.items():
+        assert presets.former_arm(old) == now and now in presets.declared_schemes()
+        with pytest.raises(ValueError, match=rf"benchmark arm '{old}' is '{now}' now"):
+            resolve_arms([old])
+        assert not [s for s in VLLM_SPECS if old in load_spec(s).arms], old
+    assert presets.former_arm("pearl-plus") is None and "pearl-plus" in load_spec(POUW).arms
+
+
 def test_a_run_recorded_under_a_former_id_is_read_as_its_spec_on_its_card():
     old = next(iter(presets.former_specs()))
     spec, card = presets.former_specs()[old]

@@ -56,6 +56,27 @@ def test_its_own_term_is_sha512s_collision_bound_at_the_phases_calls() -> None:
     assert NS.NETWORK_ATTESTER.over.startswith("bits: ") and NS.NETWORK_ATTESTER.under == "bits: zero; the attester credits nothing"
 
 
+def test_its_check_is_the_network_period_programs_answer_unchanged_and_refuses_another_protocols(tmp_path) -> None:
+    import json
+    import subprocess
+
+    def said(answer: dict):
+        return lambda argv: subprocess.CompletedProcess(argv, 1, stdout=json.dumps(answer) + "\n", stderr="")
+
+    case = {"params": {"windows": 1}, "commitment": "00", "evidence": "01"}
+    reject = {"protocol": "verity/certifier/v0", "verdict": "reject", "reason": "a reason", "public": None}
+    assert NS.NETWORK_ATTESTER.check("network-period", case, tmp_path, said(reject)) == reject
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
+    with pytest.raises(ValueError, match="the protocol 'verity/network-rows/v1', not verity/certifier/v0"):
+        NS.NETWORK_ATTESTER.check("network-rows", case, tmp_path, said({**reject, "protocol": "verity/network-rows/v1"}))
+
+
+def test_it_declares_it_keeps_no_weight_derived_copy() -> None:
+    from verity.protocols.resource_accounting import scheme as S
+
+    assert S.declared(NS.NETWORK_ATTESTER, "keeps_weight_copy") is False
+
+
 def test_cost_is_output_bits() -> None:
     cost = NS.NETWORK_ATTESTER.blocks[NS.DEFINITIONS.index(ResponseTieStop)].cost
     assert cost({"O": 4}) == 176
@@ -124,7 +145,7 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     NS.attach(front, {"process": H.FRONT, "feed": str(tmp_path), "settings": settings})
     admitter = NS.attach(eng, {"process": H.ENGINE, "feed": str(tmp_path), "settings": settings})
     assert any(isinstance(r, H.ServeRoute) and r.path == A.WATERMARK_PATH for _, r in front.filed)
-    rel = {A.RELEASE_HEADER: "0", A.RUN_HEADER: "r", A.BUCKET_HEADER: "3"}
+    rel = {A.RELEASE_HEADER: "0", A.RUN_HEADER: "0f", A.BUCKET_HEADER: "3"}
     front.emit(H.InputArrived("a", 0, 0, rel, "POST /v1/completions HTTP/1.1"))
     front.emit(H.InputArrived("b", 0, 0, {**rel, A.RELEASE_HEADER: "1"}, "POST /v1/completions HTTP/1.1"))
     front.emit(H.InputArrived("c", 0, 0, rel, "POST /v1/completions HTTP/1.1"))
@@ -132,10 +153,10 @@ def test_the_front_feeds_the_engine_in_another_process(tmp_path) -> None:
     front.emit(H.OutputsComplete("b", 0))
     front.emit(H.OutputsComplete("a", 7))
     assert [r for _, r in front.filed if isinstance(r, H.RefuseInput)] == [
-        H.RefuseInput("c", f"{A.RELEASE_HEADER}: 0 came twice in run 'r'")]
+        H.RefuseInput("c", f"{A.RELEASE_HEADER}: 0 came twice in run '0f'")]
     assert A.FeedReader(A.FrontFeed(str(tmp_path)).path)() == [
-        {"key": "a", "run": "r", "n": 0, "bucket": 3}, {"key": "b", "run": "r", "n": 1, "bucket": 3},
-        {"run": "r", "n": 1, "passed": True}]
+        {"key": "a", "run": "0f", "n": 0, "bucket": 3}, {"key": "b", "run": "0f", "n": 1, "bucket": 3},
+        {"run": "0f", "n": 1, "passed": True}]
     assert isinstance(admitter, A.Admitter) and admitter.gate is not None and admitter.front is None
 
 

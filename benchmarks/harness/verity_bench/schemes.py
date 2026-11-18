@@ -21,12 +21,15 @@ def useful_work(name: str) -> registry.Scheme:
     from verity.protocols.compose import schemes
 
     try:
-        if (found := schemes.get(name)).resource == "compute":
+        found = schemes.get(name)
+    except KeyError as e:
+        unknown = e
+    else:
+        if found.resource == "compute":
             return found
-    except KeyError:
-        pass
+        unknown = None
     compute = sorted(n for n, s in schemes.load().items() if s.resource == "compute")
-    raise ValueError(f"--protocol {name!r} is no registered compute scheme; registered: {', '.join(compute)}")
+    raise ValueError(f"--protocol {name!r} is no registered compute scheme; registered: {', '.join(compute)}") from unknown
 
 
 def attached(name: str, weights: dict, given: dict) -> object:
@@ -62,6 +65,7 @@ def arch(short: str) -> str:
 
 
 def kernel_scheme(name: str, card: str, pinned: bool) -> str:
-    """The PoUW kernel scheme the served useful-work scheme ``name`` runs on the card ``card`` (its short name), with
-    registration pinning the weights or not (its declared ``kernels``, whose `LookupError` names the cards it runs on)."""
-    return registry.declared(served(useful_work(name)), "kernels")(card, pinned=pinned)
+    """The PoUW kernel scheme the served useful-work scheme ``name`` runs on the card ``card`` (its short name, its
+    architecture `arch`), with registration pinning the weights or not (its declared ``kernels``, whose `LookupError`
+    names the cards it runs on)."""
+    return registry.declared(served(useful_work(name)), "kernels")(card, pinned=pinned, arch=arch(card))

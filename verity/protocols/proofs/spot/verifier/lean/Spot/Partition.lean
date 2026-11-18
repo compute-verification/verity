@@ -1,5 +1,6 @@
 /-
-The partition as a named query over the verifier's own program (`one_stage/partition.py`): core's `verity/partition/v1`
+The partition as a named query over the verifier's own program (`one_stage/partition.py`, its query
+`verity/circuits/partition_query.py`): core's `verity/partition/v1`
 object and its digest (Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
 `Q_call` v1 at `X ≤ 16` (`Flock.Qcall`), each on a topological program only, as core's `evaluate` refuses any other.
@@ -94,7 +95,7 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {SIZE_CLASS_MAX}"
   return calls
 
-/-- `partition._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
+/-- `partition_query._committed_bits`: per unit `[lo, hi)` of one activation of a Definition, laid out as `G`
 (`Flock.Qcall.gates`), the bits it commits: the summed declared widths of its gates that are Input gates, or that a later
 gate of the activation reads or the activation returns (`Gates.readTo`), constants included. Nothing outside an activation
 reads its gates but through its returns, so in any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s
@@ -103,7 +104,7 @@ def committedBits (G : Flock.Qcall.Gates) (units : Array (Nat × Nat)) : Array N
   units.map fun (a, b) => (List.range (b - a)).foldl (fun bits i =>
     if Flock.Program.isInputId G.prim[a + i]! || G.readTo[a + i]! ≥ b then bits + G.width[a + i]! else bits) 0
 
-/-- `partition._template_bits`: the bits one instance of template `d` commits, the summed widths, as its return type gives
+/-- `partition_query._template_bits`: the bits one instance of template `d` commits, the summed widths, as its return type gives
 them, of the distinct gates of its activation that it returns. Decoding keeps Input gates to the root's body, and nothing
 outside an instance reads its gates but through its returns, so this is `committedBits` of the whole activation, read off
 the return's references alone rather than the activation's gates. -/
@@ -122,7 +123,7 @@ def templateBits (P : Flock.Program.Prog) (d : Nat) : V Nat := do
   return (List.range sorted.size).foldl (fun bits i =>
     if i > 0 && sorted[i - 1]!.1 == sorted[i]!.1 then bits else bits + sorted[i]!.2) 0
 
-/-- `partition._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
+/-- `partition_query._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
 bits no public class holds (`sizeClass`, `templateBits`), each template once. -/
 def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
   let root := (P.defs[P.root]!).body
@@ -136,7 +137,7 @@ def checkTemplates (P : Flock.Program.Prog) (rs : Array TRange) : V Unit := do
     if (sizeClass bits).isNone then
       throw s!"query-refused: an instance of {r.template} commits {bits} bits, more than the widest class, {SIZE_CLASS_MAX}"
 
-/-- `partition._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`sizeClass`,
+/-- `partition_query._check_units` on `Q_call`'s Calls: refused when a unit commits bits no public class holds (`sizeClass`,
 `committedBits`, constants counted, which `Q_call`'s width rule leaves out), each Definition once. -/
 def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit := do
   let mut seen : Array Nat := #[]
@@ -386,7 +387,8 @@ def once (inner : Nat) (os is : Int) (count : Nat) : Bool :=
 
 /-- `partition._runs`: `(node, lo, hi, once)` per run of root-node references in `s`: each leaf of the run is one of
 leaves `[lo, hi)` of root node `node`'s result, and with `once` no two of its references name one leaf. A strided run is
-taken at its span (its corners, as `Program.decode` bounds it), an explicit one a run a reference. -/
+taken at its span (its corners, as `Program.decode` bounds it), an explicit one a run a reference, a grid one a run a
+lane a period (`Grid.pieces`). -/
 def runs (s : Flock.Program.Seq) : Array (Nat × Nat × Nat × Bool) :=
   s.parts.foldl (init := #[]) fun out part => match part with
     | .affine p i b c => if p || c == 0 then out else out.push (i, b, b + c, true)
@@ -398,6 +400,13 @@ def runs (s : Flock.Program.Seq) : Array (Nat × Nat × Nat × Bool) :=
       let at_ := corners.map fun (x, y) => b + (x : Int) * os + (y : Int) * is
       out.push (i, (at_.foldl min (at_.headD 0)).toNat, (at_.foldl max (at_.headD 0) + 1).toNat, once inner os is c)
     | .explicit items => items.foldl (init := out) fun o r => if r.p then o else o.push (r.i, r.j, r.j + 1, true)
+    | .grid run lanes =>
+      (List.range ((lanes[0]?.map (·.periods)).getD 0)).foldl (init := out) fun o t => lanes.foldl (init := o) fun o l =>
+        let lo := l.leafAt t 0
+        let hi := lo + ((run : Int) - 1) * l.e
+        if l.p || run == 0 then o
+        else if l.e == 1 || run == 1 then o.push (l.i, lo.toNat, lo.toNat + run, true)
+        else o.push (l.i, (min lo hi).toNat, (max lo hi + 1).toNat, l.e != 0)
 
 /-- `partition.fanout` over a template query's ranges `rs`: F, the most proof blocks the root nodes of one joined set
 hold, two nodes joined when one reads any part of the other's result; at least 1. It reads each instance node's

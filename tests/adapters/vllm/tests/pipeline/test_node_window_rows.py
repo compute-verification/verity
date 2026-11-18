@@ -5,7 +5,9 @@ registered read of the rank's weights, the prompt's rows a boundary read and, at
 stand in for `served_values`: each unit's rows by the chain's wiring."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from dataclasses import replace
 
 import numpy as np
@@ -14,6 +16,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
@@ -84,7 +87,9 @@ class Values:
 
 
 def weights(r: int) -> dict:
-    return {"w": registered_commit("test/node-window", "w", Values(r).w, bytes(32), r, keep_rows=True)}
+    w = Values(r).w
+    ys = hashlib.shake_256(f"node-window weights {r}".encode()).digest(len(w) * SF.SALT_BYTES)
+    return {"w": registered_commit("test/node-window", "w", w, ys, keep_rows=True)}
 
 
 def commit(r: int, out, **edit):
@@ -132,8 +137,8 @@ def test_each_rank_commits_the_window_the_join_names(stated, tmp_path):
     ({"cap": 0}, "cap"),
     ({"registered": {}}, "registered"),
     ({"registered": {**weights(1), "v": weights(1)["w"]}}, "registered"),
-    ({"registered": {"w": registered_commit("test/node-window", "w", Values(1).w.reshape(LAYERS * 2, 128), bytes(32), 1,
-                                            keep_rows=True)}}, "registered"),
+    ({"registered": {"w": registered_commit("test/node-window", "w", Values(1).w.reshape(LAYERS * 2, 128),
+                                            os.urandom(LAYERS * 2 * SF.SALT_BYTES), keep_rows=True)}}, "registered"),
 ], ids=["ingress", "no-cap", "cap-0", "registered-missing", "registered-extra", "registered-shape"])
 def test_refused_by_name_before_anything_is_written(edit, name, tmp_path):
     """A rank window that declares an ingress (its prompt is a boundary read), a cap that is not a positive count, and

@@ -45,8 +45,8 @@ Refused by name (`Unexpressible`): a Program with no weights record, an input th
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
 a gather whose rows are not one width, a port row-fed
 at two cuts, and at `NodeWindow.circuit`, a row-fed port also fed whole or a row of a unit fed twice, then at
-`_Builder.settle`, every template whose ports aren't cut a writer row or whose unit Flock's composer wouldn't prove, and
-after it a row-fed port whose cut isn't its `feed_rows` cut.
+`_Builder.settle`, every template whose ports aren't cut a writer row, after it a row-fed port whose cut isn't its
+`feed_rows` cut, and last every template whose unit Flock's composer wouldn't prove (`window_builder.check_provable`).
 """
 from __future__ import annotations
 
@@ -76,6 +76,7 @@ from .window_builder import (
     _spans,
     _step,
     _word,
+    check_provable,
     inference,
 )
 
@@ -153,7 +154,10 @@ class NodeWindow:
     """Program ``fn`` (one rank's request Program in the registered rank form) lowered into ``b``'s units by ``families``
     (module docstring): ``lower()`` walks its nodes, ``circuit()`` settles and emits the window, ``census()`` reports it.
     ``coord`` is the width of a ``COORDS`` GEMM's coordinates (1: the serving rows' coordinate, `serving_templates.coordinate`);
-    ``stand_ins``, the module docstring's."""
+    ``stand_ins``, the module docstring's. A form with more inputs or other step ends names them in `INPUTS` and `ENDS`."""
+
+    INPUTS: tuple[str, ...] = (PROMPT, WEIGHTS)
+    ENDS: frozenset[str] = SELECTS
 
     def __init__(self, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
                  coord: int = 1, stand_ins: bool = False) -> None:
@@ -161,18 +165,18 @@ class NodeWindow:
         self.families = dict(FAMILIES if families is None else families)
         self.params = [p for p, _ in fn.signature()[0]]
         self._bits = {p: next(iter(t.width_set())) for p, t in fn.signature()[0] if p != WEIGHTS and len(t.width_set()) == 1}
-        bad = [p for p in self.params if p not in (PROMPT, WEIGHTS) and not p.startswith(PEERS)]
+        bad = [p for p in self.params if p not in self.INPUTS and not p.startswith(PEERS)]
         if WEIGHTS not in self.params or bad:
-            raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes the prompt, the weights record and "
+            raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes {', '.join(self.INPUTS)} and "
                                 f"{PEERS}* partials")
-        self.b = _Builder(grain, 1, True)
+        self.b = _Builder(grain, 1)
         weights = dict(fn.signature()[0])[WEIGHTS]
         labels = [label for label, _ in weights.fields]
         self.fields = _spans(f"{name}: weight", weights.fields)
         self._firsts = [f[0] for f in self.fields]
         self.b.weights = tuple((label, s[1], e[1] - s[1]) for label, s, e in zip(labels, self.fields, self.fields[1:]))
         nodes = fn.body.nodes
-        ends = [j for j, n in enumerate(nodes) if _family(n) in SELECTS]
+        ends = [j for j, n in enumerate(nodes) if _family(n) in self.ENDS]
         self.steps = max(1, len(ends))
         self._step_of = [min(bisect.bisect_left(ends, j), self.steps - 1) for j in range(len(nodes))]
         self.meta: dict[int, tuple[int, int, int, list[tuple[int, int, int]] | None]] = {}
@@ -557,9 +561,9 @@ class NodeWindow:
     # ---- the window
 
     def circuit(self) -> IF.Circuit:
-        """The lowered units settled (`_Builder.settle`) and emitted as one Circuit: its registered reads the weights', its
-        external ports `external`, its blocks one slot (the request) at the Program's
-        steps, its free ports the ones `free` lists."""
+        """The lowered units settled (`_Builder.settle`) and emitted as one Circuit, each unit a proof block Flock's composer
+        proves (`window_builder.check_provable`): its registered reads the weights', its external ports `external`, its
+        blocks one slot (the request) at the Program's steps, its free ports the ones `free` lists."""
         if not self.lowered:
             self.lower()
         b = self.b
@@ -577,10 +581,12 @@ class NodeWindow:
                             tuple(roots), tuple(openings))
         wires = tuple(IF.coalesce(b.wires))
         starts = {tid: [at for at, _n, _slot, _step in spans] for tid, spans in b.spans.items()}
-        return IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
-                          registered=reg, external=tuple(self.external),
-                          blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
-                          order=IF.ordered(b.units, wires, starts) if wires else None)
+        circuit = IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
+                             registered=reg, external=tuple(self.external),
+                             blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
+                             order=IF.ordered(b.units, wires, starts) if wires else None)
+        check_provable(circuit)
+        return circuit
 
     def _check_rows(self) -> None:
         """Refuse, naming each, a port `feed_rows` fed that is also fed whole (`_Builder.feed`, or left free whole by

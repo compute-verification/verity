@@ -191,7 +191,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the network attester also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
-  (`verity.protocols.resource_accounting.network.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
+  (`verity.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the network attester reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: network_attester`. The gate
   refuses while another rehearsal runs, writes `attester/<run>/request.json` and starts its unit

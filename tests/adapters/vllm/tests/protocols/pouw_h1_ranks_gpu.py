@@ -6,12 +6,12 @@ otherwise it builds N tensor-parallel ranks × M pipeline stages on the multipro
 greedy requests plain, then under the window, and writes its tokens, the window's record (``pouw-h1-calls.json``) and a
 summary to ``--out``.
 
-Both flip their in-process coins from one fixed stream (`entropy`) and use one fixed hm96 key (`KEY`), a measurement that
-credits nothing (the coins aren't a challenger's) but makes the two windows' commitments comparable bit for bit.
+Both flip their in-process coins from one fixed stream (`entropy`), a measurement that credits nothing (the coins aren't
+a challenger's); each salts its rows with fresh salts of its own, so no root of one is the other's.
 ``--compare ONE_DIR OTHER_DIR`` (no GPU) holds the served tokens equal and both layouts static and complete (every one of
 the window's steps × linears called). At one TP (pipeline stages only) the layout is the same, so it also holds every
-call's (index, step, linear, module, m, k, n, base, rows) equal in count and order, and each call's A and z table roots,
-every round's root and coin, the calls root and the sample root equal. Across TPs the linears are shards, so it holds the
+call's (index, step, linear, module, m, k, n, base, rows) equal in count and order, each manifest row but its table
+roots, the round count and the commitments' unsalted fields (`COMMITTED`) equal. Across TPs the linears are shards, so it holds the
 window's MACs a step equal instead (each linear's shard n·K summed over the ranks).
 
 ``--commit`` (TP N > 1, PP 1; ROOTS1 across ranks) serves the window with ``served`` and the Commit on every
@@ -39,7 +39,6 @@ from typing import Any
 from verity_vllm.engine.hooks import Hooks
 
 SCHEMA = "verity/pouw-h1-ranks-gpu/v1"
-KEY = hashlib.sha512(b"verity/pouw-h1-ranks-gpu/key/v1").digest()[:32]
 SUMMARY = "ranks-summary.json"
 
 
@@ -154,7 +153,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     salt_coins, rounds = coins(decl.steps)
     t0 = time.monotonic()
     holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
-                         transcript_dir=str(tdir), key=KEY, served=served,
+                         transcript_dir=str(tdir), served=served,
                          commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
     w: dict[str, Any]
     h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
@@ -278,11 +277,10 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             "transcript_dir": str(out), "admission": RQ.ROUND0}})
         comp = PO.install(eng.model, ctx)
         h1 = pouw.h1_run(f"pouw:{PH.SCHEME}")
-        h1._key = KEY
         release = comp.close
     else:
         holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
-                             transcript_dir=str(out), key=KEY)
+                             transcript_dir=str(out))
         h1, release = holder.run, holder.finish
     doc["install_s"] = round(time.monotonic() - t0, 1)
     try:
@@ -303,10 +301,9 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
     return doc
 
 
-#: what two windows of one layout must agree on in their commitments (the ranks' own record, ``ranks``, is the multiprocess
-#: run's only)
-COMMITTED = ("scheme", "tile", "rows", "steps", "u_step", "units", "calls", "admission", "weights_root", "coins",
-             "salt_opening", "round_coins", "calls_root", "static", "draw")
+#: what two windows of one layout must agree on in their commitments: the fields no salt reaches (the ranks' own record,
+#: ``ranks``, is the multiprocess run's only)
+COMMITTED = ("scheme", "tile", "rows", "steps", "u_step", "units", "calls", "admission", "static")
 
 
 def macs(shapes: list[list[int]]) -> int:
@@ -349,13 +346,14 @@ def compare(one: Path, other: Path) -> dict[str, Any]:
     if same_layout:
         fields = ("index", "step", "layer", "module", "m", "k", "n", "base", "rows")
         calls_a, calls_b = ([{k: x.get(k) for k in fields} for x in y["calls"]] for y in (ca, cb))
-        first = next((i for i, (x, y) in enumerate(zip(ca["calls"], cb["calls"])) if x != y), None)
+        rows_a, rows_b = ([{k: v for k, v in x.items() if k != "tables"} for x in y["calls"]] for y in (ca, cb))
+        first = next((i for i, (x, y) in enumerate(zip(rows_a, rows_b)) if x != y), None)
         rounds_a, rounds_b = ca["commitment"]["rounds"], cb["commitment"]["rounds"]
         committed = {k: ca["commitment"].get(k) == cb["commitment"].get(k) for k in COMMITTED}
         c.update(equal=calls_a == calls_b, shapes_equal=ca["public"] == cb["public"])
-        out["manifest"] = {"rows_equal": ca["calls"] == cb["calls"], "first_unequal": first,
-                           **({"at_first": [ca["calls"][first], cb["calls"][first]]} if first is not None else {})}
-        out["rounds"] = {"count": [len(rounds_a), len(rounds_b)], "equal": rounds_a == rounds_b}
+        out["manifest"] = {"rows_equal": rows_a == rows_b, "first_unequal": first,
+                           **({"at_first": [rows_a[first], rows_b[first]]} if first is not None else {})}
+        out["rounds"] = {"count": [len(rounds_a), len(rounds_b)], "equal": len(rounds_a) == len(rounds_b)}
         out["committed"] = committed
         out["calls_equal"] = bool(out["calls_equal"] and c["equal"] and c["shapes_equal"] and len(set(c["u_step"])) == 1)
         out["commitments_equal"] = bool(out["manifest"]["rows_equal"] and out["rounds"]["equal"] and all(committed.values()))

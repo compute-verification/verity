@@ -1354,15 +1354,16 @@ def test_a_credit_bit_changed_after_the_sampling_coin_is_refused(periodic):
     assert credited(c, no_z) == ("credit", CR.no_z(0))
 
 
-def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
-    """DRAWN1: with a prover directory the run keeps its salt key and each served call's A rows, scales and z/y records
-    there, owner-only, past the close; the run's published output (its transcript) holds neither the key's bytes nor
-    its hex; and the call's A and z tables rebuilt from them have the roots its manifest row carries, so a sampled proof block
-    opens after the close, while a kept row changed afterwards is refused."""
-    prover, out, key = tmp_path / "prover", tmp_path / "out", bytes(range(32))
+def test_the_salts_and_a_calls_values_outlive_the_close_in_the_provers_directory_only(tmp_path):
+    """DRAWN1: with a prover directory the run keeps its fresh salts (the salt file `pouw_h1_prover.SALTS`) and each
+    served call's A rows, scales and z/y records there, owner-only, past the close; the run's published output (its
+    transcript) holds no salt's bytes nor their hex; and the call's A and z tables rebuilt from them have the roots its
+    manifest row carries, so a sampled proof block opens after the close, while a kept row changed afterwards is
+    refused."""
+    prover, out = tmp_path / "prover", tmp_path / "out"
     salt = hashlib.sha512(b"salt").digest()
     rounds = LiveRecord(Wd.live_challenger(0, 1, random.Random(1).randbytes), Wd.ROUND, clock=lambda: 0.0)
-    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds, key=key,
+    run = PH.H1Run("t", salt, {0: "q"}, [(64, K)], ROWS, 1, transcript_dir=str(out), rounds=rounds,
                    prover=str(prover))
     layer = Linear(64, 1, None)
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -1371,11 +1372,15 @@ def test_the_salt_key_and_a_calls_values_outlive_the_close_in_the_provers_direct
     run.record(0, xq, s_a, layer.weight, layer.weight_scale, zy)
     run.finish()
     del run
-    assert PV.key_of(prover) == key
+    kept_salts = PV.salts_of(prover)
+    a_nonce = RQ.TABLES_NONCE + RQ.TABLE_NONCES["a"]
+    salts = [kept_salts.at(a_nonce, ROWS)[192 * j:192 * (j + 1)] for j in range(ROWS)]
+    assert len(set(salts)) == ROWS
     assert stat.S_IMODE(prover.stat().st_mode) == 0o700
     assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in prover.rglob("*") if p.is_file())
     published = [p for p in out.rglob("*") if p.is_file()]
-    assert published and not any(key in p.read_bytes() or key.hex().encode() in p.read_bytes() for p in published)
+    assert published and not any(y in p.read_bytes() or y.hex().encode() in p.read_bytes() for p in published
+                                 for y in salts)
     record = json.loads((out / PH.CALLS_FILE).read_text())
     assert PV.locate(record["calls"], 1) == (0, 1)
     opened = PV.open_call(prover, record, 0, salt)

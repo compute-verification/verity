@@ -39,4 +39,5 @@ inputs = ["adapters/vllm/manifests", "adapters/vllm/verity_vllm/config.py", "ada
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
           "adapters/torch/verity_torch", "verity/__init__.py",
           "verity/protocols/__init__.py", "verity/protocols/workload_classification/__init__.py", "verity/protocols/workload_classification/training_detection/__init__.py",
-          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py", "calibration/circuit_properties"]
+          "verity/protocols/workload_classification/training_detection/inference_only/__init__.py", "benchmarks/slowdown/__init__.py", "calibration/circuit_properties",
+          "calibration/hardware/cards"]

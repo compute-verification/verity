@@ -20,6 +20,9 @@ else ``why``, which is `GONE` where the network attester's side ended first), ``
 to the request's arrival, whole) and ``ms`` (each id event's write after the arrival, in milliseconds, then the
 trailer's). It holds no id and no text. A connection's egress cell i is due i // r buckets after its first, so the delay
 a connection needed after its release is the most of ``ms[i]`` less (i // r) buckets, over its events and its trailer.
+Every other connection that breaks, before it is relayed or while it is, leaves one record: ``broken``, the side whose
+connection broke (``client`` or ``server``), ``error``, the exception's class name, and ``at``, the seconds from the
+relay's start to the break.
 """
 from __future__ import annotations
 
@@ -39,7 +42,7 @@ from verity.protocols.resource_accounting.network.prover.workload import (
     TRAILER,
     id_event,
 )
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 __all__ = ["BLANK", "BODY_BYTES", "COMPLETIONS", "GONE", "READ_BYTES", "Broken", "Front", "RequestOf", "READERS", "StreamIds", "process", "run", "serve"]
 
@@ -84,14 +87,12 @@ async def _first(reader: asyncio.StreamReader) -> bytes:
 
 
 async def _pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
-    """`src`'s bytes to `dst` until `src` ends or either breaks, then `dst`'s write side closed."""
-    with contextlib.suppress(ConnectionError):
-        while data := await src.read(READ_BYTES):
-            dst.write(data)
-            await dst.drain()
-    with contextlib.suppress(OSError):
-        if dst.can_write_eof():
-            dst.write_eof()
+    """`src`'s bytes to `dst` until `src` ends, then `dst`'s write side closed; a break of either raises."""
+    while data := await src.read(READ_BYTES):
+        dst.write(data)
+        await dst.drain()
+    if dst.can_write_eof():
+        dst.write_eof()
 
 
 async def _ended(reader: asyncio.StreamReader) -> None:
@@ -110,7 +111,7 @@ async def _close(writer: asyncio.StreamWriter | None) -> None:
 
 class Front:
     """The relay (the module docstring's) before the server at ``upstream``, for id events of ``payload`` bytes: `handle`
-    serves one connection, its task kept in ``handlers`` until it ends. ``log`` takes each id request's record, and
+    serves one connection, its task kept in ``handlers`` until it ends. ``log`` takes the module docstring's records, and
     ``clock`` reads the seconds its times are in."""
 
     def __init__(self, upstream: tuple[str, int], payload: int = ID_PAYLOAD, *, request_of: RequestOf,
@@ -135,12 +136,15 @@ class Front:
             first = await _first(reader)
             arrived = self.clock()
             fields = id_request_fields(first, self.payload)
-            if fields is not None:
+            if isinstance(fields, dict):
                 await self.ids(first.partition(BLANK)[0] + BLANK, fields, reader, writer, arrived)
             elif first:
                 await self.relay(first, reader, writer)
-        except OSError:
-            pass                                         # the client's connection broke, or the server's refused: closed below
+        except OSError as e:
+            # the client's transport is down once its connection broke; else the break was the server's
+            if self.log is not None:
+                self.log({"broken": "client" if writer.transport.is_closing() else "server", "error": type(e).__name__,
+                          "at": round(self.clock() - self.origin, 3)})
         finally:
             await _close(writer)
 
@@ -158,11 +162,19 @@ class Front:
                   arrived: float) -> None:
         """An id request (its head and fields, whole at `arrived`) answered in the id form from the server's stream of
         it, until that stream ends or `reader`'s side, the network attester's, does: either way the server's connection
-        is closed."""
-        rel = REL.release_of(head)
+        is closed. A malformed release header (`release.release_of`'s refusal) refuses the request: its record's ``why``
+        is the refusal, and the connection closes with no answer and no server connection."""
+        try:
+            rel, refused = REL.release_of(head), None
+        except ValueError as e:
+            rel, refused = None, str(e)
         n, run, bucket = rel if rel is not None else (None, None, None)
         rec: dict[str, Any] = {"n": n, "run": run.hex() if run else None, "bucket": bucket, "prompt": len(fields["prompt"]),
-                               "ids": 0, "ended": False, "why": None, "at": round(arrived - self.origin, 3), "ms": []}
+                               "ids": 0, "ended": False, "why": refused, "at": round(arrived - self.origin, 3), "ms": []}
+        if refused is not None:
+            if self.log is not None:
+                self.log(rec)
+            return
 
         def wrote() -> None:
             rec["ms"].append(round((self.clock() - arrived) * 1000, 1))
@@ -196,7 +208,6 @@ class Front:
             rec["why"] = str(e)
         except OSError as e:
             rec["why"] = f"a connection broke ({type(e).__name__})"
-            raise
         finally:
             for task in (stream, gone):
                 task.cancel()

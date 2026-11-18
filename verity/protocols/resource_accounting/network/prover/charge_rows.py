@@ -1,5 +1,5 @@
 """The charges' carry rows under hiding commitments: each window's produced value of its carry-in and carry-out rows,
-chained from window to window (`protocol/charge-chain.md`), which the verifier checks (`network.verifier.charge_check`).
+chained from window to window (`protocol/charge-chain.md`), which `network.prover.charge_check` checks.
 `commit_window` is `charge_chain.ChargeLink_v1`'s (`VALUE` "replay-charge"); `window_commit` is
 `window_charge.ChargeLink_v2`'s."""
 from __future__ import annotations

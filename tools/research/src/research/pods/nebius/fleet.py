@@ -47,6 +47,7 @@ import sys
 import time
 import tomllib
 from datetime import UTC, datetime, timedelta
+from functools import cache
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -54,6 +55,7 @@ from zoneinfo import ZoneInfo
 try:
     from research import metrics
     from research.pods.nebius import settings
+    from research.pods.registry import write_key
 except ImportError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command), or beside an older `research`
     # that lacks one of them: this file's own tree, with none of the other tree's modules kept
     for name in [n for n in sys.modules if n == "research" or n.startswith("research.")]:
@@ -61,6 +63,7 @@ except ImportError:     # run by path with a bare python3.12 (cloud_watch.toml's
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from research import metrics
     from research.pods.nebius import settings
+    from research.pods.registry import write_key
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -87,9 +90,8 @@ PANEL_MAX_BYTES = 64 * 1024
 PANELS_NOTE = "Nebius VMs only: RunPod pods aren't sampled."
 #: each pass's time and rows, none when no VM runs, replaced whole (infra/control/loop_metrics.py reads it)
 LAST_SAMPLE = "last-sample.json"
-#: a platform's GPU, for the machine class the usage tab groups by; any other `gpu-` platform is named from its own name
-GPU_CLASS = {"gpu-h200-sxm": "H200", "gpu-h100-sxm": "H100", "gpu-b200-sxm": "B200", "gpu-l40s-a": "L40S", "gpu-l40s-d": "L40S",
-             "gpu-rtx6000": "RTX PRO 6000", "gpu-rtx6000-a": "RTX PRO 6000"}
+#: the cards' registry, read by path from this file's tree: each card's `display_name` and `nebius_platforms`
+GPU_REGISTRY = Path(__file__).resolve().parents[6] / "tools" / "config" / "verity_config" / "registry" / "gpus.toml"
 OWNER_DEFAULT = "infra"          # registry.OWNER_DEFAULT (this file runs standalone)
 PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr '\\n' ,); "
          "echo cores=$(nproc); echo load=$(cut -d' ' -f1 /proc/loadavg); "
@@ -188,15 +190,8 @@ def sample(now: float | None = None) -> list[dict]:
 
 
 def set_key(name: str, key: str, value: str | None) -> None:
-    """Set (or, with None, remove) one top-level key of machine `name`'s registry file, keeping its other lines as they are.
-    The key goes after the file's last top-level key, since a line after a table's header (`[properties]`) is the table's."""
-    f = MACHINES_D / f"{name}.toml"
-    lines = f.read_text().splitlines()
-    end = next((i for i, ln in enumerate(lines) if ln.lstrip().startswith("[")), len(lines))
-    while end and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")) and end < len(lines):
-        end -= 1
-    top = [ln for ln in lines[:end] if not ln.startswith(f"{key} =")]
-    f.write_text("\n".join([*top, *([f'{key} = "{value}"'] if value is not None else []), *lines[end:]]) + "\n")
+    """Set (or, with None, remove) one top-level key of machine `name`'s registry file (`registry.write_key`)."""
+    write_key(MACHINES_D / f"{name}.toml", key, value)
 
 
 def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
@@ -422,11 +417,24 @@ def card_finding(rows_today: list[dict]) -> dict | None:
     return {"spent": round(spent, 2), "limit": limit} if limit and spent >= QUOTA_ALERT * limit else None
 
 
+@cache
+def gpu_classes() -> dict[str, str]:
+    """Each Nebius platform the cards' registry names, to its card's display name; empty, said once, without the registry."""
+    try:
+        cards = tomllib.loads(GPU_REGISTRY.read_text()).get("gpu", [])
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"fleet.py: {GPU_REGISTRY} unread, so each GPU is named from its platform ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
+        return {}
+    return {p: card["display_name"] for card in cards for p in card.get("nebius_platforms", [])}
+
+
 def machine_class(platform: str | None) -> str:
+    """The machine class the usage tab groups by: the registry's card, else a `gpu-` platform named from its own name."""
     p = platform or ""
     if not p.startswith("gpu-"):
         return "CPU"
-    return GPU_CLASS.get(p) or p[len("gpu-"):].split("-")[0].upper()
+    return gpu_classes().get(p) or p[len("gpu-"):].split("-")[0].upper()
 
 
 def hardware(row: dict) -> str:

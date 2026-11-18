@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation.batch import evaluate_batch
+from verity.commitments import salt_file as SF
 from verity.commitments.gates.embedding import arguments, reference
 from verity.commitments.gates.embedding import read as read_of
 from verity.commitments.periods import interface as IF
@@ -162,20 +163,28 @@ def test_refusals():
 
 # ---- values: the units, fed from the circuit's declarations, against the shard's words
 
-VS, KEY = 19360, hashlib.sha512(b"node-window embed test: a test committer's key").digest()[:32]
+VS = 19360
+
+
+def _salts(words: np.ndarray, b: int) -> bytes:
+    """Block ``b``'s test salts, one a row."""
+    return hashlib.shake_256(f"node-window embed test: block {b}".encode()).digest(len(words) * SF.SALT_BYTES)
+
+
 PROGRAM = hashlib.sha512(b"node-window embed test: a test program").hexdigest()
 ZERO_SALT, ZERO_PATH = bytes(96), [bytes(64)] * 18
 
 
 @pytest.fixture(scope="module")
 def tables():
-    """Made-up shard columns of blocks 0 and 1 (VS rows of 192 bf16 words each), padded and committed under a test key as the
+    """Made-up shard columns of blocks 0 and 1 (VS rows of 192 bf16 words each), padded and committed under test salts as the
     tables' registration commits them."""
     rng = np.random.default_rng(274)
     cols = {b: rng.integers(0, 0x7F80, (VS, NE.WIDTH), dtype=np.uint16) for b in (0, 1)}
-    held = {NE.shard_param(LABEL, NE.WIDTH, b): H1R.commit(PROGRAM, NE.shard_param(LABEL, NE.WIDTH, b),
-                                                           NE.table_words(c, 0, V), KEY, b, keep_rows=True, schema=G.SCHEMA_SEG)
-            for b, c in cols.items()}
+    words = {b: NE.table_words(c, 0, V) for b, c in cols.items()}
+    held = {NE.shard_param(LABEL, NE.WIDTH, b): H1R.commit(PROGRAM, NE.shard_param(LABEL, NE.WIDTH, b), w, _salts(w, b),
+                                                           keep_rows=True, schema=G.SCHEMA_SEG)
+            for b, w in words.items()}
     return cols, held
 
 

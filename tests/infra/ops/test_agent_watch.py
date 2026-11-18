@@ -3504,6 +3504,67 @@ def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
     assert widths in w.children, "a worker still sending runs is kept past WORKER_KEEP_S from its learning"
 
 
+@pytest.mark.parametrize("brief,lane", [
+    ("You are a worker of the circuits lead in /workspace; ask @vllm for help.", "circuits"),
+    ("You are EDGES, a worker of the `vllm` lane of Verity (coordinator: vllm).", "vllm"),
+    ("You are worker LSCHEME of the circuits-research lane in the repo.", "circuits-research"),
+    ("You are REHEAD, a worker of Verity's circuits coordinator. Your whole brief is a file.", "circuits"),
+    ("You're ZKS10, a worker for the vllm lane (@vllm) of Verity.", "vllm"),
+    ("Ask the vllm lane for nodes. You are a worker. Of the circuits lead nothing is said.", None),
+    ("You are a worker of the kernels lead.", None),
+])
+def test_a_brief_names_its_launchers_lane_in_prose(brief, lane):
+    assert W.brief_lane(brief, {"circuits", "circuits-research", "vllm"}) == lane
+
+
+def test_a_sender_whose_brief_names_its_lead_in_prose_or_whose_record_names_its_launcher_is_that_leads(tmp_path):
+    """Leads' turns last a minute or two, so the watch, sweeping every few minutes, follows few of them and saw none of
+    tonight's Task calls that launched the workers whose runs it posted as nobody's every ten minutes: each brief named its
+    lead only in prose ("a worker of the benchmarks lead", "a worker of the `lean` lane"), never by agent id or @handle. A
+    worker such a worker's brief names by id is that lead's too, and an agent record naming its launcher places it."""
+    wires, deep, rec = (f"bc-0000000{c}-0000-0000-0000-00000000000{c}" for c in "123")
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[wires] = worker("ACTIVE", W.iso(T0 - 600), "WIRES: one spec a workload")
+    api.workers[deep] = worker("ACTIVE", W.iso(T0 - 600), "DEEP: a sub-step")
+    api.workers[rec] = {**worker("ACTIVE", W.iso(T0 - 600), "REC: a step"), "parentAgentId": wires}
+    api.convs[wires] = [("user_message", "You are WIRES, a worker of Verity's circuits lead (repo x; lane circuits). Go.")]
+    api.convs[deep] = [("user_message", f"You are DEEP, launched by WIRES ({wires}) for its third step.")]
+    api.convs[rec] = [("user_message", "You are REC. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    for i, agent in enumerate((wires, deep, rec)):
+        sends(roots, clock, w, agent, f"r20261118-01000{i}-000{i}")
+    got = {r["agent"]: (r["handle"], r["role"], r["name"]) for r in ended(tmp_path)}
+    assert got == {wires: ("circuits", "worker", "WIRES: one spec a workload"), deep: ("circuits", "worker", "DEEP: a sub-step"),
+                   rec: ("circuits", "worker", "REC: a step")}
+    assert unplaced(tmp_path) == []
+
+
+def test_a_team_agent_no_handle_owns_is_posted_once_an_hour_by_title_and_any_other_sender_at_every_read(tmp_path):
+    """Eleven runs of four of the team's own workers were posted as nobody's every ten minutes, each by its bare id. A sender
+    the watch read as a Verity agent is posted with its name, at most once an hour however many runs it sends; a sender that
+    is no agent of the team's is posted at every read, as before."""
+    mine, other = "bc-0000000a-0000-0000-0000-00000000000a", "bc-0000000f-0000-0000-0000-00000000000f"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[mine] = worker("ACTIVE", W.iso(T0 - 600), "WIRES: one spec a workload")
+    api.convs[mine] = [("user_message", "You are WIRES. Read the note and go on.")]
+    w.sweep(lambda r: None)
+
+    def read(i):
+        clock.t += 60
+        for n, agent in enumerate((mine, mine, other)):
+            node_run(roots["vy-nebius-1"], f"r20261118-0{i}000{n}-000{n}", clock.t, by=f"https://cursor.com/agents/{agent}")
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+        return [[(u["sender"].rsplit("/", 1)[-1], u.get("title")) for u in r["runs"]] for r in ended(tmp_path)[-1:]
+                if r["t"] == W.iso(clock.t)]
+
+    title = "WIRES: one spec a workload"
+    assert read(1) == [[(mine, title), (mine, title), (other, None)]]
+    assert read(2) == [[(other, None)]], "within the hour: the team's agent is held, the stranger posted again"
+    clock.t += 3600
+    assert read(3) == [[(mine, title), (mine, title), (other, None)]], "an hour on: posted again"
+
+
 def test_a_sender_no_route_knows_is_watched_under_no_lane_until_a_route_claims_it(tmp_path):
     """A worker its coordinator never registered, whose brief names no coordinator, was rung to infra once at a run's end and
     never watched: pous-prf hung for hours unseen. Watched as infra's own worker, it then told infra to resume a worker only
@@ -3530,6 +3591,7 @@ def test_a_sender_no_route_knows_is_watched_under_no_lane_until_a_route_claims_i
         w.sweep(lambda r: None)
     (idle,) = [r for r in records(tmp_path) if r["kind"] in ("worker_idle", "workers_failed") and stray in json.dumps(r)]
     assert (idle["kind"], idle["lane"], idle.get("handle"), idle["quiet"]) == ("worker_idle", "", None, True)
+    clock.t += W.UNOWNED_EVERY_S                            # a team's agent nobody owns is posted once an hour
     sends(roots, clock, w, stray, "r20261105-120000-0002")
     assert [r.get("quiet") for r in ended(tmp_path) if r["role"] == "unknown"] == [None, True], "its next run rings no one"
     assert not [r for r in records(tmp_path) if r["kind"] == "unplaced"], "infra was rung for it at its first run's end"
@@ -3879,7 +3941,7 @@ def test_a_name_that_names_no_one_lane_places_nobody_and_infra_is_rung_once(tmp_
     assert rec["senders"] == sorted(f"https://cursor.com/agents/{a}" for a in senders)
     assert all(W.stray(w.children[a]) for a in senders) and not w.awaiting and "quiet" not in rec
     assert placed_files(tmp_path) == {}
-    clock.t += 60
+    clock.t += W.UNOWNED_EVERY_S
     w.sweep(lambda r: None)
     sends(roots, clock, w, next(iter(senders)), "r20261105-120000-0009")
     assert [(r["role"], r.get("quiet")) for r in ended(tmp_path)] == [("unknown", None), ("unknown", True)] \
@@ -4093,16 +4155,17 @@ def test_a_sender_with_a_shared_teams_key_is_placed_by_its_launcher_and_one_with
     assert by_seat == {SEAT: ("compute-research", "worker", None, None), lone: (None, "unknown", None, None),
                        kid: (None, "unknown", None, True)}
     assert W.stray(w.children[lone]) and w.children[kid]["parent"] == PERSON and placed_files(tmp_path) == {}
+    clock.t += W.UNOWNED_EVERY_S
     for i, agent in enumerate(seats):
         sends(roots, clock, w, agent, f"r20261105-12000{i}-001{i}")
     assert [(r["role"], r.get("quiet")) for r in ended(tmp_path)[3:]] == [("worker", None), ("unknown", True), ("unknown", True)]
     assert unplaced(tmp_path) == [kid], "one ring for each of the two nothing places, and none for the one its launcher does"
 
 
-def test_launchers_that_name_each_other_place_nobody_and_a_chain_is_followed_only_so_far(tmp_path):
+def test_launchers_that_name_each_other_place_nobody_and_a_chain_reaching_a_coordinator_places_at_any_depth(tmp_path):
     """Following a launcher's launcher must end: a worker resumed by the worker it launched, or two registrations naming
     each other, are a loop with no coordinator on it, and place nobody; one of them placed some other way places both. A
-    chain is followed `LAUNCHERS_MAX` agents up in one asking."""
+    chain that reaches a coordinator places its first agent however long it is."""
     a, b = W1_, W2_
     api, clock, w, _, roots = nodes_setup(tmp_path)
     for agent in (a, b):
@@ -4125,11 +4188,10 @@ def test_launchers_that_name_each_other_place_nobody_and_a_chain_is_followed_onl
     sends(roots, clock, w, a, "r20261105-120000-0002")
     assert [(r["agent"], r["handle"], r["role"]) for r in ended(tmp_path)][1:] == [(a, "vllm", "worker")]
     assert {(w.workers[x]["lane"], w.workers[x]["handle"]) for x in (a, b)} == {("vllm", "vllm")}
-    chain = [f"bc-{i:08x}-0000-0000-0000-00000000000c" for i in range(W.LAUNCHERS_MAX + 1)]
+    chain = [f"bc-{i:08x}-0000-0000-0000-00000000000c" for i in range(40)]
     for kid, parent in zip(chain, [*chain[1:], NEW]):
         launches(w, clock, parent, kid)
-    assert w.placed(chain[1], coords) == "vllm", "its coordinator is the last agent a chain this long reaches"
-    assert w.placed(chain[0], coords) is None, "one agent further: not followed"
+    assert w.placed(chain[0], coords) == "vllm", "a worker 40 launchers below its coordinator is that coordinator's"
 
 
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
@@ -5377,6 +5439,7 @@ def test_an_issue_with_no_lane_label_places_nobody_when_no_one_lane_owns_its_tea
     api.workers[agent] = worker("IDLE", W.iso(T0 - 600), "CMP-12 TABLES")
     w.sweep(lambda r: None)
     sends(roots, clock, w, agent, "r20261105-110000-0001")
+    clock.t += W.UNOWNED_EVERY_S
     sends(roots, clock, w, agent, "r20261105-120000-0002")
     assert [r["role"] for r in ended(tmp_path)] == ["unknown"] * 2 and placed_files(tmp_path) == {}
     assert lin.calls == [("CMP-12", None)]

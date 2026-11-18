@@ -20,8 +20,7 @@ no decision has admitted does in `ReplayStep_v1`.
 
 **What it computes**, with the tick's registered constants (`schedule.Rule`, or a `schedule.Tick` in microseconds): the
 bucket τ_b, the step amounts τ_sat and τ_free, the amount for each token a step schedules, and the catch-up, in order:
-1. If nothing is waiting (and, under the default catch-up `quiet`, nothing is running) and there is a next arrival, of
-   bucket a: T ← max(T, (a + 1)·τ_b).
+1. If nothing is waiting or running and there is a next arrival, of bucket a: T ← max(T, (a + 1)·τ_b).
 2. The arrivals *given* to the scheduler are the leading ones whose buckets have closed, (a + 1)·τ_b ≤ T. The buckets
    never decrease in release order, so these are all the closed ones in view.
 3. `ReplayStep_v1`'s step runs on the state and the given arrivals, every decision bit 1: the waiting loop takes each
@@ -134,7 +133,7 @@ def reference(S: SimpleNamespace, tick: Tick | Rule, st: State, inp: Inputs) -> 
     if len(inp.released) != len(inp.arrivals):
         raise ValueError(f"{len(inp.released)} release buckets for {len(inp.arrivals)} arrivals")
     clock = st.clock
-    if not st.step.waiting and not (rule.quiet and st.step.running) and inp.arrivals:
+    if not st.step.waiting and not st.step.running and inp.arrivals:
         clock = max(clock, rule.close(inp.released[0]))
     given = 0
     while given < len(inp.arrivals) and rule.close(inp.released[given]) <= clock:

@@ -3,21 +3,21 @@ backend = "vllm"
 id = "llama32-1b-1gpu-pouw-protocol-served"
 cards = ["h200", "h100"]
 # PoUW's served protocol row for the demo's Llama 3.2 1B on one H200 or H100 (sm_90a, the same code on
-# each, and only the card differs): the PoUW option's Pearl-C
-# arm on pearl_c_sm90's kernels under `pearl-c-h100-v1-h3` (the setup exports PEARLC_KERNEL and PEARLC_CUBIN) against
+# each, and only the card differs): Pearl+'s
+# arm (`pearl-plus`, the declared scheme by its name) on pearl_c_sm90's kernels under `pearl-c-h100-v1-h3` (the setup exports PEARLC_KERNEL and PEARLC_CUBIN) against
 # stock FP8, eager and compiled. served_passes.py serves its Pearl-C arm with every pass retained (`served_pearlplus.sh`,
 # served_verdicts.sh's POUW=pearlplus).
-arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]
+arms = ["stock-fp8", "pearl-plus", "stock-fp8@compiled"]
 sweep = "b32"
 reps = 6
 eager = true
 setup = "benchmarks/harness/setup/pearl_c_sm90.sh"
 
-[arm_settings."pouw:pearl-c-h100-v1-h3"]
+[arm_settings."pearl-plus"]
 precision = "bfloat16"
 control = "none"
 
-[arm_settings."pouw:pearl-c-h100-v1-h3".protocols_config.pouw]
+[arm_settings."pearl-plus".protocols_config."pearl-plus"]
 device = "cuda"
 kernel = "$PEARLC_KERNEL"
 cubin = "$PEARLC_CUBIN"

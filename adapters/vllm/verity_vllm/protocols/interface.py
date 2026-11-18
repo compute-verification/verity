@@ -1,6 +1,6 @@
 """What every protocol option implements, and what the selector hands it (`verity_vllm.protocols`).
 
-An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
+An adapter is one module of this package (`spot`, `pouw`) that defines:
 
 * ``NAME``: its protocol, one of `config.PROTOCOLS`;
 * ``schemes() -> tuple[str, ...]``: the scheme names its protocol package registers;
@@ -12,9 +12,8 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
-  is the protocol package's circuit (`scheme.register_circuits`, `protocol_options.traced_as`), and an executor whose
-  scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
+  outside (`protocol_options.SITES`).  An executor is refused beside SPOT, since SPOT would trace it as the stock
+  computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
 * optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
   the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then
@@ -26,7 +25,7 @@ An adapter is one module of this package (`spot`, `pous`, `pouw`) that defines:
   (`Context.filled`), and the install's refusals read the filled settings, so a key left unfilled is refused there.
 
 An adapter holds no protocol logic: the scheme, its commitments, the salt and the audit are its protocol package's
-(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
+(`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.proofs.spot.verifier`), which never import this one.  It finds its hook sites by type,
 never by module name, and makes every patch and service through ``target.hooks(entry)``: an `engine.hooks.Hooks` tagged
 with its entry, so the composition uninstalls it and a committer recognises it (`engine.hooks.live(tag)`).
 """
@@ -102,7 +101,7 @@ class Target:
     weight_commitments: dict[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def hooks(self, entry: str) -> Hooks:
-        """A fresh `Hooks` tagged with ``entry`` (``pous:p2-16448/v4``), for every patch and service the option makes."""
+        """A fresh `Hooks` tagged with ``entry`` (``pouw:ncp-v1``), for every patch and service the option makes."""
         h = Hooks(tag=entry)
         self.made.append(h)
         return h

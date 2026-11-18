@@ -55,6 +55,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
+
 from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import coins  # noqa: E402
 

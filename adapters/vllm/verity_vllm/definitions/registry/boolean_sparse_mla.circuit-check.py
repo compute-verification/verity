@@ -9,7 +9,8 @@ def _glm53_served_roots() -> list[Any]:
     """`SparseMlaHeadBlock_v3` at GLM-5.3's served statics: a row's later 64-key block, its first, and a 16-key first block
     (a short row's); the units it is cut into at P, `SparseMlaHeadScores_v2` and `SparseMlaHeadValues_v2`; a head's end on
     one column block of 64; and the scores units on column blocks (`SparseMlaHeadScoresCols_v2`) and their key rows' writers
-    (`SparseMlaHeadKeysWire_v2`) the chain serves.  One over `targets.MAX_GATES` holds a ``digests`` pin, which keeps it in
+    (`SparseMlaHeadKeysWire_v2`) the chain serves; and a decode step's masked units at the same statics
+    (`SparseMlaHeadBlockLive_v2`, `SparseMlaHeadKeysWireLive_v2`).  One over `targets.MAX_GATES` holds a ``digests`` pin, which keeps it in
     ``--all``; its description is rows of Calls, and its Flock block is read off them (`verity_flock.circuit.unit_block`)."""
     from verity.circuits.defs import bind
 
@@ -31,8 +32,12 @@ def _glm53_served_roots() -> list[Any]:
     cut += [bind(boolean_sparse_mla.SparseMlaHeadScoresColsV2, NVIS=nvis, FIRST=first, G=64, **S)
             for nvis, first in ((64, False), (64, True), (16, True))]
     cut += [bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=nvis, W=64, C=0) for nvis in (64, 16)]
+    # a decode step's units that read the key cache, masked by its bit: the blocks above, and the writers
+    masked = [bind(boolean_sparse_mla.SparseMlaHeadBlockLiveV2, NVIS=nvis, FIRST=first, **S)
+              for nvis, first in ((64, False), (64, True), (16, True))]
+    masked += [bind(boolean_sparse_mla.SparseMlaHeadKeysWireLiveV2, NVIS=nvis, W=64, C=0) for nvis in (64, 16)]
     return [bind(boolean_sparse_mla.SparseMlaHeadBlockV3, NVIS=nvis, FIRST=first, **S)
-            for nvis, first in ((64, False), (64, True), (16, True))] + cut
+            for nvis, first in ((64, False), (64, True), (16, True))] + cut + masked
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
@@ -70,6 +75,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                                           FIRST=False, BN=16, DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"],
                                                           SCALE=0.0625, G=16)),
         ("SparseMlaHeadKeysWire_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=16, W=16, C=0)),
+        # the masked units: a partial first block, a full later one and a writer
+        ("SparseMlaHeadBlockLive_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadBlockLiveV2, DR=16, DV=16, NVIS=5, FIRST=True,
+                                                   BN=16, DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
+        ("SparseMlaHeadBlockLive_v2/later", lambda: bind(boolean_sparse_mla.SparseMlaHeadBlockLiveV2, DR=16, DV=16, NVIS=16,
+                                                         FIRST=False, BN=16, DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"],
+                                                         SCALE=0.0625)),
+        ("SparseMlaHeadKeysWireLive_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadKeysWireLiveV2, NVIS=16, W=16, C=0)),
         ("SparseMlaHeadValues_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=5, FIRST=True, BN=16,
                                                 DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], G=4, C=0)),
         ("SparseMlaHeadValues_v2/later", lambda: bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=16, FIRST=False, BN=16,

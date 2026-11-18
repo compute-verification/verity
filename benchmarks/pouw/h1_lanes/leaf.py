@@ -95,6 +95,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "h1_prove"))
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.prover.lowering import h1unit as U  # noqa: E402
 
 import h1form as F  # noqa: E402
@@ -111,7 +112,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # no
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 
 if TYPE_CHECKING:
     from verity.circuits.defs import SpecializedDefinition
@@ -307,10 +308,10 @@ def partials(leaf: Leaf, roots: tuple) -> list[list[int]]:
 
 
 def world(name: str, ctx: Ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> World:
-    rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, SCHEME, [],
+    rec = DK.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, SCHEME, [],
                    {"kind": "stand-in", "harness": "h1_lanes", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
-    d = R.digest(rec)
+    d = DD.digest(rec)
     sample = sample_digest(d, 1)
     tree = PP.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree), **{v: PR.rows_of(regs[v]) for v in REGISTERED}}

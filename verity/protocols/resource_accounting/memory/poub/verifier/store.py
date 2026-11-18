@@ -42,7 +42,7 @@ SALT_VERSION = "verity/store/salt/v1"
 SALT_DOMAIN = SALT_VERSION.encode() + b"\0"
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
 KEY_BYTES = 32
-"""The verifier's payload salt key."""
+"""The payload salt key's length: the card's prover's own key, from the operating system."""
 ARCHITECTURES = ("LlamaForCausalLM", "Qwen2ForCausalLM")
 """The models whose vLLM module order `arena` states: a decoder layer's attention, then its MLP, no other 2-D parameter."""
 LAYER = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),

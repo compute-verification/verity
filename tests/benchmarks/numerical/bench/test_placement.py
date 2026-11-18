@@ -14,7 +14,7 @@ import pytest
 from verity_numerical.bench import cell as C
 from verity_numerical.bench import placement as PL
 
-from test_cell import BF16, FLOCK, SEPARATE, _cell, _doc, _real_runs
+from test_cell import CIRCUIT, FLOCK, SEPARATE, SLICE, _cell, _doc, _plan, _real_runs
 
 REMOTE_PROBE = PL.remote_probe
 
@@ -23,6 +23,17 @@ REMOTE_PROBE = PL.remote_probe
 def _no_ssh(monkeypatch):
     """No test reaches a pod: a plan that would probe over ssh sees it fail unless the test supplies the probes."""
     monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: (_ for _ in ()).throw(RuntimeError("no ssh in tests")))
+
+
+@pytest.fixture(autouse=True)
+def _tmp(monkeypatch, tmp_path):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr("tempfile.tempdir", None)
+
+
+def _planned(**kw) -> C.Cell:
+    """A planned C-interactive cell: the placement checks run in ``plan``, before the driver's."""
+    return _plan(CIRCUIT, str(SLICE), relation="circuit:gemm-coordinate", **kw)
 
 
 #: The five L40S cells' pair: two containers of one US-TX-4 host (one machine id, CPU and public IP; a 172.24.0.x bridge).
@@ -51,7 +62,7 @@ def _with(**changes) -> dict:
 ])
 def test_a_plan_on_one_machine_is_refused(placement, why):
     with pytest.raises(C.NotSupported, match=why):
-        _cell(placement=placement)
+        _planned(placement=placement)
 
 
 def test_separate_machines_pass():
@@ -68,12 +79,12 @@ def test_without_the_api_a_plan_is_refused(monkeypatch):
     kw = {k: v for k, v in FLOCK.items() if k != "placement"}
     monkeypatch.setattr(PL, "from_runpod", lambda m: (_ for _ in ()).throw(RuntimeError("no RUNPOD_API_KEY")))
     with pytest.raises(C.NotSupported, match="machine identity is unavailable"):
-        C.plan("C-interactive", *BF16, "vy-flock-h100", **kw)
+        C.plan("C-interactive", CIRCUIT, str(SLICE), "vy-flock-h100", relation="circuit:gemm-coordinate", **kw)
     monkeypatch.setattr(PL, "from_runpod", lambda m: CORESIDENT["prover"] if m == "vy-flock-h100" else CORESIDENT["verifier"])
     with pytest.raises(C.NotSupported, match="share machine_id"):
-        C.plan("C-interactive", *BF16, "vy-flock-h100", **kw)
+        C.plan("C-interactive", CIRCUIT, str(SLICE), "vy-flock-h100", relation="circuit:gemm-coordinate", **kw)
     monkeypatch.setattr(PL, "from_runpod", lambda m: SEPARATE["prover"] if m == "vy-flock-h100" else SEPARATE["verifier"])
-    cell = C.plan("C-interactive", *BF16, "vy-flock-h100", **kw)
+    cell = C.plan("C-interactive", CIRCUIT, str(SLICE), "vy-flock-h100", relation="circuit:gemm-coordinate", **kw)
     assert cell.placement["prover"]["machine_id"] == "m-h100" and cell.placement["link"]["peer_ip"] == "10.0.0.2"
 
 
@@ -148,8 +159,13 @@ def probes(monkeypatch):
     return calls
 
 
+def _nat_plan():
+    return _planned(placement=copy.deepcopy(NAT), verifier_addr=NAT["link"]["peer"])
+
+
 def _nat_cell():
-    return _cell(placement=copy.deepcopy(NAT), verifier_addr=NAT["link"]["peer"])
+    """The stored GEMM cell the real runs registered, carrying a plan's placement."""
+    return _cell(placement=_nat_plan().placement, verifier_addr=NAT["link"]["peer"])
 
 
 def _nat_runs(tmp_path, prover=None, verifier=None, mutate=None):
@@ -162,7 +178,7 @@ def _nat_runs(tmp_path, prover=None, verifier=None, mutate=None):
 
 
 def test_a_shared_nat_ip_plan_probes_both_pods_and_records_the_evidence(probes):
-    cell = _nat_cell()
+    cell = _nat_plan()
     assert probes == [("vy-flock-h100", "pod-v.runpod.internal:7400"), ("vy-flock-verifier", None)]
     pl = cell.placement
     assert pl["probed"] is True and pl["shared_public_ip"] is True
@@ -181,7 +197,7 @@ def test_a_shared_nat_ip_plan_probes_both_pods_and_records_the_evidence(probes):
 
 def test_a_shared_nat_ip_that_cannot_be_probed_is_refused():
     with pytest.raises(C.NotSupported, match="could not be probed"):
-        _nat_cell()
+        _nat_plan()
 
 
 def test_a_shared_nat_ip_registers_on_the_runs_own_records(tmp_path, probes):
@@ -236,7 +252,7 @@ def test_a_plan_whose_probe_shows_a_vm_is_refused(monkeypatch):
     vm = {**PROBES["vy-flock-verifier"], "hypervisor": True, "sys_vendor": "QEMU"}
     monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: copy.deepcopy(vm if m == "vy-flock-verifier" else PROBES[m]))
     with pytest.raises(C.NotSupported, match="the verifier pod is a virtual machine"):
-        _nat_cell()
+        _nat_plan()
 
 
 def test_the_probe_reads_the_hypervisor_flag(monkeypatch):
@@ -420,7 +436,7 @@ def test_uuid_the_co_resident_pair_is_refused_without_a_uuid():
 def test_the_co_resident_pair_is_still_refused():
     """Same machine id, CPU and public IP, a docker-bridge link at 0.03 ms (the five L40S cells): refused at plan and on any record."""
     with pytest.raises(C.NotSupported, match="share machine_id m-tx4"):
-        _cell(placement=CORESIDENT)
+        _planned(placement=CORESIDENT)
     bridge = {**CORESIDENT["link"], "rtt": {**RTT, "median_ms": 0.03, "target_ip": "172.24.0.3"}}
     a = PL.assess(CORESIDENT["prover"], CORESIDENT["verifier"], bridge)
     assert a["shared_public_ip"] is True

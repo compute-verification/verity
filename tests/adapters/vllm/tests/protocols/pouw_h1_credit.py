@@ -260,10 +260,10 @@ def _relist(w: Window, value: str, reg: Any, own: int) -> list[dict[str, Any]]:
     return rounds
 
 
-def tampered(w: Window, kind: str, u: int, receipts: Callable[[int], np.ndarray], key: bytes) -> Window:
+def tampered(w: Window, kind: str, u: int, receipts: Callable[[int], np.ndarray], salts: Any) -> Window:
     """``w`` with the prover's tables changed at sampled proof block ``u`` (`NEGATIVES`): ``receipt-word``, its call's receipt table
     with u's first word flipped, re-registered under its nonce and re-listed under its round's root (``receipts(c)`` the
-    call's honest receipt words, ``key`` the run's); ``receipt-word-after-round``, the same table with the round roots
+    call's honest receipt words, ``salts`` the run's `RunSalts`); ``receipt-word-after-round``, the same table with the round roots
     left honest; ``pub-other-root``, its call's public table built under another step's A table of its K;
     ``ok-zero``, the window's ok rows with u's row 0."""
     c, pre = w.call_of(u), w.prefix
@@ -272,7 +272,7 @@ def tampered(w: Window, kind: str, u: int, receipts: Callable[[int], np.ndarray]
         rc = f"{pre}receipt@{c}"
         words = np.array(receipts(c), np.uint16)
         words[t, 0] ^= 1
-        reg = NR.commit(w.program, rc, words, key, SV.RECEIPT_NONCE + c, window=w.window)
+        reg = NR.commit(w.program, rc, words, salts.at(SV.RECEIPT_NONCE + c, len(words)), window=w.window)
         rounds = w.rounds if kind == "receipt-word-after-round" else _relist(
             w, rc, reg, c // (len(w.layout["calls"]) // w.steps))
         return replace(w, tables={**w.tables, rc: reg}, entries=_entry(w, rc, reg), rounds=rounds)
@@ -315,13 +315,13 @@ class _Bcs:
         return self.bc if i == self.u else self.bcs[i]
 
 
-def check(w: Window, units: list[int], operands: Operands, receipts: Callable[[int], np.ndarray], key: bytes,
+def check(w: Window, units: list[int], operands: Operands, receipts: Callable[[int], np.ndarray], salts: Any,
           at: int | None = None) -> dict[str, Any]:
     """`verdict` of the honest window and of each of `NEGATIVES` at sampled proof block ``at`` (default ``units[0]``): ``ok`` when
     the honest window is accepted and every negative refused."""
     honest = verdict(w, units, operands)
     u = units[0] if at is None else at
-    negs = {kind: verdict(tampered(w, kind, u, receipts, key), units, operands) for kind in NEGATIVES}
+    negs = {kind: verdict(tampered(w, kind, u, receipts, salts), units, operands) for kind in NEGATIVES}
     return {"units": list(units), "at": u, "honest": honest, "negatives": negs,
             "ok": bool(honest["accepted"] and all(not v["accepted"] for v in negs.values()))}
 

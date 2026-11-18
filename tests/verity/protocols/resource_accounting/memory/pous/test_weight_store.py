@@ -1,12 +1,13 @@
 """The weight store a serving system's adapter holds (`weight_store`), on its own: its P2 store's package loaded from its
-files, and the decode at use the store's own module builds.  The adapter's option over it is tested in the vLLM adapter
-(`tests/protocols/test_pous_option.py`, `test_pous_refusals.py`)."""
+files, and the decode at use the store's own module builds.  Attached to a served run it is tested in the vLLM adapter
+(`tests/protocols/test_pous_served.py`)."""
 from __future__ import annotations
 
 import importlib
 import sys
 
 import pytest
+
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params

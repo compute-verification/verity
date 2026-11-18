@@ -131,7 +131,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as SV
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -144,9 +144,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    chain_ways, final_hits, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, KEY_BLOCKS, LAYOUTS, PACKED,  # noqa: F401
+                                                    PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
+                                                    chain_ways, final_hits, part, proved_as, template, unit_templates)
 from verity_vllm.pipeline.window_sampling_design import sampling_design_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -770,7 +770,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, idx, window.run), kind="stand-in" if stand_in else "served",
-                   registered=entries, registrar=R)
+                   registered=entries, registrar=DK)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

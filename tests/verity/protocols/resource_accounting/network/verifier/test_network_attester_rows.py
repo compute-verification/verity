@@ -164,7 +164,7 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
     assert (doc["rows"], doc["words"], doc["word_bits"], doc["row_schema"]) == (T, S * B // 2, 16, G.SCHEMA_V2)
     assert doc["wiring"] == cells_.wiring.digest().hex()
     for k, v in [("rows", T - 1), ("cell_bytes", B * 2), ("words", B // 2), ("word_bits", 32),
-                 ("row_schema", G.SCHEMA), ("window", 0), ("direction", "ingress"), ("link", "requests"),
+                 ("row_schema", RV.SCHEMA), ("window", 0), ("direction", "ingress"), ("link", "requests"),
                  ("value", "responses/egress/0"), ("parameters", "00" * 64), ("domain", "00" * 64),
                  ("root", "00" * 64), ("wiring", "00" * 64), ("wiring", "00"), ("format", "x"),
                  ("layout", {**doc["layout"], "first_bucket": 0}), ("layout", {**doc["layout"], "connection_slots": 1})]:
