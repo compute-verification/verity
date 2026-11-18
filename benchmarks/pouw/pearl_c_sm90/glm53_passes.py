@@ -78,7 +78,7 @@ def capture(a) -> int:
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), a.cubin)
-    salt_key = PPD.new_salt_key(a.scheme)
+    salt_key = PPD.no_salt_key(a.scheme)
     roots = PPDR.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
     coins = BA._Coins(EPOCH)
     opening = coins.open("salt", weights_root(roots))

@@ -59,7 +59,7 @@ def capture(args) -> int:
     if bad:
         raise SystemExit(f"{args.scheme} refuses the screen's weights: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    salt_key = PPD.new_salt_key(args.scheme)
+    salt_key = PPD.no_salt_key(args.scheme)
     roots = PPDR.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
     challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))

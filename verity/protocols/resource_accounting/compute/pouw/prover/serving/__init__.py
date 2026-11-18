@@ -98,7 +98,7 @@ _LAZY = {
     "ncp_scheme": (f"{_PROVER}.schemes", "get"),
     "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
     "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
-    "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
+    "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "no_salt_key"),
     "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
     "pearl_c_scheme": (f"{_PROVER}.schemes", "get"),
     "period_reason": (f"{_SERVING}.h1.window", "period_reason"),

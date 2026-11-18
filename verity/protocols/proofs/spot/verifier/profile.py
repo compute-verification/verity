@@ -28,6 +28,10 @@ from verity.circuits.partition import Hierarchy, Level
 #: (a few units in the last place), so the bound is never below the relaxation's exact optimum
 MARGIN = 2.0 ** -30
 
+#: the refusal of a profile whose credited blocks are not each a block of the first level and of every later level
+#: (Lean `Core.Integrity.CREDITED_UNSPLIT`)
+CREDITED_UNSPLIT = "credited-unsplit"
+
 #: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
 #: PoUB's pooled bound
 WINDOW_DELTA = Fraction(1, 2 ** 40)
@@ -121,6 +125,9 @@ class IntegrityProfile:
         `prescribed`  families of `Input` values checked against external sources (e.g. "prompt", "weights", "noise");
         `linked`      every other `Input` equals a committed output of an earlier Program in the transcript;
         `covered`     gate families proved on every audit, outside the samples (their faults survive with probability 0).
+
+    `credited` numbers the blocks a scheme credits among the top level's members; each is a block of every finer level
+    too (Lean `Core.Integrity.creditedProblem`), so every finer size is 1 when any block is credited.
     """
 
     levels: Hierarchy
@@ -132,6 +139,7 @@ class IntegrityProfile:
     linked: bool = field(default=False, kw_only=True)
     covered: frozenset[str] = field(default=frozenset(), kw_only=True)
     drawn: Mapping[str, int] = field(default_factory=dict, kw_only=True, hash=False)
+    credited: frozenset[int] = field(default=frozenset(), kw_only=True)
 
     def __post_init__(self) -> None:
         levels = tuple(Level(x) if isinstance(x, str) else x for x in self.levels)
@@ -171,6 +179,23 @@ class IntegrityProfile:
         object.__setattr__(self, "programs", tuple(self.programs))
         object.__setattr__(self, "prescribed", frozenset(self.prescribed))
         object.__setattr__(self, "covered", frozenset(self.covered))
+        object.__setattr__(self, "credited", frozenset(self.credited))
+        if why := self.credited_problem():
+            raise ValueError(why)
+
+    def credited_problem(self) -> str | None:
+        """Why the credited blocks are not each a block of the top level and of every finer one, else None."""
+        if not self.credited:
+            return None
+        top = self.levels[0]
+        if absent := sorted(c for c in self.credited if not 0 <= c < self.sizes[0]):
+            return (f"{CREDITED_UNSPLIT}: credited block {absent[0]} is not one of level '{top.name}''s "
+                    f"{self.sizes[0]} blocks")
+        for lv, size in zip(self.levels[1:], self.sizes[1:]):
+            if size != 1:
+                return (f"{CREDITED_UNSPLIT}: level '{lv.name}' splits each block of the level above into {size}, "
+                        "the credited ones included")
+        return None
 
     def _index(self, name: str) -> int:
         for i, lv in enumerate(self.levels):
@@ -318,7 +343,8 @@ class IntegrityProfile:
                 "levels": [{"name": lv.name, "query": lv.query, "size": size,
                             "draw": self.draws[lv.name].to_json() if lv.name in self.draws else None}
                            for lv, size in zip(self.levels, self.sizes)],
-                "delta": self.delta, "drawn": dict(self.drawn)}
+                "delta": self.delta, "drawn": dict(self.drawn),
+                **({"credited": sorted(self.credited)} if self.credited else {})}
 
 
 #: `Stratified.harm_bound`'s margin: the risk budget and the result are raised by this relative amount, far above what

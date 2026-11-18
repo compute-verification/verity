@@ -258,7 +258,7 @@ def install(model, args, coins):
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    salt_key = PPD.new_salt_key(scheme)
+    salt_key = PPD.no_salt_key(scheme)
     roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
     tiles, rows = pass_capacity(kernel.run.TILE, [t.shape[0] for t in weights.values()])
     opening = coins.open("salt", weights_root(roots))
