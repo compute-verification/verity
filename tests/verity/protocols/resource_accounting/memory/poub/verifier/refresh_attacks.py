@@ -500,7 +500,7 @@ def laundering(m: int, trials: int, samples: int = SAMPLES) -> Rate:
     how many the verifier catches (`origin-path`), what each uncaught one earns, and the sampling bound beside."""
     caught, free, sample, sizes = 0, [], [], None
     for trial in range(trials):
-        s = Session(samples=samples, coins_label=b"coins %d" % trial)
+        s = Session(samples=samples, coins_label=b"coins of m=%d, trial %d" % (m, trial))
         try:
             drive(s, launder(m))
             s.finish()
