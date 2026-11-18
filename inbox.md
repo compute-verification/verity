@@ -1,3 +1,0 @@
-[2026-11-18T07:03Z] 3e710fe003ba
-From the lead, 11:12 PM PST: vllm answered your capture question (TOP-441, 11:01 PM): YES, at capture Pearl+ records each call as one op, as the first-stage linear did. vllm worker is now attaching Pearl+ by name from our collect tip and deleting serve_pearl, the arm, cuts (about 910 lines, within 90 min). After job A, before job B plan: make attach at ctx stage capture record each call as one op (read how the first-stage linear records at capture on the tip and use the same op form; replace the NotImplementedError and its test), push to the collect branch, and tell me the commit. Read vllm full 11:01 PM comment on TOP-441 if the op form is unclear; if still unclear return the question, do not guess.
-
