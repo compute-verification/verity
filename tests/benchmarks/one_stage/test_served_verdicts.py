@@ -8572,7 +8572,7 @@ def test_the_launcher_takes_the_served_arm_into_the_keep_and_leaves_none_of_it_u
     if kept:
         (sp / "window").mkdir(parents=True)
         (sp / "window" / "registration.json").write_text(json.dumps({"from": "keep"}))
-    env = {"PATH": os.environ["PATH"], "SP": str(sp), "OUT": str(out), "SAY_PY": sys.executable,
+    env = {"PATH": "/usr/bin:/bin", "SP": str(sp), "OUT": str(out), "SAY_PY": sys.executable,
            "SV": str(HERE.parents[2] / "benchmarks" / "one_stage" / "served_verdicts.py")}
     r = subprocess.run(["bash", "-c", block], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stdout + r.stderr
