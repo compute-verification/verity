@@ -80,7 +80,7 @@ REGISTRATION_FORM = ("registration is this registration's circuit, the SHA-512 i
 #: the keys of one-stage v2's parameters that are a window's (`WINDOW_KEYS`, `UNDERIVED_KEYS`)
 AT_A_WINDOW = ["challenger", "window_root", "day", "declarations", "seed_salt"]
 AUDIT_FORM = ("the audit's parameters are one-stage v2's less what a window sets: an object with a log, proofs of exactly "
-              "circuit and registered, and no challenger, window_root, day, declarations or seed_salt")
+              "registered, and no challenger, window_root, day, declarations or seed_salt")
 EVIDENCE_FORM = ("a period's evidence is {pins, windows}: the host's pins log and, for each window in the ledger's order, "
                  "{audits, session}: its challenger session's files and, for each registration the session sampled, "
                  "{evidence, public, registration}")
@@ -122,7 +122,7 @@ def params_refusal(p: Any) -> str | None:
         return REGISTRATION_FORM
     audit = p["audit"]
     if not (isinstance(audit, dict) and isinstance(audit.get("log"), list) and isinstance(audit.get("proofs"), dict)
-            and sorted(audit["proofs"]) == ["circuit", "registered"] and not any(k in audit for k in AT_A_WINDOW)):
+            and sorted(audit["proofs"]) == ["registered"] and not any(k in audit for k in AT_A_WINDOW)):
         return AUDIT_FORM
     return None
 
