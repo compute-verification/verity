@@ -546,6 +546,30 @@ def pieces(ms: Sequence[CS.Member], m: CS.Member, port: str, out: str, writers: 
     return tuple(res)
 
 
+def validate(ms: Sequence[CS.Member]) -> None:
+    """`wiring.validate` over ``ms`` (in root order) as the whole of their templates' units."""
+    n_of: dict[str, int] = {}
+    for m in ms:
+        n_of[m.template] = n_of.get(m.template, 0) + m.n
+    WI.validate(ms, n_of, owns(ms))
+
+
+def writer_units(ms: Sequence[CS.Member], m: CS.Member) -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    """``m``'s wired ports as ``(port, out, the writer units its units read)``, units of ``ms`` by `Member.base` (`pieces`
+    inverted)."""
+    own = owns(ms)
+
+    def unit(t: str, leaf: int) -> int:
+        (x,) = [x for x in ms if x.template == t and own[x.key] <= leaf < own[x.key] + x.n]
+        return x.base + leaf - own[x.key]
+
+    out = []
+    for port in dict.fromkeys(w.port for w in m.wired):
+        ps = [w for w in m.wired if w.port == port]
+        out.append((port, ps[0].out, tuple(unit(ps[0].writer, int(v)) for v in WI.reads(ps, own[m.key], m.n))))
+    return tuple(out)
+
+
 def shared_tables(ms: Sequence[CS.Member]) -> list[CS.Member]:
     """``ms`` with each member whose rows lie in trees others share (`rows.Binding.shared`: wired ports, or a template of
     several members) a shared-row member: a wired port's table the leaves its units read (`wiring.table`), any other
@@ -565,18 +589,31 @@ def shared_tables(ms: Sequence[CS.Member]) -> list[CS.Member]:
     return out
 
 
-def held_rows(window: CS.Binding, data: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """``data`` (each member's rows as read, `rows.commit`'s) with each wired port given as `rows.WIRED` and each
-    shared-row member's ``refs`` its wired ports' (`rows.Binding.refs`) beside the refs it was read with; refused where a
-    wired port's rows as read are not the leaves of its writer's tree its units read (`rows.Binding.reads`)."""
+def check_held(ms: Sequence[CS.Member], data: Sequence[dict[str, Any]]) -> None:
+    """Refused where a wired port's rows as read (``data``, each member's, `rows.commit`'s) are not the leaves of its
+    writer's tree its units read (``ms`` in root order)."""
     trees: dict[tuple[str, str], np.ndarray] = {}
+    own = owns(ms)
 
     def tree(t: str, o: str) -> np.ndarray:
         if (t, o) not in trees:
-            trees[t, o] = np.concatenate([np.asarray(d["outs"][o]) for wm, d in zip(window.members, data, strict=True)
-                                          if wm.template == t])
+            trees[t, o] = np.concatenate([np.asarray(d["outs"][o]) for wm, d in zip(ms, data, strict=True) if wm.template == t])
         return trees[t, o]
 
+    for m, d in zip(ms, data, strict=True):
+        for p in dict.fromkeys(w.port for w in m.wired):
+            ps = [w for w in m.wired if w.port == p]
+            rows = d["rows"].get(p)
+            if rows is not None and not np.array_equal(rows, tree(ps[0].writer, ps[0].out)[WI.reads(ps, own[m.key], m.n)]):
+                raise ValueError(f"{m.key}: its {p!r} rows are not the {ps[0].out!r} rows of the {ps[0].writer} units that "
+                                 "write them")
+
+
+def held_rows(window: CS.Binding, data: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``data`` (each member's rows as read, `rows.commit`'s) with each wired port given as `rows.WIRED` and each
+    shared-row member's ``refs`` its wired ports' (`rows.Binding.refs`) beside the refs it was read with; refused where
+    `check_held` refuses."""
+    check_held(window.members, data)
     out = []
     for m, d in zip(window.members, data, strict=True):
         if not m.tables:
@@ -585,9 +622,6 @@ def held_rows(window: CS.Binding, data: Sequence[dict[str, Any]]) -> list[dict[s
         rows, names = dict(d["rows"]), [p for p, _w in m.rows]
         refs = np.array(d["refs"], dtype=np.int64) if "refs" in d else np.repeat(np.arange(m.n)[:, None], len(names), axis=1)
         for p in dict.fromkeys(w.port for w in m.wired):
-            w = window.wire(m, p)
-            if rows[p] is not None and not np.array_equal(rows[p], tree(w.writer, w.out)[window.reads(m, p)]):
-                raise ValueError(f"{m.key}: its {p!r} rows are not the {w.out!r} rows of the {w.writer} units that write them")
             rows[p], refs[:, names.index(p)] = CS.WIRED, window.refs(m, p)
         out.append({**d, "rows": rows, "refs": refs})
     return out
