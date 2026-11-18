@@ -11,6 +11,7 @@ import json
 
 import numpy as np
 import pytest
+from verity.commitments import domains as DM
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
@@ -41,7 +42,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     rec = json.loads((wdir / "registration.json").read_text())
     heads = HEADS
     w = rec["window"]
-    assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, R.FORMAT, "stand-in", c["run_root"])
+    assert (win["population"], rec["format"], w["kind"], w["run"]) == (heads, DM.REGISTRATION_V1, "stand-in", c["run_root"])
     man = RB.open_bundle(RB.path(c["out"], 1))["manifest_sha256"]
     assert w["of"] == {"commitment": step_rows.NAME, "run_root": c["run_root"], "bundle_manifest_sha256": man, "rows": DRW.ROWS}
     assert w["link"] == DRW.link(step_rows.NAME) and w["committer"]["from"] == "replay bundle" and w["row"] == "rope-d64-cpu"
@@ -181,5 +182,5 @@ def test_the_command_writes_the_window(tmp_path):
                                    "--out", str(tmp_path / "w"), "--workers", "1"])
     assert DRW.main(o) == 0
     win = json.loads((tmp_path / "w" / "window.json").read_text())
-    assert win["registration"] == R.FORMAT and win["run"] == c["run_root"]
+    assert win["registration"] == DM.REGISTRATION_V1 and win["run"] == c["run_root"]
     assert json.loads((tmp_path / "w" / "partition.json").read_text())["partition_digest"] == win["partition_digest"]

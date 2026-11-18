@@ -67,7 +67,7 @@ theorem m_sub_le {sts : Array Stmt} (hm : ∀ st ∈ sts.toList, st.m ≤ 35) {q
   omega
 
 /-- **At most `22` outer coins per rep** of the inner session, two reps per table, at tables of `m ≤ 35`. -/
-theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+theorem outerSlots_length_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupOf false x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (FlockComplete.outerSlots x).length ≤ 2 * sts.size * 22 := by
   unfold FlockComplete.outerSlots
@@ -75,27 +75,27 @@ theorem outerSlots_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {st
   exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
 
 /-- **At most `22` outer coins per rep** of a V* session, at tables of `m ≤ 35`. -/
-theorem outerSlotsO_length_le {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+theorem outerSlotsO_length_le {x : Hash.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
     (outerSlotsO x).length ≤ 2 * sts.size * 22 := by
   unfold outerSlotsO
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q hq => by simpa using m_sub_le hm hq
 
-theorem rhoSlotsO_length_le {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+theorem rhoSlotsO_length_le {x : Hash.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO x = some (s, spec, sts)) : (rhoSlotsO x).length ≤ 2 * sts.size * 1 := by
   unfold rhoSlotsO
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
 
-theorem betaSlotsO_length_le {x : Claims.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+theorem betaSlotsO_length_le {x : Hash.Msg} {s : RecIns} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupO x = some (s, spec, sts)) : (betaSlotsO x).length ≤ 2 * sts.size * 1 := by
   unfold betaSlotsO
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
 
 /-- A V* statement the masked verifier can accept sets up at one table. -/
-theorem setupO_of_readyO {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : readyO H x = true) :
+theorem setupO_of_readyO {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} (h : readyO H x = true) :
     ∃ s spec sts, setupO x = some (s, spec, sts) ∧ sts.size = 1 := by
   unfold readyO at h
   split at h
@@ -106,7 +106,7 @@ theorem setupO_of_readyO {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (h : r
 
 /-- **The inner session's error**: at most `44` outer coins per table over `2^128`, at a session the numbers are
 stated at. -/
-theorem ε_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
+theorem ε_le {x : Hash.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (hin : PlainIn x s spec sts) :
     FlockComplete.ε x ≤ 44 * sts.size / 2 ^ 128 := by
   have hlen := outerSlots_length_le hin.setup fun st hst => (hin.tab st hst).2.1
   rw [FlockComplete.ε]
@@ -115,7 +115,7 @@ theorem ε_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
 
 /-- **A V\* session's error**: `44` outer coins, two `β`s and two pairs counted twice, over `2^128`, at a V* statement
 the masked verifier can accept, of tables at `m ≤ 35`. -/
-theorem εO_le {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (hr : readyO H x = true)
+theorem εO_le {H : Hash.Msg → Hash.Msg} {x : Hash.Msg} (hr : readyO H x = true)
     (hm : ∀ s spec sts, setupO x = some (s, spec, sts) → ∀ st ∈ sts.toList, st.m ≤ 35) :
     εO x ≤ 50 / 2 ^ 128 := by
   obtain ⟨s, spec, sts, hs, h1⟩ := setupO_of_readyO hr
@@ -132,7 +132,7 @@ theorem εO_le {H : Claims.Msg → Claims.Msg} {x : Claims.Msg} (hr : readyO H x
 
 /-- **The compiled verifier's error, bounded**: where it can accept, at an inner session the numbers are stated at and
 V* statements of tables at `m ≤ 35`, at most `44` coins per inner table and `50` per V* session, over `2^128`. -/
-theorem δcRec_le (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem δcRec_le (st : Stage) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hin : PlainIn (xIOf x) s spec sts) (hready : readyRec st H x = true)
     (hm : ∀ j < nS x, ∀ s' spec' sts', setupO (staged st x (pick st x j) j) = some (s', spec', sts') →
       ∀ t ∈ sts'.toList, t.m ≤ 35) :
@@ -154,7 +154,7 @@ theorem δcRec_le (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} 
 
 /-- **The compiled verifier's error is below `1`** where it can accept, at an inner session the numbers are stated at,
 V* statements of tables at `m ≤ 35`, and at most `2^64` parts. -/
-theorem δcRec_lt_one (st : Stage) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
+theorem δcRec_lt_one (st : Stage) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hin : PlainIn (xIOf x) s spec sts) (hready : readyRec st H x = true)
     (hm : ∀ j < nS x, ∀ s' spec' sts', setupO (staged st x (pick st x j) j) = some (s', spec', sts') →
       ∀ t ∈ sts'.toList, t.m ≤ 35) (hn : nS x ≤ 2 ^ 64) :

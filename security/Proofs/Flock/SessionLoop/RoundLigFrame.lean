@@ -68,7 +68,7 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
       (∀ a (ha : a < cs.length), cs[a] = Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) (base + a)) ∧
       base + (xs.size + 2) + 1 = Masked.repSlot x (2 * j.val + r.val) (fun _ => 0) ∧
       ∀ coin : ℕ → ℕ → F128, FlockComplete.LigLock.Fed.CoinAt coin base cs →
-        ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : _root_.Flock.Transcript) (l₂ L : Array Claims.Msg),
+        ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : _root_.Flock.Transcript) (l₂ L : Array Hash.Msg),
           l₂.size = base + (xs.size + 2) + 1 ∧
           (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt tb.st.m tb.st.fold.kLog
               (FlockComplete.LigLock.Fed.recCoin algC) 0 zc lc ∧
@@ -423,7 +423,7 @@ theorem release_lig_frame (L₀ : LeanRelease Flock.Wit Loop.Tp)
       (∀ a (ha : a < cs.length), cs[a] = Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) (base + a)) ∧
       base + (xs.size + 2) + 1 = Masked.repSlot x (2 * j.val + r.val) (fun _ => 0) ∧
       ∀ coin : ℕ → ℕ → F128, FlockComplete.LigLock.Fed.CoinAt coin base cs →
-        ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : _root_.Flock.Transcript) (l₂ L : Array Claims.Msg),
+        ∃ (T : F128) (sws : Array _root_.Flock.Switched) (tr₂ : _root_.Flock.Transcript) (l₂ L : Array Hash.Msg),
           l₂.size = base + (xs.size + 2) + 1 ∧
           (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt tb.st.m tb.st.fold.kLog
               (FlockComplete.LigLock.Fed.recCoin algC) 0 zc lc ∧

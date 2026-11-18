@@ -105,7 +105,7 @@ theorem lcZ_round1 {lay lay' : Zk.PadLayout} {hz hz' : Array F128} {c : CircuitF
 
 /-- **Rounds recorded from send `i` on carry their sends' coins as claim points**, where they reach the points'
 `m + k_log − 6` rounds and round `1` holds `m − 13` coins. -/
-theorem roundPoints_recs {resp : ℕ → Claims.Msg} {m kLog i : ℕ} {R : Array Round} {bs : List Claims.Msg}
+theorem roundPoints_recs {resp : ℕ → Hash.Msg} {m kLog i : ℕ} {R : Array Round} {bs : List Hash.Msg}
     (hm : 14 ≤ m) (hk : 6 ≤ kLog) (hrec : Recs resp i R.toList bs) (hsz : m + kLog - 6 ≤ R.size)
     (h1 : R[1]!.n = m - 13) :
     MaskRank.roundPoints m kLog R = MaskRank.claimPoints m kLog fun j e => coinOf (resp (i + j)) e := by
@@ -127,11 +127,11 @@ theorem roundPoints_recs {resp : ℕ → Claims.Msg} {m kLog i : ℕ} {R : Array
 /-- **A masked rep's rank check, from its first send `l`**: the rep stopped within its zerocheck's and lincheck's
 `m + k_log − 6` sends, or its rank check passed at the claim points of its sends' coins: the rounds through the
 lincheck are its sends there (`zerocheckPZk_rec`, `lincheckPZk_rec`), round `1` the zerocheck's outer coins. -/
-theorem repPZk_rank_cases (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_rank_cases (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
-    (hfk : st.fold.kLog = st.kLog) {l L : Array Claims.Msg} {R : Except String (Zk.ZkProof × Transcript)}
+    (hfk : st.fold.kLog = st.kLog) {l L : Array Hash.Msg} {R : Except String (Zk.ZkProof × Transcript)}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run (Transcript.init #[] dom)).go l = (R, L)) :
     ((∃ e, R = .error e) ∧ L.size ≤ l.size + (st.m + st.kLog - 6)) ∨
@@ -179,11 +179,11 @@ theorem repPZk_rank_cases (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteA
 
 /-- **A returning masked rep's rank check read its claim points at its sends' coins**, from its first send `l`
 (`repPZk_rank_cases`). -/
-theorem repPZk_rank (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_rank (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
-    (hfk : st.fold.kLog = st.kLog) {l l' : Array Claims.Msg} {P : Zk.ZkProof} {t' : Transcript}
+    (hfk : st.fold.kLog = st.kLog) {l l' : Array Hash.Msg} {P : Zk.ZkProof} {t' : Transcript}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run (Transcript.init #[] dom)).go l = (.ok (P, t'), l')) :
     MaskRank.maskRankOk (prior ++ MaskRank.claimPoints st.m st.kLog fun j e => coinOf (resp (l.size + j)) e)
@@ -195,11 +195,11 @@ theorem repPZk_rank (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) 
 
 /-- **At claim points of less than full rank a masked rep stops within `m + k_log − 6` sends**, its rank check's
 (`repPZk_rank_cases`). -/
-theorem repPZk_rank_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_rank_stop (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
-    (hfk : st.fold.kLog = st.kLog) {l L : Array Claims.Msg} {R : Except String (Zk.ZkProof × Transcript)}
+    (hfk : st.fold.kLog = st.kLog) {l L : Array Hash.Msg} {R : Except String (Zk.ZkProof × Transcript)}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run (Transcript.init #[] dom)).go l = (R, L))
     (hbad : MaskRank.maskRankOk (prior ++ MaskRank.claimPoints st.m st.kLog fun j e => coinOf (resp (l.size + j)) e)
@@ -213,11 +213,11 @@ theorem repPZk_rank_stop (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteAr
 
 /-- **A returning masked rep's rounds carry its sends' coins as claim points**, from its first send `l`
 (`repPZk_rec`), where it sent at least the points' `m + k_log − 6` rounds. -/
-theorem repPZk_points (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_points (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hk : 6 ≤ st.kLog)
-    {l l' : Array Claims.Msg} {P : Zk.ZkProof} {t' : Transcript}
+    {l l' : Array Hash.Msg} {P : Zk.ZkProof} {t' : Transcript}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run (Transcript.init #[] dom)).go l = (.ok (P, t'), l'))
     (hsz : l.size + (st.m + st.kLog - 6) ≤ l'.size) :
@@ -235,13 +235,13 @@ theorem repPZk_points (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray
 /-! ## The session -/
 
 /-- **Table `i`'s claim points at the replies from send `repStartZk n`.** -/
-def ptsAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (i n : ℕ) : Array (List F128) :=
+def ptsAt (resp : ℕ → Hash.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (i n : ℕ) : Array (List F128) :=
   MaskRank.claimPoints sts[i]!.m sts[i]!.c.kLog fun j e => coinOf (resp (repStartZk spec sts n + j)) e
 
 /-- **Rep `q` passed its refusals at its slots**: at its table's `--zk` schedule, level 0's pair coins (`rhoSlotsZk`'s
 slot and the next) are independent and its inner `β` (`betaSlotsZk`'s slot) is not `0`; and its rank check passed, at
 its claim points from its first send (`ptsAt`), after rep `q − 1`'s at rep `1`, over its table's `words`. -/
-def PassAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (words : Array (List ℕ))
+def PassAt (resp : ℕ → Hash.Msg) (spec : SessionSpec) (sts : Array Flock.Stmt) (words : Array (List ℕ))
     (q : ℕ) : Prop :=
   (∀ v : Schedule × ℕ, Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v →
     Zk.rhoIndependent (coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2))),
@@ -254,12 +254,12 @@ def PassAt (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Flock.S
 /-- **Rep `q`'s run from its first send**: at its table's `--zk` schedule `v` and `points · |regions|` extra claims,
 from send `repStartZk q`, after rep `q − 1`'s claim points at rep `1` (`ptsAt`), over its table's `words`, ending at
 `(R, L)`. -/
-def RepRanAt (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec) (sts : Array Flock.Stmt)
-    (words : Array (List ℕ)) (q : ℕ) (R : Except String (Zk.ZkProof × Transcript)) (L : Array Claims.Msg) :
+def RepRanAt (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec) (sts : Array Flock.Stmt)
+    (words : Array (List ℕ)) (q : ℕ) (R : Except String (Zk.ZkProof × Transcript)) (L : Array Hash.Msg) :
     Prop :=
   ∃ (v : Schedule × ℕ) (extras : Array Claim) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
-    (nonce : ℕ → ℕ → UInt64) (l : Array Claims.Msg),
+    (nonce : ℕ → ℕ → UInt64) (l : Array Hash.Msg),
     Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v ∧ extras.size = spec.points * sts[q / 2]!.regions.size ∧
       l.size = repStartZk spec sts q ∧
       ((repPZk (asksS resp) (Hashes.ofSha512 hsh) (Setup.ofCircuit sts[q / 2]!) v.1 v.2 (q % 2) dom tr tb cm0
@@ -269,10 +269,10 @@ def RepRanAt (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec :
 /-- A `for` loop over a list, from position `k` of `s`, that ends at `(R, L)`, its every returning step keeping
 `inv`: it returned with `inv` past its last element, or some step, from a state and sends with `inv` at its position,
 stopped there with `R` its error. -/
-theorem forIn_list_reach {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Claims.Msg → Prop)
+theorem forIn_list_reach {α β : Type} (f : α → β → PS (ForInStep β)) (inv : ℕ → β → Array Hash.Msg → Prop)
     (s : List α) (hs : ∀ k a b l r l', s[k]? = some a → inv k b l → (f a b).go l = (.ok r, l') →
       ∃ b', r = .yield b' ∧ inv (k + 1) b' l') :
-    ∀ (xs : List α) (k : ℕ), s.drop k = xs → ∀ (b : β) (l L : Array Claims.Msg) (R : Except String β), inv k b l →
+    ∀ (xs : List α) (k : ℕ), s.drop k = xs → ∀ (b : β) (l L : Array Hash.Msg) (R : Except String β), inv k b l →
       (forIn xs b f).go l = (R, L) →
       (∃ b', R = .ok b' ∧ inv (k + xs.length) b' L) ∨
         ∃ k' a b₁ l₁ e, s[k']? = some a ∧ inv k' b₁ l₁ ∧ (f a b₁).go l₁ = (.error e, L) ∧ R = .error e
@@ -301,9 +301,9 @@ theorem forIn_list_reach {α β : Type} (f : α → β → PS (ForInStep β)) (i
 the loop returned with `inv` at the array's size and the rest ended there, or some step, from a state and sends with
 `inv` at its index, stopped with `R` its error. -/
 theorem forIn_array_bind_reach {α β γ : Type} (xs : Array α) (f : α → β → PS (ForInStep β)) (g : β → PS γ)
-    (inv : ℕ → β → Array Claims.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
+    (inv : ℕ → β → Array Hash.Msg → Prop) (hs : ∀ k a b l r l', xs[k]? = some a → inv k b l →
       (f a b).go l = (.ok r, l') → ∃ b', r = .yield b' ∧ inv (k + 1) b' l')
-    {b : β} {l L : Array Claims.Msg} {R : Except String γ} (h0 : inv 0 b l)
+    {b : β} {l L : Array Hash.Msg} {R : Except String γ} (h0 : inv 0 b l)
     (e : (forIn xs b f >>= g).go l = (R, L)) :
     (∃ b' l', inv xs.size b' l' ∧ (g b').go l' = (R, L)) ∨
       ∃ k a b₁ l₁ e', xs[k]? = some a ∧ inv k b₁ l₁ ∧ (f a b₁).go l₁ = (.error e', L) ∧ R = .error e' := by
@@ -327,10 +327,10 @@ theorem forIn_array_bind_reach {α β γ : Type} (xs : Array α) (f : α → β 
 passed its refusals at its slots (`PassAt`), or the session stopped after reps `< k` passed theirs, either within rep
 `k`'s first `repStartZk k` sends or in rep `k`'s run (`RepRanAt`). Each rep that returns sent exactly its `repRounds`
 (`repPZk_exact`), so the next starts where `repStartZk` says. -/
-theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_reach (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
-    {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
+    {R : Except String (String × Array ByteArray)} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (R, L)) :
     (∀ q < 2 * sts.size, PassAt resp spec sts words q) ∨
       (∃ e, R = .error e) ∧ ∃ k, (∀ q < k, PassAt resp spec sts words q) ∧
@@ -367,7 +367,7 @@ theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   rw [link_go] at hL
   simp only [Prod.mk.injEq, Except.ok.injEq, Array.size_empty] at hL
   obtain ⟨rfl, rfl⟩ := hL
-  have hF := forIn_array_bind_reach _ _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Claims.Msg) =>
+  have hF := forIn_array_bind_reach _ _ _ (fun k (b : Array (Array Round) × Array ByteArray) (l : Array Hash.Msg) =>
       l.size = repStartZk spec sts k ∧
         (k % 2 = 1 → MaskRank.roundPoints sts[k / 2]!.m sts[k / 2]!.c.kLog b.1.back! =
           ptsAt resp spec sts (k / 2) (k - 1)) ∧ ∀ q < k, PassAt resp spec sts words q)
@@ -489,10 +489,10 @@ theorem sessionPZk_reach (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
 
 /-- **A masked session that returns passed every rep's refusals at their slots** (`PassAt`), at tables of `14 ≤ m`
 and `6 ≤ k_log`, one spec table per statement (`sessionPZk_reach`). -/
-theorem sessionPZk_pass (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_pass (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] =
       (.ok r, bodies)) :
     ∀ q < 2 * sts.size, PassAt resp spec sts words q := by
@@ -501,10 +501,10 @@ theorem sessionPZk_pass (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray
   · cases he
 
 /-- **A rep's run sends at most its `repRounds`** (`repPZk_sends`), so it ends by the next rep's first send. -/
-theorem repRanAt_sends (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec)
+theorem repRanAt_sends (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ))
     (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog) {k : ℕ} (hk : k < 2 * sts.size)
-    {R : Except String (Zk.ZkProof × Transcript)} {L : Array Claims.Msg}
+    {R : Except String (Zk.ZkProof × Transcript)} {L : Array Hash.Msg}
     (h : RepRanAt resp hsh spec sts words k R L) : L.size ≤ repStartZk spec sts (k + 1) := by
   obtain ⟨v, extras, dom, tr, tb, cm0, pads, ic, extra, lanePad, salt, nonce, l, hz, hx, hl, hrun⟩ := h
   have hs := sends_le (repPZk_sends resp hsh _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hrun
@@ -524,12 +524,12 @@ theorem repRanAt_sends (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArra
 /-- **A masked session stops at a rep that refuses**: where rep `q` does not pass its refusals (`¬ PassAt q`) and its
 run, wherever it stops, stops within `n` sends of its first, the session stops within those sends. An earlier rep
 that stops stops before rep `q`'s first send (`repRanAt_sends`); a later one is not reached. -/
-theorem sessionPZk_stops (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_stops (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
     {q n : ℕ} (hq : q < 2 * sts.size) (hp : ¬ PassAt resp spec sts words q)
     (hstop : ∀ e L, RepRanAt resp h spec sts words q (.error e) L → L.size ≤ repStartZk spec sts q + n)
-    {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
+    {R : Except String (String × Array ByteArray)} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (R, L)) :
     (∃ e, R = .error e) ∧ L.size ≤ repStartZk spec sts q + n := by
   rcases sessionPZk_reach resp h spec sts words trs tape hspec hsts hrun with hall | ⟨hR, k, hpk, hL⟩
@@ -556,13 +556,13 @@ theorem piopZk_ofCircuit {spec : SessionSpec} {st : Flock.Stmt} {extras : Array 
 
 /-- **At a dependent pair the masked session stops within rep `q`'s `piopRoundsZk + k_0 + 4` sends**: its pair
 coins are the replies at `rhoSlotsZk`'s slot and the next (`repPZk_rho_stop`). -/
-theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_rho_stop (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
     {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v)
     (hbad : Zk.rhoIndependent (coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2))),
       coinKOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 2) + 1))) = false)
-    {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
+    {R : Except String (String × Array ByteArray)} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (R, L)) :
     (∃ e, R = .error e) ∧ L.size ≤ repStartZk spec sts q + (piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 4)) := by
   refine sessionPZk_stops resp h spec sts words trs tape hspec hsts hq (fun hp => ?_) (fun e L hran => ?_) hrun
@@ -591,13 +591,13 @@ theorem sessionPZk_rho_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
 
 /-- **At `β = 0` the masked session stops within rep `q`'s `piopRoundsZk + (k_0 + 7 + 11 R) + 3` sends**: its `β` is
 the reply at `betaSlotsZk`'s slot (`repPZk_beta_stop`). -/
-theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_beta_stop (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
     {q : ℕ} (hq : q < 2 * sts.size) {v : Schedule × ℕ} (hz : Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok v)
     (hbad : (coinOf (resp (repStartZk spec sts q + piopRoundsZk spec sts[q / 2]! +
       (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 2)) 0).isZero = true)
-    {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
+    {R : Except String (String × Array ByteArray)} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (R, L)) :
     (∃ e, R = .error e) ∧ L.size ≤ repStartZk spec sts q +
       (piopRoundsZk spec sts[q / 2]! + (v.1.k0 + 7 + 11 * (v.1.levels.size - 1)) + 3) := by
@@ -622,13 +622,13 @@ theorem sessionPZk_beta_stop (resp : ℕ → Claims.Msg) (h : ByteArray → Byte
 
 /-- **At claim points of less than full rank the masked session stops within rep `q`'s `m + k_log − 6` sends**: its
 rank check, after rep `q − 1`'s points at rep `1`, reads the replies from its first send (`repPZk_rank_stop`). -/
-theorem sessionPZk_rank_stop (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
+theorem sessionPZk_rank_stop (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (spec : SessionSpec)
     (sts : Array Flock.Stmt) (words : Array (List ℕ)) (trs : Array Trace) (tape : TapeZk)
     (hspec : spec.tables.size = sts.size) (hsts : ∀ j (hj : j < sts.size), 14 ≤ sts[j].m ∧ 6 ≤ sts[j].c.kLog)
     {q : ℕ} (hq : q < 2 * sts.size)
     (hbad : MaskRank.maskRankOk ((if q % 2 = 1 then ptsAt resp spec sts (q / 2) (q - 1) else #[]) ++
       ptsAt resp spec sts (q / 2) q) words[q / 2]! = false)
-    {R : Except String (String × Array ByteArray)} {L : Array Claims.Msg}
+    {R : Except String (String × Array ByteArray)} {L : Array Hash.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape).go #[] = (R, L)) :
     (∃ e, R = .error e) ∧ L.size ≤ repStartZk spec sts q + (sts[q / 2]!.m + sts[q / 2]!.c.kLog - 6) := by
   refine sessionPZk_stops resp h spec sts words trs tape hspec hsts hq (fun hp => ?_) (fun e L hran => ?_) hrun

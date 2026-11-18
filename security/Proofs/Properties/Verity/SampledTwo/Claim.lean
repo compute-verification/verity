@@ -38,13 +38,13 @@ variable {ι : Type} {d : ResourceAccounting.Device ι} {α : Type} [Fintype α]
 
 /-- **Replay block `ρ` is correct at the witness `w`**: at some interiors, no cell of `ρ` in a stratum of `Pt` has an
 incorrect proof block. -/
-def ReplayCorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
+def ReplayCorrect (H : Hash.Msg → Hash.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) (ρ : ℕ) : Prop :=
   ∃ ιρ : ℕ → Bool, ∀ t < Pt.strata.length, Claims.Sampling.incorrectIn H Cm s Pt dd.part w ρ t ιρ = ∅
 
 open Classical in
 /-- **The replay blocks not correct at `w`**. -/
-noncomputable def incorrectReplay (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
+noncomputable def incorrectReplay (H : Hash.Msg → Hash.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) : Finset ℕ :=
   (Finset.range dd.part.blocks.length).filter fun ρ => ¬ ReplayCorrect H Cm s Pt dd w ρ
 
@@ -54,7 +54,7 @@ def CapsAt (dd : Claims.Sampling.Design.Two) (Pt : Claims.Sampling.Partition) (m
   ∀ fp : ℕ → ℕ → ℕ, m < ((dd.incorrectBlocks Pt fp).card : ℝ) → dd.Pa Pt fp ≤ δ
 
 /-- Every replay block not correct at `w` is one the footprint at any interiors marks incorrect. -/
-theorem incorrectReplay_subset (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
+theorem incorrectReplay_subset (H : Hash.Msg → Hash.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition)
     (dd : Claims.Sampling.Design.Two) (w : Claims.Sampling.Wit) (ι' : ℕ → ℕ → Bool) :
     incorrectReplay H Cm s Pt dd w ⊆ dd.incorrectBlocks Pt (Claims.Sampling.footprint H Cm s Pt dd.part w ι') := by
   classical
@@ -72,8 +72,8 @@ theorem incorrectReplay_subset (H : Claims.Msg → Claims.Msg) (Cm : Claims.Samp
 
 /-- **The relation fails past the cap**: where the design caps `m` replay blocks at `δ`, a witness with more than `m`
 replay blocks not correct is not in the two-stage relation at `δ`. -/
-theorem not_rTwo_of_incorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)
-    (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ m : ℝ) (x : Claims.Msg)
+theorem not_rTwo_of_incorrect (H : Hash.Msg → Hash.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Hash.Msg → Option Claims.Sampling.AuditStatement)
+    (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ m : ℝ) (x : Hash.Msg)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two) (hs : parse x = some s) (hP : partition s = some Pt)
     (hd : two s = some dd) (hcap : CapsAt dd Pt m δ) (w : Claims.Sampling.Wit)
     (hw : m < ((incorrectReplay H Cm s Pt dd w).card : ℝ)) :
@@ -95,7 +95,7 @@ theorem not_rTwo_of_incorrect (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampl
 /-- **The vocabulary's units are the replay blocks** at the statement `s`, its partitions and the reading `readX` of a
 witness as the vocabulary's transcript: a bijection of the units with the replay blocks under which each unit unbound
 in a witness's transcript is a replay block not correct at it. The instance owes it at the two-stage parameters. -/
-def UnitsAreReplay (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Claims.Msg → Claims.Msg)
+def UnitsAreReplay (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Hash.Msg → Hash.Msg)
     (Cm : Claims.Sampling.CommitmentScheme Bool) (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) : Prop :=
   ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Claims.Sampling.Wit) (u : Fin (V.units θ F)),
@@ -103,9 +103,9 @@ def UnitsAreReplay (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : 
 
 /-- **The claim holds on a witness the relation takes**: where the units are the replay blocks and the design caps the
 claim's share `ε · n` at `δ`, a witness in the two-stage relation at `δ` makes the claim hold on its transcript. -/
-theorem holds_of_rTwo (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Claims.Msg → Claims.Msg)
-    (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Claims.Msg → Option Claims.Sampling.AuditStatement)
-    (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ : ℝ) (x : Claims.Msg)
+theorem holds_of_rTwo (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (H : Hash.Msg → Hash.Msg)
+    (Cm : Claims.Sampling.CommitmentScheme Bool) (parse : Hash.Msg → Option Claims.Sampling.AuditStatement)
+    (partition : Claims.Sampling.AuditStatement → Option Claims.Sampling.Partition) (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two) (δ : ℝ) (x : Hash.Msg)
     (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition) (dd : Claims.Sampling.Design.Two) (hs : parse x = some s) (hP : partition s = some Pt)
     (hd : two s = some dd) (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (hU : UnitsAreReplay V θ F c H Cm s Pt dd readX)

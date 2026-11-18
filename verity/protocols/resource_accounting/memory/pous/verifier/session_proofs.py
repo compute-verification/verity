@@ -125,8 +125,8 @@ def link_reasons(commitment: mc.SessionCommitment, proofs: SessionProofs) -> tup
     reasons: list[str] = []
     k, d, t = commitment.k, proofs.digest.rows, _rows(commitment.k)
     if len(proofs.rounds) != k or len(d) != 4 + 2 * t or len(proofs.signature.rows) != 4:
-        return (f"the session's proofs are not one signature's, one signed digest's over {_rows(k)} records rows and "
-                f"{k} rounds'",)
+        return ((f"the session's proofs are not one signature's, one signed digest's over {_rows(k)} records rows and "
+                 f"{k} rounds'"),)
     if proofs.signature.rows[1] != d[3 + t]:
         reasons.append("the signed message is not the signed digest's")
     for j, out in enumerate(proofs.rounds):

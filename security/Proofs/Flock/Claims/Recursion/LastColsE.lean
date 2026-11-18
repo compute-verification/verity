@@ -69,7 +69,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- `streams_coins_eq` at `verifyWithMK keep` and `keep'`. -/
 theorem streams_coins_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec}
     {sts : Array Stmt} {record record' : String} {proofs proofs' : Array ByteArray} {lv lv' : Live}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Hash.Msg × Coin)}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithMK keep' hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ()) :
@@ -136,9 +136,9 @@ theorem rawCols_keysK (keep keep' : Bool → Bool) {hs hs' : Hashes Flock.V} {se
 
 /-- `plain_opening_at` at the element-level verdict: an element-level decision's reps open a column only as a Merkle
 opening of table 0's level 0 within the calls `L` its verdict ran in. -/
-theorem plainE_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claims.Msg × Claims.Msg)} {s : Ins}
+theorem plainE_opening_at {x : Hash.Msg} {seen : Claims.Seen} {L : List (Hash.Msg × Hash.Msg)} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
+    {mids : List (Hash.Msg × Coin)} {f : Final} (hs : setupOf false x = some (s, spec, sts))
     (hf : lastFinal seen = some f) (hc : checks false s spec x link c₁ mids f = .ok ())
     (hv : verifyWithME (hashesIn (L.map Prod.fst)) spec (tabsOf sts) f.record f.proofs = .ok ())
     {q : ℕ} {u : List 𝔽} (hu : (q, u) ∈ plainRawCols seen) :
@@ -238,7 +238,7 @@ theorem plainE_opening_at {x : Claims.Msg} {seen : Claims.Seen} {L : List (Claim
 
 /-- **Two last messages the element-level verifier accepts after the same rounds and coins, that differ in table 0's
 opened columns, collide among the two decisions' calls**, at SHA-512 (`plain_cols_tied` at `nextE`). -/
-theorem plainE_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plainE_cols_tied {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((nextE x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((nextE x (ms ++ [l']) cs).eval sha512).1 = .acc)
@@ -277,7 +277,7 @@ theorem plainE_cols_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.
   have hw' := verdictE_within hvr'
   generalize hL₁ : ((nextE x (b :: ms'' ++ [l]) cs).eval sha512).2 = L₁ at hw ⊢
   generalize hL₂ : ((nextE x (b :: ms'' ++ [l']) cs).eval sha512).2 = L₂ at hw' ⊢
-  have hmsg : ∀ l₀ : Claims.Msg,
+  have hmsg : ∀ l₀ : Hash.Msg,
       (RecDeploy.plainView (b :: ms'' ++ [l₀]) cs).msgs.map Prod.fst = b :: ms'' ++ [l₀] := by
     intro l₀
     unfold RecDeploy.plainView

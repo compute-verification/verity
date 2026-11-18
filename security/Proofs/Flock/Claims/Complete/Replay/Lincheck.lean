@@ -127,7 +127,7 @@ def tEnd (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F12
   afterSq (t₄ c m tr zc full cs t) 1 1 cs.cf
 
 /-- The coins of the replies to the sends from the `L`-th on, with `n` rounds. -/
-def coinsAt (resp : ℕ → Claims.Msg) (L n : ℕ) : Challenges :=
+def coinsAt (resp : ℕ → Hash.Msg) (L n : ℕ) : Challenges :=
   ⟨coinOf (resp L), coinOf (resp (L + 1)), fun j => coinOf (resp (L + 2 + j)), coinOf (resp (L + 2 + n))⟩
 
 end Lc
@@ -136,8 +136,8 @@ open Lc
 
 /-- **The prover's lincheck, in closed form**, at the coins of the replies to its sends, where the statement's circuit
 fold at `α` returns `full`. -/
-theorem lincheckP_go (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
-    (t : Transcript) (l : Array Claims.Msg)
+theorem lincheckP_go (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut) (full : Array F128)
+    (t : Transcript) (l : Array Hash.Msg)
     (hfold : c.fold (coinOf (resp l.size) 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) :
     ∃ l', l'.size = l.size + 3 + (c.kLog - 6) ∧
       ((lincheckP (asksS resp) c m tr zc).run t).go l =
@@ -359,7 +359,7 @@ theorem lincheckWith_of (hs : Hashes V) (c : CircuitFold) (m : ℕ) (tr : Trace)
 
 /-! ## The goal -/
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- Table `i`'s rep `r`'s transcript after the prover's zerocheck. -/
 def _root_.FlockComplete.Run.zcEnd (o : Run H rel) (i r : ℕ) : Transcript :=
@@ -410,7 +410,7 @@ def LcAt (o : Run H rel) (i r : ℕ) : Prop :=
 /-- **The lincheck's algebra** at every rep where the statement's circuit fold at the lincheck's `α` returns: the
 statement's folded circuit at the prover's coins is some `comb` of width 64, and the rounds' claim from
 `α·v_A + v_B + β`, on the prover's messages, ends at `dot comb z_partial`. -/
-def LcAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def LcAlgebra (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2,
     o.tabs[i]!.fold.fold ((o.lcCoins i r).ca 0) (skipWeights (o.zcOut i r).z)
       ((o.zcOut i r).rho.extract 0 (o.tabs[i]!.fold.kLog - 6)) = .ok (o.full i r) → ∃ comb : Array F128,
@@ -426,7 +426,7 @@ def LcAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readabl
 
 /-- **The lincheck goal**: lincheck replays at every honest run, from where zerocheck left the transcript, on
 R1CS-valid traces, at every rep the session walk aligns, given the lincheck's algebra. -/
-theorem lincheck_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem lincheck_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel) : Lincheck H rel := by
   intro o i hi r hr
@@ -439,13 +439,13 @@ theorem lincheck_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
 
 /-- **A rep that returns** carries the prover's lincheck, at the replies from the first send after zerocheck's on,
 where the statement's circuit fold at the lincheck's `α` returns `full`. -/
-theorem repP_lincheck (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_lincheck (resp : ℕ → Hash.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {full : Array F128}
+    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repP (asksS resp) hsP st sch tr tbl cm0 extras salt nonce).run t).go l = (.ok (p, t'), l')) :
     p.lincheck = Lc.proof st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) full
       (Lc.coinsAt resp (l.size + 3 + (st.m - 6)) (st.fold.kLog - 6)) := by
