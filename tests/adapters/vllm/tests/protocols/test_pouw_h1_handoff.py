@@ -34,6 +34,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import served as SV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_gpu as GPU
@@ -313,7 +314,7 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
         assert {v.split("/", 1)[1].split("@")[0].split("/")[0] for v in values} == {"a", "zy", "b"}
 
         def bc(tree, j, words):
-            return G.Registered.commit(tree.program, tree.value, [words], [tree.salts[j]], tree.word_bits, G.SCHEMA_V2,
+            return RV.Registered.commit(tree.program, tree.value, [words], [tree.salts[j]], tree.word_bits, G.SCHEMA_V2,
                                        tree.window, tree.produced).bcs[0]
         for v in values:
             tree = trees[v]

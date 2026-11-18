@@ -68,7 +68,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     x_root = hashlib.sha512(b"x").digest()
     served = [{"port": p, "root": x_root.hex() if p == "x" else "cd" * 64, **ports[p]} for p in ports]
-    w = G.Registered.commit(digest, "w", [[0] * 512] * 16, word_bits=G.width(prog, "w"))
+    w = RV.Registered.commit(digest, "w", [[0] * 512] * 16, word_bits=G.width(prog, "w"))
     rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, WINDOW, partition=part, registered=[w.entry()])
     sup = G.sources(sources(c))
     mine = {v: G.supplied_value(prog, v, sup[v], rec, sorted(sup), prog=digest, binding=BINDING) for v in sorted(sup)}
@@ -85,7 +85,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
              "registered": {"w": 512, **words}, "supplied": sources(c), "pinned": {"w": w.root.hex()},
              "binding": BINDING}
     assert R.check(rec, **check).ok
-    zero = G.Registered.commit(digest, C.ROOTS, [SD.leaves(b"\0" * 128, True)], RV.supplied_salts(digest, C.ROOTS, 1),
+    zero = RV.Registered.commit(digest, C.ROOTS, [SD.leaves(b"\0" * 128, True)], RV.supplied_salts(digest, C.ROOTS, 1),
                                G.width(prog, C.ROOTS))
     witness = {**rec, "registered": [zero.entry() if e["value"] == C.ROOTS else e for e in rec["registered"]]}
     assert R.check(witness, **check).codes == ("R7-supplied",)

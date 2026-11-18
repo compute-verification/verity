@@ -91,7 +91,7 @@ def test_round_0s_request_table_is_cores_commit_of_its_headers():
     served = run.served
     req, words = served.live[LV.value(served, LV.REQUESTS)], LV.request_words(run.admitted.get(0, []), ROWS)
     ys = NR.salts(run._key, LV.nonce(SV.LIVE_NONCE, LV.REQUESTS, 0), ROWS)
-    core = G.Registered.commit(served.program_digest, req.value, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(ROWS)],
+    core = RV.Registered.commit(served.program_digest, req.value, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(ROWS)],
                                RV.WORD_BITS, LR.REQUEST_SCHEMA, session=SV.LOCAL_SESSION)
     assert req.entry() == core.entry() and req.bcs == core.bcs and req.levels == core.levels
     assert [req.salts[j] for j in range(ROWS)] == list(core.salts)

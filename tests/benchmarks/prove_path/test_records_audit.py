@@ -403,7 +403,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
-    a, b = (REG.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
+    a, b = (RV.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
     pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
             "registered": OP.block("test/model", {"b": b})}
     assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
@@ -564,7 +564,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     circuit = IF.Circuit("test", ((COORD, n),), registered=IF.Registered({name: 4 * K // 2}, reads=(read,),
                                                                          values=(name,) if own else ()))
     program = program_digest(circuit.program()[0]) if own else "test/model"
-    value = REG.Registered.commit(program, name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
+    value = RV.Registered.commit(program, name, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN if own else None)
     win = IF.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), cap, registered={name: value})
     if listed:
         stated = win.circuit_record()
@@ -678,7 +678,7 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
     table are refused."""
     rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
-    a, other, ids = (REG.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
+    a, other, ids = (RV.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
                      for v, r in ((f"h1/a/{K}@0", rows), (f"h1/a/{K}@1", rows), ("h1/ids@0", rows[:, :4])))
     w = {"format": R.FORMAT_V2, "registered": [a, other, ids], "previous": None}
     values = [f"row-table/0/k{K}", "input-ids/0"]
@@ -713,7 +713,7 @@ def test_a_value_w_registers_registered_afresh_by_the_window_is_held_to_w_and_re
     assert [e["value"] for e in rec["registered"]] == [name]
     assert RA.phase_values(rec, [name]) == {} and RA.window_pins(rec["window"], doc, registration=rec) == ({}, {})
     rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
-    theirs = REG.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
+    theirs = RV.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
     w = {"format": R.FORMAT_V2, "registered": [theirs], "previous": None}
     tied, pins = RA.tie_of(doc, w, prefix, RA.phase_values(rec, [name]))
     assert tied["outputs"] == {name: {"record": R.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
@@ -735,7 +735,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
     A value W doesn't register or registers twice is refused, and so is a prefix (Pearl+'s names are no Commit table)."""
     rows = {"pearl-a/0/0": np.arange(16 * K, dtype=np.uint32).reshape(16, K),
             "pearl-y/0/0": np.arange(5 * 2 * K, dtype=np.uint32).reshape(5, 2 * K)}
-    a, y = (REG.Registered.commit("pearl/program", v, r.tolist(), word_bits=32, schema=REG.SCHEMA_SEG).entry()
+    a, y = (RV.Registered.commit("pearl/program", v, r.tolist(), word_bits=32, schema=REG.SCHEMA_SEG).entry()
             for v, r in rows.items())
     w = {"format": R.FORMAT_V2, "registered": [a, y], "previous": None}
     seg = {"row_schema": REG.SCHEMA_SEG, "word_bits": 32}
@@ -815,7 +815,7 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
 
 
 @dataclass(frozen=True)
-class _Reused(REG.Registered):
+class _Reused(RV.Registered):
     """W's table as the circuit's value (`pouw_h1_commit.Reused`): W's rows, salts and tree, by the circuit's name of it, so
     its entry is W's but in name; there's no binding to recompute W's domain from."""
 
@@ -837,7 +837,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     ``prove_path.py window-commit --window-registration W`` does. W is written beside the window as ``w.json``."""
     rng = np.random.default_rng(2)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
-    theirs = REG.Registered.commit("h1/program", f"h1/a/{K}@0", rows.tolist(), schema=REG.SCHEMA_V2)
+    theirs = RV.Registered.commit("h1/program", f"h1/a/{K}@0", rows.tolist(), schema=REG.SCHEMA_V2)
     w = {"format": R.FORMAT_V2, "registered": [theirs.entry()], "previous": None}
     name = f"row-table/0/k{K}"
     value = _Reused(**{**{f.name: getattr(theirs, f.name) for f in fields(theirs)}, "value": name},
@@ -1334,7 +1334,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     read = IF.Read(TID, "wrow", TIED, 0, (n // 4, 4), 0, (0, K // 2))
     circuit = IF.Circuit("test", ((COORD, n), (fn, shell)), registered=IF.Registered({TIED: 4 * K // 2}, reads=(read,),
                                                                                               values=(TIED,)))
-    value = REG.Registered.commit(program_digest(circuit.program()[0]), TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    value = RV.Registered.commit(program_digest(circuit.program()[0]), TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
     win = IF.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), cap, registered={TIED: value})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
@@ -1364,12 +1364,12 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
 
 def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
     rows = [[1, 2], [3, 4]]
-    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
+    mine = {v: RV.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
     w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
     got = RA.committed_activations(w)
     assert got["ok"] and got["detail"]["values"]["x"] == {"root": mine["x"]["root"], "leaves": 2, "words": 2}
     assert RA.committed_activations({"run": RUN}) is None
-    elsewhere = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    elsewhere = RV.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
     for bad, code in (({**w, "run": "cd" * 64}, "domains"), ({**w, "activations": {**w["activations"], "program": "other"}}, "domains"),
                       ({**w, "activations": {"program": "test/model", "values": {**mine, "x": elsewhere}}}, "domains"),
                       ({**w, "activations": {"program": "test/model", "values": {}}}, "activations"),
@@ -1420,13 +1420,13 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
     doesn't read is neither, and one committed under another run, or naming another value, is refused. The registration's
     entries under the run root add nothing for values that are no execution phase's own (`PHASE_OWN`)."""
     rows = [[1, 2], [3, 4]]
-    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
+    mine = {v: RV.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
     w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
     circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
     assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
     assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
-    elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
-    held = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2).entry()
+    elsewhere = RV.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    held = RV.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2).entry()
     rec = {"program": "test/model", "window": {"run": RUN}, "registered": [mine["e"], held, elsewhere]}
     assert RA.window_pins({"run": RUN}, circuit, registration=rec) == ({}, {}) and RA.phase_values(rec, PARAMS) == {}
     assert RA.window_pins(w, circuit, registration=rec) == RA.window_pins(w, circuit)

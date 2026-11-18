@@ -57,7 +57,7 @@ def files(pub: dict, u: int, m: int) -> dict:
                               pub["max_tokens"], pub["prefix"])
 
 
-def known_rows(pub: dict, u: int, m: int) -> dict[str, tuple[G.Registered, int]]:
+def known_rows(pub: dict, u: int, m: int) -> dict[str, tuple[RV.Registered, int]]:
     """The verifier's own registered rows of unit u, round s's piece j: ``m@<s>`` at m (row 0), ``round@<s>`` (row 0),
     ``caps`` (row i for ``cap_<i>``), ``live-ok`` (row u), and when the round is cut by rows ``base@<j>`` (row 0)."""
     prog, prefix, window = pub["program"], pub["prefix"], pub["window"]

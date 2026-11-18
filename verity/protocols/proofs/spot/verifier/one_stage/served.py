@@ -17,7 +17,7 @@ word_bits, domain, and the row each proof block of the population reads, from th
 is one of three, and no other:
 
 * the registered-value domain of `value` in the verifier's own program (`registered.registered_entries`), when serving
-  committed the tree as a registered value (`Registered.commit`): under the window's open root R (`window_root`, from
+  committed the tree as a registered value (`registered_value.Registered.commit`): under the window's open root R (`window_root`, from
   the challenger's signed open of the window) for a per-window value, and without it for a value held across windows
   (`held`, the weights), so a window-independent program registers each window's values under the same names;
 * an earlier record's port's domain, when the tree is that port (`output`: `(record digest, port)`):
@@ -88,8 +88,8 @@ class ServedTree:
     reused: tuple[str, str] | None = None
 
     @classmethod
-    def of(cls, reg: G.Registered) -> "ServedTree":
-        """A tree serving committed as a registered value (`Registered.commit`), under its registered-value domain."""
+    def of(cls, reg: RV.Registered) -> "ServedTree":
+        """A tree serving committed as a registered value (`registered_value.Registered.commit`), under its registered-value domain."""
         e = reg.entry()
         return cls(e["value"], e["root"], e["leaves"], e["words"], e["domain"], reg.word_bits, row_schema=reg.schema)
 

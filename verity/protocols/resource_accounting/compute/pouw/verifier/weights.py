@@ -4,7 +4,7 @@ rows of the execution phase Program's linears of that K, and `weights_root`, the
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,
   little-endian (`h1zy.ROW`): `b_words(K)` u16 words, as a ``hm96-sha512/row/v2`` bit row is its bytes.
 * **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the execution phase's order, committed as
-  `registered.Registered.commit` commits them: under `registered_value.domain` of the circuit's SHA-512, the name, `b_words(K)`
+  `registered_value.Registered.commit` commits them: under `registered_value.domain` of the circuit's SHA-512, the name, `b_words(K)`
   words and Σn leaves, binding no execution phase (a value held across execution phases), in ``hm96-sha512/row/v2``, row j's salt
   `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending. The auditor
   hands that key to every lane serving the model (`model-key`), so it salts these rows only, never an execution phase's A or z/y:

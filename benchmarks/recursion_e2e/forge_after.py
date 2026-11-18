@@ -127,7 +127,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         return skip("neither the release's program nor the statement's names the value's domain")
     by_pos = sorted(zip(pos, rows, salts))
     def mk(rs):
-        return RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
+        return RV.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
     h = mk([r for _, r, _ in by_pos])
     if h.root.hex() != port_["root"] or [h.path(p).hex() for p in pos] != reg["paths"]:
         return skip("the rows and salts do not register to the statement's root and paths")

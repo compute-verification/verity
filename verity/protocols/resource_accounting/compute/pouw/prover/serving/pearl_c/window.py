@@ -264,7 +264,7 @@ def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequenc
 
 
 @dataclass(frozen=True)
-class Committed(G.Registered):
+class Committed(RV.Registered):
     """A call's A rows or y as a registered value of the audited circuit (`reuse`): its FP32 words in ``row-seg/v1`` rows,
     salted as Pearl+ salts them, in a tree under ``call_domain``, the ``frame-v3-sha512`` domain of the call's binding,
     index and rows (W's entry's domain id), so its entry is W's."""
@@ -311,7 +311,7 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
                 e = next(want)
                 n, k = e["leaves"], e["words"]
                 words = np.ascontiguousarray(rows_of(e["value"], n, np.zeros(2 * k, np.uint16)), "<u2").view("<u4")
-                base_value = G.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
+                base_value = RV.Registered.commit(man["scheme"], e["value"], words.tolist(), kept_salts(base, spec, n),
                                                  word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
                 dom = rows_domain(binding, i, n, "sha512")
                 levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base_value.bcs)])

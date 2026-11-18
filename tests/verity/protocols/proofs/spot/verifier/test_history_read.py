@@ -79,13 +79,13 @@ def _case(hist_rows=None):
     ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
-    w = G.Registered.commit(pd, "W", TABLE)
+    w = RV.Registered.commit(pd, "W", TABLE)
     if hist_rows is None:
         resolved = HT.resolve(HT.roots_of(leaf, history), SUPPLIED)
         base = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
         hist = G.supplied_value(prog, "hist", G.sources(resolved)["hist"], base, ["hist"])
     else:
-        hist = G.Registered.commit(pd, "hist", hist_rows, RV.supplied_salts(pd, "hist", 2), word_bits=16)
+        hist = RV.Registered.commit(pd, "hist", hist_rows, RV.supplied_salts(pd, "hist", 2), word_bits=16)
     rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
     check = {"program": prog, "query": Q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
              "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history}
@@ -191,7 +191,7 @@ def vector() -> dict:
     rows, salts, bcs, dom, root = _table(program)
     full = HT.domain(program, TABLE_NAME, 576)
     leaves = [digest_bits(root), digest_bits(dom.domain_id)]
-    hist = G.Registered.commit(program, "hist", leaves, RV.supplied_salts(program, "hist", 2), word_bits=16)
+    hist = RV.Registered.commit(program, "hist", leaves, RV.supplied_salts(program, "hist", 2), word_bits=16)
     return {
         "generator": "tests/verity/protocols/proofs/spot/verifier/test_history_read.py",
         "program": program,

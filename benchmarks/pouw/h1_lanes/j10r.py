@@ -52,7 +52,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lane
 from verity.protocols.resource_accounting.compute.pouw.verifier import weights as W  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
@@ -142,7 +142,7 @@ def circuit_name(kind: str, ch: int | None) -> str:
 def register(ctx: Ctx, leaf: RN.Leaf) -> tuple[dict, tuple, list[int]]:
     """The leaf's registered values in their window tables (``ctx.place``), the roots its seeds read and its receipt."""
     def commit(v, rows):
-        return G.Registered.commit(ctx.prog, ctx.place[v][0], rows, None, RV.WORD_BITS, V2)
+        return RV.Registered.commit(ctx.prog, ctx.place[v][0], rows, None, RV.WORD_BITS, V2)
 
     regs = {LL.A: commit(LL.A, chunk_rows(RN.code_words(leaf.a, leaf.sa), ctx.n)),
             LL.B: commit(LL.B, chunk_rows(RN.code_words(leaf.b, leaf.sw), ctx.n)),
@@ -179,7 +179,7 @@ def world(ctx: Ctx, name: str, leaf: RN.Leaf, regs: dict, roots: tuple, partials
             LL.OKS: [[int(o)] for o in oks]}
     for v, (n_rows, words) in ctx.values.items():
         assert len(rows[v]) == n_rows and all(len(r) == words for r in rows[v]), f"{v}: {n_rows} rows of {words} words"
-    trees = {v: PR.commit(ctx.prog, v, rs, d, schema=V2) for v, rs in rows.items()}
+    trees = {v: PP.commit(ctx.prog, v, rs, d, schema=V2) for v, rs in rows.items()}
     ops = {**{v: PR.rows_of(t) for v, t in trees.items()}, **{v: PR.rows_of(regs[v]) for v in REGISTERED}}
     return World(name, leaf, roots, regs, d, sample, trees, PR.record(d, sample, [t.entry() for t in trees.values()], ops),
                  rec, partials, carries, oks)

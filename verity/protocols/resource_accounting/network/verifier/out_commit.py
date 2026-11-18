@@ -176,7 +176,7 @@ class AttestedOut:
     head: OutHead
     certificate: Certificate
     session: bytes
-    committed: G.Registered = field(repr=False, compare=False)
+    committed: RV.Registered = field(repr=False, compare=False)
 
     @property
     def root(self) -> str:
@@ -235,7 +235,7 @@ def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | 
     issuer = key if isinstance(key, Issuer) else Issuer(key, session)
     if issuer.session != session:
         raise ValueError("the issuer signs in another attester session than `session`")
-    committed = G.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
+    committed = RV.Registered.commit(shape.program, shape.value, rows, salts, shape.word_bits, shape.schema)
     head = OutHead(shape.value, bytes.fromhex(committed.program), committed.words, committed.leaves, committed.word_bits,
                    committed.schema, committed.domain.domain_id, committed.root)
     certificate = issuer.sign(link, DIRECTION, window, head.digest())

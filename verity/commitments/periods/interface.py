@@ -1395,7 +1395,7 @@ def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, A
     """The values a period's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
     of its table's parameter alone (``entries``, core's ``Registered.entry()`` by parameter, as the verifier pinned it):
     the root's and the domain id's 64 bytes as a `Digest` port's 32 words (`digest_words`) and 1 as one word, each
-    committed as core's ``registered.Registered`` (``module``, core's ``one_stage.registered`` as the caller passes it)
+    committed as core's ``registered_value.Registered`` (``module``, core's ``one_stage.registered`` as the caller passes it)
     under ``program`` (the period's partition digest) at its public salts (``supplied_salts``), so the prover and the
     verifier make the same value and the prover chooses none of it. A history table is a parameter of its own, its entry
     the verifier's pin of its root (`verity.commitments.periods.history`). A table whose parameter has no entry has none."""
@@ -2594,7 +2594,7 @@ class Window:
     proof system's sampling design of the period, as its sample parses it), in members of at most ``cap`` units, with ``advice`` its
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
     registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
-    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
+    ``registered_value.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
     opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
     the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
     `record`ed in order, then `close` commits them and `write` writes and registers the period."""

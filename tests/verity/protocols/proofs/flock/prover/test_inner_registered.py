@@ -98,7 +98,7 @@ def test_register_commits_the_description_table_as_its_registration(staged):
     _, tabs = IR.tables(d)
     bc = tabs["cs"]["bcs"][0]
     assert G.verify_read(dom, bytes.fromhex(e["root"]), 0, bc, b""), "the statement's b || c opens the registered root at 0"
-    assert G.Registered.commit(staged.meta["program_sha512"], IR.VALUE, staged.desc.tolist(), tabs["cs"]["salts"]).bcs == (bc,)
+    assert RV.Registered.commit(staged.meta["program_sha512"], IR.VALUE, staged.desc.tolist(), tabs["cs"]["salts"]).bcs == (bc,)
 
 
 def test_the_description_port_is_the_one_row_every_instance_reads(staged):

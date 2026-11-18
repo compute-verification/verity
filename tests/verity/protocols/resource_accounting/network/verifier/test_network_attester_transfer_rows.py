@@ -50,7 +50,7 @@ def expect(t: TR.Transfer, **over):
 def test_commitment_is_a_registered_values_and_the_head_its_root(tmp_path):
     data = rows(4, 1)
     t, cert, _issuer = attested(tmp_path, data=data)
-    same = G.Registered.commit(PROGRAM, "bias", data, t.salts, 16, G.SCHEMA_V2)
+    same = RV.Registered.commit(PROGRAM, "bias", data, t.salts, 16, G.SCHEMA_V2)
     assert t.root == same.root and t.head.domain == RV.domain(PROGRAM, "bias", 1, 4).domain_id
     assert (t.head.words, t.head.rows) == (1, 4) and cert.digest == t.head.digest()
     assert TR.read_witness(t.witness) == list(t.salts) and len(set(t.salts)) == 4
@@ -85,7 +85,7 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
     data = [[rng.randrange(1 << word_bits) for _ in range(words)] for _ in range(4)]
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, word_bits=word_bits, schema=schema)
-    assert t.root == G.Registered.commit(PROGRAM, "w", data, t.salts, word_bits, schema).root
+    assert t.root == RV.Registered.commit(PROGRAM, "w", data, t.salts, word_bits, schema).root
     assert t.head.domain == TR.domain(PROGRAM, "w", words, 4, word_bits).domain_id == \
         RV.domain(PROGRAM, "w", words, 4, word_bits).domain_id
     flip = {"word_bits": {32: 16, 16: 32}[word_bits], "schema": G.SCHEMA_SEG if schema == G.SCHEMA_V2 else G.SCHEMA_V2}

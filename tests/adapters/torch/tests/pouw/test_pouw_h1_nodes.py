@@ -44,12 +44,12 @@ def test_nodes_are_the_tuple_of_their_bytes():
 @pytest.mark.parametrize("n,w", [(1, 1), (5, 3), (33, 70)])
 def test_the_cpu_twins_registered_value_opens_under_cores_root(n, w):
     words = np.random.default_rng(n).integers(0, 1 << 16, (n, w), dtype=np.uint16)
-    core = G.Registered.commit(PROGRAM, "h1/v", words.tolist(), [hm96_salt(KEY, 3, j) for j in range(n)],
+    core = RV.Registered.commit(PROGRAM, "h1/v", words.tolist(), [hm96_salt(KEY, 3, j) for j in range(n)],
                                schema=G.SCHEMA_V2, window=WINDOW)
     bcs, levels = D.host_commit(words, KEY, 3, None, core.domain.domain_id)
     assert isinstance(bcs, Nodes) and all(isinstance(lv, Nodes) for lv in levels)
     assert (bcs, levels) == (core.bcs, core.levels) and NR._numpy(words, KEY, 3, None, core.domain.domain_id) == (bcs, levels)
-    got = G.Registered(program=PROGRAM, value="h1/v", words=w, word_bits=RV.WORD_BITS, rows=core.rows, salts=core.salts,
+    got = RV.Registered(program=PROGRAM, value="h1/v", words=w, word_bits=RV.WORD_BITS, rows=core.rows, salts=core.salts,
                        bcs=bcs, levels=levels, schema=G.SCHEMA_V2, window=WINDOW)
     assert got.root == core.root and got.entry() == core.entry()
     assert all(got.path(p) == core.path(p) and G.verify_read(core.domain, core.root, p, got.bcs[p], got.path(p), G.SCHEMA_V2)

@@ -111,7 +111,7 @@ def _window(config=S.TINY, grain=GRAIN):
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
     fields = _weights(low.fn)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), SS.SCAN_STATE: state}
 
@@ -255,7 +255,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     salts = [bytes(s) for s in (*v.salts, *again.salts)]
     assert list(again.rows) == list(v.rows) and len(set(salts)) == 2 * CLASS.buckets
     assert {len(s) for s in salts} == {192} and again.entry()["root"] != v.entry()["root"]
-    ref = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, list(v.rows), list(v.salts), schema=CR.SCHEMA_V2, window=RUN)
+    ref = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, list(v.rows), list(v.salts), schema=CR.SCHEMA_V2, window=RUN)
     assert ref.entry() == v.entry()
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
@@ -678,7 +678,7 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
                                (WB.weight_param(EMBED, 1024), fields[EMBED].reshape(-1, 1024), CR.SCHEMA_V2)):
         salts = list(got[name].salts)
         assert len(salts) == len(rows) == len(set(salts)) and {len(x) for x in salts} == {192}
-        ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
+        ref = RV.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
@@ -927,7 +927,7 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     assert len(kept) == CS.SALT_BYTES and kept not in {bytes(s) for s in state.salts}
     assert CS.index_leaf((tmp_path / "index.json").read_bytes(), kept).hex() == rec["window"]["index_leaf"]
     (e,) = rec["registered"]
-    scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
+    scan = RV.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
     assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
     assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]

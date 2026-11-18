@@ -366,9 +366,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the population programs `population_program` and `mixed_population_program` (`verity.circuits.population`'s,
   which an integration builds its run's program with).
-- `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
-  `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
-  (the Lean verifier's `--registered`), `verify_read`.
+- `registered`: registered values, over `verity.commitments.registered_value` (`Registered.commit`, the prover's rows,
+  salts and tree, and `domain`): `registered_entries` and `reads` (the verifier's leaf counts, domains and read map,
+  from its own program), `reads_file` (the Lean verifier's `--registered`), `verify_read`.
 - `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
@@ -439,8 +439,8 @@ A program's weights, constants and tables are values: committed once, under hidi
   `hm96-sha512/row/v2` and `hm96-sha512/row-seg/v1`), with a salt sampled once. The root is the frame-v3-sha512 root over
   the rows under the value's registered-value domain (`registered_value.domain`, on the SHA-512 identity frame of
   `verity/one-stage/registered-domain/v1`). The prover keeps the rows and salts
-  (`Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
-  `"word_bits"` when it is not 16 (`Registered.entry`).
+  (`registered_value.Registered.commit`). The record's `registered` entry is `{"value", "root", "leaves", "words", "domain"}`, with
+  `"word_bits"` when it is not 16 (`registered_value.Registered.entry`).
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
   root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the

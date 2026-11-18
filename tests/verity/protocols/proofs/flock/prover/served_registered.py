@@ -100,14 +100,14 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     table = np.random.default_rng(seed).integers(0, 1 << 16, (ROWS, WORDS))
     for i, p in enumerate(POS):
         table[p] = cs[i]
-    reg = G.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
+    reg = RV.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
     positions, refs = G.table(POS)
     rows, salts, entry = reg.statement(positions)
     bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
-    reg_x = G.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
+    reg_x = RV.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
     outs = np.asarray(s.port("out", 0, N), np.uint16).reshape(N, -1)
-    reg_out = G.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
+    reg_out = RV.Registered.commit(P.program_digest(prog), OUT_VALUE, outs.tolist(), schema=bit_rows)
     out_rows, out_salts, out_entry = reg_out.statement(range(N))
     FC.write(text, s, 0, N, out / f"inst-{N}.bin", out / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)},

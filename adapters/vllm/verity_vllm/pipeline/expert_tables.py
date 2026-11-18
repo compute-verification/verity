@@ -1,7 +1,7 @@
 """The committer's registration of the per-expert cut's tables (`expert_rows`), one a TP rank (``verity-vllm tp-register-tables``):
 each table of each expert stack's weights and scales on the rank (`expert_rows.table_param`, its rows `expert_rows.table_words`
 of the weight as `check.weights_of_record` composes it from the checkpoint's shards for the rank) committed as core's
-``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows under fresh salts at the rank's program (`program`), written before
+``registered_value.Registered`` of ``hm96-sha512/row-seg/v1`` rows under fresh salts at the rank's program (`program`), written before
 the first window's coins as the record `records.expert_tables.ExpertTables`: the ``{program, values}`` the verifier pins
 (``records_audit.py audit --registered``), so a window's table read and opening count registered exactly where the window's root
 for the table is this one.  The salts go to the salt file beside the record (`verity.commitments.salt_file`) and never leave the

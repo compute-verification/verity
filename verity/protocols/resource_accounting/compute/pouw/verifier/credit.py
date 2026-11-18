@@ -1219,7 +1219,7 @@ def registered_file(program: str, layout: dict, shape: dict, call: int, roots: d
 
 
 def public_table(program: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
-                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], G.Registered]:
+                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """`h1window.public_table`: a call's public rows ``value`` over its `n` units from unit `u0`, their salts and their
     registration, unit u's row the window's Program salt `salt`, its position u and its call's `roots` (each hex,
     `core_check.public_words`), and with `blocks` (a J10-R window's, one a unit) the call's first position `u0` and unit
@@ -1228,18 +1228,18 @@ def public_table(program: str, value: str, salt: str, window: str, u0: int, n: i
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
-    return rows, salts, G.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
-def ok_table(program: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+def ok_table(program: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """`h1window.ok_table`: the window's ok rows ``value`` over its `population` units, their salts and their
     registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
     the window's open root `window` and u, registered under the descriptor's SHA-512 `program` binding `window`. Every
     input is public, so the verifier and the prover compute the same root."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
     salts = [CC.ok_salt(window, u) for u in range(population)]
-    return rows, salts, G.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(program, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 def sampling_design(ss: list[dict], k: Any) -> tuple[str, str] | None:

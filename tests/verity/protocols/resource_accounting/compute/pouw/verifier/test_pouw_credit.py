@@ -1401,7 +1401,7 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
 
 def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     """Each K's b/<K>, its linears' B rows (each row its int8 codes then its f32 s_w) committed as the served path
-    registers the weights (`registered.Registered`, the domain that binds no window, salts sampled once), folded by
+    registers the weights (`registered_value.Registered`, the domain that binds no window, salts sampled once), folded by
     `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
     code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
     salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""
@@ -1411,8 +1411,8 @@ def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     lay = {"calls": [list(x) for x in h1.CALLS], "linears": [list(x) for x in h1.LINEARS], "m": m, "tile": list(h1.TILE)}
     rows = {k: [r for name, kk, n in h1.LINEARS if kk == k for r in _b_rows(rng, n, k)] for k in (32, 64)}
 
-    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> G.Registered:
-        return G.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
+    def commit(k: int, b: list[tuple[list[int], float]], program: str = digest) -> RV.Registered:
+        return RV.Registered.commit(program, f"b/{k}", [_b_row(c, sw) for c, sw in b],
                                    RV.supplied_salts(program, f"b/{k}", len(b)), schema=G.SCHEMA_V2)
 
     reg = {k: commit(k, b) for k, b in rows.items()}

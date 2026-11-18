@@ -15,14 +15,14 @@ statement reading the leaf's lane partials, a value committed after the sample (
   statement check passes it with the verifier's registered reads on its template (`ProvedScope.scopeOkT`), the sampled
   audit's knowledge-soundness form (`KsScope`) admits it there, and the soundness proof is at the flat circuit it
   unrolls to.
-* **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
+* **The registered values** (`registered_value.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
   and admission tables, the weights' b/<K> and its receipt tree (`h1window`); here a registration record of the lane's
   Program (`registration.record`) stands for the window's, and its digest D is what the partials' domain binds. The roots
   the lanes' seeds read are (SHA-512 of root(a) under `ROOTS_TAG`, root(b)).
 * **The partials**, committed after the sample (STAND-IN: the sample of every unit, `sample_digest`): ``partials``, 32 rows, row
-  l lane l's (`h1zy.lane_partial`, 2 (KS + m) u32), `produced.commit`'s tree under D, with `produced.record`'s record,
+  l lane l's (`h1zy.lane_partial`, 2 (KS + m) u32), SPOT prover's `produced.commit`'s tree under D, with `produced.record`'s record,
   which `produced.check` holds to the verifier's own entry (``produced_check``). The record keeps every row's opening
   (its ``b || c``): the partials' and the rows of ``a``, ``b``, ``zy`` and ``receipt``.
 * **Each statement's rows** are all ports of the verifier's own registered reads (`leaf_lanes.own`): `leaf_lanes.reads`'
@@ -109,7 +109,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1z
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.proofs.spot.prover import produced as PP  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
@@ -265,7 +265,7 @@ class World:
     regs: dict
     registration: str
     sample: str
-    tree: G.Registered
+    tree: RV.Registered
     record: dict
     reg_record: dict
 
@@ -274,7 +274,7 @@ def register(prog: str, leaf: Leaf, place: dict) -> tuple[dict, tuple, list[int]
     """The leaf's registered values under ``prog``, each in its window table (``place``, the leaf's from its row 0), the
     roots its seeds read and its receipt."""
     def commit(v, rows):
-        return G.Registered.commit(prog, place[v][0], rows, None, RV.WORD_BITS, V2)
+        return RV.Registered.commit(prog, place[v][0], rows, None, RV.WORD_BITS, V2)
 
     regs = {LL.A: commit(LL.A, code_words(leaf.a, leaf.sa).tolist()), LL.B: commit(LL.B, code_words(leaf.b, leaf.sw).tolist()),
             LL.ZY: commit(LL.ZY, [U.record_words(*leaf.zy).tolist()])}
@@ -285,12 +285,12 @@ def register(prog: str, leaf: Leaf, place: dict) -> tuple[dict, tuple, list[int]
     return regs, roots, list(receipt)
 
 
-def receipt_reg(prog: str, receipt: list[int], place: dict, flip: int | None = None) -> G.Registered:
+def receipt_reg(prog: str, receipt: list[int], place: dict, flip: int | None = None) -> RV.Registered:
     """The registered receipt in its window table (``place``), with bit ``flip`` of it flipped when given."""
     rc = list(receipt)
     if flip is not None:
         rc[flip // 32] ^= 1 << (flip % 32)
-    return G.Registered.commit(prog, place[LL.RECEIPT][0], [U.receipt_words(rc).tolist()], None, RV.WORD_BITS, V2)
+    return RV.Registered.commit(prog, place[LL.RECEIPT][0], [U.receipt_words(rc).tolist()], None, RV.WORD_BITS, V2)
 
 
 def lane_rows(leaf: Leaf, ln: int) -> tuple[list, list, list, list]:
@@ -312,7 +312,7 @@ def world(name: str, ctx: Ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list)
                    registered=[regs[v].entry() for v in REGISTERED])
     d = R.digest(rec)
     sample = sample_digest(d, 1)
-    tree = PR.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
+    tree = PP.commit(ctx.prog, LL.PARTIALS, rows, d, schema=V2)
     ops = {LL.PARTIALS: PR.rows_of(tree), **{v: PR.rows_of(regs[v]) for v in REGISTERED}}
     return World(name, leaf, roots, regs, d, sample, tree, PR.record(d, sample, [tree.entry()], ops), rec)
 
@@ -325,7 +325,7 @@ def entries(ctx: Ctx, w: World) -> tuple[dict, dict]:
 
 # -- a statement ------------------------------------------------------------------------------------------------------------
 
-def opening(tree: G.Registered, position: int, row: int | None = None) -> dict:
+def opening(tree: RV.Registered, position: int, row: int | None = None) -> dict:
     """What the prover opens for row ``position`` of ``tree``: the row it holds there (or at ``row``, opened in its place,
     with that row's salt and ``b || c``) and the path at ``position``."""
     r = position if row is None else row
@@ -353,7 +353,7 @@ def known_rows(ctx: Ctx, w: World, kind: str, ln: int | None, index: int) -> dic
 
 def known_opening(ctx: Ctx, w: World, value: str, row: list[int], salt: bytes) -> dict:
     """The prover's opening of a known port's row: ``row`` committed under ``salt`` as its one-row tree."""
-    return opening(PR.commit(ctx.prog, value, [row], w.registration, [salt], schema=V2), 0)
+    return opening(PP.commit(ctx.prog, value, [row], w.registration, [salt], schema=V2), 0)
 
 
 def stager(ctx: Ctx, kind: str, variant: str | None = None) -> UnitStager:

@@ -32,7 +32,7 @@ def KNOWN_KEY : String := "known"
 def rowBytesV2 (row : Array Nat) : ByteArray :=
   row.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) (HmRow.rowPrefixV2 (16 * row.size))
 
-/-- The hm96 leaf of a known row: of `row`'s `sha512/row/v2` digest under `salt` (`registered.Registered.commit`). -/
+/-- The hm96 leaf of a known row: of `row`'s `sha512/row/v2` digest under `salt` (`registered_value.Registered.commit`). -/
 def knownPayload (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.treeLeaf (Hm96.Default512.commitString (Sha512.hash (rowBytesV2 row)) salt)
 

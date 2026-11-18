@@ -174,8 +174,8 @@ def test_a_unit_whose_ok_is_0_opens_no_root_the_verifier_pins():
     assert RG.bit_words(leaves, 1, 16) == [1] and RG.leaves_of(bytes.fromhex(row[0][1]), 16) == [1]
     prog = "ab" * 64
     salts = RV.supplied_salts(prog, V.OK, 1)
-    pinned = RG.Registered.commit(prog, V.OK, [[1]], salts).root
-    opens = [RG.Registered.commit(prog, V.OK, [[o]], salts).root == pinned for o in ok]
+    pinned = RV.Registered.commit(prog, V.OK, [[1]], salts).root
+    opens = [RV.Registered.commit(prog, V.OK, [[o]], salts).root == pinned for o in ok]
     assert opens == [True, False, True, False, True]
 
 

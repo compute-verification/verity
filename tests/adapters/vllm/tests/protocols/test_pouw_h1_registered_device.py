@@ -1,5 +1,5 @@
 """`pouw_h1_registered_device`: H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
-`pouw_h1_registered.commit`'s NumPy path and to core's `registered.Registered.commit`. Over random rows of 16-bit words (one row
+`pouw_h1_registered.commit`'s NumPy path and to core's `registered_value.Registered.commit`. Over random rows of 16-bit words (one row
 to a few thousand, one word to a z/y record's 3072, a row whose bytes sit 2 and 4 bytes off an 8-byte boundary), under each
 domain binding, nonces past 2^32 and 2^63, given salts and a public table's or the ok rows' (`PublicSalts`, SHA-512's
 under a u8 or a u32be counter, on the device derived where they're hashed, its rows built on the hash's stream): the ``b || c`` strings,
@@ -57,7 +57,7 @@ def _numpy(words, nonce, given=None, **binding):
 def _core(words, nonce, given=None, **binding):
     n = len(words)
     salts = ([hm96_salt(KEY, nonce, j) for j in range(n)] if given is None else [given[192 * j:192 * (j + 1)] for j in range(n)])
-    return G.Registered.commit(PROGRAM, "h1/v", words.tolist(), salts, schema=G.SCHEMA_V2, **binding)
+    return RV.Registered.commit(PROGRAM, "h1/v", words.tolist(), salts, schema=G.SCHEMA_V2, **binding)
 
 
 def _gpu():

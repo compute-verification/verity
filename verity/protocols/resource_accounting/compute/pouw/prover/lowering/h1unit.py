@@ -31,7 +31,7 @@ prover and the verifier of ``benchmarks/pouw/h1_prove/recorded.py`` share.
   with its s_a, the token rows padded with zero rows of scale 0) under the call's own salts, and its z table ``zy@<c>``,
   one record a tile of the call in its tile order; ``b/<K>``, every call's B rows (the model's, each with its s_w), call
   after call; and ``receipt`` over the execution phase's tiles. The tables and ``b/<K>`` are registered values (`tables`,
-  `register`: `registered.Registered.commit` under the execution phase Program's digest, ``row/v2`` rows of 16-bit leaves,
+  `register`: `registered_value.Registered.commit` under the execution phase Program's digest, ``row/v2`` rows of 16-bit leaves,
   `value_words` a row; each table's domain, and ``ok``'s, binds the execution phase's open root, `open_root`, and b/<K>'s none, as
   it is held across execution phases: `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
@@ -308,15 +308,15 @@ def bound_root(name: str, window_root: str) -> str | None:
     return None if CR.is_held(name) else window_root
 
 
-def register(program: str, name: str, words: np.ndarray, salts: Sequence[bytes], window_root: str) -> G.Registered:
+def register(program: str, name: str, words: np.ndarray, salts: Sequence[bytes], window_root: str) -> RV.Registered:
     """An execution phase's rows of the registered value ``name`` (its bit rows' u16 words, `row_words` or `record_words`), committed
     under the execution phase Program's digest ``program`` in the tile's ports' format (``row/v2``, 16-bit leaves) with one of
     ``salts`` a row, its domain binding the execution phase's open root ``window_root`` unless ``name`` is b/<K> (`bound_root`)."""
-    return G.Registered.commit(program, name, np.asarray(words).tolist(), [bytes(s) for s in salts], RV.WORD_BITS, V2,
+    return RV.Registered.commit(program, name, np.asarray(words).tolist(), [bytes(s) for s in salts], RV.WORD_BITS, V2,
                                bound_root(name, window_root))
 
 
-def register_ok(program: str, window: str, population: int, window_root: str) -> G.Registered:
+def register_ok(program: str, window: str, population: int, window_root: str) -> RV.Registered:
     """The verifier's registration of the ok rows of ``window``'s ``population`` units (`OK_VALUE`): row u the one word 1
     (`OK`) under unit u's public `ok_salt`, under the execution phase Program's digest ``program`` and the execution phase's open root
     ``window_root`` (`register`: ok is the execution phase's own, one row a unit). Every input is public, so the verifier and the

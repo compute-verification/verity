@@ -83,11 +83,11 @@ def _program(pos=POS, rows: int = len(TABLE), body=None, w: int = 8) -> Program:
 Q = P.template_instance_query(MIX.id)
 
 
-def _registered(prog: Program) -> G.Registered:
-    return G.Registered.commit(P.program_digest(prog), "W", TABLE)
+def _registered(prog: Program) -> RV.Registered:
+    return RV.Registered.commit(P.program_digest(prog), "W", TABLE)
 
 
-def _record(prog: Program, reg: G.Registered, **kw):
+def _record(prog: Program, reg: RV.Registered, **kw):
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
     ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
@@ -126,7 +126,7 @@ def test_a_16_bit_value_binds_only_the_five_keys():
     row = list(range(1, 65))
     assert RV.row_words(row) == row and RV.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
     rows = [[(r * 64 + j) * 1009 % 65536 for j in range(64)] for r in range(3)]
-    reg = G.Registered.commit("ab" * 64, "cs_table", rows, [bytes([r + 1]) * 192 for r in range(3)])
+    reg = RV.Registered.commit("ab" * 64, "cs_table", rows, [bytes([r + 1]) * 192 for r in range(3)])
     assert reg.root.hex() == ROOT_16 and "word_bits" not in reg.entry()
 
 
@@ -137,19 +137,19 @@ def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
     prog = P.program_digest(_program(w=32))
     assert RV.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
     assert RV.domain(prog, "W", 2, 5, 32).domain_id != RV.domain(prog, "W", 2, 5).domain_id
-    reg = G.Registered.commit(prog, "W", [[0x3727C5AC, 0x3E38AA3B]] * 2, word_bits=32)
+    reg = RV.Registered.commit(prog, "W", [[0x3727C5AC, 0x3E38AA3B]] * 2, word_bits=32)
     assert reg.entry() == {"value": "W", "root": reg.root.hex(), "leaves": 2, "words": 2, "word_bits": 32,
                            "domain": RV.domain(prog, "W", 2, 2, 32).domain_id.hex()}
     inst = hm96.SHA512
     assert reg.bcs[0] == inst.commit_string(inst.default_key, RV.row_digest([0x3727C5AC, 0x3E38AA3B], 32), reg.salts[0])
     assert G.verify_read(reg.domain, reg.root, 1, reg.bcs[1], reg.path(1))
     assert not G.verify_read(RV.domain(prog, "W", 2, 2), reg.root, 1, reg.bcs[1], reg.path(1))
-    pinned = G.Registered.commit("ab" * 64, "values", [[0x3727C5AC, 0x3E38AA3B]], [bytes([9]) * 192], word_bits=32)
+    pinned = RV.Registered.commit("ab" * 64, "values", [[0x3727C5AC, 0x3E38AA3B]], [bytes([9]) * 192], word_bits=32)
     assert pinned.root.hex() == ROOT_32
     for bad in (dict(rows=[[1 << 32, 0]], word_bits=32), dict(rows=[[1 << 16, 0]]), dict(rows=[[1, 2]], word_bits=8),
                 dict(rows=[[1, 2]], word_bits=64)):
         with pytest.raises(ValueError):
-            G.Registered.commit(prog, "W", **bad)
+            RV.Registered.commit(prog, "W", **bad)
 
 
 def test_the_verifier_derives_word_bits_from_its_own_program():
@@ -183,11 +183,11 @@ def test_salts_are_one_per_row_and_never_reused():
     prog = _program()
     salt = hm96.SHA512.fresh_salt()
     with pytest.raises(ValueError, match="never reused"):
-        G.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt, salt])
+        RV.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt, salt])
     with pytest.raises(ValueError):
-        G.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt])
+        RV.Registered.commit(P.program_digest(prog), "W", TABLE[:2], [salt])
     with pytest.raises(ValueError):
-        G.Registered.commit(P.program_digest(prog), "W", [[1, 2], [3]])
+        RV.Registered.commit(P.program_digest(prog), "W", [[1, 2], [3]])
 
 
 def test_a_statement_table_carries_the_registered_salts_and_paths():
@@ -246,8 +246,8 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
     prog = P.program_digest(_program(w=word_bits))
     rows = [[0x3727C5AC & ((1 << word_bits) - 1), 0x3E38AA3B & ((1 << word_bits) - 1)], [5, 6], [7, 8]]
     salts = [bytes([r + 1]) * 192 for r in range(3)]
-    reg = G.Registered.commit(prog, "W", rows, salts, word_bits, schema)
-    v1 = G.Registered.commit(prog, "W", rows, salts, word_bits)
+    reg = RV.Registered.commit(prog, "W", rows, salts, word_bits, schema)
+    v1 = RV.Registered.commit(prog, "W", rows, salts, word_bits)
     inst = hm96.SHA512
     words = RV.row_words(rows[0], word_bits, schema)
     assert len(words) == 2 * word_bits // 16, "a bit row is its leaves' bits, no whole-block padding"
@@ -265,7 +265,7 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
         assert not G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), other)
     assert reg.schema == schema and "row_schema" not in reg.entry(), "the registration's entry is the same in every format"
     with pytest.raises(ValueError, match="not 'hm96-sha512/row/v3'"):
-        G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
+        RV.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
 
 
 def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
@@ -277,7 +277,7 @@ def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
     V, H = 5, 3
     rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]
     salts = [bytes([t + 1]) * 192 for t in range(V)]
-    reg = G.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
+    reg = RV.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
     dom, D = reg.domain.domain_id, merkle_depth(V)
     for t in range(V):
         path = [reg.path(t)[64 * k:64 * (k + 1)] for k in range(D)]
@@ -368,7 +368,7 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
     assert G.reads(prog, QT, {"A": K // 2}, {"A": G.SCHEMA_V2}) == want
     assert G.reads(prog, QT, {"A": 8 * K}) == want, "row/v1 rows of one word a leaf, the same rows"
     rows = [[(17 * r + j) & 0xFFFF for j in range(K // 2)] for r in range(4)]
-    reg = G.Registered.commit(P.program_digest(prog), "A", rows, schema=G.SCHEMA_V2)
+    reg = RV.Registered.commit(P.program_digest(prog), "A", rows, schema=G.SCHEMA_V2)
     doc = G.reads_file(prog, QT, {"A": K // 2}, {"A": reg.root.hex()}, ports={"a[0]": "a0", "a[1]": "a1"},
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
@@ -519,7 +519,7 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     assert "R7-registered" in R.check(rec, prog, Q, **kw, registered={"W": 3}).codes
     # a count equal to the verifier's is still refused as a bool: True would give the docket a second digest
     one = _program(pos=(0, 0), rows=1)
-    rec1, ports1 = _record(one, G.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
+    rec1, ports1 = _record(one, RV.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
     kw1 = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports1}
     assert rec1["registered"][0]["leaves"] == 1 and R.check(rec1, one, Q, **kw1, registered={"W": 2}).ok
     true = {**rec1, "registered": [{**rec1["registered"][0], "leaves": True}]}
@@ -545,7 +545,7 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     """The verifier's program says the table's leaves are 32 bits: a 32-bit docket of it passes R7, and one that
     names another width, or none (16), is refused, as is a 32-bit docket of a 16-bit table."""
     prog = _program(w=32)
-    reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
+    reg = RV.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     rec, ports = _record(prog, reg)
     kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports}
     assert rec["registered"] == [reg.entry()] and reg.entry()["word_bits"] == 32
@@ -555,11 +555,11 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     as_float = {**rec, "registered": [{**reg.entry(), "word_bits": 32.0}]}
     assert R.digest(as_float) != R.digest(rec)
     assert R.check(as_float, prog, Q, **kw, registered={"W": 2}).codes == ("R7-word_bits",)
-    sixteen = G.Registered.commit(P.program_digest(prog), "W", TABLE)
+    sixteen = RV.Registered.commit(P.program_digest(prog), "W", TABLE)
     assert set(R.check({**rec, "registered": [sixteen.entry()]}, prog, Q, **kw, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}
     narrow = _program()
-    rec16, ports16 = _record(narrow, G.Registered.commit(P.program_digest(narrow), "W", TABLE, word_bits=32))
+    rec16, ports16 = _record(narrow, RV.Registered.commit(P.program_digest(narrow), "W", TABLE, word_bits=32))
     assert set(R.check(rec16, narrow, Q, sampling_design=SAMPLING_DESIGN, scheme=SCHEME, ports=ports16, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}
     # a v2 record where the verifier registers nothing, and a v1 record where it registers a value, are refused
@@ -596,7 +596,7 @@ WINDOWS = ("a1" * 64, "b2" * 64)
 X_ROWS = [[i, 2 * i] for i in range(len(POS))]
 
 
-def _windows(prog: Program, xs, w: G.Registered):
+def _windows(prog: Program, xs, w: RV.Registered):
     """A record per window, each the next's `previous`, registering x's commitment of that window and the weights W."""
     base, ports = _record(prog, w)
     out = []
@@ -616,14 +616,14 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
     prog = _program()
     d = P.program_digest(prog)
     w = _registered(prog)
-    plain, kw = _windows(prog, [G.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
+    plain, kw = _windows(prog, [RV.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
     assert R.check(plain[0], prog, Q, **kw).ok
     for held in (None, ["W"]):
         with pytest.raises(ValueError, match=r"registered values \[.*'x'\].*`window_root`"):
             R.check(plain[1], prog, Q, **kw, log=plain[:1], held=held)
         with pytest.raises(ValueError, match=r"`window_root`"):
             R.check({**plain[1], "registered": plain[0]["registered"]}, prog, Q, **kw, log=plain[:1], held=held)
-    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    xs = [RV.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
     recs, kw = _windows(prog, xs, w)
     for i, (r, rec) in enumerate(zip(WINDOWS, recs)):
         assert R.check(rec, prog, Q, **kw, log=recs[:i], window_root=r, held=["W"]).ok
@@ -632,10 +632,10 @@ def test_two_honest_windows_register_the_same_names_under_their_own_roots():
     assert xs[0].entry()["domain"] != xs[1].entry()["domain"] and xs[0].root != xs[1].root
     # (c) the weights are held across the windows: a second window's W under another root, or under its window's
     # domain, is refused
-    other = G.Registered.commit(d, "W", TABLE)
+    other = RV.Registered.commit(d, "W", TABLE)
     moved = {**recs[1], "registered": [xs[1].entry(), other.entry()]}
     assert R.check(moved, prog, Q, **kw, log=recs[:1], window_root=WINDOWS[1], held=["W"]).codes == ("R7-held",)
-    windowed = {**recs[1], "registered": [xs[1].entry(), G.Registered.commit(d, "W", TABLE, window=WINDOWS[1]).entry()]}
+    windowed = {**recs[1], "registered": [xs[1].entry(), RV.Registered.commit(d, "W", TABLE, window=WINDOWS[1]).entry()]}
     assert R.check(windowed, prog, Q, **kw, log=recs[:1], window_root=WINDOWS[1], held=["W"]).codes == ("R7-domain",
                                                                                                          "R7-held")
     # a verifier that doesn't hold W takes it per window too: then the weights' window-independent entry is refused
@@ -656,7 +656,7 @@ def test_a_window_replaying_an_earlier_windows_root_is_refused():
     prog = _program()
     d = P.program_digest(prog)
     w = _registered(prog)
-    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    xs = [RV.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
     recs, kw = _windows(prog, xs, w)
     win = {"window_root": WINDOWS[1], "held": ["W"], "log": recs[:1]}
     replay = {**recs[1], "registered": [xs[0].entry(), w.entry()]}
@@ -680,8 +680,8 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
     prog = _program()
     d = P.program_digest(prog)
     w = _registered(prog)
-    plain, kw = _windows(prog, [G.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
-    xs = [G.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
+    plain, kw = _windows(prog, [RV.Registered.commit(d, "x", X_ROWS) for _ in WINDOWS], w)
+    xs = [RV.Registered.commit(d, "x", X_ROWS, window=r) for r in WINDOWS]
     recs, _ = _windows(prog, xs, w)
     claims = {"window_root": WINDOWS[0], "held": ["x", "W"]}
     claimed = lambda rec: {**rec, "window": {**rec["window"], **claims}}  # noqa: E731
@@ -689,7 +689,7 @@ def test_the_window_root_and_held_values_are_the_verifiers_never_the_records():
         R.check(claimed(plain[1]), prog, Q, **kw, log=plain[:1], held=["W"])
     win = {"window_root": WINDOWS[1], "held": ["W"], "log": recs[:1]}
     for rec in (recs[1], {**recs[1], "registered": [xs[0].entry(), w.entry()]},
-                {**recs[1], "registered": [G.Registered.commit(d, "x", X_ROWS).entry(), w.entry()]}):
+                {**recs[1], "registered": [RV.Registered.commit(d, "x", X_ROWS).entry(), w.entry()]}):
         assert R.check(claimed(rec), prog, Q, **kw, **win).codes == R.check(rec, prog, Q, **kw, **win).codes
     assert R.check(recs[1], prog, Q, **kw, **win).ok
     for k, v in claims.items():
@@ -703,7 +703,7 @@ def test_a_session_bound_domain_binds_the_session_alone():
     the open root's place: its domain differs from the unbound one, the window-bound one and another session's, and a
     domain binds at most one of a window, a docket and a session."""
     prog = P.program_digest(_program())
-    rec = G.Registered.commit(prog, "x", X_ROWS, session="s-1")
+    rec = RV.Registered.commit(prog, "x", X_ROWS, session="s-1")
     doms = {RV.domain(prog, "x", 2, len(X_ROWS), **kw).domain_id for kw in
             ({}, {"window": WINDOWS[0]}, {"session": "s-1"}, {"session": "s-2"})}
     assert len(doms) == 4 and rec.domain.domain_id == RV.domain(prog, "x", 2, len(X_ROWS), session="s-1").domain_id
@@ -734,11 +734,11 @@ def test_the_window_prefixed_form_still_verifies():
         for i, r in enumerate(WINDOWS):
             prog, x, w, window_root = _prefixed(f"w{i}/"), f"w{i}/x", f"w{i}/W", r if windowed else None
             d = P.program_digest(prog)
-            base, ports = _record(prog, G.Registered.commit(d, w, TABLE))
+            base, ports = _record(prog, RV.Registered.commit(d, w, TABLE))
             rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
                            previous=R.digest(log[-1]) if log else None,
-                           registered=[G.Registered.commit(d, x, X_ROWS, window=window_root).entry(),
-                                       G.Registered.commit(d, w, TABLE).entry()])
+                           registered=[RV.Registered.commit(d, x, X_ROWS, window=window_root).entry(),
+                                       RV.Registered.commit(d, w, TABLE).entry()])
             assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, log=log, registered={x: 2, w: 2}, window_root=window_root,
                            held=[w] if windowed else None).ok, (i, windowed)
             log.append(rec)
@@ -747,7 +747,7 @@ def test_the_window_prefixed_form_still_verifies():
 def test_a_window_root_and_held_values_are_the_verifiers_in_one_form():
     prog = _program()
     w = _registered(prog)
-    recs, kw = _windows(prog, [G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])], w)
+    recs, kw = _windows(prog, [RV.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])], w)
     for bad in ("A1" * 64, "a1" * 63, "a1" * 63 + "a\n", 1, b"\xa1" * 64):
         with pytest.raises(ValueError, match="window root"):
             R.check(recs[0], prog, Q, **kw, window_root=bad)
@@ -764,7 +764,7 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name():
     own inputs."""
     prog = _program()
     w = _registered(prog)
-    x = G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
+    x = RV.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
     (rec,), kw = _windows(prog, [x], w)
     kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
     salt, other = "5a" * 64, "5b" * 64
@@ -792,7 +792,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name():
     (`R6-compiler`); one that read no log's compiler holds the window to nothing. A compiler in another form refuses the
     verifier's own inputs."""
     prog = _program()
-    x = G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
+    x = RV.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
     (rec,), kw = _windows(prog, [x], _registered(prog))
     kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
     digest, other = "c1" * 64, "c2" * 64
@@ -908,7 +908,7 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
     ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
-    w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
+    w = RV.Registered.commit(P.program_digest(prog), "W", TABLE)
     base = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], **kw)
     sup = G.sources(SUPPLIED)["pouw.roots"]
     roots = roots or G.supplied_value(prog, "pouw.roots", sup, base, ["pouw.roots"])
@@ -961,10 +961,10 @@ def test_r7_refuses_a_supplied_value_the_prover_chose():
     commitment of a record whose x root moved since."""
     rec, check, w, roots = _seeded_case()
     prog, words = check["program"], check["registered"]["pouw.roots"]
-    zero = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2, word_bits=32)
-    zero_public = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2,
+    zero = RV.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2, word_bits=32)
+    zero_public = RV.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2,
                                       RV.supplied_salts(P.program_digest(prog), "pouw.roots", 2), word_bits=32)
-    fresh = G.Registered.commit(P.program_digest(prog), "pouw.roots", roots.rows, word_bits=32)
+    fresh = RV.Registered.commit(P.program_digest(prog), "pouw.roots", roots.rows, word_bits=32)
     for other in (zero, zero_public, fresh):
         bad, _, _, _ = _seeded_case(roots=other)
         assert R.check(bad, **check).codes == ("R7-supplied",)
@@ -1579,7 +1579,7 @@ def _pool(log, reset=False, week=0, verdicts=None, lag=1) -> tuple[dict, dict]:
     return pool, {R.POOL_RESET: reset, R.POOL_WEEK: week, R.POOL_SPENT: reset or R.pool_spent_before(pool, log)}
 
 
-def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None, reset=False, week=0, verdicts=None, lag=1,
+def _pool_window(prog: Program, w: RV.Registered, i: int, log, pin=None, reset=False, week=0, verdicts=None, lag=1,
                  **window):
     """Window `i`'s record of `_pooled`, the next after `log`: x and `pout` (`POOLS[i]`) afresh under its window's open
     root, the weights `w` held, `pin` the entry `pin`, the empty pool filled from `genesis` by default, and its window
@@ -1587,8 +1587,8 @@ def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None, reset=Fa
     (`_pool`)."""
     d = P.program_digest(prog)
     base, ports = _record(prog, w)
-    x = G.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i])
-    pout = G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i])
+    x = RV.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i])
+    pout = RV.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i])
     pool, marks = _pool(log, reset, week, verdicts, lag)
 
     def record(pin_entry):
@@ -1617,7 +1617,7 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
     w = _registered(prog)
     first, kw = _pool_window(prog, w, 0, [])
     assert C.both(first, prog, Q, **kw).ok
-    fixed = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[0]], word_bits=32).entry()
+    fixed = RV.Registered.commit(P.program_digest(prog), "pin", [POOLS[0]], word_bits=32).entry()
     assert _entry(first, "pin")["domain"] == fixed["domain"]
     carried = {**_entry(first, "pout"), "value": "pin"}
     second, kw2 = _pool_window(prog, w, 1, [first], carried)
@@ -1625,7 +1625,7 @@ def test_a_window_opens_the_pool_the_previous_window_of_record_left():
     assert C.both(second, prog, Q, **kw2).ok
     third, kw3 = _pool_window(prog, w, 2, [first, second], {**_entry(second, "pout"), "value": "pin"})
     assert C.both(third, prog, Q, **kw3).ok
-    other = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[2]], word_bits=32, window=POOL_WINDOWS[1])
+    other = RV.Registered.commit(P.program_digest(prog), "pin", [POOLS[2]], word_bits=32, window=POOL_WINDOWS[1])
     for pin, codes in (({**carried, "root": other.root.hex()}, ("R7-held", "R7-pool-chain")),
                        (other.entry(), ("R7-domain", "R7-held", "R7-pool-chain")),
                        (_entry(first, "pin"), ("R7-domain", "R7-held", "R7-pool-chain")),
@@ -1731,7 +1731,7 @@ def test_a_window_names_its_pools_reset():
     for named in (False, None, 0, "false"):
         rec, _ = _pool_window(prog, w, 1, [first], reset=True, pool_reset=named)
         assert C.both(rec, prog, Q, **kw3).codes == ("R6-pool-reset",), named
-    fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
+    fresh = RV.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     unnamed, _ = _pool_window(prog, w, 1, [first], fresh, **UNPOOLED)
     assert C.both(unnamed, prog, Q, **plain).ok
@@ -1765,7 +1765,7 @@ def test_a_window_names_its_week_and_whether_its_weeks_reset_is_spent():
     for named in (1, None, False, "0"):
         rec, _ = _pool_window(prog, w, 1, [first], carry, pool_week=named)
         assert C.both(rec, prog, Q, **kw2).codes == ("R6-pool-week",), named
-    fresh = G.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
+    fresh = RV.Registered.commit(P.program_digest(prog), "pin", [POOLS[1]], word_bits=32, window=POOL_WINDOWS[1]).entry()
     plain = {k: v for k, v in kw2.items() if k != "pool"}
     for field, code in ((R.POOL_WEEK, "R6-pool-week"), (R.POOL_SPENT, "R6-pool-spent")):
         for named in (0, False, True):
@@ -1851,7 +1851,7 @@ def _continued() -> Program:
     return Program(bind(CompositeDefinition("RegisteredTestContinuedProgram", 0, (), sig, body, register=False)))
 
 
-def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None, verdicts=None, reset=False):
+def _cut_window(prog: Program, w: RV.Registered, i: int, log, pin=None, ing=None, verdicts=None, reset=False):
     """Window `i`'s record of `_continued`, the next after `log`: x, `req` (`_cut_rows(i)`'s) and `pout` (`POOLS[i]`)
     afresh under its window's open root, the weights `w` held, `ing` the network attester's commitment of `_cut_rows(i)`'s
     arrivals (or the entry `ing`), `pin` the entry `pin`, the empty pool filled from `genesis` by default, and its
@@ -1861,10 +1861,10 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
     pool, marks = _pool(log, reset, verdicts=verdicts)
     base, ports = _record(prog, w)
     arrivals, rows = _cut_rows(i)
-    stamped = G.Registered.commit(d, "ing", arrivals)
-    entries = [G.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i]).entry(), w.entry(), ing or stamped.entry(),
-               G.Registered.commit(d, "req", rows, window=POOL_WINDOWS[i]).entry(),
-               G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i]).entry()]
+    stamped = RV.Registered.commit(d, "ing", arrivals)
+    entries = [RV.Registered.commit(d, "x", X_ROWS, window=POOL_WINDOWS[i]).entry(), w.entry(), ing or stamped.entry(),
+               RV.Registered.commit(d, "req", rows, window=POOL_WINDOWS[i]).entry(),
+               RV.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i]).entry()]
 
     def record(pin_entry):
         return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks},
@@ -1905,7 +1905,7 @@ def test_an_arrival_open_at_a_windows_edge_continues_in_the_next_from_the_pool_i
     assert req1[0][2:10] == req0[0][2:10] and req2[0][2:6] == req1[1][2:6]
     served = _cut_rows(1, {7: 1})[0]
     assert served[0] == [1, 7, 9]
-    for ing in (_entry(first, "ing"), G.Registered.commit(P.program_digest(prog), "ing", served).entry()):
+    for ing in (_entry(first, "ing"), RV.Registered.commit(P.program_digest(prog), "ing", served).entry()):
         wrong, kw_wrong = _cut_window(prog, w, 1, [first], {**_entry(first, "pout"), "value": "pin"}, ing)
         assert C.both(wrong, prog, Q, **kw_wrong).codes == ("R7-held",)
     empty, kw_empty = _cut_window(prog, w, 1, [first])

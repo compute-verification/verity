@@ -35,7 +35,7 @@ its window's ingress the window figure beside it, with the premise it rests on n
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
-``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
+``registered_value.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port

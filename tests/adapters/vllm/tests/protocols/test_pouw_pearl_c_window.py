@@ -276,7 +276,7 @@ def test_two_commits_of_the_same_rows_take_other_salts_and_roots_and_each_is_reu
 
 def test_ws_b_rows_are_at_pouws_weight_root_the_hm96_root_of_the_same_rows(tmp_path):
     """PoUW's tree of a weight's B rows is a ``frame-v3-sha512`` tree of hm96 ``row-seg/v1`` leaves over 32-bit words
-    (`audit.Hm96Domain`), so its root is the one-stage registered commitment's (`registered.Registered.commit`, as `reuse`
+    (`audit.Hm96Domain`), so its root is the one-stage registered commitment's (`registered_value.Registered.commit`, as `reuse`
     commits A and y) of the same rows and salts in a tree under the same domain, and W's ``pearl-b/<w>`` at PoUW's root is
     that value's entry: B needs no second tree, and PoUW's root is the entry's. A row other than the committed one moves
     the root."""
@@ -286,7 +286,7 @@ def test_ws_b_rows_are_at_pouws_weight_root_the_hm96_root_of_the_same_rows(tmp_p
 
     def registered(wid: int, rows: np.ndarray) -> PWR.Committed:
         n = len(rows)
-        base = G.Registered.commit(SCHEME, PWR.b_value(wid), rows.tolist(), b_salts[wid],
+        base = RV.Registered.commit(SCHEME, PWR.b_value(wid), rows.tolist(), b_salts[wid],
                                    word_bits=32, schema=G.SCHEMA_SEG)
         dom = rows_domain(weight_binding(wid), -2, n, "sha512")
         levels = tree_levels(dom, [RV.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base.bcs)])

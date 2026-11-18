@@ -39,9 +39,9 @@ def dump(out: Path, T: int = T, S: int = S, HEADERS: list = HEADERS, MAX_TOKENS:
          SLOTS: list = SLOTS) -> dict:
     """A served window's live dump, as `pouw_h1_live.dump` writes it."""
     heads = HEADERS + [(0,) * LR.HEADER] * (T - len(HEADERS))
-    req = G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), RV.WORD_BITS,
+    req = RV.Registered.commit(PROGRAM, LR.table(PREFIX, LR.REQUESTS), LR.header_words(heads), salts(T), RV.WORD_BITS,
                               LR.REQUEST_SCHEMA, session=SESSION)
-    slots = [G.Registered.commit(PROGRAM, LR.table(PREFIX, LR.SLOTS, s), LR.slot_words(SLOTS[s]), salts(T), RV.WORD_BITS,
+    slots = [RV.Registered.commit(PROGRAM, LR.table(PREFIX, LR.SLOTS, s), LR.slot_words(SLOTS[s]), salts(T), RV.WORD_BITS,
                                  G.SCHEMA_V2, window=WINDOW) for s in range(S)]
     served = [sum(1 for x in r if x) for r in SLOTS]
     pub = {"T": T, "S": S, "prefix": PREFIX, "program": PROGRAM, "window": WINDOW, "session": SESSION,

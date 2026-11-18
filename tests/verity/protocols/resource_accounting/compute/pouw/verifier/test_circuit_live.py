@@ -217,12 +217,12 @@ def test_the_tables_rows_are_the_statements_port_rows():
 
 def _window(T, S, rng):
     prog, window, session = "cd" * 64, "ab" * 64, "session-7"
-    regs = {LR.table("h1/", LR.REQUESTS): G.Registered.commit(prog, LR.table("h1/", LR.REQUESTS),
+    regs = {LR.table("h1/", LR.REQUESTS): RV.Registered.commit(prog, LR.table("h1/", LR.REQUESTS),
                                                              LR.header_words(_valid(rng, T, n=2)[1]),
                                                              schema=LR.REQUEST_SCHEMA, session=session)}
     for s in range(S):
         v = LR.table("h1/", LR.SLOTS, s)
-        regs[v] = G.Registered.commit(prog, v, LR.slot_words([1] * (T // 2) + [0] * (T - T // 2)), schema=G.SCHEMA_V2,
+        regs[v] = RV.Registered.commit(prog, v, LR.slot_words([1] * (T // 2) + [0] * (T - T // 2)), schema=G.SCHEMA_V2,
                                       window=window)
     return prog, window, session, regs
 

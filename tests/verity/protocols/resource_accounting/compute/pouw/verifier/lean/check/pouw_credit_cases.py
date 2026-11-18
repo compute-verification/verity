@@ -1299,10 +1299,10 @@ def b_leaf_words(codes: bytes, sw: float) -> list[list[int]]:
 
 
 def registered_b(program: str, v: str, rows: list[tuple[bytes, float]]) -> dict:
-    """The entry of `rows` registered as the served path registers each K's B rows (`registered.Registered`, each row
+    """The entry of `rows` registered as the served path registers each K's B rows (`registered_value.Registered`, each row
     its `b_leaf_words`, salts sampled once, binding no execution phase)."""
     words = [w for codes, sw in rows for w in b_leaf_words(codes, sw)]
-    return G.Registered.commit(program, v, words, RV.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
+    return RV.Registered.commit(program, v, words, RV.supplied_salts(program, v, len(words)), schema=G.SCHEMA_V2).entry()
 
 
 def _rehome(weights: list[dict], program: str, prefix: str) -> list[dict]:

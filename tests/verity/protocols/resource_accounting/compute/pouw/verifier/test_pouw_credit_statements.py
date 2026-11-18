@@ -391,7 +391,7 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
     roots = tuple(bytes.fromhex(next(p for x, p in reg["ports"].items() if x.startswith(f"{t}_k"))["root"]) for t in "ab")
     rows = [Cr.CC.public_words(bytes.fromhex(d["salt"]), u0 + t, roots, (call, blocks[t])) for t in range(n)]
     salts = [Cr.CC.public_row_salt(w, u0 + t) for t in range(n)]
-    got = Cr.G.Registered.commit(program, pub["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    got = RV.Registered.commit(program, pub["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
     return {**reg, "ports": {**reg["ports"], Cr.PUB_PORT: {**pub, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
 
@@ -461,7 +461,7 @@ def _ok_rows(d: dict, s: dict, rows: list[list[int]]) -> dict:
     program, _lay, _shape, reg = _files(d, s)
     ok, w = reg["ports"][Cr.OK_PORT], d["window"]["root"]
     salts = [Cr.CC.ok_salt(w, u) for u in range(ok["leaves"])]
-    got = Cr.G.Registered.commit(program, ok["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
+    got = RV.Registered.commit(program, ok["value"], rows, salts, RV.WORD_BITS, Cr.G.SCHEMA_V2, window=w)
     return {**reg, "ports": {**reg["ports"], Cr.OK_PORT: {**ok, "root": got.root.hex(), "known": {
         "rows": rows, "salts": [x.hex() for x in salts]}}}}
 

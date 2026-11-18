@@ -120,7 +120,7 @@ INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || in
 @dataclass(frozen=True)
 class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
-    32-bit leaves (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
+    32-bit leaves (``registered_value.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
     row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
     concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
     value: Any

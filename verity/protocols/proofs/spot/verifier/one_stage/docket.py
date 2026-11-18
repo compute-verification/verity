@@ -190,7 +190,7 @@ def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
            work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
     `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
-    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
+    `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`registered_value.Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],

@@ -57,7 +57,7 @@ def _interior(stream: S.Stream, previous: str, first, flat: bool = False) -> tup
     if flat:
         prog = P.program_digest(program)
         rows = [_digest_words(r) for r in ROOTS]
-        value = G.Registered.commit(prog, "hist", rows, RV.supplied_salts(prog, "hist", len(rows)), 16)
+        value = RV.Registered.commit(prog, "hist", rows, RV.supplied_salts(prog, "hist", len(rows)), 16)
     else:
         value = G.supplied_value(program, "hist", G.sources(SUPPLIED)["hist"], bare)
     n = P.units(program, WINDOW_QUERY)

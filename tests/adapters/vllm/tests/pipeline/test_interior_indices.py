@@ -167,7 +167,7 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
         mine = RG.supplied_rows(stream.interior_program(Q), x.value, RG.sources(srcs)[x.value], it.record)
         assert mine == [[r, 0] for _ in range(Q) for r in range(x.per)]
         assert [list(r) for r in c.given[m.port("idx")].value.rows] == mine
-        v = RG.Registered.commit(prog, x.value, mine, RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema("idx"))
+        v = RV.Registered.commit(prog, x.value, mine, RV.supplied_salts(prog, x.value, len(mine)), schema=m.schema("idx"))
         assert v.entry() == {k: got[x.value][k] for k in v.entry()}
     assert IR.link_words(SUPPLIES) == {f"{KEY}/c": 2, f"{KEY}/i": 2}
     assert IR.span_values(SUPPLIES) == ((f"{KEY}/c", NC, IR.INDEX), (f"{KEY}/i", W, IR.INDEX))

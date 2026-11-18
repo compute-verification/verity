@@ -1,4 +1,4 @@
-"""A registered value committed from an array of its leaves, as `one_stage.registered.Registered.commit` commits rows.
+"""A registered value committed from an array of its leaves, as `registered_value.Registered.commit` commits rows.
 
 `Registered.commit` takes rows of Python ints, which can't hold a model's weights (9.45·10¹⁰ leaves a GLM-5.3 rank). `commit`
 takes the parameter's leaves as one unsigned array, in the parameter's leaf order, and makes the same rows, leaves, root and

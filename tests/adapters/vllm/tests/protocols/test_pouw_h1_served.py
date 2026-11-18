@@ -177,7 +177,7 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     return run, ws, got
 
 
-def _tree(reg: G.Registered, rows: list[bytes], key: bytes, first: int) -> str:
+def _tree(reg: RV.Registered, rows: list[bytes], key: bytes, first: int) -> str:
     """`reg`'s tree recomputed from each row's raw bytes, its bit row's memory, under row j's salt at nonce ``first``."""
     dom, inst = reg.domain, hm96.SHA512
     bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row, 8 * len(row)), hm96_salt(key, first, j))
@@ -284,7 +284,7 @@ def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_
     zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
     order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
     assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
-    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert all(isinstance(r, RV.Registered) for r in run.served.registered.values())
     assert list(run.served.registered) == list(waited.served.registered)
     assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
     assert (run.tables, run.round_log) == (waited.tables, waited.round_log)

@@ -82,7 +82,7 @@ from verity.protocols.resource_accounting.network.verifier.certificate import Di
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
@@ -429,7 +429,7 @@ class IngressTie:
             raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
         return stream.register(record, self.ports(window))
 
-    def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> G.Registered:
+    def known_tree(self, head: WR.CellsHead, port: str, rows: Sequence[bytes]) -> RV.Registered:
         """Port `port`'s rows (one a unit, each its bytes) as the value the verifier registers at known content on
         `head`'s execution phase (`known`): row t under its public salt (`registered_value.supplied_salts`) in a tree whose
         domain binds the registered Program and the network attester's root. The prover commits its own rows of `port` the same
@@ -437,11 +437,11 @@ class IngressTie:
         if port not in KNOWN or len(rows) != self.T:
             raise ValueError(f"a known value is one of {KNOWN}, one row a unit of the window's {self.T}")
         program, value = self._partition["program"], f"{head.value}/{VERIFIER}/{port}"
-        return G.Registered.commit(program, value, [WR.words(r) for r in rows],
+        return RV.Registered.commit(program, value, [WR.words(r) for r in rows],
                                    RV.supplied_salts(program, value, self.T), RV.WORD_BITS, SCHEMA,
                                    window=head.root.hex())
 
-    def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, G.Registered] | None:
+    def known(self, head: WR.CellsHead, lanes: Sequence[Sequence[Q.Lane]] | None) -> dict[str, RV.Registered] | None:
         """The values the verifier registers at known content on `head`'s execution phase (`known_tree`): ``pub``, row t
         the public row of bucket t's `lanes` (`public_arguments`), and ``o0``, every row the output word 1. None
         without a public row for every bucket."""

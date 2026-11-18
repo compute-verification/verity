@@ -363,14 +363,14 @@ def domain(t: Tensor, r: Reader) -> CommitmentDomain:
     return RV.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
 
 
-def commit(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader, name: str) -> REG.Registered:
+def commit(shape: Shape, seed: bytes, salts_at: str | Path, program: Program | str | Reader, name: str) -> RV.Registered:
     """Tensor `name` committed whole by core's ``Registered.commit`` (small shapes; `root` is the same root in parallel)."""
     i, t = next((i, t) for i, t in enumerate(tensors(shape)) if t.name == name)
     r = reader(shape, program)
     b = r.word_bits(name)
     rows = np.frombuffer(tensor_bytes(shape, seed, name), "<u2" if b == 16 else "<u4")
     s = salts(salts_at, name, 0, t.leaves)
-    return REG.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
+    return RV.Registered.commit(r.digest, name, rows.reshape(t.leaves, registered_words(t, b)).tolist(),
                                  [s[k * _INST.salt_bytes:(k + 1) * _INST.salt_bytes] for k in range(t.leaves)],
                                  word_bits=b, schema=t.schema)
 

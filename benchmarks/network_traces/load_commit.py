@@ -152,7 +152,7 @@ def exact() -> dict:
     rows = rng.integers(0, 256, (n, ROW_BYTES), dtype=np.uint8)
     salts = os.urandom(n * INST.salt_bytes)
     words = [list(np.frombuffer(r.tobytes(), "<u2")) for r in rows]
-    ref = G.Registered.commit(PROGRAM, "w", words, [salts[192 * i:192 * (i + 1)] for i in range(n)], 16, SCHEMA)
+    ref = RV.Registered.commit(PROGRAM, "w", words, [salts[192 * i:192 * (i + 1)] for i in range(n)], 16, SCHEMA)
     dom = RV.domain(PROGRAM, "w", ROW_WORDS, n)
     ours = frame_nodes(dom, hm96_leaves(dom, rows, salts))
     from verity.protocols.resource_accounting.memory.pous.verifier import verifier as PV

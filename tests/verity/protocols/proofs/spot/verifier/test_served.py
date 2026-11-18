@@ -57,8 +57,8 @@ def _record(prog: Program, entries, window=SERVED, previous=None, roots=None):
     return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, roots, window, previous=previous, registered=entries), ports
 
 
-def _tree(prog: Program) -> tuple[G.Registered, ServedTree]:
-    reg = G.Registered.commit(P.program_digest(prog), "W", TABLE)
+def _tree(prog: Program) -> tuple[RV.Registered, ServedTree]:
+    reg = RV.Registered.commit(P.program_digest(prog), "W", TABLE)
     return reg, ServedTree.of(reg)
 
 
@@ -108,7 +108,7 @@ def test_a_32_bit_tree_names_its_width():
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
                                             register=False)))
     q = P.template_instance_query(MIX32.id)
-    reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
+    reg = RV.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     tree = ServedTree.of(reg)
     sr = register_served(prog, q, [tree])
     assert sr.registered == [reg.entry()] and reg.entry()["word_bits"] == 32
@@ -227,7 +227,7 @@ def test_a_bit_row_tree_registers_in_its_format(schema):
     do: W's rows of two 8-bit leaves are one word each, so the tree is 5 rows of 1 word, its port names the format, and
     every read opens the served root under the format's leaves (`verify_read`), where the v1 file opens none."""
     prog = _program()
-    reg = G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema)
+    reg = RV.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema)
     tree = ServedTree.of(reg)
     assert (tree.row_schema, tree.leaves, tree.words) == (schema, 5, 1) and "row_schema" not in tree.entry()
     sr = register_served(prog, Q, [tree])
@@ -253,7 +253,7 @@ def test_a_bit_row_tree_whose_bits_are_not_the_parameters_rows_is_refused(schema
     """A bit row is exactly its `words * word_bits` bits: a tree whose words or width make its rows other than W's
     two-leaf rows, or that counts its rows as v1 would (one 8-bit leaf a word), is refused."""
     prog = _program()
-    tree = ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))
+    tree = ServedTree.of(RV.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))
     with pytest.raises(ValueError, match=why):
         register_served(prog, Q, [dataclasses.replace(tree, **change)])
 
@@ -265,7 +265,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     the same rows either way."""
     prog = _program()
     for schema in (G.SCHEMA_V2, G.SCHEMA_SEG):
-        sr = register_served(prog, Q, [ServedTree.of(G.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))])
+        sr = register_served(prog, Q, [ServedTree.of(RV.Registered.commit(P.program_digest(prog), "W", PACKED, schema=schema))])
         assert sr.schemas == {"W": schema}
         rec, ports = _record(prog, sr.registered)
         assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, registered=sr.values, schemas=sr.schemas).ok
@@ -283,7 +283,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
                                             lambda B, S, x, W: coll_concat(sig(S)[1], [B.call(MIX32, x[i], W[p]) for i, p in enumerate(POS)]),
                                             register=False)))
     q = P.template_instance_query(MIX32.id)
-    reg = G.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
+    reg = RV.Registered.commit(P.program_digest(wide), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32, schema=G.SCHEMA_V2)
     sr = register_served(wide, q, [ServedTree.of(reg)])
     assert {e["row_schema"] for e in sr.ports.values()} == {G.SCHEMA_V2}
     part = P.partition(wide, q)
@@ -321,8 +321,8 @@ def test_a_value_twice_no_tree_or_one_no_unit_reads_is_refused():
     with pytest.raises(ValueError, match="a ServedTree"):
         register_served(prog, Q, [tree.entry()])
     both = _program(unread=True)
-    w = ServedTree.of(G.Registered.commit(P.program_digest(both), "W", TABLE))
-    v = ServedTree.of(G.Registered.commit(P.program_digest(both), "V", TABLE[:1]))
+    w = ServedTree.of(RV.Registered.commit(P.program_digest(both), "W", TABLE))
+    v = ServedTree.of(RV.Registered.commit(P.program_digest(both), "V", TABLE[:1]))
     with pytest.raises(ValueError, match=r"served trees \['V'\]: no unit of the population reads them"):
         register_served(both, Q, [w, v])
 
@@ -369,8 +369,8 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
     refused: its domain is the first window's."""
     prog = _program()
     d = P.program_digest(prog)
-    w = G.Registered.commit(d, "W", TABLE)
-    xs = [G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
+    w = RV.Registered.commit(d, "W", TABLE)
+    xs = [RV.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=r) for r in WINDOWS]
     log: list = []
     for r, x in zip(WINDOWS, xs):
         sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], log=log, window_root=r, held=["W"])
@@ -385,7 +385,7 @@ def test_each_window_registers_its_own_trees_under_its_root_and_the_weights_once
         register_served(prog, Q, [ServedTree.of(xs[0]), ServedTree.of(w)], log=log[:1], window_root=WINDOWS[1],
                         held=["W"])
     with pytest.raises(ValueError, match="R7-held"):
-        register_served(prog, Q, [ServedTree.of(xs[1]), ServedTree.of(G.Registered.commit(d, "W", TABLE))], log=log[:1],
+        register_served(prog, Q, [ServedTree.of(xs[1]), ServedTree.of(RV.Registered.commit(d, "W", TABLE))], log=log[:1],
                         window_root=WINDOWS[1], held=["W"])
     with pytest.raises(ValueError, match="held values"):
         register_served(prog, Q, [ServedTree.of(xs[1])], window_root=WINDOWS[1], held=["W"])
@@ -397,11 +397,11 @@ def test_a_served_tree_cannot_hold_itself_across_windows():
     file names each port's domain as the verifier derived it, with no window root or held values of its own."""
     prog = _program()
     d = P.program_digest(prog)
-    w = G.Registered.commit(d, "W", TABLE)
-    unwindowed = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))])
+    w = RV.Registered.commit(d, "W", TABLE)
+    unwindowed = RV.Registered.commit(d, "x", [[i, i] for i in range(len(POS))])
     with pytest.raises(ValueError, match="registered-value domain"):
         register_served(prog, Q, [ServedTree.of(unwindowed), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
-    x = G.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=WINDOWS[0])
+    x = RV.Registered.commit(d, "x", [[i, i] for i in range(len(POS))], window=WINDOWS[0])
     sr = register_served(prog, Q, [ServedTree.of(x), ServedTree.of(w)], window_root=WINDOWS[0], held=["W"])
     assert set(sr.file) == {"format", "ports"}
     assert all("held" not in e and "window_root" not in e for e in sr.ports.values())

@@ -154,7 +154,7 @@ class Transfer:
     direction: Direction
     window: int
     kind: str
-    committed: G.Registered
+    committed: RV.Registered
 
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
@@ -164,7 +164,7 @@ class Transfer:
         fresh from the operating system) and never for another row."""
         _kind(kind, direction)
         _format(word_bits, schema)
-        return cls(link, direction, window, kind, G.Registered.commit(_program(program), value, rows, salts, word_bits,
+        return cls(link, direction, window, kind, RV.Registered.commit(_program(program), value, rows, salts, word_bits,
                                                                       schema))
 
     @property

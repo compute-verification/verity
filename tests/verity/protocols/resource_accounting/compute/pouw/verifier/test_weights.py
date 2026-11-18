@@ -1,5 +1,5 @@
 """`weights.weights_roots`, the streaming b/<K> commitment the auditor registers a model with, against
-`registered.Registered.commit` over the same rows and salts, and against `scalar_roots`, the per-row reference it replaced
+`registered_value.Registered.commit` over the same rows and salts, and against `scalar_roots`, the per-row reference it replaced
 (`hm96_salt`, `commit_string`, `registered_value.leaf`, `tree_levels`), for any chunking and any `workers`."""
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def committed(shapes, rows, key=KEY):
     out = {}
     for i, k in enumerate(Wt.ks(shapes)):
         words = [Wt.row_words(r) for w, (_n, kw) in enumerate(shapes) if kw == k for r in rows[w]]
-        out[k] = G.Registered.commit(CIRCUIT, Wt.value(PREFIX, k), words,
+        out[k] = RV.Registered.commit(CIRCUIT, Wt.value(PREFIX, k), words,
                                      [hm96_salt(key, Wt.B_NONCE + i, j) for j in range(len(words))], schema=G.SCHEMA_V2)
     return out
 

@@ -1,14 +1,16 @@
-"""A registered value's formats: its commitment domain, its rows' digests and leaves, its entry's keys and its supplied salts."""
+"""A registered value: its commitment (`Registered`), its domain, its rows' digests and leaves, its entry's keys and its supplied salts."""
 from __future__ import annotations
 
 import hashlib
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
-from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                         bit_row, row_leaf, sha512_row_digest, sha512_row_seg_digest, sha512_row_v2_digest)
 
@@ -120,6 +122,82 @@ def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
                      for c in range(_INST.salt_bytes // 64)) for i in range(n)]
 
 
-__all__ = ["BC_BYTES", "BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "SCHEMAS",
+@dataclass(frozen=True)
+class Registered:
+    """The prover's side of one registered value: its rows and salts (private), every row's `b || c`, the tree."""
+
+    program: str
+    value: str
+    words: int
+    word_bits: int
+    rows: tuple[tuple[int, ...], ...]
+    salts: tuple[bytes, ...]
+    bcs: tuple[bytes, ...]
+    levels: tuple[tuple[bytes, ...], ...]
+    schema: str = SCHEMA_HM96_SHA512_ROW
+    window: str | None = None
+    produced: str | None = None
+    session: str | None = None
+
+    @classmethod
+    def commit(cls, program: str, value: str, rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None,
+               word_bits: int = WORD_BITS, schema: str = SCHEMA_HM96_SHA512_ROW, window: str | None = None,
+               produced: str | None = None, session: str | None = None) -> "Registered":
+        """`salts`: one per row, sampled once (default: fresh from the operating system) and never used for any other row.
+        `word_bits`: every leaf's width (the verifier's `width` of the parameter, SPOT's `one_stage.registered.width`).
+        `schema`: the row format of the port that reads it (`SCHEMAS`). `window`: the window's open root, for a per-window
+        value; `produced`: the docket's digest, for a value produced after its sample; `session`: the window's session, for
+        a value its open root contains (`domain`)."""
+        rows = tuple(tuple(int(w) for w in r) for r in rows)
+        words = len(rows[0]) if rows else 0
+        if not rows or not words or any(len(r) != words for r in rows):
+            raise ValueError("a registered value is at least one row, every row the same width")
+        salts = tuple(bytes(s) for s in salts) if salts is not None else tuple(_INST.fresh_salt() for _ in rows)
+        if len(salts) != len(rows) or any(len(s) != _INST.salt_bytes for s in salts):
+            raise ValueError(f"one {_INST.salt_bytes}-byte salt per row")
+        if len(set(salts)) != len(salts):
+            raise ValueError("a salt is never reused: equal salts on two rows reveal the XOR of their digests")
+        bcs = tuple(_INST.commit_string(_INST.default_key, row_digest(r, word_bits, schema), s) for r, s in zip(rows, salts))
+        dom = domain(program, value, words, len(rows), word_bits, window, produced, session)
+        return cls(program, value, words, int(word_bits), rows, salts, bcs,
+                   tree_levels(dom, [leaf(dom, i, bc, schema) for i, bc in enumerate(bcs)]), schema, window, produced,
+                   session)
+
+    @property
+    def leaves(self) -> int:
+        return len(self.rows)
+
+    @property
+    def root(self) -> bytes:
+        return self.levels[-1][0]
+
+    @property
+    def domain(self) -> CommitmentDomain:
+        return domain(self.program, self.value, self.words, self.leaves, self.word_bits, self.window, self.produced,
+                      self.session)
+
+    def entry(self) -> dict[str, Any]:
+        """What the docket names: `{"value", "root", "leaves", "words", "domain"}`, and `"word_bits"` when it is not
+        16."""
+        return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
+                **width_entry(self.word_bits), "domain": self.domain.domain_id.hex()}
+
+    def path(self, position: int) -> bytes:
+        out, i = b"", position
+        for level in self.levels[:-1]:
+            out += level[i ^ 1]
+            i >>= 1
+        return out
+
+    def statement(self, positions: Sequence[int]) -> tuple[list[tuple[int, ...]], list[bytes], dict[str, Any]]:
+        """A statement's table of the rows at `positions`: the rows and their registered salts (the prover's), and the
+        header entry `{"value", "positions", "paths"}`."""
+        if any(not 0 <= p < self.leaves for p in positions):
+            raise ValueError(f"a position is outside the value's {self.leaves} rows")
+        return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
+                {"value": self.value, "positions": [int(p) for p in positions], "paths": [self.path(p).hex() for p in positions]})
+
+
+__all__ = ["BC_BYTES", "BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMAS",
            "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "domain", "known_schema", "leaf",
            "row_digest", "row_words", "supplied_salts", "width_entry", "window_root"]

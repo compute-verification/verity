@@ -41,7 +41,7 @@
   (``model-key --model M --circuit C``, `model_key`) and registers the same rows under it (`Served`'s ``registry``), so
   its ``b/<K>`` are the registration's openings, and a window whose served rows fold to a root other than W is refused.
 * **Rows** are ``hm96-sha512/row/v2`` bit rows of 16-bit words (`V2`, `row_words`, `record_words`), committed as
-  `registered.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
+  `registered_value.Registered.commit` commits them, from their NumPy words (`pouw_h1_registered.commit`), under the
   registered-value domain of the Program's digest, the value, its words and rows, and for a call's tables the window's
   open root (`registered_value.domain`'s ``window``, `Served.root`), row j's salt `audit.hm96_salt` of the run's key at
   the value's nonce (`nonce`). A window keeps its trees, not its rows, which the prover rebuilds from its own.
@@ -216,7 +216,7 @@ class Weights:
     and the period-open signs (``--model``'s registration, `ModelKey`)."""
 
     circuit: str
-    registered: dict[int, G.Registered]
+    registered: dict[int, RV.Registered]
     at: dict[int, tuple[int, int]]
     #: each linear's read-only codes and s_w known to be its rows (`matches`), as arrays, not copies
     held: dict[int, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict, compare=False, repr=False)
@@ -290,7 +290,7 @@ class Served:
     ``program``: the period's declared Program (`declared` under ``prefix``), given or declared at the first call, and
     ``program_digest`` its digest, given with it or computed then. From the first call: ``root`` (the window's open root
     its tables' domains bind, hex), ``linears``, ``calls`` and ``m`` (the Program's); ``registered`` (each value's
-    `registered.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
+    `registered_value.Registered`, in registration order) and ``refused`` (why the window has no trees)."""
 
     tile: tuple[int, int] = PH.TILE
     unit: Callable[[int], Any] | None = None
@@ -303,7 +303,7 @@ class Served:
     program: Program | None = None
     program_digest: str | None = None
     root: str | None = None
-    registered: dict[str, G.Registered] = field(default_factory=dict)
+    registered: dict[str, RV.Registered] = field(default_factory=dict)
     linears: list[tuple[str, int, int]] = field(default_factory=list)
     calls: list[tuple[str, int]] = field(default_factory=list)
     m: int = 0
@@ -322,12 +322,12 @@ class Served:
     #: with ``receipts``, each open step A table's calls, their served codes and s_a, until their step's last call of K
     _held: dict[str, list[tuple[Any, np.ndarray, np.ndarray]]] = field(default_factory=dict)
     #: the window's ok rows ``<prefix>ok`` (`h1window.OK_PORT`'s, o1), from `close`: in no entry, as credit registers them
-    ok: G.Registered | None = None
+    ok: RV.Registered | None = None
     #: each round's input-ids table and its words, with the tap
-    ids: dict[int, G.Registered] = field(default_factory=dict)
+    ids: dict[int, RV.Registered] = field(default_factory=dict)
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: with the tap, the live proof block's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
-    live: dict[str, G.Registered] = field(default_factory=dict)
+    live: dict[str, RV.Registered] = field(default_factory=dict)
     #: each open step A table's words, each call's block written at its place in call order as it's recorded, and the calls
     #: recorded so far (they may come out of call order)
     _a: dict[str, tuple[np.ndarray, set[int]]] = field(default_factory=dict)
@@ -398,7 +398,7 @@ class Served:
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
-              rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
+              rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> RV.Registered | NR.Later:
         # the digest as the window holds it, None until `declare`: `registered.commit` names it in the tree's domain
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
                          later=later, rows=rows, also=also, window=window, session=session)
@@ -491,13 +491,13 @@ class Served:
         bits = sum(dict(dict(S.TILES)[k].signature()[1].fields)[HW.OUTPUTS[0]].leaf_widths())
         return HW.call_units(self.program)[c][1], bits // 16 if bits % 16 == 0 else 0
 
-    def a_tree(self, run: Any, call: Any, words: np.ndarray) -> G.Registered:
+    def a_tree(self, run: Any, call: Any, words: np.ndarray) -> RV.Registered:
         """The tree of call ``call``'s step's A table ``a/<K>@<s>`` over ``words`` (its step's calls of K's `a_words`,
         call after call) as `commit` would register it, under the same domain and salts, unregistered
         (`pouw_h1_commit.CommitTap.arow`)."""
         return self._tree(run, self.a_table(call.index), words, nonce(self.step_calls(call.index)[0], "a"), self.root)
 
-    def ids_tree(self, run: Any, s: int, words: np.ndarray) -> G.Registered:
+    def ids_tree(self, run: Any, s: int, words: np.ndarray) -> RV.Registered:
         """The tree of round s's input-ids table ``<PREFIX>ids@<s>`` over ``words`` (`ids_words`), unregistered. Its domain
         binds the window's open root as a call's tables' do, except round 0's: the open root contains its root
         (`credit.requests_root`), so it binds the window's session (`credit.domain_of`; `LOCAL_SESSION` under
@@ -507,7 +507,7 @@ class Served:
             return self._tree(run, value, words, IDS_NONCE, None, run.session or LOCAL_SESSION)
         return self._tree(run, value, words, IDS_NONCE + s, self.root)
 
-    def _register_ids(self, run: Any, s: int, ids: Sequence[int | None]) -> G.Registered:
+    def _register_ids(self, run: Any, s: int, ids: Sequence[int | None]) -> RV.Registered:
         words = self._ids_words[s] = self.id_words(ids)
         reg = self.ids[s] = self.ids_tree(run, s, words)
         return reg

@@ -370,7 +370,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
 
 
 @dataclass(frozen=True)
-class Reused(G.Registered):
+class Reused(RV.Registered):
     """A table of the window's registration W as a registered value of the audited circuit (`reuse`): W's rows, salts and
     tree of it, under W's entry's domain ``domain_id``, by the circuit's name of it, so its entry is W's entry but in name.
     W's entry names its domain by id alone (round 0's input ids bind the window's session, which W doesn't hold), so it

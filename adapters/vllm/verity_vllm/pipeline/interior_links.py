@@ -57,7 +57,6 @@ from verity.commitments.periods import rows as CS
 from verity.commitments.periods.interface import digest_words
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
 
 from verity_vllm.pipeline import boundary_tables as BT
@@ -429,7 +428,7 @@ def supplied(program: str, links: Sequence[Link], q: int, entries: Sequence[Mapp
             rows = [digest_words(bytes.fromhex(e[s.port])) for e in entries for _ in range(s.per)]
         else:
             rows = [(x & 0xFFFF, x >> 16) for _ in range(q) for x in s.index]
-        out.append(RG.Registered.commit(program, s.value, rows, RV.supplied_salts(program, s.value, len(rows)),
+        out.append(RV.Registered.commit(program, s.value, rows, RV.supplied_salts(program, s.value, len(rows)),
                                         schema=(schemas or {}).get(s.value, SCHEMA_HM96_SHA512_ROW_V2)))
     return tuple(out)
 
@@ -495,7 +494,7 @@ def operand(program: str, x: Operand, reads: Sequence[tuple[np.ndarray, Sequence
     n = len(own)
     ys = os.urandom(n * CS.SALT_BYTES)
     salts = [ys[i * CS.SALT_BYTES:(i + 1) * CS.SALT_BYTES] for i in range(n)]
-    return RG.Registered.commit(program, x.value, own.tolist(), salts, schema=schema, window=window)
+    return RV.Registered.commit(program, x.value, own.tolist(), salts, schema=schema, window=window)
 
 
 def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, positions: int,
@@ -573,7 +572,7 @@ def tied(ms: Sequence[CS.Member], links: Sequence[Link]) -> dict[int, tuple[Supp
     return out
 
 
-#: what holds a registered table to its pin: its entry's fields (`registered.Registered.entry`)
+#: what holds a registered table to its pin: its entry's fields (`registered_value.Registered.entry`)
 PIN = (*RV.ENTRY_KEYS, RV.WIDTH_KEY)
 
 

@@ -632,7 +632,7 @@ def j10r_inputs(program: Program) -> tuple[list[int], list[tuple[int, int]]]:
 
 
 def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int, roots: tuple[str, str],
-                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], G.Registered]:
+                 blocks: list[tuple[int, int]] | None = None) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """A call's public rows ``value`` (`PUBS`) over its ``n`` units from unit ``u0``, their salts and their registration:
     unit u's row the execution phase's Program salt ``salt``, its position u and its call's ``roots`` (`core_check.public_words`,
     each hex), and with ``blocks`` (a J10-R execution phase's `call_blocks`) the call's first position ``u0`` and the unit's
@@ -641,18 +641,18 @@ def public_table(prog: str, value: str, salt: str, window: str, u0: int, n: int,
     s, rs = bytes.fromhex(salt), (bytes.fromhex(roots[0]), bytes.fromhex(roots[1]))
     rows = [CC.public_words(s, u0 + t, rs, None if blocks is None else (u0, blocks[t])) for t in range(n)]
     salts = [CC.public_row_salt(window, u) for u in range(u0, u0 + n)]
-    return rows, salts, G.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 @functools.lru_cache(maxsize=8)
-def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
+def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[list[int]], list[bytes], RV.Registered]:
     """The execution phase's ok rows ``value`` (``<prefix>ok``, `OUTPUTS`) over its ``population`` units, their salts and their
     registration (h1_prove's `register_ok`): row u the one word 1 (`core_check.OK_ROW`) under
     `core_check.ok_salt` of the execution phase's open root ``window`` and u, registered under the execution phase Program's digest
     ``prog`` binding ``window``."""
     rows = [list(CC.OK_ROW) for _u in range(population)]
     salts = [CC.ok_salt(window, u) for u in range(population)]
-    return rows, salts, G.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
+    return rows, salts, RV.Registered.commit(prog, value, rows, salts, RV.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
 # -- a sampled leaf's lanes and combine -----------------------------------------------------------------------------------------

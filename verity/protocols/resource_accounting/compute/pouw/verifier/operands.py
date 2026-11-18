@@ -31,14 +31,14 @@ GAPS = (("the A rows are not proved to be the served activations x (an x row is 
 
 
 def commit(program: str, context: str, rows: Mapping[str, Sequence[Sequence[int]]],
-           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, G.Registered]:
+           salts: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, RV.Registered]:
     """Each operand's rows (u16 words, the reading port's row) committed as a per-execution-phase value of ``program`` under the
     execution phase's ``context``; fresh salts unless ``salts`` (by value)."""
-    return {v: G.Registered.commit(program, v, rs, (salts or {}).get(v), schema=G.SCHEMA_V2, window=context)
+    return {v: RV.Registered.commit(program, v, rs, (salts or {}).get(v), schema=G.SCHEMA_V2, window=context)
             for v, rs in sorted(rows.items())}
 
 
-def block(program: str, values: Mapping[str, G.Registered]) -> dict[str, Any]:
+def block(program: str, values: Mapping[str, RV.Registered]) -> dict[str, Any]:
     """What the registration's execution phase names of the operands (its ``activations``)."""
     return {"program": program, "values": {v: r.entry() for v, r in sorted(values.items())}}
 

@@ -77,6 +77,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
     registered as G,
     docket as R,
 )
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.challenger.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.proofs.spot.verifier.challenger.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
@@ -248,7 +249,7 @@ class RegisteredSetup(Setup):
         self.committed = {}
         self._windowed = {}
         for v, w in {(v, w) for vs in values for v, w in vs.items()}:
-            self.committed[v, w] = G.Registered.commit(self.sha512, v, *self._rows(v, w))
+            self.committed[v, w] = RV.Registered.commit(self.sha512, v, *self._rows(v, w))
 
     def _rows(self, v: str, w: int) -> tuple:
         """`Registered.commit`'s rows, salts, width and row format for `v` at `w` words."""
@@ -266,7 +267,7 @@ class RegisteredSetup(Setup):
                 out.append(self.committed[v, w].entry())
                 continue
             if (v, w, window) not in self._windowed:
-                self._windowed[v, w, window] = G.Registered.commit(self.sha512, v, *self._rows(v, w), window=window)
+                self._windowed[v, w, window] = RV.Registered.commit(self.sha512, v, *self._rows(v, w), window=window)
             out.append(self._windowed[v, w, window].entry())
         return out
 
@@ -5363,7 +5364,7 @@ def _supplied_linked(c: dict, schema: str) -> dict:
     public salts of the interior's program (`supplied_salts`)."""
     link, prog = c["links"][0], c["interior"]["program"]
     n = len(c["sample"]) * next(r["per"] for r in c["rows"] if r["template"] == link["template"])
-    reg = G.Registered.commit(prog, link["value"], [[(40503 * i + j) & 0xFFFF for j in range(2)] for i in range(n)],
+    reg = RV.Registered.commit(prog, link["value"], [[(40503 * i + j) & 0xFFFF for j in range(2)] for i in range(n)],
                               RV.supplied_salts(prog, link["value"], n), schema=schema)
     return {"root": reg.root.hex(), "domain": reg.domain.domain_id.hex()}
 
@@ -7009,7 +7010,7 @@ def test_a_known_port_is_the_one_row_of_its_tree(pieces):
     """`produced.known_port`'s root and opening, Lean and Python agreeing, are the one row of a produced tree committed
     at that content and salt, and another content's are another root."""
     j = {"program": "p", "value": "ok", "row": [1], "salt": KNOWN_SALT, "registration": PRODUCED_REG, "word_bits": 16}
-    t = PD.commit("p", "ok", [[1]], PRODUCED_REG, [bytes(range(192))], schema=G.SCHEMA_V2)
+    t = PP.commit("p", "ok", [[1]], PRODUCED_REG, [bytes(range(192))], schema=G.SCHEMA_V2)
     assert D.replay(KNOWN_PORT, j, pieces) == ("output", D.canonical({"root": t.root.hex(), "bc": t.bcs[0].hex()}))
     assert json.loads(D.replay(KNOWN_PORT, {**j, "row": [0]}, pieces)[1])["root"] != t.root.hex()
 
@@ -7384,7 +7385,7 @@ def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces
 
     def stamp(rows, tag):
         salts = [hashlib.shake_256(f"ing/{tag}/{r}".encode()).digest(192) for r in range(len(rows))]
-        return G.Registered.commit(s.sha512, "ing", rows, salts).entry()
+        return RV.Registered.commit(s.sha512, "ing", rows, salts).entry()
 
     stamps = [stamp(rows, i) for i, rows in enumerate((
         [[1, 7, 5], [1, 8, 2], [1, 9, 3], [0, 0, 0]], [[1, 7, 8], [1, 9, 3], [1, 10, 1], [0, 0, 0]],

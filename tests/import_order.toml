@@ -466,7 +466,6 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_bindings.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_circuits.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",

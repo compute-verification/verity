@@ -1172,11 +1172,11 @@ def wired(members) -> list[str]:
         [f"view {b}" for b in sorted(state) if o2 and o2.get(b) != state[b]]
 
 
-def empty_start(program: str, cls: IS.Class) -> REG.Registered:
+def empty_start(program: str, cls: IS.Class) -> RV.Registered:
     """The start of a run's first execution phase, as the verifier computes it: the empty state's row as one-stage's
     registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
     verifier fills (`registered_value.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
-    return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
+    return RV.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
                                  RV.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 

@@ -244,7 +244,7 @@ def register(stage: Path, ports: Mapping[str, str] | None = None, extra: int = 0
         if extra and name in ports:
             rows += [(0,) * len(rows[0])] * extra
             salts += [os.urandom(FC.SALT_BYTES) for _ in range(extra)]
-        reg = G.Registered.commit(program_sha512, value, rows, salts)
+        reg = RV.Registered.commit(program_sha512, value, rows, salts)
         if list(reg.bcs[:len(t["bcs"])]) != t["bcs"]:
             raise AssertionError(f"port {name}: the registration's b || c are not the statement's")
         positions = list(range(len(t["bcs"])))

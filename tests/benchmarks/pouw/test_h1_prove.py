@@ -153,13 +153,13 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     for c in range(2):
         assert [bytes(x) for x in priv["bca"][c]] == U.commit_strings(port["a0"], U.row_words(priv["a"], priv["scale_a"]),
                                                                       [bytes(s) for s in priv["sa"][c]])
-    zonly = G.Registered.commit(com["program_sha512"], "zy@0", priv["zyw"][:T // 2, :2 * RC].tolist(),
+    zonly = RV.Registered.commit(com["program_sha512"], "zy@0", priv["zyw"][:T // 2, :2 * RC].tolist(),
                                 [bytes(s) for s in priv["szy"][:T // 2]], RV.WORD_BITS, U.V2, wr)
     why = RN.check_registration(win, dict(com, registered=[zonly.entry() if e["value"] == "zy@0" else e
                                                            for e in com["registered"]]))
     assert len(why) == 1 and why[0].startswith("its registered entries")
     assert RN.check_registration(win, RN.z_only(com)) != []
-    wide = G.Registered.commit(com["program_sha512"], "zy", priv["zyw"].tolist(), [bytes(s) for s in priv["szy"]],
+    wide = RV.Registered.commit(com["program_sha512"], "zy", priv["zyw"].tolist(), [bytes(s) for s in priv["szy"]],
                                RV.WORD_BITS, U.V2, wr)
     assert RN.check_registration(win, dict(com, registered=[*(e for e in com["registered"] if e["value"][:3] != "zy@"),
                                                             wide.entry()])) != []
@@ -259,7 +259,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     # without it, which the Lean verifier roots its known rows at), and credit's step-5 rule refuses them
     oku = RN.unrooted_ok(win, com)
     assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
-    assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
+    assert oku.root == RV.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
                                            16, U.V2, None).root
     bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
     for bad, why in ((bad_found, f"call 0's session of unit {sampled[0]} opened the ok rows at another port, value or root"),

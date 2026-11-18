@@ -43,7 +43,7 @@ NEGATIVES = ("receipt-word", "receipt-word-after-round", "pub-other-root", "ok-z
 
 
 def bc_of(words: Any, salt: bytes) -> bytes:
-    """A row/v2 row's b || c under ``salt`` (`registered.Registered.commit`'s)."""
+    """A row/v2 row's b || c under ``salt`` (`registered_value.Registered.commit`'s)."""
     return G._INST.commit_string(G._INST.default_key, RV.row_digest([int(w) for w in words], RV.WORD_BITS, G.SCHEMA_V2), salt)
 
 

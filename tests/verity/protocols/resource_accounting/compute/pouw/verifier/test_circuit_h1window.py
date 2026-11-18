@@ -281,14 +281,14 @@ def test_a_calls_statement_opens_its_units_rows_at_its_tables_and_at_no_other_ca
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit)
     tp, digest, rng = P.evaluate(prog, HW.query(prog)), P.program_digest(prog), random.Random(7)
 
-    def commit(value: str, rows: int, words: int) -> G.Registered:
-        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
+    def commit(value: str, rows: int, words: int) -> RV.Registered:
+        return RV.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
                                    schema=G.SCHEMA_V2)
 
     a = HW.table(prog, "a", 3, 2)
     assert a == HW.table(prog, "a", 4, 2) == "a/32@1"
     tabs = {a: commit(a, 2 * m, _words(32)), "b/32": commit("b/32", 24, _words(32))}
-    twin = G.Registered.commit(digest, HW.table(prog, "a", 0, 2), tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2)
+    twin = RV.Registered.commit(digest, HW.table(prog, "a", 0, 2), tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2)
     assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
     for c, j in ((3, 0), (4, 1)):
         u0, n = HW.call_units(prog)[c]
@@ -438,7 +438,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
     assert HW.RECEIPT_PORT not in HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w,
                                                       steps=2)["ports"]
     words = 32 // 2 // 16
-    reg = G.Registered.commit(digest, rc, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(n)],
+    reg = RV.Registered.commit(digest, rc, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(n)],
                               schema=G.SCHEMA_V2, window=w)
     file = HW.table_reads_file(prog, tp, c, {**roots, rc: reg.root.hex()}, ports=HW.window_ports(prog), window=w,
                                steps=2)["ports"]
@@ -525,15 +525,15 @@ def test_under_a_windows_open_root_a_calls_file_opens_the_tables_committed_in_th
     a, zy = HW.table(prog, "a", c, 2), HW.table(prog, "zy", c)
     u0, n = HW.call_units(prog)[c]
 
-    def commit(value: str, rows: int, words: int, window: str | None) -> G.Registered:
-        return G.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
+    def commit(value: str, rows: int, words: int, window: str | None) -> RV.Registered:
+        return RV.Registered.commit(digest, value, [[rng.randrange(1 << 16) for _ in range(words)] for _ in range(rows)],
                                    schema=G.SCHEMA_V2, window=window)
 
     tabs = {a: commit(a, 2 * m, _words(32), w), zy: commit(zy, n, 3 * R * C, w), "b/32": commit("b/32", 24, _words(32), None)}
     roots = {v: r.root.hex() for v, r in tabs.items()}
     file = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), window=w, steps=2)["ports"]
     bare = HW.table_reads_file(prog, tp, c, roots, ports=HW.window_ports(prog), steps=2)["ports"]
-    twin = G.Registered.commit(digest, a, tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2, window=other)
+    twin = RV.Registered.commit(digest, a, tabs[a].rows, tabs[a].salts, schema=G.SCHEMA_V2, window=other)
     assert twin.bcs == tabs[a].bcs and twin.root != tabs[a].root
     for port, e in file.items():
         reg = tabs[e["value"]]

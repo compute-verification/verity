@@ -69,7 +69,7 @@ from verity.protocols.resource_accounting.network.verifier import network_attest
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, PAD
 from verity.protocols.resource_accounting.network.verifier.certificate import Certificate
 from verity.protocols.resource_accounting.network.verifier.network_attester import END, NetworkAttesterParams, cell
-from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 
@@ -201,17 +201,17 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
 
-def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
+def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> RV.Registered:
     """A member's own rows of a port no network attester row registration holds (one a unit, its u16 words), committed
     before staging as a value registered on `head`'s execution phase: each row under a salt of the prover's own, in a tree
     whose domain binds the statement's Program (its SHA-512, `program`) and the network attester's root, so the root,
     which the registration names before any coin, opens under no other execution phase's. The statement commits the port's
     rows under the same salts, so they open it."""
-    return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, RV.WORD_BITS, WR.SCHEMA,
+    return RV.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, RV.WORD_BITS, WR.SCHEMA,
                                window=head.root.hex())
 
 
-def value_port(v: G.Registered, reads_from: int = 0) -> dict:
+def value_port(v: RV.Registered, reads_from: int = 0) -> dict:
     """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
     `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
     return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \

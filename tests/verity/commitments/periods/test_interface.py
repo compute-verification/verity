@@ -1575,7 +1575,7 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 
 class Held:
-    """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` leaves of
+    """A registered value as the committer reads ``registered_value.Registered``: its rows of ``words`` leaves of
     ``word_bits``, one salt a row, a root and each row's path (a stand-in's), and a statement's table of the rows at some
     positions."""
 

@@ -18,6 +18,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
@@ -281,7 +282,7 @@ def filled(low):
     load's scan state, each slot's `Slot` taking the circuit's cut linears as registered): its weights, registered values,
     slots and rows."""
     fields = _weights(low.fn)
-    state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
+    state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(_registered(), fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
@@ -412,7 +413,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
     c = low.circuit
     for i, (name, v) in enumerate(_pearl_values(low, slots).items()):
         schema, bits = IF.value_format(c.registered, name)
-        values = {**values, name: CR.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
+        values = {**values, name: RV.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
                                                        [os.urandom(192) for _ in range(len(v))],
                                                        word_bits=bits, schema=schema)}
     win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)

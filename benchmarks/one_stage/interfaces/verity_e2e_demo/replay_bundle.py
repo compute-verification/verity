@@ -717,7 +717,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     (`BINDINGS`), which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
-    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``sampling_design``,
+    and the row's string, ``string(position)`` or ``bcs[position]``: `registered_value.Registered`). ``draw``: the sample's ``sampling_design``,
     ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live sample without its receipt is refused). ``workers``:
     processes rebuilding the opened (step, slot) subtrees, one each.
 
@@ -1140,7 +1140,7 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
+def step_registration(com: Commitment, weights: Mapping[str, RV.Registered], sampling_design: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
     """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
