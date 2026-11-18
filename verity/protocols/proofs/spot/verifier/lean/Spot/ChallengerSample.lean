@@ -61,7 +61,7 @@ def sampleCoins (key : ChallengerKey) (window label : String) (after : ByteArray
   let segment := getD coins "segment"
   unless jsonStrIs (getD segment "label") label do
     throw s!"the draw's coins are not the challenger's {label} family's"
-  challengerStream c segment after (some ((((byFamily c log).find? (·.1 == label)).map (·.2)).getD []))
+  challengerStream c segment after (some log)
 
 def COINS_MAIN : String :=
   "the copy of main's first-parent history a draw's coin evidence carries is not the verifier's own, commit for " ++

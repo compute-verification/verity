@@ -25,7 +25,8 @@ public import Spot.Edges
 
 namespace Properties.Spot.Edges
 
-open _root_.Spot Flock.Program (Prog Arg Ty fieldsOf)
+open _root_.Spot
+open Flock.Program (Prog Arg Ty fieldsOf)
 open Flock.TemplateQuery (TRange)
 
 /-- **A reference between root nodes**: root node `k`'s argument `i` reads, at index `x`, leaf `l` of root node `w`,

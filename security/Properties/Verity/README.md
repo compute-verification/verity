@@ -31,13 +31,13 @@ at that strategy summed. Onsite's is the same conclusion over its seven, from it
 by name, which are the target of every subprotocol its list names, `SoundnessOf`'s hypothesis (`Vocab.targets_remote`,
 `Vocab.targets_onsite`).
 
-**The two statements on the committed files** (`Committed.lean`): the one not proved stands at remote where the
-policy's target stood. The policy's claim is on the case as sent, of which its target is proved
+**The two statements on the committed files** (`Committed.lean`). The policy's claim is on the case as sent, of which its target is proved
 (`Vocab.inferenceOnlySound`); these are what that leaves unsaid of the committed files:
 
-- `Vocab.WiresSound`, stated and not proved: the wiring the policy's record names is the wiring the committed proof
-  blocks are held to. On an accepted play, at most a `2ε` share of the committed proof blocks are unbound or read a row
-  that is not the row the wiring gives them, but for twice SPOT's error.
+- `Vocab.ReadsByPath`, stated and not proved, and no statement's hypothesis yet: a wire is one commitment. On a play
+  SPOT accepts, each reader unit's wired row reads, under the record's root for its writer's output field, the place its
+  writer unit writes at the wire's closed form (`Circuits.Wire.leafAt`): `FlockProofs.Registered.check_ok` at wired
+  ports, lifted to the record.
 - `Flock.Bridge.GateARow`, proved (`Flock.Bridge.gateARow`, `Proofs/Flock/Bridge/GateARow.lean`): every proof block of
   the committed circuit has one gate for each of its file's rows, so `Γ`, which counts rows a block, counts the gates
   PoUW's claim counts. Being proved, it is no hypothesis of remote's soundness.
@@ -45,8 +45,8 @@ policy's target stood. The policy's claim is on the case as sent, of which its t
 No clause of the conclusion reads either: the conclusion's clause for the policy is still on the case as sent.
 
 The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
-the targets and, at remote, the wires' statement, and with its two witnesses at the idle deployment (`Idle.lean`):
-`*_honest`, every target (and `Vocab.WiresSound`) holds at `Idle.unbounded`, and `*_nontrivial`, the conclusion fails
+the targets, and with its two witnesses at the idle deployment (`Idle.lean`):
+`*_honest`, every target holds at `Idle.unbounded`, and `*_nontrivial`, the conclusion fails
 at `Idle.exact` for a verifier that accepts everything.
 
 ## The subprotocols each composes

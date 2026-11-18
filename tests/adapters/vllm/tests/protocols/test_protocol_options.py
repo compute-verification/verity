@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from verity.protocols.resource_accounting import scheme as schemes
 from verity_vllm import config, errors
 from verity_vllm import llm as L
 from verity_vllm import protocols as PO
@@ -270,14 +271,11 @@ SPOT = config.PROTOCOLS[2]
 (POUB,) = PO.DRIVERS
 ROW_SET = ("pous:s1", ALL[2])
 AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
-NO_REGISTRY = "verity.protocols.resource_accounting.compute.pouw.verifier.not_a_circuit_registry"
 #: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
 SAID = [
     ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),
      (f"{POUB}: its driver verity_vllm.protocols.not_landed_here.remote is not on this tree",)),
     ("a protocol with no driver", None, lambda: PO.driver("pous", "remote"), (f"no driver of protocol 'pous' (known: {POUB})",)),
-    ("a circuit registry not installed", ("CIRCUITS", "pouw", NO_REGISTRY), lambda: PO.circuit_registry("pouw"),
-     (f"pouw: its circuit registry {NO_REGISTRY} is not installed ({NO_REGISTRY})",)),
     ("an engine that fills nothing", None, lambda: PO.from_engine(_serve(ALL[0], filled={"pouw": ("runner",)}), object()),
      (f"{ALL[0]}: its settings ['runner'] come from the built engine, which doesn't supply them: no runner",)),
     ("an install beside a live option", None, _beside_a_live_option, (f"options installed outside this composition are live: ['{ALL[0]}']",)),
@@ -657,7 +655,7 @@ def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity.protocols.resource_accounting.compute.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside SPOT, and every other one keeps its refusal, word for word.  Without SPOT nothing changes."""
     from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
+    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.circuit_registry("pouw").schemes is circuit.SCHEMES
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
     assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512")) == ()
@@ -739,12 +737,9 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
 def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.resource_accounting.compute.pouw.verifier.not_a_circuit_registry")
-    got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
-    assert got[-1] == _refused_beside_spot("ncp-v2")
-    assert got[0].startswith("pouw: its circuit registry verity.protocols.resource_accounting.compute.pouw.verifier.not_a_circuit_registry is not installed")
-    with pytest.raises(PO.Refused, match="is not installed"):
-        PO.traced_as("pouw:ncp-v2", 16, 64, 16)
+    monkeypatch.delitem(schemes.CIRCUITS, "pouw", raising=False)
+    assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512")) == (_refused_beside_spot("ncp-v2"),)
+    assert PO.traced_as("pouw:ncp-v2", 16, 64, 16) is None
 
 
 def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):

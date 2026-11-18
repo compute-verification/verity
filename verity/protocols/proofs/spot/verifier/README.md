@@ -229,9 +229,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `proofs.members_parsed`) prints what its parsers read of a case, with no verdict, as its module's docstring says. A
   window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
-  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
-  every wired row of every proof block of the sample to its writer's output row in the members' public files
-  (`OneStageZk.fieldRoots`: a wired port reads its writer's output field's tree); `one_stage.members` leaves a wiring `Outside`.
+  (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and a wired port then
+  reads its writer's output field's tree by path, one tree each writer template and output field (`OneStageZk.fieldRoots`); `one_stage.members` leaves a wiring `Outside`.
 - **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its

@@ -151,7 +151,7 @@ def test_the_check_refuses_a_templated_statement_of_another_unit(built, tmp_path
     from verity_flock import class_statement as CS
 
     args, rows, _kw = _toy(0)
-    CS.UnitStager(*args, layout="iv/hybrid/4").stage(rows, tmp_path, b"k" * 32)
+    CS.UnitStager(*args, layout="iv/hybrid/4").stage(rows, tmp_path)
     out = check(2, 1, tmp_path / "circuit.txt")
     assert out.returncode == 1
     assert re.fullmatch(rf"flock-read-tmpl: {re.escape(str(tmp_path / 'circuit.txt'))}: the check refuses its template "

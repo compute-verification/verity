@@ -141,14 +141,13 @@ def stage_template(K: int, n: int, base: int, bound: dict | None, out: Path, chu
     st, _ = stager(n)
     t_build = time.time() - t0
     cap = min(chunk_cap(st.meta), chunk or n)
-    salt_key = hashlib.sha256(f"verity/one-stage/a6/salts\0{tag}".encode()).digest()
     members = []
     for j, lo in enumerate(range(0, n, cap)):
         t1, c, d = time.time(), min(cap, n - lo), out / f"c{j}"
         st, wd = stager(c)
         set_name = f"{st.iset.name}-c{j}"
         first = base + lo if bound is not None else 0
-        got = st.stage({r: v[lo:lo + c] for r, v in rows.items()}, d, salt_key, indices=range(first, first + c),
+        got = st.stage({r: v[lo:lo + c] for r, v in rows.items()}, d, indices=range(first, first + c),
                        set_name=set_name)
         (d / "inst.bin").rename(d / f"inst-{c}.bin")
         (d / "pub.bin").rename(d / f"pub-{c}.bin")

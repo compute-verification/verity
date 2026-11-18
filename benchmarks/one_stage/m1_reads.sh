@@ -11,6 +11,7 @@
 # The router starts at E=32: M1's statement needs a row longer than one SHA-512 block (compose's pin range).
 # env: RS_PROVE, RS_BUILD (';'-separated)  RS_ARGS (more m1_unit.py arguments: --stage-ands N|auto|none, auto by default)  RS_MEM_GB=64 (the job's --mem-gb)  RS_CACHE
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 ROUTER='MoeRouterSigmoidBias_v1{E=%d,TOPK=%d,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'
 RS_PROVE=${RS_PROVE-}
 RS_BUILD=${RS_BUILD-slots $(printf "$ROUTER" 64 8);slots $(printf "$ROUTER" 256 8)}
@@ -28,7 +29,7 @@ m1() {   # m1 TAG ARGS...: one m1_unit run, its records in $OUT/TAG (never the c
   local r=$?
   grep '^M1U ' "$OUT/$tag/m1.log" | cut -c1-2000 | tee -a "$OUT/job.log"
   [ $r = 0 ] || { log "m1 $tag: rc $r"; tail -30 "$OUT/$tag/m1.log" | tee -a "$OUT/job.log"; rc=1; }
-  (cd "$W/$tag" && find . -type f \( -name '*.json' -o -name '*.log' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/$tag/")
+  (cd "$W/$tag" && find . -type f \( -name '*.json' -o -name '*.log' \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/$tag/")
   rm -rf "$W/$tag"
 }
 IFS=';' read -ra PROVE <<< "$RS_PROVE"

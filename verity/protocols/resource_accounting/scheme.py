@@ -29,7 +29,9 @@ spelt ``delta``), and a change to either names the other's line in its message. 
 - ``delta_scheme``: `δscheme`, said by name, zero included; unsaid, `bound` refuses.
 - code only: ``name`` (the configuration's), ``protocol`` (`Core.Protocol.id`), ``resource`` (`Core.Account.Part`),
   ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`), ``hooks``, ``ports``,
-  ``option``, ``requires``.
+  ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, and
+  ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.
@@ -53,6 +55,15 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 from verity.hooks import HOOKS
+
+
+def _no_requests(ctx: Any) -> tuple[Any, ...]:
+    return ()
+
+
+def _attaches_nothing(exchange: Any, ctx: Any) -> None:
+    return None
+
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
@@ -147,6 +158,9 @@ class Scheme:
     requires: Mapping[str, str] = field(default_factory=dict)
     ports: tuple[Port, ...] = ()
     delta_scheme: Fraction | None = None
+    requests: Callable[[Any], Sequence[Any]] = _no_requests
+    attach: Callable[[Any, Any], None] = _attaches_nothing
+    processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -232,6 +246,8 @@ def register(scheme: Scheme) -> Scheme:
     if scheme.name in SCHEMES:
         raise KeyError(f"a scheme named {scheme.name!r} is registered already")
     SCHEMES[scheme.name] = scheme
+    for name, start in scheme.processes.items():
+        register_process(name, start)
     return scheme
 
 
@@ -245,6 +261,26 @@ def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]
         raise KeyError(f"a process named {name!r} is registered already")
     PROCESSES[name] = start
     return start
+
+
+@dataclass(frozen=True)
+class Circuits:
+    """What a scheme's executed computation is traced as: ``schemes``, the schemes with a circuit, and ``traced_as(scheme,
+    m, k, n)``, one executed call's circuit (None without one)."""
+
+    schemes: Mapping[str, Any]
+    traced_as: Callable[[str, int, int, int], Any]
+
+
+#: the circuits of each scheme's executed computation, by the name a configuration lists it under
+CIRCUITS: dict[str, Circuits] = {}
+
+
+def register_circuits(name: str, circuits: Circuits) -> Circuits:
+    if name in CIRCUITS:
+        raise KeyError(f"circuits named {name!r} are registered already")
+    CIRCUITS[name] = circuits
+    return circuits
 
 
 def get(name: str) -> Scheme:
@@ -280,5 +316,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Port", "Scheme",
-           "bound", "credited", "get", "register", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Circuits", "Order",
+           "Port", "Scheme", "bound", "credited", "get", "register", "register_circuits", "register_process", "settings"]

@@ -421,7 +421,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.commit",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.serve_admit",
     "verity_vllm.pipeline.serve_openai",
     "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",

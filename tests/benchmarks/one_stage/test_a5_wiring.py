@@ -26,6 +26,15 @@ from verity.commitments.periods import wiring as WI
 sys.path.insert(0, str(((Path(__file__).resolve().parents[3] / "benchmarks" / "one_stage"))))
 import a5
 
+
+def fixed(w, seed: int = 0) -> dict[str, bytes]:
+    """Salts a test hands in for every port a commit takes in full (`rows.full_ports`), so two commits of one period are
+    one commitment."""
+    from verity.commitments.periods import rows
+
+    w = getattr(w, "window", w)
+    return {p: hashlib.shake_256(f"{seed} {p}".encode()).digest(n * rows.SALT_BYTES) for p, n in rows.full_ports(w).items()}
+
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
 BIG = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
@@ -46,7 +55,7 @@ def closed(circuit: I.Circuit, n: int, records) -> tuple[I.Window, dict[str, byt
     win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, n)
     for fn, x, w in records:
         win.record(fn, [x, w], [gemm(fn, x, w)])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     assert win.mismatches() == {} and max(m.n for m in win.window.members) == n
     return win, {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
 
@@ -166,7 +175,7 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
     y = gemm(BIG, x, w)
     win.record(BIG, [x, w], [y])
     win.record(GEMM, [xs, y.reshape(UNITS, 16, 16)], [gemm(GEMM, xs, y.reshape(UNITS, 16, 16))])
-    c = win.close(salt_key=bytes(32))
+    c = win.close(salts_of=fixed(win))
     ms = win.window.members
     reader = next(m for m in ms if m.wired)
     assert win.mismatches() == {} and reader.tables == (("x", 2), ("w", 2)) and [p for p, _o, _ws in reader.wired] == ["w"]
