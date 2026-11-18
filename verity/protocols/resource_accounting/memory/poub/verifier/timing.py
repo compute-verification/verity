@@ -54,8 +54,8 @@ SECTORS = BLOCK_BYTES // SECTOR_BYTES
 @dataclass(frozen=True, slots=True)
 class Figures:
     """A node's device figures, the parameters a session's ledger reads, which its caller hands in: how many GPUs, one
-    GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, SHA-512 rate and
-    squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
+    GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, the host's DRAM,
+    SHA-512 rate and squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
     sum over its devices.  A read rate is of plain reads: the encoded store's words are never constant, so the GPU's
     compression engine reads it no faster than plain bytes.  A write ceiling is its tier's specified rate: a ceiling
     must bound every prover, and a measured rate bounds only the kernels tried.  A session's figures are a parameter of
@@ -70,6 +70,7 @@ class Figures:
     host_read_bytes_per_s: float
     host_spec_bytes_per_s: float
     host_chip_bytes: int
+    host_dram_bytes: int
     disk_bytes_per_s: float
     link_burst_bytes: int
 
@@ -135,9 +136,9 @@ class Figures:
                   gpu_squarings_per_s: Mapping[str, float], link_burst_bytes: int,
                   gpu_chip_bytes: int | None = None) -> Figures:
         """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
-        and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth`, `store.chip` and
-        `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
-        sheet states are handed in: one GPU's SHA-512 rate and squaring ceiling per width, and one link burst; and one
+        and `load_card`): the node's `device.count` and `memory.dram.bytes`, the host's DRAM; its GPU card's
+        `memory.read`, `memory.bandwidth`, `store.chip` and `store.dram`; its host card's `memory.read`,
+        `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no sheet states are handed in: one GPU's SHA-512 rate and squaring ceiling per width, and one link burst; and one
         GPU's on-chip storage where its card states no `store.chip`."""
         for part, card in (("device", gpu), ("host", host)):
             if node[part]["sku"] != card["sku"]:
@@ -154,7 +155,8 @@ class Figures:
                    int(value(gpu, "store", "chip")) if gpu_chip_bytes is None else gpu_chip_bytes,
                    int(value(gpu, "store", "dram")), gpu_sha512_per_s, dict(gpu_squarings_per_s),
                    float(value(host, "memory", "read")), float(value(host, "memory", "bandwidth")),
-                   int(value(host, "store", "chip")), float(value(host, "disk", "read")), link_burst_bytes)
+                   int(value(host, "store", "chip")), int(node["memory"]["dram"]["bytes"]["value"]),
+                   float(value(host, "disk", "read")), link_burst_bytes)
 
 
 FIGURES = tuple(Figures.__dataclass_fields__)

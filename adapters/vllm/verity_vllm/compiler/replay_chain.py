@@ -112,8 +112,8 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.proofs.spot.verifier.one_stage import produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.prover import produced as PP
+from verity.commitments import registered_value as RV
 
 from verity_vllm.compiler import tick_step as TK
 
@@ -478,13 +478,13 @@ def close(S: Shape, row: Row, win: QueueRow) -> bool:
 # --- the chain ------------------------------------------------------------------------------------------------------------
 
 def empty_salts(program: str) -> tuple[bytes, bytes]:
-    """The public salts of the session's first state row and first window row (`registered.supplied_salts`' row 0 of
+    """The public salts of the session's first state row and first window row (`registered_value.supplied_salts`' row 0 of
     `VALUE` and of `WINDOW`)."""
-    return G.supplied_salts(program, VALUE, 1)[0], G.supplied_salts(program, WINDOW, 1)[0]
+    return RV.supplied_salts(program, VALUE, 1)[0], RV.supplied_salts(program, WINDOW, 1)[0]
 
 
 def _opening(words: Sequence[int], salt: bytes) -> bytes:
-    return _INST.commit_string(_INST.default_key, G.row_digest(words, WORD_BITS, SCHEMA), salt)
+    return _INST.commit_string(_INST.default_key, RV.row_digest(words, WORD_BITS, SCHEMA), salt)
 
 
 def empty_openings(program: str, S: Shape) -> tuple[bytes, bytes]:
@@ -497,8 +497,8 @@ def empty_openings(program: str, S: Shape) -> tuple[bytes, bytes]:
 class Committed:
     """A window's two produced values: its state rows (`VALUE`) and its window rows (`WINDOW`)."""
 
-    state: G.Registered
-    window: G.Registered
+    state: RV.Registered
+    window: RV.Registered
 
 
 def commit_window(program: str, rows: Sequence[Row], window: QueueRow, S: Shape, registration: str, carry: Committed | None = None,
@@ -522,8 +522,8 @@ def commit_window(program: str, rows: Sequence[Row], window: QueueRow, S: Shape,
     rest = list(salts) if salts is not None else [_INST.fresh_salt() for _ in range(S.P + 2)]
     if len(rest) != S.P + 2:
         raise ValueError(f"{S.P + 2} salts, one per state row after the first and one for the window row")
-    state = produced.commit(program, VALUE, words, registration, [first, *rest[:-1]], WORD_BITS, SCHEMA)
-    win = produced.commit(program, WINDOW, [last, row(encode_window(window, S))], registration, [last_salt, rest[-1]],
+    state = PP.commit(program, VALUE, words, registration, [first, *rest[:-1]], WORD_BITS, SCHEMA)
+    win = PP.commit(program, WINDOW, [last, row(encode_window(window, S))], registration, [last_salt, rest[-1]],
                           WORD_BITS, SCHEMA)
     return Committed(state, win)
 

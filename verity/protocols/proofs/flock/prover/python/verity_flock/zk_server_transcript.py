@@ -15,16 +15,17 @@ exposed. Nothing here trusts the ZK server's checks: a call it should have refus
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 
+from verity.circuits.codec import canonical_json
 from verity.commitments import hm96
 from verity.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_prefix
 
 from . import rec_live as RL
+from verity.commitments.domains import ZK_SERVER_PUBLIC, ZK_SERVER_TRANSCRIPT
 
-FORMAT = "verity/firewall-transcript/v0"
-PUBLIC_FORMAT = "verity/firewall-public/v0"
+FORMAT = ZK_SERVER_TRANSCRIPT
+PUBLIC_FORMAT = ZK_SERVER_PUBLIC
 INST = hm96.SHA512
 
 
@@ -38,12 +39,6 @@ def public(schedule, relations=(), statement=None, computes=(), coins=None) -> d
     if coins is not None:
         out["coins"] = {s: list(cs) for s, cs in coins.items()}
     return out
-
-
-def canon(v) -> bytes:
-    """`Flock.canon`'s form: compact, keys sorted, every character outside printable ASCII escaped, integers only (a float
-    here makes the item differ from the schedule's)."""
-    return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
 def row_message(row: list[int]) -> bytes:
@@ -172,10 +167,10 @@ class InnerRun:
         for i, c in enumerate(self.coins.calls):
             kind = c["call"]
             if kind == "hello":
-                items.append({"fixed": {"what": "hello", "by": "schedule", "sent": canon(c["hello"]).hex()}})
+                items.append({"fixed": {"what": "hello", "by": "schedule", "sent": canonical_json(c["hello"]).hex()}})
             elif kind == "roots":
                 items.append({"fixed": {"what": "roots", "by": "schedule",
-                                        "sent": canon({t: len(r) for t, r in c["roots"].items()}).hex()}})
+                                        "sent": canonical_json({t: len(r) for t, r in c["roots"].items()}).hex()}})
                 for t, r in sorted(c["roots"].items()):
                     mine = c.get("mine", self.proxy.roots).get(t, {})
                     commits(r, RL.top_rows(bytes.fromhex("".join(mine["nodes"]))) if mine else [], mine.get("salts", []))
@@ -184,11 +179,11 @@ class InnerRun:
                 items.append({"fixed": {"what": "link.y", "by": "schedule", "sent": b"".join(RL.f128_bytes(v) for v in c["y"]).hex()}})
             elif kind == "open":
                 items.append({"fixed": {"what": f"open:{c['stream']}", "by": "schedule",
-                                        "sent": canon({"at": c["at"], "parent": c["parent"]}).hex()}})
+                                        "sent": canonical_json({"at": c["at"], "parent": c["parent"]}).hex()}})
             elif kind == "round":
                 r = len([x for x in self.coins.calls[:i] if x["call"] == "round"])
                 items.append({"fixed": {"what": f"round:{r}", "by": "schedule",
-                                        "sent": canon({"stream": c["stream"], "k": c["k"], "n": c["n"], "tops": [len(x) for x in c["tops"]],
+                                        "sent": canonical_json({"stream": c["stream"], "k": c["k"], "n": c["n"], "tops": [len(x) for x in c["tops"]],
                                                        "level0": c["level0"], "commits": len(c["commits"])}).hex()}})
                 p = next(priv, None) or {}
                 clear = p.get("tops", [])
@@ -204,7 +199,7 @@ class InnerRun:
         if self.coins.end == "finish":
             rec = self.coins.record()
             items.append({"fixed": {"what": "finish", "by": "schedule",
-                                    "sent": canon({"rounds": len(rec["rounds"]), "streams": {s: v["rounds"] for s, v in rec["streams"].items()}}).hex()}})
+                                    "sent": canonical_json({"rounds": len(rec["rounds"]), "streams": {s: v["rounds"] for s, v in rec["streams"].items()}}).hex()}})
             items.append({"finish": {}})
         answers = b"".join(self.answers)
         exposed = [i for i, s in enumerate(self.tape.salts) if s in answers or s.hex().encode() in answers]

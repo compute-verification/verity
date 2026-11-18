@@ -14,8 +14,9 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import h1zy as Z
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier import leaf_lanes as LL
-from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.prover import produced as PP
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 
 from verity.errors import Refused
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
@@ -49,7 +50,7 @@ def receipt_words(rc: Sequence[int]) -> np.ndarray:
     return np.array([int(v) & M32 for v in rc], dtype="<u4").view("<u2").astype(np.uint16)
 
 
-def held(reg: G.Registered, entry: dict, what: str) -> G.Registered:
+def held(reg: RV.Registered, entry: dict, what: str) -> RV.Registered:
     """`reg` when it has the root and domain credit's ``--registered`` port `entry` reads; else Refused."""
     if (reg.root.hex(), reg.domain.domain_id.hex()) != (entry["root"], entry["domain"]):
         raise Refused(f"{entry['value']}, rebuilt from {what}, is not the tree the window registered (root "
@@ -110,13 +111,13 @@ def u32_words(words: Any) -> list[int]:
     return [int(v) for v in np.ascontiguousarray(np.asarray(words, np.uint16).astype("<u2")).view("<u4")]
 
 
-def split_rows(tree: G.Registered, at: int, n: int) -> tuple[list[list[int]], list[int]]:
+def split_rows(tree: RV.Registered, at: int, n: int) -> tuple[list[list[int]], list[int]]:
     """`tree`'s `n` rows from `at` (`split_row` each): their codes, then their scales."""
     got = [split_row(tree.rows[at + i]) for i in range(n)]
     return [v for v, _s in got], [s for _v, s in got]
 
 
-def operands(win: dict, u: int, trees: dict[str, G.Registered]) -> dict[str, Any]:
+def operands(win: dict, u: int, trees: dict[str, RV.Registered]) -> dict[str, Any]:
     """Unit u's leaf as its statements read it, from the window's rebuilt values ``trees`` at its place
     (`credit.leaf_place`): its R A rows' and C B rows' codes and scales, its record, its admit bits (every row: the tile
     unit masks none, as credit's known ``admit`` row says), the window's Program salt, its position and the roots its seeds
@@ -147,7 +148,7 @@ def partials(x: dict) -> np.ndarray:
     return np.array(out, np.uint16)
 
 
-def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registered]) -> G.Registered:
+def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, RV.Registered]) -> RV.Registered:
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
@@ -178,7 +179,7 @@ def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> 
                                u32_words(rows[LL.RECEIPT][0]))
 
 
-def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Registered], tree: G.Registered,
+def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, RV.Registered], tree: RV.Registered,
                    produced: dict[str, str], draw_root: str) -> tuple[dict, dict, dict, dict]:
     """Sampled leaf u's statement `st` as a stager's `stage` takes it (`drawn.Stager`), on credit's own ``--registered`` file
     (`credit.leaf_registered_file`): each port's one row, salt and registered read (value, position, path), from the
@@ -198,8 +199,8 @@ def leaf_statement(win: dict, u: int, st: tuple, x: dict, trees: dict[str, G.Reg
     for port, e in reg["ports"].items():
         at = e["reads"][0]
         if port in known:
-            src = PR.commit(win["program"], e["value"], [known[port][1]], draw_root,
-                            [LL.known_salt(draw_root, e["value"])], G.WORD_BITS, G.SCHEMA_V2)
+            src = PP.commit(win["program"], e["value"], [known[port][1]], draw_root,
+                            [LL.known_salt(draw_root, e["value"])], RV.WORD_BITS, G.SCHEMA_V2)
         elif e["value"] == tree.value:
             src = tree
         else:

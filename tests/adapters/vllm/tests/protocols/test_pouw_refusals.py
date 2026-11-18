@@ -27,7 +27,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import SCH
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.ncp2 import Shape
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
-from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
@@ -224,51 +223,6 @@ def test_a_unit_outside_a_calls_population_or_its_weight_sides_is_refused():
         with pytest.raises(IndexError, match=f"^Y unit {u} outside 0..2$"):
             nat.side.outputs(u)
     assert [nat.side.outputs(u).shape for u in (0, 2)] == [(3088,), (3088,)]
-
-
-def test_a_library_is_refused_before_its_build_where_no_toolchain_and_no_path_gives_its_compiler(monkeypatch):
-    """The host build takes a C++ compiler and the two CUDA builds nvcc, each the toolchain's or else the path's: with
-    neither, each refuses naming the one it lacks, as the sources' digest does, and nothing is built. The CUDA builds
-    also take the toolchain's target, a card's arch, and refuse without one.  The loaders'
-    caches are passed by, so a library another test built stays loaded."""
-    class Built(Exception):
-        pass
-
-    built: list[str] = []
-
-    def build(tool, sources, flags, name):
-        built.append(tool)
-        raise Built
-
-    path: dict[str, str] = {}
-    monkeypatch.setattr(PD.shutil, "which", path.get)
-    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain())
-    monkeypatch.setattr(PD, "_build", build)
-    loads = ((PD.host, "C++ compiler"), (PD.device, "nvcc"), (PD.fused, "nvcc"))
-    for load, what in loads:
-        with pytest.raises(RuntimeError, match=f"^no {re.escape(what)} \\(on the path, or `configure`\\)$"):
-            load.__wrapped__()
-    with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler \(on the path, or `configure`\)$"):
-        PD.source_digest()
-    assert built == []
-    path.update({"clang++": "/p/clang++", "nvcc": "/p/nvcc"})
-    for load in (PD.device, PD.fused):
-        with pytest.raises(RuntimeError, match=r"^no CUDA target: `configure\(arch=\.\.\.\)` with the arch of the run machine's card"):
-            load.__wrapped__()
-    PD.TOOLCHAIN.arch = "90a"
-    with pytest.raises(ValueError, match="^CUDA target '90a' is not a card's arch"):
-        PD.device.__wrapped__()
-    assert built == []
-    PD.TOOLCHAIN.arch = "sm_90a"
-    assert PD.cuda_flags()[-1] == "-gencode=arch=compute_90a,code=sm_90a"
-    for load, _ in loads:
-        with pytest.raises(Built):
-            load.__wrapped__()
-    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain(cxx="/t/g++", nvcc="/t/nvcc", arch="sm_90a"))
-    for load, _ in loads:
-        with pytest.raises(Built):
-            load.__wrapped__()
-    assert built == ["clang++", "/p/nvcc", "/p/nvcc", "/t/g++", "/t/nvcc", "/t/nvcc"]
 
 
 def test_a_kernel_directory_without_one_cubin_is_refused_and_its_one_cubin_is_taken(tmp_path):

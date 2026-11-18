@@ -36,7 +36,7 @@ NAME = "class Program 0"
 @pytest.fixture
 def low():
     """TINY's class Program lowered into one slot: its Program holds every node's rows."""
-    return WC.lower(S._registered(), CLASS, 1, GRAIN, provable=False)
+    return WC.lower(S._registered(), CLASS, 1, GRAIN)
 
 
 def _node(low, family: str, k: int = 0):
@@ -47,7 +47,7 @@ def _node(low, family: str, k: int = 0):
 def _program(low, fn=None, tables=None, cut=None) -> WL._Program:
     """A slot's Program of ``fn`` (the class Program by default) with nothing lowered into it, on a builder of its own."""
     p = low.programs[0]
-    return WL._Program(WB._Builder(GRAIN, 1, False), fn or low.fn, CLASS, NAME, 0, p.scan, p.entry, tables, cut)
+    return WL._Program(WB._Builder(GRAIN, 1), fn or low.fn, CLASS, NAME, 0, p.scan, p.entry, tables, cut)
 
 
 def _refused(why: str):
@@ -57,7 +57,7 @@ def _refused(why: str):
 def test_a_program_takes_a_cuts_layout_with_pearls_tables_and_only_with_them(low):
     """A cut's layout without Pearl+'s tables, or the tables without a layout, is a caller's error."""
     pearl = PearlTables("pearl-c-h100-v1-h3", words=16)
-    layout = WK.linears(low.fn, pearl.words, GRAIN.rows, provable=False)
+    layout = WK.linears(low.fn, pearl.words, GRAIN.rows)
     for tables, cut in ((None, layout), (pearl, None)):
         with pytest.raises(ValueError, match=re.escape(f"{NAME}: a cut's layout goes with Pearl+'s tables, and only with them")):
             _program(low, tables=tables, cut=cut)
@@ -143,7 +143,7 @@ def test_a_position_past_the_first_that_reads_the_prompt_is_refused(low):
 def test_with_h1s_tables_a_token_that_isnt_one_u32_row_is_refused():
     """An input-ids table's row is one token id: an embedding past the prompt whose token is a norm's input row, 64 words,
     isn't one."""
-    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, provable=False, tables=Tables(64, 8, 6))
+    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, tables=Tables(64, 8, 6))
     p, nodes = low.programs[0], low.fn.body.nodes
     emb, hidden = _node(low, "Embedding", 1)[1], _node(low, "RMSNormTriton")[1].args[0]
     (row,) = p.rows(hidden.refs)
@@ -157,15 +157,15 @@ def test_a_grain_that_cuts_no_unit_within_its_rows_is_refused_by_name():
     unit no cut of a `SiluMul`'s gate and up rows (16 words each) fits, a part of fewer words cutting them."""
     reg = S._registered()
     with _refused("RMSNormFusedCuda_v2{N=64,EPS=1e-05}: its 64 elements aren't parts of the grain's 48"):
-        class_circuit(reg, CLASS, 1, Grain(gemm_words=1024, rows=8, select=64, norm=48), provable=False)
+        class_circuit(reg, CLASS, 1, Grain(gemm_words=1024, rows=8, select=64, norm=48))
     with _refused("SiluMul_v2{I=128}: no cut of its gate and up rows holds a unit within 2 rows"):
-        class_circuit(reg, CLASS, 1, Grain(gemm_words=1024, rows=2, select=64), provable=False)
+        class_circuit(reg, CLASS, 1, Grain(gemm_words=1024, rows=2, select=64))
 
 
 def test_a_quantizer_whose_x_is_rows_that_dont_divide_its_values_is_refused():
     """o_proj's quantizer reads its 64 values as the attention's four head rows; one reading two of them and a norm's
     input row, three rows, is refused."""
-    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN, provable=False)
+    low = WC.lower(_int8(), CLASS, 1, INT8_GRAIN)
     p, nodes = low.programs[0], low.fn.body.nodes
     quant, hidden = _node(low, "Int8RowQuant", 1)[1], _node(low, "RMSNormTriton")[1].args[0]
     x = quant.args[0]

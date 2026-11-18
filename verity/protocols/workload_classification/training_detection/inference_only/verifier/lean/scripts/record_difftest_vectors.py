@@ -2094,6 +2094,17 @@ EDGED = {
         "reads": [{"reader": "EdgeB_v1", "port": "y", "param": "weights/w", "at": 1, "radix": [1], "base": 0,
                    "step": [0]}]}), "inputs"),
     "a reference to a later node": (lambda: _ab(_mapped), _repoint(["n", 3, 0, 8], 2, 1), None, "not-topological"),
+    "an edge read through a grid, each run twice": (lambda: _ab(_mapped),
+                                                    _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 4]]]]], 3, form="grid"),
+                                                    None, "wires"),
+    "a grid of two lanes, an edge's and an input's": (lambda: _ab(_mapped), _repoint(
+        [2, [["n", 2, 0, 1, [[2, 4]]], ["n", 0, 2, 1, [[2, 4]]]]], 3, form="grid"), None, "own-rows"),
+    "a grid of radix 1": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[1, 4]]]]], 3, form="grid"), None,
+                          "program"),
+    "a grid an affine part spells": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[4, 2]]]]], 3, form="grid"),
+                                     None, "program"),
+    "a grid past its node": (lambda: _ab(_mapped), _repoint([2, [["n", 2, 0, 1, [[2, 0], [2, 8]]]]], 3, form="grid"),
+                             None, "program"),
 }
 
 
