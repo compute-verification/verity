@@ -155,12 +155,16 @@ def _stage(topo, d: Path, wired: bool):
                                     wiring=replace(readers, writer_salts=False), salts=shared)
         st["own"] = CS.stage(units, SPEC, shape, cl, _cut(honest, N, tp.population), d / "own", packed=True, wiring=readers,
                              share_rows=False, salts=own)
+        st["mixed"] = CS.stage(units, SPEC, shape, cl, honest, d / "mixed", packed=True, wiring=wiring)
         port = _meta(d / "honest")["links"][0]["port"]
         _edit(d / "honest", d / "other_leaf", N, port, refs={0: 1, 1: 0})
         st["other_words"] = CS.stage(units, SPEC, shape, cl, _cut(_lanes(units, cl, tp, inputs, {N: flip[N]}), N, tp.population),
                                      d / "other_words", packed=True, wiring=replace(readers, strict=False), salts=shared)
         for name, k in (("writers", "writers"), ("readers", "honest"), ("own", "own")):
             (d / f"{name}.reads.json").write_text(json.dumps({"format": RG.READS, "ports": st[k]["registered_reads"]}))
+        wrong = json.loads(json.dumps(st["honest"]["registered_reads"]))
+        wrong[port]["tree"]["field"] = "aux"
+        (d / "wrong_field.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wrong}))
         text = (d / "honest" / "circuit.txt").read_text()
         (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
     return fn, program, query, tp, st
@@ -257,6 +261,7 @@ def _lean(*args: str) -> tuple[dict | None, str]:
 
 NO_TREE = "and no tree port (tree) reads it by path"
 NOT_OPEN = "does not open"
+NO_ROOTS = "the verifier holds no registered roots"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -265,8 +270,8 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     bound = ["--partition", str(d / "partition.json"), "--program", str(d / "program.desc")]
 
-    def at(name: str, *extra: str, reads: str | None = "readers.reads.json"):
-        return _lean("--circuit", str(d / name / "circuit.txt"), "--public", str(d / name / f"pub-{N}.bin"), *extra,
+    def at(name: str, *extra: str, reads: str | None = "readers.reads.json", n: int = N):
+        return _lean("--circuit", str(d / name / "circuit.txt"), "--public", str(d / name / f"pub-{n}.bin"), *extra,
                      *(["--registered", str(d / reads)] if reads else []))
 
     ok, out = at("writers", *bound, reads="writers.reads.json")
@@ -285,11 +290,18 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
         bad, out = at(cheat, *bound)
         print(cheat, out.strip().splitlines()[-1])
         assert bad is None and why in out, (cheat, out)
-    # without registered reads, every linked statement is refused by checkLinked's name, the honest one included
-    for name in ("honest", "made_up", "wrong_salt"):
-        bad, out = at(name, *bound, reads=None)
+    # the honest reader with its tree port naming another output field of the writer's template: a link row reads its
+    # writer's whole output row, so no other field's tree
+    bad, out = at("honest", *bound, reads="wrong_field.reads.json")
+    print("wrong_field", out.strip().splitlines()[-1])
+    assert bad is None and "reads its writer's whole output row" in out, out
+    # without registered reads every linked statement is refused, the honest one included: one whose header names
+    # registered rows as reading no root, and one that names none (layers 0 and 1 in one statement) by checkLinked's name
+    for name, why, n in (("honest", NO_ROOTS, N), ("made_up", NO_ROOTS, N), ("wrong_salt", NO_ROOTS, N),
+                         ("mixed", NO_TREE, 2 * N)):
+        bad, out = at(name, *bound, reads=None, n=n)
         print(name, "without --registered:", out.strip().splitlines()[-1])
-        assert bad is None and NO_TREE in out, (name, out)
+        assert bad is None and why in out, (name, out)
     bad, out = at("honest", "--partition", str(d / "partition.json"), reads=None)
     print("no-program", out.strip().splitlines()[-1])
     assert bad is None and "Linking needs the verifier's own program" in out, out
