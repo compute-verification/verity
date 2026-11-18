@@ -280,8 +280,9 @@ TOOLS = ("lake", "cargo")
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
-#: run` would reach another verdict than inside check (test_remote_cwd's)
-RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
+#: run` would reach another verdict than inside check (test_remote_cwd's). Nor the kit's trial switch, which `research run` sets on
+#: a run of a tree that isn't `main`'s, a queue's candidate checks among them: a test that wants a trial sets it itself
+RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX", "VERITY_BENCH_TRIAL")
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
@@ -312,8 +313,10 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
-#: failure no PR caused
-LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+#: failure no PR caused. It holds the tree's one Lake build lock, the file every test-time build takes
+#: (`verity_difftest.BUILD_LOCK`), since Lake builds a package's path requires in their own `.lake`
+LAKE_BUILD = ELAN + ('d=$PWD; until [ -z "$d" ] || [ -d "$d/verity/circuits/difftest" ]; do d=${d%/*}; done; '
+                     'L=${d:+$d/verity/circuits/difftest/}.lake; mkdir -p "$L" && exec flock "$L/harness-build.lock" lake build')
 #: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
 #: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
 #: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;
@@ -897,8 +900,10 @@ def cargo_on_path() -> None:
 
 
 def keyed_variables(env) -> dict[str, str]:
-    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`)."""
-    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}
+    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`) and those
+    no test inherits (`RUNNER_ENV`)."""
+    return {k: v for k, v in sorted(env.items())
+            if k.startswith(ENV_PREFIXES) and k not in RUNNER_ENV and SETTINGS.role_of(k) != SETTINGS.WHERE}
 
 
 def environment() -> dict:

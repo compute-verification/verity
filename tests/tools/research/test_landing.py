@@ -448,13 +448,15 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn(tmp_path):
 
 
 def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
-    """Each part of a candidate's check and its records run ask for their check slot at `AFTER_LANDING_SLOT_RANK`
-    (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever the loop's own environment says: a ranked
-    priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a `train.sh`
-    launched by hand."""
+    """Each part of a candidate's check asks for its check slot at rank 1 (`landing.CHECK_SLOT_RANK`) and its records run at
+    rank 0 (`AFTER_LANDING_SLOT_RANK`), as CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`, whatever the loop's
+    own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a
+    slot for a `train.sh` launched by hand, and a records run goes ahead of every check shard."""
     import types
 
-    from research.landing import AFTER_LANDING_SLOT_RANK, launched
+    from research.landing import AFTER_LANDING_SLOT_RANK, CHECK_SLOT_RANK, launched
+
+    assert (AFTER_LANDING_SLOT_RANK, CHECK_SLOT_RANK) == (0, 1)
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
@@ -470,10 +472,33 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
             os.waitpid(job["pid"], 0)
         return launched(job)[1]
 
-    ranked = f"rank=[{AFTER_LANDING_SLOT_RANK}]"
-    assert f"{ranked} argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
+    assert f"rank=[1] argv=[{'c' * 40} m1 --deferred pytest --shard 1/3]" in tail(
         d.launch_after_landing(repo, "c" * 40, "m1", "pytest", shard="1/3"))
-    assert f"{ranked} argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
+    assert f"rank=[0] argv=[{'c' * 40} m1 --deferred lean-audit --bookkeeping-warn]" in tail(d.launch_locks(repo, "c" * 40, "m1"))
+
+
+def _slot_opts(argv: list[str]) -> list[str]:
+    """The `slot.py` options of a `queue.quick_run` argv: what follows the slot script, up to the `--` before its job."""
+    i = next(i for i, a in enumerate(argv) if a.endswith("slot.py"))
+    return argv[i + 1:argv.index("--", i)]
+
+
+def test_a_candidates_quick_tier_takes_a_check_slot_at_rank_0_and_quick_run_ranks_only_when_asked(tmp_path, monkeypatch):
+    """A candidate's quick tier (`quick_launch`), short and on `main`'s critical path, waits in a `--priority` check slot at
+    `--rank 0`, ahead of every part of a candidate's check (rank 1); `queue.quick_run` passes a rank only when given one with
+    ``priority``, so `research queue ready`'s own quick tiers stay unranked."""
+    from research.queue import quick_run
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    got = {}
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env, **_: got.setdefault("argv", argv) and {"dir": "", "pid": 0})
+    landing.quick_launch(tmp_path, "c" * 40, "b" * 40, "m1")
+    opts = _slot_opts(got["argv"])
+    assert opts[:3] == ["--priority", "--rank", "0"] and opts.count("--rank") == 1, opts
+    wt = tmp_path / "wt"
+    assert "--rank" not in _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, priority=True))
+    assert "--rank" not in _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, rank=0))
+    assert _slot_opts(quick_run("r1", "m1", wt, "c" * 40, "b" * 40, priority=True, rank=1))[:3] == ["--priority", "--rank", "1"]
 
 
 def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and_bookkeeping(tmp_path, monkeypatch):
