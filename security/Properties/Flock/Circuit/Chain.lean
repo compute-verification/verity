@@ -22,7 +22,7 @@ tree):
   each output port bit the value `Prog.evalBool` gives the block's Definition on the input port bits.
 * `BlockEval`: the block's Program (`Spot.BlockFront.program`) evaluates, on C's values at its input ports, to block `u`'s
   local evaluation (`Partition.localEval`) at its output ports, where each word primitive evaluates as the Boolean
-  Definition C's Boolean map names for it (`BooleanAgrees`).
+  Definition the Program's Boolean map names for it (`BooleanAgrees`).
 * `PortsBind`: C's trace and the statement's port columns, opened at the same positions (`Partition.pos`), agree at
   the committed ports (`PortsAgree`), or two openings of one leaf collide.
 * `BlockCorrect`: those rows, agreeing with a trace of C at the committed ports, make block `u` correct.
@@ -47,10 +47,10 @@ def BlockIs (P : Prog) (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.siz
   ∀ g : Fin (ofProgram P).N,
     (partOf P blocks).unit g = some u.castSucc ↔ (Spot.BlockFront.inside fr.ranges g.val = true ∧ inputAt P g = false)
 
-/-- Each word primitive of `P` the Boolean map `boolean` names a Definition for evaluates as that Definition. -/
-def BooleanAgrees (P : Prog) (boolean : Std.HashMap String String) : Prop :=
-  ∀ p q, (P.defs[p]!).prim = true → boolean[(P.defs[p]!).key]? = some (P.defs[q]!).key →
-    Prog.evalBool P p = Prog.evalBool P q
+/-- Each word primitive of `P` the Program's Boolean map names a Definition for (`Prog.bodyOf?`) evaluates as that
+Definition. -/
+def BooleanAgrees (P : Prog) : Prop :=
+  ∀ p b, (P.defs[p]!).prim = true → P.bodyOf? (P.defs[p]!).key = some b → Prog.evalBool P p = Prog.evalBool P b
 
 /-- **`V5Rows`, the adapter to the sampled proof's guarantee.** A unit `u` correct in the key circuit of the templated
 statement `c` carrying the template `tu.t`: the statement's unit is the net `tu.t` unrolls to, and at every copy `u'` the
@@ -84,9 +84,9 @@ def LowerEval : Prop :=
 /-- **`BlockEval`, MERGE's (C).** The block's Program evaluates, on C's values at its input ports, to block `u`'s local
 evaluation at its output ports, bit for bit. -/
 def BlockEval : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog),
-    Spot.BlockFront.front P units boolean = .ok fr → Spot.BlockFront.program P units boolean = .ok Q →
-    BooleanAgrees P boolean →
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog),
+    Spot.BlockFront.front P units P.boolean = .ok fr → Spot.BlockFront.program P units P.boolean = .ok Q →
+    BooleanAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace,
       Prog.evalBool Q Q.root (portBits X fr.ins) = portBits ((partOf P blocks).localEval X u.castSucc) fr.outs
@@ -137,12 +137,12 @@ def PortsBind : Prop :=
 satisfied by `z` with the constant 1 (`LowerEval`'s form) and agreeing with a trace `X` of C at the committed ports
 (`PortsAgree`, what `PortsBind` concludes), make block `u` correct in C. -/
 def BlockCorrect : Prop :=
-  ∀ (P : Prog) (units : Array ℕ) (boolean : Std.HashMap String String) (fr : Spot.BlockFront.Front) (Q : Prog)
+  ∀ (P : Prog) (units : Array ℕ) (fr : Spot.BlockFront.Front) (Q : Prog)
     (t : Tmpl.Tmpl) (nt : Net),
-    Spot.BlockFront.front P units boolean = .ok fr → Spot.BlockFront.program P units boolean = .ok Q →
+    Spot.BlockFront.front P units P.boolean = .ok fr → Spot.BlockFront.program P units P.boolean = .ok Q →
     Flock.Lower.lower Q Q.root (fr.ins.map (·.width)) (fr.outs.map (·.width)) = .ok t → Tmpl.unroll t = .ok nt →
     nt.unitLog ≤ 32 → ∀ (hb : Built nt) (z : ℕ → Bool), (Rows.ofNet hb).Sat (fun c => z c.val) → z t.constPos = true →
-    BooleanAgrees P boolean →
+    BooleanAgrees P →
     ∀ (blocks : Array (Array (ℕ × ℕ))) (u : Fin blocks.size), BlockIs P blocks u fr →
     ∀ X : (ofProgram P).Trace, PortsAgree P blocks u fr t z X → (partOf P blocks).Correct X u.castSucc
 

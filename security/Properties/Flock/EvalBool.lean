@@ -12,7 +12,8 @@ template is held to and the operation of the word-level circuit's gates (`boolSe
 Its body's nodes run in order, each node's value the list of its output leaves, low leaf first, as PROTOCOL.md §6 resolves
 a reference: parameter `i`'s leaf `j` is bit `start i + j` of `x`, node `i`'s leaf `j` that node's leaf `j`.
 - **A primitive** is its gate on every operand of every argument: `And<n>` their conjunction, `Xor<n>` their sum, `Not`
-  the negation of its one, a `Const1` its constant.
+  the negation of its one, a `Const1` its constant. A word primitive, which is no §9 gate, is its Boolean Definition
+  (`Prog.bodyOf?`, the Program's Boolean map) on the same bits.
 - **A call** is the callee on its arguments' leaves, in order.
 - **A batch** of `n` is the callee on each member's arguments, its members' values one after another. An argument mapped
   over an axis of `(d, L)` gives member `m` its leaf `t` at reference `(t / L · d) · L + t % L + m · L`; one not mapped
@@ -21,8 +22,8 @@ a reference: parameter `i`'s leaf `j` is bit `start i + j` of `x`, node `i`'s le
   the carry iteration `m − 1` returned, an `xs` argument its leaf `t` at reference `t + m · cnt`, a shared one the same
   every iteration. Its value is the last carry, then each iteration's `y`.
 
-A reference reads its sequence's references in order (`Seq.toArray`). Where it meets a primitive that is not a §9 gate,
-or a callee not before its caller, its value is `[]`.
+A reference reads its sequence's references in order (`Seq.toArray`). Where it meets a word primitive the Boolean
+map names no Definition for, or a callee not before its caller, its value is `[]`.
 -/
 
 @[expose] public section
@@ -55,8 +56,9 @@ def evalDef? (P : Prog) : Nat → Nat → List Bool → Option (List Bool)
   | fuel + 1, d, x => do
     let defn ← P.defs[d]?
     if defn.prim then
-      let g ← Flock.Lower.gateOf? defn.id
-      return [gateVal g x]
+      match Flock.Lower.gateOf? defn.id with
+      | some g => return [gateVal g x]
+      | none => return ← evalDef? P fuel (← P.bodyOf? defn.key) x
     let callOf (e : Nat) (ins : List Bool) : Option (List Bool) := evalDef? P fuel e ins
     let st := paramStarts defn.params
     let outs ← defn.body.nodes.toList.foldlM (init := (#[] : Array (List Bool))) fun outs nd => do
