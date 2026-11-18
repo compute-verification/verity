@@ -252,11 +252,11 @@ def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_pa
     under each ``over_cap`` rule."""
     path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
     for rule in (None, *VR.OVER_INERT_BOUND):
-        got = same(exe, [path], 96, over_cap=rule)
+        got = same(exe, [path], 128, over_cap=rule)
         assert any(v["tile"] == 14 and "the replayed debit 168 exceeds the cap 38" in (v["reason"] or "")
                    for v in got["verdicts"]), (rule, got["verdicts"])
     monkeypatch.setattr(T.CW.D, "inert_elements", lambda flags, dead, device=None: 0)
-    out = VR.verify_passes([path], 96, 1, "test", T.published(path), SOURCE, test_instance=True)
+    out = VR.verify_passes([path], 128, 1, "test", T.published(path), SOURCE, test_instance=True)
     assert any(v["tile"] == 14 and "the replayed debit 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
 
 
