@@ -58,6 +58,7 @@ import a5 as A5  # noqa: E402
 import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
+from verity.ports import free_port  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.periods import flock_inputs as FI, rows as CS  # noqa: E402
@@ -149,14 +150,12 @@ def session(a, mm: dict, draw: dict, sdir: Path, zk_server: bool = True, forged:
             lean_pool: ThreadPoolExecutor | None = None) -> dict:
     """One `--zk` session of member ``mm`` served ``draw``, and Lean's verdict on it: with ``lean_pool``, a future of
     it, so that the next session proves while Lean verifies this one."""
-    from verity_bench import kit
-
     sdir.mkdir(parents=True, exist_ok=True)
     (sdir / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     env = a0.prover_env(a.zk_server if zk_server else None, mm["st"])
     if forged:
         env["FC_ZK_SELF_CHECK"] = "skip"
-    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", kit.free_port(), sdir, sample_file=sdir / "draw.json",
+    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, sample_file=sdir / "draw.json",
                               zk=True, env=env, prove_timeout=a.session_timeout)
     served = (record or {}).get("unit_draw") or {}
 

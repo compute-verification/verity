@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity_bench.kit import MACHINE_PROPERTIES, free_port
+from verity.ports import free_port
+from verity_bench.kit import MACHINE_PROPERTIES
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]

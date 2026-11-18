@@ -2035,10 +2035,9 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
                        published_args(getattr(a, "published_args", None)), limits=held is None)
@@ -2437,10 +2436,9 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
     srv = out / "server"
     srv.mkdir(parents=True, exist_ok=True)
     site = plugin_site(out / ".site", arm)
-    kit()
-    from verity_bench import kit as bench
+    from verity.ports import free_port
 
-    port = bench.free_port()
+    port = free_port()
     argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context_of(loads, a.max_model_len))
     front = front_argv(port, a.front, cell_payload(cells), srv / "front.jsonl")
     try:
