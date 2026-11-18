@@ -216,8 +216,53 @@ def test_served_passes_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name(mode, tmp_p
     args = ["--passes", str(tmp_path / "passes")] if mode == "serve" else []
     with pytest.raises(SystemExit, match=r"pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card"):
         SP.main([mode, "--spec", spec, "--out", str(tmp_path / "out.json"), *args])
-    assert SP.undeclared(["pouw:pearl-c-h100-v1-h3", "stock"]) is None
+    assert SP.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
     assert SP.SPEC.name == "llama32-1b-1gpu-pouw-protocol-served.toml"
+
+
+def test_served_passes_serve_attaches_pearl_plus_by_name_with_its_settings_and_a_live_sessions_ctx(monkeypatch, tmp_path):
+    """``served_passes.py serve`` attaches the arm's declared scheme on the build's exchange, not through the adapter's
+    option: the spec's arm settings that are Pearl+'s, its passes retained under DIR, and its salt in-process; under
+    the challenger gate, a session an epoch under the lane as the peer, with the gate, its ledger and the private
+    directory in its ctx, and refused by name without PEARLC_PRIVATE."""
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+    from verity.protocols.resource_accounting.scheme import settings
+    from verity_vllm import messages as M
+
+    arm = SP.pearl_c_arm(resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200"))
+    scheme = M.option(arm.protocols[0])
+    monkeypatch.setenv("PEARLC_KERNEL", "/tree/k")
+    monkeypatch.setenv("PEARLC_CUBIN", "/run/k.cubin")
+    own, ctx = SP.scheme_settings(arm, scheme, tmp_path)
+    assert (own, ctx) == ({"kernel": "/tree/k", "cubin": "/run/k.cubin", "transcript_dir": str(tmp_path),
+                           "coins": "in-process"}, {})
+    settings(scheme, own)
+
+    class Gate:
+        def __init__(self, command):
+            self.command = command
+
+        def call(self, *words):
+            return {}
+
+        def ledger(self):
+            return []
+
+    import verity_vllm.pipeline.commit_coins as CC
+
+    monkeypatch.setattr(CC, "ChallengerGate", Gate)
+    monkeypatch.setenv("PEARLC_CHALLENGER_GATE", "ssh gate")
+    monkeypatch.setenv("PEARLC_CHALLENGER_PEER", "node-1")
+    monkeypatch.delenv("PEARLC_PRIVATE", raising=False)
+    with pytest.raises(SystemExit, match="PEARLC_PRIVATE"):
+        SP.scheme_settings(arm, scheme, None)
+    monkeypatch.setenv("PEARLC_PRIVATE", str(tmp_path / "private"))
+    own, ctx = SP.scheme_settings(arm, scheme, None)
+    assert {k: own[k] for k in ("challenger", "lane", "peer")} == {"challenger": "127.0.0.1:0", "lane": "vllm",
+                                                                   "peer": "node-1"}
+    assert "coins" not in own and "transcript_dir" not in own and ctx["private"] == str(tmp_path / "private")
+    assert ctx["gate"]() == {} and ctx["ledger"]() == []
+    settings(scheme, own)
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
