@@ -41,7 +41,7 @@ own `rec-opening` statements are at `mReg` (`mReg_of_list`, `Shape.lean`).
 namespace FlockC3.VStarList
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
+open Game Spot.Sampling Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 
 /-- **The count is the list's size** where the verifier lists V*'s statements. -/

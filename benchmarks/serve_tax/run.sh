@@ -229,23 +229,17 @@ case $MODEL_ID in
   llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
   *) echo "serve-tax: MODEL_ID is moonlight, glm53, glm53-standin, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
-# CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
-# sampler) builds with; a newer toolkit can lack its headers (cuRAND)
-if [ -z "${CUDA_HOME:-}" ]; then
-  v=$("$PY" -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
-  [ -n "$v" ] && [ -d "/usr/local/cuda-$v" ] && export CUDA_HOME=/usr/local/cuda-$v
-fi
-# nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
-# /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
-# itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
+# CUDA_HOME: the toolkit of torch's own CUDA, which FlashInfer's JIT (vLLM's default sampler) builds with (a newer
+# toolkit can lack its headers, cuRAND), and whose nvcc the kv and boundary arms build the row-table kernels with; with
+# FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries itself (an inherited
+# CPATH or LIBRARY_PATH could mix toolkits)
+[ -n "${CUDA_HOME:-}" ] || { echo "serve-tax: CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)"; exit 2; }
+export CUDA_HOME
 if [ "${FLASHINFER:-0}" = 1 ]; then
-  CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
-  export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH"
+  export PATH="$CUDA_HOME/bin:$PATH"
   unset CPATH LIBRARY_PATH
 else
-  command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
-    [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
-  done
+  command -v nvcc >/dev/null || export PATH="$PATH:$CUDA_HOME/bin"
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}

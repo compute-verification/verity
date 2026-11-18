@@ -32,7 +32,7 @@ ports, so the acceptance is its own event (`AcceptsZKP`, which at `none` is `Acc
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
   HiddenExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)

@@ -78,7 +78,7 @@ statement's sample instead, so no sample in the record is read:
 
 namespace FlockSoundness.Discharge.Composed
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed DecodeZL
 open FlockSoundness.Discharge.Tables (LiveOutJ DecodesTable repTapeJ)
 open scoped ENNReal
 
@@ -351,7 +351,7 @@ end FlockSoundness.Discharge.Composed
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Placed DecodeZL
   HiddenExec Composed
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open FlockSoundness.Discharge.DecodeZLJ (partJson)

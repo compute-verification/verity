@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Spot.Sampling.SamplingDesign
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 # Proof of Flock's end-to-end guarantee under hidden outputs
 
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
-first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Audit.SamplingDesign.subset_miss`, and
+first and last terms in closed form, as `EndToEnd` is `zk_session_soundJ_custody_reg`'s (`Spot.Sampling.SamplingDesign.subset_miss`, and
 `linkBoundZC` at A2). `Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` is
 `zk_session_soundHJ_custody_sampled_reg` with its last term in closed form. Each reads the circuit the descriptor
 unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
@@ -41,7 +41,7 @@ is no extra condition: every sample verity-verify-proof accepts gives one, at an
 
 namespace Flock.SecurityProofs
 
-open FlockSoundness FlockSoundness.Audit
+open FlockSoundness Spot.Sampling
 
 /-- **Flock's one-stage audit, end to end, under hidden outputs.** -/
 theorem EndToEndHidden : Flock.Guarantees.EndToEndHidden := by

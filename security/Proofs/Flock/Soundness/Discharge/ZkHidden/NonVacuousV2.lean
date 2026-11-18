@@ -48,7 +48,7 @@ run time), `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and
 
 namespace FlockSoundness.Discharge.ZkHidden
 
-open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
+open Game Spot.Sampling Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind HiddenExec Composed
 
 variable {n : ℕ}
 

@@ -43,12 +43,15 @@ class RegisteredValues:
 
 @dataclass(frozen=True)
 class InputArrived:
-    """``steps``: input ``input`` of ``length`` values arrived, at ``step``."""
+    """``steps``: input ``input`` of ``length`` values arrived, at ``step``, with the ``headers`` it came with (names
+    lower-cased) and its ``first_line``."""
 
     hook: ClassVar[str] = "steps"
     input: str
     length: int
     step: int
+    headers: Mapping[str, str] = field(default_factory=dict)
+    first_line: str = ""
 
 
 @dataclass(frozen=True)
@@ -236,6 +239,33 @@ class StartOnBoundary:
     gate: Gate
 
 
+class Route(Protocol):
+    """A scheme's answer to a request on its route: called, on a thread of its own, with the request's first line, its
+    headers (names lower-cased) and its body as it streams in, it returns the status and the text to answer with."""
+
+    def __call__(self, first_line: str, headers: Mapping[str, str], body: Iterable[bytes]) -> tuple[int, str]: ...
+
+
+@dataclass(frozen=True)
+class ServeRoute:
+    """A scheme's request that the workload's server answer requests on ``path`` through ``serve``."""
+
+    path: str
+    serve: Route
+
+
+@dataclass(frozen=True)
+class RefuseInput:
+    """A scheme's refusal of input ``input``, answered with ``why``; filed at any time, serving included."""
+
+    input: str
+    why: str
+
+
+class Broken(Exception):
+    """Why a reader of the workload's (`StartBeside`'s readers) ends before its stream does."""
+
+
 @dataclass(frozen=True)
 class HoldRelease:
     """A scheme's request that no output of ``input`` leave before step ``until``."""
@@ -269,10 +299,11 @@ class StartBeside:
 
 
 type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
-                | StartBeside | ReuseOldestFreed)
+                | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
-           "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
-           "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced", "unmet"]
+           "Broken", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
+           "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
+           "unmet"]

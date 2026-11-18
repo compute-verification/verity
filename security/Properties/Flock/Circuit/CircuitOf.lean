@@ -68,7 +68,7 @@ theorem Circuit.ofAudit_isInput {C : Verity.Boolean.Circuit} (g : Fin C.N) :
   isInput_coreOp _
 
 /-- A game partition as core's: the same units. -/
-def Partition.ofAudit {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
+def Partition.ofAudit {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) :
     Partition (Circuit.ofAudit C) n where
   unit := P.unit
   input_iff g := (P.input_iff g).trans (by rw [Circuit.ofAudit_isInput])
@@ -103,7 +103,7 @@ noncomputable abbrev keyCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.un
 
 /-- The key program's partition into its `n` units. -/
 noncomputable abbrev keyPartition (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    FlockSoundness.Audit.Partition (keyCircuit D hU n) n :=
+    Spot.Sampling.Partition (keyCircuit D hU n) n :=
   (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
     (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
 

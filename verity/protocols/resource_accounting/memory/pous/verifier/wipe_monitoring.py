@@ -12,7 +12,7 @@ adaptive prover. A period's row covers those T wipes, so its error is their `eps
 where that is 1 or more the row prints `protocol.NO_BOUND` with the sum and neither statement below
 (`protocol.no_bound`). Under 1 it prints both:
 
-- **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each wipe,
+- **Pooled** (`pooled_step`): the count bound `Spot.Sampling.Periods.prCoin_count_le_choose`. When each wipe,
   given the earlier ones, is accepted and leaves more than its `foreign_bits` with probability at most p, at least M of
   the T are with probability at most C(T, M)·p^M. M is the least count within δ at p = `eps` (`short_sessions`), so at
   p = `eps`, except with δ, at most M − 1 of the T wipes fail their bound. The count bound takes p as each wipe's whole
@@ -52,8 +52,8 @@ from verity.protocol import DELTAS, MONITORING_PERIODS, block_count, no_bound, s
 from . import wipe_period
 
 FORMAT = "verity/wipe-monitoring-period/v1"
-STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
-             "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
+STATEMENT = {"name": "Spot.Sampling.Periods.prCoin_count_le_choose",
+             "file": "security/Proofs/Spot/Sampling/Periods.lean"}
 CADENCE_S = 86400
 EGRESS = "wipe-egress/v1"
 HBM = "gpu-hbm"
