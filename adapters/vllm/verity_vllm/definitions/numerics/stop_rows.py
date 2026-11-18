@@ -28,6 +28,7 @@ def statics_of(statics: dict[str, Any]) -> dict[str, Any]:
 def stop_check(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
+
     from verity_vllm.definitions.registry import stop_check as SC
     S = statics_of(statics)
     if len(ops) != 1:
@@ -46,6 +47,7 @@ def stop_check(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, 
 
 def check_targets(rng) -> list:
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import stop_check as SC
     return [bind(SC.StopCheck, T=4, STOP=stop, MAX_TOKENS=4, PROMPT_LEN=8, MAX_MODEL_LEN=64, FINISH=f)
             for stop, f in (((3, 7), 0), ((3, 7), 1), ((3, 7), 2), ((), 2))]
