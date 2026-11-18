@@ -38,8 +38,9 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``hooks``, ``ports`` (each with its `Layout` at a public shape when an adapter's circuit reads it, `Port.layout`),
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
-  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
-  `verity.hooks.Releases`, a `verity.hooks.Commits`), and
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, or a report: any of
+  ``summary()``, the run's totals, ``record()``, what it ran with, ``release()``, called once when the workload stops,
+  and ``commitment()``, what it committed to, read after ``release``), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the

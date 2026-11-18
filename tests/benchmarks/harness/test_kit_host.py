@@ -184,7 +184,7 @@ def test_a_session_registers_its_cards_node_file(name, node):
 
 
 def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
-    nodes = CARD_FILES.parent / "nodes"
+    nodes = kit.nodes_directory()
     for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
         text = (nodes / "h200-sxm-141gb-x1.toml").read_text()
         (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
