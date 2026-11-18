@@ -17,13 +17,29 @@ from __future__ import annotations
 import math
 
 import numpy as np
-
 from verity.circuits.defs import Coll, bind, composite, primitive
-from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry.b1 import ZERO16, ZERO32, DotBf16, _butterfly, _lane, const, f32c
-from verity_vllm.definitions.registry.prims import A16
+from verity.circuits.refs import (
+    Affine,
+    Explicit,
+    array_of,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
 from verity.circuits.types import Array, Tuple, Value
+
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import (
+    ZERO16,
+    ZERO32,
+    DotBf16,
+    _butterfly,
+    _lane,
+    const,
+    f32c,
+)
+from verity_vllm.definitions.registry.prims import A16
 
 BF16, F32 = Value(16), Value(32)
 

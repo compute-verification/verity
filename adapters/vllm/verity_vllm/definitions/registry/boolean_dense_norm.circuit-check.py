@@ -11,6 +11,7 @@ def _boolean_roots() -> list[Any]:
     `RsqrtApprox_v2`."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import mufu as BM
+
     from verity_vllm.definitions.registry import boolean_dense_norm as DN
     from verity_vllm.definitions.registry import prims as P
 

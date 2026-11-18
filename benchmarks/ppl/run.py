@@ -329,7 +329,7 @@ def cmd_metrics(a: argparse.Namespace) -> int:
     m = models.get(r["model"])
     try:
         text, doc, measured = report.metrics(r, m["repo"], m["revision"])
-    except ValueError as e:
+    except (ValueError, SystemExit) as e:
         print(f"ppl: no number: {e}", file=sys.stderr)
         return 1
     return kit.report("ppl", text, doc, measured, out=a.out, from_run=doc["run"])

@@ -7,11 +7,11 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, self_check
-from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as M
 from verity.circuits.silicon.cast import e4m3_to_f32_word
+
+from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as M
 
 SMALL = {"DN": 128, "DR": 2}
 
