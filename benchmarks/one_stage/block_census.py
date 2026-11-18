@@ -242,7 +242,8 @@ def census(docs: list[dict], request: str | None = None) -> dict:
 def proved(defs: dict[str, dict]) -> None:
     """Gives each proof-block Definition of a version on bits its ``proved_as`` (`serving_rows.proved_as`: that version at its
     statics, whose proof is its block's), and each of a kind (one ``Name_vN`` on bits) at several sizes that the kind's largest
-    entry (the most ANDs) is at least in k, ANDs, input and output bits, and is not, ``bounded_by``: that entry's ``proved_as``."""
+    entry (the most ANDs) differs from only in integer statics and is at least in k, ANDs, input and output bits, and is not,
+    ``bounded_by``: that entry's ``proved_as``."""
     for s, d in defs.items():
         if (p := ST.proved_as(s)) is not None:
             d["proved_as"] = p
@@ -252,8 +253,10 @@ def proved(defs: dict[str, dict]) -> None:
             kinds[spec_base(d["proved_as"])].append(d)
     for ds in kinds.values():
         top = max(ds, key=lambda d: d["ands"])
+        big = spec_statics(top["proved_as"])
         for d in ds:
-            if d is not top and all(top[k] >= d[k] for k in ("k_log", "ands", "in_bits", "out_bits")):
+            sizes = all(type(v) is int for k, v in spec_statics(d["proved_as"]).items() if big.get(k) != v)
+            if d is not top and sizes and all(top[k] >= d[k] for k in ("k_log", "ands", "in_bits", "out_bits")):
                 d["bounded_by"] = top["proved_as"]
 
 

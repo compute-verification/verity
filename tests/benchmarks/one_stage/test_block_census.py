@@ -184,17 +184,18 @@ def sized(k_log=22, ands=1000, in_bits=64, out_bits=16):
 def test_a_word_block_is_proved_as_its_version_on_bits_and_bounded_by_its_kinds_largest_block():
     """``proved_as``: the block's Definition on bits at its own statics, function-valued statics on bits too, absent for a
     Definition on bits or of no version on bits; ``bounded_by``: on each block of a kind at several sizes that the kind's
-    largest (most ANDs) is at least in k, ANDs, input and output bits, that one's ``proved_as``; absent on the largest and on
-    a block it doesn't bound."""
-    block = 'AttnBlock_v{}{{D=64,NVIS=128,FIRST=false,BN=128,DOT={{"fn":"HopperBF16WgmmaDot16_v{}"}},CHECK=true}}'
+    largest (most ANDs) differs from only in integer statics and is at least in k, ANDs, input and output bits, that one's
+    ``proved_as``; absent on the largest, on a block of another flag and on a block it doesn't bound."""
+    block = 'AttnBlock_v{}{{D=64,NVIS=128,FIRST=false,BN=128,DOT={{"fn":"HopperBF16WgmmaDot16_v{}"}},CHECK={}}}'
     defs = {first(190, 192): sized(26, 10**7, 900, 600), first(7, 128): sized(22, 10**5, 500, 600),
-            block.format(4, 1): sized(), HEAD_END: sized(), s8(8192): sized(24, 10**6), s8(2048): sized(25, 10**5),
-            "EmbeddingRead_v1{V=4,H=8}": sized(), "Lin_v1{N=1}": sized()}
+            block.format(4, 1, "true"): sized(ands=1001), block.format(4, 1, "false"): sized(), HEAD_END: sized(),
+            s8(8192): sized(24, 10**6), s8(2048): sized(25, 10**5), "EmbeddingRead_v1{V=4,H=8}": sized(), "Lin_v1{N=1}": sized()}
     B.proved(defs)
     assert {s: {k: d[k] for k in ("proved_as", "bounded_by") if k in d} for s, d in defs.items()} == {
         first(190, 192): {"proved_as": first(190, 192, 2)},
         first(7, 128): {"proved_as": first(7, 128, 2), "bounded_by": first(190, 192, 2)},
-        block.format(4, 1): {"proved_as": block.format(9, 2)},
+        block.format(4, 1, "true"): {"proved_as": block.format(9, 2, "true")},
+        block.format(4, 1, "false"): {"proved_as": block.format(9, 2, "false")},
         HEAD_END: {"proved_as": 'AttnHeadEnd_v2{D=64,INV={"fn":"Fa3InvSum_v2"}}'},
         s8(8192): {"proved_as": s8(8192, 2)}, s8(2048): {"proved_as": s8(2048, 2)},
         "EmbeddingRead_v1{V=4,H=8}": {}, "Lin_v1{N=1}": {}}
