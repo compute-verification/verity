@@ -605,8 +605,9 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     got = _registered(tmp_path / "w")
     mine, doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
     pins = RA.pinned(got.pin)
-    files = IF.registered_reads(doc, mine, pins, registered=REG)
-    assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
+    files = IF.registered_file(doc, mine, pins)
+    assert {f["format"] for f in files.values()} == {IF.REGISTERED_FILE} and len(files) == 2
+    assert not any({"reads", "reads_from"} & set(port) for f in files.values() for port in f["ports"].values())
     assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     rec = json.loads((got.dir / "registration.json").read_text())
@@ -669,8 +670,8 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     assert "cap" in sdoc and "members" in ldoc and "cap" not in ldoc and ldoc["registered"] == sdoc["registered"]
     assert ml.members == ms.members and all(dict(m.tables)["wrow"] == 4 for m in ml.members)
     pins = RA.pinned(listed.pin)
-    files = IF.registered_reads(ldoc, ml, pins, registered=REG)
-    assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
+    files = IF.registered_file(ldoc, ml, pins)
+    assert files == IF.registered_file(sdoc, ms, pins) and len(files) == 2
     pin = RA.pin_roots(pins)
     roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
