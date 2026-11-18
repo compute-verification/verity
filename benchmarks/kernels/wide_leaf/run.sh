@@ -6,7 +6,7 @@
 #   card    (the default) on a GPU node, on the CPUs CORES (ten, the card's NUMA node's) where given, else on the run's
 #           own (a slot's): every step pinned to them, the prover built by the steady harness's setup
 #           (benchmarks/harness/setup/flock_prover.sh) in FLOCK_WORK on the node's disk with CUDA 13.3, CUDA_TK or CUDA
-#           where given, else the machine's record's (benchmarks/kernels/machine.py: MACHINE, MACHINES_D), fetched where
+#           where given, else the machine's record's (benchmarks/kernels/machine.py: $RESEARCH_MACHINE's [properties]), fetched where
 #           the record lists none and refused before any lease where there is no record or its toolkit is unread; the statement
 #           fetched from the store into a scratch where server_rate.py looks (z/NAME/c{n}/stage) and its circuit held to
 #           its pin; then one gpu-lease of the card CARD (else of one card near those CPUs), pinned to them, for LEASE_MIN (100) minutes,

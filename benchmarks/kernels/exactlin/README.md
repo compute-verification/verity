@@ -16,12 +16,11 @@ one `int8_fused` binds. Nothing a verifier runs reads this directory.
 ## The metric
 
 From the tree's root on one card, in the pinned-vLLM Python `benchmarks/harness/env.sh` finds (made by
-`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`), with CUDA 13.0 from the machine's record (`../machine.py`: `MACHINE`
-names the machine, its record in `MACHINES_D`, by default `$RESEARCH_RUN_DIR/inputs`, where `research run --send` puts
-it), or `CUDA` where given:
+`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`), with CUDA 13.0 from the machine's `[properties]` (`../machine.py`: the
+copy `research run --on` puts in the run's `inputs/`), or `CUDA` where given, as on a local run:
 
 ~~~text
-RESEARCH_RUN_DIR=DIR MACHINE=NAME MACHINES_D=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
+RESEARCH_RUN_DIR=DIR CUDA=DIR bash benchmarks/kernels/exactlin/kbench.sh --models llama-3.2-1b
 ~~~
 
 It gates, then times, and writes `kernels/exact-linear-decode-over-stock` (`metrics.toml`) into the run's `result.json`:
@@ -33,7 +32,7 @@ With no `gpu-lease` on PATH it runs on the visible card and says so.
 ## Entry points
 
 Each launcher takes one leased GPU for a bounded time, writes under `$RESEARCH_RUN_DIR/out`, and passes extra arguments to
-its script. Each takes CUDA 13.0 as above, refusing by name before its lease without a record that lists it or `CUDA`:
+its script. Each takes CUDA 13.0 as above, refusing by name before its lease without `[properties]` that list it or `CUDA`:
 
 ~~~text
 RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh                 # gate, then kbench.py

@@ -3,8 +3,8 @@
 # minutes; KSCRIPT=kgate.py runs the gate alone, KSCRIPT=ksweep.py the GEMM config sweep.  Extra arguments go to the
 # script (e.g. --reps 15 --shapes decode).  Under `research run --gpus 1` (GPU_LEASE_UUID set) the run already holds its
 # GPU, and the script runs on it without a second lease; with no `gpu-lease` on PATH it runs on the visible card.  CUDA 13.0
-# is CUDA where given, else the machine's record's (benchmarks/kernels/machine.py: MACHINE, MACHINES_D); refused before any lease.
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO MACHINE=NAME bash benchmarks/kernels/exactlin/kbench.sh
+# is CUDA where given, else the machine's record's (benchmarks/kernels/machine.py: $RESEARCH_MACHINE's [properties]); refused before any lease.
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO CUDA=DIR bash benchmarks/kernels/exactlin/kbench.sh
 # Runs on an RTX PRO 6000, an H200 or a B200, in benchmarks/harness/env.sh's Python and PYTHONPATH.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"

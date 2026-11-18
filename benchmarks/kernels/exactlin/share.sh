@@ -4,10 +4,10 @@
 # `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.  The leased half runs on
 # the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound;
 # env/numa.json says which).  CUDA 13.0 (and its nsys, unless NSYS) is CUDA where given, else the machine's record's
-# (benchmarks/kernels/machine.py: MACHINE, MACHINES_D), refused before the lease; FlashInfer's architecture list is the
+# (benchmarks/kernels/machine.py: $RESEARCH_MACHINE's [properties]), refused before the lease; FlashInfer's architecture list is the
 # leased card's record's `arch`.
 # On an RTX PRO 6000 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO MACHINE=NAME bash benchmarks/kernels/exactlin/share.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO CUDA=DIR bash benchmarks/kernels/exactlin/share.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
 ROOT=${SHARE_ROOT:-$PWD}

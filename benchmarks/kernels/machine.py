@@ -1,13 +1,11 @@
 """machine.py toolkit VERSION | arch NAME: what kernels' runners read from their machine's record and their card's, printed
 for the shell, or refused by name before the runner takes a card.
 
-    toolkit VERSION  the directory of the CUDA toolkit VERSION: $CUDA where it is set, else the one machine $MACHINE's
-                     record lists at that version under `toolkit` (`verity_bench.kit.machine_properties`), the record
-                     read from $MACHINES_D, by default $RESEARCH_RUN_DIR/inputs, where `research run --send` puts it.
-                     Exit 3 where the record is read and lists no toolkit at that version.
+    toolkit VERSION  the directory of the CUDA toolkit VERSION: $CUDA where it is set, else the one the run's machine's
+                     `[properties]` list at that version under `toolkit` (`verity_bench.kit.machine_properties()`: the
+                     copy `research run --on` puts in $RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml).
+                     Exit 3 where the properties are read and list no toolkit at that version.
     arch NAME        the `arch` of the card record whose `driver` holds NAME, the name nvidia-smi reports (`kit.card_short`).
-
-    research run --on MACHINE --send <notes>/machines.d/MACHINE.toml --env MACHINE=MACHINE ... -- bash RUNNER
 """
 from __future__ import annotations
 
@@ -27,21 +25,21 @@ class NotListed(Exception):
 def toolkit(version: str, env: Mapping[str, str]) -> str:
     if env.get("CUDA"):
         return env["CUDA"]
-    name = env.get("MACHINE")
-    records = env.get("MACHINES_D") or (f"{env['RESEARCH_RUN_DIR']}/inputs" if env.get("RESEARCH_RUN_DIR") else "")
-    if not name or not records:
-        raise SystemExit(f"no CUDA toolkit {version}: set CUDA to its directory, or MACHINE to the machine's name and "
-                         "MACHINES_D to the directory of its record (default $RESEARCH_RUN_DIR/inputs, `research run --send`)")
-    from verity_bench import kit
+    from verity_bench import kit, settings
 
-    found = kit.machine_properties(name, directory=Path(records))["toolkit"]["value"]
+    try:
+        found = kit.machine_properties()["toolkit"]["value"]
+    except SystemExit as e:
+        raise SystemExit(f"no CUDA toolkit {version}: set CUDA to its directory, or run on a machine `research run --on` "
+                         f"names: {e}") from None
+    name = settings.RESEARCH_MACHINE
     if found == "unread":
-        raise SystemExit(f"machine {name!r}: its record ({records}/{name}.toml) has toolkit unread: read it there, or set CUDA")
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit unread: read it there, or set CUDA")
     listed = [] if found == "none" else [found, *found.get("others", [])]
     at = [t["directory"] for t in listed if t["version"] == version]
     if not at:
-        raise NotListed(f"machine {name!r}: its record ({records}/{name}.toml) lists no CUDA toolkit {version} under "
-                        f"toolkit (it lists {', '.join(t['version'] for t in listed) or 'none'}): set CUDA")
+        raise NotListed(f"machine {name!r}: its [properties] list no CUDA toolkit {version} under toolkit (they list "
+                        f"{', '.join(t['version'] for t in listed) or 'none'}): set CUDA")
     return at[0]
 
 

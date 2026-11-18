@@ -8,9 +8,9 @@
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
 # (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 # CUDA 13.0 is CUDA where given, else the machine's record's, and FlashInfer's architecture list the card record's `arch`
-# (benchmarks/kernels/machine.py: MACHINE, MACHINES_D), each refused before the lease.
+# (benchmarks/kernels/machine.py: $RESEARCH_MACHINE's [properties]), each refused before the lease.
 # On an H200 under a GPU lease:
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO MACHINE=NAME bash benchmarks/kernels/exactlin/served.sh \
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO CUDA=DIR bash benchmarks/kernels/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT/env"
