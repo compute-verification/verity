@@ -312,7 +312,7 @@ class _VllmEngine:
         if self.obj is None:
             run = _pearl_c_run(self.llm) if self.arm.protocols else None
             if run is not None:
-                return _pearl_c_gate(run)
+                return _pearl_c_gate(run, self.served)
             return _no_run(self.served) if self.served else {"passed": True, "provided": False}
         got = _callback(self.obj, "gate", self.target, None)
         if got is None:

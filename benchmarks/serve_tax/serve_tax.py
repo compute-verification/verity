@@ -1862,11 +1862,8 @@ def source_commit() -> str | None:
 
 
 def file_digest(p: Path, algorithm: str = "sha256") -> str:
-    h = hashlib.new(algorithm)
     with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 24), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, algorithm).hexdigest()
 
 
 #: the ranks that copy their KV pool to host memory at an edge (`boundary.KV_COPY`, which this module doesn't import)
