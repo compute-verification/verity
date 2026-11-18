@@ -121,7 +121,7 @@ variable (w : StratifiedBlockMT)
 units. -/
 def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform
+/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_missProb_le`): `ks s` of stratum `s`'s units, uniform
 without replacement, independently across strata. -/
 def ideal : SamplingDesign w.n := SamplingDesign.stratified w.sub w.ks w.hks
 
