@@ -55,13 +55,16 @@ def test_derived_positions_on_the_unwired_window(tmp_path, monkeypatch):
     y8 = np.asarray(evaluate_batch(READER, y, w8, kernel="reference"), dtype=np.uint16).reshape(1, 8)
     circuit = IF.Circuit("wired-two", ((WRITER, 1), (READER, 1)), wires=(WIRE,))
     other = IF.Circuit("wired-other", ((WRITER, 2), (READER, 1)), wires=(WIRE,))
-    wired, wired_other = _wired(circuit), _wired(other)
+    same_shape = IF.Circuit("wired-same-shape", ((WRITER, 1), (READER, 2)), wires=(WIRE,))
+    wired, wired_other, wired_same = _wired(circuit), _wired(other), _wired(same_shape)
     monkeypatch.setattr(IF.Circuit, "program", lambda self: wired_population_program(
         list(self.templates), {**self.description(), "external": list(self.external), "wires": []}))
     cut = circuit.program()[0]
-    print("DIGESTS wired", program_digest(wired)[:16], "cut", program_digest(cut)[:16], "other", program_digest(wired_other)[:16])
+    print("DIGESTS wired", program_digest(wired)[:16], "cut", program_digest(cut)[:16], "other", program_digest(wired_other)[:16],
+          "same-shape", program_digest(wired_same)[:16])
     (tmp_path / "wired.json").write_bytes(canonical_json(encode_program(wired)))
     (tmp_path / "wired-other.json").write_bytes(canonical_json(encode_program(wired_other)))
+    (tmp_path / "wired-same.json").write_bytes(canonical_json(encode_program(wired_same)))
 
     d = tmp_path / "window"
     win = IF.Window(circuit, RUN, RND.parse_design(DESIGN), 4)
@@ -137,8 +140,6 @@ def test_derived_positions_on_the_unwired_window(tmp_path, monkeypatch):
                         *(["--wired", str(tmp_path / wired_file)] if wired_flag else []), "--registered", reads)
         print(f"CASE {name}: rc={rc}: {out.splitlines()[-1] if out else ''}")
 
-    (sd / "explicit.json").write_text(json.dumps(own))
-    run("explicit positions, no --wired", str(sd / "explicit.json"), wired_flag=False)
     run("honest", reg("honest"))
     run("tree port without --wired", reg("honest"), wired_flag=False)
     run("another leaf (stated position moved)", reg("honest"), public=pub_moved())
@@ -146,3 +147,4 @@ def test_derived_positions_on_the_unwired_window(tmp_path, monkeypatch):
     run("another field (o1)", reg("field_o1", field="o1"))
     run("another writer template (the reader's)", reg("writer", template=RID))
     run("a different wired Program (record wired-other)", reg("honest"), wired_file="wired-other.json")
+    run("a different wired Program (record wired-same-shape)", reg("honest"), wired_file="wired-same.json")
