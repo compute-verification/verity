@@ -2,6 +2,7 @@ module
 
 public import Proofs.Core.Circuit
 public import Proofs.Core.LevelsMiss
+public import Proofs.Core.CircuitLevels
 
 /-!
 # Committing late does not help, at a circuit's two levels
@@ -137,6 +138,66 @@ theorem prCoin_accept_le_late (L : Levels G) {l₁ l₂ : Level G} (hL : L.level
   obtain ⟨τ₂, hτ₂, hle⟩ := L.late_le_missProb_opened hL r blk oblk hsub hparts (τ₁ p) (O p) (R p) (hR p)
   exact hle.trans (le_iSup₂ (f := fun (τ : C.Trace) (_ : ∀ g ∈ O p, τ g = τ₁ p g) =>
     L.design.missProb ((Pf.unopened Pc.committed (O p) ∪ Pf.incorrect τ).image blk)) τ₂ hτ₂)
+
+end Levels
+
+namespace Partition
+
+/-- A fine unit with a gate lies inside a coarse unit's block exactly when that unit is its parent. -/
+theorem Refines.block_subset_iff {C : Circuit} {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc}
+    (r : Pf.Refines Pc) (v : Fin nf) (k : Fin nc) (hv : (Pf.gates v).Nonempty) :
+    Pf.block v ⊆ Pc.block k ↔ r.parent v = k := by
+  refine ⟨fun h => ?_, fun h => h ▸ r.block_subset v⟩
+  obtain ⟨g, hg⟩ := hv
+  have hu : Pf.unit g = some v := (Finset.mem_filter.1 hg).2
+  have hin : C.isInput g = false := by
+    cases hi : C.isInput g
+    · rfl
+    · exact absurd ((Pf.input_iff g).2 hi) (by rw [hu]; exact Option.some_ne_none v)
+  have hk := (Finset.mem_filter.1 (h (Finset.mem_filter.2 ⟨Finset.mem_univ ⟨g, hin⟩, hu⟩))).2
+  rw [r.sub, hu] at hk
+  exact Option.some_inj.1 hk
+
+end Partition
+
+namespace Levels
+
+variable {C : Circuit} {nc nf : ℕ} {Pc : Partition C nc} {Pf : Partition C nf}
+  (Rc : Pc.Refines (Partition.whole C)) (rule₁ : Fin 1 → SamplingDesign (Fin nc)) (r : Pf.Refines Pc)
+  (rule₂ : Fin nc → SamplingDesign (Fin nf))
+
+/-- **Committing late does not help, at a circuit's two partitions**, from a partly opened outer trace: the levels of
+`Pc` refining the whole circuit and `Pf` refining `Pc`, the blocks their units. -/
+theorem ofPartitions_late_le_missProb_opened (τ₁ : C.Trace) (O : Finset (Fin C.N))
+    (R : (Rc.design rule₁ Finset.univ).Ω → Finset C.Computed → C.Trace) (hR : ∀ ω X, ∀ g ∈ O, R ω X g = τ₁ g) :
+    ∃ τ₂ : C.Trace, (∀ g ∈ O, τ₂ g = τ₁ g) ∧
+      prCoin (fun ω : (Rc.design rule₁ Finset.univ).Ω × ((X : Finset C.Computed) → (r.design rule₂ X).Ω) =>
+          ∀ X ∈ (Rc.design rule₁ Finset.univ).draw ω.1,
+            Disjoint ((r.design rule₂ X).draw (ω.2 X))
+              ((Pf.unopened Pc.committed O ∪ Pf.incorrect (R ω.1 X)).image Pf.block)) ≤
+        (Levels.ofPartitions (.cons Pc Rc rule₁ (.cons Pf r rule₂ .nil))).design.missProb
+          ((Pf.unopened Pc.committed O ∪ Pf.incorrect τ₂).image Pf.block) :=
+  late_le_missProb_opened (l₁ := ⟨Pc.blocks, Rc.design rule₁⟩) (l₂ := ⟨Pf.blocks, r.design rule₂⟩) _ rfl r
+    Pf.block Pc.block (r.block_subset_iff) (fun _ hX => (Partition.mem_blocks.1 hX).2) τ₁ O R hR
+
+/-- **The sampling step of soundness at a miss `δ`, interiors committed late, at a circuit's two partitions.** -/
+theorem ofPartitions_prCoin_accept_le_late {P : Type} [Fintype P] [Nonempty P]
+    (τ₁ : P → C.Trace) (O : P → Finset (Fin C.N))
+    (R : P → (Rc.design rule₁ Finset.univ).Ω → Finset C.Computed → C.Trace)
+    (hR : ∀ p ω X, ∀ g ∈ O p, R p ω X g = τ₁ p g)
+    (acc brk : P → (Rc.design rule₁ Finset.univ).Ω × ((X : Finset C.Computed) → (r.design rule₂ X).Ω) → Prop)
+    (h : ∀ p ω, acc p ω → (∀ X ∈ (Rc.design rule₁ Finset.univ).draw ω.1,
+        Disjoint ((r.design rule₂ X).draw (ω.2 X))
+          ((Pf.unopened Pc.committed (O p) ∪ Pf.incorrect (R p ω.1 X)).image Pf.block)) ∨ brk p ω)
+    (δ : ℝ≥0∞) :
+    prCoin (fun x : P × ((Rc.design rule₁ Finset.univ).Ω × ((X : Finset C.Computed) → (r.design rule₂ X).Ω)) =>
+        acc x.1 x.2 ∧ (⨆ (τ₂ : C.Trace) (_ : ∀ g ∈ O x.1, τ₂ g = τ₁ x.1 g),
+          (Levels.ofPartitions (.cons Pc Rc rule₁ (.cons Pf r rule₂ .nil))).design.missProb
+            ((Pf.unopened Pc.committed (O x.1) ∪ Pf.incorrect τ₂).image Pf.block)) ≤ δ) ≤
+      δ + prCoin (fun x : P × ((Rc.design rule₁ Finset.univ).Ω × ((X : Finset C.Computed) → (r.design rule₂ X).Ω)) =>
+        brk x.1 x.2) :=
+  prCoin_accept_le_late (l₁ := ⟨Pc.blocks, Rc.design rule₁⟩) (l₂ := ⟨Pf.blocks, r.design rule₂⟩) _ rfl r
+    Pf.block Pc.block (r.block_subset_iff) (fun _ hX => (Partition.mem_blocks.1 hX).2) τ₁ O R hR acc brk h δ
 
 end Levels
 
