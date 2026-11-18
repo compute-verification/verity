@@ -66,6 +66,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import ambient as AM
+from . import block_held as BH
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
@@ -723,7 +724,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
         fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None,
         binding: str | None = None, sliced: tuple[dict, dict] | None = None, manifest: Path | None = None,
-        guard: str | None = None) -> dict:
+        guard: str | None = None, listing: bool = False) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own (a `CONSTRUCTED` family's members in batches, `_batched`), up to ``jobs`` at once (`parallel`): forked
     from a process that holds the task list, each check with its own memo, so a target's check never reuses what another's
@@ -797,7 +798,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     (`TaskListAccepted`).
 
     The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
-    from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
+    from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself.
+
+    With ``listing`` (``--reached``) no target is checked: the report is only ``reached``, the targets this run would check
+    (`_missed`), and ``targets``, the list's length."""
     started = time.time()
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
@@ -817,6 +821,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 task_list_guard(ids, accept=guard == "accept")
             idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
+            if listing:
+                return {"reached": [ids[i] for i, g in zip(idx, got) if g is None or _errored(g[0])], "targets": len(ids)}
             if all(g is not None and not _errored(g[0]) for g in got):
                 records = [{**g[0], "cache": {"hit": g[1]}} for g in got]
                 rep = CK.report(records, opts, catalog=True) if shard is None and binding is None else SH.unjoined(records, opts)
@@ -882,6 +888,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         # before the zygotes fork: its digest parses every module a target's check can read, and theirs reuse that
         _store_listed(cache, listed, *((tasks, keys) if binding is None else
                                        ([tasks[i] for i in only], [keys[i] for i in only])), plan)
+    if listing:
+        keys = keys if keys is not None or not tracing else _keys(tasks, opts, as_call, only)
+        return {"reached": _missed(tasks, keys, hits, cache, only), "targets": len(tasks)}
     zygote = None
     if isolated and fork:
         _TASKS[:] = tasks
@@ -893,9 +902,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         zygote = [Zygote(_work, _forked, fork=True, prepare=_prepare) for _ in range(zygotes(jobs))]
     try:
         if keys is None and tracing:
-            mine = None if only is None else set(only)
-            keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ())))
-                    if mine is None or i in mine else None for i, t in enumerate(tasks)]
+            keys = _keys(tasks, opts, as_call, only)
             _store_listed(cache, listed, tasks, keys, plan)
         prologue = time.time() - started
         if log:
@@ -1047,6 +1054,35 @@ def _store_listed(cache: Path | None, listed: dict | None, tasks: list[tuple], k
     CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
 
 
+def _keys(tasks: list[tuple], opts: CK.Options, as_call: bool | None, only: list[int] | None) -> list[dict | None]:
+    """Each target's cache key (`target_key`), None for a target ``only`` leaves out."""
+    mine = None if only is None else set(only)
+    return [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ())))
+            if mine is None or i in mine else None for i, t in enumerate(tasks)]
+
+
+def _hit(i: int, keys: list[dict | None] | None, hits: dict[int, tuple[dict, str]] | None, cache: Path | None) -> tuple | None:
+    """Target ``i``'s cache entry that a run reuses (``hits``' when they were looked up already), else None."""
+    hit = hits.get(i) if hits is not None else CC.lookup(cache, keys[i], REPO) if keys and keys[i] is not None else None
+    return hit if hit is not None and not _errored(hit[0]) else None
+
+
+def _missed(tasks: list[tuple], keys: list[dict | None] | None, hits: dict[int, tuple[dict, str]] | None, cache: Path | None,
+            only: list[int] | None = None) -> list[tuple[str, str]]:
+    """The targets (kind, label) of ``tasks``, of the places ``only`` names, that `_checked_all` checks: those it reuses no
+    entry for (`_hit`)."""
+    return [(tasks[i][0], tasks[i][1]) for i in (range(len(tasks)) if only is None else only) if _hit(i, keys, hits, cache) is None]
+
+
+def progress_row(r: dict, holds: dict[str, tuple[str, str]]) -> dict:
+    """Target ``r``'s line in ``progress``: its ``failures`` those the verdict counts (`checks.counted`), and ``held``, why
+    ``holds`` (`block_held.held`) holds it past the block, when it does."""
+    failures, held = CK.counted(r, holds)
+    return {"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"),
+            "seconds": r.get("seconds"), "seconds_by_check": r.get("seconds_by_check"), "failures": failures,
+            **({"held": held} if held is not None else {}), **({"killed": True} if r.get("killed") else {})}
+
+
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
                  zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
@@ -1057,14 +1093,13 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
+    holds = BH.held() if progress is not None else {}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
         out[i] = r
         if progress is not None:
             with progress.open("a") as f:
-                f.write(json.dumps({"kind": r["kind"], "target": r["target"], "peak_gb": r.get("peak_gb"), "rss_start_gb": r.get("rss_start_gb"), "seconds": r.get("seconds"),
-                                    "seconds_by_check": r.get("seconds_by_check"), "failures": len(r["failures"]),
-                                    **({"killed": True} if r.get("killed") else {})}) + "\n")
+                f.write(json.dumps(progress_row(r, holds)) + "\n")
         if tracing and got is not None:
             if _errored(r):
                 stats["errors"].append(r["target"])
@@ -1090,8 +1125,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
     if tracing:
         asked, todo = todo, []
         for i in asked:
-            k = keys[i]
-            if (hit := hits.get(i) if hits is not None else CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+            if (hit := _hit(i, keys, hits, cache)) is not None:
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
                 if log and not everything:
@@ -1553,7 +1587,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --model: print its served bindings as targets (`definition ID`) and those no configuration can "
                          "check, and check none")
     ap.add_argument("--fail-on-warnings", action="store_true")
-    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
+    ap.add_argument("--update-pins", action="store_true",
+                    help="pin the lowering counts and circuit digests measured now (review the diff); with --reached BASE "
+                         "--check, those of the targets the change reaches, each checked now, the rest reused from the cache")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one; named "
                          "targets use check's own by default (`default_cache`)")
@@ -1590,6 +1626,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --all: write this tree's task list's counts as the reference the guard holds every --all to "
                          "(`task_list_guard`: the task list file and each owner's unkeyed file) and check no target; commit "
                          "what it writes when a change grows the list on purpose")
+    ap.add_argument("--reached", metavar="BASE",
+                    help="the targets the checkout's change since its merge base with BASE reaches, from --cache DIR (default: "
+                         "check's own, `default_cache`): none when no path it changes is one a check reads (`shard.reaching`), "
+                         "else the --all --catalog-units targets that cache gives no result for; printed, and none checked. "
+                         "Each key holds the checker's version and the VERITY_* variables (`cache.key`): from a cache another "
+                         "checker or environment filled, every target is reached")
+    ap.add_argument("--check", action="store_true", help="with --reached: check the targets it names, as --all --catalog-units")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
@@ -1616,6 +1659,20 @@ def main(argv: list[str] | None = None) -> int:
         return _combine_main(a, ap)
     if a.jobs is not None and a.jobs < 0:
         ap.error(f"--jobs {a.jobs} would start no target and wait forever: give 1 or more, or 0 for one per core")
+    if a.check and a.reached is None:
+        ap.error("--check checks the targets --reached names: give --reached BASE")
+    if a.reached is not None:
+        if (a.targets or a.all or a.no_cache or (a.update_pins and not a.check) or a.shard or a.binding or a.records_only
+                or a.bindings or a.ranges):
+            ap.error("--reached names the targets of --all a change reaches: give no target, --all, --no-cache, --update-pins "
+                     "but with --check, --shard, --binding, --records-only, --bindings or --ranges")
+        if not (paths := SH.reaching(SH.changed(REPO, a.reached), SH.declared(REPO))):
+            print(f"circuit-check --reached {a.reached}: no target reached: the change touches no path a check reads")
+            return 0
+        if not a.quiet:
+            print(f"circuit-check --reached {a.reached}: {len(paths)} path(s) a check may read: {', '.join(paths[:8])}"
+                  + (", ..." if len(paths) > 8 else ""))
+        a.all, a.catalog_units, a.cache = True, True, a.cache or default_cache()
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
@@ -1668,7 +1725,7 @@ def main(argv: list[str] | None = None) -> int:
         a.shard_dir.mkdir(parents=True, exist_ok=True)
         progress = a.shard_dir / "progress.jsonl"
         progress.unlink(missing_ok=True)
-    cache = None if a.no_cache or a.update_pins or a.list else a.cache or (None if a.all else default_cache())
+    cache = None if a.no_cache or (a.update_pins and a.reached is None) or a.list else a.cache or (None if a.all else default_cache())
     if cache:
         if (ex := CC.expire(cache))["gone"] or ex["left"]:
             print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "
@@ -1708,7 +1765,8 @@ def main(argv: list[str] | None = None) -> int:
                   log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
                   mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
                   units=a.catalog_units, shard=shard, binding=a.binding, sliced=sliced, manifest=a.records_manifest,
-                  guard="accept" if a.accept_task_list else "check" if a.all and not a.targets else None)
+                  guard="accept" if a.accept_task_list else "check" if a.all and not a.targets else None,
+                  listing=a.reached is not None and not a.check)
     except TaskListAccepted as e:
         print(f"circuit-check --accept-task-list: {e}")
         return 0
@@ -1721,6 +1779,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"circuit-check: refused: {e}", file=sys.stderr)
         return 2
     wall = time.time() - t0
+    if "reached" in rep:
+        for kind, label in rep["reached"]:
+            print(f"{kind} {label}")
+        if a.out:
+            a.out.write_text(json.dumps(rep, indent=1) + "\n")
+        print(f"circuit-check --reached {a.reached}: {len(rep['reached'])} of {rep['targets']} target(s) reached ({wall:.1f}s)")
+        return 0
     if not a.quiet:
         print(time_summary(rep, wall, jobs))
     _cache_lines(rep)
@@ -1859,7 +1924,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
               + (f" ({v['lazy']['count']} read lazily)" if v["lazy"]["count"] else ""))
     what = what or f"{len(rep['targets'])} target(s)"
     u = s["unchecked"]
-    print(f"circuit-check: {what}, {s['failures']} failure(s), {u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
+    print(f"circuit-check: {what}, {s['failures']} failure(s), {len(s.get('block_held', {}))} held past the block, "
+          f"{u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
           + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
           + (f", report {out}" if out else ""))
