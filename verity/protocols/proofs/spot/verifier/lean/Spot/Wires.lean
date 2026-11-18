@@ -40,6 +40,7 @@ module
 public import Lean.Data.Json
 public import Circuits.Wire
 public import Std.Data.HashMap
+public import Std.Data.TreeSet
 
 @[expose] public section
 
@@ -355,14 +356,19 @@ def selfRanges (ws : List Wire) (t : String) (n : Nat) : List UnitRange :=
   | rs => rs
 
 /-- `kahn`'s loop, `fuel` the templates not `done` (`ids` in id order, `ranges` each template's ranges in unit order,
-`outs` each template's readers wire by wire, `indeg` each template's wires from templates not done). -/
+`outs` each template's readers wire by wire, `indeg` each template's wires from templates not done, `ready` the templates
+not done with none). -/
 def kahnLoop (ids : Array String) (ranges : String → List UnitRange) (outs : Array (List Nat))
-    (ins : Array (List (Nat × Nat))) : Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
-  | 0, _, _, acc => .ok acc.reverse
-  | fuel + 1, done, indeg, acc =>
-    match (List.range ids.size).find? (fun i => !done[i]! && indeg[i]! == 0) with
-    | some i => kahnLoop ids ranges outs ins fuel (done.set! i true) ((outs[i]!).foldl (fun a r => a.modify r (· - 1)) indeg)
-        ((ranges ids[i]!).reverse ++ acc)
+    (ins : Array (List (Nat × Nat))) :
+    Nat → Array Bool → Array Nat → Std.TreeSet Nat compare → List UnitRange → Except Refusal (List UnitRange)
+  | 0, _, _, _, acc => .ok acc.reverse
+  | fuel + 1, done, indeg, ready, acc =>
+    match ready.min? with
+    | some i =>
+      let (indeg, ready) := (outs[i]!).foldl (fun (a, q) r =>
+        let d := a[r]!
+        (a.set! r (d - 1), if d == 1 then q.insert r else q)) (indeg, ready.erase i)
+      kahnLoop ids ranges outs ins fuel (done.set! i true) indeg ready ((ranges ids[i]!).reverse ++ acc)
     | none =>
       let rest := (List.range ids.size).filter (!done[·]!)
       let t := kahnWalk ins done rest.length (rest.headD 0)
@@ -373,7 +379,7 @@ the first template by id that reads none not yet placed, each one's units cut at
 itself by (`selfRanges`), so that such a wire is in order where each of its reader ranges reads only earlier ranges.
 Where every template not placed reads one, they hold a cycle: walking back from the first of them along each one's first
 wire from one not placed, as many steps as there are of them, ends on the cycle, and the refusal names the first such
-wire of the template it ends on. In work `O(templates² + wires)` beside the cuts. -/
+wire of the template it ends on. In work `O((templates + wires) log templates)` beside the cuts. -/
 def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let ids := ((c.templates.map (·.1)).mergeSort (· ≤ ·)).toArray
   let idx : Std.HashMap String Nat := ids.zipIdx.foldl (fun m (t, i) => m.insert t i) {}
@@ -385,8 +391,9 @@ def kahn (c : Wiring) : Except Refusal (List UnitRange) :=
   let selfWs : Std.HashMap String (List Wire) :=
     c.wires.foldr (fun w m => if w.reader == w.writer then m.insert w.reader (w :: m.getD w.reader []) else m) {}
   let units : Std.HashMap String Nat := c.templates.foldr (fun (t, tt) m => m.insert t tt.units) {}
+  let ready : Std.TreeSet Nat compare := (List.range ids.size).foldl (fun q i => if indeg[i]! == 0 then q.insert i else q) {}
   kahnLoop ids (fun t => selfRanges (selfWs.getD t []) t (units.getD t 0)) outs ins ids.size
-    (Array.replicate ids.size false) indeg []
+    (Array.replicate ids.size false) indeg ready []
 
 /-- The order the circuit states, else `kahn`'s. -/
 def statedOrder (c : Wiring) : Except Refusal (List UnitRange) :=

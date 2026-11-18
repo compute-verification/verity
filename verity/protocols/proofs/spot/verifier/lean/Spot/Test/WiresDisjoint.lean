@@ -7,7 +7,9 @@ meta import Spot.Wires
 `pairwiseDisjoint`'s compiled code, `pairwiseDisjointFast`, held to the pairwise test on random and adversarial lists
 (nested, equal starts, touching ends, empty units or rows, other readers and ports, row cuts), and its work at 700k wires:
 the live wires it compares, counted by `sweepWork`, at most a small multiple of the wires, where the pairwise test makes
-W(W−1)/2 comparisons.
+W(W−1)/2 comparisons. `kahn`'s order, the verifier's output, held to the loop it replaced (`kahnRef`: the first
+template by index not placed and reading none not placed, found by a scan at each step) on random wirings, acyclic and
+cyclic, with repeated template ids, and on a served class's shape: the same order or the same refusal.
 -/
 
 @[expose] public section
@@ -94,5 +96,79 @@ def served : List Wire :=
 #guard pairwiseDisjointFast served
 #guard sweepWork [] (served.mergeSort before) 0 ≤ 4 * served.length
 #guard !pairwiseDisjointFast (wire "t5" "p3" 41 2 0 1 :: served)
+
+/-! ## `kahn` against the scan it replaced -/
+
+/-- `kahn`'s loop as it was: a scan of every template at each step. -/
+def kahnLoopRef (ids : Array String) (ranges : String → List UnitRange) (outs : Array (List Nat))
+    (ins : Array (List (Nat × Nat))) : Nat → Array Bool → Array Nat → List UnitRange → Except Refusal (List UnitRange)
+  | 0, _, _, acc => .ok acc.reverse
+  | fuel + 1, done, indeg, acc =>
+    match (List.range ids.size).find? (fun i => !done[i]! && indeg[i]! == 0) with
+    | some i => kahnLoopRef ids ranges outs ins fuel (done.set! i true) ((outs[i]!).foldl (fun a r => a.modify r (· - 1)) indeg)
+        ((ranges ids[i]!).reverse ++ acc)
+    | none =>
+      let rest := (List.range ids.size).filter (!done[·]!)
+      let t := kahnWalk ins done rest.length (rest.headD 0)
+      .error ⟨.cycle, ((ins[t]!).find? (fun (_, wr) => !done[wr]!)).map (·.1)⟩
+
+/-- `kahn` as it was, every template's self-wires and units found by a scan. -/
+def kahnRef (c : Wiring) : Except Refusal (List UnitRange) :=
+  let ids := ((c.templates.map (·.1)).mergeSort (· ≤ ·)).toArray
+  let idx : Std.HashMap String Nat := ids.zipIdx.foldl (fun m (t, i) => m.insert t i) {}
+  let es := c.wires.zipIdx.filterMap fun (w, j) =>
+    if w.writer == w.reader then none else do pure (j, ← idx[w.writer]?, ← idx[w.reader]?)
+  let indeg := es.foldl (fun a (_, _, r) => a.modify r (· + 1)) (Array.replicate ids.size 0)
+  let outs := es.foldr (fun (_, wr, r) a => a.modify wr (r :: ·)) (Array.replicate ids.size [])
+  let ins := es.foldr (fun (j, wr, r) a => a.modify r ((j, wr) :: ·)) (Array.replicate ids.size [])
+  kahnLoopRef ids (fun t => selfRanges c.wires t (((c.templates.lookup t).map (·.units)).getD 0)) outs ins ids.size
+    (Array.replicate ids.size false) indeg []
+
+def sameOrder : Except Refusal (List UnitRange) → Except Refusal (List UnitRange) → Bool
+  | .ok a, .ok b => a == b
+  | .error a, .error b => a == b
+  | _, _ => false
+
+def tmpl (units : Nat) : Template := { units, rows := [("p", { words := 4, outer := 1 })], outs := [("o", 4)] }
+
+/-- A wiring of `nt` templates (ids out of order, the last repeating the first when `dup`) and `nw` wires from seed `x`;
+`acyclic`: each wire's writer at or before its reader in the list. -/
+def randomWiring (x nt nw : Nat) (acyclic dup : Bool) : Wiring :=
+  let names := (List.range nt).map fun i => s!"t{(i * 7 + 3) % nt}"
+  let ts := names.map fun n => (n, tmpl 8)
+  let ts := if dup then ts ++ [(names.headD "t0", tmpl 8)] else ts
+  let ws := (List.range nw).foldl (fun (acc, x) _ =>
+    let x₁ := lcg x; let x₂ := lcg x₁; let x₃ := lcg x₂; let x₄ := lcg x₃
+    let r := x₁ / 2 ^ 40 % nt
+    let wr := if acyclic then x₂ / 2 ^ 40 % (r + 1) else x₂ / 2 ^ 40 % nt
+    ({ wire (names.getD r "") "p" (x₃ / 2 ^ 40 % 6) (1 + x₄ / 2 ^ 40 % 2) 0 1 with writer := names.getD wr "" } :: acc, x₄))
+    ([], x) |>.1
+  { templates := ts, cuts := [], wires := ws }
+
+def kahnDraws : List (Nat × Nat × Nat × Bool × Bool) :=
+  (List.range 300).map fun i => (i, 1 + i % 7, i % 13, i % 3 != 0, i % 5 == 0)
+
+#guard kahnDraws.all fun (x, nt, nw, acyc, dup) => let c := randomWiring x nt nw acyc dup; sameOrder (kahn c) (kahnRef c)
+#guard (kahnDraws.filter fun (x, nt, nw, acyc, dup) => (kahn (randomWiring x nt nw acyc dup)).toBool).length ≥ 50
+#guard (kahnDraws.filter fun (x, nt, nw, acyc, dup) => !(kahn (randomWiring x nt nw acyc dup)).toBool).length ≥ 20
+
+/-- `T` templates of `L` layers, two units a root node, three ports cut into 17 rows; port 0 reads its own template's
+previous layer, ports 1 and 2 the template before it (template 0: its own previous layer): 51 wires a root node. -/
+def servedWiring (T L : Nat) : Wiring :=
+  let port : Port := { words := 68, outer := 17 }
+  let tm : Template := { units := 2 * L, rows := [("p0", port), ("p1", port), ("p2", port)], outs := [("o", 68)] }
+  let tn (j : Nat) : String := s!"t{1000000 + j}"
+  let wires := (List.range T).flatMap fun j => (List.range L).flatMap fun l => (List.range 17).flatMap fun r =>
+    let mk (p : String) (wr b : Nat) : Wire :=
+      { reader := tn j, port := p, writer := tn wr, out := "o", start := 2 * l, radix := [2], base := b, step := [1],
+        cut0 := r, cuts := 1, offset := 4 * r }
+    let self := if l > 0 then [mk "p0" j (2 * (l - 1))] else []
+    let prev := if j > 0 then [mk "p1" (j - 1) (2 * l), mk "p2" (j - 1) (2 * l)]
+      else if l > 0 then [mk "p1" j (2 * (l - 1)), mk "p2" j (2 * (l - 1))] else []
+    self ++ prev
+  { templates := ((List.range T).map fun j => (tn j, tm)).reverse,
+    cuts := (List.range T).map fun j => (tn j, [("p0", 17), ("p1", 17), ("p2", 17)]), wires }
+
+#guard let c := servedWiring 40 12; sameOrder (kahn c) (kahnRef c) && (kahn c).toBool
 
 end Spot.Test.WiresDisjoint
