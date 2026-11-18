@@ -41,10 +41,11 @@ from pathlib import Path
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.resource_accounting.memory.pous.prover import wipe_run
+from verity.protocols.resource_accounting.memory.pous.prover import wipe_run, wipe_store
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties import CHALLENGER
 
 NAME = "wipe"
+SMI = "nvidia-smi"
 #: the settings that stand for CONFIG's None, by the value that does
 UNSET = {"segments": 0, "tier": "", "threads": 0, "egress_bits": -1, "reads": 0, "disk": {}, "dram": {}}
 BINDING = ("host", "address", "command")
@@ -91,7 +92,7 @@ def busy(device: str, idle_mib: int) -> str | None:
     """Why card ``device`` (an index or a UUID, as `nvidia-smi -i` takes it) isn't idle: another process on it, or more
     than ``idle_mib`` MiB of its memory in use; None when it is."""
     def query(*args: str) -> list[str]:
-        r = subprocess.run(["nvidia-smi", *args, "--format=csv,noheader,nounits", "-i", device], capture_output=True,
+        r = subprocess.run([SMI, *args, "--format=csv,noheader,nounits", "-i", device], capture_output=True,
                            text=True)
         if r.returncode:
             raise ValueError(f"wipe: nvidia-smi can't read card {device}: {(r.stderr or r.stdout).strip()[:300]}")
@@ -104,6 +105,16 @@ def busy(device: str, idle_mib: int) -> str | None:
     if used > idle_mib:
         return f"the card {device} isn't idle: {used} MiB of its memory in use, past idle_mib {idle_mib}"
     return None
+
+
+def card_of(ordinal: int) -> str:
+    """The UUID of the card the wipe fills, CUDA's ``ordinal`` of those this process sees; `nvidia-smi -i` reads
+    indices unmapped, so the card is named by UUID."""
+    card = wipe_store.Cuda(ordinal)
+    try:
+        return card.info()["uuid"]
+    finally:
+        card.close()
 
 
 def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
@@ -145,8 +156,7 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
         raise ValueError(f"{NAME}: {'; '.join(why)}")
     s = ctx["settings"]
     if s["store"] == "cuda":
-        card = os.environ.get("CUDA_VISIBLE_DEVICES", "").split(",")[0] or str(s["device"])
-        if why := busy(card, s["idle_mib"]):
+        if why := busy(card_of(s["device"]), s["idle_mib"]):
             raise ValueError(f"{NAME}: {why}")
     pins = [dict(p) for p in ctx.get("pins") or ()]
     doc: dict[str, Any] = {
@@ -170,5 +180,5 @@ def attach(exchange: Any, ctx: Mapping[str, Any]) -> Wiped:
     return Wiped(answer, json.loads((private / "wipe.json").read_text()))
 
 
-__all__ = ["BINDING", "LAUNCHER", "NAME", "UNSET", "Wiped", "attach", "busy", "check_settings",
+__all__ = ["BINDING", "LAUNCHER", "NAME", "SMI", "UNSET", "Wiped", "attach", "busy", "card_of", "check_settings",
            "period_wipe", "pin_of", "refusals"]

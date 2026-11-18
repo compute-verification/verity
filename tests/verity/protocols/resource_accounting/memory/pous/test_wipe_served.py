@@ -78,7 +78,7 @@ def smi(tmp_path, monkeypatch):
     bin_.mkdir()
     (bin_ / "nvidia-smi").write_text(SMI)
     (bin_ / "nvidia-smi").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_}:{os.environ['PATH']}")
+    monkeypatch.setattr(WS, "SMI", str(bin_ / "nvidia-smi"))
     monkeypatch.setenv("FAKE_SMI_APPS", "")
     monkeypatch.setenv("FAKE_SMI_USED", "0")
     return monkeypatch
@@ -99,7 +99,7 @@ def test_a_card_with_another_process_or_its_memory_in_use_is_busy(smi) -> None:
 
 def test_on_a_busy_card_the_attach_refuses_before_any_session(tmp_path, smi) -> None:
     smi.setenv("FAKE_SMI_APPS", "4242\n")
-    smi.setenv("CUDA_VISIBLE_DEVICES", "GPU-1234")
+    smi.setattr(WS, "card_of", lambda ordinal: "GPU-1234")
     smi.setattr(wipe_run, "subprotocol", lambda *a, **kw: pytest.fail("a session started"))
     with pytest.raises(ValueError, match=re.escape("wipe: the card GPU-1234 isn't idle: process 4242 on it")):
         WIPE.attach(None, _ctx(tmp_path, BOUND))

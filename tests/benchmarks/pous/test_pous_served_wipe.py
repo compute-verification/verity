@@ -79,7 +79,7 @@ GPU_LEASE_UUID=GPU-own0 CUDA_VISIBLE_DEVICES=0 exec "$@"
 """
 DEMO_SHIM = """#!/usr/bin/env bash
 [ -z "$FAKE_PYTHONPATH" ] || export PYTHONPATH=$FAKE_PYTHONPATH
-exec {python} {demo} "$OUT" "${{GPU_LEASE_UUID:-}}" "$@"
+exec {python} {demo} "$OUT" "${{GPU_LEASE_UUID:-}}" "$WIPE_PRIVATE" "${{VERITY_PINS:-[]}}" "${{VERITY_CONFIGURATION:-}}" "$@"
 """
 LAUNCH = 'export FAKE_PYTHONPATH="${PYTHONPATH:-}" PATH="$FAKE_BIN:$PATH"; exec bash "$@"'
 """The stand-ins first on PATH, and the suite's PYTHONPATH (which the wrapper unsets) kept for the stand-in demo.sh's Python,

@@ -7,13 +7,13 @@ only when it is the one `--trusted-sha512` pins (the attach's ``trusted``), as d
 challenger period.json names is `Side.of`'s, written to `$OUT/party.json` before the stand-in replaces it;
 the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The `--wipe-protocol` the wrapper always gives is
 the period's Lean judge, stood in by one that answers each case as the Python answered it.
-`python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
+`python served_wipe_demo.py OUT LEASE PRIVATE PINS CONFIGURATION [DEMO_OPTIONS]`: the test's shim passes `$OUT`,
+`$GPU_LEASE_UUID`, `$WIPE_PRIVATE`, `$VERITY_PINS` and `$VERITY_CONFIGURATION`."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import shlex
 import shutil
 import sys
@@ -29,7 +29,7 @@ SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_
 
 
 def main(argv: list[str]) -> int:
-    out, lease, *argv = argv
+    out, lease, private, pins, configuration, *argv = argv
     ap = argparse.ArgumentParser()
     for o in ("--node", "--challenger", "--challenger-address", "--challenger-command", "--trusted-sha512", "--reads",
               "--wipe-protocol"):
@@ -59,10 +59,9 @@ def main(argv: list[str]) -> int:
         return [wipes[-1].answer]
 
     wipe_run.run, wipe_run.serve = ran, judged
-    private = Path(os.environ["WIPE_PRIVATE"])
+    private = Path(private)
     got = Exchange().attach(schemes.get("wipe"), settings, private=private, process=H.ENGINE, side_of=stand_in,
-                            pins=json.loads(os.environ.get("VERITY_PINS") or "[]"),
-                            configuration=os.environ.get("VERITY_CONFIGURATION") or None, trusted=a.trusted_sha512,
+                            pins=json.loads(pins), configuration=configuration or None, trusted=a.trusted_sha512,
                             node=a.node, judge=judge)
     shutil.copy(private / "wipe" / "period.json", out / "period.json")
     (out / "wipe.json").write_text(json.dumps(got.record(), sort_keys=True, indent=1))
