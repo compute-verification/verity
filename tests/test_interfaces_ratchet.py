@@ -7,8 +7,8 @@ integrator runs it at each merge sweep), ``--init`` rewrites them from the tree 
 ratchet's count, naming apart what a ruling keeps (``KEPT``). Tests (``tests/``, any ``/tests/``), ``archive/`` and ``fixtures/`` are never offenders.
 
 - ``scheme_name_tables``: a Python or shell file outside `verity/protocols/compose/schemes.py` and every ``scheme.py``
-  that compares against a scheme's name (``DECLARATIONS``' keys and the old ``pouw``, ``certifier``,
-  ``network-certifier``), keys a mapping by it, indexes by it, or reads it with ``.get``, ``.pop`` or ``.setdefault``;
+  that compares against a scheme's name (``DECLARATIONS``' keys, the old ``pouw``, ``certifier``,
+  ``network-certifier``, and the components still to declare, ``TO_DECLARE``), keys a mapping by it, indexes by it, or reads it with ``.get``, ``.pop`` or ``.setdefault``;
   a membership test counts every name in its literal. Python is read by token, so a docstring or comment never counts.
 - ``scheme_package_imports``: an import of a scheme's package under ``benchmarks/``, ``calibration/``, ``tools/`` or
   ``applications/``. The vLLM adapter's are `tests/test_boundaries.py`'s ``RESOURCE_ACCOUNTING_IMPORTERS``
@@ -47,6 +47,8 @@ SCHEMES = "verity/protocols/compose/schemes.py"
 HOOKS = "verity/hooks.py"
 HARDWARE = "calibration/hardware/"
 OLD_SCHEMES = ("pouw", "certifier", "network-certifier")
+#: components the table does not hold yet, counted as if it did, so that declaring one moves no count
+TO_DECLARE = ("sampled-proofs", "inference-only")
 CARD_NAMES = ("H200", "H100", "B200", "RTX PRO 6000", "sm_90", "sm_100", "sm_120", "sm90", "sm100", "sm120")
 SCRIPT = (".py", ".sh")
 SCHEME_IMPORT = re.compile(r"^\s*(?:from|import)\s+verity\.protocols\.(?:resource_accounting\.(?:compute|memory|network)"
@@ -114,12 +116,13 @@ def _excluded(path: str) -> bool:
 
 
 def _scheme_names(text: str) -> tuple[str, ...]:
-    """``DECLARATIONS``' keys, read from `verity/protocols/compose/schemes.py`'s text, and the old names."""
+    """``DECLARATIONS``' keys, read from `verity/protocols/compose/schemes.py`'s text, the old names and those to declare."""
     for node in ast.walk(ast.parse(text)):
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and "DECLARATIONS" in {
                 getattr(t, "id", None) for t in (node.targets if isinstance(node, ast.Assign) else [node.target])}:
             table = next(n for n in ast.walk(node.value) if isinstance(n, ast.Dict))
-            return tuple(sorted({ast.literal_eval(k) for k in table.keys if k is not None} | set(OLD_SCHEMES)))
+            return tuple(sorted({ast.literal_eval(k) for k in table.keys if k is not None} | set(OLD_SCHEMES)
+                                | set(TO_DECLARE)))
     raise AssertionError(f"{SCHEMES} has no DECLARATIONS table")
 
 
@@ -280,7 +283,7 @@ class Scan:
 def scan(files: dict[str, str]) -> Scan:
     """Every ratchet over ``files``, {tracked path: its text}."""
     s = Scan()
-    schemes = frozenset(_scheme_names(files[SCHEMES])) if SCHEMES in files else frozenset(OLD_SCHEMES)
+    schemes = frozenset(_scheme_names(files[SCHEMES])) if SCHEMES in files else frozenset(OLD_SCHEMES + TO_DECLARE)
     cards = _card_names({p: t for p, t in files.items() if p.startswith(HARDWARE) and p.endswith(".toml")})
     scheme_pre = re.compile(rf"""["']({_quoted(schemes)})["']""")
     card_pre = re.compile(rf"""["']({_quoted(cards)})["']""")
