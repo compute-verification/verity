@@ -11,11 +11,12 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/resource_accounting/memory/poub/prover/poub_session"))
 
 import device
 import sign_key
+
 from verity.commitments import randomness
 from verity.protocols.resource_accounting.memory.poub.verifier import receipts
 

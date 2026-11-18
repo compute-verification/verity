@@ -337,6 +337,7 @@ def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, mon
     assert not (tmp_path / "log" / "coins.json").exists()
 
 
+@pytest.mark.slow
 @LEAN
 def test_the_challenger_holds_every_item_to_its_own(served):
     """The challenger's stream registers the honest record and its receipt names it.  An extra public key, a raised level
@@ -426,6 +427,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     assert _codes(e) == {"coin"} and "already open" in e.value.verdict.detail["coin"]
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_no_credit(served):
     """Under ``registration_deadline`` (`Pouw.AcceptsBy`'s td, seconds on the challenger's clock), the salt coin's opening
@@ -839,6 +841,7 @@ def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
             SC.pinned_challenger_key(f)
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_refused(served):
     """The challenger re-starts the execution phase's pass's execution phase from its manifest under its own coin commitment: a salt coin of
@@ -946,6 +949,7 @@ def _unit(t: int, lean: bool = True, opening: bool = True, session: int | None =
                          "opening": {"of_record": False, "accepted": opening, "why": ""}}}
 
 
+@pytest.mark.slow
 @LEAN
 def test_the_outcome_publishes_exactly_the_public_items(served):
     """The outcome over every sampled proof block accepts only when each unit's Lean verdict and opening check accept; PoUW's public
@@ -1180,6 +1184,7 @@ def test_the_public_items_rule_of_a_window_is_leans(served):
     record.close()
 
 
+@pytest.mark.slow
 @LEAN
 def test_a_disagreement_rejects_the_session(served, monkeypatch):
     """A Python reference that disagrees with Lean, at each check, refuses the session as ``lean-python-disagree: <check>``

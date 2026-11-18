@@ -10,14 +10,14 @@ import json
 import pytest
 from test_verifier_party import STORE, Entropy, dropping
 
-from verity.runtime import sources as S
 from verity.protocol import ProtocolDef
-from verity.runtime.runner import run
 from verity.protocols.resource_accounting.memory.poub.prover import period_prover as PP
+from verity.protocols.resource_accounting.memory.poub.prover import session_prover as SPP
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import period as P
 from verity.protocols.resource_accounting.memory.poub.verifier import session_parties as SP
-from verity.protocols.resource_accounting.memory.poub.prover import session_prover as SPP
+from verity.runtime import sources as S
+from verity.runtime.runner import run
 
 SEED = b"remote bandwidth session parties"
 BOTH = [SP.VERIFIER, SP.PROVER]
