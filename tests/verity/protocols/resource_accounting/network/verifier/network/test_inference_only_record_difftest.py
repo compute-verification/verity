@@ -430,23 +430,25 @@ def test_every_row_is_counted_and_a_block_is_a_slot(shaped):
     """`Desc.evaluate`'s reference on the Program of the served class's shape, every root node that computes
     in one block (a root node holds every slot's units of its template, so no partition of them separates two slots)
     and θ empty: that block's gates are the form's gates a block times its blocks, and its input bits are the leaves
-    some gate reads. The form counts every row of every unit, so over the phase its input bits are more by exactly the
-    rows no gate reads."""
+    some gate reads. Every row that is input gates is a row the form counts that no edge fills (`inside`), so over the
+    phase those rows' bits are the Program's input bits, more than the block's by exactly the rows no gate reads."""
     reference = ref.reference
     for size, blocks in (("2x3", 2), ("4x35", 4)):
         case = shaped[f"{size} registered"]["case"]
         text = case["instance"]["program"]
         form = vectors.results(case)["detail"]
+        inside = ref.expand(case["instance"], case["trusted"])["inside"]
         inp, _, _ = reference.root_nodes(text)
         whole = reference.check_desc({"program": text, "theta": [], "owner": ["input" if i else 0 for i in inp],
                                       "gamma": form["gates"] * blocks, "alpha": [vectors.BIG, 1]})
         width, is_input, _, reads = reference.circuit(text)
         read = set().union(*reads)
         unread = sum(w for g, w in enumerate(width) if is_input[g] and g not in read)
+        own = form["inputs"] * blocks - sum(inside)
         assert form["blocks"] == blocks
-        assert whole["ius"] == [[form["gates"] * blocks, form["inputs"] * blocks - unread]] and whole["complies"]
-        assert sum(w for g, w in enumerate(width) if is_input[g]) == form["inputs"] * blocks
-        assert unread > 0
+        assert whole["ius"] == [[form["gates"] * blocks, own - unread]] and whole["complies"]
+        assert sum(w for g, w in enumerate(width) if is_input[g]) == own
+        assert unread > 0 and sum(inside) > 0
 
 
 def test_a_row_is_declared_once(shaped):
