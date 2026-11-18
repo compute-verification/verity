@@ -8,7 +8,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["test_poub_coins.py"]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
-inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
+inputs = ["tests/verity/protocols/resource_accounting/memory/poub/figures.json",
+          "verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           # `coins.trusted`'s Lean verifier (`coins.lean_answer`): one_stage's `lean`, and what `lake build
           # spot-verifier` reads, its package and its path requires
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/lean",

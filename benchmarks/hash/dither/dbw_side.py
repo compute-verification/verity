@@ -31,14 +31,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.device import load_card
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier as V
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-CARD_FILES = ROOT / "calibration/hardware/cards"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -85,8 +83,10 @@ def main() -> int:
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
                     help="a paced stretch's groups are counted at this pass (0: the calibration's median)")
-    ap.add_argument("--hbm-bytes", type=int, default=load_card("rtx-pro-6000-server", directory=CARD_FILES)["store"]["dram"]["value"],
-                    help="the memory line's capacity: one GPU's, its card's `store.dram`")
+    ap.add_argument("--figures-node", metavar="KIND",
+                    help="the node file whose figures the verifier reads (default: the session's node's)")
+    ap.add_argument("--hbm-bytes", type=int,
+                    help="the memory line's capacity (default: one GPU's, its node's card's `store.dram`)")
     ap.add_argument("--prover-py", default=sys.executable)
     ap.add_argument("--prover-cpus", help="the prover's cores (taskset -c; default this process's)")
     ap.add_argument("prover_args", nargs="*",
@@ -107,6 +107,15 @@ def main() -> int:
                           text=True, check=True).stdout.splitlines()[0] if card else "cpu"
     node = subprocess.run([sys.executable, str(ROOT / "benchmarks/kernels/machine.py"), "session-node", name, card or "0"],
                           capture_output=True, text=True, check=True).stdout.strip()
+    sys.path.insert(0, str(ROOT / "benchmarks/poub_session"))
+    import sheets
+
+    try:
+        figures = sheets.figures(a.figures_node or node.split("/")[1])
+    except ValueError as e:
+        raise SystemExit(f"dbw_side.py: the session's verifier has no figures: {e} (name a node file with "
+                         "--figures-node)") from None
+    a.hbm_bytes = figures.gpu_hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
     cmd = [a.prover_py, str(ROOT / "verity/protocols/resource_accounting/memory/poub/prover/poub_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, "--node", node, *a.prover_args]
     if a.prover_cpus:
@@ -147,7 +156,7 @@ def main() -> int:
         return head, body, stamp
 
     conn.send, conn.recv = sent, got
-    v = V.Verifier(conn, figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32), windows=1, window_ns=10 ** 9,
+    v = V.Verifier(conn, figures=figures, source=os.urandom(32), windows=1, window_ns=10 ** 9,
                    samples=2773, delta=2.0 ** -40, jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True),
                    hbm_bytes=a.hbm_bytes, lean_exe=a.lean_exe)
     try:

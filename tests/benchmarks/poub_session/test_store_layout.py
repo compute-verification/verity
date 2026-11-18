@@ -26,8 +26,9 @@ import store_layout as sl  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import verifier  # noqa: E402
 from test_session import run  # noqa: E402
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 ROLE = "synthetic-bf16"
-FIGURES = timing.RTX_PRO_6000_NODE
 B = rstore.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
 """A checkpoint of 6 weights blocks an arena, so two arenas of 7 and 2 host blocks make `test_session`'s 16-block store

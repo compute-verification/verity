@@ -160,11 +160,14 @@
 # make the sessions paced; ROLE=both SERVE=node, the node's session on this machine with its verifier and a local
 # challenger beside it, defaults them to 1:1000:2773:7 (seven stretches of a second, a live coin a pass) and 0 (the
 # pass its calibration measured), builds the Lean verifier before the lease, as a served line does, and ends by the
-# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: timing's eight-card
-# RTX PRO 6000 node). The north-star run, the verifier on a second node's CPUs:
+# verdict line. VERIFIER_ARGS='--node FILE --hbm-bytes N' states the node the share is of (default: the figures').
+# The verifier reads the audited node's figures from FIGURES, by default out/figures.json, which `sheets.py NODE_KIND`
+# writes, NODE_KIND a node file's name (ROLE=both on a GPU: the node file of this machine's card). The north-star run,
+# the verifier on a second node's CPUs:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
-#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/poub_session/run.sh   # 16 CPUs
+#     JITTER_MS=50 NODE_KIND=rtx-pro-6000-server-x8 VERIFIER_ARGS='--host-bytes 1843153879040' \
+#     bash benchmarks/poub_session/run.sh                         # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
 #     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
 #     bash benchmarks/poub_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
@@ -318,6 +321,20 @@ VERIFY=(--port "$PORT" --out "$O" "${FORM[@]}" ${QUANTILE:+--quantile "$QUANTILE
 if [ "${SERVE:-}" = node ] && [ "$ROLE" = both ]; then
   lean_exe
   VERIFY+=(--lean-exe "$LEAN_EXE")
+fi
+if [ "$ROLE" != prover ] && [ -z "${CLOSE:-}" ]; then
+  if [ -z "${FIGURES:-}" ]; then
+    if [ -z "${NODE_KIND:-}" ] && [ "$ROLE" = both ] && [ -z "${CPU:-}" ]; then
+      NODE_KIND=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name --format=csv,noheader \
+        | head -1)" 0) || refuse "no node file for this machine's card: $NODE_KIND"
+      NODE_KIND=${NODE_KIND#local/} NODE_KIND=${NODE_KIND%/*}
+    fi
+    [ -n "${NODE_KIND:-}" ] || refuse "the verifier reads the audited node's figures: set NODE_KIND (a node file under" \
+      "calibration/hardware/nodes) or FIGURES (their JSON, benchmarks/poub_session/sheets.py NODE)"
+    FIGURES=$O/figures.json
+    "$PY" benchmarks/poub_session/sheets.py "$NODE_KIND" > "$FIGURES" || refuse "no figures for NODE_KIND=$NODE_KIND"
+  fi
+  VERIFY+=(--figures "$FIGURES")
 fi
 if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}

@@ -50,15 +50,19 @@ first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done
 pinned() { local cores=$1; shift; if [ -n "$cores" ]; then taskset -c "$cores" "$@"; else "$@"; fi; }
 
 session() {  # under the lease: PLAN's sessions, the verifier's process beside the prover
-  local port=$((7700 + RANDOM % 200)) node=${SESSION_NODE:-} sessions v p w
+  local port=$((7700 + RANDOM % 200)) node=${SESSION_NODE:-} kind sessions v p w
   [ -n "$node" ] || node=$(python3 benchmarks/kernels/machine.py session-node "$(nvidia-smi --query-gpu=name \
     --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" "${CARDS%%,*}" 2>&1) \
     || { say "SESSION: no node for it to register: $node"; return 3; }
-  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
+  kind=${node#*/} kind=${kind%/*}
   mkdir -p "$O/session"
+  "$PY" benchmarks/poub_session/sheets.py "${NODE_KIND:-$kind}" > "$O/session/figures.json" \
+    || { say "SESSION: no figures for its verifier (NODE_KIND names a node file)"; return 3; }
+  sessions=$(($(tr -cd , <<< "$PLAN" | wc -c) + 1))
   pinned "${VERIFIER_CORES:-}" "$PY" verity/protocols/resource_accounting/memory/poub/verifier/poub_session/verifier_process.py \
     --port "$port" --out "$O/session" --windows "$WINDOWS" --window-ms "$WINDOW_MS" --samples "$SAMPLES" \
-    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" > "$O/session/verifier.log" 2>&1 & v=$!
+    --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" --figures "$O/session/figures.json" \
+    > "$O/session/verifier.log" 2>&1 & v=$!
   pinned "${PROVER_CORES:-}" "$PY" $PR/poub_session/prover.py --connect "127.0.0.1:$port" --out "$O/session" \
     --plan "$PLAN" --rows "$SESSION_ROWS" --lib "$B/session.so" --kv "$B/kv.so" --gib "$SESSION_GIB" --gpus 1 \
     --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$node" > "$O/session/prover.log" 2>&1
