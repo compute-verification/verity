@@ -131,14 +131,14 @@ The rules in force, each stated as itself; the friction skill has the standing r
   with useful work. An author supplies the workload, the design and δ; an accept reports ε at δ. The other protocols
   stand on the same C and commitment: PoUW credits blocks of C, the exfiltration, infiltration and inference-only limits
   are corollaries of SPOT's guarantee computed from C's description, the memory and network audits tie C's registered
-  inputs and external gates to the machine, and compose's one verdict reads every protocol's. Where `main` differs (a
-  wiring check between blocks, one-stage and two-stage forms side by side with no two-level audit accepted in Lean,
+  inputs and external gates to the machine, and compose's one verdict reads every protocol's. Where `main` differs (an
+  optional wiring check between blocks, one-stage and two-stage forms side by side with no two-level audit accepted in Lean,
   guarantees proved on their own) is ARCHITECTURE.md's section 7.
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value, touched only inside a zero-knowledge proof. Only the values on wires that cross a block
   boundary are committed, each under a hiding leaf; the values inside a block never are. Each such wire is to have one
-  commitment that every block reading or writing it shares, so there is no wire check to switch on; today a wiring
-  check (`HmLinks`) ties the blocks' commitments together.
+  commitment that every block reading or writing it shares, so there is no wire check to switch on; today each
+  block commits its own rows, and a wiring check (`HmLinks`) ties them only where an audit's case names a wiring.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -319,7 +319,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   guarantee of the layer below: one session's knowledge soundness for sampling, sampling's for recursion and for an
   audit, an audit's for an accounting bound, and every protocol's for compose's verdict. Each configuration
   (zero-knowledge, plain, recursive) and each protocol instantiates those theorems: each deployed guarantee is to be an
-  instance of a layer theorem, not a proof of its own (today they are proved on their own), and a proof that redoes a
+  instance of a layer theorem, not a proof of its own (today most are proved on their own), and a proof that redoes a
   layer is refactored onto the shared one. The ZK, sampling and recursion layers are each to be one generic compiler,
   generic in the argument system and the circuit type; Flock over Boolean circuits is one instance, today the only one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and samples,
