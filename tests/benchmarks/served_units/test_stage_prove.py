@@ -128,7 +128,7 @@ def job(tmp_path, monkeypatch):
                        ("date", DATE)):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
-    (tmp_path / "units").write_text("census:EmbeddingRead_v1{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
+    (tmp_path / "units").write_text("census:EmbeddingRead_v2{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
     (tmp_path / "verity/protocols/proofs/flock/verifier").mkdir(parents=True)
     (tmp_path / "verity/protocols/proofs/flock/verifier/lakefile.toml").write_text(LAKEFILE)
     (tmp_path / "benchmarks/served_units").mkdir(parents=True)
@@ -289,7 +289,7 @@ def test_prove_alone_proves_this_commits_staging_on_its_cards_alone(job, tmp_pat
     (fw / ".staged").write_text(f"{TREE} 2026-11-13T17:00:00Z units-sha256 0 staged 1\n")
     rc, steps, calls = job(STEPS="prove", FLOCK_WORK=str(fw), HELD="6")
     assert rc == 0 and "staged by this commit" in steps and "start check passed: cards 4,5 free" in steps, steps
-    unit = "census:EmbeddingRead_v1{V=256,H=4}@full"
+    unit = "census:EmbeddingRead_v2{V=256,H=4}@full"
     assert calls == ["4,5", f"window route gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}",
                      f"window prove gpus=2 allowed=4,5 cvd=[unset] device=gpu {unit}"]
     assert "flock-read-tmpl" not in steps and not fw.exists()
