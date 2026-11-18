@@ -274,7 +274,7 @@ def test_it_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_builds(
     assert any(isinstance(n, ast.ImportFrom) and n.module == "verity_vllm.engine" and "moe_align" in {a.name for a in n.names}
                for n in ast.parse(inspect.getsource(rank_worker)).body)
     src = inspect.getsource(build.build_engine)
-    assert src.index("moe_align.arm()") < src.index("llm = LLM(**kw)")
+    assert src.index("moe_align.arm()") < src.index("hooked(lambda: LLM(**kw))")
 
 
 def test_refuses_what_vllms_op_cannot_take():
