@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Poub.Remote.Accept
 public import Properties.Poub.Remote.Refresh
 public import Proofs.Properties.Poub.Remote.Released
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # Proofs of refresh's code-side properties
@@ -22,8 +23,12 @@ finds an append holding (`Slots`). An append comes after every block a recorded 
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open Poub Poub.Session
+
+open private Poub.Session.live from Poub.Session
 
 namespace Properties.Poub
 
@@ -45,6 +50,8 @@ theorem checkOpening_origin {reg : Registration} {digest : ByteArray} {appends :
   split at h
   · simp at h
   simp only [ha, hq, Option.bind, Option.map] at h
+  split at h
+  · simp at h
   split at h
   · simp at h
   split at h
@@ -618,5 +625,284 @@ theorem probationKept : ProbationKept := by
   revert this
   unfold Kept
   cases s.appends[a].origin <;> exact id
+
+/-! ## `CoinBySlot`, and `CoinAfterAppend` by slot -/
+
+/-- An event that leaves the appends as they were and answers with no `appended`. -/
+def NoAppend (s s' : State) (r : Result) : Prop := s'.appends = s.appends ∧ ∀ first c, r ≠ .appended first c
+
+theorem live_refused {s : State} {r : Result} (h : Poub.Session.live s = some r) :
+    ∀ first c, r ≠ .appended first c := by
+  unfold Poub.Session.live at h
+  cases hf : s.failed with
+  | none => rw [hf] at h; cases h
+  | some f => rw [hf] at h; cases h; intro _ _ h; cases h
+
+theorem quiet_start {s : State} {now : Nat} {r : Result} {s' : State} (he : start s now = (r, s')) : NoAppend s s' r := by
+  unfold start State.releaseCoin at he
+  repeat' split at he
+  all_goals cases he
+  all_goals exact ⟨rfl, fun _ _ h => by cases h⟩
+
+theorem quiet_boundary {s : State} {now : Nat} {r : Result} {s' : State} (he : boundary s now = (r, s')) :
+    NoAppend s s' r := by
+  unfold boundary State.releaseCoin at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals cases he
+  all_goals first
+    | exact ⟨rfl, live_refused ‹_›⟩
+    | exact ⟨rfl, fun _ _ h => by cases h⟩
+
+theorem quiet_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State}
+    (he : release s runs withdrawn = (r, s')) : NoAppend s s' r := by
+  unfold release at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact ⟨rfl, live_refused ‹_›⟩
+    | exact ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+    | exact ⟨rfl, fun _ _ h => by cases h⟩
+
+theorem quiet_close {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
+    (he : close s t now = .ok (r, s')) : NoAppend s s' r := by
+  unfold close at he
+  dsimp only at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact ⟨rfl, live_refused ‹_›⟩
+    | exact ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+    | exact ⟨rfl, fun _ _ h => by cases h⟩
+
+theorem quiet_verify {s : State} {t : Int} {openings : Array Opening} {r : Result} {s' : State}
+    (he : verify s t openings = (r, s')) : NoAppend s s' r := by
+  unfold verify at he
+  simp only [Id.run] at he
+  repeat' split at he
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact ⟨rfl, live_refused ‹_›⟩
+    | exact ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+    | exact ⟨rfl, fun _ _ h => by cases h⟩
+
+theorem quiet_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (Array (Int × Int))}
+    {change : Option (Array (Int × Int) × Array (Int × Int))} {st : Option Int} {now : Nat} {r : Result}
+    {s' : State} (he : receive s t i root runs change st now = (r, s')) : NoAppend s s' r := by
+  unfold receive at he
+  split at he
+  · cases he; exact ⟨rfl, live_refused ‹_›⟩
+  split at he
+  · cases he; exact ⟨rfl, fun _ _ h => by cases h⟩
+  split at he
+  · cases he; exact ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+  change (have s := s; _) = _ at he
+  extract_lets s₀ jp s₁ at he
+  have key : ∀ s₂ : State, s₂.appends = s.appends → jp () s₂ = (r, s') → NoAppend s s' r := by
+    intro s₂ e₂ hj
+    dsimp -zeta only [jp] at hj
+    extract_lets t₂ N₂ ext₂ plan₂ s₃ below₂ head₂ jp₂ at hj
+    have key₂ : jp₂ () = (r, s') → NoAppend s s' r := by
+      intro hj
+      dsimp only [jp₂] at hj
+      generalize plan₂ = q at hj
+      repeat' split at hj
+      all_goals (try dsimp only at hj)
+      all_goals cases hj
+      all_goals first
+        | exact ⟨e₂, fun _ _ h => by cases h⟩
+        | exact ⟨e₂, fun _ _ h => by simp [State.fail] at h⟩
+    split at hj
+    · split at hj
+      · cases hj; exact ⟨e₂, fun _ _ h => by simp [State.fail] at h⟩
+      · exact key₂ hj
+    · exact key₂ hj
+  split at he
+  · exact key s₁ rfl he
+  · split at he
+    · cases he; exact ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+    · exact key s₀ rfl he
+
+/-- An accepted append pushes one append, at the store's extent, in the slot it names (the appends before it without
+one), with that slot's append coin, and answers with it; with refresh it names a slot. -/
+theorem append_step {s : State} {root : ByteArray} {count : Int} {origin : _root_.Poub.Origin} {slot : Option Nat}
+    {r : Result} {s' : State} (he : append s root count origin slot = .ok (r, s')) :
+    NoAppend s s' r ∨ ∃ c, 1 ≤ count ∧ r = .appended s.extent c ∧
+      s.appendCoins[slot.getD s.appends.size]? = some c ∧ (s.params.refresh = true → slot.isSome) ∧
+      s'.appends = s.appends.push
+        { first := s.extent, count := count.toNat, root, coin := c, origin, slot := slot.getD s.appends.size } := by
+  unfold append at he
+  repeat' (first | split at he | (dsimp only at he; split at he))
+  all_goals (try simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at he)
+  all_goals (try dsimp only at he)
+  all_goals cases he
+  all_goals first
+    | exact Or.inl ⟨rfl, live_refused ‹_›⟩
+    | exact Or.inl ⟨rfl, fun _ _ h => by simp [State.fail] at h⟩
+    | (refine Or.inr ⟨_, ?_, rfl, ‹_›, ?_, rfl⟩
+       · by_cases h : 1 ≤ count
+         · exact h
+         · exfalso; simp_all
+       · intro hr
+         cases slot with
+         | none => exfalso; simp_all
+         | some _ => rfl)
+
+theorem step_appends {s : State} {e : Event} {r : Result} {s' : State} (he : step s e = .ok (r, s')) :
+    NoAppend s s' r ∨ ∃ root count origin slot c, e = .append root count origin slot ∧ 1 ≤ count ∧
+      r = .appended s.extent c ∧ s.appendCoins[slot.getD s.appends.size]? = some c ∧
+      (s.params.refresh = true → slot.isSome) ∧
+      s'.appends = s.appends.push
+        { first := s.extent, count := count.toNat, root, coin := c, origin, slot := slot.getD s.appends.size } := by
+  cases e with
+  | start now => injection he with he; exact Or.inl (quiet_start he)
+  | boundary now => injection he with he; exact Or.inl (quiet_boundary he)
+  | append root count origin slot =>
+    rcases append_step he with h | ⟨c, h1, h2, h3, h4, h5⟩
+    · exact Or.inl h
+    · exact Or.inr ⟨root, count, origin, slot, c, rfl, h1, h2, h3, h4, h5⟩
+  | release runs withdrawn => injection he with he; exact Or.inl (quiet_release he)
+  | receive t i root runs change st now => injection he with he; exact Or.inl (quiet_receive he)
+  | close t now => exact Or.inl (quiet_close he)
+  | verify t openings => injection he with he; exact Or.inl (quiet_verify he)
+
+theorem appendedOf_push (rs : Array Result) (r : Result) :
+    appendedOf (rs.push r) = appendedOf rs ++ appendedOf #[r] := by
+  unfold appendedOf
+  rw [← Array.toList_inj]
+  simp [List.filterMap_append]
+
+theorem appendedOf_quiet {r : Result} (h : ∀ first c, r ≠ .appended first c) : appendedOf #[r] = #[] := by
+  unfold appendedOf
+  rw [← Array.toList_inj]
+  cases r <;> simp_all
+
+theorem appendedOf_one (first : Nat) (c : ByteArray) : appendedOf #[.appended first c] = #[(first, c)] := by
+  unfold appendedOf
+  rw [← Array.toList_inj]
+  simp
+
+theorem extract_push_le' (rs : Array Result) (r : Result) {e : Nat} (he : e ≤ rs.size) :
+    (rs.push r).extract 0 e = rs.extract 0 e := by
+  rw [Array.extract_push, ite_eq_left he]
+
+/-- What the results `rs` of the events `l`, reaching `s` with refresh `R`, on the append coins `AC`, say of each
+`appended` result: its event is an append, recorded as the `k`-th (`k` the `appended` results before it), in the slot it
+names (else `k`), with that slot's coin. -/
+def Answered (R : Bool) (AC : Array ByteArray) (l : List Event) (rs : Array Result) (s : State) : Prop :=
+  rs.size = l.length ∧ (appendedOf rs).size = s.appends.size ∧
+  ∀ e first c, rs[e]? = some (.appended first c) →
+    let k := (appendedOf (rs.extract 0 e)).size
+    ∃ root count origin slot, l[e]? = some (.append root count origin slot) ∧ (R = true → slot.isSome) ∧
+      ∃ hk : k < s.appends.size,
+        s.appends[k].root = root ∧ (s.appends[k].count : Int) = count ∧ s.appends[k].origin = origin ∧
+        s.appends[k].slot = slot.getD k ∧ s.appends[k].first = first ∧ s.appends[k].coin = c ∧
+        AC[slot.getD k]? = some c
+
+theorem answered_step {R : Bool} {AC : Array ByteArray} {l : List Event} {rs : Array Result} {s : State} {e : Event}
+    {r : Result} {s' : State} (hR : s.params.refresh = R) (hAC : s.appendCoins = AC) (h : Answered R AC l rs s)
+    (he : step s e = .ok (r, s')) : Answered R AC (l ++ [e]) (rs.push r) s' := by
+  obtain ⟨hsz, hcnt, hold⟩ := h
+  have hlen : (rs.push r).size = (l ++ [e]).length := by simp [hsz]
+  rcases step_appends he with ⟨ha, hq⟩ | ⟨root, count, origin, slot, c, rfl, h1, rfl, hc, hsl, ha⟩
+  · refine ⟨hlen, by rw [appendedOf_push, appendedOf_quiet hq, Array.append_empty, ha, hcnt], ?_⟩
+    intro e' first c' he'
+    rw [Array.getElem?_push] at he'
+    split at he'
+    · cases he'; exact absurd rfl (hq first c')
+    · have hlt : e' < rs.size := by
+        rcases Nat.lt_or_ge e' rs.size with hl | hl
+        · exact hl
+        · rw [Array.getElem?_eq_none (by omega)] at he'; cases he'
+      obtain ⟨root, count, origin, slot, hl, hs, hk, h2⟩ := hold e' first c' he'
+      dsimp only
+      rw [extract_push_le' rs r (Nat.le_of_lt hlt), ha]
+      exact ⟨root, count, origin, slot, by rw [List.getElem?_append_left (by omega)]; exact hl, hs, hk, h2⟩
+  · have hk0 : (appendedOf rs).size = s.appends.size := hcnt
+    refine ⟨hlen, by rw [appendedOf_push, appendedOf_one, ha]; simp [hcnt], ?_⟩
+    intro e' first c' he'
+    rw [Array.getElem?_push] at he'
+    split at he'
+    · rename_i hE
+      subst hE
+      cases he'
+      dsimp only
+      rw [extract_push_le' rs _ (Nat.le_refl _), Array.extract_size, ha]
+      refine ⟨root, count, origin, slot, by rw [List.getElem?_append_right (by omega)]; simp [hsz],
+        fun hr => hsl (hR.trans hr), by simp only [Array.size_push]; omega, ?_⟩
+      simp only [hk0, Array.getElem_push_eq]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      all_goals first | trivial | rfl | omega | (rw [← hAC]; exact hc) | (simp only [Int.toNat_of_nonneg (by omega : (0 : Int) ≤ count)])
+    · have hlt : e' < rs.size := by
+        rcases Nat.lt_or_ge e' rs.size with hl | hl
+        · exact hl
+        · rw [Array.getElem?_eq_none (by omega)] at he'; cases he'
+      obtain ⟨root', count', origin', slot', hl, hs, hk, h2⟩ := hold e' first c' he'
+      dsimp only
+      rw [extract_push_le' rs _ (Nat.le_of_lt hlt), ha]
+      refine ⟨root', count', origin', slot', by rw [List.getElem?_append_left (by omega)]; exact hl, hs,
+        by simp only [Array.size_push]; omega, ?_⟩
+      simp only [Array.getElem_push_lt hk]
+      exact h2
+
+theorem answered_run {R : Bool} {AC : Array ByteArray} :
+    ∀ (l pre : List Event) (acc : Array Result × State), Inv acc.2 → acc.2.params.refresh = R →
+      acc.2.appendCoins = AC → Answered R AC pre acc.1 acc.2 →
+      ∀ out, List.foldlM (fun (acc : Array Result × State) e => do
+        let (r, s') ← step acc.2 e
+        pure (acc.1.push r, s')) acc l = .ok out → Answered R AC (pre ++ l) out.1 out.2 := by
+  intro l
+  induction l with
+  | nil => intro pre acc _ _ _ h out ho; simp only [List.foldlM_nil] at ho; cases ho; simpa using h
+  | cons e l ih =>
+    intro pre acc hi hR hAC h out ho
+    rw [List.foldlM_cons] at ho
+    cases he : step acc.2 e with
+    | error err => rw [he] at ho; cases ho
+    | ok p =>
+      rw [he] at ho
+      obtain ⟨r, s''⟩ := p
+      obtain ⟨hi', fp, -, fa⟩ := step_inv hi he
+      have := ih (pre ++ [e]) (acc.1.push r, s'') hi' (by rw [fp]; exact hR) (fa.trans hAC) (answered_step hR hAC h he) out ho
+      simpa using this
+
+theorem answered_of_run {params : Params} {reg : Registration} {coins appendCoins : Array ByteArray}
+    {notBeforeNs : Nat} {events : Array Event} {rs : Array Result} {s : State}
+    (hrun : run (State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s)) :
+    Answered params.refresh appendCoins events.toList rs s := by
+  unfold run at hrun
+  rw [← Array.foldlM_toList] at hrun
+  simpa using answered_run (R := params.refresh) (AC := appendCoins) events.toList []
+    (#[], State.init params reg coins appendCoins notBeforeNs) (inv_init _ _ _ _ _) rfl rfl
+    ⟨rfl, by simp [appendedOf, State.init], fun e _ _ h => by simp at h⟩ (rs, s) hrun
+
+/-- `CoinAfterAppend` but its last conjunct, which the code makes true by slot: the coin is the append coin of the
+append's slot, `slot.getD k` (`k` without a slot named, as without refresh). -/
+theorem coinAfterAppend_bySlot : ∀ (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray)
+    (notBeforeNs : Nat) (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
+    Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
+      rs.size = events.size ∧
+      ∀ e first c, rs[e]? = some (.appended first c) →
+        let k := (appendedOf (rs.extract 0 e)).size
+        ∃ root count origin slot, events[e]? = some (.append root count origin slot) ∧ ∃ hk : k < s.appends.size,
+          s.appends[k].root = root ∧ (s.appends[k].count : Int) = count ∧ s.appends[k].origin = origin ∧
+          s.appends[k].slot = slot.getD k ∧ s.appends[k].first = first ∧ s.appends[k].coin = c ∧
+          appendCoins[slot.getD k]? = some c := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun
+  obtain ⟨hsz, -, hold⟩ := answered_of_run hrun
+  refine ⟨by simpa using hsz, fun e first c he => ?_⟩
+  obtain ⟨root, count, origin, slot, hl, -, hk, h2⟩ := hold e first c he
+  exact ⟨root, count, origin, slot, by simpa using hl, hk, h2⟩
+
+theorem coinBySlot : CoinBySlot := by
+  intro params reg coins appendCoins notBeforeNs events rs s hrun hr e first c he
+  obtain ⟨-, -, hold⟩ := answered_of_run hrun
+  obtain ⟨root, count, origin, slot, hl, hs, hk, h1, h2, h3, h4, h5, h6, h7⟩ := hold e first c he
+  obtain ⟨σ, rfl⟩ := Option.isSome_iff_exists.1 (hs hr)
+  exact ⟨root, count, origin, σ, by simpa using hl, hk, h4, h5, h6, h7⟩
 
 end Properties.Poub

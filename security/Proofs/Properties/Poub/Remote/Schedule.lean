@@ -925,7 +925,7 @@ theorem checkOpening_of {reg : Registration} {digest : ByteArray} {appends : Arr
   unfold checkOpening
   simp only [Id.run, hpr, hjb]
   rw [hany]
-  simp [hpass, hpos, hblock, htile, hls, hps, hj, hdig, hy, hleaf, hdec, hver, hrec, horig]
+  simp [hpass, hpos, hblock, htile, hls, hps, hj, Nat.not_le.2 hj, hdig, hy, hleaf, hdec, hver, hrec, horig]
   rfl
 
 /-- The deployed codec: p1024, three rounds, masked. -/
