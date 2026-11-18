@@ -135,57 +135,23 @@ def test_summary_passes_only_when_every_request_and_window_did():
     assert not CA.summarize([], [win], engine_steps=0, idle_steps=0)["passed"]
 
 
-def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows_manifest(tmp_path):
-    """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the manifest of the
-    row's Build of record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer
-    refuses it too."""
+def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows_build(tmp_path):
+    """commit-arb's Commit is serve-openai's rows-sha512 one (`serve_seal.committer`), never SHA-256: without the row's Build of
+    record predict wrote, or ninja for its kernels, it is refused before the model loads, and the committer refuses it too."""
     def parse(*more: str) -> CA.Options:
         return cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
-    with pytest.raises(UsageError, match="under rows-sha512 .*--required-manifest DIR/manifest.json"):
+    with pytest.raises(UsageError, match="under rows-sha512: pass --row-build DIR"):
         CA.preflight(parse(), which=lambda _: "/v/bin/ninja")
-    with pytest.raises(UsageError, match="rows-sha512 .*commits with the Commit of record's parts"):
+    with pytest.raises(UsageError, match="rows-sha512 commits the row's capture plan"):
         SS.committer(CA.committer_opts(parse()), llm=None, label="commit-arb")
-    with pytest.raises(UsageError, match="no such file"):
-        CA.preflight(parse("--required-manifest", str(tmp_path / "none.json")), which=lambda _: "/v/bin/ninja")
     (traced := tmp_path / "traced").mkdir()
-    (traced / "manifest.json").write_text("{}")
-    with pytest.raises(UsageError, match="no record of predict's beside it"):
-        CA.preflight(parse("--required-manifest", str(traced / "manifest.json")), which=lambda _: "/v/bin/ninja")
-    man = predicted.row(tmp_path)
+    with pytest.raises(UsageError, match="no record of predict's in it"):
+        CA.preflight(parse("--row-build", str(traced)), which=lambda _: "/v/bin/ninja")
+    row = predicted.row(tmp_path)
     with pytest.raises(UsageError, match="ninja"):
-        CA.preflight(parse("--required-manifest", str(man)), which=lambda _: None)
-    CA.preflight(parse("--required-manifest", str(man)), which=lambda _: "/v/bin/ninja")
-    opts = CA.committer_opts(parse("--required-manifest", str(man), "--hidden-so", "h.so", "--norm-tap-so", "n.so"))
+        CA.preflight(parse("--row-build", str(row)), which=lambda _: None)
+    CA.preflight(parse("--row-build", str(row)), which=lambda _: "/v/bin/ninja")
+    opts = CA.committer_opts(parse("--row-build", str(row), "--hidden-so", "h.so", "--norm-tap-so", "n.so"))
     assert (opts.scheme, opts.commit, opts.seal) == (SS.ROWS, True, False)
     assert SS.scheme_refusal(opts) is None
-    args = SS.committer_args(opts)
-    assert (args.commit_scheme, args.required_manifest, args.hidden_so, args.tap_sources.norm_tap_so) == (SS.ROWS, str(man), "h.so", "n.so")
-
-
-def test_the_committer_is_handed_an_engine_that_carries_its_vllm_config(tmp_path, monkeypatch):
-    """The committer reads the engine's ``vllm_config`` (`native_host._model_geo_digest`), so the engine `serve_seal.committer`
-    builds around an ``LLM`` carries the one that ``LLM``'s engine holds."""
-    from types import SimpleNamespace
-
-    from verity_vllm.engine import handle
-    from verity_vllm.pipeline import commit as C
-
-    class Handed(Exception):
-        pass
-
-    def make_committer(kind: str, eng: Any, args: Any, run_id: str) -> None:
-        raise Handed(eng)
-
-    man = predicted.row(tmp_path)
-    opts = CA.committer_opts(cli.parse("commit-arb", ["--model", "m", "--revision", "r", "--out", str(tmp_path), "--required-manifest",
-                                                      str(man), "--hidden-so", "h.so", "--norm-tap-so", "n.so"], environ={}))
-    config = object()
-    llm = SimpleNamespace(vllm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=config)), model=object(),
-                          pin=SimpleNamespace(model="m", revision="r"))
-    monkeypatch.setattr(handle, "model_runner", lambda _: object())
-    monkeypatch.setattr(SS, "manifest_of_record", lambda _: {})
-    monkeypatch.setattr(C, "make_committer", make_committer)
-    with pytest.raises(Handed) as handed:
-        SS.committer(opts, llm=llm, label="commit-arb")
-    assert handed.value.args[0].vllm_config is config

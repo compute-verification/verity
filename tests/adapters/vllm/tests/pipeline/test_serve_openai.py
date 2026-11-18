@@ -38,6 +38,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.records.predicted_row import FILE
@@ -168,7 +169,7 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 def test_preflight_refuses_a_commit_without_ninja_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)],
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path)],
                      environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH, or pass --no-commit$"):
         so.preflight(opts, which=lambda _: None)
@@ -262,7 +263,7 @@ def test_a_declared_schemes_option_is_refused_naming_its_name(tmp_path):
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
-    row's manifest, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
+    row's Build of record, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
     def parse(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
@@ -275,18 +276,18 @@ def test_the_served_commit_is_rows_sha512_alone(tmp_path):
 
     man = predicted.row(tmp_path)
     assert parse().scheme == ss.ROWS == "rows-sha512" and ss.SCHEMES == (ss.ROWS,)
-    assert "--required-manifest DIR/manifest.json" in refusal(parse())
-    assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
-    with pytest.raises(cli.UsageError, match="--required-manifest DIR/manifest.json"):
+    assert "pass --row-build DIR" in refusal(parse())
+    assert refusal(parse("--row-build", str(man))) is None and refusal(parse("--no-commit")) is None
+    with pytest.raises(cli.UsageError, match="pass --row-build DIR"):
         ss.committer(parse(), llm=None)
     with pytest.raises(SystemExit):
         parse("--scheme", "vllm-v1")
 
 
 def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path):
-    """The row's manifest is the one the ahead-of-time compiler wrote with the row's Build of record (`predict row`): a manifest
-    with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
-    before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
+    """The row's Build of record is the ahead-of-time compiler's (`predict row`): a dir with no record of predict's (a traced
+    Build's), another schema's, or a record binding another compiler than this tree's is refused before the model loads,
+    committing or not; the Build is the dir itself (no --programs-root)."""
     def parse(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
@@ -298,23 +299,23 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
         return None
 
     (traced := tmp_path / "traced").mkdir()
-    (traced / "manifest.json").write_text("{}")
     (traced / "build_summary.json").write_text("{}")
     for more in ((), ("--no-commit",)):
-        why = refusal("--required-manifest", str(traced / "manifest.json"), *more)
-        assert "no record of predict's beside it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
-    assert refusal("--required-manifest", str(tmp_path / "none" / "manifest.json")).endswith("manifest.json: no such file")
+        why = refusal("--row-build", str(traced), *more)
+        assert "no record of predict's in it" in why and "`verity-vllm predict row --row ROW --out DIR`" in why, more
     (row := tmp_path / "row").mkdir()
-    man = predicted.row(row, {"manifest_digest": "m"})
-    assert refusal("--required-manifest", str(man)) is None
+    assert refusal("--row-build", str(predicted.row(row))) is None
     rec = json.loads((row / FILE).read_text())
     (row / FILE).write_text(json.dumps(rec | {"schema": "verity-vllm/aot-comparison/v1"}))
-    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--required-manifest", str(man))
-    (row / FILE).write_text(json.dumps(rec))
-    opts = parse("--required-manifest", str(predicted.row(row)))
-    assert ss.programs_root_of(opts) == str(row.resolve()) == ss.committer_args(opts).programs_root
+    assert "'schema' is 'verity-vllm/aot-comparison/v1'" in refusal("--row-build", str(row))
+    predicted.row(row, {"name": "other", "digest": "0" * 128})
+    assert "binds compiler other 0000000000000000…, not this tree's" in refusal("--row-build", str(row))
+    opts = parse("--row-build", str(predicted.row(row)))
+    assert RW.programs_root_of(opts) == str(row.resolve())
     with pytest.raises(SystemExit):
-        parse("--required-manifest", str(man), "--programs-root", str(traced))
+        parse("--row-build", str(row), "--programs-root", str(traced))
+    with pytest.raises(SystemExit):
+        parse("--required-manifest", str(row / "manifest.json"))
 
 
 def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
@@ -322,7 +323,7 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
     man = predicted.row(tmp_path)
-    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path))
+    rows = ("--model", "m", "--revision", "r", "--row-build", str(man), "--out", str(tmp_path))
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
         try:
