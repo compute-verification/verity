@@ -183,6 +183,69 @@ def test_a_module_s_replay_key_is_the_same_at_another_path_and_moves_with_its_de
     assert all(k != here[m] for m, k in keys(module_data(tmp_path / "z", literal="lis"), "z").items())
 
 
+def closure(d: Path) -> dict:
+    """A closure whose modules' keys take each way `replay_keys` has: graphs walked (two sources, one of them at another
+    path), a server part holding the path of a root that isn't a `ModuleData`, one naming another module's source, and
+    a module with no server part, imported by one more."""
+    mods = {"P.M": module_data(d / "pm"), "Q.N": module_data(d / "qn", path="/elsewhere/Q/N.lean", literal="q"),
+            "R.S": module_data(d / "rs", path="/a/R/S.lean", scalar=b"\x03" + bytes(7)),
+            "T.U": module(d / "tu", path="/a/T/U.lean"), "Old": module(d / "old")}
+    (top := d / "Top.olean").write_text("Top")
+    graph = {m: {"olean": str(f["olean"]), "imports": []} for m, f in mods.items()}
+    return {"graph": graph | {"Top": {"olean": str(top), "imports": sorted(mods)}}, "modules": ["Top"]}
+
+
+def test_the_replay_keys_walked_in_processes_are_the_keys_walked_here(tmp_path, monkeypatch):
+    """`walk_graphs` runs `canonical` in processes of their own, at most `WALK_CORE_SHARE` of the cores; the keys it gives
+    are, byte for byte, those of the same walks run in this process, whatever the number of processes, and a pass that
+    finds every walk in `_GRAPHS` starts none."""
+    facts, A = closure(tmp_path), check()
+    started = []
+    real = A.subprocess.run
+
+    def run(cmd, **kw):
+        started.append(cmd)
+        return real(cmd, **kw)
+
+    monkeypatch.setattr(A.subprocess, "run", run)
+    keys = {}
+    for n in (1, 2, 64):
+        A._GRAPHS.clear()
+        monkeypatch.setattr(A, "cores", lambda n=n: n)
+        walked: dict = {}
+        keys[n] = A.replay_keys(facts, "t", walked=walked)
+        assert walked["modules"] == 4 and walked["processes"] == max(1, min(4, int(n * A.WALK_CORE_SHARE)))
+    assert len(started) == 1 + 1 + 4
+    started.clear()
+    assert A.replay_keys(facts, "t") == keys[1] and not started, "the walks are kept in this process"
+    A._GRAPHS.clear()
+    monkeypatch.setattr(A, "walk_graphs", lambda jobs, walked=None: {k: G.canonical(f, s) for k, (s, f) in jobs.items()})
+    here = A.replay_keys(facts, "t")
+    assert keys[1] == keys[2] == keys[64] == here
+    assert len(set(here.values())) == len(here)
+    A._GRAPHS.clear()
+
+
+def test_a_failed_walk_fails_the_replay_keys_and_leaves_no_key(tmp_path, monkeypatch):
+    """A process whose walk fails (a malformed part) or that answers for fewer modules than it was given fails the pass
+    with what it said: no key is taken from anything but the walk."""
+    facts, A = closure(tmp_path), check()
+    A._GRAPHS.clear()
+    (short := tmp_path / "short.olean").write_bytes(b"olean")
+    bad = tmp_path / "rs" / "M.olean"
+    bad.write_bytes(short.read_bytes())
+    with pytest.raises(RuntimeError, match=r"(?s)exited 1 on .*Malformed: olean: not an olean file"):
+        A.replay_keys(facts, "t")
+    assert not A._GRAPHS or all(m != "R.S" for m, _ in A._GRAPHS)
+    module_data(tmp_path / "rs", path="/a/R/S.lean")
+    A._GRAPHS.clear()
+    monkeypatch.setattr(A.subprocess, "run",
+                        lambda cmd, **kw: A.subprocess.CompletedProcess(cmd, 0, '{"graphs": [], "seconds": 0}', ""))
+    with pytest.raises(RuntimeError, match="answered 0 of"):
+        A.replay_keys(facts, "t")
+    A._GRAPHS.clear()
+
+
 def test_an_address_in_no_part_or_in_two_is_malformed(tmp_path):
     x, y = module(tmp_path / "x", stray=0x4000_0000), module(tmp_path / "y", stray=0x4000_0000)
     assert G.differs(x, y, SOURCE).startswith("malformed: address 0x40000000")

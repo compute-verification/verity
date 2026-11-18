@@ -251,7 +251,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
                          "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
-                         "launch says where it went and when it should start. A machine that can start no run takes none, and one "
+                         "launch says where it went and when it should start. A Lean try or records run (lean_changed.py --try "
+                         "FILE, --records PKG; `verity lean try`) goes only to a machine whose kept Lean tree holds its package "
+                         "built, and is refused with what each machine lacks where none does. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
                          "that waits in a pool's line, whatever on, asks again and moves to a pool where a place has stood 2 "
                          "min, while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
@@ -279,7 +281,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
                          f"{waitcap.WAIT_LIMIT_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
-                         "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
+                         "Meanwhile it prints each line the run's slot (slot.py, lean_slot.py) says of its wait. Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--wait-max", type=float, default=None, metavar="S",
                     help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_LIMIT_S}; never more than {waitcap.WAIT_LIMIT_S}")
@@ -507,7 +509,8 @@ def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
 
     if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus:
         return None
-    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env)}
+    needs = auto.lean_package(command, Path(ns.source) if ns.source else None, ns.env)
+    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env), "needs": needs._asdict() if needs else None}
 
 
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
@@ -1487,10 +1490,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     told = None                                                # when it should start; a GPU job's wait is the queue's to say
     if why is None:
         lean = auto.lean_pool(command, ns.env)
+        needs = auto.lean_package(command, Path(ns.source) if ns.source else None, ns.env)
         try:
             if not docs:
-                docs.update(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {})))
-            target, why = auto.choose(docs, cpus, mem, lean_pool=lean)
+                docs.update(auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {}), **({"needs": needs} if needs else {})))
+            target, why = auto.choose(docs, cpus, mem, lean_pool=lean, needs=needs)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None
@@ -1498,7 +1502,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         told = wait.told(f"{target[0]}'s {target[1]} pool" if target else auto.AUTO_NODE)
         if wait.late:
             told = f"it isn't expected to start within {auto.START_WITHIN_MIN} min: {told}"
-            cut = auto.smaller(docs, cpus, mem, lean_pool=lean)
+            cut = auto.smaller(docs, cpus, mem, lean_pool=lean, needs=needs)
             cut = f"`--cpus {cut[0]} --mem-gb {cut[1]:g}` starts now on {cut[2][0]}'s {cut[2][1]} pool" if cut else None
             if auto.REFUSE and not ns.accept_wait:
                 print(f"research run --on auto: refused: {told}. --accept-wait queues it there anyway"
@@ -1521,7 +1525,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told, *untimed]}
-    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
+    ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean,      # what `auto` was asked, for the launch's asker to ask it again
+               "needs": needs._asdict() if needs else None}
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)
     return harness_opts
@@ -1778,9 +1783,10 @@ def _moved_to(run_dir: Path) -> Path | None:
 
 
 def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_LIMIT_S, fetch=None, sleep=None,
-                clock=None, moved=_moved_to) -> int:
+                clock=None, moved=_moved_to, said=None) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
-    it ended without one, 3 when the machine refused it). A run that left its line without starting while its late twin may
+    it ended without one, 3 when the machine refused it). While it goes, each line slot.py or lean_slot.py adds to its stderr.log
+    (``said``: `remote.slot_lines`), where it waits for a place and behind whom, is printed as it appears. A run that left its line without starting while its late twin may
     run (``moved``) is followed there: the twin's end is the run's. An unreachable machine is waited out, as `research fetch`
     would be, but no wait outlasts `max_s` of `clock` time: then the run goes on, the check-back command is printed, and it
     returns STILL_GOING (research.waitcap)."""
@@ -1791,6 +1797,8 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
     sleep, clock = sleep or time.sleep, clock or time.monotonic
     start = clock()
     fetch = fetch or (lambda d: remote.fetch(d, timeout=max_s - (clock() - start)))
+    said = said or (lambda d: remote.slot_lines(d, timeout=max(1.0, min(30.0, max_s - (clock() - start)))))
+    told = 0
     while True:
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
@@ -1798,7 +1806,7 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
             on = (remote._read_json(twin / "remote.json") or {}).get("machine")
             print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name}"
                   f"{f' on {on}' if on else ''} is the run now, and this waits for it", file=sys.stderr)
-            run_id, run_dir = twin.name, twin
+            run_id, run_dir, told = twin.name, twin, 0
             continue
         if s["state"] in R.ENDED:
             if s["state"] == "refused":
@@ -1812,6 +1820,11 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
             return rc
         if (rec or {}).get("last_fetch_error"):
             print(f"research: run {run_id}: machine unreachable (rc {rec['last_fetch_error'].get('rc')}); still waiting", file=sys.stderr)
+        else:
+            lines = said(run_dir)
+            for line in lines[told:]:
+                print(f"research: run {run_id}: {line}", file=sys.stderr, flush=True)
+            told = max(told, len(lines))
         if (left := max_s - (clock() - start)) <= 0:
             print(waitcap.still_going(f"run {run_id} ({s['state']})", f"research status {run_id}", clock() - start), file=sys.stderr)
             return waitcap.STILL_GOING
