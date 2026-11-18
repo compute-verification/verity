@@ -48,10 +48,21 @@ def row_digest(block_bytes: int, block: bytes | Iterable[bytes]) -> bytes:
     return h.digest()
 
 
+def row_leaves(salt: bytes, s: int, rows: bytes, v0: int = 0) -> list[bytes]:
+    """Segment `s`'s leaf digests `v0, v0 + 1, ...` from their labels' `sha512/row/v2` digests, `rows` (64 bytes each)."""
+    if len(rows) % 64:
+        raise ValueError(f"{len(rows)} bytes are not whole 64-byte row digests")
+    head, sha = b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little"), hashlib.sha512
+    return [sha(head + v.to_bytes(2, "little") + rows[64 * k:64 * k + 64]).digest()
+            for k, v in enumerate(range(v0, v0 + len(rows) // 64))]
+
+
 def row_leaf(params: Geometry, salt: bytes, i: int, row: bytes) -> bytes:
     """Leaf `i`'s digest from label `i`'s `sha512/row/v2` digest `row`."""
+    if len(row) != 64:
+        raise ValueError(f"a row digest is 64 bytes, not {len(row)}")
     s, v = divmod(i, params.blocks_per_segment)
-    return hashlib.sha512(b"\x00" + tag(salt_value(salt), s).to_bytes(32, "little") + v.to_bytes(2, "little") + row).digest()
+    return row_leaves(salt, s, row, v)[0]
 
 
 def leaf_hash(params: Geometry, salt: bytes, i: int, block: bytes | Iterable[bytes]) -> bytes:

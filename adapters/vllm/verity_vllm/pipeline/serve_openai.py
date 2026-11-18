@@ -5,10 +5,10 @@
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
+        [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb GB (with --seal)]
         [--copy-records-to $OUT] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+        [--protocols pearl-plus --precision bfloat16 --protocols-config JSON
          [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
@@ -95,8 +95,8 @@ committer (`NativeHostCommitter.detach`), and it waits only while the windows aw
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
-run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
-the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
+run's ``$OUT``) gets the fields `serve_mirror.PUBLIC` names of the records it lists, each with its public kind, after each close
+and each seal, and at the stop before the seals still pending; every other field and file stays in ``--out``. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (the attester's frontend's ``summary``);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
@@ -104,8 +104,8 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols`` listing declared schemes, each by its name or its option (``pouw:pearl-c-h100-v1-h3``: ``pearl-plus``,
-``--precision bfloat16``), attaches each by name on the engine's build in the list's order, the earlier outer
+``--protocols`` listing declared schemes, each by its name (``pearl-plus``, ``--precision bfloat16``; its option
+``pouw:pearl-c-h100-v1-h3`` is refused, naming it), attaches each by name on the engine's build in the list's order, the earlier outer
 (`listed`, `messages.attach_listed`), and releases each at shutdown before its report (`write_reports`): Pearl+ one epoch a Commit window,
 its passes, ``coins.json`` and ``served.json`` under ``pearl/w<k>/``, its report under ``schemes/pearl-plus/``. With
 ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` each epoch's salt comes from a session of its own
@@ -148,9 +148,10 @@ from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_
                                    serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, records_mirror,
-                                               served_statics, user_of)
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, param_of, served_statics,
+                                               user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop, advice_trace
+from verity_vllm.pipeline.serve_mirror import records_mirror
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, framings, http_chunk, sse,
                                                  usage_of)
@@ -233,13 +234,13 @@ class Options:
     window_gb: float = option("--window-gb", type=float, default=32.0,
                               help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
                                    "bundle (0: no bound)")
-    disk_floor_gb: float = option("--disk-floor-gb", type=float, default=300.0,
-                                  help="--seal: refuse to start unless OUT's filesystem has this many GB free beyond one window "
-                                       "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
-                                       "leave less (0: no floor)")
+    disk_floor_gb: float | None = option("--disk-floor-gb", type=float, default=None,
+                                         help="--seal (required with it: a fact of the machine's disk): refuse to start unless "
+                                              "OUT's filesystem has this many GB free beyond one window (--window-gb), and stop "
+                                              "cleanly (no new requests) rather than seal a window that would leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
-                                              "traces) into this directory (the run's $OUT) after each block closes and at the stop")
+                                         help="copy the records' public fields (serve_mirror.PUBLIC, field by field; nothing it doesn't "
+                                              "name) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -596,13 +597,16 @@ def admission_order(opts: Any) -> str:
 
 
 def listed(opts: Any, out: Path) -> list[tuple[Any, dict[str, Any]]]:
-    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`: by its option, or by
-    its name, as the wipe has no option) with its settings: ``--protocols-config``'s entry under the entry's name, an
-    option's protocol (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
+    """``--protocols``' entries in their order, each the declared scheme it names (`messages.named`) with its settings:
+    ``--protocols-config``'s entry under its name (`option_settings`), with what the serve holds of the keys the scheme declares: its passes under
     ``out/pearl``, its salt a session an epoch reserved under ``--challenger-lane`` as ``--challenger-peer`` (the
     challenger at this node's 127.0.0.1, at the port the gate's open answers), else in-process.  Empty when no entry
-    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do."""
-    found = [(e, M.named(e)) for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    names a declared scheme (H1's, `serve_h1`); `UsageError` when only some do, or one is a declared scheme's option
+    (`messages.option`), naming the scheme's name."""
+    entries = [e for e in (x.strip() for x in (opts.protocols or "").split(",")) if e]
+    if spelled := [f"{e} is {s.name}'s option: list it as --protocols {s.name}" for e in entries if (s := M.option(e))]:
+        raise UsageError(f"--protocols {opts.protocols}: {'; '.join(spelled)}, its settings under {s.name!r}")
+    found = [(e, M.named(e)) for e in entries]
     if all(s is None for _, s in found):
         return []
     if bad := [e for e, s in found if s is None]:
@@ -762,7 +766,10 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("order tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
-    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+    if opts.seal and opts.disk_floor_gb is None:
+        raise UsageError("--seal needs --disk-floor-gb: the GB --out's filesystem keeps free beyond one window, which only the "
+                         "machine's disk can say (0: no floor)")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb or 0, opts.switch_interval_ms) < 0:
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")

@@ -1,7 +1,7 @@
 """H1's execution phase as one public Program: every R × C tile of an execution phase's calls is one call of its call's contraction K's
 template (`template`: one call of the tile unit, `h1zy.PouwH1TileZy` over `h1tile.PouwH1Tile`, at that K), so the verifier
 derives the execution phase's units from its own copy of the Program under the `Q_template_instances` query of its templates
-(`query`), and a served path registers the trees it commits as the Program's parameters (`one_stage.served.register_served`).
+(`query`), and a served path registers the trees it commits as the Program's parameters (`prover.served.register_served`).
 
 * **The tile** is a parameter: ``tile`` is its R × C, the served path's 32 × 32 (`pouw_h1.TILE`) or h1_prove's 4 × 8
   smoke, and the execution phase binds the tile unit once per K its linears have (`tile_unit`; ``unit`` gives another), so

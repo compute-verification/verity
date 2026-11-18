@@ -67,7 +67,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   `Spot.Challenger.coinTreesOf` makes (`treeStep`), over the whole log, its head included (`readLog`): a tree
   sampled, with its root and key, or a round opened, with its coins as a session's record gives them, each record read
   as `Spot.OneStageZk.treesHeld` reads it (`recordsOn`). The other lines after the head go in pairs, a root's
-  line and its coin's release, as `Spot.Challenger.releasedRootsOf` reads them (`readTail`): the sample family's
+  line and its coin's release, as `Spot.Challenger.releasedLogOf` reads them (`readTail`): the sample family's
   coins after the registration's digest are the bytes the sample reads, and v2's evidence opens no other family's coin,
   so another release has none. Where a line doesn't read as it is read, or the log ends on a root without its release,
   the read shows no log; a record that doesn't parse reads as `null`, as `treesHeld` reads it, and v2 refuses its
@@ -895,7 +895,7 @@ def specOf (j : Lean.Json) : Option Flock.CoinTree.Spec := do
   pure ⟨streams, ← _root_.Spot.nat? (_root_.Spot.getD j "rounds_log"),
     ← _root_.Spot.nat? (_root_.Spot.getD j "block")⟩
 
-/-- **The family and the root a root line of the release log shows**, as `Spot.Challenger.releasedRootsOf`
+/-- **The family and the root a root line of the release log shows**, as `Spot.Challenger.releasedLogOf`
 reads them; `none` where the line doesn't parse or names no family or no root. -/
 def rootOf (l : String) : Option (String × ByteArray) := do
   let r ← (_root_.Spot.Challenger.event l).toOption
@@ -944,7 +944,7 @@ def treeStep (records : List Lean.Json) (ts : List (String × Lean.Json)) (d : L
 /-- **The releases the lines after the release log's head show**, for the sample of family `label` after the
 registration's digest `after`, with the sample's coins `ξ` still to place, the trees `ts` read so far and the sessions'
 records: a coin tree's line (`Spot.Challenger.treeLine`) its release (`treeStep`), and the other lines in
-pairs, as `Spot.Challenger.releasedRootsOf` reads them, a root's line `pending` and its coin's release, of the
+pairs, as `Spot.Challenger.releasedLogOf` reads them, a root's line `pending` and its coin's release, of the
 family and after the root the root's line shows (`rootOf`), with the next coin of `ξ` where it is the sample's
 (`label`'s, after `after`), else none. `none` where a line doesn't read as it is read or the log ends on a root without
 its release, as v2 refuses that log. -/
@@ -969,7 +969,7 @@ def readTail (label : String) (after : ByteArray) (records : List Lean.Json) :
 
 /-- **The releases the release log's lines show, read with v2's own tests**: its head's coin tree where the head is a
 coin tree's line (`Spot.Challenger.coinTreesOf` reads the head's line too), then the lines after it
-(`readTail`); the head in no pair, as `Spot.Challenger.releasedRootsOf` reads it. -/
+(`readTail`); the head in no pair, as `Spot.Challenger.releasedLogOf` reads it. -/
 def readLog (label : String) (after : ByteArray) (records : List Lean.Json) (ξ : ByteArray) :
     List String → Option (List Verity.Release)
   | [] => some []
@@ -1039,7 +1039,7 @@ def sampleLinkFirstFrom (label : String) (after : ByteArray) : Bool → Option S
         else sampleLinkFirstFrom label after opened none ls
 
 /-- **The sample, then the link, then the other rounds**, in the release log's lines `log` after its head. Read as
-`Spot.Challenger.releasedRootsOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a
+`Spot.Challenger.releasedLogOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a
 root's line and its coin's release: no coin of family `label` whose root's line names `after` (`rootOf`) is released
 after a line opening a coin tree's round (`openLine`), and the first such line opens the stream `TREE_SESSION`
 (`linkLine`), whose first round is the link points. A coin tree's own line (its `Hello`) may come anywhere. In v2's

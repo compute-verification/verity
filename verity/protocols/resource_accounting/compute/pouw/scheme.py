@@ -32,7 +32,7 @@ from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
 from verity.protocol import VERIFIER
-from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Launch, Order, Scheme, Term, register
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
@@ -434,8 +434,7 @@ class Attached:
         if own["challenger"]:
             k = spend_epoch(self.private)
             given = SimpleNamespace(challenger=own["challenger"], session=self.reserve(k), gate=SV.gate_of(self.gate))
-            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), True,
-                                                                          epoch=k)
+            self.session, coins, opening, _, carried, k = SV.salt_session(OPTION, given, SV.weights_root(roots), epoch=k)
         else:
             held = SV.in_process_coins(self.epochs - 1)
             coins, opening = held.commitment, held.open("salt", SV.weights_root(roots))
@@ -519,6 +518,7 @@ PEARL_PLUS = register(Scheme(
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
+    pieces={"workers": Launch(optional=("gate", "peer", "key-sha512", "lane", "main-file"))},
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),

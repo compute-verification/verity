@@ -27,8 +27,9 @@ recorded for p before the salt.
 * `pouw_window(windows, k)` is the PoUW execution phase attester windows make up, refusing any that aren't one whole, aligned
   PoUW execution phase.
 * `window_open_root(weights_root, requests_root, session)` is a live execution phase's open root: what the auditor's gate opens
-  the execution phase's challenger session on and its salt coin opens after, which the verifier recomputes from the execution phase's
-  record and the session the gate reserved (`core_check.salt_of_record`).
+  the execution phase's challenger session on and its salt coin opens after. The verifier's program recomputes it from the
+  execution phase's record and the session the gate reserved (`core_check.salt_of_record`), run by the developer's side;
+  no entry of the auditor's runs it yet.
 """
 from __future__ import annotations
 

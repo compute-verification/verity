@@ -12,12 +12,10 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     COIN_ROUND,
     H1_SCHEME,
     NO_DRAW_SESSION,
-    PEARL_C_SCHEMES,
     Challenger,
     challenger_address,
     live_challenger,
     live_epoch_reason,
-    period_reason,
     period_setting,
     reserved_of,
     session_setting,
@@ -28,12 +26,11 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 from verity_vllm.engine import handle
 
 #: The schemes whose coins the auditor device's challenger can sample (the setting ``challenger``): H1's salt and rounds,
-#: ncp-v2's and Pearl-C's salt
-CHALLENGED = (H1_SCHEME, "ncp-v2", *PEARL_C_SCHEMES)
+#: and ncp-v2's salt
+CHALLENGED = (H1_SCHEME, "ncp-v2")
 #: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
 #: answer, ``gate`` its open), by the root it opens it on, the one its salt coin follows
-OPENS = {H1_SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)",
-         **dict.fromkeys(PEARL_C_SCHEMES, "its salt epoch's root (salt.epoch_open_root, over the weights' root)")}
+OPENS = {H1_SCHEME: "its window-open root (salt.window_open_root, over round 0's request table)"}
 #: H1's setting ``unit``, the window Program's tile unit at each K (`pouw_h1_served.unit_of`): v1's per-unit noise
 #: (`h1tile.PouwH1Tile`, the default) or J10-R's one noise stream a call (`h1tile.PouwH1Tile5`)
 UNITS = ("v1", "j10r")
@@ -145,9 +142,8 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
                    "admissions arrive) and 'challenger' (the auditor device's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != H1_SCHEME:
-        if settings.runner is not None and scheme not in PEARL_C_SCHEMES:
-            out.append(f"the pouw setting 'runner' is H1's ({H1_SCHEME}) and Pearl-C's device path's, which "
-                       "ends each pass at its execute_model")
+        if settings.runner is not None:
+            out.append(f"the pouw setting 'runner' is H1's ({H1_SCHEME})")
         if settings.rounds is not None or settings.admission is not None or settings.served is not None:
             out.append(f"the pouw settings 'rounds', 'admission' and 'served' are H1's ({H1_SCHEME})")
     if scheme != H1_SCHEME and (settings.unit is not None or settings.ks is not None):
@@ -166,12 +162,9 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
                    "challenger at 'challenger'")
     elif scheme == H1_SCHEME and settings.challenger is not None and stage != "capture" and settings.draw_session is None:
         out.append(NO_DRAW_SESSION)
-    if scheme in PEARL_C_SCHEMES and settings.challenger is not None and settings.session is not None:
-        why = period_reason(settings.period, settings.session)
-        out += [] if why is None else [why]
-    elif settings.period is not None:
-        out.append("the pouw setting 'period' is the lane's open period that a Pearl-C install's reserved "
-                   f"session joins, so it goes with 'challenger' and 'session', for {', '.join(PEARL_C_SCHEMES)} only")
+    if settings.period is not None:
+        out.append("the pouw setting 'period' is a Pearl-C install's, and no scheme this adapter installs is one: Pearl+ "
+                   "is attached by its name")
     if scheme == H1_SCHEME and settings.rounds is not None and settings.steps is not None:
         have = settings.rounds.challenger.commitment.family(settings.rounds.label) - len(settings.rounds.roots)
         if have < settings.steps:

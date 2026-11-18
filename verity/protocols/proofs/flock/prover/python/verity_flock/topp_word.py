@@ -25,11 +25,13 @@ stopped half is kept and left out of the tie count.
 """
 from __future__ import annotations
 
+import sys
 from collections import Counter
 
 import numpy as np
 
 from . import fp, gf2
+from . import ir_lower as IL
 from . import tail_pieces as TP
 from .gf2 import (
     NOT,
@@ -258,3 +260,6 @@ def ands(V: int) -> int:
                 built[(name, key)] = build(name, key).counts()["ands"]
         _ANDS[V] = sum(n * built[(name, key)] for (_path, name, key), n in c.items())
     return _ANDS[V]
+
+
+IL.COMPOSED[IL.TOPP_WORD] = sys.modules[__name__]

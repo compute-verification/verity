@@ -38,9 +38,11 @@ untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "te
 # Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
 # directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
-# put on its path, which a test checks is that script of the tree.
+# put on its path, which a test checks is that script of the tree. env.sh takes the workspace's import roots from
+# research's reader of them (research.pythonpath), which a test sources it through.
 inputs = [
     "tools/research/src/research/store/labels_sync.py",
+    "tools/research/src/research/pythonpath.py",
     "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",
@@ -58,9 +60,7 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/credit_gate.py",
     "adapters/vllm/verity_vllm/protocols/interface.py",
-    "adapters/vllm/verity_vllm/protocols/pous.py",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/device.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
@@ -77,7 +77,6 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/static.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/native.py",
     "adapters/torch/verity_torch/pouw/pearl_c/passes.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "adapters/torch/verity_torch/pouw/pearl_c/graphs.py",

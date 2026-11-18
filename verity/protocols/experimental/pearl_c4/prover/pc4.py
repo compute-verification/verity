@@ -70,7 +70,7 @@ from verity.protocols.experimental.pearl_c4.prover import pearl_c4 as S
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import anchors as A
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import leaves as L
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.tile_units import DIGESTS, GRID_ROLES, ROLES, ProofBlock, RowK, _Emit, _f32, ok_word
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit import tile_units as U
 

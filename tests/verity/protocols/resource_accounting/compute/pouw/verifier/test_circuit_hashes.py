@@ -13,7 +13,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.circuits.types import Array
 from verity.commitments.crypto.turboshake import turboshake128 as native
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.prover.circuit.hashes import Emit, keccak_lanes, sha512, sha_words, shake256, turboshake128
 
 

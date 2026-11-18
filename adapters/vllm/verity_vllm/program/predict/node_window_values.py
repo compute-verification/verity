@@ -11,7 +11,7 @@ reads them (a peer's row, an unlowered node's row, the prompt). A row no source 
 undeclared: zeros, counted, and the unit's mismatch counted apart. A unit's expected words are the Program's at the frame's
 pieces (`NodeWindow.outs`), a gather's the concatenation of the rows it holds (`NodeWindow.wholes`, ``chunks``), an
 opening's verdict 1; a writer row with none is recomputed from its own inputs. Tables are committed by
-`h1.registered.commit` from the made-up weights as `pipeline.expert_rows.table_words` cuts them, under a run-local key.
+`h1.registered.commit` from the made-up weights as `pipeline.expert_rows.table_words` cuts them, under fresh OS salts.
 
 This is completeness evidence: the check is of what a verifier would read (the emitted circuit), not of the lowering's
 own lists, and it samples (`check`)."""
@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import bisect
 import dataclasses
-import hashlib
 import math
+import os
 import re
 import time
 from collections import Counter
@@ -35,7 +35,6 @@ from verity.commitments import randomness as RND
 from verity.commitments.periods import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
-from .node_window_join import Joined
 
 PROMPT = "prompt"
 SAMPLE = 1024
@@ -271,21 +270,21 @@ _TABLE = re.compile(r"^weights/(?P<label>.+)@(?P<words>\d+)/b(?P<b>\d+)/(?P<kind
 
 class Tables:
     """Each table the circuit declares, committed on first use from the made-up weights (an expert table's rows by
-    `expert_rows.table_words`, an embedding shard's column block's by `node_window_embed.table_words`) under a run-local key,
-    by parameter."""
+    `expert_rows.table_words`, an embedding shard's column block's by `node_window_embed.table_words`) under fresh OS
+    salts, by parameter."""
 
     def __init__(self, circuit: IF.Circuit, values: Values, w: NodeWindow, program: str):
         self.by = {t.name: t for t in circuit.registered.tables}
         self.values, self.program = values, program
         self.fields = {label: (first, words) for label, first, words in w.b.weights}
         self.types = dict(dict(values.fn.signature()[0])[WEIGHTS].fields)
-        self.key = hashlib.sha512(b"node-window values check: a test committer's key").digest()[:32]
         self.held: dict[str, Any] = {}
 
     def __call__(self, name: str) -> Any:
         got = self.held.get(name)
         if got is not None:
             return got
+        from verity.commitments import salt_file as SF
         from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             registered_commit,
@@ -314,8 +313,8 @@ class Tables:
                 rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
-        got = self.held[name] = registered_commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
-                                           schema=SCHEMA_HM96_SHA512_ROW_SEG)
+        got = self.held[name] = registered_commit(self.program, t.param, rows, os.urandom(t.rows * SF.SALT_BYTES),
+                                                  keep_rows=True, schema=SCHEMA_HM96_SHA512_ROW_SEG)
         return got
 
     def _vocab(self, name: str, stack: np.ndarray, width: int, b: int, V: int) -> np.ndarray:
@@ -718,37 +717,6 @@ def joint(values: Sequence[Values]) -> list[Values]:
     return list(values)
 
 
-def check_join(joined: Joined, checks: Sequence[Check], seed: int, most: int = SAMPLE) -> dict[str, Any]:
-    """Each peer input `node_window_join.join` wired (``joined.wired``), up to ``most`` of its units sampled under ``seed``: each
-    of its rows as the joined circuit's wire reads it, the writer rank's row (its Check's `Check.row`, the rank's own
-    units), against the reader rank's Program's words there (its stood peer rows, `joint`'s). ``checks[r]`` is rank r's
-    Check, its frame built with ``stand_ins``. Counts by template and port, and the first mismatch."""
-    c, first = joined.circuit, joined.first
-    by: dict[tuple[str, str], list[IF.Wire]] = {}
-    for x in c.wires:
-        by.setdefault((x.reader, x.port), []).append(x)
-    key = sample_key(seed)
-    out: dict[str, Any] = {}
-    for r, tid, port, at, count, (i, n, k) in dict.fromkeys((r, f.tid, f.port, f.at, f.count, f.rows) for r, f in joined.wired):
-        ck = checks[r]
-        rw = dict(ck.lay[tid].rows)[port] // k
-        (grid,) = [s[5] for s in ck.stood.get((tid, port), ()) if s[2:5] == (at, count, (i, n, k))]
-        rec = out.setdefault(f"{tid.split('{')[0]} {port}", {"checked": 0, "mismatches": 0, "first": None})
-        for u in (at + s for s in sample(count, key, f"{r}/{tid}/{port}/{at}/{i}", most)):
-            have = np.concatenate([ck._stand(x) for x in grid[u - at]])
-            U = first[r][tid] + u
-            for row in range(i, i + n):
-                (x,) = [x for x in by[(tid, port)] if x.at <= U < x.at + x.reader_units and x.cut[0] <= row < x.cut[0] + x.cut[1]]
-                s = int(x.source(np.asarray([(U - x.at) * x.cut[1] + row - x.cut[0]]))[0])
-                jr = max(q for q in first if first[q][x.writer] <= s)
-                got = checks[jr].row(x.writer, x.out, s - first[jr][x.writer])
-                rec["checked"] += 1
-                if not np.array_equal(got, have[(row - i) * rw:(row - i + 1) * rw]):
-                    rec["mismatches"] += 1
-                    rec["first"] = rec["first"] or {"rank": r, "unit": u, "row": row, "writer": [jr, x.writer, x.out, s]}
-    return out
-
-
 # ---- planted errors
 
 def plant_wire_row(c: IF.Circuit, family: str, port: str, row: int, keep: bool = False) -> tuple[IF.Circuit, str, dict[str, Any]]:
@@ -783,5 +751,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "check_join", "joint", "made_up", "native_selftest",
+__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "joint", "made_up", "native_selftest",
            "plant_read_shift", "plant_wire_row", "run", "sample", "sample_key"]

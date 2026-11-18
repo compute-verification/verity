@@ -1,13 +1,16 @@
-"""Importing the wire, which holds the record entry, or the Site reads no sheet."""
+"""Importing the wire, which holds the record entry, or the Site reads no sheet; the release order's formats load the
+standard library alone."""
 
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 NODE_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/nodes"
+RELEASE = Path(__file__).resolve().parents[3] / "verity/release.py"
 
 READS = """
 import os, sys
@@ -30,3 +33,13 @@ def test_the_record_and_the_site_read_no_sheet_on_import() -> None:
     assert done.returncode == 0 and not done.stderr, (
         "importing verity.channel and verity.device read these sheets (or failed): read a card or a node file only "
         f"where a reader is called, never at import\n{done.stderr}")
+
+
+def test_the_release_formats_load_the_standard_library_alone() -> None:
+    """Both a verifier and a prover load the release order's formats (`verity.release`), so they name no module
+    outside the standard library, at load or inside a function."""
+    tree = ast.parse(RELEASE.read_text())
+    named = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+    named |= {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module and not n.level}
+    assert not any(isinstance(n, ast.ImportFrom) and n.level for n in ast.walk(tree)), "a relative import"
+    assert {m.split(".")[0] for m in named} - {"__future__"} <= set(sys.stdlib_module_names), sorted(named)

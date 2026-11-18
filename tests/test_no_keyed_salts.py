@@ -52,10 +52,8 @@ FIX = (f"a leaf's salt is fresh operating-system bytes, one draw a leaf ({FRESH}
 
 #: {file that still names a keyed derivation: the lane that switches it to fresh salts}
 ALLOWED: dict[str, str] = {
-    "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
-    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
@@ -64,13 +62,9 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Session.lean": "@proofs",
     "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean": "@proofs",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/Loop.lean": "@proofs",
-    # both keep ChaCha20 only for compute-accounting's callers that pass a key and a nonce and no salts
+    # both keep ChaCha20 for a caller that hands no salts, which none does now: every caller hands its rows' salts
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/audit.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/verifier/weights.py": "@compute-accounting",
