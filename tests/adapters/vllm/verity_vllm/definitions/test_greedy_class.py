@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import greedy_stages as G
 from verity_vllm.definitions.registry import greedy_stop as GS
 from verity_vllm.definitions.registry import stop_rule as X

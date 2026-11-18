@@ -3,8 +3,8 @@ the limits row `class_window` states, at GLM-5.3's statics and at a small class.
 from __future__ import annotations
 
 import pytest
-
 from verity.commitments.periods import interface as IF
+
 from verity_vllm.pipeline import boundary_span as BS
 from verity_vllm.program.predict import class_select as CS
 from verity_vllm.program.predict import class_window as CW

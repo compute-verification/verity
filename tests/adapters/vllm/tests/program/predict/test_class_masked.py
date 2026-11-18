@@ -4,8 +4,8 @@ the units that read only the writer's row, and every other decode unit, refused.
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.defs import bind
+
 from verity_vllm.definitions.registry import sparse_mla as SM
 from verity_vllm.program.predict import class_masked as CM
 from verity_vllm.program.predict import class_window as CW
