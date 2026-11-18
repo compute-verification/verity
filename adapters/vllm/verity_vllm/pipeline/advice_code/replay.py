@@ -515,8 +515,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
     step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty
     (`Replay.clock` keeps T after each such step). A `Rule` in place of the `Tick` gives these in its own unit, adds
-    its ``token`` for each token the step schedules that is not a draft, and without ``quiet`` jumps T whenever nothing
-    waits.
+    its ``token`` for each token the step schedules that is not a draft.
 
     With a draft, `kept(i, row)` gives the drafts request i's emitting row `row` kept, in place of `RequestIO.kept`:
     it is asked once for each row that emits, the steps in the order they execute and a step's rows in its own."""
@@ -576,7 +575,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
                 add(s.quiet())
         elif rule is not None and released is not None:
             if not (s.quiet() and s.finished_ids):
-                if nxt < n and not (s.waiting or s.skipped) and (s.quiet() or not rule.quiet):
+                if nxt < n and not (s.waiting or s.skipped) and s.quiet():
                     T = max(T, rule.close(released[nxt]))
                 while nxt < n and rule.close(released[nxt]) <= T:
                     add(s.quiet())
