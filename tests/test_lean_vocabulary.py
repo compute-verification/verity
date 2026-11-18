@@ -521,7 +521,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the data sheet (`Verity.Accel.Card`; `ResourceAccounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
-    "security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
+    "security/Definitions/Flock/Circuit.lean::Spot.Sampling.Partition":
         "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game":
         "duplicate of `Verity.Game`: becomes it (deleted) (lean)",
@@ -783,7 +783,7 @@ KNOWN: dict[str, str] = {
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/protocols/resource_accounting/network/attester/program/lean/NetworkAttester/WindowCharge.lean::NetworkAttester.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py::Window":
+    "verity/protocols/interface/charge/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/device.py::Sheet":
         "duplicate of the data sheet (`Verity.Site.Sheet`'s Python mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",

@@ -160,7 +160,7 @@ theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
   obtain ⟨xs, hxs, rfl⟩ := hu
   intro u hu
-  rw [FlockSoundness.Audit.SampleExec.mem_qsort] at hu
+  rw [Spot.Sampling.SampleExec.mem_qsort] at hu
   obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hu
   rw [Array.mapM_eq_mapM_toList] at hxs
   obtain ⟨l, hl, rfl⟩ := Option.map_eq_some_iff.1 hxs
@@ -187,7 +187,7 @@ theorem mem_proved {D : Flock.Draw.UnitSample} {u : ℕ} (h : u ∈ D.units) : u
   unfold Flock.Draw.UnitSample.proved
   split
   · exact h
-  · exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).2 (Array.mem_append_left _ h)
+  · exact (Spot.Sampling.SampleExec.mem_qsort _ _ _).2 (Array.mem_append_left _ h)
 
 /-- **v2's units check gives `ProvedIn`**: at a public file whose header's `units.indices` are the population's units
 `0, …, A.n − 1`. -/
@@ -201,7 +201,7 @@ theorem provedIn_of_range (o : Own)
     rw [hJ] at h
     exact h
   obtain ⟨hn, hm⟩ := units_of_range hidx hp hD u
-    ((FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).2 (List.mem_toArray.2 hu))
+    ((Spot.Sampling.SampleExec.mem_qsort _ _ _).2 (List.mem_toArray.2 hu))
   exact ⟨hn, mem_proved hm⟩
 
 section Names

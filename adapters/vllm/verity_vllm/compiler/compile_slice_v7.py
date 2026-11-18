@@ -16,7 +16,7 @@ rows but three:
 - ``cert``: after the certified arrivals and their tokens, ``a_mt``, each arrival slot's certified max_tokens
   (`window_charge.MW` bits, a u32 of the certified body; 0 in an empty slot);
 - ``cin`` and ``cout``: `window_charge`'s carry rows (`window_charge.ROW_BITS`), the window's reads of rows 0 and 1 of
-  `window_charge.VALUE`, which the verifier holds by their b‖c to the session's chain (`window_charge.check_chain`).
+  `window_charge.VALUE`, which the verifier holds by their b‖c to the session's chain (`charge_rows.window_check_chain`).
 
 **The charge** is `window_charge.build_link(C, D, 0, 0, K, …)` on ``pub``'s book from ``cin`` to ``cout``: the
 decisions as CompileSlice_v1 charges them (en_i = i < ``count``), and a length slot for each arrival slot of ``cert``,
@@ -49,8 +49,8 @@ from verity.circuits.boolean.forms import ZERO, Circuit
 from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.protocols.interface.charge import window_charge as WC
+from verity.protocols.interface.charge import charge_chain as CC
 
 from verity_vllm.compiler import compile_slice as CS
 from verity_vllm.compiler import replay_chain as RC

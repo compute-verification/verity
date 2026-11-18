@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.FlockLink
+public import Proofs.Flock.SpotFlock.Sampling.FlockLink
 public import Proofs.Flock.Soundness.Binding.Leaf
 import Mathlib.Combinatorics.Matroid.Init
 
@@ -30,28 +30,28 @@ strings with one SHA-512 digest (`Refine.H512`).
 
 namespace FlockSoundness.Binding
 
-open Game Model Accounting Extract Refine Audit
+open Game Model Accounting Extract Refine Spot.Sampling
 
 /-- The executable's field. -/
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Spot.Sampling.Partition C n) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- The message type of sampled proof block `u`'s table. -/
 abbrev Msg (S : Finset (Fin n)) (R : Reg) (u : Fin n) : Type :=
-  Message 𝔽 (Audit.Partition.tabOf plan tab S R u).sch.k0 (Audit.Partition.tabOf plan tab S R u).sch.level₀.logCols
+  Message 𝔽 (Spot.Sampling.Partition.tabOf plan tab S R u).sch.k0 (Spot.Sampling.Partition.tabOf plan tab S R u).sch.level₀.logCols
 
 /-- The witness a message of sampled proof block `u`'s table packs. -/
 noncomputable abbrev wit (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) :
-    Witness (Audit.Partition.tabOf plan tab S R u).S.m :=
-  witnessOf execArith (Audit.Partition.tabOf plan tab S R u).S.m (Audit.Partition.tabOf plan tab S R u).sch.k0
-    (Audit.Partition.tabOf plan tab S R u).sch.level₀.logCols M
+    Witness (Spot.Sampling.Partition.tabOf plan tab S R u).S.m :=
+  witnessOf execArith (Spot.Sampling.Partition.tabOf plan tab S R u).S.m (Spot.Sampling.Partition.tabOf plan tab S R u).sch.k0
+    (Spot.Sampling.Partition.tabOf plan tab S R u).sch.level₀.logCols M
 
 /-- A message of sampled proof block `u`'s table packs a witness that satisfies the table's statement. -/
 def Sat (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) : Prop :=
-  (Audit.Partition.tabOf plan tab S R u).S.Satisfies (wit plan tab S R u M)
+  (Spot.Sampling.Partition.tabOf plan tab S R u).S.Satisfies (wit plan tab S R u M)
 
 /-- The byte whose bit `t` is `b t`, bit 0 the least significant. -/
 def byteOf (b : Fin 8 → Bool) : UInt8 := UInt8.ofNat (∑ t : Fin 8, if b t then 2 ^ t.val else 0)
@@ -69,7 +69,7 @@ and the registered leaf digests (`regLeaf`). Where a sampled proof block's table
 salt, at fixed addresses: the value's `rowBits p` bits (`rowAt`), which `rowOf` reads as a value, and the salt's 192
 bytes, bit by bit (`saltAt`). `decode_row`: in a satisfying witness the decoder's bit on each of the unit's wires is the
 bit of the value the witness holds at the wire's commit string. -/
-structure Layout (decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab) where
+structure Layout (decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab) where
   Pos : Type
   [finPos : Fintype Pos]
   [decPos : DecidableEq Pos]
@@ -84,15 +84,15 @@ structure Layout (decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan t
   rowBits : Pos → ℕ
   rowOf : (p : Pos) → (Fin (rowBits p) → Bool) → Val
   rowAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → (p : Pos) → Fin (rowBits p) →
-    Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
+    Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.m)
   saltAt : (S : Finset (Fin n)) → (R : Reg) → (u : Fin n) → Pos → Fin 192 → Fin 8 →
-    Fin (2 ^ (Audit.Partition.tabOf plan tab S R u).S.m)
+    Fin (2 ^ (Spot.Sampling.Partition.tabOf plan tab S R u).S.m)
   decode_row : ∀ S R u, u ∈ S → ∀ M, Sat plan tab S R u M → ∀ g ∈ P.io u,
     decode S R u M g = bit (rowOf (pos g) (bitsAt (wit plan tab S R u M) (rowAt S R u (pos g)))) g
 
 attribute [instance] Layout.finPos Layout.decPos Layout.inhPos Layout.finVal Layout.decVal Layout.inhVal
 
-variable {P plan tab} {decode : Audit.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
+variable {P plan tab} {decode : Spot.Sampling.Partition.DecoderB (C := C) (Reg := Reg) plan tab}
 
 namespace Layout
 
