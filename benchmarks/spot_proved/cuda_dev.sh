@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # The CUDA headers FlashInfer's JIT reads (cuBLASLt, cuRAND, NVRTC) for the toolkit nvcc resolves to, from NVIDIA's apt repo.
 set -euo pipefail
-NVCC=$(command -v nvcc || ls -d /usr/local/cuda/bin/nvcc 2>/dev/null || true)
-HOME_CUDA=${CUDA_HOME:-$(dirname "$(dirname "$(readlink -f "${NVCC:-/usr/local/cuda/bin/nvcc}")")")}
+NVCC=$(command -v nvcc || true)
+HOME_CUDA=${CUDA_HOME:-$([ -n "$NVCC" ] && dirname "$(dirname "$(readlink -f "$NVCC")")" || python3 "$(dirname "$0")/../kernels/machine.py" toolkit)}
 VER=$(basename "$HOME_CUDA" | sed -n 's/^cuda-\([0-9]*\)\.\([0-9]*\)$/\1-\2/p')
 echo "nvcc=$NVCC cuda_home=$HOME_CUDA ver=${VER:-?}"
-ls -d /usr/local/cuda* || true
 missing=0
 for h in cublasLt.h curand_kernel.h nvrtc.h; do [ -f "$HOME_CUDA/include/$h" ] || { echo "missing $h"; missing=1; }; done
 [ "$missing" = 0 ] && { echo "headers present"; exit 0; }

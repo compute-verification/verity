@@ -16,6 +16,7 @@ import pytest
 import serve_tax as S
 
 S.profiles()
+from verity_bench import kit  # noqa: E402
 from verity_bench import profiles as P  # noqa: E402 (benchmarks/harness, put on sys.path by S.profiles)
 
 #: what a request without a seed gets under the certified tick (`verity_vllm.pipeline.scheme_plugin.unseeded`)
@@ -163,8 +164,9 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *flags: str, dataset
                        "wait_ready": lambda server, port, startup_s: None, "nvml": lambda: (None, "no NVML here"),
                        "scrape": lambda port: dict.fromkeys(S.SCHEDULE, 0.0), "versions": lambda: {},
                        "stop": lambda server, grace_s: "exited", "end_of_text_ids": lambda ck: [1],
-                       "reset_prefix_cache": lambda port: True, "corpus": lambda: NS(free_port=lambda: 8000)}.items():
+                       "reset_prefix_cache": lambda port: True}.items():
         monkeypatch.setattr(S, name, stub)
+    monkeypatch.setattr(kit, "free_port", lambda: 8000)
     if datasets is not None:
         monkeypatch.setattr(S, "parse_datasets", lambda given, loads, fetch_missing=False: datasets)
     monkeypatch.setattr(S.subprocess, "Popen", lambda argv, **how: servers.append(argv) or NS(returncode=0, poll=lambda: 0))
