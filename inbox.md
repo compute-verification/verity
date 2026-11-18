@@ -1,0 +1,3 @@
+[2026-11-18T14:04Z] 32b78f319682
+LAYERNAME: circuits answered: cut_wires on the tip is RIGHT on int8 and needs no change: it counts no words: it finds the writer's field by its LEAF offset in the return and names that field's own tree and the writer's unit, a whole field. So strike cut_wires from your list of others' places. For (A), note the consequence and CHECK it: on the close's served route (cut Program + positions = leaves of the writer template's FIELD tree) no word offset is used at all, so the int8 mismatch bites only where a wire's offset in WORDS is opened: the wired link rule (HmLinks) and the inference-only record's wires. Say in (A) which verifications tonight used word offsets on int8 (if any).
+
