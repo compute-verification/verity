@@ -40,14 +40,14 @@ store. No node is audited, so it certifies nothing, and its output says so.
 SERVE=node and GPUS=1, a vLLM engine (VLLM_PY's) serving ROLE's pinned checkpoint with its weights in one arena of
 most of the card's memory (`arena_of`), which is the store; the node prover reads the whole arena in paced, timed
 passes beside the serving, and the Lean verifier and its coins run in processes beside them, in one session form
-(`PACE`, refused otherwise). The card is the card file whose `driver` holds nvidia-smi's name for it, and the
-verifier's node one card of the node file that carries it; on a card no node file carries, the session runs and
-prints no share (`card_only`). The checkpoint is fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
+(`PACE`, refused otherwise). The checkpoint is fetched into LOCAL_WORK; with no `gpu-lease` installed, the lease is
 the tree's own program, its locks in LOCAL_WORK unless the machine has a lease directory of its own (`LEASE_DIR`).
 The run's records stay in LOCAL_WORK/runs/ (the research run's own directory under one). A session whose store is below `STORE_MIN` of the card's memory prints no number. The verifier
 and the coins ran on the machine being measured, so the number is a measurement to improve on and not an audit: the
 text says so first, and the JSON says it under `local`. It reads no evidence store, so the two references beside it
-are left out with that reason.
+are left out with that reason. The card is the card file whose `driver` holds nvidia-smi's name for
+it, and the verifier's node one card of the node file that carries it; on a card no node file carries, the session
+runs and prints no share (`card_only`).
 
 Beside the number it prints two references, each from its run in the store with the run's date and card and the error
 its record states: PoUS's state bound over a card's memory, and the share a wipe left foreign at most.
@@ -645,8 +645,9 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
         raise CouldNotRun("--local serves with vLLM, and VLLM_PY names no vLLM interpreter: make one (`uv venv "
                           "VENV && uv pip install --python VENV/bin/python vllm`) and set VLLM_PY=VENV/bin/python")
     name, _ = gpu_of(run)
-    (sku, kind), work = sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
-    node, hbm_bytes = one_card(kind) if kind else ({}, card_bytes(sku))
+    (sku, sheet), work = sheet_of(name), Path(SETTINGS.LOCAL_WORK).expanduser()
+    node, hbm_bytes = one_card(sheet) if sheet else ({}, card_bytes(sku))
+    kind = sheet or sku
     arena, util = arena_of(hbm_bytes)
     work.mkdir(parents=True, exist_ok=True)
     snap = checkpoint(work, SETTINGS.VLLM_PY, run)
@@ -666,14 +667,15 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
            "ENGINE_ARGS": " ".join(filter(None, [ENGINE_ARGS, f"--arena-gib {arena} --util {util:g}",
                                                  given.get("ENGINE_ARGS")])),
            "NODE_ARGS": " ".join(filter(None, [NODE_ARGS, f"--model-dir {shlex.quote(str(snap))}",
-                                               f"--node local/{kind or sku}/serving", given.get("NODE_ARGS")])),
-           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"),
-                                                   kind and f"--node {shlex.quote(f'{held}/{NODE_FILE}')}",
-                                                   "--hbm-bytes", str(hbm_bytes)]))}
+                                               f"--node local/{kind}/serving", given.get("NODE_ARGS")])),
+           "VERIFIER_ARGS": " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--node",
+                                                   shlex.quote(f"{held}/{NODE_FILE}"), "--hbm-bytes", str(hbm_bytes)]))}
     if shutil.which("gpu-lease") is None and not LEASE_DIR.is_dir():
         env.setdefault("GPU_LEASE_DIR", str(work / "gpu-lease"))
+    if sheet is None:
+        env["VERIFIER_ARGS"] = " ".join(filter(None, [given.get("VERIFIER_ARGS"), "--hbm-bytes", str(hbm_bytes)]))
     print(f"memory: --local serves {ROLE} on {name} with a {arena} GiB arena of its {hbm_bytes / 2 ** 30:.0f} GiB, the "
-          f"verifier's node {f'one card of {kind}' if kind else f'{sku} alone, with no node file: no share'}; its "
+          f"verifier's node {f'one card of {sheet}' if sheet else f'{sku} alone, with no node file: no share'}; its "
           "records go to the directory on the next line, which `verity bench "
           f"memory --from` reads back\n  {held}/out", file=sys.stderr)
     done = run(["bash", str(RS / "run.sh")], cwd=ROOT, env=env, stdout=sys.stderr)
@@ -682,7 +684,7 @@ def local(run: Callable = subprocess.run) -> tuple[dict, Path]:
             raise NoNumber(f"{why} (run.sh exited {done.returncode}); its logs are above and in {held}/out")
         raise CouldNotRun(f"the node's session failed (run.sh exited {done.returncode}); its logs are above and in "
                           f"{held}/out")
-    if kind is None:
+    if sheet is None:
         raise NoNumber(f"{card_only(sku, Path(held) / 'out' / 'verifier.json')}; its logs are above and in {held}/out")
     s = session(Path(held) / "out" / "verifier.json", None)
     if s["store_bytes"] < STORE_MIN * hbm_bytes:
