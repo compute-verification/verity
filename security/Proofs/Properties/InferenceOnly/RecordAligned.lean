@@ -303,7 +303,7 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
 /-! ## The two rows of a wire -/
 
 /-- **What the record check has tested of a row with a writer.** The row is a row of a parameter of its unit, and
-the wire's offset is the first word of a field of the writer's return of a word or more; the row and that field have
+the word the row's index reads from is the first word of a field of the writer's return of a word or more; the row and that field have
 the same bits; and either the parameter has leaves of one bit and is none of what the unit's Definition passes on, or
 each side's leaves are of one width and the writer's divides the reader's. The check tests a wire on the text's
 templates `ts`, whose ids are apart (`tmpls_named`), each the text's reading of its Definition
@@ -326,8 +326,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
           i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) ∨
         ∃ a o, Flock.Program.Widths.homo (P.defs[sc.d]!).params[i]!.2 = some a ∧
           Flock.Program.Widths.homo (fieldsOf (P.defs[sc'.d]!).ret)[f]! = some o ∧ o ≠ 0 ∧ a % o = 0) := by
-  obtain ⟨w, hwm, rt, wtT, p, ow, hrd, hpt, hwr, -, hoff, -, -, hlr, hlw, hlp, -, hrow, -, -, hko, hkw, hur, h0,
-    huw, -⟩ := wire_of_writer hS hw
+  obtain ⟨w, hwm, rt, wtT, p, ow, hrd, hpt, hwr, -, -, -, hlr, hlw, hlp, -, hrow, -, hko, hkw, hur, h0, huw, x, -, -,
+    hoff⟩ := wire_of_writer hS hw
   obtain ⟨hur', hTr⟩ := hT r.tid rt (mem_of_lookup _ _ _ hlr)
   obtain ⟨sc, hsc⟩ := (hur' r.unit).1 hur
   obtain ⟨-, h16, hrows, -⟩ := hTr r.unit sc hsc
@@ -348,12 +348,12 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     obtain ⟨x, hx⟩ := templatesOf_tmplOf hts t ht
     exact shaped_of_tmplOf hx
   obtain ⟨f, hf, hfw, hb, h16f, hwhole⟩ := whole_spec (tmpls_named hts).1 hs hwh (mem_rowWords hS hwm) htr htw
-    (htid.trans hrd.symm) (hwid.trans hwr.symm) hi' hp'
+    (htid.trans hrd.symm) (hwid.trans hwr.symm) hi' hp' x
   rw [e1, hdr, hdw] at hwhole
   rw [hdw] at hf hfw hb h16f
   have hn : Spot.Wires.rowWords W w = p.words / W.cutsOf r.tid r.port := by
     simp only [Spot.Wires.rowWords, hrd, hpt, hlr, hlp]
-  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hfw.trans hoff, hb, hrow, ?_, hwhole⟩
+  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hfw.trans hoff.symm, hb, hrow, ?_, hwhole⟩
   rw [outRow_bits, inRow_bits _ _ _ _ (by rw [← houter]; exact hko) hrow]
   obtain ⟨m, hm⟩ := h16 i hi
   have hA : bitsOf (P.defs[sc.d]!).params[i]!.2 = 16 * p.words := by omega
