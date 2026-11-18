@@ -1872,6 +1872,36 @@ def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_def
     assert seen == [default, tmp_path / "file"]
 
 
+def test_a_batch_needing_the_whole_check_is_built_apart_unless_no_apart_and_only_where_the_land_verdicts_gate(
+        monkeypatch, tmp_path, env):
+    """The loop builds batches needing the whole check apart (`Loop.apart`) unless `--no-apart` is given, and only under `--gate
+    verdict`, with records runs or not: under another gate its snapshot says none is."""
+    seen: list[bool] = []
+
+    class Built(Exception):
+        pass
+
+    def loop(world, *args, **kw):
+        seen.append(kw["apart"])
+        raise Built
+
+    real = L.Loop
+    monkeypatch.setattr(L, "Loop", loop)
+    monkeypatch.setattr(Q, "remote_and_repo", lambda *a: ("origin", "owner/repo"))
+    monkeypatch.setattr(Q, "credential_args", lambda *a: ())
+    monkeypatch.setattr(Q, "GitHub", lambda slug: None)
+    common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
+              "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
+    for extra in ([], ["--no-apart"]):
+        with pytest.raises(Built):
+            L.main([*common, *extra])
+    assert seen == [True, False]
+    monkeypatch.setattr(L, "Loop", real)
+    assert env.loop(vqueue.decide, apart=True, slim=vqueue_slim, gate=L.VERDICT_GATE).apart
+    assert not env.loop(vqueue.decide, apart=True).apart
+    assert env.loop(vqueue.decide, apart=True, records=object(), slim=vqueue_slim, gate=L.VERDICT_GATE).apart
+
+
 @pytest.mark.parametrize("heavy, on", [("1\n", "big"), ("1\n", ""), ("*\n", "big")], ids=["big", "off", "every"])
 def test_a_heavy_pr_is_wide_its_batch_taking_no_other_lean_member_while_heavy_on_names_machines(env, heavy, on):
     """`--heavy-file` (`World.heavy`) is read into `Snapshot.wide` each tick beside the wide file, so a heavy PR's batch takes
