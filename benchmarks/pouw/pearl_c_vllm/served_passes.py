@@ -187,10 +187,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.wi
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "harness" / "specs" / "llama32-1b-1gpu-pouw-protocol-served.toml"
-#: the arm `serve` serves without ``--arm``: the spec's one Pearl-C arm, Pearl+'s, the declared scheme by its name
-#: (`PEARL_PLUS`) on an H100 or H200; ``pouw:pearl-c-*`` is an undeclared Pearl-C entry (`undeclared`)
-PEARL_PLUS = "pearl-plus"
-ARM_PREFIX = "pouw:pearl-c-"
 SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 #: t = 459 accepted samples leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
 DRAWS = 459
@@ -249,28 +245,29 @@ def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
 
 
 def undeclared(entries) -> str | None:
-    """Why a served arm of ``entries`` can't run: the first Pearl-C entry that is no declared scheme's option
-    (`messages.option`), as the RTX PRO 6000's is none, which no served path serves; None when there is none."""
-    from verity_vllm import messages as M
+    """Why a served arm of ``entries`` can't run: the first entry that is no declared scheme's name (`compose.schemes`), as
+    the RTX PRO 6000's Pearl-C and Pearl-C4's are none, which no served path serves; None when there is none."""
+    from verity.protocols.compose import schemes
 
+    names = [n for n, s in schemes.load().items() if s.option]
     for e in entries:
-        if e.startswith(ARM_PREFIX) and M.option(e) is None:
-            return (f"{e}: no declared scheme serves Pearl-C on that card, so no served arm runs it; its kernel's own "
+        if e not in names:
+            return (f"{e} is no declared scheme's name ({', '.join(names)}), so no served arm runs it; its kernel's own "
                     "benchmarks (bench_arm.py, e2e.py) run it directly")
     return None
 
 
 def pearl_c_arm(spec, name: str | None = None):
-    """The spec's Pearl-C arm (`PEARL_PLUS`, or an `ARM_PREFIX` entry) ``name``, else its one; SystemExit naming them when
-    it has none, several or not ``name``, naming its entry when it is no declared scheme (`undeclared`), and naming its
-    entries unless they are one, the scheme it attaches by name."""
+    """The spec's arm ``name`` that attaches schemes (``protocols``), else its one; SystemExit naming them when it has none, several
+    or not ``name``, naming its entry when it is no declared scheme's name (`undeclared`), and naming its entries
+    unless they are one, the scheme it attaches by name."""
     from verity_bench.vllm import arms as A
 
     got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
-           if a.protocols and all(e == PEARL_PLUS or e.startswith(ARM_PREFIX) for e in a.protocols)]
+           if a.protocols]
     picked = [a for a in got if name is None or a.id == name]
     if len(picked) != 1:
-        want = name or f"a spec's one {PEARL_PLUS} arm"
+        want = name or "a spec's one arm that attaches schemes"
         raise SystemExit(f"served_passes.py serves {want}; {spec.id} has {[a.id for a in got] or 'none'}")
     if why := undeclared(picked[0].protocols):
         raise SystemExit(f"served_passes.py: {why}")
@@ -954,7 +951,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
     s.add_argument("--spec", type=Path, default=SPEC)
-    s.add_argument("--arm", help=f"the spec's {PEARL_PLUS} arm to serve (default: its one)")
+    s.add_argument("--arm", help="the spec's arm that attaches schemes to serve (default: its one)")
     s.add_argument("--passes", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--requests", type=int, default=32)
@@ -1017,7 +1014,7 @@ def main(argv: list[str] | None = None) -> int:
                    "other than 64 x 64, and the verdict credits nothing")
     a = sub.add_parser("arm")
     a.add_argument("--spec", type=Path, default=SPEC)
-    a.add_argument("--arm", help=f"the spec's {PEARL_PLUS} arm (default: its one)")
+    a.add_argument("--arm", help="the spec's arm that attaches schemes (default: its one)")
     a.add_argument("--out", required=True)
     n = sub.add_parser("lean")
     n.add_argument("--passes", required=True)
