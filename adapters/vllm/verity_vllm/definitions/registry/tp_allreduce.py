@@ -109,7 +109,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import ZERO32, const
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity_vllm.config import TARGET_NUM_SMS
+from verity_vllm.config import target_num_sms
 from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
@@ -143,7 +143,7 @@ MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
 #: the record of the run that replayed `CAPTURE_RUNS`' kept multimem words on `AllReduceMultimemVector_v1`'s batch
 #: (tests/properties/glm53_multimem_replay.py)
 MULTIMEM_REPLAY_RUN = EVIDENCE["glm53_multimem_replay"]["run_record"]
-H200_SMS = TARGET_NUM_SMS["h200"]
+H200_SMS = target_num_sms("h200")
 _NEG_ZERO32 = const(32, 0x80000000)
 
 #: vLLM's all-reduce settings: name -> (custom all-reduce on, torch symmetric memory on), FlashInfer's all-reduce on in each.

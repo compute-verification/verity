@@ -82,17 +82,21 @@ class BatchDependent(Unexpressible):
 
 def registered_phi(role: str, target: str) -> Phi:
     """A registration of ``role``'s model, its config as the engine profile ships it (`find_hf_config`), on the device class the
-    row-id token ``target`` names (`config.TARGETS`, `config.TARGET_NUM_SMS`)."""
+    row-id token ``target`` names (`config.target_card`)."""
     import json
 
-    from verity_vllm.config import TARGET_NUM_SMS, TARGETS
+    from verity_vllm.config import UsageError, target_cc, target_num_sms
     from verity_vllm.engine.profiles.dense_generic import find_hf_config
     found = find_hf_config(role)
-    if found is None or target not in TARGET_NUM_SMS:
-        raise Unexpressible(f"{role!r} on {target!r}: no shipped config, or a device class whose SM count varies")
+    if found is None:
+        raise Unexpressible(f"{role!r} on {target!r}: no shipped config")
+    try:
+        cc, sms = target_cc(target), target_num_sms(target)
+    except UsageError as e:
+        raise Unexpressible(str(e)) from None
     cfg = json.loads(found[0].read_text())
     return Phi(model={"repo": (found[2] or {}).get("repo", role), "revision": "registered", "hf_config": cfg},
-               workload={"requests": []}, target={"compute_capability": list(TARGETS[target]), "num_sms": TARGET_NUM_SMS[target]},
+               workload={"requests": []}, target={"compute_capability": list(cc), "num_sms": sms},
                execution="bi-eager")
 
 

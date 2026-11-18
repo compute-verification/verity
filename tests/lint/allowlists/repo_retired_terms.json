@@ -2758,7 +2758,6 @@
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-live.rs", "count": 2},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-pure-gpu.rs", "count": 4},
     {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-pure.rs", "count": 8},
-    {"file": "verity/protocols/proofs/flock/prover/live/src/bin/flock-vllm-v1.rs", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/live/src/circuit.rs", "count": 42},
     {"file": "verity/protocols/proofs/flock/prover/live/src/coin_tree.rs", "count": 8},
     {"file": "verity/protocols/proofs/flock/prover/live/src/glue.rs", "count": 4},
