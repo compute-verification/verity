@@ -136,6 +136,25 @@ def _pearlplus_params(params: Mapping[str, Any]) -> dict[str, Any]:
     return {k: params[k] for k in ("class", "tie-uniform") if k in params}
 
 
+#: SPOT's levels a served run may name; the runner's variable that carries the application file's ``levels`` to it
+LEVELS, SPOT_LEVELS = (1, 2), "SPOT_LEVELS"
+TWO_LEVELS = ("levels = 2: the served window has no two-level path yet (the outer blocks' boundaries committed at "
+              "serve, the drawn outer blocks' inner blocks committed after the draw, and the second level's audit), "
+              "so nothing is run, and it is not run as one level")
+
+
+def _spot(params: Mapping[str, Any]) -> dict[str, Any]:
+    """SPOT's parameters: ``levels``, 1 or 2. Absent unless the file states it, where it reads one and the configuration
+    and its hash hold nothing for it."""
+    if extra := sorted(set(params) - {"levels"}):
+        raise Refused("unknown-key", f"[params.\"{SP.IDS['sampled-proofs']}\"]: {', '.join(extra)} (known: levels)")
+    if "levels" not in params:
+        return {}
+    if type(params["levels"]) is not int or params["levels"] not in LEVELS:
+        raise Refused("levels", f"levels is 1 or 2, not {params['levels']!r}: SPOT has one level or two")
+    return {"levels": params["levels"]}
+
+
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 LOADS = ("varied", "fixed")
 
@@ -176,7 +195,8 @@ def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ..
 _P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648"),
+              needs=frozenset({"windows"}), sampling_design=_design, default_sampling_design="rate:1/3481648",
+              params=_spot),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
@@ -439,11 +459,29 @@ _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "
        "main-file": "MAIN_FILE"}
 
 
+def levels(cfg: Mapping[str, Any]) -> int:
+    """SPOT's levels for the run, the auditor's: the application file's ``levels``, one where it states none. Refused by
+    name (``levels``) where ``SPOT_LEVELS`` is set to another, and at two (`TWO_LEVELS`)."""
+    stated = cfg["params"].get(SP.IDS["sampled-proofs"], {}).get("levels")
+    n = stated or 1
+    if (env := settings.spot_levels()) is not None and env != str(n):
+        raise Refused("levels", f"{SPOT_LEVELS}={env} and the application file's levels is {n}"
+                                f"{'' if stated else ' (it states none)'}: the levels a run audits are the file's "
+                                f"alone, so unset {SPOT_LEVELS} or state levels = {env} under "
+                                f"[params.\"{SP.IDS['sampled-proofs']}\"]")
+    if n == 2:
+        raise Refused("levels", TWO_LEVELS)
+    return n
+
+
 def _spot_challenger(cfg, params, bound):
-    """The live challenger's bindings; with no gate bound the sample's coins are the challenger party's loopback host's
-    where ``loopback`` is bound, else a local development session's, simulated either way, which served_verdicts.sh
-    takes under VERITY_HOLD_PLACEMENT=1 only in a development run."""
+    """The live challenger's bindings, and ``SPOT_LEVELS`` where the file states ``levels`` (`levels`); with no gate
+    bound the sample's coins are the challenger party's loopback host's where ``loopback`` is bound, else a local
+    development session's, simulated either way, which served_verdicts.sh takes under VERITY_HOLD_PLACEMENT=1 only in a
+    development run."""
     hooks = {v: f"gate:{bound[k]}" if k == "gate" else bound[k] for k, v in _PP.items() if k in bound}
+    n = levels(cfg)
+    hooks |= {SPOT_LEVELS: str(n)} if "levels" in params else {}
     if "gate" in bound:
         return hooks
     hooks |= {"PP_CHALLENGER": f"loopback:{bound['loopback']}"} if "loopback" in bound else {}
@@ -1061,7 +1099,9 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     (`remote_check` under remote) when the verifier is here, its line with each memory attester's `trusted-device`
     premise as `placement` read it from the challenger's outcome here, and the network attester's as `attested` reads
     it (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
-    binding is missing, and raised while a runtime party's `held` does, before anything starts."""
+    binding is missing, and raised while a runtime party's `held` does, before anything starts; refused by name
+    (``levels``) before those at a level count no served path runs (`levels`)."""
+    levels(cfg)
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
     if missing := unbound(cfg, bindings) if WORKERS in here else list(dict.fromkeys(
@@ -1113,7 +1153,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     return Result(out)
 
 
-__all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
-           "STARTS", "WORKLOADS", "Held", "Piece", "Result", "Session", "attested", "held", "live", "onsite_check",
-           "pending", "pieces", "placement", "prepare", "registration", "remote_check", "request_bound", "served_window",
-           "unbound", "variables"]
+__all__ = ["DEMOS", "HEADERS", "LEVELS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL",
+           "SERVED", "SPOT_LEVELS", "STARTS", "TWO_LEVELS", "WORKLOADS", "Held", "Piece", "Result", "Session",
+           "attested", "held", "levels", "live", "onsite_check", "pending", "pieces", "placement", "prepare",
+           "registration", "remote_check", "request_bound", "served_window", "unbound", "variables"]
