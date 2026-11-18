@@ -84,6 +84,36 @@ structure Wiring where
 /-- The number of rows template `tid`'s port `p` is cut into (absent: 1). -/
 def Wiring.cutsOf (c : Wiring) (tid p : String) : Nat := (((c.cuts.lookup tid).getD []).lookup p).getD 1
 
+/-- `l`'s elements by key, each key's in `l`'s order. -/
+def groupBy {α} (key : α → String) (l : List α) : Std.HashMap String (List α) :=
+  l.foldr (fun x m => m.insert (key x) (x :: m.getD (key x) [])) {}
+
+theorem groupBy_getD {α} (key : α → String) (l : List α) (k : String) :
+    (groupBy key l).getD k [] = l.filter (key · == k) := by
+  induction l with
+  | nil => simp [groupBy]
+  | cons x xs ih =>
+    simp only [groupBy, List.foldr_cons] at ih ⊢
+    rw [Std.HashMap.getD_insert]
+    by_cases h : key x = k
+    · subst h; simp [ih]
+    · simp [h, ih]
+
+/-- An association list as a map, its first entry for a key winning as `List.lookup`'s does. -/
+def mapOf {β} (l : List (String × β)) : Std.HashMap String β := l.foldr (fun (k, v) m => m.insert k v) {}
+
+theorem mapOf_get? {β} (l : List (String × β)) (k : String) : (mapOf l)[k]? = l.lookup k := by
+  induction l with
+  | nil => simp [mapOf]
+  | cons x xs ih =>
+    obtain ⟨a, b⟩ := x
+    simp only [mapOf, List.foldr_cons] at ih ⊢
+    rw [Std.HashMap.getElem?_insert]
+    by_cases h : a = k
+    · subst h; simp [List.lookup]
+    · have : (k == a) = false := by simpa using Ne.symm h
+      simp [ih, List.lookup, this, h]
+
 /-! ## Refusals -/
 
 inductive Code where
@@ -431,6 +461,111 @@ def check (c : Wiring) : Except Refusal Summary :=
       else match orderCode c orderedWire with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
+
+/-- `cutsOf` over the cuts as a map. -/
+def cutsOfIx (cm : Std.HashMap String (List (String × Nat))) (tid p : String) : Nat :=
+  ((cm[tid]?.getD []).lookup p).getD 1
+
+/-- `shape` over the templates and cuts as maps. -/
+def shapeIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) :
+    Except Code (Template × Template) :=
+  match tm[w.reader]?, tm[w.writer]? with
+  | some rt, some wt =>
+    match rt.rows.lookup w.port, wt.outs.lookup w.out with
+    | some p, some ow =>
+      let k := cutsOfIx cm w.reader w.port
+      if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
+          w.units % w.cuts == 0) then .error .cut
+      else if (w.offset : Int) + Circuits.Wire.lowOf w.opairs < 0 ||
+          (w.offset : Int) + Circuits.Wire.highOf w.opairs + (p.words / k : Nat) > ow then .error .width
+      else .ok (rt, wt)
+    | _, _ => .error .port
+  | _, _ => .error .template
+
+def wireCodeIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) :
+    Option Code :=
+  match shapeIx tm cm w with
+  | .error e => some e
+  | .ok (rt, wt) => if boundsOk w rt wt then none else some .bounds
+
+def rowWordsIx (tm : Std.HashMap String Template) (cm : Std.HashMap String (List (String × Nat))) (w : Wire) : Nat :=
+  match tm[w.reader]? with
+  | some rt => match rt.rows.lookup w.port with
+    | some p => p.words / cutsOfIx cm w.reader w.port
+    | none => 0
+  | none => 0
+
+/-- `ranksIn` over the order's ranges by template, with their ranks (`groupBy`). -/
+def ranksInIx (g : Std.HashMap String (List (UnitRange × Nat))) (t : String) (lo hi : Nat) : List Nat :=
+  ((g.getD t []).filter fun ((s, p0, n), _) => s == t && decide (max p0 lo < min (p0 + n) hi)).map (·.2)
+
+/-- `orderedWire` over the order's ranges by template: only the reader's ranges, and in each only the writer's. -/
+def orderedWireIx (g : Std.HashMap String (List (UnitRange × Nat))) (w : Wire) : Bool :=
+  (g.getD w.reader []).all fun (b, a) =>
+    !w.readsIn b ||
+      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+      (ranksInIx g w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
+
+/-- `check` with the templates, the cuts and the order's ranges by template found once: the code compiled in its place
+(`check_eq_fast`), in work `O(W log W)` beside each wire's ranges of its reader and writer. -/
+def checkFast (c : Wiring) : Except Refusal Summary :=
+  let tm := mapOf c.templates
+  let cm := mapOf c.cuts
+  if !cutsOk c then .error ⟨.cuts, none⟩
+  else match firstWire c (wireCodeIx tm cm) with
+    | some r => .error r
+    | none =>
+      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
+      else match (match orderOf c with
+          | .error r => some r
+          | .ok o =>
+            let g := groupBy (·.1.1) o.zipIdx
+            firstWire c fun w => if orderedWireIx g w then none else some .order) with
+        | some r => .error r
+        | none => .ok ⟨c.wires, c.wires.map (rowWordsIx tm cm)⟩
+
+private theorem cutsOfIx_eq (c : Wiring) : cutsOfIx (mapOf c.cuts) = c.cutsOf := by
+  funext t p; simp only [cutsOfIx, Wiring.cutsOf, mapOf_get?]
+
+private theorem wireCodeIx_eq (c : Wiring) : wireCodeIx (mapOf c.templates) (mapOf c.cuts) = wireCode c := by
+  funext w; simp only [wireCodeIx, wireCode, shapeIx, shape, mapOf_get?, cutsOfIx_eq]
+
+private theorem rowWordsIx_eq (c : Wiring) : rowWordsIx (mapOf c.templates) (mapOf c.cuts) = rowWords c := by
+  funext w; simp only [rowWordsIx, rowWords, mapOf_get?, cutsOfIx_eq]
+
+private theorem ranksInIx_eq (o : List UnitRange) (t : String) (lo hi : Nat) :
+    ranksInIx (groupBy (·.1.1) o.zipIdx) t lo hi = ranksIn o t lo hi := by
+  simp only [ranksInIx, ranksIn, groupBy_getD, List.filter_filter]
+  congr 1
+  apply List.filter_congr
+  intro ⟨⟨s, p0, n⟩, a⟩ _
+  by_cases h : s = t <;> simp [h]
+
+private theorem orderedWireIx_eq (o : List UnitRange) (w : Wire) :
+    orderedWireIx (groupBy (·.1.1) o.zipIdx) w = orderedWire o w := by
+  simp only [orderedWireIx, orderedWire, ranksInIx_eq, groupBy_getD]
+  rw [Bool.eq_iff_iff]
+  simp only [List.all_eq_true, List.mem_filter]
+  constructor
+  · intro h x hx
+    by_cases hr : (x.1.1 == w.reader) = true
+    · exact h x ⟨hx, hr⟩
+    · have : w.readsIn x.1 = false := by simp [Circuits.Wire.readsIn, hr]
+      simp [this]
+  · intro h x hx
+    exact h x hx.1
+
+@[csimp] theorem check_eq_fast : @check = @checkFast := by
+  funext c
+  have ho : (match orderOf c with
+      | .error r => some r
+      | .ok o =>
+        let g := groupBy (·.1.1) o.zipIdx
+        firstWire c fun w => if orderedWireIx g w then none else some .order) = orderCode c orderedWire := by
+    unfold orderCode
+    split <;> simp [orderedWireIx_eq]
+  simp only [check, checkFast, wireCodeIx_eq, rowWordsIx_eq, ho]
+  rfl
 
 /-- The writer `(template, unit, out, offset)` of reader row `(tid, u, port, row)`, by the wires alone: the reader row is
 that unit's row `out` from its word `offset` (`Wire.offsetAt`); none when no wire covers it. -/
