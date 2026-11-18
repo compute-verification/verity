@@ -38,7 +38,7 @@ Implementations (`IMPLS`), each adding one class:
   prefix and leaves, `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
   certificate (`verity/protocols/resource_accounting/memory/pous/attester/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover,
   and `pous-timed-audit`'s verdict decides them (`--pous-timed-audit`, else built once a run).
-* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_attester/live.py`, `p2_v1/harness.py`'s `MC`) at
+* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory attester (`memory_attester/live.py`, `p2_v1/harness.py`'s `MC`) at
   `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
   with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
   own); without a key they are test-signed, so the verdict rejects them all (its `fail_closed` gate), and it issues no
@@ -400,7 +400,7 @@ class P2V3Gpu:
 
 
 class P2V3McGpu(P2V3Gpu):
-    """The same kernels and framing, audited by the memory challenger (`p2_v1/harness.py`'s `MC`)."""
+    """The same kernels and framing, audited by the memory attester (`p2_v1/harness.py`'s `MC`)."""
 
     name = "p2-v3-mc-gpu"
 

@@ -1,6 +1,6 @@
 """The P2 session's two parties (`p2_parties.Verifier`, `p2_party_prover.Prover`) run by the deployment layer in
 simulated time, the verifier's sources seeded: an honest prover is accepted, its outcome the verifier's answer, and the
-verifier's case is signed by the memory challenger; a prover whose receipts skip a unit's reads is rejected; and a replay
+verifier's case is signed by the memory attester; a prover whose receipts skip a unit's reads is rejected; and a replay
 of the verifier from its transcript makes the recorded entries until the prover's openings, a frame past the transcript's
 bound that it keeps as its digest and a replay can't feed."""
 

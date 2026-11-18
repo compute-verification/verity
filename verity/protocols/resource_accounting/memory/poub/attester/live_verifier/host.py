@@ -183,7 +183,7 @@ COMPOSE_BYTES = 64 << 30
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
 SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.lake/build/bin/vstar-recursive")
-"""Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
+"""SPOT's Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the network attester front's group (its prompts)"}

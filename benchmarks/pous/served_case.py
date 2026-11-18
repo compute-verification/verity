@@ -108,7 +108,7 @@ def digest(case: Mapping[str, Any]) -> str:
 
 
 def _check(verifier: ModuleType) -> Callable[..., dict[str, Any]]:
-    """The verifier of record (`Scheme.check`) of the scheme declared in ``verifier``'s own protocol package whose
+    """The verifier (`Scheme.check`) of the scheme declared in ``verifier``'s own protocol package whose
     protocol is ``verifier``'s ``PROTOCOL``; only that package's declarations are loaded."""
     package = verifier.__name__.rsplit(".verifier.", 1)[0] + "."
     for name, module in registry.DECLARATIONS.items():

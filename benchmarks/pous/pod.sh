@@ -8,7 +8,7 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 (builds p2_store's libp2v1.so with CGBN),
 #                                                                               audited by protocol.TimedAudit
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory attester,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer),
 #                                                                               its session ids in $W/pous-mc-session-log (a key that predates
 #                                                                               the log: memory_attester.SessionLog.create once)

@@ -204,7 +204,7 @@ class NoSalt(Exception):
 
 
 def _salt_source(party: Side, audit: bytes):
-    """The salt's source: sampled by the memory challenger on ``party`` once the commitment exists, and logged there under
+    """The salt's source: sampled by the memory attester on ``party`` once the commitment exists, and logged there under
     the window's binding ``audit`` (`challenger_session.salt`)."""
 
     def source(commitment: bytes) -> bytes:
