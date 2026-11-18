@@ -1515,7 +1515,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_fresh_salts(
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1579,7 +1579,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
     serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
     that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
-    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    ones in its header, with none of its salts; the command says its digest (`registration.digest`), which Pearl+'s W
     names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
     name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
     given (its Lean's `isTheta`). Without the flag no such record is
@@ -1591,7 +1591,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
     run.mkdir()
@@ -1616,7 +1616,7 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
                                  "model": {"repo": serve["model"], "revision": serve["revision"]},
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
-    assert key.read_bytes().hex() not in first.read_text()
+    assert all(SF.read(SF.beside(out), q, [0]).hex() not in first.read_text() for q in reg["values"])
     stem = next(iter(reg["values"])).rpartition("@")[0]
     for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
         odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
@@ -1639,7 +1639,7 @@ def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.window_weights import Grain
 
-    grain = Grain(gemm_words=512, rows=9, select=64)
+    grain = Grain(gemm_words=512, rows=18, select=64)
     monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
     run, hf, ck = tmp_path / "serve", tmp_path / "tiny-int8.json", tmp_path / "ck" / "snap"
     run.mkdir()

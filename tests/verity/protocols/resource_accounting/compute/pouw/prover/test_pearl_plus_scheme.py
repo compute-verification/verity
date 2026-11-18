@@ -3,6 +3,7 @@ run verifier's credit is `tests/benchmarks/pouw/test_pearl_plus_scheme_credit.py
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from fractions import Fraction
 from types import SimpleNamespace
 
@@ -68,15 +69,18 @@ def test_it_declares_the_cut_and_is_the_one_scheme_that_does() -> None:
 
 def test_bound_reads_its_term_at_the_parameters_given() -> None:
     names = {c.name: 0 for c in PS.PEARL_PLUS.charges}
+    with pytest.raises(S.Unbounded, match="its premises are not said"):
+        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64, "N": 2**20}, epsilon=Fraction(0))
+    said = replace(PS.PEARL_PLUS, premises=())  # the term at stated premises; naming them is compute's
     with pytest.raises(ValueError, match=r"Pouw.PearlC.δPearlC is evaluated at \['q', 'N'\], and \['N'\] were not given"):
-        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64}, epsilon=Fraction(0))
-    got = S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 2**64, "N": 2**20}, epsilon=Fraction(1, 2**40))
+        S.bound(said, Fraction(1, 100), 0, names, {"q": 2**64}, epsilon=Fraction(0))
+    got = S.bound(said, Fraction(1, 100), 0, names, {"q": 2**64, "N": 2**20}, epsilon=Fraction(1, 2**40))
     assert got.term == "Pouw.PearlC.δPearlC" and got.delta_scheme == Fraction(2**64 + 2**20, 2**128)
     assert got.epsilon == Fraction(1, 2**40)
     with pytest.raises(ValueError, match="charges are"):
-        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, {**names, "rebuilt": 0}, {"q": 1, "N": 1}, epsilon=Fraction(0))
+        S.bound(said, Fraction(1, 100), 0, {**names, "rebuilt": 0}, {"q": 1, "N": 1}, epsilon=Fraction(0))
     with pytest.raises(ValueError, match="the audit's error ε"):
-        S.bound(PS.PEARL_PLUS, Fraction(1, 100), 0, names, {"q": 1, "N": 1})
+        S.bound(said, Fraction(1, 100), 0, names, {"q": 1, "N": 1})
 
 
 def _gate(*words):

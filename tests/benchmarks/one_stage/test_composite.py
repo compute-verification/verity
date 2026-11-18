@@ -57,7 +57,7 @@ def git_tree(d: Path, guarantees: list[str], dirty: bool = False) -> Path:
 def no_tree(exe: str, product: str = "remote") -> list[str]:
     """What an accept's check prints after its verdict when ``--tree`` is no git checkout."""
     cites = C.CITES.get(product)
-    return [f"RAN None clean=False sha512={C.file_sha512(Path(exe))} cites={cites}",
+    return [f"RAN None clean=False sha512={hashlib.sha512(Path(exe).read_bytes()).hexdigest()} cites={cites}",
             f"NOT_ESTABLISHED {'the tree is no git checkout' if cites else 'the product cites no listed guarantee'}"]
 
 
@@ -353,8 +353,9 @@ def test_an_accept_records_its_commit_its_executable_and_the_listed_guarantee_it
     tree = git_tree(tmp_path / "tree", [C.CITES["remote-v1"]])
     rc, record, lines = remote_accepted(tmp_path, tree)
     commit = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    verifier = hashlib.sha512((tmp_path / "lean-check").read_bytes()).hexdigest()
     assert rc == 0
-    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": C.file_sha512(tmp_path / "lean-check"),
+    assert record["ran"] == {"commit": commit, "clean": True, "verifier_sha512": verifier,
                              "cites": C.CITES["remote-v1"], "lock": {"listed": True, "deployed": False, "open": ["P.Open"]}}
     assert not any(ln.startswith(("NOT_ESTABLISHED", "UNCITED")) for ln in lines)
 

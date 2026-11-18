@@ -53,6 +53,7 @@ import numpy as np
 from verity.commitments import hm96
 from verity.circuits import boolean as BL
 from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.commitments.domains import REC_V1_VERIFIER_SALT, REC_V1_ZERO_RESIDUAL_SALT
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll
@@ -76,8 +77,8 @@ OUT_WORDS = 128
 F_WORDS = 8
 ROW_CHUNK = 64
 LEAVES = 3 ** 7
-ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
-VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
+ZERO_SALT = REC_V1_ZERO_RESIDUAL_SALT.encode()
+VERIFIER_SALT = REC_V1_VERIFIER_SALT.encode()
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
