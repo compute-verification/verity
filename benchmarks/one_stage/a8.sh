@@ -16,6 +16,7 @@
 # a8_gpu.sh takes the cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host job, and a8_cost.py reads a
 # run's sessions into the one cost model's observations (calibration/sampling_plan).
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 export HZ_CONFIGS=a8 HZ_MEM_GB=${A8_MEM_GB:?}
 if [ -n "${A8_CACHE:-}" ] && mkdir -p "$A8_CACHE" 2>/dev/null && [ -w "$A8_CACHE" ]; then export HZ_CACHE=$A8_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
@@ -37,6 +38,6 @@ log "a8: blocks ${A8_BLOCKS:-default}, plan ${A8_PLAN:-default}, samples ${A8_SA
   --cold "${A8_COLD:-1}" ${A8_NO_AUDIT:+--no-audit} 2>&1 | tee -a "$OUT/a8.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/a8"
-(cd "$W/a8" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/a8/")
+(cd "$W/a8" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/a8/")
 log "a8: done, rc $rc"
 exit "$rc"

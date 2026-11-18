@@ -19,6 +19,7 @@
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 for o in ZK_DRAWS:ZK_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "zk-cost: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
@@ -41,7 +42,7 @@ Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 keep() {
   (cd "$Z" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
-    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/")
+    \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/")
 }
 # a served type stages on CPUs alone (stage.py, no Lean), before the builds
 if [ -n "${ZK_UNITS:-}" ]; then

@@ -192,7 +192,7 @@ def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
                            program_file=out / "program.json")
 
 
-def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, salt_key: bytes, registered: bool) -> dict:
+def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, registered: bool) -> dict:
     """A statement: each unit its own table row of both ports; ``srb``'s rows its leaves', under the registration's salts
     (``registered``) or fresh ones, each with its leaf's position and path; and the verifier's own reads file, of a
     record at the unit's G (`same_g`)."""
@@ -207,7 +207,7 @@ def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, sa
     salts = {"srb": [reg.salts[u.leaf] if registered else os.urandom(len(reg.salts[u.leaf])) for u in units]}
     entry = {"value": SR.SCHEMA, "positions": [u.leaf for u in units], "paths": [b"".join(reg.open(u.leaf).path).hex() for u in units]}
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name, tables=data,
+    got = st.stage(data, out, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name, tables=data,
                    refs={r: list(range(n)) for r in data}, registered={"srb": entry})
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
@@ -371,7 +371,6 @@ def prove(a) -> int:
     zk_drivers.install()
     M = N2._one_stage()
     defn = SS.unit(**d.st)
-    secret = os.urandom(32)
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=[], arms=["fw"], cold=1,
                          serve_run=a.serve_run, window=a.window)
     per = a.per or len(honest)
@@ -388,7 +387,7 @@ def prove(a) -> int:
         meta = sg.st.meta
         log(f"{name}: lowered in {sg.lower_s} s, k_log {meta['k_log']}, vus_per_block {meta['vus_per_block']}, "
             f"{len(units)} units")
-        m = stage(M, sg, name, units, d, hashlib.sha512(secret + name.encode()).digest()[:32], registered)
+        m = stage(M, sg, name, units, d, registered)
         if m["oks"] != [u.verdict for u in units]:
             raise SystemExit(f"{name}: the staged verdict words {m['oks']} are not the reference's")
         log(f"{name}: staged {m['n']} units, {m['ands']} ANDs a unit, k_log {meta['k_log']}, m {meta['k_log'] + m['nbl']}, "

@@ -56,7 +56,7 @@ def stage(s, name: str, cs=None, refs=None, salts=None, text: str | None = None)
     (d / "circuit.txt").write_text(text)
     cs = s.desc if cs is None else np.asarray(cs)
     inputs = SimpleNamespace(name="inner-registered", subcircuit=SimpleNamespace(id=s.meta.get("subcircuit", "rope-head/d64/neox-bf16")))
-    FC.write(text, inputs, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin", None, list(range(N)), share_rows=True,
+    FC.write(text, inputs, 0, N, d / f"inst-{N}.bin", d / f"pub-{N}.bin", list(range(N)), share_rows=True,
              outs={"out": np.zeros((N, 64), np.uint16)}, tables={"x": s.x, "cs": cs}, refs={"x": list(range(N)), "cs": refs or [0] * N},
              salts={"x": s.x_salts, "cs": salts or [hm96.SHA512.fresh_salt() for _ in cs], "out": s.out_salts})
     return d
