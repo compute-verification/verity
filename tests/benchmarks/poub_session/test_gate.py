@@ -92,7 +92,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
         f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
            "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
-           "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
+           "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8", "PYTHONPATH": str(GATE.parents[2])}
     if circuit:
         env["CIRCUIT"] = circuit
     if dry:

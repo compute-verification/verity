@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 RUN_SH = Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "run.sh"
+PUBF = RUN_SH.parents[1] / "one_stage" / "public_files.py"
 
 
 def block(first: str, last: str) -> str:
@@ -27,7 +28,7 @@ def test_a_kept_cases_blobs_name_the_kept_files(tmp_path):
     blobs = [str(window / "m0" / "circuit.txt"), str(window / "m0" / "proof.bin"), other]
     (window / "case-v2.json").write_text(json.dumps({"blobs": blobs, "commitment": "ab"}))
     (window / "audit.json").write_text(json.dumps({"accepted": True}))
-    got = subprocess.run(["bash", "-c", f"set -uo pipefail\nW={w} O={o} PY={sys.executable}\n"
+    got = subprocess.run(["bash", "-c", f"set -uo pipefail\nW={w} O={o} PY={sys.executable} PUBF={PUBF}\n"
                           + block("keep() {", "}") + "keep served\n"], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     case = json.loads((o / "served" / "window" / "case-v2.json").read_text())

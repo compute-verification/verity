@@ -164,13 +164,7 @@ def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path
     bin_dir = Path(home) / "bin"
     rec = {"home": home, "nvcc_version": _run([str(bin_dir / "nvcc"), "--version"]).strip(),
            "ptxas_version": _run([str(bin_dir / "ptxas"), "--version"]).strip(), "builds": [], "problems": []}
-    old = os.environ.get("POUW_CUDA_BIN")
-    os.environ["POUW_CUDA_BIN"] = str(bin_dir)
-    try:
-        tools = SG.find_tools()
-    finally:
-        os.environ.pop("POUW_CUDA_BIN") if old is None else os.environ.__setitem__("POUW_CUDA_BIN", old)
-    rec["tools"] = tools
+    tools = rec["tools"] = SG.find_tools(bin_dir)
     for control, flags in [(False, f) for f in PINNED] + [(True, f) for f in CONTROLS]:
         out = work / f"{tk}{''.join(f.replace('=', '_') for f in flags) or '-default'}"
         cmd = [str(bin_dir / "nvcc"), *nvcc_args(arch_of(tk)), *flags, str(SOURCE), "-o", str(out)]

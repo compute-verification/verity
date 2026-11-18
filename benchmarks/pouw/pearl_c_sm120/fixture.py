@@ -62,10 +62,10 @@ CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
 
 
-def test_challenger() -> Challenger:
-    """The gate's test challenger: epoch 0's coins flipped from SHA-512 in counter mode over `COINS`, the same at every build,
+def test_challenger(coins: bytes = COINS) -> Challenger:
+    """The gate's test challenger: epoch 0's coins flipped from SHA-512 in counter mode over `coins`, the same at every build,
     so a replay starts the fixture's epoch again from B's root."""
-    blocks, buf = (hashlib.sha512(COINS + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
+    blocks, buf = (hashlib.sha512(coins + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
 
     def entropy(n: int) -> bytes:
         while len(buf) < n:

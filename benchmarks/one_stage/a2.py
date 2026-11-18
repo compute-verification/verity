@@ -37,7 +37,8 @@ import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -89,7 +90,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
     n = int(rec["population"])
-    sampling_design = D.parse_design(f"subset:{a.k}")
+    sampling_design = RND.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
     query = P.template_instance_query(template)

@@ -32,6 +32,8 @@ METRIC = "benchmarks/serving-cost-priced"
 UNIT = "percent"
 MEASURED = "vllm/prod-serving-cost-glm53"
 DIFFERENCE = "serving-cost-measured-less-priced"
+STEPS = f"*/server/{priced.S.STEPS.format('*')}"
+CONVERTER = "`benchmarks/serve_tax/serve_tax.py steps-of-trace RUN_OUT [--to DIR]`"
 MAKERS = {
     "minify": "vllm's stand-in (`benchmarks/prod_repro/run.sh --model glm53-standin`), which stores it",
     "units": "proofs' `benchmarks/dsa_topk/stress.py units --shapes decode|prefill`, which is to store it",
@@ -46,8 +48,8 @@ HOLDS = {
     "units": f"{UNITS} in the form `priced.units` reads",
     "replay": "out/replay.json, passed only where the replay is bit-exact",
     "exact": f"{EXACT}: the replay's verdict on the copy and circuit-check's on the real model's bindings",
-    "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/), topk_counters.json and "
-               "prod_repro.json",
+    "capture": "the run's out/ as priced.py reads it: each arm's lifetimes (ARM.N/) with their public steps "
+               "(ARM.N/server/steps.PID.jsonl.gz), topk_counters.json and prod_repro.json",
     "price": f"its figure under {METRIC}",
     "profile": "our extra card time a token under the model's serving-cost metric, its latencies and share within the "
                "profile's bounds beside it",
@@ -347,6 +349,10 @@ def price(a: argparse.Namespace) -> int:
     if "decode" not in tables:
         refuse("price", f"no source gives top-k's unit costs at decode shapes; the minify record: {contract('minify')}")
     runs = [a.minify, *units]
+    if not any((capture_dir / "out").glob(STEPS)):
+        refuse("price", f"capture run {a.capture} holds no public steps (out/{STEPS}), the schedule priced.py reads: "
+                        f"a run stored before its step traces were kept private holds only those, which {CONVERTER} "
+                        "turns into public steps; price a capture that holds them")
     r = priced_point(capture_dir / "out", tables, a, fp, " and ".join(runs))
     unpriced, by = r["unpriced"], priced_by(came)
     out = place(a.out)

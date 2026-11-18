@@ -24,6 +24,8 @@ The card is the run's; on a machine with none, --sku names the card file (calibr
 for, and with neither the build is refused.
   python probe.py gate BINARY... [--json OUT]                      # CPU only; exit 8 when a verdict isn't the declared one
   python probe.py run BINARY... --out DIR [--reps N] [--scale X] [--since EPOCH] [--run-id ID]   # one GPU
+
+Both read SASS with the cuobjdump and nvdisasm of --cuda-bin DIR, else those beside `nvcc()`'s.
 """
 from __future__ import annotations
 
@@ -33,7 +35,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import statistics
 import subprocess
 import sys
@@ -62,11 +63,15 @@ rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
 def nvcc() -> str:
-    for c in (os.environ.get("NVCC"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin", "nvcc"),
-              shutil.which("nvcc"), "/usr/local/cuda/bin/nvcc"):
-        if c and os.access(c, os.X_OK):
-            return c
-    raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
+    """The executable NVCC names, else the nvcc of the machine's toolkit at 13.0 (`kit.toolkit`: CUDA_HOME, else the run's
+    machine's record)."""
+    named = os.environ.get("NVCC")
+    if named and os.access(named, os.X_OK):
+        return named
+    found = os.path.join(_kit().toolkit("13.0"), "bin", "nvcc")
+    if os.access(found, os.X_OK):
+        return found
+    raise SystemExit(f"probe: no nvcc at {found} (set NVCC or CUDA_HOME)")
 
 
 def _kit():
@@ -245,8 +250,8 @@ def row_line(s: dict) -> str:
 # ---- the command ---------------------------------------------------------------------------------------------------------
 
 
-def gate_all(binaries: list[Path]) -> tuple[dict[Path, list[dict]], list[dict]]:
-    tools = G.H.find_tools()
+def gate_all(binaries: list[Path], cuda_bin: str) -> tuple[dict[Path, list[dict]], list[dict]]:
+    tools = G.H.find_tools(cuda_bin)
     tables = {b: listing(b) for b in binaries}
     verdicts = [v for b in binaries for v in judge(b, tables[b], tools=tools)]
     return tables, verdicts
@@ -276,6 +281,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--only", default="", help="time only the probes whose name matches this regex")
     r.add_argument("--passed-only", action="store_true",
                    help="time the probes that pass even when others are refused (the refusals stay in gate.json)")
+    for s in (g, r):
+        s.add_argument("--cuda-bin", help="the bin directory whose cuobjdump and nvdisasm read the SASS (default: nvcc's)")
     a = p.parse_args(argv)
 
     if a.cmd == "build":
@@ -287,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
         print((kit.card_arch if a.cmd == "arch" else kit.card_gencode)(**target(a.card, a.sku)))
         return 0
 
-    tables, verdicts = gate_all(a.binaries)
+    tables, verdicts = gate_all(a.binaries, a.cuda_bin or os.path.dirname(nvcc()))
     for line in verdict_lines(verdicts):
         print(line)
     wrong = [v for v in verdicts if not v["correct"]]

@@ -93,7 +93,7 @@ plus `P · λ` with probability at most `δ' + ε + δ`. -/
 def PaidGetsBack : Prop :=
   ∀ {τ : Type} [Fintype τ] {N : Node τ} {a : Audit} {Ω : Type} [Fintype Ω] (r : Run N a Ω) {K : ℕ}
     (bad : Ω → Finset (Fin K)) (hbad : r.Counted bad) (L : Verity.SamplingDesign (Fin K)) (δ : ℝ) (ε : ℝ≥0∞),
-    Verity.Scheme.AccountingLayer → r.Paid δ → Verity.AuditBound L (Run.prE (Ω := Ω)) r.accepts bad ε →
-      ∀ δ', (r.scheme bad hbad (ENNReal.ofReal δ)).GetsBack L (Run.prE (Ω := Ω)) δ' ε
+    Verity.Scheme.AccountingLayer → r.Paid δ → Verity.AuditBound (fun _ => L) (Run.prE (Ω := Ω)) r.accepts bad ε →
+      ∀ δ', (r.scheme bad hbad (ENNReal.ofReal δ)).GetsBack (fun _ => L) (Run.prE (Ω := Ω)) δ' ε
 
 end ResourceAccounting.Remote
