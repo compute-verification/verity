@@ -44,7 +44,7 @@ def CutOf (Pw Pu : Flock.Program.Prog) (W : Spot.Wires.Wiring) (pos : Positions)
 
 namespace Vocab
 
-variable {d : ℕ} {α : Type} (V : Vocab d α)
+variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 
 /-- Unit `u` carries its inputs in `X`: at each committed gate it reads, whose position `named` gives, the value is
 the value the writer unit's gate at that position is committed to, bit for bit. -/
@@ -53,7 +53,7 @@ def Carries (named : (θ : ByteArray) → (F : Array ByteArray) → Fin (V.circu
   ∀ g ∈ (V.partsOf θ F).io u, ∀ q, named θ F g = some q →
     ∀ (h : Fin (V.circuitOf θ F).N) (v : Fin (V.units θ F)), V.place θ F c h = some q →
       (V.partsOf θ F).unit h = some v → h ∈ (V.partsOf θ F).io v →
-        ∀ b, V.Opens θ F c h b → ∀ i, (X g).getLsbD i = b.getLsbD i
+        ∀ b : BitVec ((V.circuitOf θ F).w h), V.Opens θ F c h b → ∀ i, (X g).getLsbD i = b.getLsbD i
 
 open Classical in
 /-- The units `X` doesn't bind or that don't carry their inputs. -/
