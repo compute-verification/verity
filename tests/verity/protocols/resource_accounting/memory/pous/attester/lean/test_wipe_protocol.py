@@ -55,7 +55,7 @@ def _json_edit(c: dict, f, x: int) -> dict:
 #: `{"egress_mib": …, "signed": …}`, or whose egress is no integer.
 CASE_EDITS = [
     lambda c, x: c | {"params": c["params"] | {"extra": x}},
-    lambda c, x: c | {"params": {k: v for k, v in c["params"].items() if k != sorted(c["params"])[x % 3]}},
+    lambda c, x: c | {"params": {k: v for k, v in c["params"].items() if k != ("server", "session", "trusted")[x % 3]}},
     lambda c, x: c | {"params": c["params"] | {"session": c["params"]["session"].upper()}},
     lambda c, x: c | {"params": c["params"] | {"trusted": "00"}},
     lambda c, x: c | {"evidence": D.canonical({"egress_mib": None, "signed": None, "more": x}).encode().hex()},
@@ -120,7 +120,7 @@ def test_the_named_wipes(deployed_server):
         assert sorted(evidence) == ["egress_mib", "signed"] and "egress_bits" not in evidence["signed"], name
         params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
         assert seen[name]["public"] == WP.uncounted(params), name
-        assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
+        assert seen[name]["profile"]["gaps"] == [WP.UNFLOORED, *WP.writer_gap(evidence["egress_mib"])] == [WP.UNFLOORED,
             (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
              "signed: no wipe is certified on it until the check that composes the wipe with the network certifier")], name
     assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
@@ -131,7 +131,7 @@ def test_the_named_wipes(deployed_server):
                                         sw.EGRESS_MAX_UNITS)
     assert not none["public"]["certified"] and none["public"]["egress_mib"] == sw.EGRESS_MAX_UNITS
     assert none["public"]["foreign_bits"] == none["public"]["memory_bits"] and none["public"]["eps"] == "0"
-    assert none["profile"]["gaps"] == [(f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
+    assert none["profile"]["gaps"] == [WP.UNFLOORED, (f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
                                         f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")]
     outside = json.loads(bytes.fromhex(C.build("egress-range")["evidence"]))["egress_mib"]
     assert not 0 <= outside <= sw.EGRESS_MAX_UNITS
@@ -141,6 +141,12 @@ def test_the_named_wipes(deployed_server):
     assert seen["untrusted"]["reason"] == "the session is signed by a key that is not a trusted memory challenger's"
     assert seen["tampered"]["reason"] == "the signature does not verify"
     assert seen["commitment"]["commitment"] is None and seen["evidence"]["commitment"] is not None
+    for name in ("floored", "over-floor"):
+        assert WP.UNFLOORED not in seen[name]["profile"]["gaps"], name
+        assert C.build(name)["params"]["floors"]["figures_sha512"] == C.FIGURES_SHA512, name
+    assert seen["floor-missing"]["reason"].startswith(WP.FLOOR + "the request declares no disk: the node kind pins")
+    assert seen["floor-under"]["reason"].startswith(WP.FLOOR) and "under the" in seen["floor-under"]["reason"]
+    assert seen["floor-unpinned"]["reason"].startswith(WP.FLOOR) and "pin no size of" in seen["floor-unpinned"]["reason"]
 
 
 def test_a_wipe_of_no_reads_is_refused_as_it_decodes(deployed_server):

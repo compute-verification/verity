@@ -63,9 +63,10 @@ class Params:
     server: bytes
     session: bytes
     trusted: tuple[bytes, ...]
+    floors: WP.Floors | None = None
 
     def to_json(self) -> dict:
-        return WP.params_json(self.server, self.session, self.trusted)
+        return WP.params_json(self.server, self.session, self.trusted, self.floors)
 
 
 def _exactly(decode: Callable[[Any], Any], enc: Callable[[Any], Any], j: Any) -> Any:
@@ -76,8 +77,18 @@ def _exactly(decode: Callable[[Any], Any], enc: Callable[[Any], Any], j: Any) ->
 
 
 def decode_params(j: Any) -> Params:
-    return _exactly(lambda j: Params(M.hex_(j, "server"), M.hex_(j, "session"), tuple(M.hexes(j, "trusted"))),
-                    Params.to_json, j)
+    def floors(f: Any) -> WP.Floors:
+        tiers = M._get(f, "tiers")
+        if not (isinstance(tiers, dict) and all(type(b) is int and b > 0 for b in tiers.values())):
+            raise D.Reject("floors: tiers is not an object of positive byte counts")
+        M.hex_(f, "figures_sha512")
+        return WP.Floors(f["figures_sha512"], dict(tiers))
+
+    def of(j: Any) -> Params:
+        f = j.get("floors") if isinstance(j, dict) else None
+        return Params(M.hex_(j, "server"), M.hex_(j, "session"), tuple(M.hexes(j, "trusted")),
+                      None if f is None else floors(f))
+    return _exactly(of, Params.to_json, j)
 
 
 def decode_commitment(b: bytes) -> sw.WipeCommitment:
@@ -111,7 +122,8 @@ def reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
     """`MemoryChallenger.WipeProtocol.mkProtocol protocol_id schemes` in Python."""
 
     def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
-        return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
+        return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib,
+                          floors=p.floors)
 
     return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
                                  evidence=decode_evidence, check=check, digest=digest)
@@ -126,7 +138,8 @@ def counted_reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
     check `wipe_period.outcome_counted`."""
 
     def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
-        return WP.outcome_counted(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
+        return WP.outcome_counted(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib,
+                                  floors=p.floors)
 
     return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
                                  evidence=decode_evidence, check=check, digest=digest)
@@ -159,17 +172,45 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
 
 
 def wipe_case(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None, trusted: tuple[bytes, ...], *,
-              server: bytes | None = None, session: bytes | None = None, egress_mib: int | None = None) -> dict:
+              server: bytes | None = None, session: bytes | None = None, egress_mib: int | None = None,
+              floors: WP.Floors | None = None) -> dict:
     """The period hook's case for a wipe (`wipe_period.case`), the params' server and session the commitment's unless
-    given, its evidence's egress `egress_mib`."""
+    given, its evidence's egress `egress_mib`, its params' floors `floors`."""
     return WP.case(commitment.server if server is None else server,
-                   commitment.session if session is None else session, trusted, commitment, signed, egress_mib)
+                   commitment.session if session is None else session, trusted, commitment, signed, egress_mib, floors)
+
+
+FIGURES_SHA512 = "f1" * 64
+"""The floors' figures digest in a case: the judge carries it and compares nothing with it."""
+
+
+def floors_of(m: str, tiers: tuple[tuple[str, int], ...], r: random.Random) -> WP.Floors | None:
+    """The floors a case of change `m` pins over the commitment's declared `tiers`: none but for the floor's cases;
+    `floored`, each at its declared size; `over-floor`, each under it (declaring more is allowed); `floor-missing`, a
+    pinned tier the commitment doesn't declare; `floor-under`, one tier pinned past its declared size; `floor-unpinned`,
+    one declared tier the floors don't pin."""
+    pins = dict(tiers)
+    if m == "floored":
+        pass
+    elif m == "over-floor":
+        pins = {t: r.randrange(1, b + 1) for t, b in pins.items()}
+    elif m == "floor-missing":
+        pins["disk"] = r.randrange(1, 1 << 30)
+    elif m == "floor-under":
+        t = r.choice(sorted(pins))
+        pins[t] += r.randrange(1, 1 << 20)
+    elif m == "floor-unpinned":
+        del pins[r.choice(sorted(pins))]
+    else:
+        return None
+    return WP.Floors(FIGURES_SHA512, pins)
 
 
 EXPECT = {
     "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT, "zero-egress": ACCEPT, "uncounted": ACCEPT,
     "foreign": REJECT, "late": REJECT, "other-server": REJECT, "other-session": REJECT, "untrusted": REJECT,
     "tampered": REJECT, "egress-range": REJECT,
+    "floored": ACCEPT, "over-floor": ACCEPT, "floor-missing": REJECT, "floor-under": REJECT, "floor-unpinned": REJECT,
     "unsigned": UNDECIDED,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT,
 }
@@ -214,7 +255,7 @@ def _build(m: str, seed: int) -> dict:
     if m == "tampered":
         assert signed is not None
         signed = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
-    c = wipe_case(commitment, signed, trusted, egress_mib=egress)
+    c = wipe_case(commitment, signed, trusted, egress_mib=egress, floors=floors_of(m, params.tiers, r))
     if m == "params":
         c["params"] = [c["params"] | {"extra": 1}, {k: v for k, v in c["params"].items() if k != "trusted"},
                        c["params"] | {"server": c["params"]["server"].upper()}][r.randrange(3)]
@@ -237,7 +278,7 @@ def build(m: str, seed: int = 0) -> dict:
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
 #: Each kind's changes (`build`'s `m`): a rejection by the check itself, not by decoding, for `reject`.
 AIMS: dict[str, tuple[str, ...]] = {
-    ACCEPT: ("honest", "segment", "reads"),
+    ACCEPT: ("honest", "segment", "reads", "floored", "over-floor"),
     REJECT: tuple(m for m, v in EXPECT.items() if v == REJECT and m not in ("params", "commitment", "evidence")),
     UNDECIDED: ("unsigned",),
     "broken-params": ("params",), "broken-commitment": ("commitment",), "broken-evidence": ("evidence",),

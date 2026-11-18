@@ -45,7 +45,8 @@ def pair(seed: int, *, alone: bool = True, start: bytes | None = None, end: byte
     count = S.build("registered", seed, between=between, alone=alone)
     s = box["s"]
     named = span.named(span.params(count["params"]), span.commitment(bytes.fromhex(count["commitment"])))
-    wipe = C.wipe_case(s.commitment, s.signed, s.trusted, egress_mib=sw.egress_units(named["egress_bits"]))
+    wipe = C.wipe_case(s.commitment, s.signed, s.trusted, egress_mib=sw.egress_units(named["egress_bits"]),
+                       floors=WP.Floors(C.FIGURES_SHA512, dict(PARAMS.tiers)))
     return count, wipe
 
 

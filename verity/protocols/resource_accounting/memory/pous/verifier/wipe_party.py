@@ -14,7 +14,8 @@ takes the count as evidence beside the signed session (`wipe_period`). It times 
 names (`--reads`, `READS` by default), which the commitment
 publishes and the certificate is computed at: a request that names `k` is refused, so the prover never chooses it. A
 prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
-"host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, and `window` the session's `t0` (the
+"figures_sha512", "host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, `figures_sha512` the
+digest of the node kind's figures whose floors it held the request to (`--figures`; null when it held it to none), and `window` the session's `t0` (the
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
 interval a network attester counts the session's egress over.
 
@@ -26,12 +27,14 @@ runs them speak `wipe_parties`'s messages: `pous/attester/wipe_challenger.py` an
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.protocols.resource_accounting.memory.poub.verifier import timing
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 from . import streamed_wipe as sw
@@ -56,13 +59,53 @@ def _read(f: BinaryIO, n: int) -> bytes:
     return b
 
 
-def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
+def figures_pinned(path: Path, sha512: str) -> timing.Figures:
+    """The node kind's figures from `path` (`timing.Figures.of_json`, what `benchmarks/poub_session/sheets.py NODE`
+    writes), held to the digest the challenger's own command pins, as PoUB's verifier holds its `--figures`."""
+    figures = timing.Figures.of_json(json.loads(Path(path).read_text()))
+    if figures.sha512() != sha512.lower():
+        raise ValueError(f"--figures {path}: its SHA-512 is {figures.sha512()}, not {sha512}, the one --figures-sha512 "
+                         "pins: the figures are the verifier's configuration's, never the prover's")
+    return figures
+
+
+def floors_of(figures: timing.Figures) -> dict[str, int]:
+    """The node kind's pinned capacity by wipe tier, from its figures (`timing.Figures`, read from the node's data
+    sheets): every GPU's HBM and the host's DRAM. The figures pin no disk's size and no drive's spare area, so a disk
+    tier has no floor (`floor_refusal` refuses it)."""
+    return {"gpu-hbm": figures.hbm_bytes, "host-dram": figures.host_dram_bytes}
+
+
+def floor_refusal(tiers: Sequence[tuple[str, int]], floors: Mapping[str, int]) -> str | None:
+    """Why the declared `tiers` don't cover the node kind's pinned `floors` (none when they do): each pinned tier
+    declared at no less than its pin, and no tier the floors don't pin, since its size would be the prover's alone.
+    Declaring more than a pin is allowed: the floor is one-sided."""
+    declared = dict(tiers)
+    for t, b in sorted(floors.items()):
+        if t not in declared:
+            return (f"the request declares no {t}: the node kind pins {b} bytes of it, and memory it leaves out would "
+                    "stay outside R")
+        if declared[t] < b:
+            return f"the request declares {declared[t]} bytes of {t}, under the {b} the node kind pins"
+    unpinned = sorted(set(declared) - set(floors))
+    if unpinned:
+        return (f"the request declares {', '.join(unpinned)}, which the node kind's figures pin no size of: its "
+                "size would be the prover's alone")
+    return None
+
+
+def params_of(request: Mapping[str, Any], reads: int = READS,
+              floors: Mapping[str, int] | None = None) -> sw.WipeParams:
     """The session's parameters: the prover's request (`REQUEST_KEYS`: its node, fill, deadline and declared tiers) and
-    the challenger's own `reads`."""
+    the challenger's own `reads`, refused when `floors` (`floors_of` the node kind's pinned figures, the challenger's
+    own) are given and the tiers don't cover them (`floor_refusal`)."""
     if set(request) != REQUEST_KEYS:
         raise ValueError(f"a wipe request is {sorted(REQUEST_KEYS)}, not {sorted(request)}: the challenger chooses the "
                          "reads (--reads), never the prover")
-    return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
+    tiers = tuple((t, b) for t, b in request["tiers"])
+    if floors is not None and (why := floor_refusal(tiers, floors)):
+        raise ValueError(why)
+    return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tiers)
 
 
 

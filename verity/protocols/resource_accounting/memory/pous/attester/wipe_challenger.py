@@ -226,14 +226,17 @@ class WipeMemoryAttester:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
           reads: int = WP.READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = WP.CHUNK,
-          fill: Callable[[bytes, int], Any] | None = None) -> WipeMemoryAttester:
+          fill: Callable[[bytes, int], Any] | None = None,
+          floors: Mapping[str, int] | None = None) -> WipeMemoryAttester:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
     `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
-    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
+    leaves it unsigned. This side has no mark source, so the session's start mark is empty. `floors`, the node kind's
+    pinned capacity by tier (`WP.floors_of`), refuses a request whose tiers don't cover them before any label is
+    drawn (`WP.floor_refusal`)."""
     c = WipeMemoryAttester(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                                WP.params_of(request, reads), signer, log=log, clock=clock)
+                                WP.params_of(request, reads, floors), signer, log=log, clock=clock)
     try:
         if fill is not None:
             f.flush()
@@ -259,9 +262,12 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     return c
 
 
-def report(c: WipeMemoryAttester, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
-    """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
-    out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
+def report(c: WipeMemoryAttester, public_key: bytes, window: tuple[int, int] | None = None,
+           figures_sha512: str | None = None) -> dict[str, Any]:
+    """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock;
+    `figures_sha512`, the digest of the pinned figures whose floors the request was held to (None: held to none)."""
+    out = {"commitment": c.commitment.to_json(), "ended": c.ended, "figures_sha512": figures_sha512,
+           "host": socket.gethostname(),
            "public_key": public_key.hex(), "reads": len(c.batches),
            "signed": None if c.signed is None else c.signed.to_json()}
     if window is not None:
@@ -292,7 +298,8 @@ class MemoryAttesterParty:
                 f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(streamed_wipe.raw_clock_ns, "
                 "streamed_wipe.CLOCK)}}")}, "clock", kind="private")]
         try:
-            self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS))
+            self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS),
+                                                               given.get("floors"))
         except ValueError:
             return self._finish("schema")
         self.phase = Phase("Coins")
@@ -406,9 +413,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--streamer", help="stream the fill natively (`wipe_stream`): a built wipe_stream, or `build` to "
                     "compile it into --device; gated before the side listens")
     ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
+    ap.add_argument("--figures", type=Path, help="the node kind's figures (`benchmarks/poub_session/sheets.py NODE`), "
+                    "whose pinned HBM and host DRAM floor the request's tiers (`WP.floor_refusal`); with "
+                    "--figures-sha512")
+    ap.add_argument("--figures-sha512", metavar="HEX", help="the SHA-512 this challenger's configuration pins "
+                    "--figures to")
     a = ap.parse_args(argv)
+    if (a.figures is None) != (a.figures_sha512 is None):
+        ap.error("--figures and --figures-sha512 go together: the figures are held to the digest the challenger's "
+                 "own configuration pins")
+    floors = None
+    if a.figures is not None:
+        try:
+            floors = WP.floors_of(WP.figures_pinned(a.figures, a.figures_sha512))
+        except (OSError, ValueError) as e:
+            ap.error(str(e))
     request = json.loads(sys.stdin.readline())
-    WP.params_of(request, a.reads)
+    WP.params_of(request, a.reads, floors)
     device = Path(a.device)
     streamer, extra = None, {}
     if a.streamer:
@@ -432,9 +453,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             with conn.makefile("rwb") as f:
                 c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), reads=a.reads,
-                          fill=None if streamer is None else native)
+                          fill=None if streamer is None else native, floors=floors)
             t1 = time.time_ns()
-    print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
+    print(json.dumps(report(c, signer.public_key, (t0, t1), a.figures_sha512 and a.figures_sha512.lower()) | extra, sort_keys=True), flush=True)
     return 0
 
 
