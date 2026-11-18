@@ -67,6 +67,15 @@ def test_the_host_stamp_names_the_card_each_gpus_uuid_and_clocks_the_driver_and_
                      ["nvidia-smi"]]
 
 
+def test_the_runs_card_sku_is_its_host_stamps_cards_and_a_host_with_no_gpu_is_refused_by_name(monkeypatch, no_gpu):
+    """`run_card_sku` is what `build_engine(card=...)` and vLLM's CARD_SKU take: the card file of the GPUs the stamp
+    names; on a host with none it says so, rather than asking for a card file that holds the name "none"."""
+    with pytest.raises(SystemExit, match=r"^no GPU here \(.+\), so no card the run is on"):
+        kit.run_card_sku()
+    _host(monkeypatch, {"query": (0, _row(GPU0)), "header": (0, HEADER)})
+    assert kit.run_card_sku() == kit.card_record(CARD)["sku"] == "rtx-pro-6000-server"
+
+
 def test_the_host_stamp_is_of_the_leases_gpus(monkeypatch):
     asked = _host(monkeypatch, {"query": (0, _row(GPU1)), "header": (1, "")})
     monkeypatch.setenv("GPU_LEASE_UUID", GPU1)
@@ -150,3 +159,41 @@ def test_each_gpu_a_spec_may_name_is_one_card_records_short():
     shorts = [kit.card_short(d["value"]) for sku in skus("gpu", directory=CARD_FILES)
               for d in load_card(sku, directory=CARD_FILES).get("driver", ())]
     assert set(registry()) <= set(shorts), sorted(set(registry()) - set(shorts))
+
+
+def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_none(tmp_path):
+    assert kit.gpu_target("h200-sxm-141gb", directory=CARD_FILES) == {"device_name": "NVIDIA H200", "compute_capability": [9, 0],
+                                                                      "num_sms": 132}
+    assert kit.gpu_target("b200-sxm-180gb", directory=CARD_FILES)["compute_capability"] == [10, 0]
+    with pytest.raises(KeyError, match="no card 'a100-sxm4-80gb'"):
+        kit.gpu_target("a100-sxm4-80gb", directory=CARD_FILES)
+    with pytest.raises(SystemExit, match="^card 'xeon-6776p-2s' .* is no compile target"):
+        kit.gpu_target("xeon-6776p-2s", directory=CARD_FILES)
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
+    with pytest.raises(SystemExit, match="no architecture 'GH100'"):
+        kit.gpu_target("h200-sxm-141gb", directory=tmp_path)
+
+
+@pytest.mark.parametrize("name, node", [("NVIDIA H200", "local/h200-sxm-141gb-x1/0"),
+                                        ("NVIDIA H100 80GB HBM3", "local/h100-sxm-80gb-x1/0"),
+                                        ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "local/rtx-pro-6000-server-x8/0"),
+                                        (None, "local/cpu/0")])
+def test_a_session_registers_its_cards_node_file(name, node):
+    assert kit.session_node(name, 0) == node
+
+
+def test_a_session_on_a_card_two_node_files_carry_is_refused_by_name(tmp_path):
+    nodes = CARD_FILES.parent / "nodes"
+    for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
+        text = (nodes / "h200-sxm-141gb-x1.toml").read_text()
+        (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
+    with pytest.raises(SystemExit, match="h200-sxm-141gb-x1, h200-sxm-141gb-x2 all carry h200-sxm-141gb"):
+        kit.session_node("NVIDIA H200", "serving", directory=tmp_path)
+    assert kit.session_node("NVIDIA H200", "serving", kind="h200-sxm-141gb-x2") == "local/h200-sxm-141gb-x2/serving"
+
+
+def test_the_data_sheets_memory_bandwidth_is_read_from_the_card_and_refused_where_the_card_has_none():
+    assert kit.datasheet_bandwidth("NVIDIA H200") == 4_800_000_000_000
+    with pytest.raises(SystemExit, match="^the card record h100-sxm-80gb .* has no memory.datasheet_bandwidth"):
+        kit.datasheet_bandwidth("NVIDIA H100 80GB HBM3")

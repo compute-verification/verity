@@ -23,7 +23,7 @@ probability space `Ω`, uniform by assumption A3 (`Assumptions.UniformRandomByte
   stream so far is the tape's first bytes, so a sample it returns is the sampler's on the whole tape.
 * `stratifiedWith_tape`: a stratified run on unread streams returns `Flock.Draw.stratified`'s sample on the whole tapes.
 * `sampleOS_subset_escape_le`, `sampleOS_stratified_escape_le`, `sampleOS_work_escape_le`: the live sample misses `B` with
-  probability at most the model's missProb, `SamplingDesign.subset`'s or `SamplingDesign.stratified`'s, for every number of bytes `L` read,
+  probability at most the model's missProb, `Verity.SamplingDesign.subset`'s or `SamplingDesign.stratified`'s, for every number of bytes `L` read,
   through `subset_exec_escape_le` and `stratified_exec_escape_le`.
 * `execOS`: the live sample as a sampling design, a run that would read past the source's bytes sampling every unit.
   `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its missProb, and `execOS_miss_le` its
@@ -464,7 +464,7 @@ theorem sampleOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk :
 /-- **The live subset sample escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem sampleOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
-    prCoin (fun ω => ∃ d, runOS (t ω) (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ (subset n k hk).missProb B := by
+    prCoin (fun ω => ∃ d, runOS (t ω) (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ (Verity.SamplingDesign.subset n k hk).missProb B := by
   classical
   rw [ht fun f => ∃ d, runOS f (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units]
   calc prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => ∃ d, runOS f (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units)
@@ -495,7 +495,7 @@ theorem sampleOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintyp
           ∃ D, Flock.Draw.subset k n (streamOf g) = some D ∧ ∀ u ∈ B, u.val ∉ D) :=
         prCoin_pi_forall (Ω := fun s => Fin (L s) → Fin 256) univ (fun _ (g : Fin (L _) → Fin 256) =>
           ∃ D, Flock.Draw.subset k n (streamOf g) = some D ∧ ∀ u ∈ B, u.val ∉ D)
-    _ ≤ (subset n k hk).missProb B := by
+    _ ≤ (Verity.SamplingDesign.subset n k hk).missProb B := by
         rw [Fin.prod_univ_one]
         exact subset_exec_escape_le n k (L 0) hk B
 
@@ -556,8 +556,8 @@ theorem execOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
 /-- **The live subset sample, as a sampling design, escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem execOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
-    (execOS (n := n) t (.subset k) n).missProb B ≤ (subset n k hk).missProb B :=
-  execOS_escape_le_of t _ n B _ (fun h => by rw [h, subset_escape]; simp [ENNReal.div_self,
+    (execOS (n := n) t (.subset k) n).missProb B ≤ (Verity.SamplingDesign.subset n k hk).missProb B :=
+  execOS_escape_le_of t _ n B _ (fun h => by rw [h, Verity.SamplingDesign.subset_escape]; simp [ENNReal.div_self,
     (Nat.choose_pos hk).ne'])
     (sampleOS_subset_escape_le n k hk L t ht B)
 

@@ -16,7 +16,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
-| `release-order` | requests added in the network attester's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
+| `release-order` | requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.scheme_plugin`, the network attester's scheme turned on by name), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |

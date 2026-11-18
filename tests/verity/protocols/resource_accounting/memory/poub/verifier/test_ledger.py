@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
+from pathlib import Path
 from fractions import Fraction
 
 import pytest
@@ -29,9 +30,10 @@ from verity.protocols.resource_accounting.memory.poub.prover import audit_prover
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, ledger, line, monitoring, period, receipts, timing
 from verity.protocols.resource_accounting.memory.poub.verifier.audit import AuditRun, Pace
 
+FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[7] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
-FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0,
@@ -143,7 +145,7 @@ def test_a_pace_has_a_closing_window_and_a_record_of_one_window_has_no_time_held
     one = dataclasses.replace(r, windows=r.windows[:1])
     snap, held, links = ledger.memory(one, node())
     assert "one window" in held.refused and links.refused == held.refused and snap.refused is None
-    assert [w.window for w in ledger.gamma(one, node(), timing.SPEC_BYTES_PER_S).windows] == [0]
+    assert [w.window for w in ledger.gamma(one, node(), FIGURES.spec_bytes_per_s).windows] == [0]
 
 
 def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1) -> None:
@@ -159,11 +161,11 @@ def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1
         odd = dataclasses.replace(r, windows=(dataclasses.replace(w, arrived_ns=bad), *r.windows[1:]))
         assert "not in order" in ledger.memory(odd, node())[1].refused
         with pytest.raises(ValueError, match="not in order"):
-            ledger.gamma(odd, node(), timing.SPEC_BYTES_PER_S)
+            ledger.gamma(odd, node(), FIGURES.spec_bytes_per_s)
     bare = dataclasses.replace(r, windows=tuple(dataclasses.replace(x, arrived_ns=()) for x in r.windows))
     assert "has none" in ledger.memory(bare, node())[1].refused
     with pytest.raises(ValueError, match="has none"):
-        ledger.gamma(bare, node(), timing.SPEC_BYTES_PER_S)
+        ledger.gamma(bare, node(), FIGURES.spec_bytes_per_s)
 
 
 def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
@@ -402,10 +404,10 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
-    `timing.LINK_BURST_BYTES` when the links are charged; each may be stated instead."""
+    `FIGURES.link_burst_bytes` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
-        timing.CHIP_BYTES, 4.32e9, timing.LINK_BURST_BYTES)
+        FIGURES.chip_bytes, 4.32e9, FIGURES.link_burst_bytes)
     assert (ledger.Node.stated(FIGURES).disk_burst_bytes, ledger.Node.stated(FIGURES).link_burst_bytes) == (0, 0)
     m = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20
@@ -440,7 +442,7 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     and by default, each a positive finite rate, and no DPU's."""
     for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
-            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597568e12, 819.2e9)
+            FIGURES.gpu_write_bytes_per_s, FIGURES.host_write_bytes_per_s) == (1.597568e12, 819.2e9)
         assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597568e12, 819.2e9)
     assert not [f.name for f in dataclasses.fields(ledger.Node) if "dpu" in f.name]
     for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
@@ -456,9 +458,9 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     bytes."""
     n = ledger.Node.stated(FIGURES)
     assert n.tiers == {
-        "hbm": ledger.Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
-                           timing.GPU_CHIP_BYTES),
-        "dram": ledger.Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
+        "hbm": ledger.Tier(FIGURES.gpus, FIGURES.gpu_spec_bytes_per_s, FIGURES.gpu_read_bytes_per_s,
+                           FIGURES.gpu_chip_bytes),
+        "dram": ledger.Tier(1, FIGURES.host_spec_bytes_per_s, FIGURES.host_read_bytes_per_s, FIGURES.host_chip_bytes)}
     assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.599744e12
     assert sum(t.devices * t.read_bytes_per_s for t in n.tiers.values()) == n.read_bytes_per_s == 12.9188e12
     assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
@@ -483,9 +485,9 @@ def test_a_nodes_capacities_are_handed_in_as_the_ledger_publishes_them() -> None
     for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10), node()):
         assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == n
     j = ledger.Node.stated(FIGURES).to_json()
-    assert (j["read_bytes_per_s"], j["chip_bytes"]) == (timing.READ_BYTES_PER_S, timing.CHIP_BYTES)
-    assert j["tiers"]["hbm"] == {"devices": timing.GPUS, "spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
-                                 "read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "chip_bytes": timing.GPU_CHIP_BYTES}
+    assert (j["read_bytes_per_s"], j["chip_bytes"]) == (FIGURES.read_bytes_per_s, FIGURES.chip_bytes)
+    assert j["tiers"]["hbm"] == {"devices": FIGURES.gpus, "spec_bytes_per_s": FIGURES.gpu_spec_bytes_per_s,
+                                 "read_bytes_per_s": FIGURES.gpu_read_bytes_per_s, "chip_bytes": FIGURES.gpu_chip_bytes}
     for bad in ({**j, "extra": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
         with pytest.raises(ValueError, match="exactly"):
             ledger.Node.of_json(bad)

@@ -3,7 +3,7 @@ output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class
 positions a Program) at its grain, TINY's bf16 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
 attention; its exact-int8 window waits on its norm's reader, `test_window_circuit_int8`), with random weights registered
 under a committer's key and a scan state whose row at bucket 0 carries the two slots' requests; and the network
-attester's scan of its own traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
+attester's scan of its own traffic (`scan_state_rows.scan_state`), which starts each request in the slot its anchor and lane give, at
 TINY's slots and the class of record's.
 """
 from __future__ import annotations
@@ -26,6 +26,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
+from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
 
@@ -240,14 +241,14 @@ def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
 
 
 def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
-    """Where no scan ran (`prove_path`'s window commit), `standin_state` is the scan state rows that give each slot its row
+    """Where no scan ran (`prove_path`'s window commit), `scan_state_rows.standin_rows` is the scan state rows that give each slot its row
     and ``max_tokens`` at its anchor and lane, every other field zero: bucket 0's row is `STATE`'s, which holds the slots'
     lanes alone. It is a per-window value in its reading port's rows, each row under 192 fresh bytes from the OS, so a
     second commit of the same rows opens the same rows under other salts and another root; `Rows` takes it as the scan
     state."""
     low, _f, values, _w, slots = window
     heads = [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]
-    v, again = (WR.standin_state(PROGRAM, CLASS, heads, window=RUN) for _ in range(2))
+    v, again = (WR.state_value(PROGRAM, CLASS, SR.standin_rows(CLASS, heads), window=RUN) for _ in range(2))
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
     salts = [bytes(s) for s in (*v.salts, *again.salts)]
@@ -282,20 +283,20 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
 
 
 def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
-    """`scan_state` on the network attester's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
+    """`scan_state_rows.scan_state` on the network attester's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
     at buckets 0 and 16 of a 32-bucket window, TINY's bounds): three requests admitted at bucket 0 are anchored at bucket 16
     (WITHIN 12 on), in lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth
-    admitted at 5 is anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
+    admitted at 5 is anchored at 32 (`scan_state_rows.scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
     started slot's lane of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the
-    empty state's, and carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same
+    empty state's, and carry what the scan does past the slots' rows, so a stand-in (`scan_state_rows.standin_rows`) giving the same
     slots the same rows is another value. A prompt past the class's prompt bound (the scan's KI) and rows short of the
     window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
     scan = SLOTS_CLASS.scan
-    assert SS.scan_anchors(SLOTS_CLASS, ingress, outputs) == {1: 16, 2: 16, 3: 16, 4: 32}
+    assert SR.scan_anchors(SLOTS_CLASS, ingress, outputs) == {1: 16, 2: 16, 3: 16, 4: 32}
     for w, want in ((0, [None, 1, None, 2, None, 3, None, None]), (1, [None] * 6 + [4, None])):
-        rows, starts = SS.scan_state(SLOTS_CLASS, ingress, outputs, w * SLOTS_CLASS.buckets)
+        rows, starts = SR.scan_state(SLOTS_CLASS, ingress, outputs, w * SLOTS_CLASS.buckets)
         assert starts == want and len(rows) == SLOTS_CLASS.buckets
         heads = []
         for k, q in enumerate(starts):
@@ -304,14 +305,14 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
                 ((1, len(p), p) if q else (0, 0, ()))
             heads.append(([int(bool(q)), len(p), *p, *[0] * (SLOTS_CLASS.prompt - len(p))], 2 if q else 0))
         got = WR.state_value(PROGRAM, SLOTS_CLASS, rows, window=RUN)
-        standin = WR.standin_state(PROGRAM, SLOTS_CLASS, heads, window=RUN)
+        standin = WR.state_value(PROGRAM, SLOTS_CLASS, SR.standin_rows(SLOTS_CLASS, heads), window=RUN)
         assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
-    assert SS.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
+    assert SR.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
     with pytest.raises(ValueError, match="refuses the network attester's ingress rows"):
-        SS.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
+        SR.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
     with pytest.raises(ValueError, match="give the ingress rows to it, 63, not 40"):
-        SS.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)
+        SR.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)
 
 
 def test_the_scans_state_value_gives_the_window_its_slots(window):
@@ -321,7 +322,7 @@ def test_the_scans_state_value_gives_the_window_its_slots(window):
     `STATE` does (`scan_slots`), and `Rows` takes the scan's value with the slots of those rows."""
     low, _f, values, _w, slots = window
     ingress, outputs = _traffic(CLASS, [ids[:lp] for _o, lp, _m, ids in LANES], (0, 0))
-    rows, starts = SS.scan_state(CLASS, ingress, outputs, CLASS.buckets)
+    rows, starts = SR.scan_state(CLASS, ingress, outputs, CLASS.buckets)
     assert starts == [1, 2]
     v = WR.state_value(PROGRAM, CLASS, rows, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) == [(r, [r[1], 2]) for r in SLOTS]
@@ -759,7 +760,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
         if (off := np.flatnonzero((got != want).any(axis=1))).size:
             bad[tid] = off.tolist()
     assert bad == {}
-    c = win.close(salt_key=bytes(32))
+    c = win.close()
     assert c is not None
     labels = win.labels()
     seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
@@ -807,12 +808,13 @@ def _runs(rows) -> list[tuple[str, int, Any]]:
 
 
 def _two(window) -> dict[str, tuple[Any, list[WR.Slot]]]:
-    """The window at two occupancies, each its stand-in scan state (`standin_state`) and slots:
+    """The window at two occupancies, each its stand-in scan state (`scan_state_rows.standin_rows`) and slots:
     `LANES` with slot 0 served (its request's values), and `OTHER_LANES`, every node computed."""
     low, _f, _v, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
-    state = {k: WR.standin_state(PROGRAM, CLASS, [([occ, lp, *ids], m) for occ, lp, m, ids in lanes], window=RUN)
+    state = {k: WR.state_value(PROGRAM, CLASS, SR.standin_rows(CLASS, [([occ, lp, *ids], m) for occ, lp, m, ids in lanes]),
+                               window=RUN)
              for k, lanes in (("served", LANES), ("other", OTHER_LANES))}
     return {"served": (state["served"], [s0, slots[1]]),
             "other": (state["other"], [WR.Slot(low.fn, CLASS, r, weights) for r in OTHER])}
@@ -912,7 +914,8 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     assert c.registered.values == (SS.SCAN_STATE,)
     program, digest = c.program()[0], IB.program_digest(c)
     assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
-    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], window=RUN)
+    state = WR.state_value(digest, CLASS, SR.standin_rows(CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)]),
+                           window=RUN)
     vals = {**values, SS.SCAN_STATE: state}
     win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
     win.supply(CR)

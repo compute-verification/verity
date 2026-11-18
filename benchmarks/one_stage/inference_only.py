@@ -93,6 +93,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import served_shares as SS  # noqa: E402
+from verity_bench import kit  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
@@ -112,7 +113,8 @@ INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_
 CAP = 64
 #: the H200 an int8 serve's ``serve.json`` names (`serve_seal.target_of` on the card: ``TargetProfile.from_device`` with
 #: the int8 scope ``--precision verity_int8`` runs)
-H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
+H200 = {k: tuple(v) if k == "compute_capability" else v for k, v in kit.gpu_target("h200-sxm-141gb").items()
+        if k != "device_name"} | {"int8_exact": "linears"}
 CLOCK = "tensor"
 UTILIZATION = Fraction(1, 4)
 UTILIZATION_SOURCE = ("compute-accounting's declared share for this week's served run: at least 9%, 25% with the GPU "

@@ -332,13 +332,13 @@ def test_each_statement_has_its_own_lease_from_its_release_through_the_zk_server
     assert RUN.statements("alg,cap") == ["alg-p0", "alg-p1", "cap"] and len(RUN.statements()) == 10
     assert RUN.main(["plan"]) == 0
     assert "leases (min): L0 94, L1 23, L2 21, L3 12, alg-p0 21, alg-p1 22, cap 2," in capsys.readouterr().out
-    assert RUN.main(["run", "--dry-run"]) == 0
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2"]) == 0   # a plain run: its limit is --timeout
     cmd = capsys.readouterr().out.split()
     assert f"MODES={ZK}" in cmd and "GPU_MAX_MIN=94" in cmd and "OPROVE_RUNS=1" in cmd
     every = int(cmd[cmd.index("--timeout") + 1].removesuffix("m"))
     assert every > 7870 * 1.5 / 60                                         # every statement's release, one at a time
     assert cmd[cmd.index("--mem-gb") + 1] == "128"                          # L0's release through the ZK server peaked at 99 GB
-    assert RUN.main(["run", "--dry-run", "--env", "LEVELS=L3"]) == 0
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "cpu-node-2", "--env", "LEVELS=L3"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "GPU_MAX_MIN=12" in cmd and int(cmd[cmd.index("--timeout") + 1].removesuffix("m")) < every - 60
     assert RUN.main(["run", "--dry-run", "--lease-min", "30", "--modes", "dev"]) == 0
