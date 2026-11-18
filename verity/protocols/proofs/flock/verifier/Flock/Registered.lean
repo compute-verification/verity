@@ -99,6 +99,8 @@ structure Port where
   tree : Option (String × String) := none
   /-- the wired Program (`--wired`) a tree port's reads are derived from, beside the unwired `--program` -/
   wired : Option Program.Prog := none
+  /-- the template parameter the port reads (`PARAM_KEY`), whose first leaf a derived read is at -/
+  param : Option String := none
   deriving Inhabited
 
 /-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
@@ -160,8 +162,9 @@ def portsOf (j : Json) : V (Array Port) := do
       if !keysIn tj ["template", "field"] || !reads.isEmpty then
         throw s!"{ctx}: port {name}: a tree port's {TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
       pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
+    let param ← if J.has e "param" then some <$> J.str e "param" ctx else pure none
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom,
-             tree }
+             tree, param }
 
 /-- The first port of `ps` whose name a later port has. -/
 def dupName? : List Port → Option String
@@ -329,26 +332,24 @@ def fieldStart (ret : Program.Ty) (j : Nat) : Option Nat :=
   let fs := Program.fieldsOf ret
   if j < fs.length then some ((fs.take j).foldl (· + ·.leaves) 0) else none
 
-/-- Port `p`'s first parameter leaf: the leaf of the unit's input map (`leavesIn`) at the port's first input word. -/
-def portLeaf (c : Circuit) (p : Nat) : Option Nat :=
-  let w : Nat := (c.ports.extract 0 p).foldl (· + ·.words) 0
-  (c.leavesIn.getD 0 #[]).findIdx? (· == (w : Int))
-
-/-- Tree port `reg`'s reads derived from the wired Program `W`: each unit `u` of `indices` reads, at port `p`'s first
-parameter leaf (`portLeaf`), the gate `W` wires there; that gate must be the first output leaf of field `f` of a unit of
+/-- Tree port `reg`'s reads derived from the wired Program `W`: each unit `u` of `indices` reads, at the first leaf of
+the parameter the port reads (`param`; without it, its link row's first leaf), the gate `W` wires there; that gate must be the first output leaf of field `f` of a unit of
 template `t`, whose leaf in the tree is that unit's rank in the template (`HmLinks.treeLeaf`). The units are `W`'s, the
 unwired Program's by the cut. -/
 def wiredReads (c : Circuit) (W : Program.Prog) (indices : Array Nat) (reg : Port) (t f : String) : V Port := do
   let some j := fieldIndex f | throw s!"registered reads: tree port {reg.name} names field {f}, not an output field o<j>"
-  let some p := (List.range c.ports.size).find? (fun q => (c.ports.getD q default).name == reg.name)
-    | throw s!"registered reads: tree port {reg.name} is not a row of the circuit"
-  let some lo := portLeaf c p | throw s!"registered reads: tree port {reg.name}'s first word holds no parameter leaf"
+  let link := ((← HmLinks.parse c).find? fun (q, _, _) => (c.ports.getD q default).name == reg.name).map (·.2.1)
   let ns := HmLinks.nodes W
   let body := (W.defs[W.root]!).body
   let first := indices.foldl min (indices.getD 0 0)
   let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
   for u in indices do
     let some (k, m) := HmLinks.unitAt ns u | throw s!"registered reads: unit {u} is outside the wired Program's units"
+    let ps := (W.defs[body.nodes[k]!.fn]!).params
+    let some lo := match reg.param with
+        | some x => (ps.findIdx? (·.1 == x)).map fun i => (ps.extract 0 i).foldl (· + ·.2.leaves) 0
+        | none => link
+      | throw s!"registered reads: tree port {reg.name} names no parameter of unit {u}'s template (param) and is no link row"
     let some g := (← Program.operands W W.rootScope body.nodes[k]! m)[lo]?
       | throw s!"registered reads: tree port {reg.name}: unit {u} has no parameter leaf {lo}"
     let some v := HmLinks.ownerAt ns g

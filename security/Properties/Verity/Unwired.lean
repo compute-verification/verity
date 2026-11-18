@@ -16,7 +16,7 @@ but an `ε` share of the units hold, at each input position, the value the write
 position named.
 
 `Vocab.CutIsRegistered`, open until the registration's check exists: the unwired Program and positions the sampled
-proofs are verified against are the cut of the registered wired Program. Both read the same positions `posOf`, and the
+proofs are verified against are the cut of the registered wired Program and its circuit record. Both read the same positions `posOf`, and the
 registered wired Program (`wired`) and the file's labels (`Labels`) as given, which that check is to define.
 -/
 
@@ -34,10 +34,11 @@ def calleeAt (P : Flock.Program.Prog) (u : ℕ) : Option Flock.Program.Defn :=
   (Flock.HmLinks.unitAt (Flock.HmLinks.nodes P) u).map fun (k, _) =>
     P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!
 
-/-- **`Pu` with `pos` is the cut of `Pw` under `W`**: the same callee at every unit, and exactly one position for each
-wired reader row, naming that wire's writer, output field and leaf. -/
-def CutOf (Pw Pu : Flock.Program.Prog) (W : Spot.Wires.Wiring) (pos : Positions) : Prop :=
-  (∀ u, calleeAt Pu u = calleeAt Pw u) ∧
+/-- **`Pu` with `pos` is the cut of `Pw` and its circuit record `doc`**: the wiring `doc` states over `Pw`
+(`Spot.RecordText.wiring`), the same callee at every unit, and exactly one position for each wired reader row, naming
+that wire's writer, output field and leaf. -/
+def CutOf (Pw : Flock.Program.Prog) (doc : Lean.Json) (Pu : Flock.Program.Prog) (pos : Positions) : Prop :=
+  ∃ W, Spot.RecordText.wiring Pw doc = .ok W ∧ (∀ u, calleeAt Pu u = calleeAt Pw u) ∧
     (∀ w ∈ W.wires, ∀ (u row v : ℕ), w.leafAt u row = some v → pos w.reader u w.port row = some (w.writer, w.out, v)) ∧
     ∀ t u port row x, pos t u port row = some x →
       ∃ w ∈ W.wires, ∃ v, w.reader = t ∧ w.port = port ∧ w.leafAt u row = some v ∧ x = (w.writer, w.out, v)
@@ -81,17 +82,17 @@ def PositionsCarry (k : Verity.Registration.Composite) (L : Labels V)
       (V.game θ F c) σ ≤ V.error .sampled θ F c σ
 
 /-- **The unwired Program is the cut of the registered one**: on an accepted case, the Program the circuit file
-decodes to, with the positions `posOf` reads, is the cut (`CutOf`) of the registered wired Program `wired` under the
-wiring the record's text states. -/
+decodes to, with the positions `posOf` reads, is the cut (`CutOf`) of the registered wired Program `wired` and the
+circuit record the record names by its text's digest. -/
 def CutIsRegistered (k : Verity.Registration.Composite) (wired : ByteArray → Option Flock.Program.Prog)
     (posOf : ByteArray → Array ByteArray → Positions) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (o : Exchange), V.Verdict k .sampled o →
     ∀ p r e, PolicyCase k o.sent p r e →
-      ∀ (Pw : Flock.Program.Prog) (text : String) (doc : Lean.Json) (W : Spot.Wires.Wiring), wired θ = some Pw →
+      ∀ (Pw : Flock.Program.Prog) (text : String) (doc : Lean.Json), wired θ = some Pw →
         InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD r.record "window") "circuit" =
             some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) →
-          Flock.JsonParse.parse text = .ok doc → Spot.RecordText.wiring Pw doc = .ok W →
-            ∀ Pu, Flock.Program.decode (V.circuitFile θ F) = .ok Pu → CutOf Pw Pu W (posOf θ F)
+          Flock.JsonParse.parse text = .ok doc →
+            ∀ Pu, Flock.Program.decode (V.circuitFile θ F) = .ok Pu → CutOf Pw doc Pu (posOf θ F)
 
 end Vocab
 
