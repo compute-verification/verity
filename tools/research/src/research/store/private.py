@@ -288,7 +288,8 @@ def toy(path: Path) -> str | None:
         return None
     try:
         doc = json.loads((repo / REGISTRY).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research: {repo / REGISTRY} was not read ({type(e).__name__}), so {path.name} is taken as no toy", file=sys.stderr)
         return None
     rel = path.relative_to(repo).as_posix()
     toys = doc.get(TOYS) if isinstance(doc, dict) else None

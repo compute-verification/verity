@@ -361,8 +361,8 @@ def _ensure_local(store: LocalStore, repo: Path, doc: dict[str, Any], want: list
         if not store.manifest_path(ids.hex_of(a)).exists() and p is not None and p.exists() and fixture_id(p) == a:
             try:
                 store.put_artifact(FIXTURE_KIND, {}, None, file=p if p.is_file() else None, tree=p if p.is_dir() else None)
-            except P.PrivateFiles:
-                pass                                                # `private_fixtures` refuses it by name, with the fix
+            except P.PrivateFiles as e:                             # `private_fixtures` refuses it by name, with the fix
+                print(f"research data export: {paths[a]} was not put in the local store: {e}", file=sys.stderr)
     ms = fetchset.fetch_manifests(store, want, srcs, jobs=jobs, report=fetchset._report())
     lost = set(want) - set(ms)
     for new, olds in previous(doc).items():
