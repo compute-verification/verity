@@ -138,7 +138,7 @@ noncomputable def uncarried (L : Labels V) (posOf : ByteArray → Array ByteArra
   Finset.univ.filter fun u => u ∈ unbound (V.partsOf θ F) (V.Opens θ F c) X ∨ ¬ V.Carries L posOf θ F c X u
 
 /-- The cut Program the circuit file decodes to, the one `CutIsRegistered` reads. -/
-def cutProgram (θ : ByteArray) (F : Array ByteArray) : Option Flock.Program.Prog :=
+noncomputable def cutProgram (θ : ByteArray) (F : Array ByteArray) : Option Flock.Program.Prog :=
   (Flock.Program.decode (V.circuitFile θ F)).toOption
 
 /-- `Labels.ofProgram` at the cut Program labels every input gate of a unit (`Labels.Total`). Open: it is about
