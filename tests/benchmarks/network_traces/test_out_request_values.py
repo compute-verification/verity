@@ -113,16 +113,21 @@ def test_scan_zk_publishes_what_the_gate_publishes_of_its_own_rehearsal(tmp_path
     holds_none_of_the_run(out, "warden")
 
 
-def test_scan_zk_keeps_its_answers_whole_registrations_out_of_its_output(tmp_path):
-    """The scan's copy of its driver's directory into $OUT/sczk leaves out ``answers.json``, whose registrations carry
-    their wiring; the summary, which holds each answer's verdict and public part, is copied."""
+def test_scan_zk_keeps_its_summary_and_programs_and_nothing_the_verifier_received(tmp_path):
+    """Of its driver's directory the scan keeps the summary, which holds each answer's verdict and public part, and each
+    round's Program; ``answers.json`` and the verifier's files (the registrations with their wiring, the openings,
+    the registered reads) stay in $W."""
     w, out = tmp_path / "W", tmp_path / "OUT"
     whole = {"wiring": "17" * 64, "root": "ab" * 64}
     put(w / "sczk", {"summary.json": {"answers": {"0": {"verdict": "accept", "public": {"proved": [0]}}}},
                      "answers.json": {"windows": [{"registration": whole, "registrations": [whole, whole]}]},
-                     "honest-0/verifier/program.json": {"units": 3}})
+                     "honest-0/verifier/program.json": {"units": 3},
+                     "honest-0/verifier/warden-registration-ingress-0.json": whole,
+                     "honest-0/verifier/openings.json": [{"unit": 0, "o0": 1}],
+                     "honest-0/verifier/registration.json": {"window": {"units": {"cells": [[1, 4]]}}},
+                     "honest-0/registered.json": {"ports": {"p": {"rows": [3]}}}})
     (out / "sczk").mkdir(parents=True)
-    got = run(block("scan_zk.sh", '(cd "$W/sczk" && find', "  ! -name"), W=w, OUT=out)
+    got = run(block("scan_zk.sh", '(cd "$W/sczk" && find', "  | xargs"), W=w, OUT=out)
     assert got.returncode == 0, got.stderr
     assert published(out) == ["sczk/honest-0/verifier/program.json", "sczk/summary.json"]
     assert "17" * 64 not in "".join(p.read_text() for p in out.rglob("*.json"))
