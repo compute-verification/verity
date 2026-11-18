@@ -60,6 +60,8 @@ from . import wipe_store
 
 
 T = TypeVar("T")
+#: what carries the challenger's link in a placement: the connection's addresses stay in the private record
+CHALLENGER_LINK = "the prover's connection to the memory attester's machine (its addresses in the private record)"
 #: who graded the wipe's answer, its placement's ``graded_by``
 GRADED_BY = ("graded by the developer's piece (verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py: "
              "wipe_period.answer and wipe-protocol, verity/wipe/v0 uncounted) on the served node; no auditor-side entry "
@@ -463,11 +465,11 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     if c["reads"] is not None and k != c["reads"]:
         raise RuntimeError(f"the memory attester on {party.host} ran {k} reads, not period.json's wipe.reads "
                            f"{c['reads']}: its command chooses them (wipe_party --reads)")
-    links = [wipe_party.link(e["name"], node, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))
+    prover_machine, attester_machine = mc.machines(node, party.host)
+    links = [wipe_party.link(e["name"], prover_machine, e["to"], e["via"], mbps=e.get("mbps"), counted_by=e.get("counted_by"))
              for e in c["links"]]
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
-        conn = wipe.report["connection"]
-        links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
+        links.append(wipe_party.link("challenger", prover_machine, attester_machine, CHALLENGER_LINK))
     where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], **deployment(doc),
                                  store_gaps=W.store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
@@ -475,7 +477,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     where = where | {"graded_by": GRADED_BY}
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),
-                         "clock": f"{socket.gethostname()}'s real-time clock, around the whole session (the "
+                         "clock": f"{mc.PROVER_MACHINE}'s real-time clock, around the whole session (the "
                                   "challenger's start included)"}}
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
