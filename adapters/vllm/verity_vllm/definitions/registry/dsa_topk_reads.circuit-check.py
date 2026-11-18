@@ -33,6 +33,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `DsaPositionsMerge_v2` at those statics (`_merge_calls_roots`)."""
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import read
+
     from verity_vllm.definitions.registry import dsa_topk_reads as R
 
     return [
@@ -43,9 +44,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaPositionsChunk_v1", lambda: bind(R.DsaPositionsChunk, K=4, W=2)),
         ("DsaPositionsChunk_v1-odd", lambda: bind(R.DsaPositionsChunk, K=5, W=2)),
         ("DsaPositionsChunk_v1-served", lambda: bind(R.DsaPositionsChunk, K=2048, W=R.CHUNK)),
-        ("DsaPositionsSlot_v1", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
-        ("DsaPositionsSlot_v1-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
-        ("DsaPositionsSlot_v1-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
+        ("DsaPositionsSlotBits_v1", lambda: bind(R.DsaPositionsSlotBits, K=4, N=20)),
+        ("DsaPositionsSlotBits_v1-served", lambda: bind(R.DsaPositionsSlotBits, K=R.CHUNK, N=131072)),
+        ("DsaPositionsSlot_v2", lambda: bind(R.DsaPositionsSlot, K=4, N=20)),
+        ("DsaPositionsSlot_v2-odd", lambda: bind(R.DsaPositionsSlot, K=5, N=12)),
+        ("DsaPositionsSlot_v2-served", lambda: bind(R.DsaPositionsSlot, K=R.CHUNK, N=131072)),
         ("DsaTopKReadRows_v1", lambda: bind(R.DsaTopKReadRows, N=12, TOPK=2, BLOCK=4, READ=read(16, 1))),
     ]
 
@@ -54,6 +57,7 @@ def _merge_calls_roots() -> list[Any]:
     """The merge written as Calls at the traced one's bindings (one list, three, and the served 8 blocks of 2,048 slots, held
     to its digest pin), and its pieces, the two offsets at a small K and the served one."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_reads as R
 
     return [*(bind(R.DsaPositionsMergeV2, M=m, K=k) for m, k in ((1, 4), (3, 4), (8, 2048))),
@@ -66,6 +70,7 @@ def _by_calls_roots() -> list[Any]:
     whole.  The first class, the last whole one (`dsa_topk_mask_cut.WHOLE_MAX`), the first cut one and the longest row."""
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import read
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
     from verity_vllm.definitions.registry import dsa_topk_reads as R
 
@@ -79,6 +84,7 @@ def _positions_calls_roots() -> list[Any]:
     multiple of its length; and the two the long row serves, a block of the cut and the longest row masked whole, each held to
     its digest pin."""
     from verity.circuits.defs import bind
+
     from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
     from verity_vllm.definitions.registry import dsa_topk_reads as R
 

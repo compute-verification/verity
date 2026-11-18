@@ -67,8 +67,9 @@ def saltCheck (key ledger pins main window session weights requests opening : Js
 session, else the refusal. -/
 def roundsCheck (key ledger pins main window session roots openings : Json) : R Unit := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let (c, received) ← (trustedChallengePhaseOf ledger window k pins main session).mapError fun e =>
+  let (c, log) ← (trustedChallengePhaseOf ledger window k pins main session).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
+  let received := Spot.Challenger.byFamily c log
   let some rs := (match roots with
       | .arr rs => rs.toList.mapM fun r => if (str? r).any isHexDigest then hex? r else none
       | _ => none) | throw ("rounds", "the round roots are not a list of SHA-512 digests")

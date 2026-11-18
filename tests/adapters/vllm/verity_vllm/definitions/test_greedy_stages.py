@@ -19,11 +19,11 @@ from collections import Counter
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import b1
 from verity_vllm.definitions.registry import greedy_stages as G
 

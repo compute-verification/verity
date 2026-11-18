@@ -22,7 +22,7 @@ from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS
 from tests.protocols.test_pouw_h1_served import _unit
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.pipeline.advice_code import format as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW

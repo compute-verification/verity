@@ -20,19 +20,26 @@ def _no_git(monkeypatch):
     for name in ("run", "check_output"):
         real = getattr(subprocess, name)
 
-        def refuse(argv, *args, _real=real, **kwargs):
-            if list(argv)[:1] == ["git"]:
-                raise AssertionError(f"--here asked git: {argv}")
-            return _real(argv, *args, **kwargs)
+        def refuse(argv, *args, _real=real, _name=name, **kwargs):
+            if list(argv)[:1] != ["git"]:
+                return _real(argv, *args, **kwargs)
+            if _name == "check_output":
+                raise subprocess.CalledProcessError(128, argv)
+            return subprocess.CompletedProcess(argv, 128, "", "fatal: not a git repository")
 
         monkeypatch.setattr(subprocess, name, refuse)
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", SHIPPED)
+    monkeypatch.setattr(jobs, "lease_host", lambda: False)
 
 
 @pytest.mark.parametrize("card", ["NVIDIA H100 80GB HBM3", "NVIDIA H200"])
-def test_here_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_git_lease_or_slot(
+def test_run_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_git_lease_or_slot(
         tmp_path, monkeypatch, capsys, card):
+    """A machine not ours (a Slurm job of VCF's cluster): no git that knows the commit, so no catalog lookup, which `run`
+    says by name, and the point runs on the cards the job was given."""
+
     _no_git(monkeypatch)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.delenv("VERITY_BENCH_VENV", raising=False)
     monkeypatch.delenv("VERITY_BENCH_SETUP", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
@@ -41,8 +48,9 @@ def test_here_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_gi
     dispatch = jobs.dispatch
     monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
         *a, **k, execute=lambda command, cwd: commands.append((list(command), cwd)) or 0))
-    assert main(["run", NAME, "--here"]) == 0
+    assert main(["run", NAME]) == 0
     [(command, cwd)] = commands
+    assert "no catalog lookup here, so no passing run is reused: git doesn't know commit" in capsys.readouterr().err
     item = jobs.make_plan(NAME, root=ROOT, lookup=lambda identity, commit: None).points[0]
     assert cwd == ROOT and item.point.id == "b32-p512-mixed"
     assert command == ["env", "VERITY_BENCH_SETUP=benchmarks/harness/setup/pearl_c_sm90.sh",
@@ -61,32 +69,32 @@ def test_here_runs_the_one_point_in_this_run_on_the_card_it_was_given_with_no_gi
         assert stop.value.code == 2 and f"the card is a {card}, not the h100 of spec {NAME!r}" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(("argv", "why"), [
-    (["--here", "--direct", "vy-h100-1"], "--here runs the points on this machine, --direct NODE on that node's slots"),
-    (["--here", "--card", "0", "--cores", "0-15"], "need --direct NODE"),
-    (["--here", "--end", "2026-11-18T07:13Z"], "needs --direct NODE"),
-])
-def test_here_refuses_what_only_a_direct_launch_takes(monkeypatch, capsys, argv, why):
+@pytest.mark.parametrize("argv", [["--here"], ["--direct", "vy-h100-1"], ["--card", "0"], ["--cores", "0-15"],
+                                  ["--end", "2026-11-18T07:13Z"]])
+def test_run_takes_no_flag_of_the_launches_it_replaced(monkeypatch, capsys, argv):
     _no_git(monkeypatch)
     monkeypatch.chdir(ROOT)
-    dispatch = jobs.dispatch
-    monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
-        *a, **k, execute=lambda command, cwd: pytest.fail(f"launched {command}")))
     with pytest.raises(SystemExit):
         main(["run", NAME, *argv])
-    assert why in capsys.readouterr().err
+    assert "unrecognized arguments" in capsys.readouterr().err
 
 
-def test_here_refuses_a_spec_with_more_than_one_point_to_run(monkeypatch, capsys):
+def test_run_refuses_a_spec_with_more_than_one_point_unless_one_is_named(tmp_path, monkeypatch, capsys):
     _no_git(monkeypatch)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.chdir(ROOT)
+    commands = []
     dispatch = jobs.dispatch
     monkeypatch.setattr(jobs, "dispatch", lambda *a, **k: dispatch(
-        *a, **k, execute=lambda command, cwd: pytest.fail(f"launched {command}")))
+        *a, **k, execute=lambda command, cwd: commands.append(command) or 0))
+    name = "llama31-8b-fp8-1gpu-commit-served-width-h200"
     with pytest.raises(SystemExit):
-        main(["run", "llama31-8b-fp8-1gpu-commit-served-width-h200", "--here"])
-    assert ("has 3 to run (b1-p512-mixed, b8-p512-mixed, b32-p512-mixed); run them with --direct NODE or the queue"
-            in capsys.readouterr().err)
+        main(["run", name])
+    assert ("has 3 points (b1-p512-mixed, b8-p512-mixed, b32-p512-mixed) and a run runs one: name it with --point"
+            in capsys.readouterr().err) and commands == []
+    assert main(["run", name, "--point", "b8-p512-mixed"]) == 0
+    [command] = commands
+    assert command[command.index("--point") + 1] == "b8-p512-mixed"
 
 
 def test_a_tree_git_cant_name_refuses_naming_the_variable_unless_research_run_set_it(tmp_path, monkeypatch):

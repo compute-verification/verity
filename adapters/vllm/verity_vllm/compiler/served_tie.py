@@ -79,7 +79,7 @@ from verity.commitments import hm96
 from verity.commitments.gates.frame_v3 import _part, _refs
 from verity.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 
 from verity_vllm.compiler import replay_chain as RC
@@ -252,12 +252,12 @@ def _sig_step(S):
 
 
 def _body_step(B, S, step, n, chunks, switches):
-    Z, K = _step_widths(S), HC._Consts(B)
+    Z, K = _step_widths(S), GB._Consts(B)
     sl = _refs(B.call(bind(ServedTieSlots, R=S.R, L=S.L, T=S.T), step, n))
-    recs = HC._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
+    recs = GB._coll(Array(Z.M, Array(Z.V, BIT)), sl[2:] + K.bits(0, (Z.M - S.R) * Z.V))
     routed = B.call(bind(IT.IoTieRoute, W=Z.V, D=Z.D), recs, switches)
-    pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, HC._coll(BIT, [sl[1]]))
-    return HC._coll(Array(2, BIT), [sl[0], *_refs(pos)])
+    pos = B.call(bind(ServedTieScan, R=S.R, L=S.L, T=S.T, IB=S.IB, PB=S.PB), routed, n, chunks, GB._coll(BIT, [sl[1]]))
+    return GB._coll(Array(2, BIT), [sl[0], *_refs(pos)])
 
 
 ServedTieStep = CompositeDefinition(
@@ -304,31 +304,31 @@ def _sig(S):
 def _all(B, refs: list):
     if len(refs) == 1:
         return refs[0]
-    return _refs(B.call(BL.and_gate(len(refs)), HC._coll(Array(len(refs), BIT), refs)))[0]
+    return _refs(B.call(BL.and_gate(len(refs)), GB._coll(Array(len(refs), BIT), refs)))[0]
 
 
 def _body(B, S, pub, srv, *rest):
-    Z, G, K = widths(S), geometry(S), HC._Consts(B)
+    Z, G, K = widths(S), geometry(S), GB._Consts(B)
     pr, sr = _refs(pub), _refs(srv)
     pos, sw = rest[:S.G * G.K], rest[S.G * G.K:]
     counts, poss = [], []
     tie = [b for i in range(S.P) for b in _tie(S, sr[i * Z.SB:(i + 1) * Z.SB])]
     if Z.U > 1:
-        sel = _refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.TB), HC._coll(Array(Z.JW, BIT), pr[:Z.JW]),
-                              HC._coll(Array(S.P * Z.TB, BIT), tie)))
+        sel = _refs(B.call(bind(ServedTieSelect, P=S.P, G=S.G, SB=Z.TB), GB._coll(Array(Z.JW, BIT), pr[:Z.JW]),
+                              GB._coll(Array(S.P * Z.TB, BIT), tie)))
         recs = sel[:-1]
         counts.append(sel[-1])
     else:
         recs = tie
     step = bind(ServedTieStep, **{k: getattr(S, k) for k in STEP})
     for g in range(S.G):
-        o = _refs(B.call(step, HC._coll(Array(Z.TB, BIT), recs[g * Z.TB:(g + 1) * Z.TB]),
-                            HC._coll(Array(Z.TW, BIT), pr[Z.JW + g * Z.TW:Z.JW + (g + 1) * Z.TW]),
-                            HC._coll(Array(G.K, Array(8 * CHUNK, BIT)), [r for c in pos[g * G.K:(g + 1) * G.K] for r in _refs(c)]),
-                            HC._coll(Array(Z.SW, BIT), _refs(sw[g])[:Z.SW])))
+        o = _refs(B.call(step, GB._coll(Array(Z.TB, BIT), recs[g * Z.TB:(g + 1) * Z.TB]),
+                            GB._coll(Array(Z.TW, BIT), pr[Z.JW + g * Z.TW:Z.JW + (g + 1) * Z.TW]),
+                            GB._coll(Array(G.K, Array(8 * CHUNK, BIT)), [r for c in pos[g * G.K:(g + 1) * G.K] for r in _refs(c)]),
+                            GB._coll(Array(Z.SW, BIT), _refs(sw[g])[:Z.SW])))
         counts.append(o[0])
         poss.append(o[1])
-    return HC._coll(Array(16, BIT), [_all(B, counts), _all(B, poss), *K.bits(0, 16 - len(FLAGS))])
+    return GB._coll(Array(16, BIT), [_all(B, counts), _all(B, poss), *K.bits(0, 16 - len(FLAGS))])
 
 
 ServedRowsTie = CompositeDefinition(

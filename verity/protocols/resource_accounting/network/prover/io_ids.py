@@ -53,13 +53,13 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
 from verity.commitments.gates.frame_v3 import _part, opens
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES
 
-BIT, BYTE = HC.BIT, HC.BYTE
+BIT, BYTE = GB.BIT, GB.BYTE
 #: a slot's record out of `IoTieIdsSlots`: field, ordinal, value
 SLOT = 1 + 32 + 32
 #: the registered value the ingress port reads, the Commit's input ids
@@ -288,7 +288,7 @@ def _check_sizes(shape: Shape, inst: Instance) -> None:
 def reads_open(shape: Shape, inst: Instance) -> bool:
     """Every read row opens at its step under the Commit's root: the bucket's `port_reads`, in the clear."""
     _check_sizes(shape, inst)
-    return all(opens(SCHEMA, inst.port_root, inst.port_domain, HC.hiding_value(x, s), st, list(p)) == 1
+    return all(opens(SCHEMA, inst.port_root, inst.port_domain, GB.hiding_value(x, s), st, list(p)) == 1
                for x, s, st, p in zip(inst.port, inst.port_salts, inst.map.steps, inst.paths))
 
 
@@ -480,13 +480,13 @@ def _sig_chain(S):
 
 
 def _body_chain(B, S, members):
-    W, n, m = S.CB + 33, 1 << S.D2, HC._refs(members)
+    W, n, m = S.CB + 33, 1 << S.D2, GB._refs(members)
     pairs = Array(n - 1, Array(W, BIT))
-    first = B.call(bind(IoTieIdsFirst, CB=S.CB), HC._coll(Array(W, BIT), m[:W]))
-    links = B.batch(bind(IoTieIdsLink, CB=S.CB), HC._coll(pairs, m[:W * (n - 1)]), HC._coll(pairs, m[W:]), axes=(0, 0))
+    first = B.call(bind(IoTieIdsFirst, CB=S.CB), GB._coll(Array(W, BIT), m[:W]))
+    links = B.batch(bind(IoTieIdsLink, CB=S.CB), GB._coll(pairs, m[:W * (n - 1)]), GB._coll(pairs, m[W:]), axes=(0, 0))
     # one And over the first member's bit and each link's three in order: the flat build's `and_reduce`, gate for gate
-    bits = [*HC._refs(first), *HC._refs(links)]
-    return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
+    bits = [*GB._refs(first), *GB._refs(links)]
+    return B.call(BL.and_gate(len(bits)), GB._coll(Array(len(bits), BIT), bits))
 
 
 IoTieIdsChain = CompositeDefinition(
@@ -513,30 +513,30 @@ def _sig_ids(S):
 def _body_ids(B, S, row, lanes_, keys, ekeys, port, route, sort):
     sh = _unit_shape(S)
     CB = sh.CB
-    K, cr, lr, pr = HC._Consts(B), HC._refs(row), HC._refs(lanes_), HC._refs(port)
+    K, cr, lr, pr = GB._Consts(B), GB._refs(row), GB._refs(lanes_), GB._refs(port)
     oks = []
-    nf, slots = HC._coll(Array(32, BIT), K.bits(0, 32)), []
+    nf, slots = GB._coll(Array(32, BIT), K.bits(0, 32)), []
     for k in range(S.L):
         ln = lr[Q.LANE * k:Q.LANE * (k + 1)]
-        q = HC._coll(Array(32, BIT), ln[0:32])
-        state = HC._coll(Array(Q.STATE, BIT), ln[32:96] + K.bits(0, 2) + K.bits(1, 1))
+        q = GB._coll(Array(32, BIT), ln[0:32])
+        state = GB._coll(Array(Q.STATE, BIT), ln[32:96] + K.bits(0, 2) + K.bits(1, 1))
         for j in range(S.R):
             i = S.R * k + j
-            cell = HC._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])
-            fo = B.call(bind(Q.IoTieRequestFrame, B=S.B), cell, HC._coll(Array(32, BIT), HC._refs(state)[:32]), q)
-            so = HC._refs(B.call(bind(IoTieIdsSlots, B=S.B), cell, fo, nf))
-            nf, slots = HC._coll(Array(32, BIT), so[:32]), slots + so[32:]
+            cell = GB._coll(Array(S.B, BYTE), cr[8 * S.B * i:8 * S.B * (i + 1)])
+            fo = B.call(bind(Q.IoTieRequestFrame, B=S.B), cell, GB._coll(Array(32, BIT), GB._refs(state)[:32]), q)
+            so = GB._refs(B.call(bind(IoTieIdsSlots, B=S.B), cell, fo, nf))
+            nf, slots = GB._coll(Array(32, BIT), so[:32]), slots + so[32:]
             state = B.call(bind(Q.IoTieRequestStep), state, fo)
-        oks.append(B.call(bind(Q.IoTieRequestEnd), state, HC._coll(Array(32, BIT), ln[96:128]),
-                          HC._coll(Array(32, BIT), ln[128:160])))
-    kr, xs1 = HC._refs(keys), []
+        oks.append(B.call(bind(Q.IoTieRequestEnd), state, GB._coll(Array(32, BIT), ln[96:128]),
+                          GB._coll(Array(32, BIT), ln[128:160])))
+    kr, xs1 = GB._refs(keys), []
     for f in range(1 << sh.D1):
         xs1 += (kr[CB * f:CB * (f + 1)] if f < sh.NK else K.bits(sh.sink, CB)) + K.bits(f, sh.D1)
     routed1 = B.call(bind(IT.IoTieRoute, W=CB + sh.D1, D=sh.D1),
-                     HC._coll(Array(1 << sh.D1, Array(CB + sh.D1, BIT)), xs1), route)
-    ko = HC._refs(B.call(bind(IoTieIdsKeys, NK=sh.NK, CB=CB, D1=sh.D1), HC._coll(Array(sh.NK, Array(SLOT, BIT)), slots),
+                     GB._coll(Array(1 << sh.D1, Array(CB + sh.D1, BIT)), xs1), route)
+    ko = GB._refs(B.call(bind(IoTieIdsKeys, NK=sh.NK, CB=CB, D1=sh.D1), GB._coll(Array(sh.NK, Array(SLOT, BIT)), slots),
                          routed1))
-    ek, members = HC._refs(ekeys), []
+    ek, members = GB._refs(ekeys), []
     for s in range(sh.NK):
         members += ko[1 + CB * s:1 + CB * (s + 1)] + K.bits(0, 1) + slots[SLOT * s + 33:SLOT * (s + 1)]
     for e in range(sh.E):
@@ -544,11 +544,11 @@ def _body_ids(B, S, row, lanes_, keys, ekeys, port, route, sort):
         members += ek[CB * e:CB * (e + 1)] + K.bits(1, 1) + [pr[8 * (4 * e + 3 - j // 8) + j % 8] for j in range(32)]
     for _ in range(sh.NK + sh.E, 1 << sh.D2):
         members += K.bits(sh.sink, CB) + K.bits(1, 1) + K.bits(0, 32)
-    ordered = B.call(bind(IT.IoTieRoute, W=CB + 33, D=sh.D2), HC._coll(Array(1 << sh.D2, Array(CB + 33, BIT)), members),
+    ordered = B.call(bind(IT.IoTieRoute, W=CB + 33, D=sh.D2), GB._coll(Array(1 << sh.D2, Array(CB + 33, BIT)), members),
                      sort)
     oks.append(B.call(bind(IoTieIdsChain, CB=CB, D2=sh.D2), ordered))
-    bits = [r for o in oks for r in HC._refs(o)] + [ko[0]]
-    return B.call(BL.and_gate(len(bits)), HC._coll(Array(len(bits), BIT), bits))
+    bits = [r for o in oks for r in GB._refs(o)] + [ko[0]]
+    return B.call(BL.and_gate(len(bits)), GB._coll(Array(len(bits), BIT), bits))
 
 
 IoTieRequestIds = CompositeDefinition(
@@ -566,15 +566,15 @@ IoTieRequestIds = CompositeDefinition(
 
 def slots_arguments(cells: Sequence[bytes], frames: Sequence[Sequence[int]], nfs: Sequence[int]) -> list[list[int]]:
     """`IoTieIdsSlots`' arguments for a batch of (cell, `IoTieRequestFrame` output bits, nf)."""
-    return [[HC._bytes_bits(c) for c in cells], [list(f) for f in frames], [HC._int_bits(x, 32) for x in nfs]]
+    return [[GB._bytes_bits(c) for c in cells], [list(f) for f in frames], [GB._int_bits(x, 32) for x in nfs]]
 
 
 def arguments(shape: Shape, inst: Instance, route: Sequence[int], sort: Sequence[int]) -> list[list[int]]:
     """`IoTieRequestIds`' arguments in its signature's order, each its leaves' bits: IoTieRequest's (the row and the
     lanes), then the map's classes, the read rows (as the registered reads give them) and both routings."""
     sh, mp = shape, inst.map
-    return [*Q.arguments(sh.request, inst.request), [b for k in mp.keys for b in HC._int_bits(k, sh.CB)],
-            [b for k in mp.ekeys for b in HC._int_bits(k, sh.CB)], [b for r in inst.port for b in HC._bytes_bits(r)],
+    return [*Q.arguments(sh.request, inst.request), [b for k in mp.keys for b in GB._int_bits(k, sh.CB)],
+            [b for k in mp.ekeys for b in GB._int_bits(k, sh.CB)], [b for r in inst.port for b in GB._bytes_bits(r)],
             list(route), list(sort)]
 
 

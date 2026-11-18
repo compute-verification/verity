@@ -188,10 +188,15 @@ def sample(now: float | None = None) -> list[dict]:
 
 
 def set_key(name: str, key: str, value: str | None) -> None:
-    """Set (or, with None, remove) one key of machine `name`'s registry file, keeping its other lines as they are."""
+    """Set (or, with None, remove) one top-level key of machine `name`'s registry file, keeping its other lines as they are.
+    The key goes after the file's last top-level key, since a line after a table's header (`[properties]`) is the table's."""
     f = MACHINES_D / f"{name}.toml"
-    kept = [ln for ln in f.read_text().splitlines() if not ln.startswith(f"{key} =")]
-    f.write_text("\n".join([*kept, *([f'{key} = "{value}"'] if value is not None else [])]) + "\n")
+    lines = f.read_text().splitlines()
+    end = next((i for i, ln in enumerate(lines) if ln.lstrip().startswith("[")), len(lines))
+    while end and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")) and end < len(lines):
+        end -= 1
+    top = [ln for ln in lines[:end] if not ln.startswith(f"{key} =")]
+    f.write_text("\n".join([*top, *([f'{key} = "{value}"'] if value is not None else []), *lines[end:]]) + "\n")
 
 
 def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:

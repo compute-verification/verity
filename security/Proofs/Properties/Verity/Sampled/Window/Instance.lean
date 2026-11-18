@@ -669,14 +669,15 @@ theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Regist
     (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
-    (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec) :
+    (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   executionPhaseSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
     (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.pinned I.dev reg ExecutionPhase.table ev filesDec
     record₀ recordDigest (fun θ _ _ _ => labelAt θ) _root_.Spot.Challenger.MAX_COINS
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
-    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa)
+    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa) hTwo
     (fun _ _ _ _ o _ => Device.printsLog_dev _ o)
     (fun θ F _ _ c => Device.signsPlay_dev (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
       I.deployment θ F c (I.signer θ))
@@ -705,10 +706,11 @@ theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ 
     (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
+    (hTwo : TwoStageBound (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)) .remote)
     (hW : I.base.PouwSound .remote)
     (hWi : (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).WiresSound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=
   Verity.remote_soundness_of_subprotocols ι α d _
-    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR) hW hWi
+    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR hTwo) hW hWi
 
 end Verity.Sampled

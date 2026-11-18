@@ -6,7 +6,7 @@ check that refuses it by its refusal code, and the advice and Commit tamperings 
         [--model M] [--T 50] [--R 32]
     python benchmarks/network_traces/negatives.py warden --run DIR
 
-The advice is I1's (`verity.protocols.resource_accounting.network.verifier.advice`, its `encode` bytes) and the Commit record
+The advice is I1's (`verity_vllm.pipeline.advice_code.format`, its `encode` bytes) and the Commit record
 I3's (serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
@@ -86,7 +86,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_NAM
 from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
-ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
+ADVICE_MODULE = "verity_vllm.pipeline.advice_code.format"
 IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
 NETWORK_ATTESTER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
@@ -176,7 +176,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
-# On I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`): Advice(requests, steps, release),
+# On I1 v0 (`verity_vllm.pipeline.advice_code.format`): Advice(requests, steps, release),
 # RequestAdvice(id, prompt_len, output_len, finish), StepAdvice(rows), Row(request, kind, start, n, cache_hit,
 # preempted, sources), Source(request, n), and `release` one egress bucket a kept output. Each tampering returns new advice and
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed
@@ -657,18 +657,17 @@ def attested_ingress(Q, requests: list[bytes], received: list[int], *, T: int, f
 
 
 def request_tie(Q, cells: Ingress, link) -> tuple[bool, ...]:
-    """IoTieRequest's verdict on each ingress window of `link` (`tie_service.LinkAdvice`): its reference on every bucket
-    row of the window against the verifier's lanes of the bucket (`io_request.lanes`: the advice's prompt lengths in
-    its order and the network attester's release); every window refused where the release isn't the network attester's
-    schedule for the advice's requests or doesn't put `received`'s request cells in each window
+    """IoTieRequest's verdict on each ingress window of `link` (`tie_service.IngressInputs`): its reference on every
+    bucket row of the window against the verifier's lanes of the bucket (`io_request.lanes`: each input's length in its
+    place and the network attester's release); every window refused where the release isn't the network attester's
+    schedule for the inputs or doesn't put `received`'s request cells in each window
     (`tie_service.IngressTie.tie`). The verifier takes the verdict from IoTieRequest proofs it verified; this
     is their reference in the clear."""
     refused, T = (False,) * len(link.received), cells.T
-    lens = [q.prompt_len for q in link.advice.requests]
     if len(link.received) * T != len(cells.rows):
         return refused
     try:
-        lanes = [Q.lanes(cells.shape, lens, cells.releases, t) for t in range(len(cells.rows))]
+        lanes = [Q.lanes(cells.shape, link.lengths, cells.releases, t, link.places) for t in range(len(cells.rows))]
     except ValueError:
         return refused
     if TS.window_cells(cells.releases, T) != {w: c for w, c in enumerate(link.received) if c}:
@@ -696,7 +695,11 @@ def advice_suite(advice, *, T: int, request_frames, received: list[int], frame_b
                               link_received(advice, request_frames, received), T=T, frame_bytes=frame_bytes)
 
     def judged(b) -> dict:
-        tie = list(request_tie(Q, cells, TS.LinkAdvice(b, tuple(link_received(b, request_frames, received)))))
+        lens, got = tuple(q.prompt_len for q in b.requests), tuple(link_received(b, request_frames, received))
+        try:
+            tie = list(request_tie(Q, cells, TS.IngressInputs(tuple(range(len(lens))), lens, got)))
+        except ValueError:
+            tie = [False] * len(got)
         return {"codes": [] if all(tie) else [REQUEST_TIE], "request_tie": tie}
 
     honest = judged(advice)

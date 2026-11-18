@@ -9,7 +9,8 @@ unset VLLM_BATCH_INVARIANT
 export PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
 PC_OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup/pearl_c_sm90
 mkdir -p "$(dirname "$PC_OUT")"
-CUDA=${CUDA_HOME:-/usr/local/cuda-13.0} bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh "$PC_OUT" \
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4
+CUDA_HOME=$CUDA_HOME bash verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh "$PC_OUT" \
   || { echo "setup: verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/build.sh failed" >&2; exit 4; }
 sha256sum verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/*.cuh verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/*.cuh \
   verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py "$PC_OUT/pearl_c_sm90.cubin" > "$PC_OUT/sha256.txt"

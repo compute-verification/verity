@@ -15,12 +15,12 @@ token count gives.
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.kernels import tc as CK
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.numerics import flashmla_twin as T
 from verity_vllm.definitions.numerics.kernel_registry import register
-from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 
 U32 = np.uint32
 
@@ -80,10 +80,10 @@ def decode(q, nope, scale, rope, idx, *, SPLITS, QT: int, BN: int, DV: int, SCAL
     return head(q, kv_rows(nope, scale, rope, valid, QT), valid, SPLITS=SPLITS, BN=BN, DV=DV, SCALE=SCALE)
 
 
-def step_splits(tokens: int, *, topk: int, h_q: int = 64, BN: int = T.BLOCK) -> tuple[int, ...]:
+def step_splits(tokens: int, *, topk: int, num_sms: int, h_q: int = 64, BN: int = T.BLOCK) -> tuple[int, ...]:
     """SPLITS of every token of a step of ``tokens`` query rows: the call is one request of s_q = tokens rows over ``topk`` cache
-    rows, which the planner cuts over num_sm_parts = max(132 / tokens / (h_q / 64), 1) partitions (`flashmla_twin.sched_meta`)."""
-    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(h_q, s_q=tokens))
+    rows, which the planner cuts over num_sm_parts = max(num_sms / tokens / (h_q / 64), 1) partitions (`flashmla_twin.sched_meta`)."""
+    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(h_q, s_q=tokens, num_sms=num_sms))
     return T.request_splits(metas, ns, 0, topk // BN)
 
 
