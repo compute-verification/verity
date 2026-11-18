@@ -343,6 +343,19 @@ def test_never_a_number_whose_last_launch_is_in_flight_or_ran_less_than_its_ever
     assert len(pod.launched) == 2
 
 
+def test_a_command_is_launched_again_at_its_shortest_due_numbers_every_not_its_longest(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("top/slow", CPU, every="6h"), row("top/fast", CPU, every="1h")]})
+    pod = Pod(states={run_id(1): ("done", 0, True)})
+    state, _ = run(cfg, pod)
+    run(cfg, pod, state, now=NOW + 60)
+    pod.ages = {"top/slow": 30 * 60_000, "top/fast": 30 * 60_000}
+    run(cfg, pod, state, now=NOW + 1800)
+    assert len(pod.launched) == 1, "both fresh"
+    pod.ages = {"top/slow": 61 * 60_000, "top/fast": 61 * 60_000}
+    run(cfg, pod, state, now=NOW + 3720)
+    assert len(pod.launched) == 2, "top/fast is past its hour; top/slow's six hours don't hold it"
+
+
 def test_a_failed_run_rings_its_owner_and_is_tried_again_within_the_hour_not_after_its_every(tmp_path):
     """A weekly number whose run fails is launched again an hour after, not a week: the owner (the id's handle) is rung once
     with the run id and the failure's reason line, and the launch between is said."""
