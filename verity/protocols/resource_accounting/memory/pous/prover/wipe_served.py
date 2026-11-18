@@ -35,7 +35,7 @@ the facts:
 - ``ready``: called with the judge's path before the judge answers (`wipe_run.subprotocol`'s ``ready``); `built` by
   default, which waits for a judge its launcher still builds beside the wipe (`served_wipe.sh`).
 
-It refuses, by name, before any session: outside the engine's process (``ctx["process"]``), with no side, with no
+It refuses, by name, before any session: outside its piece's process (``ctx["process"]``), with no side, with no
 private directory, with no pin handed to it, with no challenger binding, and on a busy card. The case and the record
 go to ``ctx["private"]`` (``wipe.case.json``, ``wipe.json``); the report returned (`Wiped`) gives the record and its
 summary. The challenger's run key and session log are in a scratch directory removed before it returns."""
@@ -175,8 +175,8 @@ def refusals(ctx: Mapping[str, Any]) -> tuple[str, ...]:
     s = {**ctx["settings"], **facts}
     if why := check(s):
         out.append(why)
-    if ctx.get("process") != H.ENGINE:
-        out.append(f"it runs in the engine's process, before the model loads, not in {ctx.get('process')!r}")
+    if ctx.get("process") != H.PIECE:
+        out.append(f"it runs in its piece's process, before any engine is on the card, not in {ctx.get('process')!r}")
     if ctx.get("side_of") is None:
         out.append("no challenger's side was handed to it (ctx['side_of'], the runtime's Side.of)")
     if ctx.get("private") is None:
