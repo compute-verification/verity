@@ -762,6 +762,7 @@ def test_the_verifier_tie_tests_tie_is_the_audits_on_their_toys():
     code = f"""
 import sys
 sys.path[:0] = [{str(HERE)!r}, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r}]
+import settings  # records_audit puts benchmarks/one_stage, with a settings.py of its own, ahead of HERE
 import records_audit as RA
 from verity.circuits.codec import descriptor_id
 import json
