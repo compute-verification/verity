@@ -17,7 +17,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.population import BitsWord, WordBits
-from verity.commitments.periods import interface as I, rows as CS
+from verity.commitments.periods import interface as I
 
 GID, RUN = TI.GID, TI.RUN
 
@@ -226,13 +226,12 @@ def test_cmp92s_class_circuit_has_one_inference_and_nothing_free(circuit):
 
 
 def test_cmp92s_members_come_from_its_record_and_its_blocks_are_the_same_under_any_run(circuit):
-    """The layer row units are one statement (their one wire covers both layers), and the verifier derives the same members
-    from the descriptor record; the period's blocks are byte-identical under any run. The members are the circuit's without
-    its registered reads, whose tables cut the layer rows at each step's layer."""
+    """The layer row units are a member per step and layer (S·H units each, in the order a root runs them), the verifier
+    derives the same members from the descriptor record, and the period's blocks are byte-identical under any run. The
+    members are the circuit's without its registered reads."""
     cap = 1 << 20
     plain = replace(circuit, registered=None)
-    base = {t: lo for _k, t, lo, _n in CS.template_partition(*plain.program()).ranges}
-    assert [(m.base, m.n) for m in I.members(plain, cap) if m.template == OID] == [(base[OID], 2 * H * T * S)]
+    assert [m.n for m in I.members(plain, cap) if m.template == OID] == [S * H] * (LAYERS * T)
     rec = I.descriptor_record(plain, cap)
     for run in ("ab" * 64, "cd" * 64):
         w = I.window_of_record({**rec, "run": run, "context": ""}, TI.SAMPLING_DESIGN, I.resolve)
