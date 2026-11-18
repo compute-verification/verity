@@ -12,7 +12,7 @@ import pytest
 
 from verity.circuits.silicon import fp32
 from verity.circuits.silicon.models import HOPPER_E4M3_K32
-from verity.protocols.resource_accounting.compute.pouw.prover.circuit import words as W
+from verity.circuits.ops import words as W
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_inert_work as D

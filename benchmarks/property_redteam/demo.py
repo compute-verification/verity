@@ -27,7 +27,7 @@ import random
 import struct
 import sys
 
-import verity.protocols.resource_accounting.compute.pouw.prover.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+import verity.circuits.ops.words  # noqa: F401  (PoUW word primitives register on import)
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value

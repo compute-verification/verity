@@ -88,7 +88,7 @@ from . import boolean as _boolean
 from . import inert_bound, pc8
 from . import tile_units as U
 from . import leaves as L
-from . import words as W
+from verity.circuits.ops import words as W
 
 __all__ = ["PUBLIC", "PearlPlusAdmit", "PearlPlusAdmitV2", "PearlPlusSaltDead", "PearlPlusSaltDeadV2", "PearlPlusTile",
            "PearlPlusTileCore", "PearlPlusTileCoreV2", "PearlPlusTileLeaf", "leaf_reference", "reference", "statement_rows",
