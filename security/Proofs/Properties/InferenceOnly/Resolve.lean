@@ -474,7 +474,7 @@ theorem resolve_lt (B : ℕ) (sc : Scope) (r : Ref) (hs : Inv P B (sc, r)) {a : 
     a < B :=
   DescAgree.run_inv "scope resolution" (resolveStep P) (Inv P B) (· < B)
     (fun s a hs h => (step_ok P hroot hB hL B s _ hs h).1 a rfl)
-    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs h
+    (fun s s' hs h => (step_ok P hroot hB hL B s _ hs h).2 s' rfl) _ _ _ hs (Flock.Program.resolve_run h)
 
 /-- A reference of node `k`'s arguments starts resolution below the node. -/
 theorem start_ok (sc : Scope) (hg : Good P sc) (k : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size) (r : Ref)

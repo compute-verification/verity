@@ -178,7 +178,8 @@ theorem gate_located {P : Prog} (hP : ReadProg P) {g : ℕ} (hg : g < gates P) :
   have hg' : g < (P.defs[P.root]!).gates := hg
   obtain ⟨⟨p, ops, sc⟩, hx⟩ := Walk.gate_ok_of P hc hlay hr hrp (Walk.depth_lt_fuel P hwk) hg'
     (fun sc hR _ k hk hpk m hm e => by
-      obtain ⟨ops, hops⟩ := OperandsResolve.operands_prim P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel sc
+      obtain ⟨ops, hops⟩ := OperandsResolve.operands_prim P ⟨hr, hrp⟩ hB hlay hc hpar hz hfuel
+        (OperandsResolve.resolvable_recut P hres) sc
         (OperandsResolve.reach_walkQ P ⟨hr, hrp⟩ hB hlay hg' hR).1 k hk hpk m hm
       rw [hops]
       exact fun h => by cases h)

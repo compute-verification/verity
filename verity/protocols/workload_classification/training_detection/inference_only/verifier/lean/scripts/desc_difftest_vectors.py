@@ -320,6 +320,25 @@ def grids() -> list[dict]:
     return out
 
 
+def recuts() -> list[dict]:
+    """One instance whose root reads its registered input node, a batch of 32 `RegisteredInput16_v1`, as 16 of
+    `RegisteredInput32_v1`, its reader's references unchanged: each 16-bit leaf it reads is half of a 32-bit gate
+    (`refs.recut`), which the check refuses (`recut-unread`)."""
+    w = 16
+    total = vectors.summing(32, w, w)
+    fn = bind(CompositeDefinition("NciRecutDecl", 1, (), lambda S: ((("x", Array(32, Value(w))),), Value(w)),
+                                  lambda B, S, x: B.call(total, x), register=False))
+    desc = json.loads(codec.canonical_json(codec.encode_program(Program(fn, registered=("x",)))))
+    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
+    desc["callees"].append("RegisteredInput32_v1")
+    desc["definitions"]["RegisteredInput32_v1"] = {"form": "primitive", "id": "RegisteredInput32_v1", "params": [],
+                                                   "ret": ["Value", 32]}
+    desc["types"] += [t for t in (["Value", 32], ["Array", 16, ["Value", 32]]) if t not in desc["types"]]
+    nodes[0].update(fn=len(desc["callees"]) - 1, n=16, out=desc["types"].index(["Array", 16, ["Value", 32]]))
+    text = codec.canonical_json(desc).decode()
+    return [{"program": text, "theta": [0], "owner": ["input", 0], "gamma": 1, "alpha": [1, 1]}]
+
+
 def shared_decl(reader: str, order: tuple[str, ...]) -> str:
     """A declaration whose root batches a composite over two members, each returning its shared parameters `a` and `b`
     (in `order`), the outputs of two Calls `A` and `B` on registered inputs, and a gate (a primitive, `reader =
@@ -379,7 +398,7 @@ def mistyped() -> list[dict]:
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
     declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, `walks()`, `empties()`,
-    `shared()`, `mistyped()` and `grids()`."""
+    `shared()`, `mistyped()`, `grids()` and `recuts()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
     first_walk = first_decoy + len(decoys())
@@ -388,6 +407,9 @@ def instance(seed: int) -> dict:
     first_mistyped = first_shared + len(shared())
     if seed >= first_mistyped:
         mis = mistyped()
+        if seed >= first_mistyped + len(mis) + len(grids()):
+            return {"instance": recuts()[seed - first_mistyped - len(mis) - len(grids())], "shape": "recut",
+                    "theta_kind": None, "division": None, "malformed": "recut-unread"}
         if seed >= first_mistyped + len(mis):
             return {"instance": grids()[seed - first_mistyped - len(mis)], "shape": "grid", "theta_kind": None,
                     "division": None, "malformed": None}
@@ -494,9 +516,10 @@ NAMES = ("instances", "expanded", "python")
 
 def total() -> int:
     """How many instances the audit's data has: the random ones, every fixture's, the decoys,
-    `difftest_vectors.pinned()`'s, the walks, the empties, the shared members', the mistyped ones and the grids."""
+    `difftest_vectors.pinned()`'s, the walks, the empties, the shared members', the mistyped ones, the grids and the
+    recut read."""
     return (COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(vectors.pinned()) + len(walks())
-            + len(empties()) + len(shared()) + len(mistyped()) + len(grids()))
+            + len(empties()) + len(shared()) + len(mistyped()) + len(grids()) + len(recuts()))
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
