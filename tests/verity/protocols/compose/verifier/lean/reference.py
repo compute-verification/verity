@@ -172,13 +172,45 @@ def _two_stage():
 FORMS = '"one-stage", "recursive" or "two-stage"'
 
 
-def _form(j: Any, what: str) -> tuple[str, dict]:
-    """`VStar.Recursive.Sampled`'s split: the object's ``form`` and the rest."""
+#: `VStar.Recursive.Sampled.TWO_LEVEL_KEYS`
+TWO_LEVEL_KEYS = ["boundary", "interior", "rule"]
+
+
+def _levels_form(v: Any, what: str) -> str:
+    """`VStar.Recursive.Sampled.levelsForm`."""
+    if type(v) is not int:
+        raise Reject(f"levels-not-integer: the {what}' levels is {canonical(v)}, not a whole number of levels")
+    if v in (1, 2):
+        return "one-stage" if v == 1 else "two-stage"
+    if v < 1:
+        raise Reject(f"levels-not-positive: the {what}' levels is {v}: an audit samples at least one level")
+    raise Reject(f"levels-not-built: the {what}' levels is {v}: only 1 or 2 levels are built")
+
+
+def _form(j: Any, what: str, params: bool = False) -> tuple[str, dict]:
+    """`VStar.Recursive.Sampled`'s split: the form the object's ``levels`` and ``form`` name (one-stage where neither
+    does), held to the parameters' shape (``params``), and the rest."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
-    if not isinstance(j.get("form"), str):
-        raise Reject(f"the {what} names no form ({FORMS})")
-    return j["form"], {k: v for k, v in j.items() if k != "form"}
+    by_levels = _levels_form(j["levels"], what) if "levels" in j else None
+    f = j.get("form")
+    if isinstance(f, str):
+        if by_levels is not None and f != by_levels:
+            raise Reject(f"levels-form-mismatch: the {what}' levels is {canonical(j['levels'])}, and their form is {f}")
+        form = f
+    elif f is None:
+        form = by_levels or "one-stage"
+    else:
+        raise Reject(f"the {what}' form is {canonical(f)}, not a string ({FORMS})")
+    if params and form in ("one-stage", "two-stage"):
+        held = [k for k in TWO_LEVEL_KEYS if k in j]
+        if held and len(held) != len(TWO_LEVEL_KEYS):
+            raise Reject(f"levels-shape: the parameters hold [{', '.join(held)}] of two levels' "
+                         f"[{', '.join(TWO_LEVEL_KEYS)}]: neither shape")
+        shape = "two-stage" if held else "one-stage"
+        if shape != form:
+            raise Reject(f"levels-params-mismatch: the parameters name the form {form}, and their shape is {shape}'s")
+    return form, {k: v for k, v in j.items() if k not in ("form", "levels")}
 
 
 def _recursive(rest: dict, what: str):
@@ -297,7 +329,7 @@ def _two_stage_evidence(j: Any) -> dict:
 
 
 def _form_params(j: Any) -> dict:
-    form, rest = _form(j, "parameters")
+    form, rest = _form(j, "parameters", params=True)
     if form == "one-stage":
         return _one_stage_params(rest)
     if form == "recursive":
