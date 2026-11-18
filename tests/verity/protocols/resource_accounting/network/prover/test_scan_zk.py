@@ -34,6 +34,7 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 
 
@@ -101,7 +102,7 @@ def test_each_rounds_host_read_is_the_rounds(tmp_path):
         assert blk.ports["o0"]["root"] == tr.root.hex() == ing.ports[f"prog{j}"]["root"] == last.ports[
             f"prog{j}"]["root"]
         assert blk.ports["o0"]["reads"] == list(range(nb)) and sorted(blk.ports) == sorted(blk.framed) == ["o0", "x"]
-        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.REG.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
+        assert blk.ports["x"]["value"] == sz.value("frame") and blk.ports["x"][sz.RV.SCHEMA_KEY] == sz.REG.SCHEMA_SEG
         assert blk.made["o0"] == [sz._bits(tr, b) for b in range(nb)] == [u[0] for u in blk.units]
         assert blk.set_name == at.block_sets[j] and tr.binding == sz.block_binding(at.block_sets[j], nb)
     assert len(set(at.block_sets)) == len({tr.root for tr in trs}) == cls.NR
@@ -263,7 +264,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     first = sz.empty_start(digest, cls)
     assert rounds[0]["start"].ports["sin"] == {
         "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
-        "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": first.domain.domain_id.hex(), sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
     assert first.salts == tuple(RV.supplied_salts(digest, sz.CARRY, 1))
     last, start = rounds[0]["last"], rounds[1]["start"]
@@ -271,7 +272,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
     assert start.ports["sin"] == {
         "value": sz.CARRY, "root": last.ports["o1"]["root"], "leaves": 1, "words": words, "word_bits": 16,
-        "domain": last.ports["o1"]["domain"], sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+        "domain": last.ports["o1"]["domain"], sz.RV.SCHEMA_KEY: v2, "reads": [0]}
     assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
     assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
     assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
@@ -306,7 +307,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
     T, v2 = s.params.window, sz.BitRowLeaf.hiding_schema
     root, query, defs = _scan_program(cls, T)
     h = sz.host(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
-    alone = sz.PA.mixed_population_program([(defs["start"], 1)])
+    alone = sz.PN.mixed_population_program([(defs["start"], 1)])
     programs = {sz.TEMPLATES: (root, query, RND.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
                 sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), RND.parse_design("stratified:1"),
                            None)}
@@ -328,7 +329,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
             if r.kind != "stale":
                 ports[sz.CARRY_PORT] = {x: ms["last"].ports["o1"][x] for x in ("root", "leaves", "domain")}
             want = {p: {"leaves": e["leaves"], "domain": e["domain"]} for p, e in ports.items()}
-            rec = R.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
+            rec = DK.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
                            {"kind": "stand-in", "of": r.name}, leaf_layer="ee" * 64, **carry.record)
 
             def check(record, given, program=program, q=q, law=law, want=want, tied=tied):
@@ -398,7 +399,7 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
             own[name, m.name] = [p for p in m.framed if m.ports[p]["value"] == sz.value("frame")]
             for p in own[name, m.name]:
                 port = m.ports[p]
-                schema = port.get(sz.REG.SCHEMA_KEY, sz.REG.SCHEMA)
+                schema = port.get(sz.RV.SCHEMA_KEY, sz.RV.SCHEMA)
                 dom = sz.ADV.domain(sz.frame_binding(m.set_name, m.n, p, schema), m.n)
                 assert (port["domain"], port["leaves"], port["reads"], port.get(RV.READS_FROM, 0)) == (
                     dom.domain_id.hex(), m.n, list(range(m.n)), m.base)
@@ -530,7 +531,7 @@ def test_the_members_are_the_programs_ranges():
     for templates in {t for t, _o in sz.ROUNDS.values()}:
         members = sz.members_of(templates, T, entries=E, lanes=L)
         counts = sz.counts_of(members)
-        program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in templates])
+        program = sz.PN.mixed_population_program([(defs[t], counts[t]) for t in templates])
         ranges = sz.PA.ranges(program, sz.PA.template_instances_query([defs[t] for t in templates]))
         assert [(lo, n) for _t, lo, n in ranges] == [
             (next(m.base for m in members if m.template == t), counts[t]) for t in templates]
@@ -612,7 +613,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     assert lanes == PC.prog_params(cls.NR)
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     shared = every > 1
     v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=lanes)
     assert v.ok and v.rests_on_period_check == (lanes if shared else ()), v
@@ -662,7 +663,7 @@ def test_a_scan_registered_with_a_second_tied_input_is_refused_by_the_period_che
     query, design = sz.PA.template_instances_query([unit]), RND.parse_design(f"stratified:{N}")
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
-    reg = R.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    reg = DK.record(root, query, design, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
     for some in ((), lanes, ("state",), (lanes[0], "state")):
         v = R.check(reg, root, query, design, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=some)
         assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == some, (some, v)
@@ -814,7 +815,7 @@ def _program(T: int) -> tuple:
     buckets, with stand-in templates."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     defs = {"start": START, "ingress": ING, "egress": EG}
-    return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
+    return (sz.PN.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
             sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), RND.parse_design(f"stratified:{2 * T + 1}"))
 
 
@@ -830,7 +831,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     T = 4
     program, query, law = _program(T)
     N = 2 * T + 1
-    reg = R.record(program, query, law, sz.S.SCHEME,
+    reg = DK.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
@@ -864,7 +865,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     regs, results = {}, {}
     for w in range(G):
         (d := out / f"honest-{w}").mkdir(parents=True)
-        regs[w] = R.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
+        regs[w] = DK.record(*_program(h.T), sz.S.SCHEME, [], {"kind": "stand-in", "of": w}, leaf_layer="ee" * 64)
         (d / "registration.json").write_text(json.dumps(regs[w]))
         results[f"honest-{w}"] = {"window_accepted": False, "why": {"lean-verify/egress-0": None},
                                   "failed": {"registered": ["registered"]}}
@@ -982,7 +983,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     win = {"kind": "stand-in", "reads": {"scan/state": reads}, "empty": {sz.CARRY: carry.empty}}
 
     def registration(named: list[dict], layer: str = "ee", window: dict = win) -> dict:
-        return R.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
+        return DK.record(program, query, law, sz.S.SCHEME, named, window, leaf_layer=layer * 64, **carry.record)
 
     reg, chain = (registration(roots, x) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -992,7 +993,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    block = sz.PA.mixed_population_program([(defs["block"], E)])
+    block = sz.PN.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), RND.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
     assert entries == [f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block', lane=j))}/o0"
@@ -1004,7 +1005,7 @@ def test_the_rows_forms_case_is_the_phases_rows_attestations_and_the_scans_answe
         law = RND.parse_design(f"subset:{sampled}") if sampled else blaw
         held = {"value": sz.SCAN_STATE, "words": st.n_bits // 16, **(scan_state or {})}
         window = {"kind": "served", "activations": {"program": "c3" * 64, "values": {sz.SCAN_STATE: held}}}
-        breg = R.record(block, bquery, law, sz.S.SCHEME,
+        breg = DK.record(block, bquery, law, sz.S.SCHEME,
                         [*({"port": q, **o} for q, o in zip(ports, o0, strict=True)), *stated],
                         window if served else {"kind": "stand-in"}, leaf_layer="cc" * 64,
                         registered=[held] if registered else ())
@@ -1439,7 +1440,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     T, k, root = 32, 16, "dd" * 64
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
-    program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
+    program = sz.PN.mixed_population_program([(defs[s], 2 * T) for s in templates])
     query = sz.PA.template_instances_query([defs[s] for s in templates])
     pg = SimpleNamespace(program=program, query=query, templates=templates,
                          stagers={s: SimpleNamespace(defn=defs[s]) for s in templates}, tied=())
@@ -1457,7 +1458,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
         law, table = sz.S.params_sampling_design(rule, program, query, None)
-        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
+        return DK.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
