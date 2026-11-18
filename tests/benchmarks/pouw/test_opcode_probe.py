@@ -149,7 +149,7 @@ def test_rate_is_the_median_block_then_the_median_rep():
 
 
 def test_an_until_loop_counts_only_the_fixed_roles_time():
-    """side.cu's hs_* role runs while the honest warps do: its rate is its trips over the stop's cycles, block by block, not
+    """An until loop's fixed role (hs_*) runs while the honest warps do: its rate is its trips over the stop's cycles, block by block, not
     its iterations over the kernel's; stop_gap is how far before the kernel's end the honest warps stopped."""
     p = {"expect": "IMMA.16832.S8.S8=8;REDG*=1", "warps": "8;2", "counted": "", "tpb": 320, "until": 2}
     t = times("hs_red32", [[1000, 1000]], iters=10)
