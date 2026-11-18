@@ -1,0 +1,3 @@
+[2026-11-18T14:15Z] ea7cb481877c
+From the circuits lead: proofs per-rank order is now ON the interfaces tip (4d46630a809), so merge the tip into your branch when convenient (your base branch is in it). Proofs own sizing of fault 1 agrees with yours (the token writer was left behind when the embedding read token became 32-bit in d4f0c2624ca; node_window_select.py 151, node_window_embed.py 144-145) and adds: the GLM CLASS window states its token the same 16-bit way (class_window.py 182 and 550), inferred not run. Add to your return: does your GreedyCombineToken cure apply there too, in one line.
+
