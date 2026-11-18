@@ -242,7 +242,7 @@ variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.
 theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {f l : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
-    (hb : 0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!) (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
+    (hb : 0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!) (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
     ∃ g, OutLeaf P sc (Spot.Edges.fieldWord (P.defs[sc.d]!).ret f) l g (bitAt (outRow (P.defs[sc.d]!) f).2 l)
       (bitAt (outRow (P.defs[sc.d]!) f).2 l + (outRow (P.defs[sc.d]!) f).2[l]!) := by
   obtain ⟨g, hg⟩ := unit_ret_ok hP hrs hu (outRow_lt _ f l hf hl)
@@ -326,7 +326,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     ∃ sc sc' i f, UnitAt P rs r.tid r.unit sc ∧ 0 ≤ wu ∧ UnitAt P rs wt wu.toNat sc' ∧
       i < (P.defs[sc.d]!).params.size ∧ (P.defs[sc.d]!).params[i]!.1 = r.port ∧
       f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f = off ∧
-      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧ r.row < W.cutsOf r.tid r.port ∧
+      0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧ r.row < W.cutsOf r.tid r.port ∧
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 =
         (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ∧
       ((Flock.Program.Widths.homo (P.defs[sc.d]!).params[i]!.2 = some 1 ∧

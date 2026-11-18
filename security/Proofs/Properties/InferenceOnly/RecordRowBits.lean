@@ -191,12 +191,12 @@ theorem outName_inj (f f' : ℕ) (h : "o" ++ toString f = "o" ++ toString f') : 
 
 /-- Field `f` of `t` starts at least its own words before any later field. -/
 theorem fieldWord_succ_le (t : Ty) {f f' : ℕ} (hf : f < f') (hf' : f' ≤ (fieldsOf t).length) :
-    Spot.Edges.fieldWord t f + Spot.Edges.wordsOf (fieldsOf t)[f]! ≤ Spot.Edges.fieldWord t f' := by
-  let L := (fieldsOf t).map Spot.Edges.wordsOf
+    Spot.Edges.fieldWord t f + Spot.Bits.wordsOf (fieldsOf t)[f]! ≤ Spot.Edges.fieldWord t f' := by
+  let L := (fieldsOf t).map Spot.Bits.wordsOf
   have hw : ∀ n, Spot.Edges.fieldWord t n = (L.take n).sum := fun n => by
     simp only [Spot.Edges.fieldWord, L, List.map_take]
   have hlt : f < L.length := by simp only [L, List.length_map]; omega
-  have hs : (L.take (f + 1)).sum = (L.take f).sum + Spot.Edges.wordsOf (fieldsOf t)[f]! := by
+  have hs : (L.take (f + 1)).sum = (L.take f).sum + Spot.Bits.wordsOf (fieldsOf t)[f]! := by
     rw [List.sum_take_succ L f hlt]
     simp only [L, List.getElem_map, getElem!_pos (fieldsOf t) f (by omega)]
   have hm : (L.take (f + 1)).sum ≤ (L.take f').sum := by
@@ -207,10 +207,12 @@ theorem fieldWord_succ_le (t : Ty) {f f' : ℕ} (hf : f < f') (hf' : f' ≤ (fie
   rw [hw, hw, ← hs]
   exact hm
 
-/-- A field of a word or more is named by its first word. -/
+/-- A field of a bit or more is named by its first word. -/
 theorem fieldWord_inj (t : Ty) {f f' : ℕ} (hf : f < (fieldsOf t).length) (hf' : f' < (fieldsOf t).length)
-    (hb : 0 < Spot.Edges.wordsOf (fieldsOf t)[f]!) (hb' : 0 < Spot.Edges.wordsOf (fieldsOf t)[f']!)
+    (hb : 0 < Spot.Bits.bitsOf (fieldsOf t)[f]!) (hb' : 0 < Spot.Bits.bitsOf (fieldsOf t)[f']!)
     (h : Spot.Edges.fieldWord t f = Spot.Edges.fieldWord t f') : f = f' := by
+  have hw : 0 < Spot.Bits.wordsOf (fieldsOf t)[f]! := by unfold Spot.Bits.wordsOf; omega
+  have hw' : 0 < Spot.Bits.wordsOf (fieldsOf t)[f']! := by unfold Spot.Bits.wordsOf; omega
   rcases Nat.lt_trichotomy f f' with c | c | c
   · have := fieldWord_succ_le t c hf'.le
     omega

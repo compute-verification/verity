@@ -184,7 +184,7 @@ which a wire at offset `off` reads. An activation of a primitive has the default
 the one leaf of its one field, at word 0, is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (off : ℕ) (l g lo hi : ℕ) : Prop :=
   ∃ f, Spot.Edges.fieldWord (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
-    0 < Spot.Edges.wordsOf (fieldsOf (P.defs[sc.d]!).ret)[f]! ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
+    0 < Spot.Bits.bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]! ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 

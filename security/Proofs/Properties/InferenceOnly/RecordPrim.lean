@@ -371,8 +371,11 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
   · rw [hfields]
     exact Nat.zero_lt_one
   · rw [hfields, getElem!_pos _ 0 (by simp)]
-    simp only [List.getElem_cons_zero, Spot.Edges.wordsOf]
-    omega
+    simp only [List.getElem_cons_zero, Spot.Bits.bitsOf, hwidths]
+    first
+      | (simp only [List.foldl_toArray', List.foldl_cons, List.foldl_nil]; omega)
+      | (simp; omega)
+      | simpa using hpos
   · rw [hrow]
     exact Nat.zero_lt_one
   · rw [hrow]

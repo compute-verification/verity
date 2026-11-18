@@ -122,7 +122,7 @@ theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wi
         (Circuits.Wire.opairs w) = some os ∧ ∀ d ∈ os,
     ∃ t j, ts.find? (·.tid == w.writer) = some t ∧ j < (fieldsOf (P.defs[t.defn]!).ret).length ∧
       Spot.Edges.fieldWord (P.defs[t.defn]!).ret j = ((w.offset : Int) + d).toNat ∧
-      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[t.defn]!).ret)[j]! ∧
+      0 < Spot.Bits.bitsOf (fieldsOf (P.defs[t.defn]!).ret)[j]! ∧
       (∀ b, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup ("o" ++ toString j)) = some b →
         b = 16 * n) ∧
       (((ls.find? (·.tid == w.reader)).map fun l => l.closed.contains w.port).getD false = true ∨
@@ -301,7 +301,7 @@ theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd :
     {tr tw : Tmpl} (htr : tr ∈ ts) (htw : tw ∈ ts) (hr : tr.tid = w.reader) (hwt : tw.tid = w.writer)
     {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port) (x : Nat) :
     ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[tw.defn]!).ret j = w.offsetAt x ∧
-      0 < Spot.Edges.wordsOf (fieldsOf (P.defs[tw.defn]!).ret)[j]! ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
+      0 < Spot.Bits.bitsOf (fieldsOf (P.defs[tw.defn]!).ret)[j]! ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
       ((Widths.homo (P.defs[tr.defn]!).params[i].2 = some 1 ∧
           i ∉ passed[tr.defn]?.getD (List.range (P.defs[tr.defn]!).params.size)) ∨
         ∃ r o, Widths.homo (P.defs[tr.defn]!).params[i].2 = some r ∧

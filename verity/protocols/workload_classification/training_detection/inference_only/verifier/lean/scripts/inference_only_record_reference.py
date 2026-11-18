@@ -199,7 +199,7 @@ class Template:
             self.rows.append((name, bits // 16, ty.n if isinstance(ty, Array) else 1))
             self.widths[name] = tuple(ty.leaf_widths())
         #: each return field's first word in the unit's output row, a wire's `offset` (`Spot.Edges.fieldWord`: each
-        #: leaf its bits in whole words), to the field
+        #: field its bits in whole words, as the layout packs it), to the field
         self.firsts: dict[int, int] = {}
         at = 0
         for j, ty in enumerate(fields_of(ret)):
@@ -207,7 +207,7 @@ class Template:
             if bits == 0:
                 raise Malformed("templates")
             self.firsts[at] = j
-            at += sum(-(-w // 16) for w in ty.leaf_widths())
+            at += -(-bits // 16)
             self.outs.append((f"o{j}", -(-bits // 16)))
             self.widths.setdefault(f"o{j}", tuple(ty.leaf_widths()))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):

@@ -14,7 +14,7 @@ public import Spot.Edges
 * `WireReadsAt P rs W e u row t k i x w l`, `WireReads`: wire `e` covers that read: reader unit `u` is member `mk` of
   node `k`, its row `row` of port `i` holds index `x` at leaf `t`; the wire's own lookups at the row's index
   (`Circuits.Wire.indexAt`, `writerAt`, `offsetAt`) give the writer unit of member `mw` of node `w` and the first word of
-  its field `f`, the fields before it whole words; and `l` is leaf `t` of that field, the row being the field whole.
+  its field `f`; and `l` is leaf `t` of that field, the row being the field whole.
 * `EdgesExact P rs W ws`: the wires `ws` are exactly the references between root nodes: each is covered by a wire of
   `ws`, every row a wire indexes is a port's row read whole, each read is a reference, and no two wires cover one.
 * `EdgesOfExact`: the wires `edgesOf` accepts of a decoded Program, under its templates' ranges, are exact, an open
@@ -52,8 +52,8 @@ def rowLen (P : Prog) (W : Wires.Wiring) (tid : String) (k i : ℕ) : ℕ :=
 /-- **Wire `e` reads a reference at reader unit `u`'s row `row`, leaf `t`**: `u` is member `mk` of root node `k`, whose
 row `row` of port `i` holds argument index `x` at leaf `t`; the row's index `j` (`Circuits.Wire.indexAt`, by the
 wire's cuts and reader steps) has writer unit `wb + mw` (`writerAt`), member `mw` of root node `w`, and first word
-`offsetAt j` (`offset` and `ostep`) in its output row `out`, the first u16 word of return field `f` (`fieldWord`), every
-field before `f` whole words; the row is field `f` whole, and `l` is the field's leaf `t` (`fieldOffset`, in leaves). -/
+`offsetAt j` (`offset` and `ostep`) in its output row `out`, the first u16 word of return field `f` (`fieldWord`, each
+field its bits in whole words); the row is field `f` whole, and `l` is the field's leaf `t` (`fieldOffset`, in leaves). -/
 def WireReadsAt (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wire) (u row t k i x w l : ℕ) : Prop :=
   let b := (P.defs[P.root]!).body
   let node := b.nodes[k]!
@@ -64,7 +64,7 @@ def WireReadsAt (P : Prog) (rs : Array TRange) (W : Wires.Wiring) (e : Wires.Wir
       (Edges.firstUnits rs)[w]? = some (e.writer, wb) ∧ u = rb + mk ∧ mk < node.members ∧
       row < W.cutsOf e.reader e.port ∧ t < len ∧ e.indexAt u row = some j ∧ e.writerAt j = ((wb + mw : ℕ) : ℤ) ∧
       mw < (b.nodes[w]!).members ∧ x = memberIndex (node.args[i]!) mk (row * len + t) ∧ f < (fieldsOf wd.ret).length ∧
-      (∀ g < f, _root_.Spot.Bits.bitsOf (fieldsOf wd.ret)[g]! % 16 = 0) ∧ e.offsetAt j = Edges.fieldWord wd.ret f ∧
+      e.offsetAt j = Edges.fieldWord wd.ret f ∧
       len = ((fieldsOf wd.ret)[f]!).leaves ∧ l = mw * wd.outLeaves + Edges.fieldOffset wd.ret f + t
 
 /-- **Wire `e` covers a read**: at some reader unit, row and leaf (`WireReadsAt`). -/
