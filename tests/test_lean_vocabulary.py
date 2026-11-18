@@ -695,8 +695,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/proved_ticks.py::Sheet": "homonym, a family's priced headline design: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
-        "homonym, one replayed window's checks: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py::Statement":
