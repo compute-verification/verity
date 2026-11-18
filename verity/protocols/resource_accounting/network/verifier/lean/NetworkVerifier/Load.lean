@@ -40,12 +40,15 @@ rows.
 * `shape`: it names no shape of `shapes`;
 * `format`: its format is not `loadFormat`, its window not the number 0, or its link not a string;
 * `manifest`: the shape's manifest has a value that is not whole rows (no shape of `shapes` has one);
-* `values`: its values are not a list of as many registrations as the manifest has values;
+* `values`: its values are not a list of as many registrations as the manifest has values.
+
+Past those it has two problems of the document's own, each beside what its registrations give:
+
 * `load-keys`: it holds another key set than `loadKeys`, or its `link_format` is not a string;
 * `key-session`: its key and session are not the deployment's, the ones the check is made under.
 
 Then every value's registration is read, and each refusal is a problem naming its value. The load is accepted when
-there is no problem. The check reads the manifest, of 5 + 14 · layers values, and the registrations it is handed, each
+there is no problem; `registered` counts the values whose registration is accepted, whatever the document's own. The check reads the manifest, of 5 + 14 · layers values, and the registrations it is handed, each
 once.
 
 `loadFn` and `registrationFn` are the `load` and `transfer-registration` functions of `network-records verdicts`
@@ -317,16 +320,18 @@ structure Problem where
   value : Option String
   refusal : Refusal
 
-/-- The check's outcome (`load_check.check_load`'s): the manifest's values, how many have a registration the check
+/-- The check's summary: the manifest's values, how many have a registration the check
 accepts, and the problems, none on an accepted load. -/
-structure Outcome where
+structure Summary where
   values : Nat
   registered : Nat
   problems : Array Problem
 
-/-- The document read before its registrations: its link and program, and its shape's values each beside its
-registration; or its refusal, with the manifest's values where the shape is read. -/
-def documentOf (key : Key) (doc : Json) : Except (Nat × Refusal) (String × String × List (Value × Json)) := do
+/-- The document read before its registrations: its link and program, its shape's values each beside its
+registration, and the document's own problems that leave its registrations readable (`load-keys`, `key-session`); or
+its refusal, with the manifest's values where the shape is read. -/
+def documentOf (key : Key) (doc : Json) :
+    Except (Nat × Refusal) (String × String × List (Value × Json) × Array Refusal) := do
   unless (keysOf doc).isSome do throw (0, ⟨"not-object", "a load's registrations are a JSON object"⟩)
   let some shape := (strAt doc "shape").bind fun n => shapes.find? (·.name == n)
     | throw (0, ⟨"shape", s!"no such shape: one of {shapes.map (·.name)}"⟩)
@@ -341,26 +346,28 @@ def documentOf (key : Key) (doc : Json) : Except (Nat × Refusal) (String × Str
     | .arr regs => pure regs
     | _ => throw (n, ⟨"values", s!"not one registration of each of {n} values"⟩)
   unless regs.size == n do throw (n, ⟨"values", s!"not one registration of each of {n} values"⟩)
-  unless keysOf doc == some loadKeys && (strAt doc "link_format").isSome do
-    throw (n, ⟨"load-keys", s!"a load's registrations hold the keys {loadKeys} and no other, link_format a string"⟩)
-  unless key.written (doc.getObjValD "key") && strAt doc "session" == some (Flock.hexOf key.session) do
-    throw (n, ⟨"key-session", "not signed under the deployment's key and session"⟩)
-  pure (link, (strAt doc "program").getD "", values.zip regs.toList)
+  let keys : Array Refusal :=
+    if keysOf doc == some loadKeys && (strAt doc "link_format").isSome then #[]
+    else #[⟨"load-keys", s!"a load's registrations hold the keys {loadKeys} and no other, link_format a string"⟩]
+  let under : Array Refusal :=
+    if key.written (doc.getObjValD "key") && strAt doc "session" == some (Flock.hexOf key.session) then #[]
+    else #[⟨"key-session", "not signed under the deployment's key and session"⟩]
+  pure (link, (strAt doc "program").getD "", values.zip regs.toList, keys ++ under)
 
-/-- `load_check.check_load` under the deployment's key and session (the module docstring). -/
-def loadCheck (key : Key) (doc : Json) : Outcome :=
+/-- The check of a load's document under the deployment's key and session (the module docstring). -/
+def loadCheck (key : Key) (doc : Json) : Summary :=
   match documentOf key doc with
   | .error (n, r) => ⟨n, 0, #[⟨none, r⟩]⟩
-  | .ok (link, program, read) =>
+  | .ok (link, program, read, own) =>
     let problems := read.toArray.filterMap fun (v, reg) =>
       match registrationCheck key (expected link program v) reg with
       | .ok () => none
       | .error r => some ⟨some v.name, r⟩
-    ⟨read.length, read.length - problems.size, problems⟩
+    ⟨read.length, read.length - problems.size, own.map (⟨none, ·⟩) ++ problems⟩
 
 def Refusal.fields (r : Refusal) : List (String × Json) := [("refusal", .str r.name), ("why", .str r.why)]
 
-def Outcome.json (o : Outcome) : Json :=
+def Summary.json (o : Summary) : Json :=
   Json.mkObj [("values", toJson o.values), ("registered", toJson o.registered),
     ("problems", .arr (o.problems.map fun p =>
       Json.mkObj (p.refusal.fields ++ match p.value with
@@ -385,20 +392,31 @@ def loadFn (j : Json) : Except String Json := do
   let key ← keyOf (j.getObjValD "key") session
   return (loadCheck key (j.getObjValD "load")).json
 
+/-- What a number a case expects is below. A registration's number is read by its value (`natAt`), and the reference
+by its type too: the two read one registration alike while every number the verifier expects is below this, since the
+caller writes a fraction of such a value with its point (`16.0`), which is no natural number, and only one at or past
+it in exponent form (`1e+16`), which is one. A load's are: its window is 0, its leaves 16 bits, and its words and rows
+those of `shapes`. -/
+def numberBound : Nat := 10 ^ 15
+
 /-- The transfer a case expects, `{"link", "direction", "window", "kind", "value", "program", "words", "rows",
-"word_bits", "row_schema"}`. -/
+"word_bits", "row_schema"}`, each number below `numberBound`. -/
 def expectedOf (j : Json) : V Expected := do
   exactly j ["direction", "kind", "link", "program", "row_schema", "rows", "value", "window", "word_bits", "words"]
     "expected"
   let need {α} (o : Option α) (k : String) : V α := match o with
     | some a => pure a
     | none => throw s!"expected.{k}: not the type the transfer states it in"
+  let nat (k : String) : V Nat := do
+    let n ← need (natAt j k) k
+    unless n < numberBound do throw s!"expected.{k}: {numberBound} or more"
+    pure n
   pure { link := ← need (strAt j "link") "link",
          direction := ← Direction.ofValue (← need (strAt j "direction") "direction"),
-         window := ← need (natAt j "window") "window", kind := ← need (strAt j "kind") "kind",
+         window := ← nat "window", kind := ← need (strAt j "kind") "kind",
          value := ← need (strAt j "value") "value", program := ← need (strAt j "program") "program",
-         words := ← need (natAt j "words") "words", rows := ← need (natAt j "rows") "rows",
-         wordBits := ← need (natAt j "word_bits") "word_bits", schema := ← need (strAt j "row_schema") "row_schema" }
+         words := ← nat "words", rows := ← nat "rows", wordBits := ← nat "word_bits",
+         schema := ← need (strAt j "row_schema") "row_schema" }
 
 /-- `network-records verdicts`' `transfer-registration`: `registrationCheck` of one registration for the transfer a
 case expects, `{"key", "session", "expected", "registration"}`, as `{"refusal": null}` or `{"refusal", "why"}`. -/
