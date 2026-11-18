@@ -32,7 +32,7 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.evaluation.bits import evaluate_bits
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.indexed import RangeIndexedDomain
@@ -156,8 +156,9 @@ def test_a_fused_unit_is_its_read_then_its_gemm(routed: bool) -> None:
         h, ok = table.read(tok, at)
         w = np.array(h, "<u2").view(np.uint8).tolist()
         want.append((tuple(evaluate(gemm, xq.tolist(), sx.tolist(), *g.tolist()[:routed], w, ws.tolist())), ok))
-    got = evaluate_bits(fused, *[np.array([c[k] for c in cases], dtype=np.uint8) for k in range(len(cases[0]))])
-    got = got.reshape(len(cases), -1)
+    toks = np.array([[sum(b << j for j, b in enumerate(c[0]))] for c in cases], dtype=object)
+    got = evaluate_batch(fused, toks, *[np.array([c[k] for c in cases], dtype=np.uint8) for k in range(1, len(cases[0]))])
+    got = np.asarray(got).reshape(len(cases), -1)
     assert [(tuple(int(sum(int(b) << j for j, b in enumerate(r[16 * n:16 * n + 16]))) for n in range(N)), int(r[16 * N]))
             for r in got] == want
     assert [ok for _y, ok in want] == [1, 1, 0, 1]
