@@ -172,14 +172,12 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
             S.run(NS(arm=records, **bench))
     (fresh, was_there), stock = seen[1], seen[2]
     assert was_there and not fresh.exists() and not fresh.is_relative_to(tmp_path / "run") and stock == (None, True)
-    # none given, under the corpus client (a serve, whose later stages read them): refused, so no serve finds its
-    # classes gone with a directory it never named; an arm that keeps nothing serves as before
-    with pytest.raises(SystemExit, match=r"a serve's later stages read it: --private DIR.*PRIVATE"):
-        S.run(NS(out=str(out), private=None, arm="canonical-topk", client=S.CORPUS))
-    for keeps in ("boundary-rows", "two-stage", "record"):
-        with pytest.raises(SystemExit, match=r"records its step trace.*--private DIR.*PRIVATE"):
-            S.run(NS(out=str(out), private=None, arm=keeps, client=S.CORPUS))
-    assert len(seen) == 3 and S.run(NS(out=str(out), private=None, arm="compiled", client=S.CORPUS)) == 0
+    # none given, under the corpus client, whose records hold each request's served ids and whose plan holds the
+    # prompts: refused for every arm, one that keeps nothing else too
+    for arm in ("canonical-topk", "boundary-rows", "two-stage", "record", "compiled"):
+        with pytest.raises(SystemExit, match=r"sent by the corpus client.*--private DIR.*PRIVATE"):
+            S.run(NS(out=str(out), private=None, arm=arm, client=S.CORPUS))
+    assert len(seen) == 3
 
 
 def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -571,8 +569,15 @@ def test_drive_load_counts_what_the_client_sent_and_the_server_did_not_serve(mon
             return {"sent": len(recs), "unfinished": 0}
 
     monkeypatch.setattr(S, "corpus", lambda: Corpus)
-    m = S.drive_load(0, "m", [{"i": i} for i in range(4)], 10.0, 1.0, "light1", tmp_path / "rep-1", 1.0, None)
+    kept = tmp_path / "private" / "client" / "rep-1"
+    m = S.drive_load(0, "m", [{"i": i} for i in range(4)], 10.0, 1.0, "light1", tmp_path / "rep-1", 1.0, None, kept=kept)
     assert (m["requests"], m["unserved"]) == (4, 1)
+    # the records whole on the node, and less their served ids in the run's directory, where their tokens still count
+    whole = [json.loads(x) for x in (kept / "client.jsonl").read_text().splitlines()]
+    public = [json.loads(x) for x in (tmp_path / "rep-1" / "client.jsonl").read_text().splitlines()]
+    assert [r["output_ids"] for r in whole] == [[0, 1]] * 4 and kept.stat().st_mode & 0o777 == 0o700
+    assert public == [{k: v for k, v in r.items() if k != "output_ids"} for r in whole]
+    assert [S.served_tokens(r) for r in public] == [2] * 4
 
 
 def test_step_traces_are_read_plain_or_gzipped(tmp_path: Path):
@@ -2313,13 +2318,16 @@ def test_run_sh_refuses_by_name_an_arm_that_records_or_a_replay_without_private(
     lines = (S.HERE / "run.sh").read_text().splitlines()
     first = lines.index('if [ -z "${PRIVATE:-}" ]; then')
     block = "\n".join(lines[first:lines.index("fi", first) + 1])
-    env = {"PY": S.sys.executable, "here": str(S.HERE), "PYTHONPATH": S.os.environ.get("PYTHONPATH", "")}
+    env = {"PY": S.sys.executable, "here": str(S.HERE), "PYTHONPATH": S.os.environ.get("PYTHONPATH", ""),
+           "CLIENT": "vllm-bench"}
     rc, out = bash(["-c", block], {**env, "ARMS": "compiled record canonical-topk prod-record"})
     assert (rc, out) == (2, "serve-tax: arms record prod-record record their step traces, served ids or edges' outputs, "
                             "which hold request values: PRIVATE, a directory outside every run's\n")
     rc, out = bash(["-c", block], {**env, "ARMS": "compiled", "REPLAY": "agentic@2"})
     assert rc == 2 and "REPLAY keeps each replay's tokens on the node: PRIVATE" in out
     assert bash(["-c", block], {**env, "ARMS": "compiled canonical-topk"}) == (0, "")
+    rc, out = bash(["-c", block], {**env, "ARMS": "compiled", "CLIENT": "corpus"})
+    assert rc == 2 and "the corpus client keeps each request's served ids, and the plan its prompts, on the node" in out
     assert bash(["-c", block], {**env, "ARMS": "record", "REPLAY": "agentic@2", "PRIVATE": "/elsewhere"}) == (0, "")
 
 
