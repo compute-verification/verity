@@ -1,0 +1,3768 @@
+{
+ "about": "What of adapters/vllm/verity_vllm/definitions/ each class of root reaches (`reach`), and its superseded Definition versions (`superseded`); written by tools/move/definitions_reach.py.",
+ "classes": "commands: the verity command, the applications, the console scripts outside benchmarks/ and tests/, the adapter's served_run and ops shells and the verity-vllm subcommands they name; tools: the other console scripts and tools/; benchmarks: benchmarks/; tests: tests/ and circuit-check's sidecars. A command's reach never enters tests/, benchmarks/, infra/ or tools/ but the verity command and verity_config. catalog_on reads the by-id loads (registry.catalog.load, definitions/__init__'s catalog_loader, registry/__init__'s lazy families) as edges; catalog_off doesn't. Each row is the first class, in that order, that reaches the file; a sidecar and its pins are read with their module.",
+ "python_files": 362,
+ "python_lines": 67524,
+ "reached_by_nothing": {
+  "files": 0,
+  "lines": 0,
+  "list": []
+ },
+ "commands_only_by_id": {
+  "files": 123,
+  "lines": 17801,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_metadata_twin.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_transcendental.py",
+   "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.py",
+   "adapters/vllm/verity_vllm/definitions/registry/glibc_pow_data.py",
+   "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.py",
+   "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py",
+   "adapters/vllm/verity_vllm/definitions/registry/host_f64.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_twins.py",
+   "adapters/vllm/verity_vllm/definitions/registry/spec.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/spec.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_attention.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_attention.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_clip.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_clip.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_loss.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_loss.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_optim.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_optim.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_step.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_step.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.py"
+  ]
+ },
+ "tests_only": {
+  "files": 121,
+  "lines": 17775,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/encoding.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_schedule.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_metadata_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/fa3_split_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/greedy_accept_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/nvfp4_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/program_walk.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/ref_prims_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/serve3_reference.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_blocks.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_kernels.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_step.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/twins.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_transcendental.py",
+   "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.py",
+   "adapters/vllm/verity_vllm/definitions/registry/glibc_pow_data.py",
+   "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.py",
+   "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py",
+   "adapters/vllm/verity_vllm/definitions/registry/host_f64.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mla.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_twins.py",
+   "adapters/vllm/verity_vllm/definitions/registry/spec.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/spec.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_attention.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_attention.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_clip.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_clip.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_loss.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_loss.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_optim.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_optim.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_step.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_step.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_train.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_train.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_words.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/torch_words.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.py"
+  ]
+ },
+ "benchmarks_only": {
+  "files": 13,
+  "lines": 2104,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/numerics/token_select_rows.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.py"
+  ]
+ },
+ "tools_only": {
+  "files": 2,
+  "lines": 634,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py"
+  ]
+ },
+ "tests_only_with_the_by_id_loads": {
+  "files": 12,
+  "lines": 2693,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/encoding.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_schedule.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/fa3_split_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/greedy_accept_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/nvfp4_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/program_walk.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/ref_prims_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/serve3_reference.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_blocks.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_kernels.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/torch_step.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/twins.py"
+  ]
+ },
+ "benchmarks_only_with_the_by_id_loads": {
+  "files": 1,
+  "lines": 19,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/numerics/token_select_rows.py"
+  ]
+ },
+ "for_models_no_application_serves": {
+  "source": "adapters/vllm/manifests/definitions.json",
+  "models": [
+   "deepseek-ai/DeepSeek-V4-Pro",
+   "zai-org/GLM-5.3"
+  ],
+  "files": 54,
+  "lines": 15889,
+  "list": [
+   "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_twins.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsa_norm_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_compressor_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_indices_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_metadata_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_indexer_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_indices_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_moe_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_qnorm_insert_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/dsv4_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/flashmla_prefill_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/flashmla_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/fp8_moe_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/glm53_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/marlin_moe_rows.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/mhc_twin.py",
+   "adapters/vllm/verity_vllm/definitions/numerics/sparse_mla_split_twins.py",
+   "adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indexer.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/deepgemm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsa.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsa_norm.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_compressor.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_indexer.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_indices.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/dsv4_qnorm_insert.py",
+   "adapters/vllm/verity_vllm/definitions/registry/flashmla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/flashmla_prefill.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/marlin_moe.py",
+   "adapters/vllm/verity_vllm/definitions/registry/merge_attn_states.py",
+   "adapters/vllm/verity_vllm/definitions/registry/mhc.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sparse_mla.py",
+   "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.py",
+   "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_check.py"
+  ]
+ },
+ "families_on_both_sides": {
+  "DivFullScaleA (word)": [
+   {
+    "id": "DivFullScaleA_v1",
+    "file": "verity/circuits/ops/mufu.py",
+    "superseded": true
+   },
+   {
+    "id": "DivFullScaleA_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/prims.py",
+    "superseded": false
+   }
+  ],
+  "DivFullScaleA (Boolean)": [
+   {
+    "id": "DivFullScaleA_v3",
+    "file": "verity/circuits/ops/boolean/mufu.py",
+    "superseded": true
+   },
+   {
+    "id": "DivFullScaleA_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py",
+    "superseded": false
+   }
+  ],
+  "DotBf16 (word)": [
+   {
+    "id": "DotBf16_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "superseded": true
+   },
+   {
+    "id": "DotBf16_v2",
+    "file": "verity/circuits/ops/gemm.py",
+    "superseded": false
+   }
+  ],
+  "DotBf16 (Boolean)": [
+   {
+    "id": "DotBf16_v3",
+    "file": "verity/circuits/ops/boolean/gemm.py",
+    "superseded": true
+   },
+   {
+    "id": "DotBf16_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py",
+    "superseded": false
+   }
+  ],
+  "Gemm (word)": [
+   {
+    "id": "Gemm_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "superseded": true
+   },
+   {
+    "id": "Gemm_v2",
+    "file": "verity/circuits/ops/gemm.py",
+    "superseded": false
+   }
+  ],
+  "Gemm (Boolean)": [
+   {
+    "id": "Gemm_v3",
+    "file": "verity/circuits/ops/boolean/gemm.py",
+    "superseded": true
+   },
+   {
+    "id": "Gemm_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py",
+    "superseded": false
+   }
+  ],
+  "GemmCoordinate (word)": [
+   {
+    "id": "GemmCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "superseded": true
+   },
+   {
+    "id": "GemmCoordinate_v2",
+    "file": "verity/circuits/ops/gemm.py",
+    "superseded": false
+   }
+  ],
+  "GemmCoordinate (Boolean)": [
+   {
+    "id": "GemmCoordinate_v3",
+    "file": "verity/circuits/ops/boolean/gemm.py",
+    "superseded": true
+   },
+   {
+    "id": "GemmCoordinate_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py",
+    "superseded": false
+   }
+  ]
+ },
+ "superseded": {
+  "registered_ids": 2241,
+  "superseded_ids": 220,
+  "in_definitions": 176,
+  "kept_for_records": [
+   "AttentionHead_v1",
+   "Attention_v1",
+   "AttnBlock_v1",
+   "Final_v1",
+   "LayerPost_v1",
+   "LayerPre_v1",
+   "RMSNormFusedCuda_v1",
+   "Serve_v1",
+   "Serve_v2",
+   "Serve_v3",
+   "SiluMulBf16_v1",
+   "SiluMulBf16_v3",
+   "SiluMul_v1",
+   "SiluMul_v3"
+  ],
+  "modules_every_version_superseded": [
+   "adapters/vllm/verity_vllm/definitions/registry/boolean_silu.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+   "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.py",
+   "adapters/vllm/verity_vllm/definitions/registry/topp_words.py"
+  ],
+  "to_delete": [
+   {
+    "id": "AddScalarBf16_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "AddScalarBf16_v3"
+   },
+   {
+    "id": "AddScalarBf16_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+    "newest": "AddScalarBf16_v4"
+   },
+   {
+    "id": "AddScalarF32_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "AddScalarF32_v3"
+   },
+   {
+    "id": "AddScalarF32_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+    "newest": "AddScalarF32_v4"
+   },
+   {
+    "id": "AttentionHeadSoftcap_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "AttentionHeadSoftcap_v5"
+   },
+   {
+    "id": "AttentionHeadSoftcap_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.py",
+    "newest": "AttentionHeadSoftcap_v5"
+   },
+   {
+    "id": "AttentionHeadSoftcap_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py",
+    "newest": "AttentionHeadSoftcap_v6"
+   },
+   {
+    "id": "AttentionHeadSoftcap_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttentionHeadSoftcap_v5"
+   },
+   {
+    "id": "AttentionHead_v10",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v11",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v12",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v13",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v14",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v15",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v16",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v18",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v19",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v5",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "AttentionHead_v20"
+   },
+   {
+    "id": "AttentionHead_v6",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v7",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v8",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionHead_v9",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttentionHead_v17"
+   },
+   {
+    "id": "AttentionSoftcap_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "AttentionSoftcap_v5"
+   },
+   {
+    "id": "AttentionSoftcap_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.py",
+    "newest": "AttentionSoftcap_v5"
+   },
+   {
+    "id": "AttentionSoftcap_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py",
+    "newest": "AttentionSoftcap_v6"
+   },
+   {
+    "id": "AttentionSoftcap_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttentionSoftcap_v5"
+   },
+   {
+    "id": "Attention_v10",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v11",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v12",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v13",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v14",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v15",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v16",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v18",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v19",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v5",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "Attention_v20"
+   },
+   {
+    "id": "Attention_v6",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v7",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v8",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "Attention_v9",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "Attention_v17"
+   },
+   {
+    "id": "AttnBlockFirst_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "AttnBlockFirst_v2"
+   },
+   {
+    "id": "AttnBlockSoftcap_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "AttnBlockSoftcap_v5"
+   },
+   {
+    "id": "AttnBlockSoftcap_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.py",
+    "newest": "AttnBlockSoftcap_v5"
+   },
+   {
+    "id": "AttnBlockSoftcap_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py",
+    "newest": "AttnBlockSoftcap_v6"
+   },
+   {
+    "id": "AttnBlockSoftcap_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttnBlockSoftcap_v5"
+   },
+   {
+    "id": "AttnBlock_v10",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v11",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v12",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v14",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v15",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v16",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v5",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py",
+    "newest": "AttnBlock_v13"
+   },
+   {
+    "id": "AttnBlock_v6",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v7",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v8",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "AttnBlock_v9",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py",
+    "newest": "AttnBlock_v17"
+   },
+   {
+    "id": "Bf16DivScalar_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "Bf16DivScalar_v3"
+   },
+   {
+    "id": "Bf16DivScalar_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+    "newest": "Bf16DivScalar_v4"
+   },
+   {
+    "id": "Bf16MulScalar_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "Bf16MulScalar_v3"
+   },
+   {
+    "id": "Bf16MulScalar_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py",
+    "newest": "Bf16MulScalar_v4"
+   },
+   {
+    "id": "DotBf16_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "DotBf16_v2"
+   },
+   {
+    "id": "DotE4m3_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "DotE4m3_v2"
+   },
+   {
+    "id": "DotE4m3_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "DotE4m3_v4"
+   },
+   {
+    "id": "DsaMaskPositions_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py",
+    "newest": "DsaMaskPositions_v2"
+   },
+   {
+    "id": "DsaMqaLogit_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa.py",
+    "newest": "DsaMqaLogit_v3"
+   },
+   {
+    "id": "DsaMqaLogit_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.py",
+    "newest": "DsaMqaLogit_v4"
+   },
+   {
+    "id": "DsaPositionsMerge_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py",
+    "newest": "DsaPositionsMerge_v2"
+   },
+   {
+    "id": "DsaRMSNormApply_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+    "newest": "DsaRMSNormApply_v3"
+   },
+   {
+    "id": "DsaRMSNormSumSq_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+    "newest": "DsaRMSNormSumSq_v3"
+   },
+   {
+    "id": "DsaRMSNorm_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py",
+    "newest": "DsaRMSNorm_v3"
+   },
+   {
+    "id": "DsaRadixPass_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.py",
+    "newest": "DsaRadixPass_v2"
+   },
+   {
+    "id": "DsaRadixTies_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.py",
+    "newest": "DsaRadixTies_v2"
+   },
+   {
+    "id": "DsaRowValid_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.py",
+    "newest": "DsaRowValid_v2"
+   },
+   {
+    "id": "DsaTopKDigitPick_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py",
+    "newest": "DsaTopKDigitPick_v2"
+   },
+   {
+    "id": "DsaTopKMaskBlock_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py",
+    "newest": "DsaTopKMaskBlock_v2"
+   },
+   {
+    "id": "DsaTopKMaskWhole_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py",
+    "newest": "DsaTopKMaskWhole_v2"
+   },
+   {
+    "id": "EmbeddingBackwardTied_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.py",
+    "newest": "EmbeddingBackwardTied_v2"
+   },
+   {
+    "id": "Exp2Lut127_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py",
+    "newest": "Exp2Lut127_v2"
+   },
+   {
+    "id": "F32FmaRm_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/moe.py",
+    "newest": "F32FmaRm_v2"
+   },
+   {
+    "id": "F32FmaRm_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py",
+    "newest": "F32FmaRm_v4"
+   },
+   {
+    "id": "F32Sub_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "newest": "F32Sub_v2"
+   },
+   {
+    "id": "F32Sub_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py",
+    "newest": "F32Sub_v4"
+   },
+   {
+    "id": "GeluTanhMulBf16_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "GeluTanhMulBf16_v3"
+   },
+   {
+    "id": "GemmBiasCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.py",
+    "newest": "GemmBiasCoordinate_v2"
+   },
+   {
+    "id": "GemmBias_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.py",
+    "newest": "GemmBias_v2"
+   },
+   {
+    "id": "GemmCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "GemmCoordinate_v2"
+   },
+   {
+    "id": "Gemm_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "Gemm_v2"
+   },
+   {
+    "id": "GumbelNoiseLane_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "GumbelNoiseLane_v2"
+   },
+   {
+    "id": "GumbelSelectF32GivenGreedy_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "GumbelSelectF32GivenGreedy_v2"
+   },
+   {
+    "id": "GumbelSelectF32_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "GumbelSelectF32_v3"
+   },
+   {
+    "id": "GumbelTopPTokenSelectSharedGreedy_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "GumbelTopPTokenSelectSharedGreedy_v2"
+   },
+   {
+    "id": "GumbelTopPTokenSelect_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "GumbelTopPTokenSelect_v3"
+   },
+   {
+    "id": "GumbelTopPTokenSelect_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/topp_words.py",
+    "newest": "GumbelTopPTokenSelect_v3"
+   },
+   {
+    "id": "HopperBf16Dot16StepFirstX_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.py",
+    "newest": "HopperBf16Dot16StepFirstX_v2"
+   },
+   {
+    "id": "HopperBf16Dot16StepFirst_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.py",
+    "newest": "HopperBf16Dot16StepFirst_v2"
+   },
+   {
+    "id": "HopperBf16Dot16StepX_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.py",
+    "newest": "HopperBf16Dot16StepX_v2"
+   },
+   {
+    "id": "HopperBf16Dot16Step_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.py",
+    "newest": "HopperBf16Dot16Step_v2"
+   },
+   {
+    "id": "Int8LutAttentionRow_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py",
+    "newest": "Int8LutAttentionRow_v2"
+   },
+   {
+    "id": "Int8LutSoftmax_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py",
+    "newest": "Int8LutSoftmax_v2"
+   },
+   {
+    "id": "Int8RowQuant_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py",
+    "newest": "Int8RowQuant_v5"
+   },
+   {
+    "id": "Int8RowQuant_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.py",
+    "newest": "Int8RowQuant_v6"
+   },
+   {
+    "id": "Int8RowQuant_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py",
+    "newest": "Int8RowQuant_v5"
+   },
+   {
+    "id": "Int8RowQuant_v4",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.py",
+    "newest": "Int8RowQuant_v6"
+   },
+   {
+    "id": "LayerNormAten_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/layer_norm.py",
+    "newest": "LayerNormAten_v2"
+   },
+   {
+    "id": "LayerNormRef_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "newest": "LayerNormRef_v2"
+   },
+   {
+    "id": "MoeExpertCoordinateW_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/moe.py",
+    "newest": "MoeExpertCoordinateW_v2"
+   },
+   {
+    "id": "MoeExpertCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/moe.py",
+    "newest": "MoeExpertCoordinate_v2"
+   },
+   {
+    "id": "MoeExpertFp8BlockCoordinateW_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py",
+    "newest": "MoeExpertFp8BlockCoordinateW_v3"
+   },
+   {
+    "id": "MoeExpertFp8BlockCoordinateW_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+    "newest": "MoeExpertFp8BlockCoordinateW_v4"
+   },
+   {
+    "id": "MoeExpertFp8BlockCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py",
+    "newest": "MoeExpertFp8BlockCoordinate_v3"
+   },
+   {
+    "id": "MoeExpertFp8BlockCoordinate_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py",
+    "newest": "MoeExpertFp8BlockCoordinate_v4"
+   },
+   {
+    "id": "MoeExpertGemmW_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/moe.py",
+    "newest": "MoeExpertGemmW_v2"
+   },
+   {
+    "id": "MoeExpertGemm_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/moe.py",
+    "newest": "MoeExpertGemm_v2"
+   },
+   {
+    "id": "MoeSum_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.py",
+    "newest": "MoeSum_v3"
+   },
+   {
+    "id": "NvLogf_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.py",
+    "newest": "NvLogf_v4"
+   },
+   {
+    "id": "NvLogf_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.py",
+    "newest": "NvLogf_v4"
+   },
+   {
+    "id": "NvLogf_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py",
+    "newest": "NvLogf_v5"
+   },
+   {
+    "id": "RMSNormArgCuda_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormArgCuda_v2"
+   },
+   {
+    "id": "RMSNormFusedCudaVector8_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm.py",
+    "newest": "RMSNormFusedCudaVector8_v3"
+   },
+   {
+    "id": "RMSNormFusedCudaVector8_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormFusedCudaVector8_v4"
+   },
+   {
+    "id": "RMSNormFusedCuda_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "RMSNormFusedCuda_v4"
+   },
+   {
+    "id": "RMSNormFusedCuda_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormFusedCuda_v5"
+   },
+   {
+    "id": "RMSNormMeanEpsTriton_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormMeanEpsTriton_v2"
+   },
+   {
+    "id": "RMSNormRef_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "newest": "RMSNormRef_v2"
+   },
+   {
+    "id": "RMSNormTriton_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "RMSNormTriton_v5"
+   },
+   {
+    "id": "RMSNormTriton_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormTriton_v4"
+   },
+   {
+    "id": "RMSNormTriton_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py",
+    "newest": "RMSNormTriton_v5"
+   },
+   {
+    "id": "RMSNormVarEpsCuda_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormVarEpsCuda_v3"
+   },
+   {
+    "id": "RMSNormVarEpsCuda_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormVarEpsCuda_v4"
+   },
+   {
+    "id": "RMSNormVarEpsTriton_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormVarEpsTriton_v3"
+   },
+   {
+    "id": "RMSNormVarEpsTriton_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py",
+    "newest": "RMSNormVarEpsTriton_v4"
+   },
+   {
+    "id": "RoPEHeadGptJ_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py",
+    "newest": "RoPEHeadGptJ_v2"
+   },
+   {
+    "id": "ScaledMmFp8BlockCoordinateGivenScale_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "ScaledMmFp8BlockCoordinateGivenScale_v3"
+   },
+   {
+    "id": "ScaledMmFp8BlockCoordinateGivenScale_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "ScaledMmFp8BlockCoordinateGivenScale_v4"
+   },
+   {
+    "id": "ScaledMmFp8BlockCoordinate_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "ScaledMmFp8BlockCoordinate_v3"
+   },
+   {
+    "id": "ScaledMmFp8BlockCoordinate_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "ScaledMmFp8BlockCoordinate_v4"
+   },
+   {
+    "id": "ScaledMmFp8BlockSharedScaleTile_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "ScaledMmFp8BlockSharedScaleTile_v3"
+   },
+   {
+    "id": "ScaledMmFp8BlockSharedScaleTile_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "ScaledMmFp8BlockSharedScaleTile_v4"
+   },
+   {
+    "id": "ScaledMmFp8BlockSharedScale_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "ScaledMmFp8BlockSharedScale_v3"
+   },
+   {
+    "id": "ScaledMmFp8BlockSharedScale_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "ScaledMmFp8BlockSharedScale_v4"
+   },
+   {
+    "id": "ScaledMmFp8Block_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/fp8.py",
+    "newest": "ScaledMmFp8Block_v3"
+   },
+   {
+    "id": "ScaledMmFp8Block_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py",
+    "newest": "ScaledMmFp8Block_v4"
+   },
+   {
+    "id": "SelectCollect_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/io_shell.py",
+    "newest": "SelectCollect_v2"
+   },
+   {
+    "id": "SparseMlaHeadBlock_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py",
+    "newest": "SparseMlaHeadBlock_v3"
+   },
+   {
+    "id": "TanhF32Rn_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dense.py",
+    "newest": "TanhF32Rn_v2"
+   },
+   {
+    "id": "TokenSelectChunk_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "TokenSelectChunk_v2"
+   },
+   {
+    "id": "TokenSelectCombine_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "TokenSelectCombine_v2"
+   },
+   {
+    "id": "TokenSelect_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/b1.py",
+    "newest": "TokenSelect_v4"
+   },
+   {
+    "id": "TokenSelect_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "TokenSelect_v4"
+   },
+   {
+    "id": "TopPKeepWord_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/topp_words.py",
+    "newest": "TopPKeepWord_v2"
+   },
+   {
+    "id": "TopPMask_v1",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/sampling.py",
+    "newest": "TopPMask_v4"
+   },
+   {
+    "id": "TopPMask_v2",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/topp_words.py",
+    "newest": "TopPMask_v4"
+   },
+   {
+    "id": "TopPMask_v3",
+    "file": "adapters/vllm/verity_vllm/definitions/registry/dead_free.py",
+    "newest": "TopPMask_v4"
+   }
+  ]
+ },
+ "reach": {
+  "adapters/vllm/verity_vllm/definitions/README.md": {
+   "lines": 95,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/__init__.py": {
+   "lines": 41,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/encoding.py": {
+   "lines": 7,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/evidence.json": {
+   "lines": 106,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/evidence.py": {
+   "lines": 9,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/__init__.py": {
+   "lines": 13,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/_jit.py": {
+   "lines": 166,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/act_rows.py": {
+   "lines": 52,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/batched_gemm_rows.py": {
+   "lines": 74,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cpp/fa2_model.cpp": {
+   "lines": 283,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cpp/k16_chain.cpp": {
+   "lines": 107,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cpp/rms_triton_model.cpp": {
+   "lines": 205,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cpp/tc_model.cpp": {
+   "lines": 285,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cpu_model.py": {
+   "lines": 187,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cublas_gemm_rows.py": {
+   "lines": 153,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/cuda_rmsnorm_rows.py": {
+   "lines": 196,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_rows.py": {
+   "lines": 85,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_schedule.py": {
+   "lines": 172,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/deepgemm_twins.py": {
+   "lines": 167,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dense_rows.py": {
+   "lines": 471,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/derived_rows.py": {
+   "lines": 955,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsa_norm_rows.py": {
+   "lines": 84,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_compressor_twin.py": {
+   "lines": 305,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_indices_twin.py": {
+   "lines": 81,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_decode_metadata_twin.py": {
+   "lines": 171,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_indexer_twin.py": {
+   "lines": 182,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_indices_twin.py": {
+   "lines": 97,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_moe_twin.py": {
+   "lines": 129,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_qnorm_insert_twin.py": {
+   "lines": 269,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/dsv4_rows.py": {
+   "lines": 658,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fa2_model.py": {
+   "lines": 289,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fa2_relation.py": {
+   "lines": 191,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fa2_split_twins.py": {
+   "lines": 88,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fa3_model.py": {
+   "lines": 338,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fa3_split_twins.py": {
+   "lines": 67,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/flashmla_dsv32_twin.py": {
+   "lines": 240,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/flashmla_prefill_twin.py": {
+   "lines": 182,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/flashmla_twin.py": {
+   "lines": 563,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fp8_moe_rows.py": {
+   "lines": 179,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/fp8_twins.py": {
+   "lines": 111,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/gemm_relation.py": {
+   "lines": 484,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/glm53_rows.py": {
+   "lines": 348,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/greedy_accept_twin.py": {
+   "lines": 84,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/inductor_rows.py": {
+   "lines": 131,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/int8_rows.py": {
+   "lines": 221,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/ir_rows.py": {
+   "lines": 79,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/kernel_registry.py": {
+   "lines": 165,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/kernel_zoo.py": {
+   "lines": 143,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/libdevice.py": {
+   "lines": 161,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/marlin_moe_rows.py": {
+   "lines": 293,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/mhc_twin.py": {
+   "lines": 446,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/mma.py": {
+   "lines": 139,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/moe_align_rows.py": {
+   "lines": 88,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/moe_router_rows.py": {
+   "lines": 74,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/moe_twins.py": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/nvfp4_twins.py": {
+   "lines": 15,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/prims_twins.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/program_walk.py": {
+   "lines": 269,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/ref_prims_twins.py": {
+   "lines": 196,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/rms_relation.py": {
+   "lines": 168,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/rms_triton_model.py": {
+   "lines": 240,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/rmsnorm_fused.py": {
+   "lines": 98,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/rows.py": {
+   "lines": 797,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/serve3_reference.py": {
+   "lines": 88,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/softcap_rows.py": {
+   "lines": 164,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/sparse_mla_split_twins.py": {
+   "lines": 221,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/stop_rows.py": {
+   "lines": 56,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/token_select_rows.py": {
+   "lines": 19,
+   "catalog_on": "benchmarks",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/topp_stage_twins.py": {
+   "lines": 326,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/torch_blocks.py": {
+   "lines": 128,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/torch_kernels.py": {
+   "lines": 558,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/torch_step.py": {
+   "lines": 210,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/twins.py": {
+   "lines": 899,
+   "catalog_on": "tests",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/numerics/value_rows.py": {
+   "lines": 77,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/__init__.py": {
+   "lines": 123,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/act.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/act.circuit-check.py": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/act.py": {
+   "lines": 182,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/attention_cuts.py": {
+   "lines": 42,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/attention_vocab.py": {
+   "lines": 43,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/b1.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/b1.py": {
+   "lines": 1202,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/b1_tp2.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/b1_tp2.py": {
+   "lines": 405,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py": {
+   "lines": 506,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_activation.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_activation.circuit-check.py": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_activation.py": {
+   "lines": 148,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.circuit-check.json": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.circuit-check.py": {
+   "lines": 45,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_attention.py": {
+   "lines": 596,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.circuit-check.json": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_deepgemm.py": {
+   "lines": 168,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.circuit-check.json": {
+   "lines": 116,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense.py": {
+   "lines": 201,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.circuit-check.json": {
+   "lines": 72,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.circuit-check.py": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dense_norm.py": {
+   "lines": 240,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.circuit-check.json": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.circuit-check.py": {
+   "lines": 53,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa.py": {
+   "lines": 299,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.circuit-check.unkeyed.json": {
+   "lines": 5,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_ds_mla.py": {
+   "lines": 40,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.circuit-check.json": {
+   "lines": 57,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.circuit-check.py": {
+   "lines": 40,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_norm.py": {
+   "lines": 218,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk.circuit-check.json": {
+   "lines": 120,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk.py": {
+   "lines": 263,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.circuit-check.json": {
+   "lines": 931,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.circuit-check.py": {
+   "lines": 102,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsa_topk_mask.py": {
+   "lines": 605,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.circuit-check.json": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.circuit-check.py": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_compressor.py": {
+   "lines": 132,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.circuit-check.json": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_indices.py": {
+   "lines": 74,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.circuit-check.json": {
+   "lines": 80,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.circuit-check.py": {
+   "lines": 27,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_decode_metadata.py": {
+   "lines": 174,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indexer.circuit-check.json": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indexer.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indexer.py": {
+   "lines": 209,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indices.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indices.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_indices.py": {
+   "lines": 58,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.circuit-check.json": {
+   "lines": 76,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_moe.py": {
+   "lines": 482,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_dsv4_qnorm_insert.py": {
+   "lines": 146,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_split.py": {
+   "lines": 80,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa2_train_bwd.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fa3_split.py": {
+   "lines": 47,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.circuit-check.json": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.circuit-check.py": {
+   "lines": 27,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla.py": {
+   "lines": 226,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.circuit-check.json": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.circuit-check.unkeyed.json": {
+   "lines": 12,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_flashmla_prefill.py": {
+   "lines": 94,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.circuit-check.json": {
+   "lines": 64,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.circuit-check.py": {
+   "lines": 43,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8.py": {
+   "lines": 393,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.py": {
+   "lines": 70,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.py": {
+   "lines": 297,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.circuit-check.json": {
+   "lines": 96,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.circuit-check.py": {
+   "lines": 41,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_gather.py": {
+   "lines": 303,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.circuit-check.json": {
+   "lines": 84,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.circuit-check.py": {
+   "lines": 30,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_int8.py": {
+   "lines": 88,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_io_shell.circuit-check.json": {
+   "lines": 27,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_io_shell.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_io_shell.py": {
+   "lines": 194,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.circuit-check.json": {
+   "lines": 88,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.circuit-check.py": {
+   "lines": 42,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_marlin_moe.py": {
+   "lines": 398,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.circuit-check.json": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.circuit-check.py": {
+   "lines": 38,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.circuit-check.unkeyed.json": {
+   "lines": 10,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mhc.py": {
+   "lines": 215,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.circuit-check.json": {
+   "lines": 60,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.circuit-check.py": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_moe.py": {
+   "lines": 531,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.circuit-check.json": {
+   "lines": 31,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.circuit-check.py": {
+   "lines": 31,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_mtp_draft.py": {
+   "lines": 135,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.circuit-check.json": {
+   "lines": 108,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.circuit-check.py": {
+   "lines": 41,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms.py": {
+   "lines": 793,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.circuit-check.json": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.circuit-check.py": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_norms_split.py": {
+   "lines": 70,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_rope.circuit-check.json": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_rope.circuit-check.py": {
+   "lines": 33,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_rope.py": {
+   "lines": 147,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.circuit-check.json": {
+   "lines": 40,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_scalar.py": {
+   "lines": 87,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.circuit-check.json": {
+   "lines": 92,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.circuit-check.py": {
+   "lines": 52,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.circuit-check.unkeyed.json": {
+   "lines": 5,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sigma.py": {
+   "lines": 102,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_silu.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_silu.circuit-check.py": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_silu.py": {
+   "lines": 113,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.circuit-check.json": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.circuit-check.py": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_softcap.py": {
+   "lines": 220,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.json": {
+   "lines": 97,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.py": {
+   "lines": 93,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla.py": {
+   "lines": 354,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.circuit-check.json": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.circuit-check.py": {
+   "lines": 38,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.circuit-check.unkeyed.json": {
+   "lines": 6,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_sparse_mla_split.py": {
+   "lines": 246,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.circuit-check.json": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_stop_rule.py": {
+   "lines": 69,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.circuit-check.py": {
+   "lines": 14,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tanh.py": {
+   "lines": 218,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.circuit-check.json": {
+   "lines": 53,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.circuit-check.py": {
+   "lines": 31,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_topp_stages.py": {
+   "lines": 78,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.circuit-check.json": {
+   "lines": 60,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.circuit-check.py": {
+   "lines": 14,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_torch_words.py": {
+   "lines": 144,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.circuit-check.json": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.circuit-check.py": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_allreduce.py": {
+   "lines": 228,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.circuit-check.json": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.circuit-check.py": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_tp_combine.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_transcendental.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/boolean_transcendental.py": {
+   "lines": 430,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py": {
+   "lines": 207,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/catalog.py": {
+   "lines": 63,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.circuit-check.json": {
+   "lines": 64,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.circuit-check.py": {
+   "lines": 81,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.circuit-check.unkeyed.json": {
+   "lines": 19,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_bf16.py": {
+   "lines": 624,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_gemv.circuit-check.py": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_gemv.py": {
+   "lines": 105,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cublas_routes.json": {
+   "lines": 22,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm.py": {
+   "lines": 266,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/cuda_rmsnorm_split.py": {
+   "lines": 66,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dead_free.circuit-check.py": {
+   "lines": 55,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dead_free.circuit-check.unkeyed.json": {
+   "lines": 5,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dead_free.py": {
+   "lines": 507,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/deepgemm.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/deepgemm.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/deepgemm.py": {
+   "lines": 281,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dense.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dense.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dense.py": {
+   "lines": 619,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/device_pins/NVIDIA_B200.json": {
+   "lines": 87,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/device_pins/NVIDIA_H200.json": {
+   "lines": 90,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/device_pins/NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition.json": {
+   "lines": 87,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa.circuit-check.json": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa.circuit-check.py": {
+   "lines": 41,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa.py": {
+   "lines": 428,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_ds_mla.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_ds_mla.py": {
+   "lines": 137,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_norm.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_norm.py": {
+   "lines": 222,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.circuit-check.py": {
+   "lines": 34,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.py": {
+   "lines": 350,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask.circuit-check.py": {
+   "lines": 76,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask.py": {
+   "lines": 474,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.circuit-check.json": {
+   "lines": 199,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.circuit-check.py": {
+   "lines": 67,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_mask_cut.py": {
+   "lines": 543,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.circuit-check.json": {
+   "lines": 280,
+   "catalog_on": "commands",
+   "catalog_off": "tools"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.circuit-check.py": {
+   "lines": 92,
+   "catalog_on": "commands",
+   "catalog_off": "tools"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsa_topk_reads.py": {
+   "lines": 542,
+   "catalog_on": "commands",
+   "catalog_off": "tools"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_compressor.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_compressor.circuit-check.py": {
+   "lines": 31,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_compressor.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_compressor.py": {
+   "lines": 385,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_indices.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_indices.py": {
+   "lines": 158,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_decode_metadata.py": {
+   "lines": 330,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_indexer.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_indexer.py": {
+   "lines": 418,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_indices.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_indices.py": {
+   "lines": 145,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_moe.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_moe.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_moe.py": {
+   "lines": 311,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_qnorm_insert.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_qnorm_insert.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_qnorm_insert.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/dsv4_qnorm_insert.py": {
+   "lines": 295,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_check_inf.py": {
+   "lines": 202,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_softcap.py": {
+   "lines": 155,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_split.circuit-check.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_split.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_split.py": {
+   "lines": 257,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_train.circuit-check.py": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_train.py": {
+   "lines": 311,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.circuit-check.py": {
+   "lines": 34,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa2_train_bwd.py": {
+   "lines": 301,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.circuit-check.py": {
+   "lines": 26,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa3_check_inf.py": {
+   "lines": 182,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa3_split.circuit-check.py": {
+   "lines": 27,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fa3_split.py": {
+   "lines": 206,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla.circuit-check.json": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla.circuit-check.py": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla.circuit-check.unkeyed.json": {
+   "lines": 9,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla.py": {
+   "lines": 540,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_dsv32.circuit-check.py": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_dsv32.py": {
+   "lines": 295,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_prefill.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_prefill.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_prefill.circuit-check.unkeyed.json": {
+   "lines": 13,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/flashmla_prefill.py": {
+   "lines": 284,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8.circuit-check.py": {
+   "lines": 34,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8.circuit-check.unkeyed.json": {
+   "lines": 11,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8.py": {
+   "lines": 608,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_ds_mla_upconvert.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_ds_mla_upconvert.py": {
+   "lines": 247,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.circuit-check.py": {
+   "lines": 48,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe.py": {
+   "lines": 305,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe_experts.circuit-check.json": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe_experts.circuit-check.py": {
+   "lines": 70,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe_experts.circuit-check.unkeyed.json": {
+   "lines": 24,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_moe_experts.py": {
+   "lines": 191,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/fp8_vocab.py": {
+   "lines": 35,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gelu_erf_table.py": {
+   "lines": 1203,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gemm_bias.py": {
+   "lines": 50,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/glibc_pow_data.py": {
+   "lines": 183,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/greedy_stages.circuit-check.json": {
+   "lines": 7,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/greedy_stages.circuit-check.py": {
+   "lines": 34,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/greedy_stages.py": {
+   "lines": 489,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.circuit-check.py": {
+   "lines": 30,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/greedy_stop.py": {
+   "lines": 162,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.circuit-check.json": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/gumbel_boolean.py": {
+   "lines": 485,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/hopper.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/hopper.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/hopper.py": {
+   "lines": 202,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/host_f64.py": {
+   "lines": 242,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/inductor.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/inductor.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/inductor.py": {
+   "lines": 340,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/int8_exact.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/int8_exact.circuit-check.py": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/int8_exact.py": {
+   "lines": 466,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/io_shell.circuit-check.py": {
+   "lines": 42,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/io_shell.py": {
+   "lines": 634,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/layer_norm.py": {
+   "lines": 164,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/lifted.circuit-check.py": {
+   "lines": 21,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/lifted.py": {
+   "lines": 2075,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/linear_cut.circuit-check.json": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/linear_cut.circuit-check.py": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/linear_cut.py": {
+   "lines": 65,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ll_bf16.circuit-check.json": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ll_bf16.circuit-check.py": {
+   "lines": 48,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ll_bf16.py": {
+   "lines": 259,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/marlin_moe.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/marlin_moe.py": {
+   "lines": 621,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/merge_attn_states.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/merge_attn_states.py": {
+   "lines": 95,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/metadata.json": {
+   "lines": 100,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mhc.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mhc.circuit-check.py": {
+   "lines": 42,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mhc.circuit-check.unkeyed.json": {
+   "lines": 18,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mhc.py": {
+   "lines": 715,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mla.circuit-check.json": {
+   "lines": 8,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mla.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mla.py": {
+   "lines": 283,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mla_check.py": {
+   "lines": 323,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/moe.circuit-check.json": {
+   "lines": 12,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/moe.circuit-check.py": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/moe.py": {
+   "lines": 767,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/moe_pad.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/moe_pad.py": {
+   "lines": 305,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mtp_draft.py": {
+   "lines": 104,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/mufu_lg2.json": {
+   "lines": 283,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/nvfp4.circuit-check.py": {
+   "lines": 18,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/nvfp4.py": {
+   "lines": 123,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/operand_widths.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/pad_prims.py": {
+   "lines": 46,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/pouw_rows.circuit-check.py": {
+   "lines": 15,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/pouw_rows.py": {
+   "lines": 125,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/prims.circuit-check.json": {
+   "lines": 64,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/prims.py": {
+   "lines": 203,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ref_prims.circuit-check.json": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ref_prims.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py": {
+   "lines": 844,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/rmsnorm_fused_split.circuit-check.py": {
+   "lines": 17,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/rmsnorm_fused_split.py": {
+   "lines": 64,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.circuit-check.py": {
+   "lines": 66,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampled_accept.py": {
+   "lines": 725,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling.circuit-check.json": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling.py": {
+   "lines": 666,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.circuit-check.json": {
+   "lines": 140,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.circuit-check.py": {
+   "lines": 22,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_boolean.py": {
+   "lines": 270,
+   "catalog_on": "commands",
+   "catalog_off": "benchmarks"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_rows.py": {
+   "lines": 259,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_topp_difftest.py": {
+   "lines": 46,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_twins.py": {
+   "lines": 52,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sampling_vocab.py": {
+   "lines": 23,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/serve3.circuit-check.py": {
+   "lines": 17,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/serve3.py": {
+   "lines": 166,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sparse_mla.circuit-check.py": {
+   "lines": 40,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sparse_mla.py": {
+   "lines": 525,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.circuit-check.json": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.circuit-check.py": {
+   "lines": 46,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/sparse_mla_split.py": {
+   "lines": 551,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/spec.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/spec.circuit-check.unkeyed.json": {
+   "lines": 7,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/spec.py": {
+   "lines": 426,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/stop_check.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/stop_check.py": {
+   "lines": 61,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/stop_rule.circuit-check.py": {
+   "lines": 20,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/stop_rule.py": {
+   "lines": 189,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tables.circuit-check.json": {
+   "lines": 16,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tables.circuit-check.py": {
+   "lines": 35,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tables.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tables.py": {
+   "lines": 153,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_geometry.py": {
+   "lines": 70,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_keep_builder.py": {
+   "lines": 550,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_split.py": {
+   "lines": 539,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_stages.circuit-check.py": {
+   "lines": 43,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_stages.py": {
+   "lines": 787,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_standalone.py": {
+   "lines": 258,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.circuit-check.py": {
+   "lines": 25,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_standalone_words.py": {
+   "lines": 276,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.circuit-check.json": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_word_gates.py": {
+   "lines": 219,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_words.circuit-check.py": {
+   "lines": 17,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/topp_words.py": {
+   "lines": 245,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_attention.circuit-check.json": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_attention.circuit-check.py": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_attention.py": {
+   "lines": 539,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_clip.circuit-check.json": {
+   "lines": 48,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_clip.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_clip.py": {
+   "lines": 399,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.circuit-check.json": {
+   "lines": 200,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.circuit-check.py": {
+   "lines": 33,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_embedding.py": {
+   "lines": 693,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_embedding_f32.py": {
+   "lines": 331,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_loss.circuit-check.json": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_loss.circuit-check.py": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_loss.circuit-check.unkeyed.json": {
+   "lines": 8,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_loss.py": {
+   "lines": 398,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_optim.circuit-check.json": {
+   "lines": 32,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_optim.circuit-check.py": {
+   "lines": 24,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_optim.circuit-check.unkeyed.json": {
+   "lines": 5,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_optim.py": {
+   "lines": 300,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_step.circuit-check.json": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_step.circuit-check.py": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_step.py": {
+   "lines": 418,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_train.circuit-check.json": {
+   "lines": 36,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_train.circuit-check.py": {
+   "lines": 28,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_train.circuit-check.unkeyed.json": {
+   "lines": 5,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_train.py": {
+   "lines": 517,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_words.circuit-check.json": {
+   "lines": 60,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_words.circuit-check.py": {
+   "lines": 11,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/torch_words.py": {
+   "lines": 181,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.circuit-check.json": {
+   "lines": 172,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.circuit-check.py": {
+   "lines": 76,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.circuit-check.unkeyed.json": {
+   "lines": 66,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce.py": {
+   "lines": 828,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_check.py": {
+   "lines": 161,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_nodes.json": {
+   "lines": 4,
+   "catalog_on": "none",
+   "catalog_off": "none"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_nodes.py": {
+   "lines": 207,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.circuit-check.py": {
+   "lines": 19,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_allreduce_split.py": {
+   "lines": 44,
+   "catalog_on": "commands",
+   "catalog_off": "tests"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_combine.circuit-check.py": {
+   "lines": 29,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/tp_combine.py": {
+   "lines": 248,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/traced_parts.py": {
+   "lines": 58,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/value_inputs.circuit-check.py": {
+   "lines": 27,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/registry/value_inputs.py": {
+   "lines": 227,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  },
+  "adapters/vllm/verity_vllm/definitions/replay.py": {
+   "lines": 112,
+   "catalog_on": "commands",
+   "catalog_off": "commands"
+  }
+ }
+}
