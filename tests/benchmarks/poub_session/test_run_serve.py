@@ -406,6 +406,17 @@ def test_a_paced_line_hands_the_verifier_its_pace_in_place_of_the_windows_and_on
             "refused: PACED=1:1000:2773:7 1:1000:2773:7 paces 2 session(s), and PLAN=serve has 1")
 
 
+def test_refresh_reaches_the_verifier_as_the_line_states_it_and_not_at_all_when_unset(node, tmp_path):
+    p = node.both("tiny")
+    assert p.returncode == 0, said(p)
+    assert "--refresh" not in node.verifier()["argv"]
+    other = Node(tmp_path / "other")
+    p = other.both("tiny", REFRESH="0,1")
+    assert p.returncode == 0, said(p)
+    argv = other.verifier()["argv"]
+    assert argv[argv.index("--refresh") + 1] == "0,1"
+
+
 def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     port = str(free_port())
     p = node.both("row", PORT=port, ROW_ARGS="--norm-tap-so /taps/norm.so")

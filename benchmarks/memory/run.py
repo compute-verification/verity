@@ -344,7 +344,8 @@ def parameters(v: dict, vs: dict) -> dict:
     `passes` the passes the ledger counted in all. A paced session has no windows: its record's `windows` are the pass
     groups it ran (`pass_groups`) and its `window_ns` a placeholder, so it states neither as windows; its `pace` is
     its verifier's (`pace_of`: the passes a coin, a stretch's milliseconds and openings, the openings a group, the
-    credited stretches, the groups a stretch and the pass they are counted at). None where the record states none."""
+    credited stretches, the groups a stretch and the pass they are counted at). None where the record states none.
+    A session under refresh says so (`refresh`, the record's own key, which no other session's parameters hold)."""
     def ns(x):
         return x / 1e6 if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
@@ -356,7 +357,8 @@ def parameters(v: dict, vs: dict) -> dict:
             "samples": vs.get("samples"), "delta": vs.get("delta"), **form, "allowance_ms": ns(vs.get("allowance_ns")),
             "budget_log2": ((vs.get("ledger") or {}).get("sketch_failure") or {}).get("queries_log2"),
             "passes": passes if type(passes) is int else
-            sum(passes) if isinstance(passes, list) and passes and all(type(x) is int for x in passes) else None}
+            sum(passes) if isinstance(passes, list) and passes and all(type(x) is int for x in passes) else None,
+            **({"refresh": True} if vs.get("refresh") is True else {})}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None,
