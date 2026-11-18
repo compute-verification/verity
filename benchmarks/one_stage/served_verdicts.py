@@ -406,6 +406,11 @@ AS_WRITTEN = "as the served node wrote it"
 #: ... SPOT's under ``record --sampled-lean`` (`lean_sampled_row`)
 LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive sampled check) from the proofs and public "
              "files of the window's sampled proofs case, not the served node's answer")
+#: ... and the limits of its accept in the per-member form (``limits``)
+MEMBERS_LIMITS = ("each sampled proof block proved in its own kind's statement against the one registration's roots on live "
+                  "coins; members with no sampled proof block were not proved, and no theorem yet covers a sample that "
+                  "misses members; the wires between members are not held; the circuit files' digests are fixed before "
+                  "the coins in the parameters but not signed in the docket")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwVerifier.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
@@ -1810,6 +1815,17 @@ def check_answer(a: Any) -> dict[str, Any]:
     return dict(a)
 
 
+def levels_held(row: Mapping[str, Any], levels: int) -> dict[str, Any]:
+    """SPOT's accepting row, or its error where its integrity profile's ``levels`` list (Definition 3.13's) isn't
+    ``levels`` long, the application file's setting: `epsilon` reads its last level as the checked one."""
+    profile = (row.get("answer") or {}).get("profile")
+    got = profile.get("levels") if isinstance(profile, Mapping) else None
+    if isinstance(got, list) and len(got) == levels:
+        return dict(row)
+    return {"verdict": "error", "owner": row.get("owner"), "answer_from": row.get("answer_from"),
+            "reason": f"levels: the application file states {levels} and SPOT's accept's integrity profile lists "
+                      f"{len(got) if isinstance(got, list) else 'none'}, so its bound is not over the levels audited"}
+
 def epsilon(a: Mapping[str, Any]) -> str | None:
     """A sampled protocol's bound on incorrect proof blocks (``public.bound``) over its checked level's size (`Core.Integrity`), or
     None for an answer that has no such bound."""
@@ -1868,8 +1884,8 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
     was not started (`served_cases.NotStarted`: its blob files sum past the limit, or the host makes no memory scope):
     the row is `spot_row`'s, ``answer_from`` and ``not_started`` naming why, the sum and the limit. A case the Lean
     doesn't make or answer, or an answer about another record, is the row's error. An accept of a case in the
-    per-member form carries ``members`` (sampled of registered) and each sampled member's bound over its own proof
-    blocks (``bounds``), and no ε over the workload."""
+    per-member form carries ``limits`` (`MEMBERS_LIMITS`), ``members`` (sampled of registered) and each sampled
+    member's bound over its own proof blocks (``bounds``), and no ε over the workload."""
     import served_cases as SC
 
     if not (audit_dir / "window" / "case-v2.json").is_file():
@@ -1883,7 +1899,7 @@ def lean_sampled_row(audit_dir: Path, scratch: Path, exe: str | os.PathLike | No
         row = {**row_of(INTEGRITY_OWNER, answer, audit_dir, run), "answer_from": LEAN_HERE}
         proofs = case["params"].get("proofs")
         if isinstance(proofs, dict) and "members" in proofs and row["verdict"] == "accept":
-            return {**row, "epsilon": None, **members_reached(proofs["members"], answer)}
+            return {**row, "limits": MEMBERS_LIMITS, "epsilon": None, **members_reached(proofs["members"], answer)}
         return row
     except SC.NotStarted as e:
         return {**spot_row(audit_dir, run), "not_started": {"reason": str(e), **e.line},
@@ -2473,6 +2489,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
+           levels: int = 1,
            front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
@@ -2489,7 +2506,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
     over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
     doesn't read. SPOT's accept row and its block record carry ``covers`` `BR.COVERS_BLOCKS`: each sampled block on its
-    own inputs; the wires between blocks are not held."""
+    own inputs; the wires between blocks are not held. An accept whose profile's levels list isn't ``levels`` long, the
+    application file's setting, is its error (`levels_held`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2501,6 +2519,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
+    if rows.get("integrity", {}).get("verdict") == "accept":
+        rows["integrity"] = levels_held(rows["integrity"], levels)
     if rows.get("integrity", {}).get("verdict") == "accept":
         rows["integrity"]["covers"] = BR.COVERS_BLOCKS
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
@@ -2671,6 +2691,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
     p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
+    r.add_argument("--levels", type=int, default=1, help="SPOT's levels as the application file states them "
+                   "(served_verdicts.sh's SPOT_LEVELS): the integrity profile's levels list must have that many")
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
@@ -2922,7 +2944,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
-                               answer=answer, lean=lean, inference_only=io,
+                               answer=answer, lean=lean, inference_only=io, levels=a.levels,
                                front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")

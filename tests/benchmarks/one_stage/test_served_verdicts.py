@@ -1565,6 +1565,7 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     monkeypatch.setenv("ANSWER", json.dumps(answer))
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
     assert rows["integrity"]["verdict"] == "accept" and rows["integrity"]["covers"] == "blocks", rows["integrity"]
+    rows_one_level = rows["integrity"]
     w = tmp_path / "serve" / STEP3 / "window"
     case = json.loads((w / "case-v2.json").read_text())
     members = {"m0": {"units": [[0, 2]]}, "m1": {"units": [[2, 3]]}, "m2": {"units": [[3, 4]]}}
@@ -1572,6 +1573,13 @@ def test_a_spot_row_the_lean_here_accepts_in_the_per_member_form_says_what_it_co
     _rc, _line, rows = _recorded(tmp_path, argv, capsys)
     row = rows["integrity"]
     assert row["verdict"] == "accept" and row["covers"] == "blocks" and row["epsilon"] is None, row
+    assert row["limits"] == S.MEMBERS_LIMITS and "limits" not in rows_one_level, row
+    for clause in ("proved in its own kind's statement against the one registration's roots on live coins",
+                   "members with no sampled proof block were not proved",
+                   "no theorem yet covers a sample that misses members",
+                   "the wires between members are not held",
+                   "fixed before the coins in the parameters but not signed in the docket"):
+        assert clause in row["limits"], clause
     assert row["members"] == {"sampled": 2, "registered": 3}, row
     assert row["bounds"] == ["at most 1 incorrect of member m0's 2 proof blocks at δ 1/100",
                              "at most 0 incorrect of member m2's 1 proof block at δ 1/100"], row
@@ -7971,3 +7979,22 @@ def test_the_window_verb_publishes_the_execution_phase_in_a_fresh_out_or_stops(t
                                        ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
 def test_hold_placement_holds_only_under_exactly_1(env, held):
     assert S.hold_placement(env) is held
+
+
+@pytest.mark.parametrize(("levels", "profile", "said"), [
+    (1, None, None),
+    (2, None, "lists 1,"),
+    (1, {"drawn": {"unit": 2}, "delta": "1/100"}, "lists none,"),
+    (1, {"levels": [{"name": "outer", "size": 2}, {"name": "unit", "size": 4}], "delta": "1/100"}, "lists 2,")])
+def test_spots_accept_holds_its_profiles_levels_to_the_files_setting(levels, profile, said):
+    """The levels list's length is the setting, held to the application file's and never read back from the record; the
+    accept whose list differs is the row's error, named ``levels``, and carries no ε or covers."""
+    row = _accepted()
+    if profile is not None:
+        row = {**row, "answer": {**row["answer"], "profile": profile}}
+    held = S.levels_held(row, levels)
+    if said is None:
+        assert held == row and held is not row
+        return
+    assert held["verdict"] == "error" and held["reason"].startswith("levels: the application file states "), held
+    assert said in held["reason"] and "epsilon" not in held and "covers" not in held, held
