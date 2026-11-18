@@ -18,6 +18,7 @@ public import Proofs.Core.LevelsCount
 public import Proofs.Core.LevelsCircuit
 public import Proofs.Core.LevelsCredited
 public import Proofs.Core.LevelsKinds
+public import Proofs.Core.LevelsProofBlocks
 public import Proofs.Core.Prob
 public import Proofs.Core.Coins
 public import Proofs.Core.Game.Poly
