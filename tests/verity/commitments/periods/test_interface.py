@@ -2796,8 +2796,6 @@ def test_an_opening_may_declare_the_output_that_returns_its_row():
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=NotImplementedError, strict=True, reason="o1 reads embed/opened (3 words) at width 1: the "
-                   "registered leaves cut again at a reader's width waits on circuits and lean defining the cut")
 def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
     salt and path the units' own; and the verifier derives the same members, and each member's ``--registered`` file, from
@@ -2838,7 +2836,7 @@ def test_a_period_commits_its_table_reads_and_verdicts_as_registered_reads():
     with pytest.raises(ValueError, match="didn't pin"):
         I.registered_reads(doc, mine, {}, registered=REG)
     win.registered = {**win.registered, "embed/opened": Held("embed/opened", np.ones((1, 3), dtype=np.uint16))}
-    with pytest.raises(ValueError, match="rows of 3 16-bit leaves, not the port's 1 16-bit words"):
+    with pytest.raises(ValueError, match="rows of 3 16-bit words, in rows of 1"):
         win.close(salts_of=fixed(win))
 
 
