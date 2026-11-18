@@ -310,18 +310,22 @@ def arm_of(mode: str, run, args):
                                                       run_id=settings.RESEARCH_RUN_ID))
 
 
+def tile_digests(run, ended: dict) -> bytes:
+    """An ended pass's tiles' unsalted digests, the leaves the tree salts (`run.leaves`, read before the next pass poisons
+    them; a pass ended without `lag`).  A pass without hashing has no tiles and no leaves: empty."""
+    return run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes() if ended["tiles"] else b""
+
+
 def under_salt(run, ended: dict) -> dict:
-    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests, the leaves the
-    tree salts (`run.leaves`, read before the next pass poisons them; a pass ended without `lag`)."""
-    return {"transcript_root": ended["transcript_root"],
-            "digests": run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes()}
+    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests (`tile_digests`).
+    A pass with hashing only: without it a pass has no root."""
+    return {"transcript_root": ended["transcript_root"], "digests": tile_digests(run, ended)}
 
 
 def unsalted(run, ended: dict) -> dict:
     """What two passes of the same calls must share although each draws fresh salts: the SHA-512 of their tiles' unsalted
-    digests (`under_salt`), their units and their tiles; never a root."""
-    return {"digests": hashlib.sha512(under_salt(run, ended)["digests"]).hexdigest(), "units": ended["units"],
-            "tiles": ended["tiles"]}
+    digests (`tile_digests`), their units and their tiles; never a root, so a pass without hashing has it too."""
+    return {"digests": hashlib.sha512(tile_digests(run, ended)).hexdigest(), "units": ended["units"], "tiles": ended["tiles"]}
 
 
 def call_verdict(commits: list[dict], err: float) -> dict:

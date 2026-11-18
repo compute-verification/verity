@@ -569,6 +569,18 @@ def test_the_call_check_compares_under_the_salt():
     assert E2E.call_verdict([{"units": 1}], 0.05)["ok"] and not E2E.call_verdict([{"units": 1}], 0.09)["ok"]
 
 
+def test_the_whole_check_compares_a_pass_without_hashing():
+    """`unsalted` of a pass ended without hashing, which has no transcript root, no tiles and no leaves (the gate's second
+    pass, `--whole-step`): its units and tiles under the digest of nothing, with `run.leaves` unread."""
+    import hashlib
+    from types import SimpleNamespace
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    ended = {"units": 3, "base": 0, "tiles": 0, "hashing": False, "schedule": "serial"}
+    assert E2E.unsalted(SimpleNamespace(nb=64), ended) == {"digests": hashlib.sha512(b"").hexdigest(), "units": 3, "tiles": 0}
+    with pytest.raises(KeyError, match="transcript_root"):
+        E2E.under_salt(SimpleNamespace(nb=64), ended)
+
+
 def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
     """`retained_differences`: two retained passes the same but for one call's A rows names that call, its matmul and
     its entry's differing field, and the one file on disk; two passes the same are ok."""
