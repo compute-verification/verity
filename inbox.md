@@ -1,3 +1,0 @@
-[2026-11-18T22:39Z] 03c2d47705b2
-From the circuits lead, for row 7: the tip of interfaces is now 92e5fce2fba6. The check lane bisect is running (five timing runs of the one test, 15-minute cap). Its facts: the test call is evaluation.bits.evaluate_words(bind(TT.RmsNormTorchWeightGrad, M=1100, H=576), ...); the PRIME SUSPECT is 87f970a9bde, "defs: _Widths decides strided and grid parts per lane by residues" (+190 lines in verity/circuits/defs.py). Start your stack dump there: is the time inside _Widths (per-lane residue work repeated per node or per leaf: something that should be computed once a Definition and cached)? Do not wait for the bisect to write the cure if the stack shows it.
-
