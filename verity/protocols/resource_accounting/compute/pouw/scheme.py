@@ -533,6 +533,8 @@ PEARL_PLUS = register(Scheme(
     salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
     keeps_weight_copy=True,
-    copy_beside_storage_ruled="storage's bound does not depend on what else holds the weights; Pearl+ keeps a formed FP8 copy "
-                              "of each linear it serves in memory beside storage, and the serve may read it.",
+    copy_beside_storage_ruled="Storage's bound is over a responder that is handed the weights, so it does not depend on "
+                              "what else holds them. Beside Pearl+ the plain weights stay resident for the whole serve, "
+                              "with Pearl+'s formed FP8 buffers as a third form, and storage's release of a weight frees "
+                              "nothing.",
 ))

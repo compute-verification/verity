@@ -525,7 +525,7 @@ def test_storage_beside_a_scheme_that_has_not_declared_whether_it_keeps_a_copy_i
     assert M.weight_copy_refusals([made[k] for k in order]) == [
         "storage is storage (it needs the workload's store) and other's declaration does not say whether it keeps a "
         "weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it until it declares "
-        "that, and a scheme that keeps one beside storage awaits a decision"]
+        "that, and a scheme that keeps one beside storage is refused until its copy beside storage is ruled"]
 
 
 def test_storage_beside_one_that_declares_no_copy_and_a_copy_without_storage_are_attached():

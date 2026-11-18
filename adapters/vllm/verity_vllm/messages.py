@@ -330,7 +330,7 @@ def weight_copy(listed: Sequence[schemes.Scheme]) -> tuple[list[str], list[Weigh
             elif isinstance(keeps, schemes.Lacks):
                 refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
                                f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
-                               "until it declares that, and a scheme that keeps one beside storage awaits a decision")
+                               "until it declares that, and a scheme that keeps one beside storage is refused until its copy beside storage is ruled")
     return refused, noted
 
 

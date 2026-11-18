@@ -107,14 +107,15 @@ UNDECLARED = Lacks()
 
 #: the field that declares a scheme's weight-derived copy beside storage ruled, a sentence, as its readers name it
 BESIDE_STORAGE = "copy_beside_storage_ruled"
-# placeholders, awaiting soundness's final words
-#: what a ruling of a weight-derived copy beside storage does not show, printed with each pair it allows
+#: what a ruling of a weight-derived copy beside storage does not show, printed with each pair it allows. This list is
+#: Pearl+'s in particular (its third item and the ruling's second sentence are true of Pearl+); when a second keeper is
+#: ruled, its not-shown goes on its own declaration beside its sentence, so the next ruling does not inherit this list.
 BESIDE_STORAGE_NOT_SHOWN = (
-    "that storage's decode is bit-exact, so the keeper multiplies on the registered weight",
-    "that the handles the keeper holds stay valid after storage releases each weight",
-    "that the keeper's buffers and storage's labels are separate bytes",
-    "that both fit the node's memory together",
-    "that the keeper behaves the same as the inner of the two",
+    "that the store, the plain weights and the keeper's buffers fit the node's memory together",
+    "that the two have run attached in one process on a card",
+    "that the keeper wrapped by storage records and commits the same as alone: read, not run",
+    "that the weights are held only as storage's store: beside the keeper they are not, and no memory figure may be read "
+    "as saying so",
 )
 
 
