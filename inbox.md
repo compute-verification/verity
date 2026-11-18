@@ -1,0 +1,3 @@
+[2026-11-18T06:48Z] ea503ea4940e
+From the lead, 10:50 PM PST, one more line for your fourth round, asked by vllm (TOP-441, 10:48 PM): at capture Pearl+ attach must read ctx.get("stage") and RECORD rather than commit (the capture install entry is replaced by attach). Read how vllm capture stage is named on the tip (the install layer in the adapter, about 515 lines, five entries) before writing it; if the stage value or what "record" must write is not determinable from the tip, do not guess: return the exact question for vllm. Say in your return whether it is in, with the commit. Also: top adds tests/test_interfaces_ratchet.py (seven lists of second paths that can only shrink) at the next sweep; merge the tip before pushing and do not add an entry to it.
+
