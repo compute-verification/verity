@@ -365,8 +365,13 @@ theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   split at h
   rotate_left; · exact absurd h (by intro h; injection h)
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
-  replace hgo := BodiesOk.decodeDefs_plain hgo
-  unfold goOf at hgo
+  unfold decodeDefs at hgo
+  split at hgo
+  swap; · exact absurd hgo (by intro h; injection h)
+  rename_i r' hgo'
+  injection hgo with hgo
+  subst hgo
+  unfold goOf at hgo'
   extract_lets rd jpR at h
   split at h
   · exact (ex_throw_bind h).elim
@@ -375,7 +380,7 @@ theorem decode_kept (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
-  refine ⟨st, rfl, rfl, of_triple (go_kept _ _ _) hgo ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩⟩
+  refine ⟨st, rfl, rfl, of_triple (go_kept _ _ _) hgo' ⟨⟨?_, ?_, ?_⟩, ?_, ?_⟩⟩
   · intro k v h
     exact absurd h (by simp)
   · intro i h

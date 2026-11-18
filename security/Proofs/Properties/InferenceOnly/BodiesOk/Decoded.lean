@@ -70,15 +70,6 @@ theorem go_inv (desc : Desc) (rootId programFn : String) (root : ℕ) (s0 st : D
   · obtain ⟨-, rfl⟩ := st_pure hf
     exact grows_refl _
 
-/-- `decode`'s Definitions are the plain walk's (`decodeDefs`: the walk that reads an input node at another width only names
-a refusal). -/
-theorem decodeDefs_plain {desc : Desc} {rootId programFn : String} {r : ℕ × DecState}
-    (h : decodeDefs desc rootId programFn = .ok r) : (goOf desc rootId programFn false).run {} = .ok r := by
-  unfold decodeDefs at h
-  split at h
-  next r' hr => injection h with h; rw [hr, h]
-  next => exact absurd h (by intro h; injection h)
-
 /-- **What `decode` returns**: the Definitions of a decoder state that keeps `Inv`, its root one of them, a composite
 without parameters. -/
 theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
@@ -121,8 +112,13 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   split at h
   swap; · exact absurd h (by intro h; injection h)
   obtain ⟨⟨root, st⟩, hgo, h⟩ := Walk.except_bind_ok h
-  replace hgo := decodeDefs_plain hgo
-  unfold goOf at hgo
+  unfold decodeDefs at hgo
+  split at hgo
+  swap; · exact absurd hgo (by intro h; injection h)
+  rename_i r' hgo'
+  injection hgo with hgo
+  subst hgo
+  unfold goOf at hgo'
   extract_lets rd jpR at h
   split at h
   · exact (ex_throw_bind h).elim
@@ -132,7 +128,7 @@ theorem decode_full (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   obtain ⟨c, -, h⟩ := Walk.except_bind_ok h
   injection h with h
   subst h
-  obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo
+  obtain ⟨hinv, hlt⟩ := go_inv _ _ _ _ _ _ hgo'
     ⟨fun i hi => absurd hi (Nat.not_lt_zero i), fun k v hk => absurd hk (by simp)⟩
   simp only [rd, Bool.or_eq_true, not_or] at hrd
   exact ⟨st, rfl, hinv, by simpa using hrd.1, hlt, by simpa using hrd.2⟩
