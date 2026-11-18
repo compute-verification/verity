@@ -1051,9 +1051,9 @@ def shaped() -> list[dict]:
     pin = [ref.closure_digest(json.loads(lowered(2, 3, word=True).program()[0]), EMBED)]
     first("2x3 the key a 32-bit word, its writers' too", lowered(2, 3, word=True), 23, pins=pin, policy={})
     def twice(nodes: list, _desc: dict) -> None:
-        """`Norm`'s weights' row handed the input gates its `x` has."""
+        """`Norm`'s `x` handed the input gates its weights' row has."""
         norm = units(nodes)[2]
-        norm["args"][1]["refs"] = copy.deepcopy(norm["args"][0]["refs"])
+        norm["args"][0]["refs"] = copy.deepcopy(norm["args"][1]["refs"])
 
     def shared(nodes: list, desc: dict) -> None:
         """`Feed`'s selection not mapped: every unit handed the first unit's input gates."""
