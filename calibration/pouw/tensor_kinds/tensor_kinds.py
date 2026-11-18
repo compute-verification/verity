@@ -1,4 +1,4 @@
-"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_90, sm_100 or sm_89: there each
+"""Fit each MMA form's joint issue coefficient from a tensor_kinds run (sm_120, or sm_90 or sm_100: there each
 form also has an alone4 point, and JI3e, sm_120's rows, isn't loaded). A spec point whose run recorded each role's own cycles also gets the exact co-run reading: the MMA warps'
 SMSP-cycles a MMA and the lane warps' instructions a SMSP-cycle, each over its own time.
 
@@ -41,7 +41,7 @@ REF = "imma_s8_m16n8k32"
 #: The one SASS instruction `REF`'s PTX MMA is on every target: a reference that lowers otherwise measures something else.
 REF_SASS = "IMMA.16832.S8.S8"
 #: The targets (a card record's `arch`) tensor_kinds.cu has forms for.
-TARGETS = ("sm_120a", "sm_90a", "sm_100a", "sm_89")
+TARGETS = ("sm_120a", "sm_90a", "sm_100a")
 NOISE = 0.02
 #: The mixed points' lane op (IADD3 and FFMA alternating) alone must issue at least this many warp instructions a
 #: SMSP-cycle, or the mixed points bind on a pipe's own rate instead of the issue facet and overstate a.
@@ -49,7 +49,7 @@ LANE_MIN = 0.9
 LANES = ("iadd3", "ffma", "iadd3_ffma")
 MIXED_LANE = "iadd3_ffma"
 #: The most adds or FFMAs in a row the mixed lane loop's SASS may issue. The source alternates them; ptxas keeps that,
-#: or swaps one pair beside the loop's compare (sm_89, sm_90a), and both issue at one a SMSP-cycle. Runs of three
+#: or swaps one pair beside the loop's compare (sm_90a), and both issue at one a SMSP-cycle. Runs of three
 #: and four (sm_120a, when k_opalone's end stored the k_spec roles) bind on a pipe and read below LANE_MIN.
 LANE_RUN_MAX = 2
 #: A loop counter's add, `IADD3 Rn, Rn, 0x1, RZ` (sm_120a's syntax names the carry predicates), not a lane op.
@@ -71,13 +71,9 @@ KIND = {"imma_s8_m16n8k32": "IMMA16832", "imma_u8s8_m16n8k32": "IMMA16832", "imm
         "qmma_e5m2_m16n8k32_f32": "QMMA16832", "qmma_e2m1_m16n8k32_f32": "QMMA16832",
         "qmma_sf_e4m3_m16n8k32_f32": "QMMASF16832", "qmma_sp_e4m3_m16n8k64_f32": "QMMASP16864",
         "omma_nvf4_m16n8k64": "OMMASF16864",
-        # sm_89's other forms
-        "imma_s4_m16n8k64": "IMMA16864S4", "imma_s4_m16n8k32": "IMMA16832S4", "imma_s4_m8n8k32": "IMMA8832S4",
-        "bmma_and_m16n8k256": "BMMA168256", "bmma_xor_m16n8k256": "BMMA168256", "bmma_and_m16n8k128": "BMMA168128",
-        "bmma_and_m8n8k128": "BMMA88128", "hmma_f16_m16n8k8_f32": "HMMA1688", "hmma_bf16_m16n8k8_f32": "HMMA1688",
+        # the shapes sm_90 and sm_100 time beyond those
+        "hmma_f16_m16n8k8_f32": "HMMA1688", "hmma_bf16_m16n8k8_f32": "HMMA1688",
         "hmma_f16_m16n8k8_f16": "HMMA1688F16", "qmma_e4m3_m16n8k16_f32": "QMMA16816",
-        "qmma_e4m3_m16n8k16_f16": "QMMA16816F16", "qmma_e4m3_m16n8k32_f16": "QMMA16832F16",
-        "imma_sp_s4_m16n8k64": "IMMASP16864S4", "imma_sp_s4_m16n8k128": "IMMASP168128S4",
         "hmma_sp_f16_m16n8k16_f32": "HMMASP16816", "hmma_sp_tf32_m16n8k16": "HMMASP16816T"}
 #: The kinds VF3e's programs counted as MMA, so VF3e's coefficient bounds theirs too.
 VF3E_KINDS = {"IMMA16832", "OMMASF16864"}
@@ -101,22 +97,11 @@ STRUCTS = {
     "QmmaE2m1k32": "qmma_e2m1_m16n8k32_f32",
     "QmmaSfE4m3k32": "qmma_sf_e4m3_m16n8k32_f32",
     "QmmaSpE4m3k64": "qmma_sp_e4m3_m16n8k64_f32",
-    # sm_89
-    "ImmaS4k64": "imma_s4_m16n8k64",
-    "ImmaS4k32": "imma_s4_m16n8k32",
-    "ImmaS4m8k32": "imma_s4_m8n8k32",
-    "BmmaAndK256": "bmma_and_m16n8k256",
-    "BmmaXorK256": "bmma_xor_m16n8k256",
-    "BmmaAndK128": "bmma_and_m16n8k128",
-    "BmmaAndM8k128": "bmma_and_m8n8k128",
+    # the shapes sm_90 and sm_100 time beyond those
     "HmmaF16k8F32": "hmma_f16_m16n8k8_f32",
     "HmmaF16k8F16": "hmma_f16_m16n8k8_f16",
     "HmmaBf16k8F32": "hmma_bf16_m16n8k8_f32",
     "QmmaE4m3k16F32": "qmma_e4m3_m16n8k16_f32",
-    "QmmaE4m3k16F16": "qmma_e4m3_m16n8k16_f16",
-    "QmmaE4m3k32F16": "qmma_e4m3_m16n8k32_f16",
-    "ImmaSpS4k64": "imma_sp_s4_m16n8k64",
-    "ImmaSpS4k128": "imma_sp_s4_m16n8k128",
     "HmmaSpF16k16": "hmma_sp_f16_m16n8k16_f32",
     "HmmaSpTf32k16": "hmma_sp_tf32_m16n8k16",
     "QmmaSpE4m3k64Ada": "qmma_sp_e4m3_m16n8k64_f32",
@@ -221,8 +206,6 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
     arch = done[0].get("sm", 120) if done else 120
     fails: list[str] = [] if num_sms else ["the run did not finish (no done line)"]
     groups = {r.get("group", -1) for r in done}
-    if arch == 89 and done and groups != {0, 1, 2, 3}:
-        fails.append(f"sm_89: groups {sorted(groups)} finished, want 0-3")
     if arch == 100 and done and 0 not in groups:
         fails.append(f"sm_100: groups {sorted(groups)} finished, want 0 (int8)")
     if arch == 90 and done and groups != {0, 1}:
@@ -478,7 +461,7 @@ METRIC = "compute-research/eight-bit-mma-issue-cost"
 def target(card: str, directory: Path | None = None) -> tuple[str, int]:
     """(short, TK_SM) of the card the kit finds for `card`, the name nvidia-smi gives the GPU (`kit.card_short`,
     `kit.card_arch`, in `directory` or the kit's), TK_SM its architecture file's capability's digits; refused, naming why,
-    for a card no record holds or an `arch` tensor_kinds.cu has no forms for or no architecture file states."""
+    for a card no record holds or an `arch` tensor_kinds.cu has no forms for."""
     from verity.device import load_architecture
     from verity_bench import kit
 
@@ -486,10 +469,7 @@ def target(card: str, directory: Path | None = None) -> tuple[str, int]:
     if arch not in TARGETS:
         raise SystemExit(f"tensor_kinds: the {short} card's arch is {arch!r}, and tensor_kinds.cu has forms "
                          f"for {', '.join(TARGETS)} only: no build, no point")
-    try:
-        capability = load_architecture(arch, directory=kit.cards_directory().parent / "architectures")["capability"]
-    except KeyError as e:
-        raise SystemExit(f"tensor_kinds: the {short} card's {e.args[0]}: no build, no point") from None
+    capability = load_architecture(arch, directory=kit.cards_directory().parent / "architectures")["capability"]
     return short, int(capability.replace(".", ""))
 
 
