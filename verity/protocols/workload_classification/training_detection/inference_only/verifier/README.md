@@ -28,6 +28,7 @@ Each is a `lake exe` in `lean/`.
 | --- | --- |
 | `inference-only id \| check \| serve` | the core protocol `verity/inference-only/v0`, which both composites compose |
 | `inference-only-rows id \| check \| serve` | the core protocol `verity/inference-only/rows/v1`, which no system lists |
+| `inference-only-record id \| check \| serve` | the core protocol `verity/inference-only/record/v1`, the record check in the Program's gates, which no system lists |
 | `inference-only-verifier INSTANCE TRUSTED` | the verdict on one instance, as JSON; `--count` the count of (c, k)-inference blocks, `--policy` the policy alone |
 | `inference-only-record-check CASE` | the record form on one case written from a served run's files, for the private record only |
 

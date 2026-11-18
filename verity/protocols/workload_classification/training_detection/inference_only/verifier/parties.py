@@ -11,7 +11,7 @@ The verifier (`VERIFIER`) is SPOT's party, the auditor's, one of it. This packag
 principal and cardinality are stated here, and its test holds them to SPOT's declaration, and `ID` to the id SPOT
 lists the policy under.
 
-Two protocols, each a core protocol of its executable (``EXE check PARAMS COMMITMENT EVIDENCE [BLOB...]``):
+Three protocols, each a core protocol of its executable (``EXE check PARAMS COMMITMENT EVIDENCE [BLOB...]``):
 
 * `ID`, ``verity/inference-only/v0`` (`MANIFEST`, executable ``inference-only``, `InferenceOnlyCheck.Protocol`): the check on
   a Program that holds every weight it reads and every wire between its units, counted in the Program's gates. Its
@@ -29,6 +29,11 @@ Two protocols, each a core protocol of its executable (``EXE check PARAMS COMMIT
     text the registration record commits, and the order of its unit ranges where the record states none;
   - blobs: each template's circuit file, and the pinned lookup tables a file looks up, each read only under a digest
     ``circuits`` names or a pinned table's own.
+* `RECORD_ID`, ``verity/inference-only/record/v1`` (`RECORD_MANIFEST`, executable ``inference-only-record``,
+  `InferenceOnly.RecordProtocol`): the check on an execution phase's circuit record, each block counted in the
+  Program's gates that no wire covers. No composite lists it. Its params are ``gamma`` (Γ, the most gates a block
+  holds), ``alpha`` (α, the most fresh bits a gate), ``log``, ``pins`` and ``program``, as the rows check's; its
+  commitment and evidence are the rows check's, and it reads no blob.
 """
 
 from __future__ import annotations
@@ -37,11 +42,14 @@ from verity.protocol import Manifest, Role
 
 ID = "verity/inference-only/v0"
 ROWS_ID = "verity/inference-only/rows/v1"
+RECORD_ID = "verity/inference-only/record/v1"
 VERSION = 1
 VERIFIER = "verifier"
 _PARTIES = (Role(VERIFIER, "auditor", needs=("component",)),)
 MANIFEST = Manifest(ID, VERSION, "inference-only check PARAMS", parties=_PARTIES, channels=(), messages=())
 ROWS_MANIFEST = Manifest(ROWS_ID, VERSION, "inference-only-rows check PARAMS", parties=_PARTIES, channels=(),
                          messages=())
+RECORD_MANIFEST = Manifest(RECORD_ID, VERSION, "inference-only-record check PARAMS", parties=_PARTIES, channels=(),
+                           messages=())
 
-__all__ = ["ID", "MANIFEST", "ROWS_ID", "ROWS_MANIFEST", "VERIFIER", "VERSION"]
+__all__ = ["ID", "MANIFEST", "RECORD_ID", "RECORD_MANIFEST", "ROWS_ID", "ROWS_MANIFEST", "VERIFIER", "VERSION"]

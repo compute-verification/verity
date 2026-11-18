@@ -118,6 +118,7 @@
   "Proofs.Properties.InferenceOnly.Record",
   "Proofs.Properties.InferenceOnly.RecordForm",
   "Proofs.Properties.InferenceOnly.RecordCounts",
+  "Proofs.Properties.InferenceOnly.RecordProtocolComplies",
   "Proofs.Properties.InferenceOnly.DecodeKeys",
   "Proofs.Properties.InferenceOnly.Lemmas.Opening",
   "Proofs.Properties.InferenceOnly.RecordProvenance",

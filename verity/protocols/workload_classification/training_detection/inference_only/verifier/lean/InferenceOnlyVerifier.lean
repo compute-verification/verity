@@ -16,6 +16,7 @@ public import InferenceOnlyVerifier.RecordDifftest
 public import InferenceOnlyVerifier.ThetaDifftest
 public import InferenceOnlyVerifier.Protocol
 public import InferenceOnlyVerifier.RowsProtocol
+public import InferenceOnlyVerifier.RecordProtocol
 public import InferenceOnlyVerifier.Count
 public import InferenceOnlyVerifier.CountDifftest
 public import InferenceOnlyVerifier.DefinitionDigest

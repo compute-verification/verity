@@ -9,10 +9,12 @@
 # `verity/inference-only/v0` (`InferenceOnlyCheck.Protocol`), the inference-only policy's subprotocol of onsite and remote.
 # `inference-only-rows` is the policy's check of an execution phase's circuit record, a block counted in the rows of
 # its templates' circuit files, as the core protocol `verity/inference-only/rows/v1`: it reads each file with the
-# reader SPOT's one-stage check reads it with (`core_spot`, below).
+# reader SPOT's one-stage check reads it with (`core_spot`, below). `inference-only-record` is the policy's check of an
+# execution phase's circuit record in the Program's gates, as the core protocol `verity/inference-only/record/v1`.
 name = "inference_only_verifier"
 defaultTargets = ["InferenceOnlyVerifier", "inference-only-difftest", "inference-only-desc-difftest", "inference-only-desc-liveness", "inference-only-desc-fuzz", "inference-only-theta-difftest",
-  "inference-only-count-difftest", "inference-only-verifier", "inference-only", "inference-only-rows"]
+  "inference-only-count-difftest", "inference-only-verifier", "inference-only", "inference-only-rows",
+  "inference-only-record"]
 
 [leanOptions]
 autoImplicit = false
@@ -80,3 +82,7 @@ root = "InferenceOnlyVerifier.ProtocolMain"
 [[lean_exe]]
 name = "inference-only-rows"
 root = "InferenceOnlyVerifier.RowsProtocolMain"
+
+[[lean_exe]]
+name = "inference-only-record"
+root = "InferenceOnlyVerifier.RecordProtocolMain"
