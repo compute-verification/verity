@@ -33,6 +33,7 @@ sat_us = 0
 free_us = 0
 token_ns = 0
 log = ""
+front_tokens = 4
 
 [params."verity/wipe/v0"]
 store = "cuda"
