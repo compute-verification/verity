@@ -158,6 +158,7 @@ from verity.protocols.resource_accounting.memory.poub.verifier.session import ve
 from verity.protocols.resource_accounting.memory.poub.verifier.poub_session import verifier_process as VP  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, pooled, timing  # noqa: E402
+from verity.device import load_node, number  # noqa: E402
 from verity.protocol import no_bound  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch  # noqa: E402
@@ -168,7 +169,8 @@ import sheets  # noqa: E402
 FIGURES = sheets.figures("rtx-pro-6000-server-x8")
 """The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
-RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": float(number(load_node(
+    "rtx-pro-6000-server-x8", directory=sheets.NODE_FILES, cards_directory=sheets.CARD_FILES)["interface"]["eth0"]["rate"]) / 8)}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
 (the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
 them, link-charged (54.311e9 in all)."""
@@ -282,11 +284,12 @@ def peer_of(out: Path, v: dict) -> str:
 
 def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     """A release log's lines after its head, by family: each coin's root (`after`), its request's receipt and the
-    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form)."""
+    coin's release, on the challenger's clock, in index order (`challenger.released_log_of` checks the form).  A label's
+    former name (`coins.FORMER`) is read as that label."""
     fam: dict[str, dict[str, list]] = {}
     for i in range(1, len(lines) - 1, 2):
         root, release = json.loads(lines[i]), json.loads(lines[i + 1])
-        f = fam.setdefault(root["label"], {"after": [], "received": [], "released": []})
+        f = fam.setdefault(coins.FORMER.get(root["label"], root["label"]), {"after": [], "received": [], "released": []})
         f["after"].append(root["root"])
         f["received"].append(root["received_at"])
         f["released"].append(release["released_at"])

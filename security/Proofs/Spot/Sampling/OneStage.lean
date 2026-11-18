@@ -249,7 +249,7 @@ theorem audit_cone (hks : (P.analysis X ext).KnowledgeSound εks)
     calc prCoin (fun ω => (C.InputsAgree Y a ∧ ∃ t ∈ T, t ∈ P.committed ∧ Y t ≠ C.eval a t) ∧
           Disjoint (L.draw ω) (P.incorrect Y))
         ≤ L.missProb (P.incorrect Y) := prCoin_mono fun ω h => h.2
-      _ ≤ 1 - L.incl u := L.escape_le_of_mem huw
+      _ ≤ 1 - L.incl u := L.missProb_le_of_mem huw
       _ ≤ ⨆ u ∈ P.cone T, (1 - L.incl u) :=
           le_iSup₂_of_le (f := fun u (_ : u ∈ P.cone T) => 1 - L.incl u) u huc le_rfl
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hE h.1).trans (prCoin_false.le.trans (zero_le))

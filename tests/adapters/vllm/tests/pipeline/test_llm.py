@@ -216,6 +216,23 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     assert built == {}
 
 
+def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_releases_it(built, monkeypatch):
+    """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
+    llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3",
+                protocols_config={"pouw": {"device": "cuda", "kernel": "/k.so"}})
+    ex = llm._engine.exchange
+    assert list(ex.attached) == ["pearl-plus"] and llm.protocols is None
+    assert ex.attached["pearl-plus"]["kernel"] == "/k.so" and ex.attached["pearl-plus"]["coins"] == "in-process"
+    assert ("pearl-plus", H.RequireProperty("eager", True, "its kernel at each linear block is not graph-capturable")) in ex.requests
+    released: list[bool] = []
+    monkeypatch.setattr(llm.scheme, "release", lambda: released.append(True))
+    llm.close()
+    llm.close()
+    assert released == [True]
+    with pytest.raises(ValueError, match="pouw:pearl-c-h100-v1-h3 runs on cuda"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3", protocols_config={"pouw": {"device": "cpu"}})
+
+
 @pytest.mark.parametrize("option,value", [
     ("dtype", "float16"),
     ("quantization", "fp8"),

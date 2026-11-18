@@ -43,6 +43,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
 
 import device  # noqa: E402
+import keep  # noqa: E402
 import store_layout  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 from engine import IpcHandle, write_json  # noqa: E402
@@ -254,7 +255,7 @@ def main() -> int:
                               sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                               trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
                               host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas)
-        out["engines"] = exports
+        out["engines"] = [keep.export_kept(e) for e in exports]
         out["layout"] = backend.layout()
         host_, port = a.connect.rsplit(":", 1)
         conn = wire.connect(host_, int(port))

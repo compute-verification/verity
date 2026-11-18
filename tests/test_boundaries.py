@@ -143,13 +143,12 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
+    # Flock's measurement campaign and its tests
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
-        "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
+        "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
@@ -1865,6 +1864,23 @@ def test_a_file_in_no_place_imports_the_standard_library_alone() -> None:
     assert not offenders, ("Python of verity in no `place` of tests/import_order.toml only groups packages and imports the "
                            "standard library alone: give a new package its place, with what it loads, or move what the "
                            "file needs out of it:\n" + "\n".join(offenders))
+
+
+def test_ports_imports_no_unit_and_no_verifier_imports_it() -> None:
+    listing = _listing()
+    assert _place("verity/ports.py", listing.places) is None, "verity/ports.py is in no place of tests/import_order.toml"
+    assert not [n for n, _, _ in _imports(SRC / "ports.py") if n.split(".")[0] not in sys.stdlib_module_names], \
+        "verity/ports.py imports the standard library alone"
+    offenders = []
+    for path in _sources():
+        rel = path.relative_to(ROOT).as_posix()
+        place = _place(rel, listing.places)
+        if _trusted(rel) is None and (place is None or not _trusted_place(listing.places[place])):
+            continue
+        text = path.read_text(encoding="utf-8")
+        offenders += [f"{rel}:{line}" for name, line, _ in _imports(path) if name == "verity.ports"]
+        offenders += [rel] if re.search(r"from verity import [^\n]*\bports\b", text) else []
+    assert not offenders, "no verifier or device imports verity.ports: take a port from the caller:\n" + "\n".join(offenders)
 
 
 def test_the_listing_is_what_its_generator_writes() -> None:
