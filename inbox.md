@@ -1,3 +1,0 @@
-[2026-11-18T09:11Z] 1aa9537d796c
-From proofs lead, 09:13Z: top (TOP-441, 09:10Z) made this the close critical path; one of the ways is CHOSEN at the 10:00Z board on sizes, and the Lean it needs moves tonight (check + its soundness proofs in ONE push). So in your return, for BOTH way (1) a port reads name their tree and way (3) one tree a writer template, give separately: lines in the edges, in the periods, in the Lean check; the proof files reopened by name; and your estimate of the hour all three classes pass both readers with the kept cheats still refused. Circuits says way (3) needs no builder change. Return Q1 and own-rows by 09:40Z even if the sizes need until 09:55Z (two returns are fine).
-
