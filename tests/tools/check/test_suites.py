@@ -1561,7 +1561,7 @@ def test_changed_runs_no_slow_test_the_change_does_not_reach_unless_slow(tmp_pat
 
 def test_jobs_1_needs_its_reason(tmp_path, monkeypatch, capsys):
     """`--jobs 1` (or `-j 1`) without `--why-serial` is refused, naming the flag and the default; with it the run says why once.
-    Other `--jobs` take no reason, and a reason without `--jobs 1` is refused."""
+    Other `--jobs` need no reason, and a later `--jobs` over a wrapper's `--jobs 1 --why-serial` leaves the reason unsaid."""
     _slow_tree(tmp_path)
     S = _suites(monkeypatch, tmp_path)
     for jobs in (["--jobs", "1"], ["-j", "1"], ["-j1"], ["--jobs=1"]):
@@ -1573,9 +1573,8 @@ def test_jobs_1_needs_its_reason(tmp_path, monkeypatch, capsys):
         assert S.main(["--list", *jobs, "--why-serial", "bisecting an order dependence"]) == 0
         assert capsys.readouterr().out.count("suites: --jobs 1: bisecting an order dependence\n") == 1
     assert S.main(["--list", "--jobs", "2"]) == 0 and "--jobs 1" not in capsys.readouterr().out
-    with pytest.raises(SystemExit) as e:
-        S.main(["--list", "--jobs", "2", "--why-serial", "no"])
-    assert e.value.code == 2 and "--why-serial is the reason for --jobs 1: pass --jobs 1 or drop it" in capsys.readouterr().err
+    assert S.main(["--list", "--jobs", "1", "--why-serial", "a wrapper's", "--jobs", "6"]) == 0
+    assert "--jobs 1" not in capsys.readouterr().out
 
 
 def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(tmp_path):

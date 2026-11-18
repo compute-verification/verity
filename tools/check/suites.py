@@ -2749,8 +2749,6 @@ def main(argv: list[str] | None = None) -> int:
     if a.jobs == 1 and not a.why_serial:
         ap.error("--jobs 1 runs every test serially, often for hours: give its reason with --why-serial TEXT, or omit --jobs, whose "
                  f"default runs as many test processes as the CPUs and memory allow (here {default_jobs()})")
-    if a.why_serial and a.jobs != 1:
-        ap.error("--why-serial is the reason for --jobs 1: pass --jobs 1 or drop it")
     a.jobs = default_jobs() if a.jobs is None else a.jobs
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
@@ -2792,7 +2790,7 @@ def main(argv: list[str] | None = None) -> int:
         if implied:
             print("suites: --changed runs the quick tier (the tests marked slow only in the test modules the change reaches); "
                   "--slow keeps them all")
-    if a.why_serial:
+    if a.jobs == 1 and a.why_serial:
         print(f"suites: --jobs 1: {a.why_serial}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
