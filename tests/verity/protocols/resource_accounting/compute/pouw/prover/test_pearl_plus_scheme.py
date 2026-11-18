@@ -259,6 +259,12 @@ def test_attach_refuses_without_coins_or_a_challenger_its_gate_or_a_kernel() -> 
         PS.PEARL_PLUS.attach(_Exchange(), {"settings": {"coins": "in-process"}})
 
 
+def test_a_capture_is_refused_by_name_until_what_it_records_is_settled() -> None:
+    with pytest.raises(NotImplementedError, match=r"Match capture \(ctx\['stage'\] 'capture'\) records rather than commits"):
+        PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "capture"})
+    PS.PEARL_PLUS.attach(_Exchange(), {**IN_PROCESS, "stage": "commit"})
+
+
 def test_attach_refuses_an_undeclared_setting() -> None:
     with pytest.raises(ValueError, match=r"pearl-plus has no setting \['runner'\]"):
         PS.PEARL_PLUS.attach(_Exchange(), {**CTX, "settings": {**CTX["settings"], "runner": "r"}})

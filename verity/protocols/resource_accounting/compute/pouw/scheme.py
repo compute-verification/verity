@@ -145,6 +145,10 @@ class Attached:
         self.gate: Any = ctx.get("gate")
         self.private: Any = ctx.get("private")
         self.ledger: Any = ctx.get("ledger")
+        if ctx.get("stage") == "capture":
+            raise NotImplementedError("pearl-plus at a Match capture (ctx['stage'] 'capture') records rather than commits, "
+                                      "and what it records of each call is not settled (vllm, TOP-441): its device run has "
+                                      "no record-only mode")
         if not self.own["coins"] and not self.own["challenger"]:
             raise ValueError("pearl-plus: neither 'coins' nor 'challenger' is among its settings (ctx['settings']): the salt is "
                              "the challenger's salt coin, opened after the weights' root, and there is no beacon")
