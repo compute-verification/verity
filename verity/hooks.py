@@ -254,6 +254,34 @@ class Gate(Protocol):
 
     def open(self, why: str) -> None: ...
 
+    def take(self, record: Mapping[str, Any]) -> None:
+        """One record of what the gate orders by, fed on the thread that steps the workload."""
+
+
+class Reports(Protocol):
+    """A gate, frontend or subscriber whose report the workload's run keeps under its scheme's name: ``summary`` at the
+    run's end, ``record`` the versions and parameters it ran with."""
+
+    def summary(self) -> Mapping[str, Any]: ...
+
+    def record(self) -> Mapping[str, Any]: ...
+
+
+class Front(Protocol):
+    """A scheme's frontend, which the workload's server hands each request: ``key`` names a request by its headers
+    (None: not one the scheme orders), ``submit`` and ``abort`` forward one, and ``passed`` says the one ``key`` named
+    has left the server."""
+
+    def key(self, headers: Mapping[str, str]) -> Any: ...
+
+    def submit(self, admission: Any) -> None: ...
+
+    def abort(self, input: str) -> None: ...
+
+    def passed(self, key: Any) -> None: ...
+
+    def summary(self) -> Mapping[str, Any]: ...
+
 
 @dataclass(frozen=True)
 class StartOnBoundary:
@@ -287,14 +315,6 @@ class RefuseInput:
 
 class Broken(Exception):
     """Why a reader of the workload's (`StartBeside`'s readers) ends before its stream does."""
-
-
-@dataclass(frozen=True)
-class HoldRelease:
-    """A scheme's request that no output of ``input`` leave before step ``until``."""
-
-    input: str
-    until: int
 
 
 @dataclass(frozen=True)
@@ -338,12 +358,12 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
+type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldResident
                 | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
-           "Broken", "FixRanges", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldResident",
+           "Broken", "FixRanges", "Front", "Reports", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
            "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

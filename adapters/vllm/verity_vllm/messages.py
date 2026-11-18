@@ -165,10 +165,6 @@ class Exchange:
         """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
         return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
 
-    def held(self, input: str, step: int) -> bool:
-        """Whether an output of ``input`` may not leave at ``step`` (`HoldRelease`)."""
-        return any(r.input == input and step < r.until for _, r in self._filed(H.HoldRelease))
-
     def resident(self, range_: int, step: int) -> bool:
         """Whether range ``range_`` must stay allocated at ``step`` (`HoldResident`)."""
         return any(r.range == range_ and step < r.until for _, r in self._filed(H.HoldResident))
