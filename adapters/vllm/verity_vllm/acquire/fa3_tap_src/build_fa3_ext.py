@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
-from verity_vllm.engine.profiles.devices import cuda_arch
+from verity_vllm.config import cuda_arch
 from verity_vllm.config import option
 from verity_vllm.log import write
 

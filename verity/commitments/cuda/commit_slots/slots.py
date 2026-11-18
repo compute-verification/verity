@@ -13,7 +13,7 @@ A step's tree is three levels of trees, each a ``frame-v3-sha512`` tree padded t
 A row's leaf, row g of slot s (rows numbered in the layout's order within a slot) and rank r in its unit::
 
   x    = SHA-512(P(8 len(row)) || row)                       rowleaf.sha512_row_v2_digest
-  y    = ChaCha20 chunks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      Flock's hm96_salt
+  y    = the leaf's salt, 192 bytes from the operating system, drawn once for it    hm96.SHA512.fresh_salt()
   b||c = hm96.SHA512.commit_string(KEY, x, y)                public, 128 bytes
   leaf = unit_domain(u).leaf(r, r, "hm96-sha512/row/v2", hm96.SHA512.tree_leaf(KEY, b||c))
 
@@ -21,7 +21,12 @@ The layout (:class:`CommitShape`) is the step's public structure: groups (what o
 each of rows, each row the concatenation of byte ranges (:class:`Part`) of the slot's row of the group's tensors. Every slot
 has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
 slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
-from that slot's rows alone (a replay of its request), and :func:`verify_unit` checks an opening against the step's root.
+from that slot's rows alone (a replay of its request) and their salts, and :func:`verify_unit` checks an opening against the
+step's root.
+
+Salts are data. No salt is derived, from a key or from anything else: a step's salts (:func:`fresh_salts`, ``(slots, rows,
+192)`` bytes) are the prover's draws, one a leaf, which it hands to :func:`commit` and keeps, with the step's record and never
+under a run's output directory, to open a unit later.
 
 Parts, rows and groups, with their checks, are ``verity.commitments.layout``'s, which also reads a layout file
 (:func:`load`) in the form :func:`_layout_json` writes.
@@ -42,7 +47,6 @@ import numpy as np
 
 from verity.commitments import hm96
 from verity.commitments import layout as L
-from verity.commitments.crypto.chacha20 import keystream
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
@@ -51,9 +55,8 @@ from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, ve
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 
 __all__ = ["UNIT_MAX_BITS", "Group", "CommitShape", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
-           "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
-           "row_salts", "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids",
-           "verify_unit"]
+           "edge_layout", "fixture", "fresh_salts", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
+           "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids", "verify_unit"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -201,15 +204,27 @@ def step_domain(context: bytes, layout: CommitShape, step: int, slots: int) -> C
                               "slots": slots, "schema": ROOTS_SCHEMA}, slots)
 
 
-def fresh_salt_key() -> bytes:
-    """A step's salt key from the operating system's generator: the prover's alone, kept with the step's record."""
-    return os.urandom(32)
+def fresh_salts(layout: CommitShape, slots: int) -> np.ndarray:
+    """A step's salts, ``(slots, layout.row_count, 192)`` uint8: row g of slot s has its own 192 bytes at ``[s, g]``, each one
+    draw from the operating system's generator (``hm96.SHA512.fresh_salt()``), derived from nothing and never drawn again.
+    They are the prover's alone: it hands them to whatever hashes the leaves as data and keeps them with the step's record
+    to open a unit, never under a run's output directory."""
+    if type(slots) is not int or slots < 1:
+        raise ValueError("a step has at least one slot")
+    raw = b"".join(INST.fresh_salt() for _ in range(slots * layout.row_count))
+    return np.frombuffer(raw, dtype=np.uint8).reshape(slots, layout.row_count, SALT_BYTES)
 
 
-def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
-    """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
-    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.protocols.resource_accounting.compute.pouw.verifier.audit.hm96_salt``)."""
-    return keystream(salt_key, slot, 3 * first, 3 * n)
+def _salts(salts: Any, *shape: int) -> np.ndarray:
+    """``salts`` (bytes, or an array of bytes) as ``(*shape, 192)`` uint8: one salt a leaf, given as data."""
+    if isinstance(salts, (bytes, bytearray, memoryview)):
+        a = np.frombuffer(salts, dtype=np.uint8)
+    else:
+        a = np.asarray(salts)
+    if a.dtype != np.uint8 or a.size != int(np.prod(shape, dtype=np.int64)) * SALT_BYTES:
+        raise ValueError(f"salts are {(*shape, SALT_BYTES)} bytes, one fresh {SALT_BYTES}-byte salt a row "
+                         f"(hm96.SHA512.fresh_salt(), fresh_salts), not {a.size} of {a.dtype}: none is derived from a key")
+    return a.reshape(*shape, SALT_BYTES)
 
 
 # --- committing --------------------------------------------------------------------------------------------------------
@@ -255,12 +270,13 @@ class SlotCommit:
         return self.tree.root
 
 
-def commit_slot(context: bytes, layout: CommitShape, salt_key: bytes, slot: int, rows: Sequence[bytes]) -> SlotCommit:
-    """Slot ``slot``'s subtree from its rows alone (:func:`slot_rows`): what a replay of its request rebuilds."""
+def commit_slot(context: bytes, layout: CommitShape, salts: Any, rows: Sequence[bytes]) -> SlotCommit:
+    """A slot's subtree from its rows alone (:func:`slot_rows`) and their salts (``(rows, 192)`` bytes, row g's at ``[g]``:
+    the slot's part of the step's, :func:`fresh_salts`): what a replay of its request rebuilds."""
     flat = [r for u in layout.units for r in u]
     if len(rows) != len(flat) or any(len(r) != row.nbytes for r, row in zip(rows, flat, strict=True)):
         raise ValueError("a slot's rows are the layout's, in order")
-    strings = _strings(rows, row_salts(salt_key, slot, 0, len(rows)))
+    strings = _strings(rows, _salts(salts, len(rows)).tobytes())
     trees = tuple(_unit_tree(unit_domain(context, layout, u), strings[b:b + len(rows_u)])
                   for u, (b, rows_u) in enumerate(zip(layout.row_base, layout.units, strict=True)))
     return SlotCommit(tuple(strings), trees, RootTree(slot_domain(context, layout), [t.commitment.root for t in trees]))
@@ -268,7 +284,7 @@ def commit_slot(context: bytes, layout: CommitShape, salt_key: bytes, slot: int,
 
 @dataclass(frozen=True)
 class StepCommit:
-    """A step's commitment: its root and every slot's root, in slot order (what the prover keeps, with the salt key)."""
+    """A step's commitment: its root and every slot's root, in slot order (what the prover keeps, with the step's salts)."""
 
     root: bytes
     slot_roots: tuple[bytes, ...]
@@ -278,9 +294,11 @@ def step_tree(context: bytes, layout: CommitShape, step: int, slot_roots: Sequen
     return RootTree(step_domain(context, layout, step, len(slot_roots)), slot_roots)
 
 
-def commit(context: bytes, layout: CommitShape, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int) -> StepCommit:
-    """The reference commitment of a step of ``slots`` slots: ``outputs`` as :func:`slot_rows` reads them."""
-    roots = [commit_slot(context, layout, salt_key, s, slot_rows(layout, outputs, s)).root for s in range(slots)]
+def commit(context: bytes, layout: CommitShape, step: int, salts: Any, outputs: Sequence[Sequence[Any]], slots: int) -> StepCommit:
+    """The reference commitment of a step of ``slots`` slots: ``outputs`` as :func:`slot_rows` reads them, under ``salts``,
+    the step's ``(slots, rows, 192)`` bytes (:func:`fresh_salts`), row g of slot s's at ``[s, g]``."""
+    y = _salts(salts, slots, layout.row_count)
+    roots = [commit_slot(context, layout, y[s], slot_rows(layout, outputs, s)).root for s in range(slots)]
     return StepCommit(step_tree(context, layout, step, roots).root, tuple(roots))
 
 
@@ -307,10 +325,11 @@ class UnitOpening:
                    RootOpening.of_json(doc["unit_path"]), RootOpening.of_json(doc["slot_path"]))
 
 
-def open_unit(context: bytes, layout: CommitShape, step: int, salt_key: bytes, slot_roots: Sequence[bytes], slot: int, unit: int,
+def open_unit(context: bytes, layout: CommitShape, step: int, salts: Any, slot_roots: Sequence[bytes], slot: int, unit: int,
               rows: Sequence[bytes]) -> UnitOpening:
-    """The opening of ``unit`` of ``slot`` from the slot's rows (a replay of its request) and the step's slot roots."""
-    sc = commit_slot(context, layout, salt_key, slot, rows)
+    """The opening of ``unit`` of ``slot`` from the slot's rows (a replay of its request), their salts as the prover kept them
+    (``(rows, 192)`` bytes, the slot's part of the step's) and the step's slot roots."""
+    sc = commit_slot(context, layout, salts, rows)
     if sc.root != slot_roots[slot]:
         raise ValueError(f"slot {slot}'s replayed rows are not the ones committed")
     b = layout.row_base[unit]
@@ -420,40 +439,40 @@ def load(path: str | os.PathLike[str]) -> CommitShape:
 
 
 def fixture() -> dict[str, Any]:
-    """The interface's fixture: :func:`edge_layout` at 3 slots under a public test context and salt key, every value a consumer
-    checks against (domain ids, each row's digest, salt and string in slot 0, every slot's unit roots and root, the step's root),
+    """The interface's fixture: :func:`edge_layout` at 3 slots under a public test context and public test salts (the
+    fixture's generator's bytes, stored in it as data: ``salts``, each slot's rows' in order), every value a consumer checks
+    against (domain ids, each row's digest, salt and string in slot 0, every slot's unit roots and root, the step's root),
     one unit's opening, and the frozen H200 layout's public numbers."""
     layout, slots, step = edge_layout(), 3, 7
     context = identity_digest_sha512("verity/commit-slots/fixture/context/v1", {"fixture": 1})
-    salt_key = bytes(range(32))
-    outputs = random_outputs(layout, slots, np.random.default_rng(20261026))
+    rng = np.random.default_rng(20261026)
+    outputs = random_outputs(layout, slots, rng)
+    salts = rng.integers(0, 256, (slots, layout.row_count, SALT_BYTES), dtype=np.uint8)
     per_slot = []
     for s in range(slots):
         rows = slot_rows(layout, outputs, s)
-        sc = commit_slot(context, layout, salt_key, s, rows)
+        sc = commit_slot(context, layout, salts[s], rows)
         doc: dict[str, Any] = {"strings": [x.hex() for x in sc.strings], "unit_roots": [t.commitment.root.hex() for t in sc.units],
                                "root": sc.root.hex()}
         if s == 0:
-            salts = row_salts(salt_key, s, 0, len(rows))
             doc["rows"] = [{"bytes": r.hex(), "bits": 8 * len(r), "x": sha512_row_v2_digest(r, 8 * len(r)).hex(),
-                            "salt": salts[SALT_BYTES * i:SALT_BYTES * (i + 1)].hex()} for i, r in enumerate(rows)]
+                            "salt": salts[s, i].tobytes().hex()} for i, r in enumerate(rows)]
         per_slot.append(doc)
     roots = [bytes.fromhex(d["root"]) for d in per_slot]
     step_root = step_tree(context, layout, step, roots).root
     slot, unit = 1, 1
     rows1 = slot_rows(layout, outputs, slot)
-    opening = open_unit(context, layout, step, salt_key, roots, slot, unit, rows1)
+    opening = open_unit(context, layout, step, salts[slot], roots, slot, unit, rows1)
     b, n = layout.row_base[unit], len(layout.units[unit])
-    salts1 = row_salts(salt_key, slot, b, n)
     h200 = h200_layout()
     return {
         "schema": "verity/commit-slots/fixture/v1",
         "about": "A step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
                  "step tree over slot trees over unit trees over rows (verity/commitments/cuda/commit_slots/README.md). The context "
-                 "and salt key are public test values.",
+                 "and the salts are public test values, the salts given as data.",
         "tags": {"layout": LAYOUT_TAG, "unit": UNIT_TAG, "slot": SLOT_TAG, "step": STEP_TAG, "row_schema": ROW_SCHEMA,
                  "roots_schema": ROOTS_SCHEMA, "hm96": INST.name},
-        "context": context.hex(), "step": step, "slots": slots, "salt_key": salt_key.hex(),
+        "context": context.hex(), "step": step, "slots": slots, "salts": [salts[s].tobytes().hex() for s in range(slots)],
         "layout": _layout_json(layout), "layout_manifest": layout.manifest(), "layout_digest": layout_digest(layout).hex(),
         "outputs": [[a.tobytes().hex() for a in tensors] for tensors in outputs],
         "domains": {"units": [unit_domain(context, layout, u).domain_id.hex() for u in range(layout.unit_count)],
@@ -461,7 +480,7 @@ def fixture() -> dict[str, Any]:
                     "step": step_domain(context, layout, step, slots).domain_id.hex()},
         "per_slot": per_slot,
         "root": step_root.hex(),
-        "opening": {**opening.to_json(), "rows": [[r.hex(), salts1[SALT_BYTES * i:SALT_BYTES * (i + 1)].hex()]
+        "opening": {**opening.to_json(), "rows": [[r.hex(), salts[slot, b + i].tobytes().hex()]
                                                   for i, r in enumerate(rows1[b:b + n])]},
         "h200": {"name": h200.name, "layers": len(h200.groups), "units_per_layer": len(h200.groups[0].units),
                  "unit_bits": [[r.bits for r in u] for u in h200.groups[0].units], "slot_bytes": h200.slot_bytes,

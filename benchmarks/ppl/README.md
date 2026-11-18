@@ -47,7 +47,7 @@ C4 at 2048, `metrics.toml`'s axis, writes the metrics: `run.py metrics` refuses 
 its table alone.
 
 `pearl-c-linears` is the compute benchmark's served arithmetic (`pearl-c-h100-v1-h3` in
-`benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`): its one step, `linear.pearl_c`, calls the
+`benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served.toml`): its one step, `linear.pearl_c`, calls the
 served engine's own kernel, `verity_torch.pouw.PearlCDeviceRun.gemm` on the sm_90a cubin, with x and W in BF16, so
 every decoder linear is the FP8 E4M3 forming with Pearl's noise, the K32 chain and the noise peeled off that serving
 runs; `lm_head` and attention stay bf16, as served (PoUW's executor sits at vLLM's `LinearBase` only). The bench keeps

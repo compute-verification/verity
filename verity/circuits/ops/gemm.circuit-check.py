@@ -26,6 +26,5 @@ def _core_roots() -> list[Any]:
         bind(G.ScaledMmS8Coordinate, K=64, **G.GEMM_SM120_S8),
         bind(G.ScaledMmS8CoordinateRows, K=64, R=2, **G.GEMM_SM90_S8),
         bind(G.ScaledMmS8ResidualCoordinateRows, K=64, R=2, **G.GEMM_SM90_S8),
-        bind(G.ScaledMmS8, K=64, N=3, **G.GEMM_SM120_S8),
         bind(G.ScaledMmS8V3, K=64, N=3, **G.GEMM_SM120_S8),
     ]

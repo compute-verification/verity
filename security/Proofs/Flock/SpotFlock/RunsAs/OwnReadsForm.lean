@@ -55,7 +55,7 @@ theorem accepted_ownReads_form (hrec : RecordReadSame) (hver : VerdictsReadSame)
     {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
     (hsn : SampledNoneOf p c ξ e bs)
-    (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    (h : VStar.Recursive.SampledTwo.checkBlobsAtInner p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ r i it, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
       ∀ opened v root,
         Spot.Record.ownRegistered c₂.record (Spot.Record.sessionRegistered r.out) = some opened →

@@ -431,7 +431,7 @@ class Recording:
 def _trees(dev):
     import torch
     s, cpu = pouw_schemes.get(OA.SERVED), torch.device("cpu")
-    const = PPDR._constants(s, cpu, SALT_KEY)
+    const = PPDR._constants(cpu)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
                           const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
     return SYD.DeviceTrees(run)
@@ -521,17 +521,20 @@ def test_a_y_tree_whose_rows_were_never_widened_is_not_commit_y_s(host):
 def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
     """On a recording stand-in, the arm's y launches are the served `DeviceTrees`'s for the same y, the same kernels with
     the same ints, but for its widen_a launches: one a chunk, from y's rows into the words buffer its row digests read
-    next; every pointer is into a buffer made before the launch, and the launch allocates nothing and calls no torch."""
+    next; its leaves read the salts it drew for the call's rows (``salts``), which the served tree is handed too; every
+    pointer is into a buffer made before the launch, and the launch allocates nothing and calls no torch."""
     import torch
     dev = Recording()
     trees = _trees(dev)
     trees.pipes[n] = trees._pipe(n)
     yt = OA._YTree(trees, m, n, OA.INDEX)
+    salts = yt.salts
+    assert salts.numel() == 192 * m
     y = torch.zeros((m, n), dtype=torch.bfloat16)
     allocs, ptr, dev.log = dev.allocs, y.data_ptr(), []
     assert _torch_calls(lambda: yt.launch(ptr)) == [] and dev.allocs == allocs
     arm, dev.log = dev.log, []
-    trees._tree(trees.pipes[n], y, OA.INDEX)
+    trees._tree(trees.pipes[n], y, OA.INDEX, salts)
     served = dev.log
     assert [(name, i) for name, _, i in arm if name != "widen_a"] == [(name, i) for name, _, i in served]
     tree, dig, seg, words = yt.at
@@ -540,7 +543,8 @@ def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
     assert [(p, i) for _, p, i in widens] == [((ptr + 2 * n * r, 0, words), (min(rows, m - r), n, min(rows, m - r)))
                                               for r in range(0, m, rows)]
     assert all(arm[j + 1][1][0] == words for j, _, _ in widens)
-    spans = [(ptr, 2 * m * n)] + [(t.data_ptr(), t.numel()) for t in [*yt.bufs, trees.dom, trees.run.const]]
+    assert [p[2] for name, p, _ in arm if name == "hm_leaves"] == [salts.data_ptr()]
+    spans = [(ptr, 2 * m * n)] + [(t.data_ptr(), t.numel()) for t in [*yt.bufs, trees.dom, trees.run.const, salts]]
     held = set(trees.pipes[n].b.values())
     for name, p, _ in arm:
         for q in p:

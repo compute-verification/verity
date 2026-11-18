@@ -127,7 +127,7 @@ def test_the_cli_writes_the_record_and_each_kernels_listing_and_exits_0(tmp_path
     (tmp_path / "p.txt").write_text(ptxas)
     (tmp_path / "s.txt").write_text(sass)
     out, listings = tmp_path / "gate.json", tmp_path / "sass64"
-    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(out), "--listings", str(listings)]) == 0
+    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(out), "--arch", "sm_90a", "--listings", str(listings)]) == 0
     doc = json.loads(out.read_text())
     assert doc["problems"] == [] and set(doc["kernels"]) == sass_gate.WANT
     assert "sketch64_pass_kernel 128 registers, 32 IMMA.16832.S8.S8, 0 bytes local" in capsys.readouterr().out
@@ -227,7 +227,7 @@ def test_a_kernel_compiled_for_another_arch_or_absent_from_the_listing_is_refuse
     assert sass_gate.gate(ptxas, sass)[1] == [f"{SYMBOL['signs_kernel<64>']}: no ptxas resource line"]
     (tmp_path / "p.txt").write_text(ptxas)
     (tmp_path / "s.txt").write_text(sass)
-    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(tmp_path / "gate.json")]) == 1
+    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(tmp_path / "gate.json"), "--arch", "sm_90a"]) == 1
     assert json.loads((tmp_path / "gate.json").read_text())["problems"]
 
 
@@ -248,4 +248,4 @@ def test_a_build_without_the_leaf_pass64_define_wants_five_and_refuses_the_leaf_
     ptxas, sass = build(DEFAULT)
     (tmp_path / "p.txt").write_text(ptxas)
     (tmp_path / "s.txt").write_text(sass)
-    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(tmp_path / "g.json"), "--no-leaf64"]) == 1
+    assert sass_gate.main([str(tmp_path / "p.txt"), str(tmp_path / "s.txt"), str(tmp_path / "g.json"), "--arch", "sm_90a", "--no-leaf64"]) == 1

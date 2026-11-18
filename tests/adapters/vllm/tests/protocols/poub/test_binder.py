@@ -284,7 +284,7 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
     r.kv_caches[0][:, 1] = 1.5
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((1,), step=0))
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     b.on_event(StepEnded(1))
     assert m.last == 1 and memory_map_lines(m) == [] and b.step == 2
     with pytest.raises(RuntimeError, match="no KV pool"):
@@ -329,7 +329,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
     assert not s.in_pass and b.step == 1
     b.on_event(RangeWritten(2, 4, 1, 1))
     b.on_event(StepBegan(1, ("a",), 1))
-    b.on_event(StepBegan(2))
+    b.on_event(StepBegan(2, slots=1))
     assert s.counters.calls["end_pass"] == 2 and b.step == 3
     b.on_event(RangeFreed((1, 2), step=2))
     assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3]
@@ -340,7 +340,7 @@ def test_steps_append_their_writes_and_free_the_freed_pages():
 def steps(b: Binder, n: int) -> None:
     """``n`` empty steps after the binder's last."""
     for _ in range(n):
-        b.on_event(StepBegan(b.step))
+        b.on_event(StepBegan(b.step, slots=1))
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
@@ -418,7 +418,7 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_event(StepEnded(0))
     b.on_event(RangeFreed((2,), step=0))
     assert m.text().count("\n") == 1
-    b.on_event(StepBegan(1))
+    b.on_event(StepBegan(1, slots=1))
     assert open_step() == (1 if passes else None)
     (step,) = memory_map.parse(m.text().splitlines())[1]
     kv = s.region("kv/0")
@@ -460,6 +460,21 @@ def test_under_the_admission_hooks_steps_the_memory_map_is_the_one_steps_ending_
 
     got = run(True)
     assert got == run(False) and got[0].count("\n") == 3
+
+
+def test_every_step_opens_its_memory_map_line_an_empty_one_too():
+    """Every call of the scheduler is a step, and the remote session's backend (`StoreBackend.advance`) finds one line a
+    step: steps of 1, 0 and 1 slots leave the map's last line at 0, 1 and 2."""
+    s = NodeMemory()
+    b = Binder(s, passes=False, kv=False)
+    load(b, runner())
+    m = s.record_memory_map(registration=bytes(range(64)))
+    last = []
+    for step, slots in [(0, 1), (1, 0), (2, 1)]:
+        b.on_event(StepBegan(step, slots=slots))
+        b.on_event(StepEnded(step))
+        last.append(m.last)
+    assert last == [0, 1, 2] and b.step == 3
 
 
 def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_its_z():
@@ -593,7 +608,7 @@ def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touche
 def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_reads_the_output(monkeypatch, binder):
     """Under the admission hook, the steps' one emitter: `Scheduler.schedule` runs vLLM's own first, with its arguments,
     and then opens the step's pass; the pass ends after vLLM's own `Scheduler.update_from_output`, and a ``schedule``
-    that schedules no token opens none."""
+    that schedules no token is a step too, its pass over nothing new."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s)
     b = binder(s, install=True, block_bytes=1024)
@@ -607,4 +622,4 @@ def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_r
     assert v.calls[-1] == ("update_from_output", True, "out", True) and not s.in_pass
     sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=0)
     sched.update_from_output(sched.schedule(), "out")
-    assert not s.in_pass and b.step == 1 and s.counters.calls["end_pass"] == 1
+    assert not s.in_pass and b.step == 2 and s.counters.calls["end_pass"] == 2

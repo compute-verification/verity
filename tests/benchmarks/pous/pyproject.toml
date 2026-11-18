@@ -48,7 +48,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "adapters/vllm/verity_vllm/records/fields.py", "adapters/vllm/verity_vllm/records/workload.py",
           "adapters/vllm/verity_vllm/protocols/__init__.py", "adapters/vllm/verity_vllm/protocols/interface.py",
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
-          "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/errors.py",
+          "adapters/vllm/verity_vllm/engine/hooks.py", "verity/hooks.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/records/schema_ids.py",
           # the adapter's pous.py reads its option from PoUS's declaration (memory/pous/scheme.py), which imports these
           "verity/hooks.py", "verity/protocols/resource_accounting/scheme.py",
