@@ -46,7 +46,7 @@ from verity_vllm.definitions.registry.b1 import (
     layer_weights_type,
     weights_type,
 )
-from verity_vllm.definitions.registry.prims import BF16, I32
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 B1_TP2_CONFIG: dict[str, Any] = dict(B1_CONFIG, TP=2)
 
@@ -159,6 +159,14 @@ def AllGather(B, S, parts):
     """`torch.ops.vllm.all_gather` along the trailing axis over WORLD ranks: rank r's `[N]` becomes columns r*N..(r+1)*N of every rank's
     `[WORLD*N]`.  A copy: the output IS the concatenation of the parts in rank order (no gate)."""
     return parts.reshape(Array(int(S.WORLD) * S.N, BF16))
+
+
+@composite("AllGatherF32", 1, ["WORLD", "N"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, F32))),), Array(int(S.WORLD) * S.N, F32)),
+           conformance="protocol-defined: the node window's gather of rows of f32 words, a copy with no gates")
+def AllGatherF32(B, S, parts):
+    """`AllGather_v1` over rows of f32 words, such as a split-K product's partial sums: the parts in rank order (no gate)."""
+    return parts.reshape(Array(int(S.WORLD) * S.N, F32))
 
 
 @composite("AllGatherTail", 1, ["WORLD", "N", "TAIL", "TN"],
@@ -402,4 +410,4 @@ def serve_tp2(LP: int, STEPS: int, C: dict[str, Any] | None = None):
     return bind(ServeTP2, C=dict(C or B1_TP2_CONFIG), LP=LP, STEPS=STEPS)
 
 
-TP_N_COMPOSITES = [AllReduce, AllGather]
+TP_N_COMPOSITES = [AllReduce, AllGather, AllGatherF32]

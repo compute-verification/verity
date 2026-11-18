@@ -61,6 +61,7 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
+from verity.circuits.types import RecordType, Tuple
 from verity.commitments.periods import interface as IF
 
 from verity_vllm.definitions.registry import b1_tp2 as B1T
@@ -508,7 +509,7 @@ class NodeWindow:
         n, c = len(rows), widths.pop()
         R = n * c
         if n + 1 <= GATHER_ROWS:
-            tid, at = self.unit(GATHER, bind(B1T.AllGather, WORLD=n, N=c), M)
+            tid, at = self.unit(GATHER, self._gather_of(rows[0], n), M)
             self.b.feed(tid, "parts", at, M, rows, ((M, s),))
             got = [Row(tid, at + t, "o0", R) for t in range(M)]
         elif not _smooth(n):
@@ -520,11 +521,23 @@ class NodeWindow:
             self.wholes[rs] = r
         return got
 
+    def _wide(self, row: Row) -> bool:
+        ret = self.b.fns[row.tid].signature()[1]
+        f = ret.fields[int(row.out[1:])] if isinstance(ret, (Tuple, RecordType)) else ret
+        return (f[1] if isinstance(f, tuple) else f).homogeneous_width() == 32
+
+    def _gather_of(self, row: Row, world: int) -> Any:
+        """The gather of ``world`` rows like ``row``: `AllGatherF32_v1` where its writer's output is f32 words, else
+        `AllGather_v1`."""
+        if self._wide(row):
+            return bind(B1T.AllGatherF32, WORLD=world, N=row.words // 2)
+        return bind(B1T.AllGather, WORLD=world, N=row.words)
+
     def _chunks(self, rowss: list[tuple[Row, ...]], s: int, k: int, G: int) -> list[tuple[Row, ...]]:
         """Each member's first G k writer rows gathered k at a time (`AllGather_v1{WORLD=k, N=c}`, unit ``a + g M + t``), each
         chunk kept for later reads (``most``): each member's G chunk rows."""
         rows, M, c = rowss[0], len(rowss), rowss[0][0].words
-        t1, a1 = self.unit(GATHER, bind(B1T.AllGather, WORLD=k, N=c), G * M)
+        t1, a1 = self.unit(GATHER, self._gather_of(rows[0], k), G * M)
         groups = [rows[g * k:(g + 1) * k] for g in range(G)]
         if (gs := _step(groups)) is not None:
             self.b.feed(t1, "parts", a1, G * M, groups[0], ((G, gs), (M, s)))
@@ -542,6 +555,8 @@ class NodeWindow:
         chunk rows (or the row they gather into, where they and the r rows left over would outgrow a gather unit) and the r
         rows as they are. Every row of the read is a writer's, so it adds no free row."""
         n, c, M = len(rowss[0]), rowss[0][0].words, len(rowss)
+        if self._wide(rowss[0][0]):
+            raise Unexpressible(f"{self.name}: a whole read of {n} rows of f32 words that no chunk size divides")
         k = GATHER_ROWS - 1
         G, r = divmod(n, k)
         heads = self._chunks(rowss, s, k, G)
