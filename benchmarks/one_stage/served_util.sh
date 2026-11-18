@@ -47,9 +47,9 @@
 # serve-openai scans its samples every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
-# Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
-# and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
-# bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
+# Published ($OUT): util.json and util.txt (the steady state's aggregates, `served_util.py`), the profile (prof.nsys-rep),
+# steps.txt. The step trace, serve.json, summary.json, pauses.jsonl, the loads' timings files, request bodies, outputs,
+# sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
 for o in STANDIN_DRAWS:STANDIN_SAMPLES; do n=${o#*:} o=${o%%:*}; [ -z "${!o+x}" ] || [ -n "${!n+x}" ] \
   || { echo "served-util: $o is set and $n is not: it is read as $n now; set $n instead" >&2; exit 2; }; done
@@ -273,6 +273,4 @@ trap - TERM INT
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
 say "EXPORT (exit $?): $(du -sh "$SCR/prof.nsys-rep" "$SCR/prof.sqlite" 2>/dev/null | tr '\n' ' ')"
 cp "$SCR/prof.nsys-rep" "$OUT/"
-for f in serve.json summary.json advice_trace.jsonl pauses.jsonl; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-cp "$SCR/warm.timings.json" "$SCR/main.timings.json" "$OUT/" 2>/dev/null
 [ "$lrc" = 0 ]

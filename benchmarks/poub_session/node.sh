@@ -24,7 +24,8 @@ ARCH=$("$PY" benchmarks/kernels/machine.py arch \
   { echo "node.sh: no build target for the leased cards: ${GENCODE:-$ARCH}"; exit 4; }
 FLAGS=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/resource_accounting/memory/poub/prover/poub_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+# shellcheck disable=SC2086
+nvcc "${FLAGS[@]}" ${KV_DEFS:?run.sh states them} -o "$B/kv.so" verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 MODEL=${MODEL:-unsloth/Llama-3.1-8B}
 # The cache holds snapshots without refs, which an offline lookup by name doesn't resolve.
 if [ ! -d "$MODEL" ]; then

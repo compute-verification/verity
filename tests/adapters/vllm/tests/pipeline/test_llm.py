@@ -345,11 +345,11 @@ def test_each_llm_files_on_its_own_builds_exchange_and_generates_in_it(built, mo
 
 def test_an_engine_class_fills_its_settings():
     assert L.class_options({"engine_class": "G", "max_model_len": CTX}) == {
-        "engine_class": "G", "execution": "eager", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS}
+        "engine_class": "G", "execution": "eager", "max_num_seqs": 1024, "max_model_len": CTX, **CLASS_G_ARGS}
     assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, "max_model_len": 131072, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
-    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
+    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 1024
     assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
 
 
@@ -375,7 +375,7 @@ def test_class_g_serves_compiled_at_its_breakable_graphs():
     sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
     graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": sizes}
     assert L.class_options({"engine_class": "G", "execution": "compiled", "max_model_len": CTX}) == {
-        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, "max_model_len": CTX, **CLASS_G_ARGS,
+        "engine_class": "G", "execution": "compiled", "max_num_seqs": 1024, "max_model_len": CTX, **CLASS_G_ARGS,
         "compilation_config": graphs}
     assert EC.compilation("G", "compiled") == "breakable" and EC.compilation("G", None) is None
     with pytest.raises(Refused, match="execution 'bi-compiled' \\(class G serves eager, compiled\\)"):
@@ -407,13 +407,13 @@ def test_a_built_engine_runs_at_its_launchs_context_limit_or_at_one_vllm_fitted(
 def test_an_option_the_class_contradicts_is_refused_by_name():
     with pytest.raises(Refused) as e:
         L.class_options({"engine_class": "G", "tensor_parallel_size": 4, "long_prefill_token_threshold": 512,
-                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 257})
+                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 1025})
     msg = str(e.value)
     assert msg.startswith("engine class G refused: ")
     for part in ("tensor_parallel_size=4, where the class serves 8", "long_prefill_token_threshold=512, where the class serves 256",
                  "enable_prefix_caching=True, where the class serves False", "execution='bi-eager', where the class serves 'eager'",
                  "attention_backend='FLASH_ATTN': the class serves the engine profile's",
-                 "max_num_seqs=257, over the class's 256", "max_model_len=None: the class serves at its launch's context limit"):
+                 "max_num_seqs=1025, over the class's 1024", "max_model_len=None: the class serves at its launch's context limit"):
         assert part in msg, part
     with pytest.raises(Refused, match=r"engine class 'H' is not registered \(registered: G\)"):
         L.class_options({"engine_class": "H"})
@@ -463,7 +463,7 @@ def built_g(monkeypatch):
 def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(built_g):
     llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G", max_model_len=CTX)
     assert built_g["engine_args"] == {**CLASS_G_ARGS, "max_model_len": CTX}
-    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 256, "eager")
+    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 1024, "eager")
     assert built_g["env"] == llm.engine_record["env_flags"] == {"VERITY_DSA_TOPK": "canonical"}
     assert llm.engine_record["engine_class"] == "G" and llm.engine_record["engine_overrides"] == {"moe_backend": "triton"}
     sched = handle.scheduler(llm)
@@ -572,7 +572,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
             if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
     assert args == {**CLASS_G_ARGS, "max_model_len": CTX}
     eng = B.build_engine(cps, case="M", max_num_seqs=EC.max_num_seqs("G"), engine_args=args, execution="eager", env=EC.env("G"))
-    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 256)
+    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 1024)
     assert eng.runner is None and eng.model is None
     assert eng.env_flags == {"VERITY_DSA_TOPK": "canonical"} == {"VERITY_DSA_TOPK": os.environ["VERITY_DSA_TOPK"]}
     assert EC.effective_refusals("G", eng.effective, eng.env_flags, CTX) == []
