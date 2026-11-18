@@ -32,7 +32,7 @@ XS = tuple((f"x{j}", WIDE) for j in range(6))
 
 def _u_body(B, S, *xs):
     ys = [B.call(BL.XOR, BL.operands(x[0], x[1])) for x in xs]
-    return array_of(ys + [B.call(BL.AND, BL.operands(ys[0], ys[5]))])
+    return array_of(ys + [B.call(BL.AND, BL.operands(ys[0], xs[5][1]))])
 
 
 U = bind(CompositeDefinition("FitToyU", 1, (), lambda S: (tuple((f"x{j}", A2) for j in range(6)), A7), _u_body,
@@ -46,8 +46,8 @@ def _root_body(B, S, *xs):
 
 @functools.cache
 def toy() -> tuple[Program, bytes]:
-    """Two units of U over six root inputs, each its own row: a unit has 7 rows (six inputs and its output run), and its
-    last node alone reads only one-bit rows of the blocks before it."""
+    """Two units of U over six root inputs, each its own row: a unit has 7 rows (six inputs and its output row), and a piece
+    of its nodes one row an input it reads and one a node it holds."""
     program = Program(CompositeDefinition("FitToy", 1, (), lambda S: (XS, Tuple(A7, A7)), _root_body, register=False))
     return program, b"".join(descriptor_chunks(program))
 
@@ -61,27 +61,44 @@ def codes(program, q, blocks, **kw) -> set[str]:
     return set(PO.verify(PO.build(program, q, blocks), program, **kw).codes)
 
 
-def test_the_chain_packs_as_the_template_query_cuts_it_and_verifies():
+def test_the_chain_packs_as_its_cap_says_and_verifies():
+    """At its window's grain, two units, the template query's cut; at the default cap a unit a block; uncapped, all eight."""
     program = chain()
-    assert FT.build(program, cap=2) == [[0, 2], [2, 4], [4, 6], [6, 8]]
-    assert FT.build(program) == [[0, 8]]
-    for blocks in ([[0, 2], [2, 4], [4, 6], [6, 8]], [[0, 8]], [[u, u + 1] for u in range(8)]):
-        assert PO.verify(PO.build(program, FT.query(), blocks), program).ok
+    for cap, blocks in ((2, [[0, 2], [2, 4], [4, 6], [6, 8]]), (1, [[u, u + 1] for u in range(8)]), (None, [[0, 8]])):
+        assert FT.build(program, cap=cap) == blocks
+        assert PO.verify(PO.build(program, FT.query(cap=cap), blocks), program).ok
+    assert FT.build(program) == FT.build(program, cap=1)
 
 
-def test_the_toy_fits_whole_at_seven_rows_and_is_cut_into_its_nodes_at_five():
+def test_a_block_past_its_cap_is_refused_and_the_cap_is_under_the_digest():
+    program = chain()
+    assert codes(program, FT.query(cap=1), [[0, 2], [2, 4], [4, 6], [6, 8]]) == {"fit-cap"}
+    a, b = (PO.build(program, FT.query(cap=cap), [[0, 8]]) for cap in (8, None))
+    assert PO.digest(a) != PO.digest(b) and PO.verify(a, program).ok and PO.verify(b, program).ok
+
+
+def _units(program) -> list[int]:
+    return [k for k, n in enumerate(program.root.body.nodes) if getattr(n.fn, "id", None) == U.id]
+
+
+def test_the_toy_fits_whole_at_seven_rows_and_is_cut_into_its_nodes_at_six():
+    """Two whole units write two rows (a writer row a unit), so they fit together at eight; a piece of three nodes reads three
+    rows and writes three, one a node."""
     program, _ = toy()
-    assert FT.build(program, rows=7) == [[0, 2]]
-    root = program.root.body
-    k0, k1 = [k for k, n in enumerate(root.nodes) if getattr(n.fn, "id", None) == U.id]
-    want = [{"path": [[k, 0]], "nodes": r} for k in (k0, k1) for r in ([0, 4], [4, 7])]
-    assert FT.build(program, rows=5) == want
-    assert PO.verify(PO.build(program, FT.query(rows=5), want), program).ok
+    assert FT.build(program, rows=7) == [[0, 1], [1, 2]]
+    assert FT.build(program, rows=8, cap=None) == [[0, 2]]
+    assert FT.build(program, rows=7, cap=None) == [[0, 1], [1, 2]]
+    want = [{"path": [[k, 0]], "nodes": r} for k in _units(program) for r in ([0, 3], [3, 6], [6, 7])]
+    assert FT.build(program, rows=6) == want
+    assert PO.verify(PO.build(program, FT.query(rows=6), want), program).ok
+    fp, fit = FT.FitPartition(program, FT.query(rows=6)), FT.Fit(program)
+    m = fit.measure(FT.part_of(program, fp, want[0]))
+    assert m.rows == 6 and m.writers == [(0, 0, 0), (1, 0, 0), (2, 0, 0)]
 
 
 def test_a_block_past_its_rows_or_its_bits_is_refused_by_name():
     program, _ = toy()
-    assert codes(program, FT.query(rows=4), [[0, 2]]) == {"fit-rows"}
+    assert codes(program, FT.query(rows=7, cap=None), [[0, 2]]) == {"fit-rows"}
     assert codes(program, FT.query(bits=1 << 19), [[0, 1], [1, 2]]) == {"fit-bits"}
 
 
@@ -94,11 +111,12 @@ def test_a_cover_that_is_not_the_calls_each_once_in_order_is_refused(blocks, cod
 
 def test_a_block_holding_units_of_two_inference_blocks_is_refused():
     program, _ = toy()
-    assert codes(program, FT.query(), [[0, 2]], inference=lambda u: u) == {"fit-straddles"}
-    assert PO.verify(PO.build(program, FT.query(), [[0, 2]]), program, inference=lambda u: 0).ok
-    assert PO.verify(PO.build(program, FT.query(), [[0, 1], [1, 2]]), program, inference=lambda u: u).ok
-    pieces = FT.build(program, rows=5)
-    assert PO.verify(PO.build(program, FT.query(rows=5), pieces), program, inference=lambda u: u).ok
+    q = FT.query(cap=None)
+    assert codes(program, q, [[0, 2]], inference=lambda u: u) == {"fit-straddles"}
+    assert PO.verify(PO.build(program, q, [[0, 2]]), program, inference=lambda u: 0).ok
+    assert PO.verify(PO.build(program, q, [[0, 1], [1, 2]]), program, inference=lambda u: u).ok
+    pieces = FT.build(program, rows=6)
+    assert PO.verify(PO.build(program, FT.query(rows=6), pieces), program, inference=lambda u: u).ok
 
 
 def test_a_fit_object_without_its_blocks_is_refused():
@@ -120,11 +138,11 @@ def _bit(t, bits, x):
     return (t[g] >> bits.out[g].index(x)) & 1
 
 
-@pytest.mark.parametrize("rows", [5, 7])
-def test_a_block_restricted_computes_what_C_computes_there(rows):
+@pytest.mark.parametrize("rows,cap", [(6, 1), (7, 1), (8, None)])
+def test_a_block_restricted_computes_what_C_computes_there(rows, cap):
     program, c = toy()
-    blocks = FT.build(program, rows=rows)
-    obj = PO.build(program, FT.query(rows=rows), blocks)
+    blocks = FT.build(program, rows=rows, cap=cap)
+    obj = PO.build(program, FT.query(rows=rows, cap=cap), blocks)
     bits = R.Bits(R.program(c))
     C, rng, t = program.circuit, random.Random(7), {}
     for g in C.gates():
@@ -143,20 +161,9 @@ def test_a_block_restricted_computes_what_C_computes_there(rows):
 
 def test_a_piece_not_among_the_blocks_is_refused():
     program, c = toy()
-    obj = PO.build(program, FT.query(rows=5), FT.build(program, rows=5))
+    obj = PO.build(program, FT.query(rows=6), FT.build(program, rows=6))
     with pytest.raises(R.Refused, match="E_UNITS"):
         R.restrict(c, obj, {"path": [[obj["blocks"][0]["path"][0][0], 0]], "nodes": [0, 2]})
-
-
-def test_a_block_with_no_pin_is_refused_in_verify_and_where_it_joins_no_neighbour_at_build():
-    """At four rows the toy's last node is a block of one-bit rows; joined to the block before it, it has five."""
-    program, _ = toy()
-    ks = [k for k, n in enumerate(program.root.body.nodes) if getattr(n.fn, "id", None) == U.id]
-    blocks = [{"path": [[k, 0]], "nodes": r} for k in ks for r in ([0, 3], [3, 6], [6, 7])]
-    assert codes(program, FT.query(rows=4), blocks) == {"fit-pin"}
-    with pytest.raises(FT.Unfit) as e:
-        FT.build(program, rows=4)
-    assert e.value.code == "fit-pin"
 
 
 U32 = W.U32
@@ -201,17 +208,42 @@ def test_a_block_with_no_pin_joins_the_block_before_it_where_rows_and_bits_allow
     fp, fit = FT.FitPartition(program, FT.query(rows=4)), FT.Fit(program)
     m0 = fit.measure(FT.part_of(program, fp, [0, 1]))
     assert (m0.rows, m0.pinned) == (4, True) and fit.measure(FT.part_of(program, fp, [0, 2])).rows == 5
-    fit.finish(FT.part_of(program, fp, [0, 1]), m0.outs, m0.widths)
+    fit.finish(FT.part_of(program, fp, [0, 1]), m0)
     tail = fit.measure(FT.part_of(program, fp, [1, 3]))
     assert tail.rows <= 4 and not tail.pinned
-    assert FT.build(program, rows=4) == [[0, 3]]
-    assert codes(program, FT.query(rows=4), [[0, 1], [1, 3]]) == {"fit-pin"}
-    assert PO.verify(PO.build(program, FT.query(rows=4), [[0, 3]]), program).ok
+    assert FT.build(program, rows=4, cap=None) == [[0, 3]]
+    assert PO.verify(PO.build(program, FT.query(rows=4, cap=None), [[0, 3]]), program).ok
+
+
+def test_a_block_with_no_pin_is_refused_in_verify_and_where_it_joins_no_neighbour_at_build():
+    """At a unit a block, the joined toy's u1 and u2 may not join u0."""
+    program = joined()
+    assert codes(program, FT.query(rows=4, cap=None), [[0, 1], [1, 3]]) == {"fit-pin"}
+    assert codes(program, FT.query(rows=4), [[0, 1], [1, 2], [2, 3]]) == {"fit-pin"}
+    with pytest.raises(FT.Unfit) as e:
+        FT.build(program, rows=4)
+    assert e.value.code == "fit-pin"
+
+
+def test_a_root_input_nodes_registered_rows_are_its_rows():
+    """The joined toy's inputs registered eight words a row: u0 reads one 32-byte row of each, no pin, and five rows in all
+    with u1's two."""
+    program = joined()
+    nodes = [k for k, n in enumerate(program.root.body.nodes) if n.form != "call"]
+    fp = FT.FitPartition(program, FT.query(rows=4, cap=None))
+    whole, rows8 = FT.Fit(program), FT.Fit(program, {k: 8 for k in nodes})
+    part = FT.part_of(program, fp, [0, 1])
+    assert whole.measure(part).pinned and not rows8.measure(part).pinned
+    g = program.root.body.offsets[nodes[0]]
+    assert whole.row(g)[:2] == (g, 128) and rows8.row(g)[:2] == (g, 32) and rows8.row(g + 8)[:2] == (g + 8, 32)
+    assert codes(program, FT.query(rows=4, cap=None), [[0, 3]], registered={k: 8 for k in nodes}) == {"fit-pin"}
+    with pytest.raises(FT.Unfit):
+        FT.Fit(program, {len(program.root.body.nodes) - 1: 8})
 
 
 def test_a_partitions_writer_rows_are_measured_once_for_all_its_blocks(monkeypatch):
     program, c = toy()
-    obj = PO.build(program, FT.query(rows=5), FT.build(program, rows=5))
+    obj = PO.build(program, FT.query(rows=6), FT.build(program, rows=6))
     bits = R.Bits(R.program(c))
     R._WRITERS.clear()
     passes = []

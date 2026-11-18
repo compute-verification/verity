@@ -41,7 +41,7 @@ from . import boundary as BD
 from . import count as K
 from .codec import descriptor_id
 from .defs import PrimitiveDefinition
-from .layout import Scope
+from .layout import Scope, resolve
 from .parts import Part, Unsupported, n_members
 from .program import is_input
 
@@ -86,14 +86,17 @@ def _is_int(x: Any) -> bool:
 
 
 def params_ok(p: Mapping[str, Any]) -> bool:
-    return _is_int(p.get("rows")) and 1 <= p["rows"] <= 1 << 16 and _is_int(p.get("bits")) and 1 <= p["bits"] <= BITS_MAX
+    cap = p.get("cap")
+    return _is_int(p.get("rows")) and 1 <= p["rows"] <= 1 << 16 and _is_int(p.get("bits")) and 1 <= p["bits"] <= BITS_MAX \
+        and (cap is None or _is_int(cap) and 1 <= cap <= 1 << 32)
 
 
-def query(rows: int = MAX_ROWS, bits: int = 1 << K_MAX) -> dict[str, Any]:
-    """`Q_fit{rows, bits}` v1, Flock's composer's bounds by default."""
-    if not params_ok({"rows": rows, "bits": bits}):
-        raise ValueError(f"Q_fit's rows are 1..65536 and its bits 1..2^40, not {rows!r}, {bits!r}")
-    return {"name": Q_FIT[0], "version": Q_FIT[1], "params": {"rows": rows, "bits": bits}}
+def query(rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int | None = 1) -> dict[str, Any]:
+    """`Q_fit{rows, bits, cap}` v1: Flock's composer's bounds, and at most one root unit a block, by default."""
+    if not params_ok({"rows": rows, "bits": bits, "cap": cap}):
+        raise ValueError(f"Q_fit's rows are 1..65536, its bits 1..2^40 and its cap 1..2^32 or none, not {rows!r}, {bits!r}, "
+                         f"{cap!r}")
+    return {"name": Q_FIT[0], "version": Q_FIT[1], "params": {"rows": rows, "bits": bits, "cap": cap}}
 
 
 class Unfit(ValueError):
@@ -114,10 +117,10 @@ class FitPartition:
     def __init__(self, program: Any, q: Mapping[str, Any]) -> None:
         from .partition_object import QueryInapplicable, calls
         if (q.get("name"), q.get("version")) != Q_FIT or not isinstance(q.get("params"), Mapping) or \
-                set(q["params"]) != {"rows", "bits"} or not params_ok(q["params"]):
+                set(q["params"]) != {"rows", "bits", "cap"} or not params_ok(q["params"]):
             raise QueryInapplicable(f"not Q_fit v1 with its parameters: {dict(q)!r}", {"query": dict(q)})
         self.query, self.program = dict(q), program
-        self.rows, self.bits = q["params"]["rows"], q["params"]["bits"]
+        self.rows, self.bits, self.cap = q["params"]["rows"], q["params"]["bits"], q["params"]["cap"]
         nodes = program.root.body.nodes
         self.ranges: list[tuple[int, int, int]] = []
         at = 0
@@ -237,40 +240,49 @@ def cover(program: Any, fp: FitPartition, parts: Sequence[Part]) -> list[tuple[s
     return bad
 
 
+def _cut(outs: Sequence[int], widths: Sequence[int], writers: Sequence[tuple]) -> list[tuple[int, int]]:
+    """out(S) cut into rows: a row breaks at every change of width or of writer (node, member and field). Each row
+    ``(first gate, bytes)``."""
+    rows: list[list[int]] = []
+    for i, (g, w) in enumerate(zip(outs, widths)):
+        if i == 0 or w != widths[i - 1] or writers[i] != writers[i - 1]:
+            rows.append([g, 0])
+        rows[-1][1] += w
+    return [(g, -(-bits // 8)) for g, bits in rows]
+
+
 @dataclass
 class _Writers:
-    """The finished blocks' writer rows: each block's gate intervals, its out(S) in increasing index and each one's row."""
+    """The finished blocks' writer rows: each block's gate intervals, its out(S) in increasing index, and the row each lies in,
+    named by its first gate."""
     starts: list[int] = field(default_factory=list)
     ivs: list[tuple[int, int, int]] = field(default_factory=list)
     outs: list[list[int]] = field(default_factory=list)
-    run_of: list[list[int]] = field(default_factory=list)
-    run_bytes: list[list[int]] = field(default_factory=list)
+    row_of: list[list[tuple[int, int]]] = field(default_factory=list)
 
     def pop(self) -> None:
         b = len(self.outs) - 1
         keep = [i for i, (_lo, _hi, x) in enumerate(self.ivs) if x != b]
         self.starts = [self.starts[i] for i in keep]
         self.ivs = [self.ivs[i] for i in keep]
-        for xs in (self.outs, self.run_of, self.run_bytes):
-            xs.pop()
+        self.outs.pop()
+        self.row_of.pop()
 
-    def add(self, part: Part, outs: list[int], widths: list[int]) -> None:
+    def add(self, part: Part, outs: list[int], widths: list[int], writers: list[tuple]) -> None:
         b = len(self.outs)
         for lo, hi in part.intervals():
             at = bisect.bisect_left(self.starts, lo)
             self.starts.insert(at, lo)
             self.ivs.insert(at, (lo, hi, b))
-        runs, rb = [], []
-        for i, w in enumerate(widths):
-            if i == 0 or w != widths[i - 1]:
-                rb.append(0)
-            runs.append(len(rb) - 1)
-            rb[-1] += w
+        rows, at = _cut(outs, widths, writers), []
+        firsts = [g for g, _ in rows]
+        for g in outs:
+            at.append(rows[bisect.bisect_right(firsts, g) - 1])
         self.outs.append(outs)
-        self.run_of.append(runs)
-        self.run_bytes.append([-(-x // 8) for x in rb])
+        self.row_of.append(at)
 
-    def row(self, g: int) -> tuple[tuple, int] | None:
+    def row(self, g: int) -> tuple[int, int, int] | None:
+        """``(the row's first gate, its bytes, the block that writes it)``, or None where no finished block writes ``g``."""
         at = bisect.bisect_right(self.starts, g) - 1
         if at < 0:
             return None
@@ -280,8 +292,8 @@ class _Writers:
         i = bisect.bisect_left(self.outs[b], g)
         if i == len(self.outs[b]) or self.outs[b][i] != g:
             return None
-        r = self.run_of[b][i]
-        return ("w", b, r), self.run_bytes[b][r]
+        first, size = self.row_of[b][i]
+        return first, size, b
 
 
 def ports(part: Part) -> tuple[list[int], list[int]]:
@@ -294,26 +306,58 @@ def ports(part: Part) -> tuple[list[int], list[int]]:
     return sorted(ins), sorted(outs)
 
 
+def _field_ends(ret: Any) -> list[int]:
+    fields = getattr(ret, "fields", None) or (ret,)
+    ends, at = [], 0
+    for f in fields:
+        at += (f[1] if isinstance(f, tuple) else f).leaves
+        ends.append(at)
+    return ends
+
+
+def writers(part: Part, outs: Sequence[int]) -> list[tuple[int, int, int]]:
+    """Each gate of ``outs`` (the part's out(S)) as ``(node, member, field)`` of the part's activation: the node's member
+    whose return leaf names it first, and that leaf's field of the member's Definition's return."""
+    scope, want, got = part.scope, set(outs), {}
+    body = scope.spec.body
+    for j, m in sorted(part.items):
+        node = body.nodes[j]
+        per = node.out.leaves // max(1, n_members(node))
+        ends = _field_ends(node.fn.ret if hasattr(node.fn, "ret") else node.fn.signature()[1])
+        for r in range(per):
+            g = resolve(scope, ("n", j, m * per + r))
+            if g in want and g not in got:
+                got[g] = (j, m, bisect.bisect_right(ends, r))
+    return [got[g] for g in outs]
+
+
 class Measure(NamedTuple):
-    """A block's rows, its Flock block's ``k_log``, its out(S) with their widths, and whether a row holds the pin."""
+    """A block's rows, its Flock block's ``k_log``, its out(S) with their widths and writers (`writers`), and whether a row
+    holds the pin."""
     rows: int
     k: int
     outs: list[int]
     widths: list[int]
+    writers: list[tuple[int, int, int]]
     pinned: bool
 
 
 class Fit:
-    """A program's rows and bits of a proof block (module docstring), over the blocks finished so far (`finish`)."""
+    """A program's rows and bits of a proof block (module docstring), over the blocks finished so far (`finish`).
+    ``registered``: a root input node (its index in the root's body) -> its leaves a row, its registered rows; a node it
+    does not name is one row."""
 
-    def __init__(self, program: Any) -> None:
+    def __init__(self, program: Any, registered: Mapping[int, int] | None = None) -> None:
         self.program = program
+        self.registered = dict(registered or {})
         self.writers = _Writers()
         self._counts: dict[str, K.Count] | None = None
-        self._input_rows: dict[int, int] = {}
         body = program.root.body
         self._input_nodes = [k for k, n in enumerate(body.nodes) if is_input(n.fn)]
         self._input_starts = [body.offsets[k] for k in self._input_nodes]
+        for k, w in self.registered.items():
+            if k not in self._input_nodes or not (_is_int(w) and w >= 1):
+                raise Unfit("fit-registered", f"root node {k}, {w!r} leaves a row: not an input node and a positive count")
 
     def _ports(self, part: Part) -> tuple[list[int], list[int]]:
         return ports(part)
@@ -321,18 +365,21 @@ class Fit:
     def _width(self, g: int) -> int:
         return BD.gate_width(self.program, g)
 
-    def _input_row(self, g: int) -> tuple[tuple, int] | None:
+    def _input_row(self, g: int) -> tuple[int, int, int] | None:
+        """``(the row's first gate, its bytes, -1)`` for a gate of a root input node, else None."""
         at = bisect.bisect_right(self._input_starts, g) - 1
         if at < 0:
             return None
         k = self._input_nodes[at]
         body = self.program.root.body
-        if not body.offsets[k] <= g < body.offsets[k + 1]:
+        lo, hi = body.offsets[k], body.offsets[k + 1]
+        if not lo <= g < hi:
             return None
-        if k not in self._input_rows:
-            node = body.nodes[k]
-            self._input_rows[k] = -(-n_members(node) * node.fn.ret.w // 8)
-        return ("in", k), self._input_rows[k]
+        node = body.nodes[k]
+        n, per = n_members(node), node.fn.gates
+        w = self.registered.get(k, n)
+        r = (g - lo) // per // w
+        return lo + r * w * per, -(-min(w, n - r * w) * node.fn.ret.w // 8), -1
 
     def _ands(self, part: Part) -> int:
         if self._counts is None:
@@ -343,35 +390,41 @@ class Fit:
         body = part.scope.spec.body
         return sum(self._counts[descriptor_id(body.nodes[j].fn)].ands for j, _m in part.items)
 
+    def row(self, g: int) -> tuple[int, int, int] | None:
+        """The row ``g`` lies in: a root input node's registered row, or a finished block's writer row (`_Writers.row`)."""
+        return self._input_row(g) or self.writers.row(g)
+
     def measure(self, part: Part) -> Measure:
         """The part as a block over the finished blocks."""
         ins, outs = self._ports(part)
         widths = [self._width(g) for g in outs]
-        rows: dict[tuple, int] = {}
+        rows: dict[int, int] = {}
         for g in ins:
-            got = self._input_row(g) or self.writers.row(g)
+            got = self.row(g)
             if got is None:
                 raise Unfit("fit-order", f"gate {g} that {part.scope.spec.id}'s part reads is in no earlier block nor input")
             rows[got[0]] = got[1]
-        out_bytes = []
-        for i, w in enumerate(widths):
-            if i == 0 or w != widths[i - 1]:
-                out_bytes.append(0)
-            out_bytes[-1] += w
-        out_bytes = [-(-x // 8) for x in out_bytes]
+        ws = writers(part, outs)
+        out_bytes = [b for _g, b in _cut(outs, widths, ws)]
         k = proof_block_k_log(list(rows.values()), out_bytes, self._ands(part), packed=False)
         pinned = any(b > LAST_BLOCK_BYTES for b in [*rows.values(), *out_bytes])
-        return Measure(len(rows) + len(out_bytes), k, outs, widths, pinned)
+        return Measure(len(rows) + len(out_bytes), k, outs, widths, ws, pinned)
 
-    def finish(self, part: Part, outs: list[int], widths: list[int]) -> None:
-        self.writers.add(part, outs, widths)
+    def finish(self, part: Part, m: Any) -> None:
+        """Adds the part as a block, ``m`` its outputs (`Measure`'s or `outputs`')."""
+        self.writers.add(part, m.outs, m.widths, m.writers)
+
+    def outputs(self, part: Part) -> Measure:
+        """The part's out(S), widths and writers alone (the rest of the `Measure` unmeasured), for `finish`."""
+        _ins, outs = self._ports(part)
+        return Measure(0, 0, outs, [self._width(g) for g in outs], writers(part, outs), True)
 
 
 def verify(program: Any, fp: FitPartition, entries: Sequence[Any], bad: dict[str, list],
-           inference: Callable[[int], Any] | None = None) -> None:
+           inference: Callable[[int], Any] | None = None, registered: Mapping[int, int] | None = None) -> None:
     """`partition_object.verify`'s checks of a `Q_fit` object's ``blocks`` (module docstring), into ``bad`` by code: an entry
     naming no gates of C (``fit-entry``), the cover (`cover`), every block within ``rows`` (``fit-rows``) and ``bits``
-    (``fit-bits``) and with a pin (``fit-pin``), and, given ``inference`` (a unit's inference block), no block of units of two (``fit-straddles``)."""
+    (``fit-bits``) and with a pin (``fit-pin``), no block of more than ``cap`` root units (``fit-cap``), and, given ``inference`` (a unit's inference block), no block of units of two (``fit-straddles``)."""
     parts = []
     for i, e in enumerate(entries):
         try:
@@ -382,6 +435,9 @@ def verify(program: Any, fp: FitPartition, entries: Sequence[Any], bad: dict[str
         return
     for code, what in cover(program, fp, parts):
         bad.setdefault(code, []).append(what)
+    for i, e in enumerate(entries):
+        if fp.cap is not None and _pair(e) and e[1] - e[0] > fp.cap:
+            bad.setdefault("fit-cap", []).append([i, e[1] - e[0], fp.cap])
     if bad:
         return
     if inference is not None:
@@ -389,17 +445,17 @@ def verify(program: Any, fp: FitPartition, entries: Sequence[Any], bad: dict[str
             us = range(e[0], e[1]) if _pair(e) else [_unit_of(fp, e)]
             if len({inference(u) for u in us}) > 1:
                 bad.setdefault("fit-straddles", []).append([i, e])
-    fit = Fit(program)
     try:
+        fit = Fit(program, registered)
         for i, p in enumerate(parts):
-            rows, k, outs, widths, pinned = fit.measure(p)
+            rows, k, _outs, _widths, _writers, pinned = m = fit.measure(p)
             if rows > fp.rows:
                 bad.setdefault("fit-rows", []).append([i, rows, fp.rows])
             if (1 << k) > fp.bits:
                 bad.setdefault("fit-bits", []).append([i, k, fp.bits])
             if not pinned:
                 bad.setdefault("fit-pin", []).append([i, LAST_BLOCK_BYTES])
-            fit.finish(p, outs, widths)
+            fit.finish(p, m)
     except Unfit as x:
         bad.setdefault(x.code, []).append(str(x))
 
@@ -416,12 +472,13 @@ def _computes(node: Any) -> bool:
     return n_members(node) > 0 and node.fn.gates > 0
 
 
-def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int | None = None) -> list[Any]:
-    """`Q_fit{rows, bits}`'s blocks of ``program`` (module docstring's entries), packed greedily in layout order: as many whole
+def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int | None = 1,
+          registered: Mapping[int, int] | None = None) -> list[Any]:
+    """`Q_fit{rows, bits, cap}`'s blocks of ``program`` (module docstring's entries), packed greedily in layout order: as many whole
     root units as fit (at most ``cap`` a block), else into the unit, packing its nodes, members and their bodies alike.
     Refuses (`Unfit`) a gate that alone does not fit, and a scan or primitive the cut would have to enter."""
-    fp = FitPartition(program, query(rows, bits))
-    fit = Fit(program)
+    fp = FitPartition(program, query(rows, bits, cap))
+    fit = Fit(program, registered)
     out: list[Any] = []
     root = program.circuit.root_scope
 
@@ -430,7 +487,7 @@ def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int |
         return (m.rows <= rows and (1 << m.k) <= bits), m
 
     def emit(part: Part, doc: Any, m: Measure) -> None:
-        fit.finish(part, m.outs, m.widths)
+        fit.finish(part, m)
         out.append(doc)
 
     def greedy(n: int, make: Callable[[int, int], Part], doc: Callable[[int, int], Any], into: Callable[[int], None],

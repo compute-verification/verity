@@ -56,7 +56,6 @@ from functools import cached_property, lru_cache
 from typing import Any, Mapping, Sequence
 
 from . import boolean as BL
-from . import boundary as BD
 from . import fit as FT
 from . import partition_object as PO
 from . import program as P
@@ -391,34 +390,39 @@ def ports(part: Part) -> tuple[list[int], list[int]]:
         raise Refused("E_BOUNDARY", str(x)) from None
 
 
-#: each partition object's blocks measured once (`fit.Fit` over all of them), by its digest and C's bytes' SHA-256
-_WRITERS: dict[tuple[str, str], tuple[Any, int, str]] = {}
+#: each partition object's blocks measured once (`fit.Fit` over all of them), by its digest, C's bytes' SHA-256 and the
+#: root input nodes' registered rows
+_WRITERS: dict[tuple, tuple[Any, int, str]] = {}
 _WRITERS_MAX = 4
 
 
-def _writers(D: DecodedProgram, tp: Any, entries: Sequence[Any], key: tuple[str, str]) -> tuple[Any, int, str]:
+def _writers(D: DecodedProgram, tp: Any, entries: Sequence[Any], registered: Mapping[int, int] | None,
+             key: tuple) -> tuple[Any, int, str]:
     """`fit.Fit` with every block of ``entries`` finished in order, the number finished, and why the rest is not."""
     if key in _WRITERS:
         return _WRITERS[key]
-    fit, done, why = FT.Fit(D), 0, ""
-    for e in entries:
-        p = FT.part_of(D, tp, e)
-        try:
-            _ins, outs = FT.ports(p)
-        except FT.Unfit as x:
-            why = str(x)
-            break
-        fit.finish(p, outs, [BD.gate_width(D, g) for g in outs])
-        done += 1
+    done, why = 0, ""
+    try:
+        fit = FT.Fit(D, registered)
+        for e in entries:
+            p = FT.part_of(D, tp, e)
+            fit.finish(p, fit.outputs(p))
+            done += 1
+    except FT.Unfit as x:
+        why = str(x)
+        if done == 0 and x.code == "fit-registered":
+            raise Refused("E_UNITS", why) from None
     if len(_WRITERS) >= _WRITERS_MAX:
         _WRITERS.pop(next(iter(_WRITERS)))
     _WRITERS[key] = (fit, done, why)
     return _WRITERS[key]
 
 
-def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any, c: bytes) -> Any:
-    """Under `Q_fit` with the partition's ``blocks``: a gate of in(S) -> its writer row (`fit`'s rows), from the blocks before
-    this one; None otherwise. Refused where ``units`` is no block of the partition."""
+def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any, c: bytes,
+          registered: Mapping[int, int] | None) -> Any:
+    """Under `Q_fit` with the partition's ``blocks``: a gate of in(S) -> the first gate of the row it lies in (`fit`'s rows),
+    a root input node's registered row or a writer row of a block before this one; None otherwise. Refused where ``units``
+    is no block of the partition."""
     entries = partition.get(PO.BLOCKS) if isinstance(tp, FT.FitPartition) else None
     if entries is None:
         return None
@@ -426,13 +430,14 @@ def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any, 
     if me not in entries:
         raise Refused("E_UNITS", f"{units!r} is no block of the partition's blocks")
     i = entries.index(me)
-    fit, done, why = _writers(D, tp, entries, (PO.digest(partition), hashlib.sha256(c).hexdigest()))
+    reg = tuple(sorted((registered or {}).items()))
+    fit, done, why = _writers(D, tp, entries, registered, (PO.digest(partition), hashlib.sha256(c).hexdigest(), reg))
     if i > done:
         raise Refused("E_BOUNDARY", why)
 
-    def key(g: int) -> tuple:
-        got = fit._input_row(g) or fit.writers.row(g)
-        if got is None or (got[0][0] == "w" and got[0][1] >= i):
+    def key(g: int) -> int:
+        got = fit.row(g)
+        if got is None or got[2] >= i:
             raise Refused("E_ORDER", f"gate {g} is in no block before this one and no input")
         return got[0]
     return key
@@ -613,15 +618,30 @@ def _build(bits: Bits, where: _Where, ins: list[int], outs: list[int], row: Any 
         P._BODY_LOOKUP[:] = saved
 
 
-def restrict(c: bytes, partition: Mapping[str, Any], units: Any, bits: Bits | None = None) -> Block:
+#: C decoded, by its bytes' SHA-256, for the calls of `restrict` that pass no `Bits`
+_BITS: dict[str, Bits] = {}
+
+
+def _bits_of(c: bytes) -> Bits:
+    key = hashlib.sha256(c).hexdigest()
+    if key not in _BITS:
+        if len(_BITS) >= 2:
+            _BITS.pop(next(iter(_BITS)))
+        _BITS[key] = Bits(program(c))
+    return _BITS[key]
+
+
+def restrict(c: bytes, partition: Mapping[str, Any], units: Any, bits: Bits | None = None,
+             registered: Mapping[int, int] | None = None) -> Block:
     """`compact (restrict C S)` for S the gates of ``units``: ascending ranges of the partition's units, or under `Q_fit` a
-    piece (`fit`) (module docstring: the index, the block and the object)."""
-    bits = Bits(program(c)) if bits is None else bits
+    piece (`fit`), its root input nodes' rows those ``registered`` gives (`fit.Fit`) (module docstring: the index, the block
+    and the object)."""
+    bits = _bits_of(c) if bits is None else bits
     tp = _partition(bits.D, partition)
     units = _ranges(tp, units)
     where = _where(bits.D, tp, units)
     ins, outs = ports(where.part)
-    prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units, c))
+    prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units, c, registered))
     key = dict(units) if isinstance(units, Mapping) else tuple(tuple(u) for u in units)
     return Block(key, tuple(where.part.intervals()), tuple(ins), tuple(outs), prog, b"".join(descriptor_chunks(prog)), bits)
 

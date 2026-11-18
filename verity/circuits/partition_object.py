@@ -114,7 +114,7 @@ QUERIES: dict[tuple[str, int], tuple[tuple[str, ...], Callable[[Mapping[str, Any
     Q_CALL: (("X",), _word_params_ok),
     Q_TEMPLATE_INSTANCE: (("template",), lambda p: isinstance(p["template"], str)),
     Q_TEMPLATE_INSTANCES: (("templates",), lambda p: _templates_ok(p["templates"])),
-    FT.Q_FIT: (("rows", "bits"), FT.params_ok),
+    FT.Q_FIT: (("rows", "bits", "cap"), FT.params_ok),
 }
 
 #: one-stage's name for the template queries' refusal
@@ -510,7 +510,7 @@ def owners_digest(part: Partition | CallPartition) -> str:
 
 
 def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[int]] | None = None,
-           inference: Callable[[int], Any] | None = None) -> CutVerdict:
+           inference: Callable[[int], Any] | None = None, registered: Mapping[int, int] | None = None) -> CutVerdict:
     """The object against the program: `validate`, `program` = `codec.program_digest(program)`, then the query evaluated here
     (`query-inapplicable` when it does not apply) and every Call's cut checked on its derived graph (`cut.check_cut`: the invariant with
     the derived committed set, and the width rule with the query's X and W), once per Definition; failures by Call under `cut`
@@ -526,8 +526,9 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     Under `Q_word` v2 a value computed in two units is no failure; the verdict's detail reports it, never as a code, under
     `recomputed_across`: {"n": the pairs over every Call, "gates": per Call with any, {"call", "n", "gates": its first pairs}}.
 
-    Under `Q_fit` every block is checked (`fit.verify`): its entry, the cover, its rows and its bits, and, given ``inference``
-    (a unit -> its inference block), that no block holds units of two (`fit-straddles`)."""
+    Under `Q_fit` every block is checked (`fit.verify`): its entry, the cover, its cap, its rows, its bits and its pin, the
+    root input nodes' rows those ``registered`` gives (`fit.Fit`), and, given ``inference`` (a unit -> its inference block),
+    that no block holds units of two (`fit-straddles`)."""
     v = validate(obj)
     if not v.ok:
         return v
@@ -542,7 +543,7 @@ def verify(obj: Mapping[str, Any], program: Any, served: Mapping[int, Iterable[i
     try:
         part = evaluate(program, obj["query"])
         if fit:
-            FT.verify(program, part, obj[BLOCKS], bad, inference)
+            FT.verify(program, part, obj[BLOCKS], bad, inference, registered)
         elif not template:
             _verify_calls(part, served, bad, report)
         elif BLOCKS in obj:
