@@ -49,9 +49,18 @@ def test_work_outside_the_designs_products_is_refused(census):
         P.units(census, S)
 
 
-def test_a_family_without_a_sheet_clock_is_refused():
-    with pytest.raises(ValueError, match="FMAX_MHZ"):
-        P.sheet("sm_90")
+def test_every_headline_familys_sheet_reads_its_cards_sm_clock_and_names_no_card_in_code():
+    """Each family `headline.toml` names gets its sheet with f_max its own card's `clock.sm`, read through
+    `verity.device.load_card`, and the default sheet is the machine model's own family's."""
+    import tomllib
+
+    from verity.device import load_card, number
+    from verity_machine_model.model import CARD_FILES, data_device, device
+
+    assert S.family == data_device()
+    for family in P.headline.spec()["family"]:
+        sku = tomllib.loads((device(family) / "model.toml").read_text())["card"]
+        assert P.sheet(family).fmax_mhz == int(number(load_card(sku, directory=CARD_FILES)["clock"]["sm"]))
 
 
 def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_other_work_is_refused():
