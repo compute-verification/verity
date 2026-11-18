@@ -7,8 +7,8 @@ The window is a ``stand-in`` (core's ``registration.KINDS``), not ``served``: se
 scheme the record was committed in (``commitment``: the store's, whose run root and folded step roots `cpu_replay.of_record` holds
 to the run root of record; ``rows-sha512`` by default, ``vllm-v1`` an older record's), and these rows are committed afterwards from
 the bundle in trees of their own (`ml.windows.rows`: a ``frame-v3-sha512`` tree per port, fresh salts), so their roots are a fresh
-commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root, the bundle's manifest
-digest and this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
+commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root and
+this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
 hash.  A window is ``served`` when its roots are serving's own, made before sampling (the in-Commit hook's, `serving_rows.readers`,
 which a deferred Commit with ``--serving-rows`` runs at its C2 site before its bundle is sealed, `c2_replay.serving_rows`); a
 window from the bundle becomes ``served`` only once a circuit opens the record's own leaves (rows-sha512's ``hm96-sha512/row/v2``
@@ -41,10 +41,10 @@ def link(commitment: str) -> str:
             f"and committed these rows from it; no circuit opens the {commitment} leaves")
 
 
-def stand_in(run_root: str, bundle_manifest_sha256: str, commitment: str) -> dict[str, Any]:
-    """The window's link to serving's commitment: ``of`` the record's ``commitment`` (`of_record`'s) and run root, the bundle's
-    manifest digest and the command that turned the bundle into rows, and ``link``."""
-    return {"of": {"commitment": commitment, "run_root": run_root, "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS},
+def stand_in(run_root: str, commitment: str) -> dict[str, Any]:
+    """The window's link to serving's commitment: ``of`` the record's ``commitment`` (`of_record`'s) and run root and the command
+    that turned the bundle into rows, and ``link``."""
+    return {"of": {"commitment": commitment, "run_root": run_root, "rows": ROWS},
             "link": link(commitment)}
 
 
@@ -99,16 +99,15 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
 SERVED_ROOT = DIGEST_BYTES["sha512"]
 
 
-def source(window: dict[str, Any], run_root: str, bundle_manifest_sha256: str, commitment: str,
+def source(window: dict[str, Any], run_root: str, commitment: str,
            weights_root: str | None = None) -> dict[str, bool]:
     """A registration's ``window`` held to the verifier's record, its run root ``run_root`` (hex) and ``commitment`` (`of_record`'s),
     each check by name; the one-stage audit's (A5's) source check.  Either kind names the record's commitment as the scheme its values
-    were read under.  A ``stand-in``'s run, ``of`` and ``link`` are `stand_in`'s over the run root, the digest of the bundle's
-    manifest and the commitment.  A ``served`` window (the in-Commit hook's, `serving_rows.readers`: serving's own commitment, made
+    were read under.  A ``stand-in``'s run, ``of`` and ``link`` are `stand_in`'s over the run root and the commitment.  A ``served`` window (the in-Commit hook's, `serving_rows.readers`: serving's own commitment, made
     before sampling) has the run root as its run, which is a SHA-512 root (``sha512``: a ``vllm-v1`` root's is refused), and carries
     no stand-in link; given the record's committed ``weights_root`` (hex), the weights its rows read were registered under SHA-512
     too (``weights_sha512``: a vllm-v1 registration's 32-byte root is refused)."""
-    want = stand_in(run_root, bundle_manifest_sha256, commitment)
+    want = stand_in(run_root, commitment)
     named = {"run": window.get("run") == run_root, "commitment": window.get("commitment") == commitment}
     if window.get("kind") == "served":
         return {"kind": True, **named, "sha512": len(run_root) == 2 * SERVED_ROOT,
@@ -151,7 +150,7 @@ def from_bundle(bundle: str | os.PathLike, row_dir: str, partition_file: str, ou
                             manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                             row=(r.ctx.get("args") or {}).get("label"), arrivals=r.arrivals, program_dirs=r.program_dirs,
                             digests=r.digests, committer=committer, workers=workers,
-                            stand_in=stand_in(bytes(r.run.run_root).hex(), r.bundle["manifest_sha256"], r.commitment), tables=tables)
+                            stand_in=stand_in(bytes(r.run.run_root).hex(), r.commitment), tables=tables)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

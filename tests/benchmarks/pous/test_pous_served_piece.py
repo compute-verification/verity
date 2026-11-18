@@ -37,6 +37,7 @@ from verity.protocols.resource_accounting.memory.pous.attester import challenger
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
+from verity.protocols.resource_accounting.memory.pous.prover import served as pous_served
 from verity.protocols.resource_accounting.memory.pous.verifier import period
 from verity.protocols.resource_accounting.memory.pous.verifier import setup as pous_setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import POINT, P2Params
@@ -79,7 +80,6 @@ SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdic
 fakes = _load("pous_fakes", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
-pous = SP.pous
 
 
 def _tensors(plain: bool = False) -> dict[str, torch.Tensor]:
@@ -270,7 +270,7 @@ def _gone(*args, **kw):
 
 def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, between=lambda: None, **kw):
     """`_run` in the two parts `served_piece.sh` runs: `sessions`, which leaves no answer, then ``between``, then
-    `answers` with the challenger's sides and the adapter's setup out of reach."""
+    `answers` with the challenger's sides and PoUS's setup out of reach."""
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CR, "session", auditor.session)
@@ -287,7 +287,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     assert early is None
     between()
     with monkeypatch.context() as m:
-        for mod, name in ((CS, "salt"), (CR, "session"), (SP.PO, "install"), (SP.HB, "held")):
+        for mod, name in ((CS, "salt"), (CR, "session"), (SP.messages, "Exchange"), (SP.HB, "held")):
             m.setattr(mod, name, _gone)
         return SP.answers(s.serve, 3, s.out, trusted_sha512=trusted, private=s.private, schemes=ts.SCHEMES,
                           protocol=TEST_PROTOCOL, **kw)
@@ -324,10 +324,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     """The served weights held as C*, the session answered from it, the verifier's tie and check: an accept, which the
     composed run's row and the block record read as PoUS's certificate (0 bits at the small point, which no certificate
     covers); the weights covered are the linears, the rest of the checkpoint and the serving state named outside."""
-    types = pous.linear_types
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "accept", answer["reason"]
-    assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
+    assert json.loads((served.out / "answer.json").read_text()) == answer
     assert json.loads((served.out / "pous.json").read_text())["key_pin"] == "run"
     assert not mc.holds(answer["profile"]["placement"])
     row = SV.piece_row("space", served.out.parent)
@@ -552,6 +551,43 @@ def test_the_sessions_are_kept_and_then_answered_with_no_card(served, tmp_path, 
         SP.answers(s.serve, 3, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
 
 
+class _Lazy(futures.Executor):
+    """An executor that runs a task only when its result is first asked for, logging each submit and each run."""
+
+    def __init__(self):
+        self.log: list[tuple[str, str]] = []
+
+    def submit(self, fn, /, *args, **kw):
+        self.log.append(("submit", fn.__name__))
+        log, done = self.log, []
+
+        class Later:
+            def result(self):
+                if not done:
+                    log.append(("run", fn.__name__))
+                    done.append(fn(*args, **kw))
+                return done[0]
+        return Later()
+
+
+def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_path, monkeypatch):
+    """`answers` hands PoUB-P2's answer and PoUS's by the Python and by the Lean to its executor before it waits for
+    any of them, so none waits for another's end. The bandwidth session held and `held_bandwidth.decide` are
+    stand-ins."""
+    s, pool = served, _Lazy()
+
+    def held_bandwidth():
+        held = json.loads((s.private / SP.HELD).read_text())
+        (s.private / SP.HELD).write_text(json.dumps(held | {"bandwidth": {"session_s": 0.0}}))
+    monkeypatch.setattr(SP.HB, "decide", lambda *a, **kw: {"verdict": "accept"})
+    monkeypatch.setattr(SP.HB, "line", lambda bw: "BANDWIDTH stand-in")
+    answer = _parts(s, tmp_path, monkeypatch, between=held_bandwidth, pool=pool)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert pool.log[:3] == [("submit", "bandwidth_answer"), ("submit", "lean_answer"), ("submit", "python_answer")]
+    assert sorted(pool.log[3:]) == [("run", "bandwidth_answer"), ("run", "lean_answer"), ("run", "python_answer")]
+    assert json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
+
+
 def test_the_pin_is_the_answers_own_never_one_the_sessions_kept(served, tmp_path, monkeypatch):
     """The trusted key is the one `answers` is given: under another pin than the session's key the kept session is
     rejected, and the record says no key was trusted."""
@@ -590,12 +626,12 @@ def test_kept_sessions_under_another_id_than_the_windows_are_not_answered(served
 def test_a_store_missing_blocks_is_rejected_with_its_reason(served, tmp_path, monkeypatch):
     """A prover that no longer holds most of C* answers the challenged blocks it dropped with zeros: the run's check
     refuses the session, and the answer is a reject with its reason, still under a hiding commitment."""
-    held = pous.PousOption.answer
+    held = pous_served.Served.answer
     dropped = set(range(8, 48))
 
     def lost(self, i):
         return bytes(self.store.params.block_bytes) if i in dropped else held(self, i)
-    monkeypatch.setattr(pous.PousOption, "answer", lost)
+    monkeypatch.setattr(pous_served.Served, "answer", lost)
     answer, calls = _run(served, tmp_path, monkeypatch)
     assert answer["verdict"] == "reject" and answer["reason"] and len(calls) == 1
     assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64
@@ -951,10 +987,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
-    assert _stamps(s.out) == [
-        "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
-        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's answer by the Lean done",
-        "PoUS's case written"]
+    stamps = _stamps(s.out)
+    answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Python", "PoUS's answer by the Lean")
+               for e in ("start", "done")]
+    assert stamps[:5] == ["the weights loaded", "setup done", "PoUS's session done", "PoUB's session start",
+                          "PoUB's session done"]
+    assert sorted(stamps[5:-1]) == sorted(answers) and stamps[-1] == "PoUS's case written"
+    assert all(stamps.index(start) < stamps.index(done) for start, done in zip(answers[::2], answers[1::2]))
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()

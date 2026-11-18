@@ -213,9 +213,56 @@ def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_re
                                              Fraction(1, 4), "quantity.eps")
     assert set(R.BY_NAME) <= {"integrity", "pouw"}
     assert R._premises(R._scheme("bandwidth")) == ["ResourceAccounting.Remote.Run.Counted"]
-    assert R._premises(R._scheme("pous")) == [] and "owner's to name" in R._premises(R._scheme("certifier"))
+    assert R._premises(R._scheme("pous")) == []
+    assert R._premises(R._scheme("certifier")) == ["NetTiming.Attester.Phase.ChargeHolds",
+                                                   "NetTiming.Attester.RowsCommitted"]
     with pytest.raises(ValueError, match="not a subprotocol"):
         R._quantity("attester", row)
+
+
+def test_each_row_its_scheme_bounds_not_carries_why_beside_it_and_keeps_its_verdict(monkeypatch) -> None:
+    """`S.bound` refuses all four declared rows today (PoUS's help and the bandwidth audit's six Γ charges nothing
+    bounds, the wipe's own term unsaid, the network attester's start and tied entries nothing bounds): each carries that sentence and the
+    terms it lacks, and its verdict is still its answer's. Naming a row in `UNDECIDED_WHEN_UNBOUNDED` makes it
+    undecided with the sentence as its reason, and only that row."""
+    report, wipe = _accepting_report()
+    built = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    legs = built["legs"]
+    lacking = {"pous": "help", "bandwidth": "chip", "wipe": "Verity.Scheme.δscheme", "certifier": "start"}
+    for name, term in lacking.items():
+        refused = R.S.unbounded(R._scheme(name))
+        assert legs[name]["unbounded"] == {"why": str(refused), "terms": list(refused.terms)} and term in refused.terms
+        assert legs[name]["answer"]["verdict"] == "accept"
+    assert not any("unbounded" in legs[k] for k in R.BY_NAME)
+    assert built["composed"]["legs"] == {k: "accept" for k in R.SUBPROTOCOLS}
+    jsonschema.Draft202012Validator(SCHEMA).validate(built)
+    assert R.check(built) == {} and R.UNDECIDED_WHEN_UNBOUNDED == ()
+    monkeypatch.setattr(R, "UNDECIDED_WHEN_UNBOUNDED", ("pous",))
+    again = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    assert again["legs"]["pous"]["answer"]["verdict"] == "undecided"
+    assert again["legs"]["pous"]["answer"]["reason"] == legs["pous"]["unbounded"]["why"]
+    assert again["composed"]["legs"] == {k: "undecided" if k == "pous" else "accept" for k in R.SUBPROTOCOLS}
+
+
+def test_a_piece_that_refused_to_run_shows_undecided_by_its_sentence_never_accepted_nor_dropped() -> None:
+    """A refusal to run (the wipe on a busy card) is in the record by name: undecided with its sentence, its value
+    null and held at no δ, neither accepted nor missing, and a record that says otherwise is refused."""
+    report, _ = _accepting_report()
+    busy = {"verdict": R.REFUSED, "reason": "card 0 is busy: another process holds it", "owner": "memory-accounting"}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE,
+                        extra={"wipe": {"row": busy, "server": report["node"], "runs": ["r"]}})
+    lg = rec["legs"]["wipe"]
+    assert lg["answer"]["verdict"] == "undecided" and lg["refused"] == busy["reason"]
+    assert lg["answer"]["reason"] == f"refused to run: {busy['reason']}" and lg["quantity"]["value"] is None
+    assert not any(at["holds"] for at in lg["at"].values())
+    assert rec["composed"]["legs"]["wipe"] == "undecided" and "wipe" not in rec["composed"]["missing"]
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    forged = copy.deepcopy(rec)
+    forged["legs"]["wipe"]["answer"]["verdict"] = "accept"
+    assert "subprotocol:wipe" in R.check(forged)
+    with pytest.raises(ValueError, match="says why it refused"):
+        R.subprotocol("wipe", {"verdict": R.REFUSED}, server="n0", runs=["r"])
 
 
 def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:

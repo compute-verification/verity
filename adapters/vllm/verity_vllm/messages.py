@@ -15,10 +15,11 @@ message's writers and readers.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from verity import hooks as H
@@ -26,10 +27,17 @@ from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
+from verity_vllm import settings
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "option", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "attach_listed", "body", "build", "close", "current", "declaring", "line", "lines", "listed_refusals",
+           "named", "option", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
+
+
+def _pins(entries: Any) -> tuple[Mapping[str, str], ...]:
+    """The application's ``[[pin]]`` entries, read-only (`Exchange.attach`'s ``ctx["pins"]``)."""
+    return tuple(MappingProxyType(dict(p)) for p in entries)
 
 _KEYS = itertools.count()
 
@@ -54,6 +62,8 @@ class Exchange:
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
         self.key = f"build-{next(_KEYS)}"
+        #: the model's `H.RegisteredValues` has been emitted: its weights are loaded, and `attach` refuses
+        self.registered = False
 
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
                gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
@@ -65,8 +75,28 @@ class Exchange:
         (`commit_coins.ChallengerGate.call`), or None where the launcher holds none.  ``ctx["private"]`` is the scheme's
         own directory under the launcher's ``private`` (``private/<scheme's name>``, made here), outside every run
         output, where it keeps what never leaves the node across servers; None where the launcher holds none.
+        ``ctx["pins"]`` is the application's ``[[pin]]`` entries, read-only, as the launcher's ``pins`` gives them or
+        else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
+        is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
+        ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
-        `request` refuses them."""
+        `request` refuses them.
+
+        In an engine's process (``ctx["process"]`` `hooks.ENGINE`) a launcher attaches every scheme before the
+        workload's model begins to load, so an attach that returns has run with none of the workload's bytes on the
+        device; the exchange refuses an engine's attach once the model's `hooks.RegisteredValues` has been emitted on
+        it (`RuntimeError`). That catches a late attach, not one during the load: a scheme that needs an empty device
+        checks the device itself (the wipe's idle-card check). An attach that names no engine process may come
+        after the load (`serve_openai.network_admission` attaches admission to the loaded engine's exchange)."""
+        if self.registered and launcher.get("process") == H.ENGINE:
+            raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
+                               "engine runs before the load")
+        for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
+            handed, held = launcher.get(key), settings.get(name)
+            if handed is not None and held is not None and read(handed) != read(held):
+                raise ValueError(f"{scheme.name}: the launcher's {key} differ from {name}, the {key} it was given: "
+                                 "hand one, or the same")
+            launcher[key] = None if (got := held if handed is None else handed) is None else read(got)
         own = None
         if private is not None:
             own = Path(private) / scheme.name
@@ -106,7 +136,7 @@ class Exchange:
         return lambda: self.subscribers[hook].remove(entry) if entry in self.subscribers[hook] else None
 
     def request(self, name: str, request: H.Request) -> None:
-        """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
+        """File scheme ``name``'s request; kernels and gates filed earlier run outside later ones."""
         kind = type(request).__name__
         if isinstance(request, H.RefuseInput):
             self.requests.append((name, request))
@@ -151,6 +181,8 @@ class Exchange:
     def emit(self, event: Any) -> None:
         if isinstance(event, H.StepBegan):
             self.step = event.step
+        elif isinstance(event, H.RegisteredValues):
+            self.registered = True
         for _, fn in tuple(self.subscribers[event.hook]):
             fn(event)
 
@@ -158,7 +190,7 @@ class Exchange:
         """A due block's output: emitted to ``blocks``' subscribers, then computed by the filed kernels, the workload's
         ``original`` innermost; inputs a kernel hands inward replace the block's for every kernel inside it."""
         self.emit(due)
-        kernels = [r.kernel for _, r in self._filed(H.ComputeBlockWith)]
+        kernels = [r.kernel for _, r in self._filed(H.ComputeBlockWith)][::-1]
 
         def level(i: int, inputs: Mapping[str, H.Handle] | None) -> H.Handle:
             if i < 0:
@@ -234,6 +266,28 @@ def option(entry: str | None) -> schemes.Scheme | None:
 def declaring(port: str) -> schemes.Scheme:
     """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
     return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
+
+
+def named(entry: str) -> schemes.Scheme | None:
+    """The declared scheme ``entry`` names, by its option (`option`) or by its name; None when it names none."""
+    found = option(entry)
+    return found if found is not None else declarations.load().get(entry)
+
+
+def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
+    """Every reason ``listed``, a configuration's schemes in its order, can't be attached together in one process,
+    checked before any of them attaches; empty: it can."""
+    names = [s.name for s in listed]
+    return [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
+
+
+def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
+    """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
+    (`Exchange.attach`) in list order, once `listed_refusals` refuses none, so the scheme listed earlier is the outer
+    (`Exchange.request`); what each attach returned."""
+    if bad := listed_refusals([s for s, _ in listed]):
+        raise Refused("listed schemes", "; ".join(bad))
+    return [exchange.attach(s, given, **ctx) for s, given in listed]
 
 
 _CURRENT: Exchange | None = None

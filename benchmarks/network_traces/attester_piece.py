@@ -188,7 +188,7 @@ ROWS = "verity/network-rows/v1"
 UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the front's refusal without ``--peer``
 NO_PEER = ("--peer is unset: the served node's name in the gate's peers file, which `verity run` passes from the "
-           "binding network-certifier.certifier.peer")
+           "binding network-attester.network-attester.peer")
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
@@ -792,9 +792,8 @@ def lean_exe(name: str, given: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    from verity.protocols.resource_accounting.network.prover import scan_period as SP
     try:
-        return SP.lean_check(exe, case, d, run=captured)
+        return schemes.get("network-attester").check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 

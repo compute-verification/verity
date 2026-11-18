@@ -62,13 +62,14 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, fresh_salts, weight_binding
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as REG
 from verity.commitments import randomness as RND
 from verity.protocols.resource_accounting.network.prover import scan_state_rows as SR
 from verity.circuits.codec import canonical_json, program_digest
@@ -274,7 +275,7 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
     real = {(v, i) for v in pearl for i in range(PEARL.rows(CLASS, int(v.split("/")[1])))}
     assert sorted(reads.values()) == sorted(real)
     VR = _verify_run()
-    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": REG.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
+    assert VR.tie(toy.W, _passes(toy.manifests)) == {"record": DD.digest(toy.W), "tables": (2 * CLASS.outputs + 1) * CALLS}
     assert [e["value"] for e in toy.W["registered"]][-CALLS:] == [PEARL.b(w) for w in range(CALLS)]
     assert {v: x.entry() for v, x in _reuse(toy, toy.W).items()} == {e["value"]: e for e in _calls(toy.W)}
 
@@ -290,7 +291,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
     assert [x["value"] for x, y in zip(toy.W["registered"], flipped.W["registered"], strict=True) if x != y] == [FLIP[0]]
     with pytest.raises(ValueError, match=f"W's {FLIP[0]}: its root not the call's"):
         VR.tie(flipped.W, _passes(toy.manifests))
-    assert VR.tie(flipped.W, _passes(flipped.manifests))["record"] == REG.digest(flipped.W)
+    assert VR.tie(flipped.W, _passes(flipped.manifests))["record"] == DD.digest(flipped.W)
     with pytest.raises(ValueError, match="W is not the window record of these passes"):
         _reuse(toy, flipped.W)
     with pytest.raises(ValueError, match=f"^{FLIP[0]}: the rows the audited circuit's proof blocks make of it are not"):
@@ -310,11 +311,11 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     ``registration.json``), and the verifier's own window and circuit record from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
     win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.W)}, forms=WRS.FORMS)
-    win.supply(G)
+    win.supply()
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0}}
-    win.write(committed, out, prov, registrar=REG, previous=REG.digest(toy.W))
+    win.write(committed, out, prov, registrar=REG, previous=DD.digest(toy.W))
     mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
@@ -324,7 +325,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
 def _by_hand(written, W: dict) -> dict:
     """The window's record R chained after ``W`` instead and registering ``W``'s entries, written by hand."""
     theirs = {e["value"]: e for e in W["registered"]}
-    return {**written.R, "previous": REG.digest(W), "registered": [theirs.get(e["value"], e) for e in written.R["registered"]]}
+    return {**written.R, "previous": DD.digest(W), "registered": [theirs.get(e["value"], e) for e in written.R["registered"]]}
 
 
 def _check(written, W: dict, R: dict):
@@ -344,7 +345,7 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
-    assert R["format"] == DM.REGISTRATION and R["previous"] == REG.digest(W)
+    assert R["format"] == DM.REGISTRATION and R["previous"] == DD.digest(W)
     assert sorted(R["registered"], key=lambda e: e["value"]) == sorted([*_calls(W), *written.own.values()],
                                                                        key=lambda e: e["value"])
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
@@ -366,7 +367,7 @@ def test_the_records_accept_a_flipped_row_on_its_own_w_so_only_its_readers_proof
     flipped = _flipped(toy)
     R2 = _by_hand(written, flipped.W)
     assert canonical_json(R2) != canonical_json(written.R)
-    assert _verify_run().tie(flipped.W, _passes(flipped.manifests))["record"] == REG.digest(flipped.W)
+    assert _verify_run().tie(flipped.W, _passes(flipped.manifests))["record"] == DD.digest(flipped.W)
     assert list(_check(written, flipped.W, R2).codes) == []
     assert list(_check(written, toy.W, R2).codes) != []
 
@@ -432,9 +433,9 @@ def test_one_stage_s_lean_accepts_r_on_w_and_refuses_it_on_a_w_of_another_root(t
     tied to W', as R1-R7 do."""
     SC, flipped = lean.one.SC, _flipped(toy)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, toy.W, written.R), tmp_path)
-    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(written.R)), got
+    assert (got["verdict"], got["commitment"]) == ("accept", DD.digest(written.R)), got
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, flipped.W, written.R), tmp_path)
     assert got["verdict"] == "reject" and got["reason"].startswith("registration: "), got
     R2 = _by_hand(written, flipped.W)
     got, _ = SC.lean_answer(lean.v1, _v1_case(lean.one, written, flipped.W, R2), tmp_path)
-    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(R2)), got
+    assert (got["verdict"], got["commitment"]) == ("accept", DD.digest(R2)), got

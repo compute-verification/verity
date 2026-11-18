@@ -109,7 +109,7 @@ if [ "$STAGE" = setup ]; then
       uv pip install -q --python "$KEEP/cuda/bin/python" "${CU_PKGS[@]}" > "$J/result/cuda.log" 2>&1 ||
       fail "NVIDIA's nvcc packages can't be installed ($(tail -1 "$J/result/cuda.log"))"
   fi
-  CUDA_HOME=$KEEP/cuda/lib/python3.12/site-packages/nvidia/cu13
+  CUDA_HOME=$("$KEEP/cuda/bin/python" -c 'import nvidia.cu13 as m; print(m.__path__[0])') || fail "no nvidia.cu13 in $KEEP/cuda"
   [ -x "$CUDA_HOME/bin/nvcc" ] || fail "the nvcc package put no bin/nvcc under $CUDA_HOME"
   [ -e "$CUDA_HOME/lib64" ] || ln -s lib "$CUDA_HOME/lib64"
   if [ -n "${CXX_FROM_CONDA:-}" ] || ! command -v g++ > /dev/null; then
@@ -165,7 +165,7 @@ fi
 # STAGE=session
 for s in tree-env nvcc lean vllm checkpoint; do have "$s" || fail "setup hasn't kept $s at $COMMIT: run STAGE=setup again" 3; done
 got "what setup kept at $COMMIT"
-CUDA_HOME=$KEEP/cuda/lib/python3.12/site-packages/nvidia/cu13
+CUDA_HOME=$("$KEEP/cuda/bin/python" -c 'import nvidia.cu13 as m; print(m.__path__[0])') || fail "no nvidia.cu13 in $KEEP/cuda" 3
 # shellcheck source=/dev/null
 [ -f "$KEEP/cc.sh" ] && . "$KEEP/cc.sh"
 mkdir -p "$KEEP/work"

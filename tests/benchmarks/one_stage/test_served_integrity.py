@@ -30,10 +30,11 @@ from pathlib import Path
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -78,7 +79,7 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     a = I.answer(out, REG)
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
-    assert a["commitment"] == R.digest(REG)
+    assert a["commitment"] == DD.digest(REG)
     assert a["public"] == {"bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "complete": False,
                            "drawn": [5, 700], "per_template": None, "proved": [5, 700]}
     p = CC.integrity(a["profile"])
@@ -113,7 +114,7 @@ def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     a = I.answer(write(tmp_path / "a", summary, rec), REG)
     assert check_answer(a) == a
     assert a["verdict"] == "reject" and a["reason"].startswith(why)
-    assert a["commitment"] == R.digest(REG)
+    assert a["commitment"] == DD.digest(REG)
 
 
 @pytest.mark.parametrize("coins", [
@@ -140,7 +141,7 @@ def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, 
     assert check_answer(a) == a
     assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
     assert a["reason"].startswith("the audit record names no challenger key and session a check verified its coins under")
-    assert a["commitment"] == R.digest(REG)
+    assert a["commitment"] == DD.digest(REG)
 
 
 #: why a5 writes no case for the compiled check on a sample of two members, and on plain sessions (`a5.v2_proof`)
@@ -168,7 +169,7 @@ def test_an_accepted_audit_that_does_not_say_whether_it_wrote_the_case_is_undeci
     assert check_answer(a) == a
     assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
     assert a["reason"].startswith("the audit record doesn't say whether its audit wrote the case for the compiled check")
-    assert a["commitment"] == R.digest(REG)
+    assert a["commitment"] == DD.digest(REG)
 
 
 def case(out: Path, params) -> Path:
@@ -196,7 +197,7 @@ def test_an_accept_beside_a_case_naming_another_challenger_key_is_undecided(tmp_
     assert a["reason"] == (f"the case for the compiled check (window/case-v2.json) names a challenger key with SHA-512 "
                            f"{other}, and the audit's coins verified under the key with SHA-512 {WHOSE['key_sha512']} "
                            "(coins.verified)")
-    assert a["commitment"] == R.digest(REG)
+    assert a["commitment"] == DD.digest(REG)
 
 
 @pytest.mark.parametrize("params,why", [

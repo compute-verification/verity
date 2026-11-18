@@ -117,6 +117,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Cha
 from verity.protocols.proofs.spot.verifier.challenger import challenger as LC
 from verity.protocols.proofs.spot.verifier.challenger import remote as R
 from verity.protocols.proofs.spot.verifier.challenger.challenger import CoinError, LiveRecord
+from verity.commitments import registered_value as RV
 
 import verity_vllm.protocols.pouw.h1_hooks as PHK
 import verity_vllm.protocols.pouw.h1_ranks as PHR
@@ -150,6 +151,7 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
+from verity.commitments import docket_digest as DD
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -336,9 +338,8 @@ def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
     name."""
     def refused(entry, settings):
         return PO.refusals(PO.Context(stage="serve", enabled=(entry,), settings=settings))
-    other = {"pouw": {"coins": Challenger(0, CH.entropy(0))}}
     period = {"period": "p1", "lane": "vllm"}
-    for entry, settings in ((_entry(), _settings()), ("pouw:ncp-v1", other)):
+    for entry, settings in ((_entry(), _settings()),):
         assert refused(entry, settings) == ()
         no_window = (f"{entry}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
@@ -1729,14 +1730,13 @@ def test_the_hosts_table_roots_take_n_rows_of_8_bit_codes_and_n_32_bit_words():
 
 
 def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(monkeypatch):
-    """The host's twins of the device's hashing are built with the system's C++ compiler, the first of g++, c++ and
-    clang++ on the path. With none there, each library is refused by what is missing."""
-    asked: list[str] = []
-    monkeypatch.setattr(RGD.shutil, "which", lambda name: asked.append(name))
+    """The host's twins of the device's hashing are built with the serving device's C++ compiler. With none, each library
+    is refused by what is missing."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+    monkeypatch.setattr(pouw_device, "compiler", lambda: None)
     for lib in (RGD.host_lib, RGD.zy_host_lib):
-        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
+        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler configured or on the path$"):
             lib.__wrapped__()
-    assert asked == ["g++", "c++", "clang++"] * 2
 
 
 def test_a_compiled_call_shape_is_whole_tiles_and_its_units_in_one_seed_group(window, monkeypatch):
@@ -1877,7 +1877,7 @@ def test_a_window_that_holds_no_tree_of_a_rounds_table_has_none_a_named_record_r
 
     def refusal():
         window = CT.registration(run, previous)
-        return CT.reused(run, window, {**record, "previous": CT.REG.digest(window)})
+        return CT.reused(run, window, {**record, "previous": DD.digest(window)})
     ids = served.ids.pop(1)
     assert refusal() == (f"the window registers no round 1's input-ids table, so no Commit record reuses it as "
                          f"{CR.commit_ids(1)}")
@@ -1900,7 +1900,7 @@ def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_arr
     assert tensor.dtype == torch.uint16 and tuple(tensor.shape) == (3, 4)
     of_array = NR.commit(circuit, "v", words, KEY, 7, keep_rows=True)
     of_tensor = NR.commit(circuit, "v", tensor, KEY, 7, keep_rows=True)
-    assert isinstance(of_array, DN.G.Registered) and isinstance(of_tensor, DN.G.Registered)
+    assert isinstance(of_array, RV.Registered) and isinstance(of_tensor, RV.Registered)
     assert of_tensor.root == of_array.root and of_tensor.leaves == 3
     assert [bytes(row) for row in of_tensor.rows] == [bytes(row) for row in of_array.rows]
     for other in (tensor.view(torch.int16), tensor.view(torch.uint8), tensor[0]):
@@ -1923,14 +1923,14 @@ def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and
     no_y: np.ndarray = np.zeros((0, 32), np.int16)
     words = SV.record_words(no_z, no_y, 32, PH.TILE)
     same = NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
+    assert isinstance(same, RV.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
     assert value.root != NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy")).root
     assert not np.count_nonzero(words)
     no_codes: np.ndarray = np.zeros((0, K), np.int8)
     zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
     table = DN.a_value(win, tmp_path, KEY, 0)
     same = NR.commit(circuit, f"h1/a/{K}@0", zero, KEY, SV.nonce(0, "a"), keep_rows=True, window=root)
-    assert isinstance(same, DN.G.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
+    assert isinstance(same, RV.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
     assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
     assert list(tmp_path.iterdir()) == []
 
@@ -1939,7 +1939,7 @@ def test_a_statements_port_that_reads_no_row_at_a_sampled_proof_block_is_refused
     """`call_rows` takes each port's row at each sampled proof block from credit's file. A port whose reads begin
     past a sampled proof block reads no row there: the call's rows are refused by the port and the call, before a
     value is read."""
-    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    reg = {"ports": {CR.PUB_PORT: {RV.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
     with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
         DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
 

@@ -35,10 +35,12 @@ _MEMORY = "verity.protocols.resource_accounting.memory"
 DECLARATIONS: Mapping[str, str] = MappingProxyType({
     "bandwidth": f"{_MEMORY}.poub.scheme",
     "dither": "verity.protocols.experimental.dither.scheme",
+    "inference-only": "verity.protocols.workload_classification.training_detection.inference_only.scheme",
     "network-attester": "verity.protocols.resource_accounting.network.scheme",
     "pearl-plus": f"{_COMPUTE}.pouw.scheme",
     "poub": f"{_MEMORY}.poub.scheme",
     "pous": f"{_MEMORY}.pous.scheme",
+    "sampled-proofs": "verity.protocols.proofs.spot.scheme",
     "wipe": f"{_MEMORY}.pous.scheme",
 })
 

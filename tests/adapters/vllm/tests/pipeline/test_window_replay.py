@@ -12,6 +12,7 @@ import hashlib
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import reference as REF
@@ -53,7 +54,7 @@ def _and_record(circuit: IF.Circuit) -> tuple[IF.Circuit, dict]:
 def _window(free: bool = False) -> IF.Circuit:
     """The window of the module docstring; ``free``: without the short chunk's wires, so a row of `C3`'s ports is free
     beside its wired ones."""
-    b = _Builder(Grain(), provable=False)
+    b = _Builder(Grain())
     b.label = (0, 0)
     x, _ = b.unit(X, 6)
     b.unit(X, 4)
@@ -85,7 +86,7 @@ def _window(free: bool = False) -> IF.Circuit:
 
 def _whole(external: tuple[str, ...] | None = None) -> IF.Circuit:
     """One unit of `C2`, and one of `C1` reading its token as ``idx``: a one-instance writer read whole."""
-    b = _Builder(Grain(), provable=False)
+    b = _Builder(Grain())
     b.label = (0, 0)
     c2, _ = b.unit(C2, 1)
     c1, _ = b.unit(C1, 1)
@@ -268,7 +269,7 @@ def test_a_window_of_one_wire_read_whole_is_in_the_form_round_two_derives():
     defn = WR.replay(circuit, _record(circuit))
     assert [(n.form, n.fn.id) for n in defn.body.nodes] == [("call", C2.id), ("call", C1.id)]
     c1, c2 = descriptor_id(C1), descriptor_id(C2)
-    assert SS.replay_wires(P.population_program(defn, 3), descriptor_id(defn)) == (SS.Wire(c1, "idx", c2, "o0"),)
+    assert SS.replay_wires(PN.population_program(defn, 3), descriptor_id(defn)) == (SS.Wire(c1, "idx", c2, "o0"),)
     assert read_back(defn)[0] == _cells(circuit) == {(c1, "idx"): {(0, 0): (c2, "o0", 0)}}
 
 

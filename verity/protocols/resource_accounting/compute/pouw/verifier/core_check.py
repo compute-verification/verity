@@ -81,13 +81,13 @@ import sys
 from fractions import Fraction
 from typing import Any, NamedTuple
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.compute.pouw.verifier import coins as Co
 from verity.protocols.resource_accounting.compute.pouw.verifier import salt as PS
 from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as V
 from verity.protocols.resource_accounting.compute.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import U64, fold_roots, tagged
@@ -346,7 +346,7 @@ def commitment(b: bytes) -> dict:
 
 def digest(c: dict) -> bytes:
     """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
-    return R.record_digest(c["format"], c["bytes"])
+    return DD.record_digest(c["format"], c["bytes"])
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
@@ -786,13 +786,13 @@ def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
     rows = list(rows)
     while rows and rows[-1] is None:
         rows.pop()
-    return {G.READS_FROM: u0, "reads": rows}
+    return {RV.READS_FROM: u0, "reads": rows}
 
 
 def port_reads(entry: dict[str, Any]) -> list[int | None]:
     """The row every unit from unit 0 reads at a ``--registered`` port, of either format (Flock's
     `Registered.Port.reads`): none below its ``reads_from`` (absent: 0), then its ``reads``."""
-    return [None] * entry.get(G.READS_FROM, 0) + list(entry["reads"])
+    return [None] * entry.get(RV.READS_FROM, 0) + list(entry["reads"])
 
 
 def public_bc(context: str, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> bytes:

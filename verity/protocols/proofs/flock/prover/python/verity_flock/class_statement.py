@@ -212,7 +212,7 @@ class Wiring:
     prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
     own.
 
-    ``tree`` (`registered.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
+    ``tree`` (`registered_value.Registered` of the template's output field, leaf v the template's v-th unit in root order): each
     instance's ``out`` row is its leaf's row under its leaf's salt, and each link row the writer's leaf, opened by path in
     the header's ``registered`` (a tree port of the verifier's `--registered`), so a writer may lie in another statement.
     Since a verifier given registered reads reads every port by path, each other input port is registered too, a value of
@@ -471,7 +471,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity_vllm.definitions.encoding import encode_specialization
+    from verity.circuits.codec import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}

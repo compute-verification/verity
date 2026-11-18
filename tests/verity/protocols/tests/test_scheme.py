@@ -220,6 +220,7 @@ def test_unbounded_charge_refuses_a_bound() -> None:
     s = _toy(charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("padding", "Network.PaddingBound", bounded=False)))
     with pytest.raises(ValueError, match="nothing bounds yet: padding"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "padding": 0})
+    assert S.unbounded(s).terms == ("padding",) and S.unbounded(_toy()) is None
 
 
 def test_ports() -> None:
@@ -321,7 +322,8 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
 
     root = Path(__file__).resolve().parents[4]
     declaring = {str(p.relative_to(root).with_suffix("")).replace("/", ".")
-                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
+                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental",
+                           "verity/protocols/proofs/spot", "verity/protocols/workload_classification")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
     assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"
@@ -372,3 +374,15 @@ def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkey
     monkeypatch.setattr(S, "SCHEMES", {})
     S.register(_toy(processes={"toy-beside": start}))
     assert S.PROCESSES == {"toy-beside": start}
+
+
+def test_a_pieces_party_is_a_declared_developer_party_and_its_development_one_of_its_bindings() -> None:
+    from verity.protocol import Role
+    parties = (Role("prover", "developer"), Role("challenger", "auditor"), Role("verifier", "auditor"))
+    ok = _toy(parties=parties, pieces={"prover": S.Launch(optional=("address",), development="address")})
+    assert ok.pieces["prover"].development == "address"
+    for pieces, why in (({"challenger": S.Launch()}, "declared developer-side parties' \\['prover'\\], not 'challenger'"),
+                        ({"prover": S.Launch(development="host")}, "development binding 'host' is one of its binds"),
+                        ({"prover": S.Launch(reaches="prover")}, "reaches a declared auditor party, not 'prover'")):
+        with pytest.raises(ValueError, match=why):
+            _toy(parties=parties, pieces=pieces)

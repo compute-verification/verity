@@ -55,7 +55,6 @@ ALLOWED: dict[str, str] = {
     "adapters/torch/verity_torch/pouw/h1/registered_device.py": "@compute-accounting",
     # the step rows' processor twin is ruled (RULED's native_rows.cu); the registered weights' `tensor_key` expansion here is not
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
-    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
     "verity/protocols/proofs/flock/prover/live/src/zk_server.rs": "@proofs",
@@ -67,7 +66,6 @@ ALLOWED: dict[str, str] = {
     # both keep ChaCha20 only for compute-accounting's callers that pass a key and a nonce and no salts
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@vllm",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@vllm",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py": "@compute-accounting",
@@ -109,8 +107,8 @@ WRITES = re.compile(r"\.(?:send|write|write_bytes|write_text|dump|dumps|save|sav
 #: its writer takes its directory from one function that names that store, outside every run's output, and the file's name
 #: is on the adapter's private list (`verity_vllm.pipeline.research_outputs.PRIVATE`), with a check here that reads both.
 WRITTEN: dict[str, str] = {
-    # `keys.bin` goes into the replay bundle, `<out>/replay_bundle_p<pair>/store/`, inside the commit's output, private by the
-    # bundle directory's name alone
+    # a replay bundle's `keys.bin` goes to its private part under `replay_bundle.private_root`, outside the run's directory, but
+    # `dump_files` without `keys_to` still writes it beside the store, and the name is on no private list
     "adapters/vllm/verity_vllm/commit/store_dump.py": "@vllm",
 }
 LANES = {"@compute-accounting", "@kernels", "@lean", "@memory-accounting", "@network-accounting", "@proofs", "@vllm"}

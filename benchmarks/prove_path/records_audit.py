@@ -35,7 +35,7 @@ its window's ingress the window figure beside it, with the premise it rests on n
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
-``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
+``registered_value.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each sampled
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row, a port
@@ -54,7 +54,7 @@ reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A docket whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the docket;
-the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
+the audit holds each entry's domain to the one core's ``registered_value.domain`` makes of the program, the value, its rows and
 the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
 the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
 takes, `tied_values`) are pinned from the docket beside ``--registered``'s (`window_pins`), so Lean's registered
@@ -192,12 +192,15 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.commitments import docket_digest as DD
 from verity import device as ST  # noqa: E402
 from verity.protocols.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.resource_accounting.network.verifier import blocks as NB  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME  # noqa: E402
+from verity.protocols.compose import schemes  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments import registered_value as RV  # noqa: E402
 from verity.circuits.codec import program_digest  # noqa: E402
 from verity.commitments.periods import history as HW, interface as IF  # noqa: E402
 
@@ -210,7 +213,17 @@ REFUSED = 2
 #: the values an execution phase registers afresh under its open root, never an earlier record's: the scan's state, which
 #: the network verifier ties to its scan (stateTied); a circuit names it among its values and marks nothing else, so any
 #: other value it takes is W's
-PHASE_OWN = frozenset({NB.SCAN_STATE})
+def port_value(scheme: Any, port: str) -> str:
+    """The value ``scheme``'s port ``port`` registers: refused (ValueError) naming both unless it declares that port
+    exactly once, with a value."""
+    got = [p.value for p in scheme.ports if p.name == port]
+    if len(got) != 1 or not got[0]:
+        raise ValueError(f"the {scheme.name} declaration declares the port {port!r} with a value {len(got)} times, "
+                         "not once: records_audit reads the execution phase's own value from it")
+    return got[0]
+
+
+PHASE_OWN = frozenset({port_value(schemes.get("network-attester"), "scan-state")})
 
 
 def catalog_resolve(tid: str) -> Any:
@@ -491,7 +504,7 @@ def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
-    (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
+    (ValueError) unless it names its parameter and its domain is the one core's ``registered_value.domain`` makes of the pin's
     program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
     is their values together, each under its own program (the weights under the model's, the output a network attester
     relayed under the reading program's), a value pinned once."""
@@ -506,7 +519,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     try:
         program, values = doc["program"], doc["values"]
         for v, e in values.items():
-            want = REG.domain(program, v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS)).domain_id.hex()
+            want = RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS)).domain_id.hex()
             if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
                 raise ValueError(f"the pin of {v!r} names another value or domain than {program!r}'s, or no root")
     except (KeyError, TypeError, AttributeError) as e:
@@ -558,7 +571,7 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any], resolve: Calla
     acts = w.get("activations") or {}
     values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
     for v, e in values.items():
-        want = REG.domain(acts["program"], v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+        want = RV.domain(acts["program"], v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                           window=w.get("run")).domain_id.hex()
         if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
             raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
@@ -603,7 +616,7 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None, prefix: str 
     entries: dict[str, list[dict[str, Any]]] = {}
     for e in w.get("registered") or ():
         entries.setdefault(e.get("value") if isinstance(e, Mapping) else None, []).append(dict(e))
-    pins, outputs, d = {}, {}, R.digest(w)
+    pins, outputs, d = {}, {}, DD.digest(w)
     for v in values:
         name = v if prefix is None else CR.window_table(v, prefix)
         if len(got := entries.get(name, [])) != 1:
@@ -690,8 +703,8 @@ def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
     w = tied["log"][0]
     scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
-    return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
+    pearl = isinstance(scheme, str) and getattr(BY_NAME.get(scheme), "family", None) == "pearl-c"
+    return {"record": DD.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
 
 
 def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dict[str, Any]]:
@@ -700,7 +713,7 @@ def phase_values(rec: Mapping[str, Any], params: Iterable[str]) -> dict[str, dic
         v = e.get("value") if isinstance(e, Mapping) else None
         if v not in params or not isinstance(e.get("root"), str) or not isinstance(run, str):
             continue
-        want = REG.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+        want = RV.domain(rec.get("program", ""), v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                           window=run).domain_id.hex()
         if e.get("domain") == want:
             out[v] = dict(e)
@@ -717,7 +730,7 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     try:
         program, values = w["activations"]["program"], dict(w["activations"]["values"])
         other = [v for v, e in values.items() if e.get("value") != v or not isinstance(e.get("root"), str) or e.get("domain")
-                 != REG.domain(program, v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                 != RV.domain(program, v, e["words"], e["leaves"], e.get(RV.WIDTH_KEY, RV.WORD_BITS),
                                window=w.get("run")).domain_id.hex()]
     except (KeyError, TypeError, AttributeError, ValueError) as e:
         return _verdict({"activations": False}, {"why": f"{type(e).__name__}: {e}"})
@@ -768,9 +781,9 @@ def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound:
     import a5 as A5
 
     w, b = rec.get("window") or {}, bound or {}
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
+    ok = {"after-the-draw": receipt.get("registration") == DD.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
           "compiler": w.get("compiler") == b.get("compiler"), "advice": w.get("advice") == b.get("advice")}
-    return _verdict(ok, {"drawn_after": receipt.get("registration"), "registration": R.digest(rec),
+    return _verdict(ok, {"drawn_after": receipt.get("registration"), "registration": DD.digest(rec),
                          "received": receipt.get("received")})
 
 
@@ -841,7 +854,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], tied: str) -> dic
     if program_digest(program) != rec.get("program"):
         raise ValueError(f"the audit's Program ({program_digest(program)[:16]}…) isn't the one the registration names")
     answer = SI.answer(audit, rec)
-    if answer["commitment"] != R.digest(rec):
+    if answer["commitment"] != DD.digest(rec):
         raise ValueError("the audit's answer commits to another registration than the window's")
     return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
@@ -1110,7 +1123,7 @@ def audit(a: argparse.Namespace) -> int:
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie, a.declared = tied, day
     if tied.get("log"):
-        named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
+        named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == DD.digest(tied["log"][0])}
         (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
         print("TIE " + json.dumps(named, sort_keys=True), flush=True)
     if a.forged:

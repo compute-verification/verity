@@ -616,7 +616,7 @@ def test_the_bandwidth_audits_member_specs_are_its_record_spec_on_one_h200_and_t
     pinned = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200").preset
     assert (small.model, small.revision, small.case) == (pinned.model, pinned.revision, pinned.case)
     [protocol] = [p for p in served_table.PROTOCOLS if p.record == "pous-bandwidth-audit"]
-    assert protocol.members == (("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL))
+    assert [(m.name, m.key) for m in protocol.members] == [("llama-3.1-8b-h200", BIG), ("llama-3.2-1b-h200", SMALL)]
 
 
 def _row(protocol: str, spec: str, mean: float, member: str | None = None) -> dict:
@@ -635,7 +635,7 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
         "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
-    table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
+    table["rows"].append(_row("Pearl+ served", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before
     [pouw] = [m for m in after if m["name"] == POUW]

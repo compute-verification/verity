@@ -156,12 +156,19 @@ def wipe_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
 def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLike | None) -> dict[str, Any]:
     """``answer``, or with ``exe`` (the component's Lean, `pous-run-protocol` or `wipe-protocol`) the Lean's answer on
     ``case`` (`period.serve`), refused unless it agrees with ``answer`` but for the reason."""
-    if exe is None:
-        return answer
+    return answer if exe is None else agreed(lean_answer(case, exe), answer, exe)
+
+
+def lean_answer(case: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``exe``'s answer on ``case`` (`period.serve`); `Refused` when it gives none."""
     try:
-        lean = period.serve(exe, [case])[0]
+        return period.serve(exe, [case])[0]
     except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
         raise Refused(f"{exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000]) from None
+
+
+def agreed(lean: dict[str, Any], answer: Mapping[str, Any], exe: str | os.PathLike) -> dict[str, Any]:
+    """``lean``, ``exe``'s answer, refused unless it is the Python's ``answer`` but for the reason."""
     _need({k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in answer.items() if k != "reason"},
           f"{exe} answers the case {lean.get('verdict')} ({lean.get('reason')}), its Python {answer['verdict']} "
           f"({answer['reason']})")
@@ -236,23 +243,18 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
     _need(not wrong, "the snapshot is not the pinned checkpoint's: " + "; ".join(wrong))
     model, _ = SP.linears(ck, torch.device(device))
     del ck
-    pous, types = SP.pous, SP.pous.linear_types
-    pous.linear_types = SP._linear_types
+    tensors = {name: m.weight for name, m in model.layers.items()}
+    layout, commitment = ws.commit(SP.ENTRY.partition(":")[2], tensors)
+    _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
+    store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
     try:
-        _, _, tensors = pous._plaintext(SP.ENTRY, model)
-        layout, commitment = ws.commit(pous.DEFAULT_SCHEME, tensors)
-        _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
-        store = ws.encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
-        try:
-            _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
-                  f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
-            _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
-            _need(store.digests == digests, "C* encoded at the kept salt is not the memory attester's table")
-            return commitment, published.salt, store.segments()
-        finally:
-            store.free()
+        _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
+              f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
+        _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
+        _need(store.digests == digests, "C* encoded at the kept salt is not the memory attester's table")
+        return commitment, published.salt, store.segments()
     finally:
-        pous.linear_types = types
+        store.free()
 
 
 def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,

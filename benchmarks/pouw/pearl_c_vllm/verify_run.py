@@ -126,6 +126,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
@@ -149,7 +150,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.window import LI
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.scheme import declared
 from verity.protocols.proofs.spot.verifier.challenger.challenger import LiveCommitment
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as REG
+from verity.commitments import registered_value as RV
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
@@ -607,10 +608,10 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
     for v, x in want.items():
         if (e := got.get(v)) is None:
             raise ValueError(f"W registers no {v}")
-        have = {**e, "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        have = {**e, "word_bits": e.get(RV.WIDTH_KEY, RV.WORD_BITS)}
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
             raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
-    return {"record": REG.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
+    return {"record": DD.digest(w), "tables": len(want), **({} if tied else {"weights": WEIGHTS_UNTIED})}
 
 
 def load_class(load: Any) -> tuple[int, int, int]:

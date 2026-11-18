@@ -122,6 +122,7 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
@@ -131,7 +132,8 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import HEA
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
 from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, OPTIONAL_FIELDS, NetworkAttesterParams
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.proofs.spot.verifier.profile import Stratified
 from verity.circuits import boolean as BL, codec, population
@@ -1033,7 +1035,7 @@ def _start_checks(p: Params, starts: list[CertifiedStart]) -> list[Finding]:
 def _answered(what: str, reg: dict, a: dict) -> tuple[dict, object]:
     if a["protocol"] != ONE_STAGE:
         raise Finding(REJECT, f"{what}: protocol {a['protocol']}")
-    if a["commitment"] != R.digest(reg):
+    if a["commitment"] != DD.digest(reg):
         raise Finding(REJECT, f"{what}: the answer is for another registration")
     if a["verdict"] == ACCEPT:
         try:
@@ -1249,7 +1251,7 @@ def start_empty(words: int, salt: bytes, domain: bytes, row: bytes | None = None
     """The empty state as a scan's registration starts from it (`startEmpty`): its `registered` entry of `START`, a
     tree of the one row of `words` zero u16 words (or of `row`, a row the prover chose) under `salt` at the domain
     whose id is `domain`, and the opening its `window` gives as ``empty``."""
-    root = G.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
+    root = RV.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
     return ({"domain": domain.hex(), "leaves": 1, "root": root.hex(), "value": START, "words": words},
             {START: {"salt": salt.hex(), "words": words}})
 
@@ -2674,7 +2676,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         elif aimed and m == "answer-unsampled":
             rec = _unsample(r, rec)
-        digest = bytes.fromhex(R.digest(rec))
+        digest = bytes.fromhex(DD.digest(rec))
         answer = _accepted(digest, program, rec["partition"], units, k,
                            r.choice([d for d in DELTAS if d != delta]) if aimed and m == "delta" else delta,
                            r.randint(0, units), strata)
@@ -2690,7 +2692,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
-                answer["commitment"] = r.choice([r.randbytes(64).hex(), R.digest(rec | {"population": 1})])
+                answer["commitment"] = r.choice([r.randbytes(64).hex(), DD.digest(rec | {"population": 1})])
             elif m == "answer-reject":
                 answer = _refused(answer, REJECT)
             elif m in ("answer-undecided", "undecided-and-reject"):
@@ -2793,7 +2795,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                                                    entries, renamed, i in selects, scan_slots))
         elif i == a and m == "audit-unsampled":
             rec = _unsample(r, rec)
-        digest = bytes.fromhex(R.digest(rec))
+        digest = bytes.fromhex(DD.digest(rec))
         answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            wrong, strata)
         if i == a:

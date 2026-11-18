@@ -5377,6 +5377,11 @@
     },
     {
       "paths": {
+        "adapters/vllm/verity_vllm/protocols/poub/remote.py": "verity/protocols/resource_accounting/memory/poub/prover/commit_session.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-r6.toml": "benchmarks/harness/specs/llama31-8b-fp8-1gpu-bandwidth-served-reps6.toml",
         "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served-h200.toml": "benchmarks/harness/specs/llama32-1b-fp8-1gpu-bandwidth-served.toml"
       }
@@ -5448,6 +5453,11 @@
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/sample.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/sample.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/names.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/served.py": "verity/protocols/proofs/spot/prover/served.py"
       }
     }
   ]

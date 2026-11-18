@@ -119,6 +119,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from verity.circuits.codec import canonical_json
 from verity.commitments import domains as DM
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
@@ -126,15 +127,15 @@ from verity.commitments import hm96
 from .rec_algebra import fast100
 from .record_text import session_text
 
-KIND = "rec/inner-transcript/v1"
-SESSION_KIND = "flock-live-session/v1"
+KIND = DM.REC_INNER_TRANSCRIPT
+SESSION_KIND = DM.FLOCK_LIVE_SESSION
 #: the circuit registration the session was held to (``verity/registration/v2``, written at staging and bound by META:
 #: `verity_flock.inner_registered.REGISTRATION`), copied into the session directory: its ``registered`` entries include
 #: the top of each table with no root at ``Commit``
 REGISTRATION = "circuit-registration.json"
 #: how a record's tree tops are salted: each 64-byte node a registered row (``hm96-sha512/row/v1``) under its own salt
 #: (`commit_top`)
-TOPS = "hm96-sha512/v1/node-row"
+TOPS = DM.HM96_SHA512_NODE_ROW
 
 OP_DOMAIN, OP_LABEL, OP_OBSERVE, OP_SQUEEZE, OP_BYTES = 1, 2, 3, 4, 5
 KIND_SCALAR, KIND_SLICE = 1, 2
@@ -148,7 +149,7 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_SAMPLE = range
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
 #: `Flock.ZkServer.Contract.COINS_TAG`: the coin message's tag
-COINS_TAG = b"verity/firewall-coins/v0\0"
+COINS_TAG = DM.ZK_SERVER_COINS.encode() + b"\0"
 #: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
 LINK_COINS = "link"
 COINS_KIND = "rec/inner-coins/v0"
@@ -443,7 +444,7 @@ def refused(what: str) -> str:
 def canonical(v) -> str:
     """``v`` as the ZK server compares it with the pinned schedule: JSON with sorted keys and no spaces, so ``2`` and ``2.0``
     (or ``true`` and ``1``) differ."""
-    return json.dumps(v, sort_keys=True, separators=(",", ":"))
+    return canonical_json(v).decode()
 
 
 def rep_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
@@ -973,14 +974,14 @@ def _opening(cap: bytes, salts: list[bytes]) -> dict:
 def register_top(program: str, table: str, cap: bytes, fresh_salt: Callable[[], bytes] = hm96.SHA512.fresh_salt) -> dict:
     """A table's level-0 top registered with the private circuit (``program``, the registration's) at staging: the
     registered value ``table`` whose rows are the top's nodes (`top_rows`), each under its own salt, sampled here, once
-    (one-stage ``registered.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
+    (one-stage ``registered_value.Registered``, whose ``b || c`` are `commit_top`'s). Its opening (``nodes``, ``salts``) and
     ``b || c`` a node (``top``) are the prover's; its ``entry`` is what the circuit registration names
     (`verity_flock.inner_registered.bind`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
 
     rows = top_rows(cap)
     salts = [fresh_salt() for _ in rows]
-    reg = G.Registered.commit(program, table, rows, salts)
+    reg = RV.Registered.commit(program, table, rows, salts)
     return {**_opening(cap, salts), "top": [b.hex() for b in reg.bcs], "entry": reg.entry()}
 
 
@@ -1139,13 +1140,13 @@ class Proxy:
         """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
         root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the entry named
         ``table`` of the registration whose digest META binds (``bound``, `top_entry`)."""
-        from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+        from verity.commitments import docket_digest as DD
 
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")
         if table in self.schedule["roots"] or table in self.registered:
             raise ValueError(f"{table}: registered twice, or a table whose root is committed at Commit")
-        if not isinstance(self.registration, dict) or self.bound is None or R.digest(self.registration) != self.bound:
+        if not isinstance(self.registration, dict) or self.bound is None or DD.digest(self.registration) != self.bound:
             raise ValueError(f"{table}: the registration is not the one the statement's META binds ({self.bound})")
         entry = registered_entry(self.registration, table)
         if entry is None:

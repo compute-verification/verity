@@ -34,11 +34,14 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit, partition as P, docket as R, verifier as V  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
+from verity.commitments.domains import PARTITION  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
@@ -92,14 +95,14 @@ def main() -> int:
     n = int(rec["population"])
     sampling_design = RND.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
-    program = P.population_program(template, n)
+    program = PN.population_program(template, n)
     query = P.template_instance_query(template)
     part = P.partition(program, query)
     if a.legacy_partition:
         part = {"program": part["program"], "query": {"name": query["name"], "version": query["version"], "template": P.template_id(template),
                                                       "width_rule": None}}
     summary: dict = {"n": n, "k": a.k, "delta": a.delta, "source": rec.get("window", {}).get("kind"), "n_from": "registration",
-                     "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else "verity/partition/v1"}
+                     "partition_envelope": "pre-canonical {program, query}" if a.legacy_partition else PARTITION}
 
     # the verifier's own circuit, bound to its own partition and program
     st_dir = out / "stage"
@@ -137,7 +140,7 @@ def main() -> int:
         checks["source"] = {"ok": rec.get("window", {}).get("kind") == "served", "codes": [], "detail": rec.get("window")}
     receipt = R.receipt(rec, "one-stage-e2e verifier (a2.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(registration=R.digest(rec), partition=rec["partition"], checks_before_draw={k: v["ok"] for k, v in checks.items()})
+    summary.update(registration=DD.digest(rec), partition=rec["partition"], checks_before_draw={k: v["ok"] for k, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))

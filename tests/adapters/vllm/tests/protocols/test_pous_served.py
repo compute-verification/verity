@@ -1,46 +1,146 @@
 """PoUS attached by its scheme's name on the build's exchange (`compose.schemes.get("pous")`, `messages.Exchange`), over a
 tiny int8 model's weights, on the CPU: what it holds, what it refuses, its period and its rejects.
 
-The weights are `test_pous_option`'s model's, registered as a served run registers them (`RegisteredValues`, a tied weight
+The weights are a toy int8 model's (`Model`), registered as a served run registers them (`RegisteredValues`, a tied weight
 once), and P2 runs at the small point's 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so encoding takes
 milliseconds. No forward runs: a linear block is computed through the exchange with the weight decoded from ``C*``.
 """
 from __future__ import annotations
 
 import dataclasses
+import importlib.util
+import itertools
+import json
 import re
+import socket
 import subprocess
 import sys
+from concurrent import futures
+from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
 from verity import hooks as H
 from verity.protocols.compose import schemes
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
 from verity.protocols.resource_accounting.memory.pous.prover import period_prover
 from verity.protocols.resource_accounting.memory.pous.prover import served
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 from verity.protocols.resource_accounting.memory.pous.verifier import period, setup
+from verity.protocols.resource_accounting.memory.pous.verifier.schemes.p2 import P2Params
 from verity.runtime.stream import Side
 
-from tests.protocols.test_pous_option import (
-    AUDITOR,
-    COINS,
-    JUDGES,
-    NODE,
-    P2,
-    SMALL,
-    SOURCE,
-    TEST_PROTOCOL,
-    Linear,
-    Model,
-    _in_process_party,
-    _judges,
-    _period_dir,
-    ts,
-)
 from verity_vllm import messages
+
+P2 = "p2-16448/v4"
+SOURCE = "a5" * 32
+NODE, AUDITOR = "vy-dc-h200-3", "vy-auditor-2"
+COINS = bytes(range(64))
+SMALL = P2Params(period.W, period.C0, 8)
+ROOT = Path(__file__).resolve().parents[5]
+
+
+def _signer_module():
+    path = ROOT / "tests" / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "pous_test_signer.py"
+    spec = importlib.util.spec_from_file_location("pous_test_signer", path)
+    assert spec is not None and spec.loader is not None, path
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+ts = _signer_module()
+TEST_PROTOCOL = mc.TEST_PREFIX + period.PROTOCOL
+
+
+class Linear:
+    """An int8 linear as the int8_exact target holds one: its weight [N, K] and its f32 ``weight_scale`` [N, 1]."""
+
+    def __init__(self, weight, scale):
+        self.weight = torch.nn.Parameter(weight, requires_grad=False)
+        self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
+
+
+class Model:
+    """Three int8 linears; the head shares q's weight, as a tied head does."""
+
+    def __init__(self) -> None:
+        g = torch.Generator().manual_seed(7)
+
+        def w(n, k):
+            return torch.randint(-127, 128, (n, k), dtype=torch.int8, generator=g)
+
+        def s(n):
+            return torch.rand(n, 1, generator=g) + 0.5
+        q, k = Linear(w(24, 16), s(24)), Linear(w(40, 16), s(40))
+        head = Linear(w(24, 16), s(24))
+        head.weight = q.weight
+        self.layers = {"q": q, "k": k, "head": head}
+        self.plain = {"q": q.weight.detach().clone(), "k": k.weight.detach().clone()}
+        self.x = torch.randint(-127, 128, (3, 16), dtype=torch.int8, generator=g)
+
+
+def _ticks(step: int = 1_000):
+    counter = itertools.count(0, step)
+    return lambda: next(counter)
+
+
+def _in_process_party(signer, log):
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    test signer, a counter clock, its own coins each session) and the prover's over a socket pair
+    (`challenger_prover.answer`)."""
+    calls: list[tuple] = []
+
+    def session(party, request, respond):
+        a, b = socket.socketpair()
+        coins = COINS[:-1] + bytes([len(calls)])
+
+        def challenger():
+            with b, b.makefile("rwb") as f:
+                return CP.serve(f, request, signer=signer, log=log, coins=coins, domain=period.SESSION_DOMAIN,
+                                clock=_ticks())
+        with futures.ThreadPoolExecutor(1) as pool:
+            served = pool.submit(challenger)
+            try:
+                with a, a.makefile("rwb") as f:
+                    rounds = CR.answer(f, request["block_bytes"], respond)
+            finally:
+                sid, served_session = served.result()
+        calls.append((party, request))
+        return CP.report(sid, served_session, signer.public_key) | {"host": party.host, "rounds": rounds - CS.WARMUPS}
+    return session, calls
+
+
+def _period_dir(tmp_path, n: int, tools: dict[str, str] | None = None):
+    d = tmp_path / "periods" / f"p{n}"
+    d.mkdir(parents=True)
+    (d / "period.json").write_text(json.dumps({"challenger_host": AUDITOR, "challenger": {"pous": {
+        "command": ["ssh", AUDITOR, "uv", "run", "python", "-m", CS.MODULE, "--device", "pous-challenger",
+                    "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}} | ({"tools": tools} if tools else {})))
+    return d
+
+
+#: stand-ins for the period's Lean tools, which `_judges` answers for
+JUDGES = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
+
+
+def _judges(monkeypatch) -> list:
+    """`period.serve` answering for `JUDGES` as the Lean does of an honest period: the run tool with the Python's
+    answer, the setup tool with an accept. Returns the Python's runs, in order."""
+    audit, runs = period_prover.audit, []
+
+    def audited(*args, **kw):
+        runs.append(audit(*args, **kw))
+        return runs[-1]
+
+    monkeypatch.setattr(period_prover, "audit", audited)
+    monkeypatch.setattr(period, "serve", lambda exe, cases: [runs[-1].answer if exe == "RUN" else {"verdict": "accept"}])
+    return runs
+
 
 POUS = schemes.get("pous")
 ENTRY = POUS.option
@@ -261,3 +361,110 @@ def test_attaching_pous_by_name_loads_no_selector_and_no_other_scheme():
              "assert not bad, bad\n")
     got = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr[-2000:]
+
+
+def test_weights_registered_again_after_the_commitment_are_refused(toy):
+    """C* is encoded once, from the weights the run registered first: a second registration (a weight altered after the
+    commitment and registered anew) is refused, and the store still holds the first."""
+    model = toy
+    opt, ex = _held(model)
+    root = opt.store.root
+    model.layers["k"].weight.data[0, 0] += 1
+    w = _weights(model)
+    with pytest.raises(RuntimeError, match=re.escape(f"{ENTRY}: the weights were registered twice, and C* is encoded once")):
+        ex.emit(H.RegisteredValues(tuple(w.items()), operands={n: i for i, n in enumerate(w)}))
+    assert opt.store.root == root
+    opt.release()
+
+
+def test_a_run_that_registers_no_weight_operand_is_refused_and_holds_nothing(toy):
+    ex = messages.Exchange()
+    opt = ex.attach(POUS, {}, salt_source=SOURCE, experimental=True)
+    ex.answer(H.Declared("card", {"eager": True}, tuple(ex.attached), {n: dict(v) for n, v in ex.attached.items()}))
+    with pytest.raises(ValueError, match=re.escape(f"{ENTRY}: no registered value is a block's weight operand, so W is empty")):
+        ex.emit(H.RegisteredValues((("bias", torch.zeros(4)),), operands={}))
+    assert opt.store is None
+
+
+def test_an_int8_weight_is_held_and_its_scales_stay_outside_the_store(toy):
+    """W is the int8 weights' bytes as the kernel reads them; each linear's ``weight_scale`` is not a registered weight
+    operand, so it stays where it is and is no part of the store."""
+    scales = {n: m.weight_scale.detach().clone() for n, m in toy.layers.items()}
+    opt, _ = _held(toy)
+    assert [p.name for p in opt.store.layout.tensors] == ["q.weight", "k.weight"]
+    assert all(torch.equal(m.weight_scale, scales[n]) for n, m in toy.layers.items())
+    opt.release()
+
+
+#: the period's Lean tools, stood in for by `_lean`
+TOOLS = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
+
+
+def _lean(monkeypatch, tmp_path):
+    """Stand-ins for a period's parties and tools: the challenger's session in this process, and `period.serve`
+    answering for the tool named ``RUN`` as ``say["run"]`` makes of the Python's answer, and for any other as
+    ``say["setup"]``. Returns ``say``, the Python's runs and what was served, each in order."""
+    session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
+    monkeypatch.setattr(CR, "session", session)
+    audit, runs, served_ = period_prover.audit, [], []
+    say: dict[str, Any] = {"run": lambda answer: answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
+
+    def audited(*args, **kw):
+        runs.append(audit(*args, **kw))
+        return runs[-1]
+
+    def serve(exe, cases):
+        served_.append((exe, list(cases)))
+        return [say["run"](runs[-1].answer) if exe == "RUN" else say["setup"]]
+
+    monkeypatch.setattr(period_prover, "audit", audited)
+    monkeypatch.setattr(period, "serve", serve)
+    return say, runs, served_
+
+
+def _subprotocol(opt, tmp_path, n):
+    """Monitoring period ``n``'s subprotocol of ``opt``, its ``period.json`` naming `TOOLS`; the answer and what
+    ``pous.json`` holds."""
+    directory, out = _period_dir(tmp_path, n, TOOLS), tmp_path / f"out{n}"
+    got = opt.subprotocol(directory, NODE, out, side_of=Side.of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    return got, json.loads((out / "pous.json").read_text())
+
+
+def test_where_a_period_names_the_lean_tools_the_subprotocols_answer_is_theirs_and_must_be_the_pythons(toy, tmp_path, monkeypatch):
+    """The run tool is asked every period with the run's case and the setup tool at the first alone, with the setup's;
+    the subprotocol answers with the run tool's answer, and refuses one that differs from the Python's in more than its
+    reason, writing nothing."""
+    say, runs, served_ = _lean(monkeypatch, tmp_path)
+    opt, _ = _held(toy)
+    got, doc = _subprotocol(opt, tmp_path, 0)
+    assert served_ == [("RUN", [runs[0].case]), ("SETUP", [runs[0].setup_case])]
+    assert runs[0].answer["verdict"] == "accept" and runs[0].answer["reason"] != "the Lean's words"
+    assert got == runs[0].answer | {"reason": "the Lean's words", "profile": got["profile"]} == doc["answer"]
+    assert doc["lean"] == {"run": runs[0].answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
+
+    got, doc = _subprotocol(opt, tmp_path, 1)
+    assert served_[2:] == [("RUN", [runs[1].case])] and set(doc["lean"]) == {"run"} and got["reason"] == "the Lean's words"
+
+    say["run"] = lambda answer: answer | {"verdict": "reject"}
+    with pytest.raises(RuntimeError, match="^pous-run-protocol answered .*'verdict': 'reject'.*, the Python .*'verdict': 'accept'"):
+        _subprotocol(opt, tmp_path, 2)
+    assert not (tmp_path / "out2").exists()
+
+
+def test_a_setup_the_lean_refuses_fails_the_first_period_whatever_the_python_said(toy, tmp_path, monkeypatch):
+    say, runs, served_ = _lean(monkeypatch, tmp_path)
+    say["setup"] = {"verdict": "reject", "reason": "C* is not the encoding"}
+    opt, _ = _held(toy)
+    with pytest.raises(RuntimeError, match="^pous-setup refused the setup the Python accepted: .*C\\* is not the encoding"):
+        _subprotocol(opt, tmp_path, 0)
+    assert runs[0].answer["verdict"] == "accept" and [exe for exe, _ in served_] == ["RUN", "SETUP"]
+    assert not (tmp_path / "out0").exists()
+
+
+def test_a_released_store_refuses_a_subprotocol_at_its_audit_and_writes_no_output(toy, tmp_path, monkeypatch):
+    _, runs, served_ = _lean(monkeypatch, tmp_path)
+    opt, _ = _held(toy)
+    opt.release()
+    with pytest.raises(RuntimeError, match=re.escape(f"{ENTRY}: nothing is held to audit") + "$"):
+        _subprotocol(opt, tmp_path, 0)
+    assert not runs and not served_ and opt.periods == 0 and not (tmp_path / "out0").exists()

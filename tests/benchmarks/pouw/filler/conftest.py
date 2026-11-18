@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 FILLER = (Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "filler")
 
 
@@ -24,3 +26,10 @@ def load(file: str) -> ModuleType:
             del sys.modules[name]
             raise
     return sys.modules[name]
+
+
+@pytest.fixture(autouse=True)
+def _no_run_result(monkeypatch):
+    """No test writes into a research run's result (`tests/test_tests_write_no_measurement.py`)."""
+    for name in ("RESEARCH_RUN_DIR", "OUT"):
+        monkeypatch.delenv(name, raising=False)

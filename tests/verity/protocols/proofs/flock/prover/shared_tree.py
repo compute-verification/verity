@@ -36,6 +36,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity.commitments import hm96
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 
 SEED = 20261118
 FIELD = "out"
@@ -59,15 +60,15 @@ def program(n: int) -> tuple[Program, dict]:
     return Program(bind(CompositeDefinition("SharedTreeRoPE", 0, (), sig, body, register=False))), P.template_instance_query(t)
 
 
-def port(reg: G.Registered, reads: dict[int, int], units: int) -> dict:
+def port(reg: RV.Registered, reads: dict[int, int], units: int) -> dict:
     """The verifier's own entry for a port reading `reg`: unit u reads row `reads[u]`, other units none."""
-    return {**reg.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(RV.SCHEMA),
             "reads": [reads.get(u) for u in range(units)]}
 
 
-def tree_port(reg: G.Registered, template: str, field: str) -> dict:
+def tree_port(reg: RV.Registered, template: str, field: str) -> dict:
     """The verifier's own entry for a link row reading the tree of (`template`, `field`): its reads the program's."""
-    return {**reg.entry(), **G.width_entry(G.WORD_BITS), **G.schema_entry(G.SCHEMA),
+    return {**reg.entry(), **RV.width_entry(RV.WORD_BITS), **RV.schema_entry(RV.SCHEMA),
             "tree": {"template": template, "field": field}, "reads": []}
 
 
@@ -106,9 +107,9 @@ def stage(out: Path, n: int, seed: int = SEED) -> dict:
     x = np.asarray(s.port("x", 0, n), np.uint16).reshape(n, -1)
     cs = np.asarray(s.port("cs", 0, 2 * n), np.uint16).reshape(2 * n, -1)
     w = rope(x, cs[:n])
-    reg_x = G.Registered.commit(pd, "x", x.tolist())
-    reg_cs = G.Registered.commit(pd, "cs", cs.tolist())
-    shared = G.Registered.commit(pd, tree, np.concatenate([w, rope(w[::-1], cs[n:])]).tolist())
+    reg_x = RV.Registered.commit(pd, "x", x.tolist())
+    reg_cs = RV.Registered.commit(pd, "cs", cs.tolist())
+    shared = RV.Registered.commit(pd, tree, np.concatenate([w, rope(w[::-1], cs[n:])]).tolist())
     units = 2 * n
     readers = {n + i: n - 1 - i for i in range(n)}
 
@@ -125,7 +126,7 @@ def stage(out: Path, n: int, seed: int = SEED) -> dict:
             xin = np.asarray([w[at[u]] for u in range(n, units)], np.uint16)
             if flip:
                 xin[0, 5] ^= 1
-            t = G.Registered.commit(pd, tree, np.concatenate([w, rope(xin, cs[n:])]).tolist()) if flip or x_from else shared
+            t = RV.Registered.commit(pd, tree, np.concatenate([w, rope(xin, cs[n:])]).tolist()) if flip or x_from else shared
             x_pos, x_refs = G.table([at[u] for u in us])
             _, x_salts, x_e = t.statement(x_pos)
             x_rows = np.asarray([w[p] for p in x_pos], np.uint16)
