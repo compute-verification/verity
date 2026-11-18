@@ -36,8 +36,9 @@ from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge,
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
 OPTION = f"pouw:{KERNEL}"
-#: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
-READS = ("bf16", "fp16", "fp32")
+#: the weight formats its kernel reads: BF16 only, since a weight's tree commits its FP32 words and its retained rows are
+#: BF16 (run_device._weight_words); any other weight (FP16, FP32, FP8, INT8) is refused, not misread
+READS = ("bf16",)
 
 
 def tile_macs(shape: Mapping[str, int]) -> int:

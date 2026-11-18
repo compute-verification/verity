@@ -151,8 +151,9 @@ def test_attach_computes_each_linear_block_with_its_run(monkeypatch) -> None:
     ex.emit(H.StepBegan(1, ("a",), 8))
     assert req.kernel(_due(), lambda given: "stock") == "y"
     assert run.calls == [(3, "x", "w", None)]
-    with pytest.raises(ValueError, match="e4m3"):
-        req.kernel(_due("e4m3"), lambda given: "stock")
+    for fmt in ("e4m3", "fp16", "fp32", "int8"):
+        with pytest.raises(ValueError, match=rf"block model.layers.0.qkv's weight is {fmt}, and its kernel reads \('bf16',\)"):
+            req.kernel(_due(fmt), lambda given: "stock")
 
 
 def test_a_pass_ends_at_each_steps_computed_and_a_step_over_one_is_refused(monkeypatch) -> None:
