@@ -1966,8 +1966,8 @@ class Slim:
     shard_count = staticmethod(vqueue_slim.shard_count)
 
     @staticmethod
-    def replaced(lines, members, now) -> list:
-        return []
+    def replaced(lines, members, now, of=()) -> dict:
+        return {}
 
     @staticmethod
     def audited(driver, v: Verdict, rec, source) -> Verdict:
