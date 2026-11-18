@@ -1085,7 +1085,7 @@ def test_the_front_without_its_peer_is_refused_by_the_settings_name_before_the_g
     serve, out = tmp_path / "serve", tmp_path / "out"
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), *flags]) == 2
     why = json.loads((out / "session.json").read_text())["refused"]
-    assert why == CP.NO_PEER and "network-certifier.certifier.peer" in why
+    assert why == CP.NO_PEER and "network-attester.network-attester.peer" in why
     assert not (tmp_path / "request").exists() and not (tmp_path / "asked").exists()
 
 
