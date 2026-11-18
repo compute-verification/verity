@@ -5254,6 +5254,15 @@
         "tests/benchmarks/two_stage/test_guard.py": "tests/benchmarks/one_stage/test_guard.py",
         "tests/benchmarks/two_stage/test_toy.py": "tests/benchmarks/one_stage/test_toy.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/resource_accounting/network/verifier/advice.py": "adapters/vllm/verity_vllm/pipeline/advice_code/format.py",
+        "verity/protocols/resource_accounting/network/prover/window_chain.py": "adapters/vllm/verity_vllm/pipeline/window_chain.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_advice.py": "tests/adapters/vllm/tests/pipeline/test_advice_format.py",
+        "tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_advice_adversarial.py": "tests/adapters/vllm/tests/pipeline/test_advice_format_adversarial.py",
+        "tests/benchmarks/network_traces/test_window_chain.py": "tests/adapters/vllm/tests/pipeline/test_window_chain.py"
+      }
     }
   ]
 }

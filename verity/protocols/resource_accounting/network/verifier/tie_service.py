@@ -74,7 +74,8 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.resource_accounting.network.verifier import advice as ADV, head_check as HC, io_request as Q
+from verity_vllm.pipeline.advice_code import format as ADV
+from verity.protocols.resource_accounting.network.verifier import head_check as HC, io_request as Q
 from verity.protocols.resource_accounting.network.verifier import service as SVC, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams

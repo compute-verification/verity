@@ -66,7 +66,8 @@ from typing import NamedTuple
 
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, n2_zk as Z
-from verity.protocols.resource_accounting.network.verifier import advice as ADV, head_check as HC
+from verity_vllm.pipeline.advice_code import format as ADV
+from verity.protocols.resource_accounting.network.verifier import head_check as HC
 from verity.protocols.resource_accounting.network.verifier import io_request as Q, service as SVC
 from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W, network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER

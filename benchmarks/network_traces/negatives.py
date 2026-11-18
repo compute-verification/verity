@@ -6,7 +6,7 @@ check that refuses it by its refusal code, and the advice and Commit tamperings 
         [--model M] [--T 50] [--R 32]
     python benchmarks/network_traces/negatives.py warden --run DIR
 
-The advice is I1's (`verity.protocols.resource_accounting.network.verifier.advice`, its `encode` bytes) and the Commit record
+The advice is I1's (`verity_vllm.pipeline.advice_code.format`, its `encode` bytes) and the Commit record
 I3's (serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
@@ -86,7 +86,7 @@ from verity.protocols.resource_accounting.network.verifier.id_form import ID_NAM
 from verity.protocols.resource_accounting.network.verifier import tie_service as TS, network_attester as W  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
-ADVICE_MODULE = "verity.protocols.resource_accounting.network.verifier.advice"
+ADVICE_MODULE = "verity_vllm.pipeline.advice_code.format"
 IO_TIE_MODULE = "verity.protocols.resource_accounting.network.verifier.io_tie"
 IO_REQUEST_MODULE = "verity.protocols.resource_accounting.network.verifier.io_request"
 NETWORK_ATTESTER_ROWS_MODULE = "verity.protocols.resource_accounting.network.verifier.network_attester_rows"
@@ -176,7 +176,7 @@ def network_attester_frame(run: Path, at: int | None = None) -> dict:
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
-# On I1 v0 (`verity.protocols.resource_accounting.network.verifier.advice`): Advice(requests, steps, release),
+# On I1 v0 (`verity_vllm.pipeline.advice_code.format`): Advice(requests, steps, release),
 # RequestAdvice(id, prompt_len, output_len, finish), StepAdvice(rows), Row(request, kind, start, n, cache_hit,
 # preempted, sources), Source(request, n), and `release` one egress bucket a kept output. Each tampering returns new advice and
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed

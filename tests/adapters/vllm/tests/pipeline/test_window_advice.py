@@ -4,7 +4,7 @@ bit a request more, and every window has the one encoding."""
 from __future__ import annotations
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import advice as I1
+from verity_vllm.pipeline.advice_code import format as I1
 
 from verity_vllm.pipeline import window_advice as WA
 

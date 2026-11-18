@@ -50,7 +50,7 @@ from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.definitions.registry import stop_check as SC
 from verity_vllm.definitions.registry.topp_geometry import registered_splits
 
-import verity.protocols.resource_accounting.network.verifier.advice as I1
+import verity_vllm.pipeline.advice_code.format as I1
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.partition_object import calls
