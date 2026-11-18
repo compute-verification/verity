@@ -137,7 +137,7 @@ def unit_ands(lab: str, target: str = "h200") -> int:
     above, the rest (and every unit on sm_120) `class_size.measured`'s, refused where neither has it."""
     fam, s = CS.statics(lab)
     if target == "h200":
-        if fam == "ScaledMmS8_v1":
+        if fam == "ScaledMmS8_v3":
             return s["N"] * S8_COORD[s["K"]]
         if fam in ROW_QUANTS:
             return ROW_QUANT[s["K"]]

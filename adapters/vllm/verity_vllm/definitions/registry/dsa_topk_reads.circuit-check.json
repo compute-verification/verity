@@ -244,15 +244,15 @@
    "and": 32,
    "type": "64702e7f4c5feecadee7614261e0546630268f7e4b5586f1bab199d2ee6ef3c6871d3429ef2651902b06812dc3525c0591fdc9bb6be439d5cd5ce85938dede8f"
   },
-  "DsaPositionsSlot_v1{K=32,N=131072}": {
+  "DsaPositionsSlotBits_v1{K=32,N=131072}": {
    "and": 1065,
    "type": "7e5072b393d5ab81b318d2fe20a7a59dd69a0a1de91f8166069e09eebea7e175ee4d0d2752083e0d5ed39ef845c5fe7f4527953cf15bbdaa4ce20f04972892a2"
   },
-  "DsaPositionsSlot_v1{K=4,N=20}": {
+  "DsaPositionsSlotBits_v1{K=4,N=20}": {
    "and": 187,
    "type": "4bfe3b364fb226c9260c9d767681bb4f21282a767e0e49aa4adca7c57c7d1ac1a52f0b60504c677f1aae195565d847f0c95de8bcb30e4df79b60f2b86cfa8d5b"
   },
-  "DsaPositionsSlot_v1{K=5,N=12}": {
+  "DsaPositionsSlotBits_v1{K=5,N=12}": {
    "and": 285,
    "type": "e7037dd9624034ea9cc8b43de814bc43f48852b6b84bb3cb799607a104d069c8804f47b2869856b1ee0129468310191880e5d98f1bee0e93e166dba223b8fe60"
   }
