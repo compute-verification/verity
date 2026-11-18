@@ -68,11 +68,6 @@ def _pous_attach(exchange: Any, ctx: Any) -> Any:
     return served.attach(exchange, ctx, POUS.option.partition(":")[2])
 
 
-def _wipe_attach() -> Any:
-    raise LookupError("wipe attaches through no hook of a served run: it runs before the workload's engine loads, as "
-                      "its own session with the memory attester (`verifier.wipe_parties`), started by its piece")
-
-
 POUS = register(Scheme(
     name="pous",
     messages=workload.MESSAGES,
@@ -151,7 +146,6 @@ WIPE = register(Scheme(
         "one-design": "its own: `k` indices of the fill, revealed one at a time",
     },
     delta_scheme=WIPE_TERM,
-    attach=lambda exchange, ctx: _wipe_attach(),
     parties=(*WP.MANIFEST.parties, VERIFIER),
     channels=(*WP.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER.name, ("WipeReport",), after=("End",))),
     channel_schemas=WP.MANIFEST.messages,
