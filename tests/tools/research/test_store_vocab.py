@@ -99,6 +99,10 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert vocab.is_known("verified")
     assert vocab.check("training-slowdown", "a" * 64 + "/101/final") is None
     assert "does not match" in vocab.check("training-slowdown", "a" * 64 + "/101/test")
+    assert vocab.key("hot_card").form == vocab.TEXT and vocab.key("hot_card").group == vocab.GROUP_VERIFICATION
+    assert vocab.check("hot_card", "NODE card CARD: the driver counts 9 h of thermal slowdown on this card") is None
+    for value in (True, False, "", "  "):
+        assert "the value names the card" in vocab.check("hot_card", value), value
 
 
 def test_canonical_spellings_and_coercion():
@@ -196,7 +200,7 @@ def test_lane_shorthand_folds_into_one_spelling(env, capsys):
     st = LocalStore()
     for key, value, want in (("axis", "l", ("sweep", "l")), ("milestone", "1M-vu", ("arm", "1M-vu")), ("tree", "main@6babe27", ("source", "main@6babe27")),
                              ("release", "lane/x@ec45c0b", ("source", "lane/x@ec45c0b")), ("verifier_note", "Rust", ("note", "Rust")),
-                             ("same_device", "false", ("same_device", False)), ("below_bar", "true", ("below_bar", True)), ("hot_card", "true", ("hot_card", True)), ("fold", "4", ("fold", 4)), ("pipeline", "2", ("pipeline", 2)),
+                             ("same_device", "false", ("same_device", False)), ("below_bar", "true", ("below_bar", True)), ("fold", "4", ("fold", 4)), ("pipeline", "2", ("pipeline", 2)),
                              ("hash", "poseidon2-babybear-w24", ("hash", "poseidon2-babybear-w24")), ("lane", "b-verify-par", ("lane", "b-verify-par")),
                              ("superseded_by", "r20260922-231034-0693", ("superseded_by", "r20260922-231034-0693"))):
         assert main(["label", ART, key, value, "--by", "lane-x"]) == 0, key
