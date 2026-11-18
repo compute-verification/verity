@@ -1098,7 +1098,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if (ex := messages.current()).wants("values"):
                 for k, o in enumerate(output if isinstance(output, (tuple, list)) else (output,)):
                     if isinstance(o, torch.Tensor):
-                        ex.emit(H.ValueProduced(name, "producer_output", k, o, ex.step))
+                        ex.emit(H.BlockResult(name, "producer_output", k, o, ex.step))
             try:
                 if isinstance(output, torch.Tensor):
                     me._acquire(name, output, job)
@@ -1128,7 +1128,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if job is None or not args:
                 return None
             if isinstance(args[0], torch.Tensor) and (ex := messages.current()).wants("values"):
-                ex.emit(H.ValueProduced(name, "consumer_input", 0, args[0], ex.step))
+                ex.emit(H.BlockResult(name, "consumer_input", 0, args[0], ex.step))
             try:
                 if isinstance(args[0], torch.Tensor):
                     me._acquire(f"{name}/in", args[0], job)

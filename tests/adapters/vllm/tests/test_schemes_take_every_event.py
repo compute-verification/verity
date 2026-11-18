@@ -83,7 +83,7 @@ def _honest() -> list[object]:
             H.PhaseOpened(0, 0),
             H.StepBegan(0, ("r0",), 3),
             H.BlockDue("b", 0, {"m": 1, "n": 64, "k": 256}, "bf16", {"x": x, "weight": w}, 0, {"weight": "w"}),
-            H.ValueProduced("b", "o0", 0, x),
+            H.BlockResult("b", "o0", 0, x),
             H.MemoryChanged("written", (0,), offset=0, count=3),
             H.StepComputed(0),
             H.StepEnded(0),

@@ -131,7 +131,7 @@ class PhaseCommitted:
 
 
 @dataclass(frozen=True)
-class ValueProduced:
+class BlockResult:
     """``values``: a value at a block's boundary, at the site ``(block, port, slot)``."""
 
     hook: ClassVar[str] = "values"
@@ -208,7 +208,7 @@ class OutputLeft:
 
 
 #: every event a served run emits, each read through its ``hook``
-EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
+EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, BlockResult, BlockDue, RangesDeclared,
           MemoryChanged, OutputLeft, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
@@ -359,8 +359,8 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
                 | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
+__all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "BlockResult", "ComputeBlockWith", "Declared", "Gate", "Handle",
            "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputLeft",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded",
            "unmet"]

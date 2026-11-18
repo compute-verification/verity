@@ -12,7 +12,7 @@
     plan_selection(plan, model)                                 that module set and consumer-input set
 
 A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) -- fail closed.
-Each site's observed tensor is a `verity.hooks.ValueProduced` (block, port, slot = the site's module, kind and slot) emitted to the
+Each site's observed tensor is a `verity.hooks.BlockResult` (block, port, slot = the site's module, kind and slot) emitted to the
 process's exchange (`messages.current`) while a subscriber wants ``values``; `OccurrenceSink`, called with a site's key and tensor,
 counts occurrences and records shapes only (no value reads, no synchronisation): the GPU gate's non-interference observer.
 """
@@ -109,7 +109,7 @@ class OccurrenceSink:
 
 def _emit(key: tuple[str, str, str], t: Any) -> None:
     if (ex := messages.current()).wants("values"):
-        ex.emit(H.ValueProduced(*key, t, ex.step))
+        ex.emit(H.BlockResult(*key, t, ex.step))
 
 
 def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None) -> Installation:

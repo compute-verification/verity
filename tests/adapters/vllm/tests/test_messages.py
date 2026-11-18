@@ -200,10 +200,10 @@ def test_exchange_answers_requests_by_name_before_serving():
     with pytest.raises(Refused, match="after the build was answered"):
         ex.request("c", H.RequireProperty("world", 1, "one rank"))
     off = ex.subscribe("c", "values", seen.append)
-    ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
+    ex.emit(H.BlockResult("layers.0", "producer_output", 0, "rows"))
     off()
-    ex.emit(H.ValueProduced("layers.0", "producer_output", 1, "rows"))
-    assert seen[1:] == [H.ValueProduced("layers.0", "producer_output", 0, "rows")]
+    ex.emit(H.BlockResult("layers.0", "producer_output", 1, "rows"))
+    assert seen[1:] == [H.BlockResult("layers.0", "producer_output", 0, "rows")]
     ex.emit(H.StepBegan(4))
     assert ex.step == 4
 

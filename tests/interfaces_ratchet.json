@@ -71,10 +71,10 @@
   "verity/commitments/lean/Commitments/FV3.lean": 2
  },
  "messages_one_sided": {
+  "BlockResult": 1,
   "Front": 1,
   "Kernel": 0,
-  "Route": 1,
-  "ValueProduced": 1
+  "Route": 1
  },
  "scheme_name_tables": {
   "adapters/vllm/verity_vllm/config.py": 1,
