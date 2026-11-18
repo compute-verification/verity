@@ -25,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
+from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
@@ -125,7 +126,7 @@ def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = No
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -330,7 +331,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     s = Served()
     w = window(s)
     got = read(s, w.members)
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got])
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     j = next(j for j, m in enumerate(w.members) if m.template == B16 and m.n > 1)
@@ -349,7 +350,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
     bad = [dict(g, rows={**g["rows"], "in5": g["rows"]["in5"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in5 row is not the o2 row")):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad)
 
 
 def composed(t: str, d: Path) -> UnitStager:

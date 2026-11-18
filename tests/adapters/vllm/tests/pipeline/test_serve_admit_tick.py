@@ -1,4 +1,4 @@
-"""``--admit tick`` (`serve_admit.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
+"""``--admit tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
@@ -947,16 +947,18 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
             assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
-def test_the_flag_takes_tick_with_the_engine_class_step_times():
+def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
-    opts = cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "27.5", "--tick-free-ms", "41"], environ={})
-    assert (opts.admit, opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms) == ("tick", 100.0, 27.5, 41.0)
+    name = messages.providing("admission").name
+    times = ["--protocols-config", json.dumps({name: {"sat_us": 27_500, "free_us": 41_000}})]
+    opts = cli.parse("serve-openai", [*base, "--admit", "tick", *times], environ={})
+    assert so.admission_settings(opts) == {"sat_us": 27_500, "free_us": 41_000, "order": "tick"}
     so.preflight(opts, which=lambda _: None)
-    with pytest.raises(cli.UsageError, match="registered step times"):
+    with pytest.raises(cli.UsageError, match="--admit tick: --protocols-config: .*a positive integer of microseconds"):
         so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick"], environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-requests"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "1", "--tick-free-ms", "1",
-                                                "--window-requests", "4"], environ={}), which=lambda _: None)
+        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", *times, "--window-requests", "4"], environ={}),
+                     which=lambda _: None)
 
 
 def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
@@ -966,7 +968,8 @@ def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed()
     sched = Sched()
     built = admission.install(sched)
     loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
-    opts = SimpleNamespace(admit="tick", tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000)
+    opts = SimpleNamespace(admit="tick", protocols_config=json.dumps(
+        {messages.providing("admission").name: {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
     try:
         hook, order = so.network_admission(loop, sched, opts)
         assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0

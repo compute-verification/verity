@@ -1045,21 +1045,14 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
-    "adapters/vllm/verity_vllm/compiler/compile_slice.py",
-    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
-    "adapters/vllm/verity_vllm/compiler/served_tie.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
-    "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
     "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
-    "adapters/vllm/verity_vllm/program/predict/scan_state.py",
     "adapters/vllm/verity_vllm/program/predict/window_class.py",
     "adapters/vllm/verity_vllm/program/predict/window_rows.py",
     "adapters/vllm/verity_vllm/program/predict/window_weights.py",
@@ -1189,8 +1182,6 @@ WORLD_PATHS_ALLOWED: dict[str, str] = {
     "circuits/silicon/models.py": "circuits: each model's source string cites the probe run that measured it",
     "protocols/proofs/spot/prover/cost/inputs.py":
         "proofs: `MEASURED`, the sampling plan's measured inputs, read by default until every caller passes them",
-    "protocols/resource_accounting/memory/poub/verifier/timing.py":
-        "memory-accounting: each bound's note cites the probe that measured it",
     "protocols/proofs/spot/prover/cost/transformer.py":
         "proofs: a table row saying `SERVERS` is assumed, not in the census",
 }

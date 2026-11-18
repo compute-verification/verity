@@ -15,10 +15,12 @@ untraced = ["test_ship_nvcc.py", "test_ship_place.py"]
 # tests/ evaluate the Definition (verity.circuits, which imports no other unit) and the twin's bf16 cast (verity.circuits.kernels.tc);
 # wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate;
 # a call to wgmma.py naming no SM count reads the H200's from its card through verity.device.
+# a ship's -gencode is machine.py's, from the target's architecture file through the harness's kit.
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
           "verity/device.py", "verity/channel.py", "calibration/hardware/cards/h200-sxm-141gb.toml",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "tools/config/verity_config",
           "verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py", "benchmarks/kernels/ship_nvcc.sh",
           "benchmarks/kernels/ship_probe.sh", "benchmarks/kernels/job_nvcc.sh", "benchmarks/kernels/ship.sh",
           "benchmarks/kernels/ship_clock.c", "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops",
-          "verity/circuits/silicon", "benchmarks/kernels/s8_linear"]
+          "verity/circuits/silicon", "benchmarks/kernels/s8_linear", "benchmarks/kernels/machine.py",
+          "benchmarks/harness/verity_bench", "calibration/hardware/cards", "calibration/hardware/architectures"]

@@ -262,12 +262,12 @@ RANDOM = 300
 def test_random_programs_have_the_old_codecs_bytes():
     """`_Gen`'s Programs: the streamed descriptor, `encode_program`'s, `program_digest` and `descriptor_size` are the old codec's
     under both schemas, at node batches of 1 and 3 (a batch boundary inside a body, where an alias reaches back across it) and
-    the default, as is the partition object's `program`; and the alias rule fires (a v1 body writes `alias`)."""
+    the default; and the alias rule fires (a v1 body writes `alias`)."""
     aliased = 0
     for seed in range(RANDOM):
         prog = _Gen(seed).program()
         assert assert_same(prog) == len(SCHEMAS)
-        assert PO.program_sha512(prog) == hashlib.sha512(old_bytes(prog)).hexdigest()
+        assert C.program_digest(prog) == hashlib.sha512(old_bytes(prog)).hexdigest()
         aliased += b'"alias"' in old_bytes(prog)
     assert aliased > RANDOM // 10
 

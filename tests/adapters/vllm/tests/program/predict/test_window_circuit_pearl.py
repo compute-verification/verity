@@ -14,9 +14,7 @@ import re
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
@@ -431,7 +429,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
             if (u := np.flatnonzero((want != np.concatenate(rows.outs[tid], axis=1)).any(axis=1))).size:
                 bad[tid] = u.tolist()
     assert bad == {}
-    assert win.close(salt_key=bytes(32)) is not None
+    assert win.close() is not None
 
 
 @pytest.fixture(scope="module")
@@ -448,8 +446,7 @@ def test_the_tiny_pearl_class_circuit_is_one_wired_program_of_registered_rows(pe
     assert prog.annotations["free"] == []
     assert root_kinds(circuit, prog) == {"read": 41, "table read": 2, "opening": 3}
     assert prog.fn.gates == 110_433_268
-    assert query["params"]["templates"][len(circuit.ids):] == [
-        descriptor_id(t) for t in (*(bind(BitsWord, W=w) for w in (16, 32)), *(bind(WordBits, W=w) for w in (16, 32)))]
+    assert query["params"]["templates"] == circuit.ids
 
 
 @pytest.mark.slow

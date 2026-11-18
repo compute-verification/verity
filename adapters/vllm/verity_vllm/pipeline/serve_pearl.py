@@ -74,7 +74,7 @@ def config_of(value: str | None) -> dict[str, Any]:
                                                                   else M.read(Path(value), "PoUWScheme")))
     except (OSError, ValueError) as e:
         raise UsageError(f"--protocols-config {str(value)[:80]}: {e}") from None
-    if stray := sorted(set(doc) - {"pouw"}):
+    if stray := sorted(set(doc) - {"pouw", M.providing("admission").name}):
         raise UsageError(f"--protocols-config: {stray} are not Pearl+'s (pouw)")
     pouw = doc.get("pouw", {})
     if stray := sorted(set(pouw) - set(CONFIG)):

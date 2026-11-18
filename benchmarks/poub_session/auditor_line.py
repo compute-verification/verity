@@ -165,8 +165,8 @@ from verity.protocols.proofs.spot.verifier.challenger import remote  # noqa: E40
 
 import sheets  # noqa: E402
 
-FIGURES = sheets.figures()
-"""The node's figures, from its data sheets (`sheets.figures`)."""
+FIGURES = sheets.figures("rtx-pro-6000-server-x8")
+"""The figures of the node the gate's sessions ran on, from its data sheets (`sheets.figures`)."""
 
 RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
@@ -306,7 +306,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
     fam = release_log(lines)
-    ch, op = fam.get("challenge"), fam.get("openings")
+    ch, op = fam.get(coins.CHALLENGE), fam.get(coins.OPENINGS)
     n = len(seen)
     draws = -(-n // per_coin)
     if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < draws:
@@ -317,13 +317,13 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     out, by = [], {}
     for g, w in enumerate(seen):
         if per_coin == 1:
-            t, label = op["received"][g], "openings"
+            t, label = op["received"][g], coins.OPENINGS
             if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
-                t, label = ch["received"][g + 2], "challenge"
+                t, label = ch["received"][g + 2], coins.CHALLENGE
         else:
-            t, label = op["received"][g // per_coin], "openings"
+            t, label = op["received"][g // per_coin], coins.OPENINGS
             if g + 2 < n and ch["received"][g + 2] < t:
-                t, label = ch["received"][g + 2], "challenge"
+                t, label = ch["received"][g + 2], coins.CHALLENGE
         by[label] = by.get(label, 0) + 1
         out.append({**w, "released_ns": ch["released"][g], "arrivals_ns": [t] if w["arrivals_ns"] else []})
     return out, {"last_root_first_named_by": by}
@@ -734,8 +734,8 @@ def log_checks(lines: list[str], window_root: str) -> dict:
             "coin_before_its_root": [(label, i) for label, f in fam.items()
                                      for i, (r, s) in enumerate(zip(f["received"], f["released"])) if s < r],
             "clock_monotone": all(a <= b for a, b in zip(times, times[1:])),
-            "sigma0_after_window_root": bool(fam.get("challenge", {}).get("after"))
-            and fam["challenge"]["after"][0] == window_root}
+            "sigma0_after_window_root": bool(fam.get(coins.CHALLENGE, {}).get("after"))
+            and fam[coins.CHALLENGE]["after"][0] == window_root}
 
 
 def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: str

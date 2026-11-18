@@ -33,7 +33,7 @@ verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from
 verity bench recursion_e2e store RESULT... [--merge] --dir DIR    the results and their table as one art's tree in DIR,
                                                                    and the `research data put` command that stores it
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes zk_server --oprove-runs 1 --lease-min M --neg challenge,query
-       --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
+       --forge KINDS [--no-forge-after] --cpu --on MACHINE [--direct --cores 0-31] [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
 `job.sh` needs GNU time at `/usr/bin/time`, cargo, lake (or curl to install elan), 32 cores and 128 GB of memory with an oprove behind the ZK server (else 64), and refuses, before it builds anything, a machine that lacks one.

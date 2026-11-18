@@ -6,7 +6,7 @@ The arithmetic lives in ``cpp/rms_triton_model.cpp``; this module builds/loads i
 tables it needs (``MUFU.SQRT`` and ``MUFU.RSQ`` measured by ``../../../../../benchmarks/definitions/numerics/cuda/rms_probe.cu``, ``MUFU.RCP`` measured by
 ``../../../../../benchmarks/definitions/numerics/cuda/mufu_probe.cu``; all verified against the RTX 4090 on all 2^32 inputs) and exposes
 
-* :func:`rms_norm_rows` -- the model: BF16 rows + BF16 weight + eps -> BF16 rows (and the fp32 scalars);
+* :func:`rms_norm_rows` -- the model: BF16 rows + BF16 weight + eps -> BF16 rows;
 * :func:`gate` -- the measured domain (kernel specialisation, dtype, n_cols family, contiguity).
 
 Kernel identities: ``vllm/model_executor/determinism/batch_invariant.py::
@@ -93,10 +93,10 @@ def lib() -> ctypes.CDLL:
         _lib = _jit.load(build, SOURCES)
         _lib.rms_triton_rows.restype = None
         _lib.rms_triton_rows.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_int, ctypes.c_float,
-                                         ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                                         ctypes.c_int]
+                                         ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
         _lib.rms_cuda_rows.restype = None
-        _lib.rms_cuda_rows.argtypes = _lib.rms_triton_rows.argtypes
+        _lib.rms_cuda_rows.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_int, ctypes.c_float,
+                                       ctypes.c_void_p, ctypes.c_void_p]
         _lib.rms_rsqrt_words.restype = None
         _lib.rms_rsqrt_words.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
         _lib.rms_div_full_words.restype = None
@@ -174,11 +174,8 @@ def div_full(a: np.ndarray, b: np.ndarray, tables: RmsTables) -> np.ndarray:
 # ---- the model ---------------------------------------------------------------------------------
 
 
-def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, variant: int = 0,
-                  want_scalars: bool = False, want_pre: bool = False, kernel: str = "triton"):
-    """``x``: (rows, n_cols) BF16 words (uint16); ``w``: (n_cols,) BF16 words; returns (rows, n_cols) BF16 words,
-    followed (if requested) by the per-row fp32 scalars (triton: ``[sum_sq, mean_eps, rms, inv]``; cuda:
-    ``[sum_sq, arg, mean, s]``) and by the fp32 values just before the BF16 output cast.
+def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, kernel: str = "triton") -> np.ndarray:
+    """``x``: (rows, n_cols) BF16 words (uint16); ``w``: (n_cols,) BF16 words; returns (rows, n_cols) BF16 words.
     ``kernel``: ``"triton"`` (the batch-invariant ``_rms_norm_kernel``) or ``"cuda"`` (``vllm::rms_norm_kernel<bf16, 8>``)."""
     x = np.ascontiguousarray(x, dtype=np.uint16)
     w = np.ascontiguousarray(w, dtype=np.uint16)
@@ -186,27 +183,18 @@ def rms_norm_rows(x: np.ndarray, w: np.ndarray, eps: float, tables: RmsTables, v
         raise ValueError(f"shape mismatch: x {x.shape}, w {w.shape}")
     rows, n = x.shape
     out = np.empty_like(x)
-    dbg = np.empty((rows, 4), dtype=np.float32) if want_scalars else None
-    pre = np.empty((rows, n), dtype=np.float32) if want_pre else None
     if kernel == "triton":
-        fn, tab2 = lib().rms_triton_rows, tables.sqrt
+        fn, tabs = lib().rms_triton_rows, (tables.rcp, tables.sqrt)
     elif kernel == "cuda":
         if tables.rsq is None:
             raise ValueError("the CUDA kernel model needs the MUFU.RSQ table (mufu_rsq_delta_int8.xz)")
         if n % 8 != 0:
             raise ValueError(f"n_cols={n}: only the VEC_SIZE=8 instantiation (n_cols % 8 == 0) is modelled")
-        fn, tab2 = lib().rms_cuda_rows, tables.rsq
+        fn, tabs = lib().rms_cuda_rows, (tables.rsq,)
     else:
         raise ValueError(kernel)
-    fn(x.ctypes.data, w.ctypes.data, rows, n, ctypes.c_float(float(eps)),
-       tables.rcp.ctypes.data, tab2.ctypes.data, out.ctypes.data,
-       dbg.ctypes.data if dbg is not None else None, pre.ctypes.data if pre is not None else None, int(variant))
-    res = [out]
-    if want_scalars:
-        res.append(dbg)
-    if want_pre:
-        res.append(pre)
-    return res[0] if len(res) == 1 else tuple(res)
+    fn(x.ctypes.data, w.ctypes.data, rows, n, ctypes.c_float(float(eps)), *(t.ctypes.data for t in tabs), out.ctypes.data)
+    return out
 
 
 class RmsUnresolved(Exception):

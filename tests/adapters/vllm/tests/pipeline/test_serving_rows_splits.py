@@ -215,7 +215,7 @@ def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = No
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*IF.listed_program(defs, ()), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -319,14 +319,29 @@ def test_a_split_row_holds_each_split_s_chain_its_column_ends_and_the_combines()
             CH.positions(SRW.template(t), spec_statics(row()))
 
 
+def _wired(ms: list[CS.Member], m: CS.Member) -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    """``m``'s wired ports as ``(port, out, the writer units its units read)``, units of ``ms`` by `Member.base`."""
+    own = CH.owns(ms)
+
+    def unit(t: str, leaf: int) -> int:
+        (x,) = [x for x in ms if x.template == t and own[x.key] <= leaf < own[x.key] + x.n]
+        return x.base + leaf - own[x.key]
+
+    out = []
+    for port in dict.fromkeys(w.port for w in m.wired):
+        ps = [w for w in m.wired if w.port == port]
+        out.append((port, ps[0].out, tuple(unit(ps[0].writer, int(v)) for v in WI.reads(ps, own[m.key], m.n))))
+    return tuple(out)
+
+
 def test_the_key_blocks_boolean_bodies_are_the_same_units_rows_and_wires():
     """A window over ``BITS`` is the window over ``TMPLS`` but for its key blocks' template ids: each member's rows, outputs,
     units and wires, and every word serving reads for it."""
     s = Served(n=2)
     ms, bits = members(s), members(s, BITS, BITS_PER_CHUNK)
     of = dict(zip(TMPLS, BITS))
-    assert [(of[m.template], m.rows, m.outs, m.n, m.base, m.wired) for m in ms] == [
-        (m.template, m.rows, m.outs, m.n, m.base, m.wired) for m in bits]
+    assert [(of[m.template], m.rows, m.outs, m.n, m.base, _wired(ms, m)) for m in ms] == [
+        (m.template, m.rows, m.outs, m.n, m.base, _wired(bits, m)) for m in bits]
     for (g, e), (gb, eb) in zip(read(s, ms), read(s, bits, BITS), strict=True):
         assert e == eb and all(np.array_equal(g[x][q], gb[x][q]) for x in ("rows", "outs") for q in g[x] | gb[x])
 
@@ -342,13 +357,13 @@ def test_each_read_row_is_wired_to_the_unit_that_wrote_it():
         if m.template in (F16, F8):
             assert m.wired == ()
         elif m.template == C2:
-            assert m.wired == tuple((f"in{g}.{s}", o, tuple(unit[(p, h, (2, 4)[s])] for p, h, _j in keys))
+            assert _wired(ms, m) == tuple((f"in{g}.{s}", o, tuple(unit[(p, h, (2, 4)[s])] for p, h, _j in keys))
                                     for g, o in ((0, "o1"), (1, "o0")) for s in range(2))
         else:
             prev = tuple(unit[(p, h, writer[j])] for p, h, j in keys)
             names = ("m_prev", "l_prev", "o_prev") if m.template == B16 else ("m", "l", "o")
             g = {nm: i for i, (nm, _ty) in enumerate(SRW.template(m.template).fn.signature()[0])}
-            assert m.wired == tuple((f"in{g[x]}", o, prev) for x, o in zip(names, ("o0", "o1", "o2")))
+            assert _wired(ms, m) == tuple((f"in{g[x]}", o, prev) for x, o in zip(names, ("o0", "o1", "o2")))
     WI.validate(ms)
 
 
@@ -405,7 +420,7 @@ def test_a_combine_of_two_column_blocks_reads_each_column_end_of_its_own():
     assert {t: CH.positions(SRW.template(t), WIDE) for t in tmpls} == places
     unit = units(ms, tmpls, places)
     (c2,) = [m for m in ms if m.template == tmpls[-1]]
-    assert c2.wired == tuple((f"in{g}.{sp}", o, tuple(unit[(0, h, (2 + c, 5 + c)[sp])] for h in range(2) for c in range(2)))
+    assert _wired(ms, c2) == tuple((f"in{g}.{sp}", o, tuple(unit[(0, h, (2 + c, 5 + c)[sp])] for h in range(2) for c in range(2)))
                              for g, o in ((0, "o1"), (1, "o0")) for sp in range(2))
     got = read(s, ms, tmpls)
     ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
@@ -479,7 +494,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     got = read(s, w.members)
     for m, (g, _e) in zip(w.members, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got])
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     j = next(j for j, m in enumerate(w.members) if m.template == C2)
@@ -499,7 +514,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
     bad = [dict(g, rows={**g["rows"], "in1.0": g["rows"]["in1.0"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in1.0 row is not the o0 row")):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad)
 
 
 def test_a_split_row_also_holds_each_key_block_as_its_scores_and_values_units():
@@ -571,33 +586,27 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
     the values unit of its column block before it; a split's end the last scores unit and the last values unit of its column
     block; a combine each split's end on its column block.  Each scores unit's key rows are wired to its key block's writers,
     one a column block, and each values unit's to its column block's; those wired rows have no tree of their own, each its
-    writer member's output rows (`rows.Member.wired_trees`), so a member is cut where a wire's writer member changes."""
+    writer template's output tree (`wiring.Wired`)."""
     ms = members(Served(row(HALF), n=2), UNITS, UNITS_CHUNK)
     assert sum(m.n for m in ms) == 2 * (2 * 15 + 9)
     unit, kunit = units(ms, UNITS, UNITS_PLACES, rows=2), key_units(ms, UNITS, UNITS_PLACES, rows=2)
     at = {u: key for key, u in unit.items()}
     pl, kp = CH.places(HALF), CH.key_places(HALF)
     writer = {(p, kp[j].split, kp[j].block, kp[j].col): u for (p, j), u in kunit.items() if kp[j].key[2] == 32}
-    bases = WI.bases(ms)
     for m in ms:
         kind = CH.kind(SRW.template(m.template))
         if kind == "keys":
-            assert (m.wired, m.wired_trees, m.tables) == ((), True, ())
+            assert m.wired == ()
             continue
         keys = [at[m.base + i] for i in range(m.n)]
         g = {nm: i for i, (nm, _ty) in enumerate(SRW.template(m.template).fn.signature()[0])}
         reads = pl[keys[0][2]].reads
         by_kind: dict[str, list] = {"scores": [(f"kv{c}", lambda _j, c=c: c) for c in range(3)], "values": [("kv", lambda j: pl[j].col)]}
         cols = by_kind.get(kind, [])
-        assert m.wired == tuple((f"in{g[x]}" + ("" if sp is None else f".{sp}"), o,
+        assert _wired(ms, m) == tuple((f"in{g[x]}" + ("" if sp is None else f".{sp}"), o,
                                  tuple(unit[(p, h, pl[j].reads[i][3])] for p, h, j in keys)) for i, (x, sp, o, _to) in enumerate(reads)) + \
             tuple((f"in{g[x]}", "o0", tuple(writer[(p, pl[j].split, pl[j].block, c(j))] for p, _h, j in keys)) for x, c in cols)
         assert bool(m.wired) == (m.template not in (UNITS[0], UNITS[2])) or kind == "scores"
-        assert m.wired_trees == (kind not in ("scores", "values"))
-        if not m.wired_trees:
-            mine = {p: WI.writers(ms, ws, bases) for p, _o, ws in m.wired}
-            assert all(len(x) == 1 for x in mine.values())
-            assert m.tables == tuple((p, mine[p][0][0].n if p in mine else m.n) for p, _w in m.rows)
     later = [m.key for m in ms if m.template == UNITS[4]]
     assert later == [f"{UNITS[4]}/c{j}" for j in range(len(later))] and len(later) > 2 * 2 // UNITS_CHUNK[UNITS[4]]
     WI.validate(ms)
@@ -665,8 +674,8 @@ def test_the_scores_and_values_units_boolean_bodies_are_the_same_units_rows_and_
     s = Served(row(HALF), n=2)
     ms, bits = members(s, UNITS, UNITS_CHUNK), members(s, UNITS_BITS, UNITS_BITS_CHUNK)
     of = dict(zip(UNITS, UNITS_BITS))
-    assert [(of[m.template], m.rows, m.outs, m.n, m.base, m.wired, m.wired_trees, m.tables) for m in ms] == [
-        (m.template, m.rows, m.outs, m.n, m.base, m.wired, m.wired_trees, m.tables) for m in bits]
+    assert [(of[m.template], m.rows, m.outs, m.n, m.base, _wired(ms, m), m.tables) for m in ms] == [
+        (m.template, m.rows, m.outs, m.n, m.base, _wired(bits, m), m.tables) for m in bits]
     for (g, e), (gb, eb) in zip(read(s, ms, UNITS), read(s, bits, UNITS_BITS), strict=True):
         assert e == eb and all(np.array_equal(g[x][q], gb[x][q]) for x in ("rows", "outs") for q in g[x] | gb[x])
 
@@ -689,7 +698,7 @@ def test_a_combine_of_64_columns_reads_each_split_s_end_from_the_unit_the_partit
     assert {t: CH.positions(SRW.template(t), WIDE) for t in tmpls} == places
     unit = units(ms, tmpls, places)
     (m,) = [m for m in ms if m.template == c2]
-    assert m.wired == tuple((f"in{g}.{sp}", o, tuple(unit[(0, h, 18 + 2 * sp + c)] for h in range(2) for c in range(2)))
+    assert _wired(ms, m) == tuple((f"in{g}.{sp}", o, tuple(unit[(0, h, 18 + 2 * sp + c)] for h in range(2) for c in range(2)))
                             for g, o in ((0, "o1"), (1, "o0")) for sp in range(2))
     assert committed(ms, read(s, ms, tmpls))[m.port("o0")].reshape(-1).tolist() == s.y.tolist()
     chunk = dict.fromkeys([*whole, *tmpls, values(16, WIDE, G=32)], 64)
@@ -789,7 +798,7 @@ def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     got = read(s, w.members, UNITS)
-    c = CS.commit(w, held_values(w, got), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, got))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     held = [(m, p) for m in w.members if not m.wired_trees for p, _o, _ws in m.wired]
@@ -875,7 +884,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     assert sum(len(m.wired) for m in copies.members) < sum(len(m.wired) for m in w.members)
 
     def codes(win: CS.Binding, data: list[dict]) -> tuple[str, ...]:
-        c = CS.commit(win, data, salt_key=bytes(32))
+        c = CS.commit(win, data)
         rec = CS.registration(c, {"by": "test"}, None, registrar=R)
         return tuple(R.check(rec, w.program, w.query, design, CS.SCHEME, CS.expected_ports(w),
                              leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
@@ -892,7 +901,7 @@ def test_a_unit_in_the_sample_whose_key_reference_names_another_row_of_its_write
     only the member's other units."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
-    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     kp = CH.key_places(HALF)
     writer = {(kp[j].split, kp[j].block, kp[j].col): u for (_p, j), u in key_units(w.members, UNITS, UNITS_PLACES).items()}

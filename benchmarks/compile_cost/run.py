@@ -59,11 +59,8 @@ PINS: dict[str, list[str]] = {
 
 
 def target(card: str) -> dict:
-    from verity_bench import kit
-    t = kit.gpu_target(card)
-    return {"compute_capability": t["compute_capability"], "num_sms": t["num_sms"], "batch_invariant": False, "attention_backend": None,
-            "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": t["device_name"],
-            "moe_backend": "triton", "card": card}
+    return {"card": card, "batch_invariant": False, "attention_backend": None, "vllm_revision": "d9105ea80",
+            "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "moe_backend": "triton"}
 
 
 def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seqs: int = 256) -> list[list[tuple[int, int, int]]]:
@@ -130,10 +127,9 @@ def class_cost(m: Meter, card: str) -> dict:
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.window_class import WindowClass
     hf = json.loads(pinned_hf_config(LLAMA32_1B["repo"], LLAMA32_1B["revision"]).read_text())
-    tgt = {k: target(card)[k] for k in ("compute_capability", "num_sms", "card")}
     t0 = time.perf_counter()
     with m.phase("Registered.of"):
-        reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target=tgt), default_seed=DEFAULT_SEED)
+        reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target={"card": card}), default_seed=DEFAULT_SEED)
     with m.phase("lower"):
         low = window_circuit.lower(reg, WindowClass(*CLASS_1B))
     wall = time.perf_counter() - t0
@@ -240,7 +236,7 @@ def instrument(m: Meter) -> None:
 def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", choices=sorted(MODELS), default="glm-5.3",
-                    help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered unwired, in place of a window")
+                    help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered wired, in place of a window")
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--card", required=True, help="the card the target is compiled for, by its card file's name under "
@@ -256,9 +252,10 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
     a = ap.parse_args(argv)
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     try:
-        target(a.card)
-    except (KeyError, SystemExit) as e:
+        TargetProfile(card=a.card)
+    except (KeyError, ValueError) as e:
         ap.error(f"--card: {e.args[0]}")
     if a.window and a.requests:
         ap.error("one of --window and --requests")
@@ -353,7 +350,8 @@ def machine(card: str) -> str:
 
 def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str) -> None:
     from verity_bench import kit
-    short = kit.card_short(target(card)["device_name"])
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    short = kit.card_short(TargetProfile(card=card).device_name)
     w = kit.writer(out)
     fields = {"model": MODELS[model], "window": window, "execution": execution, "card": short,
               "machine": machine(w.stamp["card"])}

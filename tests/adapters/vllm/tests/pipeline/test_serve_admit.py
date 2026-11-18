@@ -1,4 +1,4 @@
-"""serve-openai's ``--admit release-order`` (`serve_admit.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
+"""serve-openai's ``--admit release-order`` (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder`) on CPU: requests reach the engine in the network attester's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
 later ones, and a release that never comes (the network attester dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, Tokenizer, records
+from verity_vllm import messages
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity.protocols.resource_accounting.network.prover import admission as na
@@ -391,12 +392,16 @@ def test_a_refused_release_and_an_unnumbered_request_hold_nothing(tmp_path):
 def test_the_flag_defaults_off_and_takes_release_order():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
     assert cli.parse("serve-openai", base, environ={}).admit == "arrival"
-    opts = cli.parse("serve-openai", [*base, "--admit", "release-order", "--admit-hold-ms", "2500"], environ={})
-    assert (opts.admit, opts.admit_hold_ms) == ("release-order", 2500)
+    name = messages.providing("admission").name
+    opts = cli.parse("serve-openai", [*base, "--admit", "release-order", "--protocols-config",
+                                      json.dumps({name: {"hold_ms": 2500}})], environ={})
+    assert so.admission_settings(opts) == {"hold_ms": 2500, "order": "release-order"}
+    so.preflight(opts, which=lambda _: None)
     with pytest.raises(SystemExit):
         cli.parse("serve-openai", [*base, "--admit", "boundary"], environ={})
-    with pytest.raises(cli.UsageError, match="admit-hold-ms"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit-hold-ms", "0"], environ={}), which=lambda _: None)
+    with pytest.raises(cli.UsageError, match="hold_ms a positive number"):
+        so.preflight(cli.parse("serve-openai", [*base, "--admit", "release-order", "--protocols-config",
+                                                json.dumps({name: {"hold_ms": 0}})], environ={}), which=lambda _: None)
 
 
 def test_without_the_flag_a_release_header_changes_nothing(tmp_path):

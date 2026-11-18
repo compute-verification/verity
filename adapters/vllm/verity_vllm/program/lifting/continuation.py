@@ -163,10 +163,10 @@ class Slot:
         return "active" if self.emit and self.run else ("lag" if self.run else ("inactive" if not self.emit else "UNREACHABLE(1,0)"))
 
 
-def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int], w: int = 32, lifted_words: bool = False) -> list[Slot]:
+def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int], w: int = 32) -> list[Slot]:
     """The bits COMPUTED from the Program's rule and the record's RAW transcript `raw[t-1] = y_t` (the sampled token of every EXECUTED slot,
     the lag slot's discarded sample included -- the fold has it, tokens.json has only the served ones; `None` where the record produced no
-    token).  `lifted_words`: `raw` are `w+1`-bit words (bot allowed) rather than plain ids.  Nothing is judged here (see `check_transcript`):
+    token).  Nothing is judged here (see `check_transcript`):
     a slot with `r_t = 1` and no raw token reads `b_t = 0` and is named there as a deleted step; a token at `r_t = 0` is named there as
     execution past the stop.  Returns exactly `cap` slots (the population is fixed; the inactive suffix is present as slots with (0, 0))."""
     check_profile(A)
@@ -178,7 +178,7 @@ def recurrence(raw: Sequence[int | None], *, cap: int, A: int, eos: Iterable[int
     e, r, out = True, True, []
     for t in range(1, cap + 1):
         y = raw[t - 1] if t - 1 < len(raw) else None
-        if y is not None and not lifted_words:
+        if y is not None:
             y = L.enc_active(w, int(y))
         b = (y is not None) and r and is_eos_total(w, int(y), eos_set)  # an inactive token is not EOS (IsEOS total)
         ne, nr = next_flags(emit=e, token_is_eos=b, has_next_slot=t < cap, async_one_step=A == 1)
