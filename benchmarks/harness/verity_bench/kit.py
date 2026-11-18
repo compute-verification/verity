@@ -241,6 +241,18 @@ def card_short(name: str, *, directory: Path | None = None) -> str:
     return card_record(name, directory=directory)["short"]
 
 
+def card_named_short(short: str, *, directory: Path | None = None) -> dict:
+    """The GPU card record in ``directory`` (`cards_directory` by default) whose ``short`` is ``short``, a member's card
+    part as a record stored it; refused, naming the shorts there are, unless exactly one has it."""
+    directory = directory or cards_directory()
+    cards = _gpu_cards(directory)
+    held = [c for c in cards if c.get("short") == short]
+    if len(held) != 1:
+        raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
+                         f"{sorted(c['short'] for c in cards if c.get('short'))}")
+    return held[0]
+
+
 def card_sku(name: str, *, directory: Path | None = None) -> str:
     return card_record(name, directory=directory)["sku"]
 

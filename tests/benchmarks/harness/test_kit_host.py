@@ -120,6 +120,17 @@ def test_the_kit_finds_a_card_by_its_driver_name_only_through_the_devices_lookup
     assert not kit.is_card("NVIDIA H200", "h200", directory=tmp_path)
 
 
+def test_a_members_card_part_is_one_gpu_card_files_short(tmp_path):
+    assert kit.card_named_short("h200")["sku"] == "h200-sxm-141gb"
+    with pytest.raises(SystemExit, match=r"^0 GPU card files under .* have `short` 'NVIDIA H200': one of \[.*'h200'"):
+        kit.card_named_short("NVIDIA H200")
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    for sku in ("h200-sxm-141gb", "h200-twin"):
+        (tmp_path / f"{sku}.toml").write_text(h200.replace('sku = "h200-sxm-141gb"', f'sku = "{sku}"'))
+    with pytest.raises(SystemExit, match="^2 GPU card files"):
+        kit.card_named_short("h200", directory=tmp_path)
+
+
 @pytest.mark.parametrize("card, short", [("NVIDIA H200", "h200"), ("NVIDIA H200, NVIDIA H200", "h200"),
                                          ("NVIDIA H100 80GB HBM3", "h100"), ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
                                                                              "rtx-pro-6000"), ("NVIDIA B200", "b200")])
