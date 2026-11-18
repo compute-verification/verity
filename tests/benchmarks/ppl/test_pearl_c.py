@@ -118,9 +118,40 @@ def test_metrics_of_a_run_whose_gates_failed_is_no_number(tmp_path, capsys, stam
     assert not (tmp_path / "out").exists()
 
 
+def test_metrics_of_another_set_is_no_point(tmp_path, capsys, stamped):
+    p = tmp_path / "results.json"
+    p.write_text(json.dumps(a_result() | {"set": "wikitext2"}))
+    assert run.main(["metrics", str(p), "--out", str(tmp_path / "out")]) == 1
+    assert "metrics.toml's axis" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
 def test_metrics_of_another_run_is_a_reprint(tmp_path, capsys, stamped, monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20000101-000002-qqqq")
     p = tmp_path / "results.json"
     p.write_text(json.dumps(a_result()))
     assert run.main(["metrics", str(p), "--out", str(tmp_path / "out")]) == 0
     assert not (tmp_path / "out" / "result.json").exists()
+
+
+def test_each_point_names_the_model_and_the_card_its_eval_ran_on(tmp_path, stamped):
+    names = [report.METRICS[k] for k in ("shipped", "pearl_c", "cost")]
+    for device, member in (("NVIDIA H200", "llama-3.2-1b-h200"),
+                           ("NVIDIA H100 80GB HBM3", "llama-3.2-1b-h100")):
+        r = a_result()
+        r["env"]["device"] = device
+        p, out = tmp_path / f"{member}.json", tmp_path / member
+        p.write_text(json.dumps(r))
+        assert run.main(["metrics", str(p), "--out", str(out)]) == 0
+        got = json.loads((out / "result.json").read_text())["measurements"]
+        assert [(m["name"], m["member"]) for m in got] == [(n, member) for n in names]
+
+
+def test_a_card_no_card_record_holds_is_no_point(tmp_path, capsys, stamped):
+    r = a_result()
+    r["env"]["device"] = "NVIDIA H200 NVL"
+    p = tmp_path / "results.json"
+    p.write_text(json.dumps(r))
+    assert run.main(["metrics", str(p), "--out", str(tmp_path / "out")]) == 1
+    assert "'NVIDIA H200 NVL', the card nvidia-smi names here" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()

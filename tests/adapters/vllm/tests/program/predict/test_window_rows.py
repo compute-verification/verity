@@ -20,13 +20,12 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.registry import io_shell as IO
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.verifier import network_attester as W
 from verity.protocols.resource_accounting.network.verifier.id_form import id_request
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
-from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -41,6 +40,7 @@ from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.definitions.registry import io_shell as IO
 from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import scan_state as SS
@@ -766,7 +766,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
 
 def test_a_cut_norms_parts_hold_its_sum_and_its_tail_the_nodes_value():
     """At a class whose norm after down_proj is cut at its residual add (`test_window_circuit.SPLIT`), each add part holds its
-    words of the node's sum, which is `RMSNormFusedCudaAdd_v1` on the node's x and res, and the tail the node's value, which
+    words of the node's sum, which is `RMSNormFusedCudaAdd_v2` on the node's x and res, and the tail the node's value, which
     is `RMSNormFusedCudaTail_v1` on the parts' sums in order of AT; every unit is filled."""
     low, _f, values, _w, slots = _window(SPLIT, SPLIT_GRAIN)
     rows = WR.Rows(low, slots, values)
@@ -898,3 +898,27 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
         pub[name] = _public(c, tmp_path / name)
     assert pub["served"] == pub["other"]
     assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])
+
+
+@pytest.mark.slow
+def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_verifier_derives(window, tmp_path):
+    """Slow (minutes) for the window's close, which no cheaper path to `Window.write` skips."""
+    low, _f, values, _w, slots = window
+    c, words = low.circuit, SS.words(CLASS.scan)
+    assert c.registered.values == (SS.SCAN_STATE,)
+    program, digest = c.program()[0], WC.population_digest(c)
+    assert dict(program.fn.signature()[0])[SS.SCAN_STATE].leaves == CLASS.buckets * words
+    state = WR.standin_state(digest, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 0, window=RUN)
+    vals = {**values, SS.SCAN_STATE: state}
+    win = IF.Window(c, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
+    win.supply(CR)
+    WR.Rows(low, slots, vals).record(win)
+    win.write(win.close(), tmp_path, {}, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+    rec = json.loads((tmp_path / "registration.json").read_text())
+    (e,) = rec["registered"]
+    scan = CR.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
+    want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
+    assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
+    assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
+    assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
+        CLASS.buckets, words, CR.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())

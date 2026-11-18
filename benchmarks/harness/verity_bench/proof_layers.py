@@ -44,13 +44,16 @@ from verity_bench.proof_layers_parse import (
     _lean_verdicts,
     _number,
     _sampled,
+    _serves,
     _tagged,
     _text,
 )
 from verity_bench.proof_layers_print import (
     document,
     has_number,
+    batch_word,
     measured,
+    prover_device,
     render,
 )
 from verity_bench.proof_layers_result import (
@@ -96,6 +99,7 @@ __all__ = [
     "Result",
     "Unreadable",
     "add_arguments",
+    "batch_word",
     "detect",
     "document",
     "fetch",
@@ -103,6 +107,7 @@ __all__ = [
     "locate",
     "measured",
     "per_unit",
+    "prover_device",
     "read",
     "read_a5",
     "read_layers_sh",
@@ -110,6 +115,7 @@ __all__ = [
     "read_recursion",
     "render",
     "run",
+    "staged_words",
 ]
 
 
@@ -190,6 +196,52 @@ def _epsilon(e: Any) -> str | None:
             f" (summary.json epsilon, the first and last of its {len(pairs)} pairs)")
 
 
+#: a5_llama1b_h200.sh's steps.txt: a step's start and its exit (``HH:MM:SSZ NAME: ARGS``, ``HH:MM:SSZ NAME rc=N``), and the
+#: build step's ``build cache:`` line
+STEP_AT = re.compile(r"^(\d\d):(\d\d):(\d\d)Z (build)(?:: | rc=(\d+)$)")
+BUILD_CACHE = re.compile(r"^\d\d:\d\d:\d\dZ build cache: (.+)$")
+
+
+def _build(steps: str) -> tuple[float | None, str]:
+    """steps.txt's build step: its wall seconds, from its start line to an ``rc=0`` line after it (None without both), and its
+    ``build cache:`` line's words (`NOT_STATED` without one)."""
+
+    start = end = None
+    cache = NOT_STATED
+    for line in steps.splitlines():
+        if m := STEP_AT.match(line):
+            at = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+            if m.group(5) is None:
+                start, end = at, None
+            elif start is not None and m.group(5) == "0":
+                end = at
+        elif m := BUILD_CACHE.match(line):
+            cache = m.group(1)
+    return (None if start is None or end is None else float((end - start) % 86400)), cache
+
+
+def _statement_instances(d: Path) -> int | None:
+    """The proof blocks the run's Flock statement holds, by its prover's ``statement NAME instances=N`` line: the proof server's
+    log, or a plain session's prove.log; None unless every such line states one number."""
+
+    logs = [*sorted(d.glob("a5/window/proof-server/prover-*.log")), *sorted(d.glob("a5/window/session-*/prove.log"))]
+    counts = {int(m.group(1)) for f in logs for m in re.finditer(r"^statement \S+ instances=(\d+)", _text(f), re.M)}
+    return counts.pop() if len(counts) == 1 else None
+
+
+def staged_words(st: dict) -> str:
+    """What a recursion run's inner statement (stage.sh's ``stage.json``) holds: N of a served window member's M proof
+    blocks, the served values committed again under plain leaves, or seeded inputs."""
+
+    win, sub = st.get("window"), st.get("subset")
+    if not win:
+        return f"{st['subcircuit']} x {st['n']}, seeded inputs, not served values"
+    of, member = (sub["n"], sub["member"]) if sub else (st["n"], win["member"])
+    return (f"{st['subcircuit']}: {st['n']} of {of} proof blocks of a served window's member {member}, the served values "
+            "committed again under plain leaves for the recursion, not the served commitment; the outer proof is not "
+            "tied to the served registration")
+
+
 def read_recursion(d: Path, result: Result) -> None:
     """recursion_e2e.json: the headline's verdict (an accept only where Lean composed V*'s parts into the recursive
     statement and accepted it: ``ok`` and ``composed``), one recursive run's path without Lean's step as the prover's
@@ -198,7 +250,7 @@ def read_recursion(d: Path, result: Result) -> None:
     doc = json.loads((d / "recursion_e2e.json").read_text())
     h, p, inputs = doc.get("headline") or {}, doc.get("params") or {}, doc.get("inputs") or {}
     st = doc.get("staged")
-    shape = f"{st['subcircuit']} x {st['n']}" if st else f"K = {p.get('K', '?')}, N = {p.get('N', '?')}"
+    shape = staged_words(st) if st else f"K = {p.get('K', '?')}, N = {p.get('N', '?')}"
     inner = [c.strip() for c in CLAUSE.split(str(inputs.get("inner") or "")) if c.strip()]
     result.workload = shape + (f": {inner[0]}" if inner else "")
     result.accepted = h.get("ok") is True and h.get("composed") is True
@@ -346,8 +398,8 @@ def read_prove_path(d: Path, result: Result) -> None:
 
 def read_a5(d: Path, result: Result) -> None:
     """a5_llama1b_h200.sh's out (or a5.sh's): the audit's last A5 line (its Lean verify verdicts), the audit's summary.json
-    for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir and
-    verdicts.txt's serving stages."""
+    for its timing, its coins and its arm, summary.txt's STOPPED, REGISTERED and rc lines, machine.txt's row dir,
+    verdicts.txt's serving stages, steps.txt's build step and the prover's log for its statement's proof blocks."""
 
     summary_txt = _text(d / "summary.txt")
     log = next((_text(d / f) for f in ("a5/a5.log", "a5.log") if (d / f).is_file()), summary_txt)
@@ -382,6 +434,12 @@ def read_a5(d: Path, result: Result) -> None:
                     + _sampled(counts, summary.get("population")) + (f" ({window})" if window else ""))
     if summary.get("timing"):
         _per_block(result, [per_unit(summary["timing"], counts)])
+    result.prover_batch = _statement_instances(d)
+    if result.prover_batch is not None and result.prover_what:
+        result.prover_what += f"; its Flock statement holds {result.prover_batch:,} proof blocks, the prover's batch"
+    result.build_s, result.build_cache = _build(_text(d / "steps.txt"))
+    result.build_what = ("steps.txt's build step: the served workload's step, request and workload Programs, every Definition's, "
+                         "not only the partition's") if result.build_s is not None else ""
     verdicts = ((a5 or {}).get("audit") or {}).get("verdicts") or {}
     challengers = sorted(k for k in verdicts if k.startswith("challenger/"))
     coins = summary.get("coins") or {}
@@ -395,6 +453,9 @@ def read_a5(d: Path, result: Result) -> None:
     else:
         result.said(_challenger(coins.get("source"), coins.get("challenger")), None, said)
     result.commit, result.commit_from = _commit(d / "machine.txt"), "machine.txt's git HEAD"
+    result.serves, unheld = _serves(_text(d / "machine.txt"))
+    if unheld:
+        result.notes.append(unheld)
     result.proof = "plain" if summary.get("plain") else "zk" if summary else None
     result.device = _device((summary.get("timing") or {}).values())
     result.eps_delta = (_epsilon(summary.get("epsilon")) or _incorrect((summary.get("audit") or {}).get("wrong_units"))
@@ -508,9 +569,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
                             help=f"the output the benchmark result for {named[layer]} is read from: a run's out/ directory, "
                                  "or a run id fetched through the store")
+    parser.add_argument("--batch", metavar="LO-HI",
+                        help="a batch study's request steps, not the partition file's own scope: every member it writes "
+                             "ends in that batch (-b16 for 1-16), so the plain members hold the own batch alone")
 
 
 def run(args: argparse.Namespace) -> int:
     results = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    kit.report(REPORT, render(results), document(results), measured(results, getattr(args, "metrics", None) or {}))
+    kit.report(REPORT, render(results), document(results),
+               measured(results, getattr(args, "metrics", None) or {}, getattr(args, "batch", None)))
     return 0 if has_number(results) else 1

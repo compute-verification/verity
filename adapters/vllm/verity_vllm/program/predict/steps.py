@@ -41,8 +41,8 @@ its account in the output accounting (the advice through `reads.gate`):
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
   TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
-  8,192 tokens and 256 sequences, positions at most 131,072, prefill chunks of at most 256 rows, the prefix cache stated on or
-  off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
+  8,192 tokens and 1,024 sequences, positions at most 131,072, prefill chunks of at most 256 rows (or unclamped at a threshold of 0),
+  the prefix cache stated on or off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
   graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
   prefill chunks and then its decodes, every row that step's forward ran as (n, start), in the advice's batch order, a refused
@@ -61,8 +61,7 @@ its account in the output accounting (the advice through `reads.gate`):
   state. One whose rows here are all past its last kept output has no Program here. The launch and the chunks are the advice's
   schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
   reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
-  statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
-  captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
+  statics don't cover is the build's refusal, by name: today an all-reduce no capture covers (`tp_allreduce.covered`). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
 - `recompute_hits=True`: a request's prefix-cache hit is its Program's to compute from its own tokens, and no Program reads
   another request's KV, so a hit request's Program has no `prefix` input and GP-01 records no producers for it. Its rows still
   start at the hit: positions 0..C-1 are its Program's alone (`RequestUnit.recomputed`), in no row. On a batch-invariant target
@@ -90,7 +89,7 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
   bytes, is over ℓ (before any of it is read), comes without its certified record, or isn't a string v1 decodes
   (`AdviceCodeError`, "ill-formed v1 advice": the code's own bits, and windows that are the replay's residual);
 - a target without batch invariance outside class G, and in class G a step over the registered `max_num_batched_tokens` or
-  `max_num_seqs`, or a request's row over its `long_prefill_token_threshold`;
+  `max_num_seqs`, or a request's row over its `long_prefill_token_threshold` (when that is above 0);
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary,
   whose `output_len` and `finish` its `max_tokens` contradicts, whose stop fields its length rule doesn't read
   (`stop_rule.body_refusal`), that finished on a stop id with none, or stochastic with a seed `reads.seed_of` refuses;
@@ -128,14 +127,19 @@ from typing import Any
 import verity.protocols.resource_accounting.network.verifier.advice as I1
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
-from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
+from verity_torch.prune import dead_units
+
+from verity_vllm.definitions.registry import io_shell as IO
+from verity_vllm.engine.profiles.engine_classes import (
+    CLASS_G,
+    CLASS_G_EXECUTIONS,
+    CLASS_G_LIMITS,
+)
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.records.schema_ids import COMPILED_STEPS_SCHEMA
-from verity_torch.prune import dead_units
-from verity_vllm.definitions.registry import io_shell as IO
 
 from . import reads
 from .build import Unexpressible, build_program, decoder, model_shape
@@ -420,7 +424,8 @@ def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int, carry: W
 def launch_class(phi: Phi) -> None:
     """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
     world and device, an execution the class doesn't serve (`CLASS_G_EXECUTIONS`) or a target compilation other than the one it
-    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
+    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS` (a long-prefill threshold of 0 too: vLLM's
+    no clamp a request), and the prefix cache stated on or
     off (vLLM's default is on).  Async scheduling isn't one: the rows it runs past a request's stop are the advice's, `discarded`
     and in the launches they ran in."""
     eng = dict(phi.engine or {})
@@ -432,8 +437,10 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {limit}" for k, limit in CLASS_G_LIMITS.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= limit]
+    unclamped = {"long_prefill_token_threshold"}
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {limit}{' or 0 (no clamp)' if k in unclamped else ''}"
+              for k, limit in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not (0 < eng[k] <= limit or (k in unclamped and eng[k] == 0))]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:
@@ -605,7 +612,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
             for row in step.rows:
                 for why in over:
                     refuse(row.request, f"step {s} runs {why}")
-                if row.n > eng["long_prefill_token_threshold"]:
+                if 0 < eng["long_prefill_token_threshold"] < row.n:
                     refuse(row.request, f"request {row.request}: step {s} runs {row.n} of its rows, over the registered "
                                         f"long_prefill_token_threshold {eng['long_prefill_token_threshold']} (the engine schedules at "
                                         f"most that many of a request's rows a step)")

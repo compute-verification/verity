@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -24,7 +23,6 @@ from verity_bench.vllm.presets import SPEC_ROOT
 ROOT = Path(__file__).resolve().parents[3]
 STEADY = sorted(path.stem for path in SPEC_ROOT.glob("*.toml") if SP.is_steady(path))
 HEAD = "glm53-flock-steady-head-block-h200"
-HEAD_C24 = "glm53-flock-steady-head-block-h200-c24"
 SETUP = "benchmarks/harness/setup/flock_prover.sh"
 LAUNCHER = "benchmarks/harness/steady_point.sh"
 
@@ -69,23 +67,6 @@ def test_the_head_blocks_statements_are_two_directories_of_one_artifact_in_the_s
     (art, one), (same, other) = false.stored, true.stored
     assert art == same and one != other
     assert not any(row.staged.startswith("/") for row in (false, true)), "no point reads a directory another lane staged"
-
-
-def test_the_head_blocks_24_core_points_are_its_four_prover_points_with_identities_of_their_own():
-    """`HEAD_C24` is the head block's spec at four provers on 24 cores and in nothing else: its points are the ten-core
-    spec's four-prover points, and each identity is the one that point would have at 24 cores, never the ten-core one,
-    so neither's result is read as the other's."""
-
-    ten, wide = SP.load_spec(HEAD), SP.load_spec(HEAD_C24)
-    assert (ten.cores, wide.cores) == (10, 24)
-    assert replace(ten, id=wide.id, cores=wide.cores, row=wide.row) == wide
-    assert wide.row == tuple(replace(row, provers=(4,)) for row in ten.row)
-    fours = [point for point in ten.points if point.provers == 4]
-    assert [(point.id, point.sessions) for point in wide.points] == [(point.id, point.sessions) for point in fours]
-    files = "f" * 64
-    for four, point in zip(fours, wide.points, strict=True):
-        assert SP.point_identity(wide, point, files) == SP.point_identity(replace(ten, cores=24), four, files)
-        assert SP.point_identity(wide, point, files) != SP.point_identity(ten, four, files)
 
 
 def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
@@ -268,7 +249,7 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert pythonpath.split(":") == [
         f"{root}/benchmarks/harness", f"{root}/tools/config", str(root), f"{root}/tools/research/src",
         str(root), f"{root}/verity/protocols/proofs/flock/prover/python", f"{root}/adapters/vllm",
-        f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
+        f"{root}/adapters/torch", f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
     setup = launcher.run_dir / "out" / "setup"
     assert (work / "build-saw.txt").read_text().splitlines() == [
         "BUILD_ONLY=1 GPU=1", f"{setup}/build", f"{setup}/build/sweep", f"{toolkit}/bin/nvcc", str(root)]

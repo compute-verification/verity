@@ -78,6 +78,35 @@ def test_register_writes_one_file_and_run_on_resolves_it(reg):
     assert sorted(x.name for x in reg.glob("*.toml")) == ["vy-lane-a.toml", "vy-lane-b.toml"]   # two pods, two files, no merge
 
 
+def test_a_machine_is_marked_stopped_and_back_with_its_other_lines_kept_and_a_re_registration_keeps_the_mark(reg, capsys, monkeypatch):
+    """`research pods stopped NAME` is the mark placement reads (`left_out`); it changes one line of the file and no machine."""
+    import datetime as dt
+
+    monkeypatch.setenv("RESEARCH_NOTES_SYNC", "0")
+    p, _ = registry.register_ssh("vy-nebius-cpu-7", "192.0.2.7", "verity", probe=lambda e: None, nebius_instance_id="computeinstance-x")
+    p.write_text(p.read_text() + 'deadline = "2026-12-01T06:00:00Z"\n')
+    before, t = p.read_text(), dt.datetime(2026, 11, 12, 19, 15, tzinfo=dt.UTC)
+    assert registry.left_out(tomllib.loads(before), t.timestamp()) is None
+    assert registry.stopped("vy-nebius-cpu-7", now=t) == (p, "is marked stopped since 2026-11-12T19:15:00Z")
+    assert p.read_text() == before + 'stopped_since = "2026-11-12T19:15:00Z"\n'
+    assert registry.left_out(tomllib.loads(p.read_text()), t.timestamp()) == "stopped since 2026-11-12T19:15:00Z"
+    assert registry.stopped("vy-nebius-cpu-7", now=t + dt.timedelta(hours=1))[1] == "is marked stopped since 2026-11-12T19:15:00Z already"
+    assert registry.register_ssh("vy-nebius-cpu-7", "192.0.2.7", "verity", probe=lambda e: None, lane="infra",
+                                 nebius_instance_id="computeinstance-x")[1] == "updated"
+    assert tomllib.loads(p.read_text())["stopped_since"] == "2026-11-12T19:15:00Z", "only `--back` takes the mark out"
+    p.write_text(before + 'stopped_since = "2026-11-12T19:15:00Z"\n')
+    assert part.main(["stopped", "vy-nebius-cpu-7", "--back"]) == 0 and p.read_text() == before
+    out = capsys.readouterr().out
+    assert "is no longer marked stopped (it was since 2026-11-12T19:15:00Z)" in out and "roll /etc/vy/peers --by WHO --apply" in out
+    assert registry.stopped("vy-nebius-cpu-7", back=True)[1] == "wasn't marked stopped" and p.read_text() == before
+    assert part.main(["stopped", "vy-absent"]) == 2 and "no " + str(reg / "vy-absent.toml") in capsys.readouterr().err
+    guard = registry.UNREACHABLE_OUT_MIN * 60
+    assert [registry.left_out({"unreachable_since": "2026-11-12T19:15:00Z"}, t.timestamp() + s) for s in (guard - 1, guard)] == \
+        [None, "no answer since 2026-11-12T19:15:00Z"]
+    assert registry.left_out({"stopped_since": "soon", "unreachable_since": 7}, t.timestamp()) is None, "a mark that is no time"
+    assert registry.left_out({"stopped_since": "2026-13-01T00:00:00Z", "unreachable_since": "0000-01-01T00:00:00Z"}, t.timestamp()) is None
+
+
 def test_g2_an_unknown_pod_id_is_refused_and_nothing_is_written(reg):
     with pytest.raises(remote.Refused, match="not in the RunPod account"):
         registry.register("vy-lane-a", "nosuchpod00000", "verity", get_pod=pods(POD))
@@ -103,6 +132,34 @@ def test_register_refuses_a_foreign_name_a_bad_name_and_a_silent_rebind(reg, tmp
     (tmp_path / "machines.toml").write_text(f'[machines.vy-lane-b]\nprovider = "runpod"\npod_id = "{POD["id"]}"\nproject = "verity"\n')
     with pytest.raises(remote.Refused, match="machines.toml binds vy-lane-b to pod abc123"):
         registry.register("vy-lane-b", OTHER["id"], "verity", get_pod=pods(OTHER))
+
+
+def test_a_re_registration_of_the_same_binding_keeps_the_properties_table(reg):
+    assert registry.register("vy-lane-a", POD["id"], "verity", get_pod=pods(POD))[1] == "registered"
+    f = reg / "vy-lane-a.toml"
+    props = {"cards": {"value": 1, "read": "nvidia-smi -L | wc -l"},
+             "toolkit": {"value": {"directory": "/usr/local/cuda-13.0", "version": "13.0", "loader": "lib64",
+                                   "others": [{"directory": "/usr/local/cuda-12.9", "version": "12.9"}]}, "read": "nvcc --version"}}
+    f.write_text(f.read_text() + '\n[properties]\ncards = { value = 1, read = "nvidia-smi -L | wc -l" }\n'
+                 'toolkit = { value = { directory = "/usr/local/cuda-13.0", version = "13.0", loader = "lib64", others = '
+                 '[{ directory = "/usr/local/cuda-12.9", version = "12.9" }] }, read = "nvcc --version" }\n')
+    assert registry.register("vy-lane-a", POD["id"], "verity", guard="90", get_pod=pods(POD))[1] == "updated"
+    got = tomllib.loads(f.read_text())
+    assert got["guard"] == 90 and got["properties"] == props
+    assert registry.register("vy-lane-a", OTHER["id"], "verity", any_name=True, replace=True, get_pod=pods(OTHER))[1] == "updated"
+    assert "properties" not in tomllib.loads(f.read_text())
+
+
+def test_the_run_copy_of_a_record_holds_its_name_and_properties_and_none_of_its_address():
+    """Rule: the copy a run gets is `machine` and `[properties]` only; weakening: the whole record, host and port with it."""
+    props = {"cards": {"value": 1, "read": "nvidia-smi -L | wc -l"},
+             "toolkit": {"value": {"directory": "/usr/local/cuda-13.0", "version": "13.0", "loader": "lib64"}, "read": "nvcc --version"}}
+    record = {"provider": "ssh", "host": "203.0.113.7", "port": 2222, "user": "research", "pod_id": POD["id"],
+              "key": "/dummy/id_ed25519", "project": "verity", "properties": props}
+    text = registry.properties_copy("vy-lane-a", record)
+    assert tomllib.loads(text) == {"machine": "vy-lane-a", "properties": props}
+    assert [v for v in ("203.0.113.7", "2222", POD["id"], "/dummy/id_ed25519", "ssh") if v in text] == []
+    assert registry.properties_copy("vy-lane-a", {k: v for k, v in record.items() if k != "properties"}) is None
 
 
 def test_a_name_the_two_sources_bind_to_different_pods_is_refused_not_guessed(reg, tmp_path):

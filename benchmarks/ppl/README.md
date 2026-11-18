@@ -38,7 +38,12 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --timeo
 checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
 and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
-`--gpus 1` (research's own lease would take any card and leave the script none to pin).
+`--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures
+WikiText-2 instead, built from the hub's parquet of its test split into the bench's pinned file, with pyarrow installed
+beside the venv (`$WORK/ppl-pyarrow`) if it lacks one. `ARMS` runs other arms beside `pearl-c-linears` in the same eval,
+e.g. `fp8-linears`, the same linears in plain E4M3 with no noise, and `PPL_OUT` names the output directory. Only
+C4 at 2048, `metrics.toml`'s axis, writes the metrics: `run.py metrics` refuses another set, and `SET=wikitext2` writes
+its table alone.
 
 `pearl-c-linears` is the compute benchmark's served arithmetic (`pearl-c-h100-v1-h3` in
 `benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml`): its one step, `linear.pearl_c`, calls the
@@ -55,7 +60,10 @@ it to.
 `ppl.json`, and in the run's `result.json` `compute-accounting/perplexity-shipped` (the bf16 reference),
 `compute-accounting/perplexity-pearl-c` (the mean over its seeds) and `compute-accounting/perplexity-cost-pearl-c`
 (their difference in percent of bf16's), each with the model, its revision, the card, the set and the context as
-fields. A run whose gates failed reports none, and a results file of another run is a reprint, which writes none.
+fields, and as its `member` the model and the card the eval ran on (`llama-3.2-1b-h200`), the card's `short` from the
+one card record whose `driver` holds the name the driver reports (`kit.card_short`), which the Metrics tab shows beside
+the point. A run whose gates failed reports none, nor does one on a card no card record holds, and a results file of
+another run is a reprint, which writes none.
 
 This file holds no table: `run.py tables` (`tables.py`) prints each one from the code and data it describes, the
 registered steps, the arms in `specs/`, the window lists, the models and the locked baseline, so a new step, arm,

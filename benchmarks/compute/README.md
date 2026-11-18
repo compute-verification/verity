@@ -274,9 +274,11 @@ The paths below are relative to the record directory.
   passes hold the LM head's calls, and `--per-call` prints it.
 - `out/pieces/pouw/development.json` (optional): the Pearl+ verifier's development document. Only its `coin_source`,
   where the passes' salt coins came from, is read.
-- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger` and `development` are
-  read, for the second line: `challenger` is `local` or `in-process`, and `development` true. A file saying the
-  challenger is `deployed`, or `development` false, is refused (exit 2).
+- `out/compute-run.json` (optional): what the serving command ran with. Only its `challenger`, `development` and
+  `card` are read. The first two are for the second line: `challenger` is `local` or `in-process`, and `development`
+  true. A file saying the challenger is `deployed`, or `development` false, is refused (exit 2). `card` is the name
+  nvidia-smi gives the card serve.sh checked and served on, and it names each measurement's member with the model
+  (`llama-3.2-1b-h200`); a file with no card writes no member.
 - `job.json` (optional): the run's own record of itself. The command prints its `run.id` as the run, and the commit
   its `store.conditions` name (`source.commit`, with `-dirty` when `source.dirty`). Without it the run is the
   directory's name and the commit is unknown. A `made_up` statement in it makes the record a made-up one: the output says so, and `result.json` marks each

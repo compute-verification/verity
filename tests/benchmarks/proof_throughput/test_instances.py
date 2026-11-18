@@ -12,17 +12,24 @@ W = workload("bf16-k6144")
 TEMPLATE = 'GemmCoordinate_v2{K=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 
 
-def test_the_manifest_pins_its_population_from_its_lanes():
-    m = I.load(W)
-    assert (m["schema"], m["dataset"], m["tier"], m["n"]) == (I.SCHEMA, I.DATASET, W.name, W.n_max)
-    assert len(m["lanes"]) == W.n_max and m["population_digest"] == I.population_digest(m["lanes"])
-    assert m["recipe"]["partition"] == I.PARTITION and m["recipe"]["population"] == f"population_program({W.vu}, {W.n_max})"
+CLASS = ("bf16-k6144", "bf16-k2048")
 
 
-def test_recomputed_lanes_match_the_manifest():
-    got = I.class_lanes(W, 4)
-    assert I.lane_digests(got["ins"], got["want"]) == I.load(W)["lanes"][:4]
-    assert got["program_digest"] == I.load(W)["recipe"]["program_digest"]
+@pytest.mark.parametrize("name", CLASS)
+def test_the_manifest_pins_its_population_from_its_lanes(name):
+    w = workload(name)
+    m = I.load(w)
+    assert (m["schema"], m["dataset"], m["tier"], m["n"], m["K"]) == (I.SCHEMA, I.DATASET, w.name, w.n_max, w.K)
+    assert len(m["lanes"]) == w.n_max and m["population_digest"] == I.population_digest(m["lanes"])
+    assert m["recipe"]["partition"] == I.PARTITION and m["recipe"]["population"] == f"population_program({w.vu}, {w.n_max})"
+
+
+@pytest.mark.parametrize("name", CLASS)
+def test_recomputed_lanes_match_the_manifest(name):
+    w = workload(name)
+    got = I.class_lanes(w, 4)
+    assert I.lane_digests(got["ins"], got["want"]) == I.load(w)["lanes"][:4]
+    assert got["program_digest"] == I.load(w)["recipe"]["program_digest"]
 
 
 def test_lane_digests_cover_every_word_in_order():

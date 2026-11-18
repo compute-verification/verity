@@ -52,10 +52,22 @@ def prove_path_arm(out: Path, name: str, *, proof: str = "zk", forged: bool = Fa
     return arm
 
 
-def a5_out(root: Path, *, stopped: bool = False, **summary: object) -> Path:
+MACHINE = ("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\nCUDA_HOME /usr/local/cuda\n"
+           "GPU 0: NVIDIA H200 (UUID: GPU-0)\nGPU 1: NVIDIA H200 (UUID: GPU-1)\n"
+           "HF_HOME /w/hf VENV /w/venv312 A5_COINS challenger: card 1 and CPUs 40-59 leased by gpu-lease for Match and Commit\n")
+SERVES = "llama-3.2-1b-h200"
+
+
+def a5_out(root: Path, *, stopped: bool = False, steps: str | None = None, prover_log: str | None = None,
+           **summary: object) -> Path:
     out = root / "out"
     (out / "a5" / "a5").mkdir(parents=True)
-    (out / "machine.txt").write_text("ubuntu\nnode\nabc\nrow dir /w/r/llama32-1b__int8__h200__tp1__b4\n")
+    if steps is not None:
+        (out / "steps.txt").write_text(steps)
+    if prover_log is not None:
+        (out / "a5" / "window" / "proof-server").mkdir(parents=True)
+        (out / "a5" / "window" / "proof-server" / "prover-cpu.log").write_text(prover_log)
+    (out / "machine.txt").write_text(MACHINE)
     a5 = {"audit": {"accepted": True, "verdicts": {"challenger/m0": True, "lean-draw/m0": True, "lean-verify/m0": True}},
           "draw_counts": {"RoPEHead_v1{D=64}": 4}, "source": "served"}
     lines = ["STOPPED at commit (no window)"] if stopped else [
@@ -174,7 +186,7 @@ def table_lines(text: str) -> dict[str, str]:
 
 def test_a_plain_sampling_result_writes_null_with_why_under_every_id(tmp_path):
     results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, plain=True)))]
-    own = [m for m in PL.measured(results, IDS) if m["member"] == "sampling"]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES]
     assert [m["name"] for m in own] == list(IDS)
     assert all(m["value"] is None and "says its proof is plain" in m["why"] and m["extra"]["proof"] == "plain" for m in own)
 
@@ -203,6 +215,45 @@ def test_an_a5_result_is_checked_against_the_proof_of_the_layer_it_is_given_as(t
     assert zk.ran_with == "ran with: coins local challenger; parameters not stated (summary.json coins.challenger local)"
 
 
+def test_an_a5_run_states_the_model_of_its_row_and_the_name_of_the_card_it_took(tmp_path):
+    assert PL.read("sampling", str(a5_out(tmp_path))).serves == SERVES
+    mixed = MACHINE.replace("GPU 1: NVIDIA H200", "GPU 1: NVIDIA H100 80GB HBM3")
+    assert PL.read("sampling", str(a5_out(tmp_path / "h100"))).serves == SERVES
+    (tmp_path / "h100" / "out" / "machine.txt").write_text(mixed)
+    assert PL.read("sampling", str(tmp_path / "h100")).serves == "llama-3.2-1b-h100"
+    (tmp_path / "h100" / "out" / "machine.txt").write_text(mixed.replace("card 1 and", "card any and"))
+    assert PL.read("sampling", str(tmp_path / "h100")).serves is None
+
+
+def test_an_h100_s_members_take_its_card_record_s_short_name(tmp_path):
+    out = a5_out(tmp_path)
+    (out / "out" / "machine.txt").write_text(MACHINE.replace("NVIDIA H200", "NVIDIA H100 80GB HBM3"))
+    written = PL.measured([PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(out))], IDS)
+    assert len(written) == 3 * len(IDS)
+    assert [m["member"] for m in written[:3]] == ["llama-3.2-1b-h100-flock", "llama-3.2-1b-h100-flock-zero-knowledge",
+                                                   "llama-3.2-1b-h100"]
+
+
+def test_a_card_name_no_record_holds_writes_no_measurement_and_says_why(tmp_path):
+    out = a5_out(tmp_path)
+    (out / "out" / "machine.txt").write_text(MACHINE.replace("NVIDIA H200", "NVIDIA H300"))
+    sampling = PL.read("sampling", str(out))
+    assert sampling.serves is None
+    assert PL.measured([PL.read("flock", None), PL.read("zk", None), sampling], IDS) == []
+    assert "- with sampling: no member, so no measurement: 0 card records under " in PL.render([sampling])
+    assert "have 'NVIDIA H300', the card nvidia-smi names here" in PL.render([sampling])
+
+
+def test_the_layers_write_nothing_unless_their_outputs_state_one_model_and_card(tmp_path):
+    zk, sampling = PL.read("zk", str(prove_path_arm(tmp_path / "z", "llama"))), PL.read("sampling", str(a5_out(tmp_path / "s")))
+    assert PL.measured([PL.read("flock", None), zk, PL.read("sampling", None)], IDS) == []
+    other = PL.read("zk", str(a5_out(tmp_path / "o")))
+    other.serves = "llama-3.2-1b-b200"
+    with pytest.raises(ValueError, match="state llama-3.2-1b-b200 and llama-3.2-1b-h200: give the outputs of one served row"):
+        PL.measured([PL.read("flock", None), other, sampling], IDS)
+    assert PL.measured([PL.read("flock", None), zk, sampling], {}) == []
+
+
 def test_a_stopped_a5_run_says_where_it_stopped(tmp_path):
     result = PL.read("sampling", str(a5_out(tmp_path, stopped=True)))
     assert not result.accepted and result.prover_s is None and result.why == "STOPPED at commit (no window)"
@@ -223,7 +274,9 @@ def test_a_run_id_is_read_from_the_record_its_fetcher_lands(tmp_path):
 
 #: `benchmarks/prove/run.py`'s ``LAYER_METRICS``
 IDS = {"benchmarks/proof-layer-prover-seconds": "prover_s", "benchmarks/proof-layer-lean-seconds": "lean_s",
-       "benchmarks/proof-layer-proof-bytes": "proof_bytes"}
+       "benchmarks/proof-layer-proof-bytes": "proof_bytes", "benchmarks/proof-layer-build-seconds": "build_s"}
+STEPS = ("10:00:00Z build: --stages build --config-run 1 --replay-k 460\n10:01:29Z build rc=0\n"
+         "10:01:29Z build cache: no (no Program cache; the JIT caches under /w/a5-llama1b/cache held 0 files before it)\n")
 
 
 def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_then_sampling(tmp_path, monkeypatch,
@@ -233,7 +286,7 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     monkeypatch.setenv("OUT", str(tmp_path / "report"))
     assert main(["prove-layers", "--recursion", str(recursion(tmp_path / "r")),
                  "--zk", str(prove_path_arm(tmp_path / "z", "llama")),
-                 "--sampling", str(a5_out(tmp_path / "s"))], metrics=IDS) == 0
+                 "--sampling", str(a5_out(tmp_path / "s", steps=STEPS))], metrics=IDS) == 0
     text, line = capsys.readouterr().out.rstrip("\n").rsplit("\n", 1)
     for title in PL.LAYERS.values():
         assert f"| {title} |" in text
@@ -243,12 +296,13 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert json.loads((tmp_path / "report" / "proof-layers.json").read_text()) == doc
     written = json.loads((tmp_path / "report" / "result.json").read_text())["measurements"]
     assert [(m["name"], m.get("member")) for m in written] == [
-        (name, member) for name in IDS for member in ("flock", "flock-zero-knowledge", "sampling")]
+        (name, SERVES + layer) for name in IDS for layer in ("-flock", "-flock-zero-knowledge", "")]
     values = {(m["name"], m.get("member")): m for m in written}
-    assert [values[name, "flock-zero-knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0]
-    assert [values[name, "sampling"]["value"] for name in IDS] == [5.0, 2.0, 125.0]
-    assert all(values[name, "flock"]["value"] is None and values[name, "flock"]["why"].startswith("not run") for name in IDS)
-    assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block"} and all(m["mark"] == "measured"
+    assert [values[name, f"{SERVES}-flock-zero-knowledge"]["value"] for name in IDS] == [3.0, 1.0, 850000.0, None]
+    assert [values[name, SERVES]["value"] for name in IDS] == [5.0, 2.0, 125.0, 89.0]
+    assert all(values[name, f"{SERVES}-flock"]["value"] is None and values[name, f"{SERVES}-flock"]["why"].startswith("not run")
+               for name in IDS)
+    assert {m["unit"] for m in written} == {"s a proof block", "bytes a proof block", "s a build"} and all(m["mark"] == "measured"
                                                                                            for m in written)
     assert doc["results"][3]["ran_with"].startswith("ran with: coins in-process; parameters not stated (")
     assert doc["results"][3]["prover_s"] == 1202.0
@@ -266,6 +320,35 @@ def test_the_command_prints_every_layer_and_writes_each_id_flock_zero_knowledge_
     assert "| 850,000 bytes a sampled proof block (every rep's proof files" in line["Flock with zero knowledge"]
 
 
+
+def test_an_a5_runs_build_step_gives_its_wall_and_its_cache_and_its_prover_log_the_batch(tmp_path):
+    """The build step's wall is its start line to its ``rc=0`` line, across midnight too, and the point carries its ``build
+    cache:`` words and the proof blocks the prover's statement holds."""
+
+    log = "statement rope-head/neox-bf16/pair instances=880\nprove ok\nstatement rope-head/neox-bf16/pair instances=880\n"
+    result = PL.read("sampling", str(a5_out(tmp_path / "a", steps=STEPS, prover_log=log)))
+    assert (result.build_s, result.prover_batch) == (89.0, 880)
+    assert result.build_cache.startswith("no (no Program cache;") and "holds 880 proof blocks, the prover's batch" in result.prover_what
+    none = [PL.read("flock", None), PL.read("zk", None)]
+    (point,) = [m for m in PL.measured([*none, result], {"benchmarks/proof-layer-build-seconds": "build_s"}) if m["value"] is not None]
+    assert point["unit"] == "s a build" and point["extra"]["build_cache"] == result.build_cache
+    assert point["extra"]["prover_batch"] == 880
+    assert "| 89 s a build, wall (steps.txt's build step" in table_lines(PL.render([result]))["with sampling"]
+    late = PL.read("sampling", str(a5_out(tmp_path / "b", steps="23:59:30Z build: x\n00:00:40Z build rc=0\n")))
+    assert (late.build_s, late.build_cache) == (70.0, PL.NOT_STATED)
+    (unstated,) = PL.measured([*none, late], {"benchmarks/proof-layer-build-seconds": "build_s"})[2:]
+    assert unstated["value"] is None and "no build cache: line" in unstated["why"]
+
+
+@pytest.mark.parametrize("steps", ["10:00:00Z build: x\n10:01:00Z build rc=10\n", "10:00:00Z build: x\n", ""])
+def test_a_build_step_with_no_rc_0_gives_no_build_seconds(tmp_path, steps):
+    result = PL.read("sampling", str(a5_out(tmp_path, steps=steps,
+                                            prover_log="statement a instances=4\nstatement b instances=8\n")))
+    assert result.build_s is None and result.prover_batch is None
+    (point,) = PL.measured([PL.read("flock", None), PL.read("zk", None), result],
+                           {"benchmarks/proof-layer-build-seconds": "build_s"})[2:]
+    assert point["value"] is None and "no build step's wall" in point["why"]
+
 def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_any_id(tmp_path):
     """A refused Lean verify and an a5 member whose timing is keyed by its chunk's name (no count of its sampled proof
     blocks) each write null with why, never a figure; recursion's benchmark result is no member of any id."""
@@ -277,8 +360,8 @@ def test_a_layer_without_an_accept_or_a_per_block_figure_writes_no_number_under_
                for n in chunk.notes)
     results = [PL.read("flock", None), refused, chunk, PL.read("recursion", str(recursion(tmp_path / "r")))]
     written = PL.measured(results, IDS)
-    assert len(written) == 9 and all(m["value"] is None and m["why"] for m in written)
-    assert {m["member"] for m in written} == {"flock", "flock-zero-knowledge", "sampling"}
+    assert len(written) == 12 and all(m["value"] is None and m["why"] for m in written)
+    assert {m["member"] for m in written} == {f"{SERVES}-flock", f"{SERVES}-flock-zero-knowledge", SERVES}
     with pytest.raises(ValueError, match="not one of"):
         PL.measured(results, {"benchmarks/x": "seconds"})
 
@@ -323,6 +406,30 @@ def test_the_device_is_the_outputs_own_words(tmp_path):
     assert PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu))).device == "CPU (timing gpus 0)"
     assert PL.read("sampling", str(a5_out(tmp_path / "n"))).device == "not stated"
     assert PL.read("recursion", str(recursion(tmp_path / "r"))).device == "not stated"
+
+
+def test_a_point_says_its_provers_device_and_its_member_the_card_served_on(tmp_path):
+    """A CPU prover's points say ``processors`` beside the member that names the H200 the workload was served on."""
+
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path / "c", timing=cpu)))]
+    own = [m for m in PL.measured(results, IDS) if m["member"] == SERVES]
+    assert [m["name"] for m in own] == list(IDS) and {m["extra"]["prover_device"] for m in own} == {"processors"}
+    assert {m["member"] for m in PL.measured(results, IDS)} == {f"{SERVES}-flock", f"{SERVES}-flock-zero-knowledge", SERVES}
+    assert PL.prover_device("GPU 4 (gpu-lease's record of each flock-circuit prove)").startswith("GPU 4")
+    assert PL.prover_device(PL.NOT_STATED) == PL.NOT_STATED
+
+
+def test_a_batch_study_writes_its_own_members_and_the_own_batch_the_plain_ones(tmp_path):
+    cpu = {"RoPEHead_v1{D=64}": {"gpus": 0, "device": None, "lean_verify_s": 8.0,
+                                 "timing": {"prove_total_s": 20.0, "proof_bytes": [500, 500]}}}
+    results = [PL.read("flock", None), PL.read("zk", None), PL.read("sampling", str(a5_out(tmp_path, timing=cpu)))]
+    for batch, word in ((None, ""), ("1-4", "-b4"), ("1-16", "-b16"), ("3-8", "-b3-8")):
+        assert {m["member"] for m in PL.measured(results, IDS, batch)} == {
+            f"{SERVES}-flock{word}", f"{SERVES}-flock-zero-knowledge{word}", f"{SERVES}{word}"}
+    with pytest.raises(ValueError, match="LO-HI request steps"):
+        PL.batch_word("8-1")
 
 
 def test_prove_without_the_store_refuses_in_one_line(monkeypatch, capsys):
@@ -399,7 +506,9 @@ def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_sta
     assert results["sampling"].ran_with.startswith("ran with: coins local challenger; parameters development (a development")
     assert results["sampling"].eps_delta == "at most 895 of 2,560 incorrect proof blocks except with probability 2^-20"
     assert results["flock"].eps_delta == PL.NOT_STATED and results["zk"].device.startswith("GPU 4 (gpu-lease's")
-    line = table_lines(PL.render(list(results.values()) + [PL.read("recursion", None)]))
+    text = PL.render(list(results.values()) + [PL.read("recursion", None)])
+    line = table_lines(text)
+    assert "\n\n- ε at δ: each sampled block on its own inputs; the wires between blocks are not held\n" in text and "- ε at δ:" not in PL.render([results["flock"]])
     assert "| 2 s a statement of 2,048 proof blocks; 3 s a statement of 512 proof blocks (Flock's prove_total_s) |" in line["Flock"]
     assert "| 6 s a statement of 26 proof blocks; 7 s a statement of 6 proof blocks (Lean's verify) |" in line["with sampling"]
     assert "900 bytes a statement of 2,048 proof blocks; 901 bytes a statement of 512 proof blocks (one rep's proof)" in line["Flock"]
@@ -408,9 +517,12 @@ def test_a_layers_sh_run_gives_its_three_layers_each_a_statements_figures_as_sta
 def test_a_stand_in_result_writes_no_figure_a_proof_block_under_the_metric_ids(tmp_path):
     run = str(layers_run(tmp_path / "run"))
     results = [PL.read(x, run if x != "recursion" else None) for x in PL.LAYERS]
+    assert PL.measured(results, IDS) == []
+    results[0].serves = SERVES
     written = PL.measured(results, IDS)
-    assert len(written) == 9 and all(m["value"] is None for m in written)
-    assert all(m["why"] == "stand-in values, never served: its figures are a statement's, not a proof block's" for m in written)
+    assert len(written) == 12 and all(m["value"] is None for m in written)
+    assert all(m["why"] == ("its output gives no build step's wall (steps.txt)" if IDS[m["name"]] == "build_s" else
+                            "stand-in values, never served: its figures are a statement's, not a proof block's") for m in written)
 
 
 def test_a_layers_sh_result_with_a_negative_case_accepted_or_no_zk_flag_prints_no_number(tmp_path):
@@ -532,3 +644,23 @@ def test_a_layers_sh_results_commit_is_the_sha_after_source_never_one_printed_be
     assert PL.read("zk", str(tmp_path)).commit == SHA
     (d / "job.log").write_text(f"21:30:00Z fetch: main at {'1' * 40}\n")
     assert PL.read("zk", str(tmp_path)).commit is None
+
+
+def test_a_recursion_run_says_how_many_of_a_served_members_proof_blocks_its_inner_statement_holds(tmp_path):
+    """stage.sh's ``staged`` record: N of the member's M proof blocks, and that the served values were committed again,
+    so the outer proof is not tied to the served registration; seeded inputs say so."""
+
+    def read(name: str, staged: dict) -> str:
+        root = recursion(tmp_path / name)
+        f = root / "out" / "recursion_e2e.json"
+        f.write_text(json.dumps({**json.loads(f.read_text()), "staged": staged}))
+        return PL.read("recursion", str(root)).workload
+
+    st = {"subcircuit": "rope-head/d64/neox-bf16", "n": 16, "window": {"run": "ab" * 64, "member": 0}}
+    tail = ("the served values committed again under plain leaves for the recursion, not the served commitment; "
+            "the outer proof is not tied to the served registration")
+    assert read("subset", {**st, "subset": {"member": 0, "n": 880, "units": list(range(16))}}).startswith(
+        f"rope-head/d64/neox-bf16: 16 of 880 proof blocks of a served window's member 0, {tail}")
+    assert read("whole", st).startswith(f"rope-head/d64/neox-bf16: 16 of 16 proof blocks of a served window's member 0, {tail}")
+    assert read("seeded", {"subcircuit": "rope-head/d64/neox-bf16", "n": 16}).startswith(
+        "rope-head/d64/neox-bf16 x 16, seeded inputs, not served values")
