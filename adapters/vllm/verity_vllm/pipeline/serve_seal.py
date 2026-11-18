@@ -2,7 +2,7 @@
 
 `committer` builds the server's committer, rows-sha512's (``--scheme``), the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition over the row's capture plan (`program.predict.window_rows.captured` over the registered compiler's slot
+acquisition over the row's capture plan (`program.predict.capture_plan.captured` over the registered compiler's slot
 Programs) and the row's Build of record (``--row-build``, ``verity-vllm predict row``'s, `serve_row`): the attention hidden tap
 (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the plan's hook sets. The serve builds no capture plan at its
 start yet, so `committer` refuses by name (`NO_PLAN`). Then `served_record.StepInputPort` (each step's
@@ -104,7 +104,7 @@ def scheme_refusal(opts: Any) -> str | None:
 #: why the served Commit can't start: what its acquisition and its seal's binder read is the row's capture plan, which the
 #: serve doesn't build at its start
 NO_PLAN = ("the served Commit's acquisition (hidden tap, taps, MoE source, promoted inputs, hook sets) and its seal's binder read "
-           "the row's capture plan (`window_rows.captured` over the registered compiler's slot Programs), which serve-openai "
+           "the row's capture plan (`capture_plan.captured` over the registered compiler's slot Programs), which serve-openai "
            "doesn't build at its start yet: serve with --no-commit")
 
 
@@ -168,7 +168,7 @@ def window_requests(rows: Mapping[int, Sequence[tuple]], name_of: Callable[[str]
 
 def served_binder(plan: Sequence[Mapping[str, Any]], steps: Sequence[int], sources: Sequence[Any] = ()) -> Any:
     """The `query.manifest.bind.Binder` of a served window's ``steps``: the identities one engine step of the bench row's
-    Programs commits (each member of each row of its capture plan, `window_rows.captured`, each (op_path, member, row) once, in
+    Programs commits (each member of each row of its capture plan, `capture_plan.captured`, each (op_path, member, row) once, in
     the plan's order), at every step, with the committing sources' ports. A served step batches requests at any step of their
     own, and a module's output at a step is one identity whatever the requests in it; the binding map splits it between them
     (`binding.build_binding_map`'s request rows). With a `served_record.StepInputPort` among the sources, its tensors bind as

@@ -161,7 +161,7 @@ def _i64(xs, T):
 
 
 def _plan(fx) -> list[dict[str, Any]]:
-    """The fixture's rows of the row's Programs (those naming their Definition) as `window_rows.captured` gives a capture plan."""
+    """The fixture's rows of the row's Programs (those naming their Definition) as `capture_plan.captured` gives a capture plan."""
     rows: dict[tuple[str, int], dict[str, Any]] = {}
     for r in fx["identities"]:
         if r.get("spec"):
