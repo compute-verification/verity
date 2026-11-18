@@ -38,12 +38,12 @@ theorem paramsOfJson_twoStage {j : Json} {p : VStar.Recursive.SampledTwo.Params}
 
 /-- **The form's check, accepting at parsed parameters, accepted a two-stage run**: `acceptedTwo_of_check` at
 parameters the form's parser returned, which are two-stage by `paramsOfJson_twoStage`. -/
-theorem acceptedTwo_of_parsed {form : Bool} {j : Json} {p : VStar.Recursive.SampledTwo.Params}
+theorem acceptedTwo_of_parsed {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hj : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p)
     (hsn : SampledNoneOf p c ξ e bs)
-    (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    form = true ∧ ∃ c₂ ξ₂ r i it run, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧
+    (h : VStar.Recursive.SampledTwo.checkBlobsAtInner p c ξ e bs = .accept pub prof) :
+    ∃ c₂ ξ₂ r i it run, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧
       AcceptedTwo i it run ∧ VStar.Recursive.SampledTwo.sourceRead ξ run = .ok () :=
   acceptedTwo_of_check (paramsOfJson_twoStage hj) hsn h
 
