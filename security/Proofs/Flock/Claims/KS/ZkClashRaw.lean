@@ -96,7 +96,7 @@ variable [S : ZkSetup]
 
 /-- **An accepted masked run's reps open a column of table `j` only as a Merkle opening** of table `j`'s level 0 in
 its own log: `zk_openingJ` at every column a rep opens. -/
-theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
@@ -204,7 +204,7 @@ end Gen
 
 /-- **An accepted masked run's reps open a column of table `j` only as a Merkle opening** of table `j`'s level 0 in
 its own log: `zk_openingJ` at every column a rep opens. -/
-theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
+theorem zk_openingJ_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {r : Fin ((V true).k x) → Coin}
     {j q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ)
@@ -224,7 +224,7 @@ variable [S : ZkSetup]
 
 /-- **A self-clash among an accepted masked run's columns collides in its own log**: two columns table `j`'s reps
 open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j)
     (hv : (q, v) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
@@ -245,7 +245,7 @@ end Gen
 
 /-- **A self-clash among an accepted masked run's columns collides in its own log**: two columns table `j`'s reps
 open at one position that differ give a collision among the run's verifier calls, at SHA-512. -/
-theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem zk_selfClash_tiedJ {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {j q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V true) x ω r).out = .acc)
     (hu : (q, u) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j)
     (hv : (q, v) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j) (huv : u ≠ v) :
@@ -265,8 +265,8 @@ open Claims.Bridge.Live
 /-- **A live event at `P'`'s outcome gives an accepting masked run of `P` whose reps open two different columns at
 one position of some table, or a collision**: `ZkClashRun` with a self-clash at level 0 asked without the hashes
 (`zkRawColsJ`). -/
-def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
+def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) (J N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
     (pL : LiveOutJ (J x) mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
@@ -284,8 +284,8 @@ variable [S : ZkSetup]
 /-- **A live event at `P'`'s outcome gives an accepting masked run of `P` whose reps open two different columns at
 one position of some table, or a collision**: `ZkClashRun` with a self-clash at level 0 asked without the hashes
 (`zkRawColsJ`). -/
-def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (J N : Claims.Msg → ℕ)
-    (dg : ByteArray → ByteArray) (w : (x : Claims.Msg) → Wire 65536 (J x) mPts) {τ : Type}
+def ZkRawClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω) (mPts : ℕ) (J N : Hash.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : (x : Hash.Msg) → Wire 65536 (J x) mPts) {τ : Type}
     (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin)
     (pL : LiveOutJ (J x) mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r') →
@@ -303,8 +303,8 @@ variable [S : ZkSetup]
 
 /-- **The clash gives the collision**: two different columns of an accepting masked run at one position of one table
 collide in its log (`zk_selfClash_tiedJ`), so `ZkRawClashRun` gives `ZkClashRun`. -/
-theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
-    {J N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Claims.Msg) → Wire 65536 (J x) mPts} {τ : Type}
+theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {mPts : ℕ}
+    {J N : Hash.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Hash.Msg) → Wire 65536 (J x) mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin}
     {pL : LiveOutJ (J x) mPts → Prop} (h : ZkRawClashRun P x ω mPts J N dg w P' Φ pL) :
     ZkClashRun P x ω mPts J N dg w P' Φ pL := fun u r' hp => by
@@ -316,8 +316,8 @@ end Gen
 
 /-- **The clash gives the collision**: two different columns of an accepting masked run at one position of one table
 collide in its log (`zk_selfClash_tiedJ`), so `ZkRawClashRun` gives `ZkClashRun`. -/
-theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {mPts : ℕ}
-    {J N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Claims.Msg) → Wire 65536 (J x) mPts} {τ : Type}
+theorem zkClashRun_of_raw {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω} {mPts : ℕ}
+    {J N : Hash.Msg → ℕ} {dg : ByteArray → ByteArray} {w : (x : Hash.Msg) → Wire 65536 (J x) mPts} {τ : Type}
     {P' : Claims.Prover (Ω × τ)} {Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin}
     {pL : LiveOutJ (J x) mPts → Prop} (h : ZkRawClashRun P x ω mPts J N dg w P' Φ pL) :
     ZkClashRun P x ω mPts J N dg w P' Φ pL :=

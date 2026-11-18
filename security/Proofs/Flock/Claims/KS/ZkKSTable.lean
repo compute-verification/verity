@@ -99,20 +99,20 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-theorem tableErrJ_eq {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {j : ℕ}
+theorem tableErrJ_eq {zk : Bool} {x : Hash.Msg} {spec : SessionSpec} {st : Stmt} {j : ℕ}
     (h : (tables zk x)[j]? = some (spec, st)) : tableErrJ zk x j = tableErr zk spec st := by
   unfold tableErrJ
   rw [h]
   rfl
 
-theorem tableErrJ_nonneg (zk : Bool) (x : Claims.Msg) (j : ℕ) : 0 ≤ tableErrJ zk x j := by
+theorem tableErrJ_nonneg (zk : Bool) (x : Hash.Msg) (j : ℕ) : 0 ≤ tableErrJ zk x j := by
   unfold tableErrJ
   cases (tables zk x)[j]? with
   | none => exact le_rfl
   | some p => exact tableErr_nonneg zk p.1 p.2
 
 /-- **A table's own error is at most `ε_table`**, the tables' errors summed. -/
-theorem tableErrJ_le_εtable (zk : Bool) (x : Claims.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x := by
+theorem tableErrJ_le_εtable (zk : Bool) (x : Hash.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x := by
   cases h : (tables zk x)[j]? with
   | none =>
     unfold tableErrJ
@@ -129,7 +129,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.ZkLink FlockSou
 /-- **Every masked table's bound at its own error at a statement in scope, off the table on a witness lane**, the
 escapes counted per round: `zk_tableBoundEachAccAtR_of_sessionsW` at Flock ZK's padded tables (`zk_atTabs`) and the
 live sessions' bound there (`zkSessWJ_of_liveW`). -/
-theorem zk_tableBoundEachAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem zk_tableBoundEachAccAtR_live {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (hl : ZkLiveAccWJ x) :
@@ -149,7 +149,7 @@ end Live
 /-- **Every masked table's bound at its own error at every statement, off the table on a witness lane**, the escapes
 counted per round, at full-width columns, from `ZkLiveAccWJ` at the statements some run accepts; elsewhere no run
 accepts. -/
-theorem zk_tableBoundEachAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) (x : Claims.Msg) :
+theorem zk_tableBoundEachAccAtR (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x) (x : Hash.Msg) :
     Claims.Flock.TableBoundEachAccAtR sha512 (deployZk Readable.relation) (wordLenJ true) (wideJ true)
       (tableErrJ true x) x := by
   by_cases hno : Claims.Flock.NoAcc sha512 (V true) x
@@ -173,7 +173,7 @@ theorem zk_tableBoundEachR_untrim :
           (fun x _ => zkViewClashQP x) x hno)) x)
 
 /-- A table's word is no longer than `N₀`, the tables' words' lengths summed. -/
-theorem wordLenJ_le_N₀ (zk : Bool) (x : Claims.Msg) (j : ℕ) : (wordLenJ zk x j : ℝ) ≤ N₀ zk x := by
+theorem wordLenJ_le_N₀ (zk : Bool) (x : Hash.Msg) (j : ℕ) : (wordLenJ zk x j : ℝ) ≤ N₀ zk x := by
   have h1 : wordLenJ zk x j ≤ ∑ i : Fin (j + 1), wordLenJ zk x i :=
     Finset.single_le_sum (f := fun i : Fin (j + 1) => wordLenJ zk x i) (fun _ _ => Nat.zero_le _)
       (Finset.mem_univ (Fin.last j))
@@ -181,7 +181,7 @@ theorem wordLenJ_le_N₀ (zk : Bool) (x : Claims.Msg) (j : ℕ) : (wordLenJ zk x
 
 /-- **The masked verifier's `k` range at each table**: at every statement and table, the table is one of the
 statement's and `k_j ≥ 8`, or its word is empty and `k_j = 0`, or the verifier accepts no run at SHA-512. -/
-theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ) :
+theorem kTable_range_zk (rel : Readable.Parsed → Readable.Relation) (x : Hash.Msg) (j : ℕ) :
     (j < Claims.Flock.nTab (deployZk rel) x ∧ 8 ≤ Claims.Flock.kTable (wordLenJ true) j x) ∨
       Claims.Flock.kTable (wordLenJ true) j x = 0 ∨ Claims.Flock.NoAcc sha512 (deployZk rel).V x := by
   by_cases hacc : Claims.Flock.NoAcc sha512 (deployZk rel).V x
@@ -233,7 +233,7 @@ theorem zk_KSTable_untrim :
 end Gen
 
 /-- **A table's own error is at most `ε_table`**, the tables' errors summed. -/
-theorem tableErrJ_le_εtable (zk : Bool) (x : Claims.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x :=
+theorem tableErrJ_le_εtable (zk : Bool) (x : Hash.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x :=
   Gen.tableErrJ_le_εtable (S := S₀) (zk := zk) (x := x) (j := j)
 
 /-- **Masked knowledge soundness at each table of a session, at the untrimmed instance**, at SHA-512 at the deployed

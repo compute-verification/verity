@@ -21,3 +21,11 @@
 "llama32-1b-1gpu-stock-served-h100" = { spec = "llama32-1b-1gpu-stock-served", card = "h100" }
 "qwen3-8b-bf16-rtx-served-arm-eager" = { spec = "qwen3-8b-bf16-served-arm-eager", card = "rtx-pro-6000" }
 "qwen3-8b-bf16-rtx-served-arm" = { spec = "qwen3-8b-bf16-served-arm", card = "rtx-pro-6000" }
+
+# Each spec deleted with no successor, as why a launch of it is refused (`presets.retired_spec`); its stored runs read
+# under its id.
+[retired]
+"llama31-8b-1gpu-pouw-protocol-served" = """served Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3`), which is no declared \
+scheme: declaring one is compute-accounting's"""
+"llama31-8b-1gpu-pouw-protocol-served-b32" = """served Pearl-C on sm_120 (`pouw:pearl-c-sm120-v1-h3`), which is no \
+declared scheme: declaring one is compute-accounting's"""

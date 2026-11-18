@@ -31,17 +31,17 @@ open Flock Transcript Replay
 
 /-- **`coin` and `coin'` agree on the rounds of `L` from index `P` to before `N`**: at a round framed as a squeeze of
 `k < 2 ^ 64` coins, on the coins below `k`. -/
-def Good (coin coin' : ℕ → ℕ → F128) (N P : ℕ) (L : Array Claims.Msg) : Prop :=
+def Good (coin coin' : ℕ → ℕ → F128) (N P : ℕ) (L : Array Hash.Msg) : Prop :=
   ∀ p, P ≤ p → p < N → ∀ (t : Transcript) (kind : UInt8) (k : ℕ), k < 2 ^ 64 →
     L[p]? = some (Claims.toMsg (framed t kind k)) → ∀ i < k, coin p i = coin' p i
 
 variable {coin coin' : ℕ → ℕ → F128} {N : ℕ}
 
-theorem Good.mono {P P' : ℕ} {L : Array Claims.Msg} (h : Good coin coin' N P L) (hP : P ≤ P') :
+theorem Good.mono {P P' : ℕ} {L : Array Hash.Msg} (h : Good coin coin' N P L) (hP : P ≤ P') :
     Good coin coin' N P' L :=
   fun p hp => h p (le_trans hP hp)
 
-theorem Good.of_append {P : ℕ} {L bs : Array Claims.Msg} (h : Good coin coin' N P (L ++ bs)) :
+theorem Good.of_append {P : ℕ} {L bs : Array Hash.Msg} (h : Good coin coin' N P (L ++ bs)) :
     Good coin coin' N P L := by
   intro p hp hpN t kind k hk hL
   by_cases hs : p < L.size
@@ -450,7 +450,7 @@ theorem ligeritoPZk_go_coin (coin coin' : ℕ → ℕ → F128) (N : ℕ) (H : B
     (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (hn : sch.n < 2 ^ 62) (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 63) (tr : Transcript)
-    (l : Array Claims.Msg)
+    (l : Array Hash.Msg)
     (hG : Good coin coin' N l.size
       (((ligeritoPZk (asksCut coin N) (Hashes.ofSha512 H) ms sch T cm0 t b lay h rep tPad extra lanePad salt
         nonce).run tr).go l).2) :

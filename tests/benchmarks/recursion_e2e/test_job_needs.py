@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 NEEDS = {"cargo": "no cargo", "lean": "no lake, nor curl", "cores": "cores, and the job runs on 32",
-         "memory": "GiB of memory, and the job asks"}
+         "memory": "GiB of memory, and the job asks", "card": "a GPU step builds for SM"}
 GNU_TIME = os.access("/usr/bin/time", os.X_OK) and subprocess.run(["/usr/bin/time", "-v", "true"],
                                                                      capture_output=True).returncode == 0
 
@@ -38,7 +38,8 @@ def _job(tmp_path: Path, lacks: set[str], **env: str) -> tuple[subprocess.Comple
         _stand_in(bin_, "lake", "exit 0")
     (tmp_path / "home").mkdir()
     done = subprocess.run(["/bin/bash", "benchmarks/recursion_e2e/job.sh", f"OUT={tmp_path / 'out'}",
-                           f"FLOCK_WORK={tmp_path / 'work'}", *(f"{k}={v}" for k, v in env.items())], cwd=ROOT,
+                           f"FLOCK_WORK={tmp_path / 'work'}", *([] if "card" in lacks else ["SM=120"]),
+                           *(f"{k}={v}" for k, v in env.items())], cwd=ROOT,
                           env={"PATH": str(bin_), "HOME": str(tmp_path / "home")}, capture_output=True, text=True)
     return done, [line for line in done.stderr.splitlines() if line.startswith("job.sh: ")]
 

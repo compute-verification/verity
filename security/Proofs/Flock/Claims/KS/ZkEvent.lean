@@ -143,7 +143,7 @@ coins, and on a statement of sample `d`, at any `J ≤` the statement's tables a
 column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
 link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
 records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
-theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽) (j : ℕ)
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
@@ -209,7 +209,7 @@ coins, and on a statement of sample `d`, at any `J ≤` the statement's tables a
 column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
 link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
 records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
-theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Hash.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽) (j : ℕ)
     (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,

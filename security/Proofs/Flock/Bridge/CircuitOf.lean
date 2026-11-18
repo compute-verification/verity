@@ -301,8 +301,8 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Spo
 /-- **A unit incorrect in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`, under any
 design and strata. -/
 theorem incorrect_subset_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
+    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Hash.Msg) (q : Query) (roots : List Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) w := by
   classical
@@ -317,8 +317,8 @@ theorem incorrect_subset_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ 
   exact hu (correct_of_progCorrect P u _ ι hι.1)
 
 theorem card_incorrect_le_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
+    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Hash.Msg) (q : Query) (roots : List Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
     (P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))).card ≤
       ((faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) w).filter (· < n)).card :=
   Finset.card_le_card_of_injOn Fin.val
@@ -328,8 +328,8 @@ theorem card_incorrect_le_faulty {n : ℕ} (P : Spot.Sampling.Partition C n) (κ
 /-- **The sampling relation bounds the incorrect proof blocks**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` under
 `subset kd` leaves fewer than `K₀` of the circuit's units incorrect in the wire values it opens, whatever the strata. -/
 theorem card_incorrect_lt_of_relS {n : ℕ} (P : Spot.Sampling.Partition C n) (κ : Fin C.N → Option Bool)
-    {ns : List ℕ} (hns : ns.sum = n) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
+    {ns : List ℕ} (hns : ns.sum = n) (kd K₀ : ℕ) (desc : Hash.Msg) (q : Query) (roots : List Hash.Msg)
+    (H : Hash.Msg → Hash.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ (.subset kd) desc q roots)
       (partOf P κ ns) w) :
     (P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ (.subset kd) desc q roots)))).card < K₀ := by
@@ -376,7 +376,7 @@ theorem partsOf_incorrect (xs : Fin (keyCircuit D hU n).N → Bool) :
 the sampling statement of the key program at constants `κ` under `subset kd`, at strata `ns` that sum to `n`, leaves
 fewer than `K₀` of `partsOf`'s units incorrect in the transcript it opens. -/
 theorem card_incorrect_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) {ns : List ℕ} (hns : ns.sum = n)
-    (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
+    (kd K₀ : ℕ) (desc : Hash.Msg) (q : Query) (roots : List Hash.Msg) (H : Hash.Msg → Hash.Msg)
     (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ))
       (stmtOf (keyPartition D hU n) κ (.subset kd) desc q roots) (partOf (keyPartition D hU n) κ ns) w) :

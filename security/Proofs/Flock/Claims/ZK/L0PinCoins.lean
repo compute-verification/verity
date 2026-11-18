@@ -69,7 +69,7 @@ open Flock Transcript Replay
 /-- **A returned PIOP from a source ran its four phases**, the rank check keeping the transcript and the log. -/
 theorem piopCut_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
-    {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃}
+    {l : Array Hash.Msg} {zp lp ss T sws t₃ l₃}
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) :
     ∃ zc t₁ l₁ lc t₂ l₂,
@@ -98,7 +98,7 @@ source returns, its switched claims are `Rs.sws` of the closed-form claims at an
 and it sent `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies, all before the cut's stop `n`. -/
 theorem piopCut_at {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay : Zk.PadLayout} {src : RepSrc}
     {cap root : ByteArray} {extras : Array Claim} {prior : Array (List F128)} {words : List ℕ} {t₀ : Transcript}
-    {l : Array Claims.Msg} {zp lp ss T sws t₃ l₃} (hm : 14 ≤ st.m)
+    {l : Array Hash.Msg} {zp lp ss T sws t₃ l₃} (hm : 14 ≤ st.m)
     (h : ((piopCut (asksCut coin n) st lay src cap root extras prior words).run t₀).go l =
       (.ok ((zp, lp, ss, T, sws), t₃), l₃)) (tr : Trace) :
     sws = Rs.sws (abcClaims st.m st.kLog (Zc.out st.m (zcCoins coin l.size) tr)

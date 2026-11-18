@@ -49,7 +49,7 @@ open FlockDeploy (Raw encNat encBytes encStr encBool encOpt encList Rd rdTake rd
 theorem rdBool_encBool (b : Bool) (rest : List UInt8) : rdBool.run (encBool b ++ rest) = some (b, rest) := by
   cases b <;> rfl
 
-theorem rdOpt_encOpt {α : Type} {r : Rd α} {e : α → Claims.Msg} {a : Option α}
+theorem rdOpt_encOpt {α : Type} {r : Rd α} {e : α → Hash.Msg} {a : Option α}
     (hr : ∀ v ∈ a, ∀ rest, r.run (e v ++ rest) = some (v, rest)) (rest : List UInt8) :
     (rdOpt r).run (encOpt e a ++ rest) = some (a, rest) := by
   cases a with
@@ -79,7 +79,7 @@ theorem rdOptNat {a : Option Nat} (h : ∀ n ∈ a, n < 2 ^ 64) (rest : List UIn
     (rdOpt rdNat).run (encOpt encNat a ++ rest) = some (a, rest) :=
   rdOpt_encOpt (fun n hn rest => FlockComplete.rdNat_encNat (h n hn) rest) rest
 
-theorem run_bind_of {α β : Type} {x : Rd α} {f : α → Rd β} {s s' : Claims.Msg} {a : α}
+theorem run_bind_of {α β : Type} {x : Rd α} {f : α → Rd β} {s s' : Hash.Msg} {a : α}
     (h : x.run s = some (a, s')) : (x >>= f).run s = (f a).run s' := by
   rw [StateT.run_bind, h]
   rfl
