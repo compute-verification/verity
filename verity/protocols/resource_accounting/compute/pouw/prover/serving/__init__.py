@@ -90,6 +90,7 @@ _LAZY = {
     "commit_site": (f"{_SERVING}.h1.commit", "site"),
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
     "finish_window": (f"{_SERVING}.h1.window", "finish"),
+    "fresh_salts": (f"{_POUW}.verifier.audit", "fresh_salts"),
     "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
     "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
     "lead_refusals": (f"{_SERVING}.lead", "refusals"),

@@ -7,7 +7,8 @@
 # each decode point, CP_CO entries BUILD:NC:S:PAD_KB. Clocks are read, never set.
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/capfillc.XXXXXX); trap 'rm -rf "$B"' EXIT
 export CP_POINTS=${CP_POINTS:-"1:2048 32:2048 128:2048 256:2048"}

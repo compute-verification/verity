@@ -26,7 +26,7 @@ import pytest
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS
+from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS, wiring as WI
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR, serving_rows as SRW
@@ -171,7 +171,7 @@ def test_a_class_wired_to_a_writer_of_two_units_a_block_is_committed_by_its_repl
     assert CS.expected_ports(r.design.window(again.docket.digest, sample)) == r.interior.ports
     w = r.interior.committed.window
     assert [(m.template, m.n) for m in w.members] == [(t, Q * o) for t in ids]
-    assert w.held_leaves(w.members[1], "mask") == tuple(range(Q * o))
+    assert w.tree(w.members[1], "mask") == WI.tree(ids[0], "o0") and w.reads(w.members[1], "mask").tolist() == list(range(Q * o))
     assert [e["value"] for e in r.record["registered"]] == ["scores", "n", "key", "r"]
     assert sorted(u // o for u in r.draw.units) == list(range(2 * Q))
     with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
@@ -328,14 +328,15 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_f
 
 
 def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():
-    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome round 2 refuses
-    by its form alone held; the same run with ``second-inputs`` among round 2's codes, or among the outcome's, did
-    not, whatever else it reports."""
+    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome is accepted held,
+    and one whose outcome round 2 refuses, by the deleted two-stage form's code too, did not; the same run with
+    ``second-inputs`` among round 2's codes, or among the outcome's, did not, whatever else it reports."""
     s = {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
          "audit": {"complete": True, "registered_reads": True, "verdicts": {"m0": True}}}
     files, r2 = {TID: True}, {"ok": True, "codes": []}
-    o = {"accepted": False, "interior": ["statements"], "statements": [TS.FORM_REFUSED], "replay_sample": []}
+    o = {"accepted": True, "interior": [], "statements": [], "replay_sample": []}
     assert TS.held(s, r2, o, files)
+    assert not TS.held(s, r2, {**o, "accepted": False, "interior": ["statements"], "statements": [SM.FORM]}, files)
     assert not TS.held(s, {"ok": False, "codes": [TS.INPUTS_REFUSED]}, o, files)
     assert not TS.held(s, r2, {**o, "statements": [TS.INPUTS_REFUSED]}, files)
     assert not TS.held(s, {"ok": True, "codes": [TS.INPUTS_REFUSED]}, {**o, "accepted": True, "statements": []}, files)
@@ -365,7 +366,7 @@ def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_
     untimed = summary([SM.INPUTS])
     del untimed["audit"]["timing"]
     assert SM.expect(untimed, SM.INPUTS) == {**passed, "round_two": True, "outcome": True, "cost": False}
-    for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [TS.FORM_REFUSED]):
+    for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [SM.FORM]):
         assert SM.expect(summary(codes), SM.INPUTS) == {**passed, "round_two": False, "outcome": False}
     assert all(SM.expect(summary([], [SM.FORM])).values())
     assert SM.expect(summary([SM.INPUTS])) == {**passed, "round_two": False, "outcome": False}

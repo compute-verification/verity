@@ -15,8 +15,8 @@ set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc)
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "power.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "power.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

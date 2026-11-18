@@ -57,6 +57,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     DomainError,
     Epoch,
     finish_window,
+    fresh_salts,
     H1_CHALLENGER,
     H1_SCHEME,
     H1Run,
@@ -97,7 +98,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     Workload,
 )
 
-from verity.protocols.resource_accounting.compute.pouw.verifier.audit import fresh_salts
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity import hooks as H
 from verity.protocols.compose import schemes as declarations
