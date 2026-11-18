@@ -1565,7 +1565,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="also check the spots of each sidecar's RANGES rule for these families (every rule's when none is "
                          "named), as named targets (`ranges`); give the targets before it")
     ap.add_argument("--fail-on-warnings", action="store_true")
-    ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
+    ap.add_argument("--update-pins", action="store_true",
+                    help="pin the lowering counts and circuit digests measured now (review the diff); with --reached BASE "
+                         "--check, those of the targets the change reaches, each checked now, the rest reused from the cache")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
                     help="reuse a report whose every input is unchanged (circuit_check.cache), else run and record one; named "
                          "targets use check's own by default (`default_cache`)")
@@ -1638,9 +1640,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.check and a.reached is None:
         ap.error("--check checks the targets --reached names: give --reached BASE")
     if a.reached is not None:
-        if a.targets or a.all or a.no_cache or a.update_pins or a.shard or a.binding or a.records_only or a.bindings or a.ranges:
-            ap.error("--reached names the targets of --all a change reaches: give no target, --all, --no-cache, --update-pins, "
-                     "--shard, --binding, --records-only, --bindings or --ranges")
+        if (a.targets or a.all or a.no_cache or (a.update_pins and not a.check) or a.shard or a.binding or a.records_only
+                or a.bindings or a.ranges):
+            ap.error("--reached names the targets of --all a change reaches: give no target, --all, --no-cache, --update-pins "
+                     "but with --check, --shard, --binding, --records-only, --bindings or --ranges")
         if not (paths := SH.reaching(SH.changed(REPO, a.reached), SH.declared(REPO))):
             print(f"circuit-check --reached {a.reached}: no target reached: the change touches no path a check reads")
             return 0
@@ -1694,7 +1697,7 @@ def main(argv: list[str] | None = None) -> int:
         a.shard_dir.mkdir(parents=True, exist_ok=True)
         progress = a.shard_dir / "progress.jsonl"
         progress.unlink(missing_ok=True)
-    cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
+    cache = None if a.no_cache or (a.update_pins and a.reached is None) else a.cache or (None if a.all else default_cache())
     if cache:
         if (ex := CC.expire(cache))["gone"] or ex["left"]:
             print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "

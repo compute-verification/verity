@@ -73,8 +73,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
 
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import frame
+from verity.commitments.scheme import DIGEST_BYTES
 
 from ..codec import Codec
 from ..labels import salt_value, tag

@@ -30,6 +30,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SparseMlaHeadScoresCols_v1", lambda: bind(sparse_mla.SparseMlaHeadScoresCols, DR=16, DV=16, NVIS=16, FIRST=False,
                                                     BN=16, DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625, G=8)),
         ("SparseMlaHeadKeysWire_v1", lambda: bind(sparse_mla.SparseMlaHeadKeysWire, NVIS=16, W=8, C=0)),
+        # a decode step's units that read the key cache, masked by its bit: the served later block, and the writer above
+        ("SparseMlaHeadBlockLive_v1", lambda: bind(sparse_mla.SparseMlaHeadBlockLive, NVIS=64, FIRST=False,
+                                                   **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
+        ("SparseMlaHeadKeysWireLive_v1", lambda: bind(sparse_mla.SparseMlaHeadKeysWireLive, NVIS=16, W=8, C=0)),
         ("SparseMlaHeadEnd_v1", lambda: bind(sparse_mla.SparseMlaHeadEnd, DV=sparse_mla.SPARSE_MLA_GLM53["DV"],
                                              INV=sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),

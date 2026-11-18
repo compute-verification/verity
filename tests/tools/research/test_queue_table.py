@@ -174,7 +174,7 @@ def test_the_table_holds_each_number_over_its_windows():
     rows = {r["name"]: r for r in qt.table(d, {"now": d["now"] - 3600, "nodes": {"vy-nebius-cpu-1": {"stat": [5000 - 3600 * 100 * 30, 0]}}})}
     m2m = rows["Mark to `main`"]
     assert m2m["hour"] == m2m["day"] == "p50 95, p90 111 min (n=2)"            # 115 and 75 min, landed 55 min ago
-    assert rows["Share on `main` within 2 h of the mark"]["day"] == "2 of 2 landed (100%); with the 3 marked in the window and waiting, 0 past 2 h: 5 of 5 (100%)"
+    assert rows["Share on `main` within 2 h of the mark"]["day"] == "2 of 2 landed (100%); 3 marked in the window and waiting, none past 2 h yet"
     assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs: 1 with a land verdict, 2 without; 1 in a candidate being checked")
     assert rows["Mark to land verdict (the review wait)"]["day"] == "p50 18, p90 28 min (n=2)"     # 30 and 5 min
     assert rows["Marked heads with no land verdict now"]["now"] == "2: 1 held by a reviewer, 1 not looked at, the oldest of those marked 90 min ago"
@@ -596,11 +596,15 @@ def test_a_merge_of_main_keeps_the_mark_to_main_clock_and_a_change_of_the_diff_r
     assert {r["name"]: r for r in qt.table(withdrawn)}["Mark to `main`"]["day"] == "p50 55, p90 71 min (n=2)"
 
 
-def test_the_share_within_2_h_also_counts_the_marked_still_waiting_a_wait_past_2_h_a_miss():
+def test_the_share_within_2_h_counts_a_wait_past_2_h_a_miss_and_a_shorter_wait_not_yet():
     d = dict(doc(), now=qt.ts(at("03:30")))
     row = {r["name"]: r for r in qt.table(d)}["Share on `main` within 2 h of the mark"]
-    assert row["day"] == "2 of 2 landed (100%); with the 3 marked in the window and waiting, 2 past 2 h: 3 of 5 (60%)"   # #3 and #4
+    assert row["day"] == ("2 of 2 landed (100%); with the 2 marked in the window and waiting past 2 h, misses already: 2 of 4 "
+                          "(50%); 1 waiting under 2 h not counted yet")                  # #3 and #4 missed
     assert row["hour"] == "none landed"                                                  # nothing waits from the last hour either
+    early = dict(doc(), now=qt.ts(at("01:30")))
+    assert {r["name"]: r for r in qt.table(early)}["Share on `main` within 2 h of the mark"]["day"].endswith(
+        "waiting, none past 2 h yet")
 
 
 def test_a_heads_own_change_is_the_queues_so_a_merge_of_main_keeps_it(tmp_path):
@@ -630,6 +634,8 @@ def test_a_heads_own_change_is_the_queues_so_a_merge_of_main_keeps_it(tmp_path):
     assert sorted(json.loads(kept.read_text()).values()) == sorted(own.values())
     kept.write_text(json.dumps({f"{git('merge-base', main_, h1)} {h1}": "kept"}))
     assert qt.own_changes({"1": (main_, [h1])}, repo=tmp_path, kept=kept)[0] == {f"1@{h1}": "kept"}
+    assert qt.own_changes({"1": (main_, [main_])}, repo=tmp_path, kept=kept)[0] == {f"1@{main_}": None}
+    assert list(json.loads(kept.read_text()).values()) == ["kept"]                  # a None is worked out again, never kept
 
 
 def left() -> list[dict]:

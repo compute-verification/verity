@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session"))
 
 import same_sass
 

@@ -12,3 +12,4 @@ inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/conf
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
+worker_gb = 6
