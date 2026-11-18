@@ -23,7 +23,8 @@ BOUND = {"host": "auditor", "address": "auditor:7000", "command": ["ssh", "audit
 
 def test_its_settings_and_facts_are_period_json_s_wipe_with_none_unset() -> None:
     """Every key of `period.json`'s ``wipe`` but the pin is a parameter or a fact, none both, and their defaults are
-    CONFIG's but for the served store: a card's (``cuda``), streamed natively."""
+    CONFIG's but for the served store: a card's (``cuda``), streamed natively. The declaration writes its own defaults,
+    since loading it loads no prover file; this holds them to CONFIG and UNSET."""
     assert not set(WIPE.settings) & set(WS.FACTS) and WIPE.settings["limit_ns"] == LIMIT_NS
     got = WS.period_wipe(WIPE.settings | WS.FACTS)
     assert set(got) | {"trusted_sha512"} == set(wipe_run.CONFIG)
