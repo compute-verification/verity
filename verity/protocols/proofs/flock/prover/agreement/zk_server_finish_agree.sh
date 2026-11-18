@@ -10,9 +10,7 @@
 # Every round in a device round's place is the loop's own (`Flock.ZkServer.Frames`: `Skeleton.rounds`, then `Drive.openStep`).
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
 # configs (FF_CONFIG, default hidden:256: a hiding tile, whose rows are a form the soundness proof covers, where a plain
-# tile's are refused) over FF_N instances (default 1), all sampled, or h1:K, the H1 tile unit at contraction K with one
-# random instance (benchmarks/verifier_cost/flock_read.py), whose verifiers' verdicts are reported and not required: its
-# checks of record are h1_prove's, with the window's Program, partition and registered reads. Results in
+# tile's are refused) over FF_N instances (default 1), all sampled. Results in
 # $RESEARCH_RUN_DIR/out: result.json, the session's logs, the requests' sizes; never a request or a proof.
 set -uo pipefail
 SRC=$(pwd)
@@ -27,15 +25,7 @@ ZK_SERVER=${LEAN%/verity-verify-proof}/flock-zk-server
 role=${CFG%%:*} k=${CFG#*:} tag=${CFG%%:*}-k${CFG#*:}
 D=$W/$tag O=$OUT/$tag
 mkdir -p "$D" "$O"
-if [ "$role" = h1 ]; then
-  "$PY" "$SRC/benchmarks/verifier_cost/flock_read.py" "$k" "$D/h1" > "$O/stage.out" 2> "$O/stage.err" \
-    || { log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; exit 1; }
-  ln -s "$D/h1/circuit.txt" "$D/h1/stmt/inst.bin" "$D/h1/stmt/pub.bin" "$D/"
-  cp "$D/h1/build.json" "$D/stage.json"
-  "$PY" -c "import json, sys; print(json.load(open(sys.argv[1]))['pin'], end='')" "$D/stage.json" > "$D/pin.txt"
-else
-  stage_config "$role" "$k" "$tag" "$D" "$O" || { log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; exit 1; }
-fi
+stage_config "$role" "$k" "$tag" "$D" "$O" || { log "$tag: staging FAILED: $(tail -1 "$O/stage.err")"; exit 1; }
 cp "$D/stage.json" "$O/"
 DUMP=$W/dump; mkdir -p "$DUMP"
 pin=$(cat "$D/pin.txt") port=$(free_port)
@@ -81,5 +71,5 @@ sys.exit(0 if v and (v[0]['accepted'] or v[0]['why'].startswith(sys.argv[2])) el
 lean=$?
 log "the session's verdict: $([ "$live" = 0 ] && echo ACCEPT || echo "NOT accepted"); the Lean verifier's: \
 $([ $lean = 0 ] && echo "every check passed" || echo "REJECT") $(grep '^VERDICT ' "$O/lean-verify.out" | cut -c1-300)"
-[ "$role" = h1 ] || { [ "$live" = 0 ] && [ $lean = 0 ]; } || rc=1
+{ [ "$live" = 0 ] && [ $lean = 0 ]; } || rc=1
 exit $rc

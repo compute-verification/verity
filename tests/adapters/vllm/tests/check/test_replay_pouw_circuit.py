@@ -1,4 +1,4 @@
-"""`verity_vllm.check.replay.pouw_circuit` beside a whole replay, on the calls the PoUW end-to-end world commits
+"""`verity_vllm.protocols.pouw.pouw_circuit` beside a whole replay, on the calls the PoUW end-to-end world commits
 (`tests.check.test_pouw_ncp_v2_end_to_end`): the record of a window that committed no call, the reasons a record names
 beside the reasons it counts, the composition entry the live run is asked for under, and what the tile tamper commits
 wrong."""
@@ -11,7 +11,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.circuit import pla
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
 
 from tests.check import test_pouw_ncp_v2_end_to_end as E2E
-from verity_vllm.check.replay import pouw_circuit as RC
+from verity_vllm.protocols.pouw import pouw_circuit as RC
 from verity_vllm.protocols import pouw
 from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 

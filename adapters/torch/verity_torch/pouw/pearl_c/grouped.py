@@ -22,7 +22,9 @@ its leaves' address and its offsets in a pinned host slot (`_Group.table`), uplo
 behind a zero row, and its steps read it from there: A's rows into their segments (one gather by the layout's row sources,
 `_Call.src`, a filler row the zero row), the launches, and with hashing one scatter (`pouw_pearl_c_screen.scatter_into`)
 that screens the rows, at their rows of A, into the pass's flags and copies the units' A roots into the pass at the table's
-offsets.  So no step reads anything of the call's but the table, its layout's row sources and the staged x, and with ``graphs``
+offsets.  With hashing, the call's rows of A get fresh hm96 salts on the caller's stream (``salts_a``, `host.fresh_into`),
+graph replays included, which only the main lane's commitment reads.  So no step reads anything of the call's but the
+table, its layout's row sources, its salts and the staged x, and with ``graphs``
 each lane's steps are captured as a CUDA graph at a layout's second call and replayed by the driver after (`_replay`),
 as a dense call's lane graphs are (`pouw_pearl_c_graphs`).  A layout's graphs serve only calls of the same counts; any
 other call runs the same steps eagerly.  vLLM's own capture of a forward can't take a grouped call (its counts are the
@@ -51,7 +53,7 @@ import numpy as np
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import CALL_CAPACITY
-from verity_torch.pouw.pearl_c.host import _Driver, _event, _put, _zeros
+from verity_torch.pouw.pearl_c.host import _Driver, _event, _put, _zeros, fresh_into
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.kernel import _load
 from verity_torch.pouw.pearl_c.passes import call_index
 from verity_torch.pouw.pearl_c.screen import scatter_into, screen_into
@@ -215,7 +217,7 @@ class _Group:
         self.rows = max(MIN_ROWS, R.pow2(max(rows, self.rows)))
         self.count = self.rows // G.SEG
         size = {**G.sizes(R, self.rows, self.count, self.n, self.k), "xf": 4 * (self.rows + 1) * self.k, "alpha_s": 4 * self.rows,
-                "aux_s": 8 * self.rows, "roots": run.nb * self.count}
+                "aux_s": 8 * self.rows, "roots": run.nb * self.count, "salts_a": R.HM_SALT * self.rows}
         size["meta"] += OFFS_BYTES
         self.b = {x: _zeros(s, run.device) for x, s in size.items()}
         self.sets = [{x: self.b[x] for x in ROTATED}, *({x: _zeros(size[x], run.device) for x in ROTATED} for _ in range(ring - 1))]
@@ -479,6 +481,8 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     if side:
         to = run.sides[run._side_turn % len(run.sides)]
         run._side_turn += 1
+    if run.hashing:                                     # read on the main lane alone, which starts after the caller
+        fresh_into(b["salts_a"], rows, raw if cuda else None)
     graphed = cuda and run.graphs and run.fused_screen
     if graphed and c.execs:
         _replay(run, g, c, j, slot, nbytes, b, x, raw, main, lane_raw, to)
@@ -508,7 +512,8 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
             xa, slot_a = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k), G.tree_bytes(R)
             for i, (u, mm) in enumerate(zip(us, mms, strict=True)):
                 run._retained(cur, mm, u.m, flags[u.src:u.src + u.m], xa[u.row:u.row + u.m16],
-                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)], y=c.y[u.row:u.row + u.m])
+                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)],
+                              b["salts_a"][R.HM_SALT * u.row:R.HM_SALT * (u.row + u.m16)], y=c.y[u.row:u.row + u.m])
         cur.tiles += tiles
     y = c.y.index_select(0, c.idx)
     return y if bias is None else y + bias
