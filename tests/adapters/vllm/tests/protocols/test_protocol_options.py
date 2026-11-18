@@ -59,16 +59,16 @@ def test_a_malformed_set_is_refused(value, match):
 # --- the TargetProfile field --------------------------------------------------------------------------------------------
 
 def test_an_undeclared_set_keeps_every_digest():
-    p = TargetProfile()
+    p = TargetProfile.default()
     assert p.protocols is None and "protocols" not in p.to_json() and p.digest() == DEFAULT_DIGEST
     assert TargetProfile.from_json(p.to_json()).digest() == DEFAULT_DIGEST
 
 
 def test_a_declared_set_is_in_the_profile_and_its_digest():
-    p = TargetProfile(protocols=ALL[1:])
+    p = TargetProfile.default().with_overrides(protocols=ALL[1:])
     assert p.to_json()["protocols"] == list(ALL[1:]) and p.digest() != DEFAULT_DIGEST
     assert TargetProfile.from_json(p.to_json()) == p
-    art = ArtifactIdentity.build({"v": 1}, TargetProfile(), {}, "ab" * 32)
+    art = ArtifactIdentity.build({"v": 1}, TargetProfile.default(), {}, "ab" * 32)
     with pytest.raises(ApplicabilityError, match="target_profile.protocols"):
         check_reuse(art, p, {})
 
@@ -77,7 +77,7 @@ def test_a_declared_set_is_in_the_profile_and_its_digest():
                                              (tuple(reversed(ALL)), "must be spelled"), ("pous:x,sampled-proofs:rows-sha512", "string")])
 def test_a_profile_refuses_another_spelling(protocols, match):
     with pytest.raises(ValueError, match=match):
-        TargetProfile(protocols=protocols)
+        TargetProfile.default().with_overrides(protocols=protocols)
 
 
 # --- stand-in adapters over a toy linear layer ----------------------------------------------------------------------------
@@ -275,13 +275,13 @@ SAID = [
     ("an engine that fills nothing", None, lambda: PO.from_engine(_serve(ALL[0], filled={"pouw": ("runner",)}), object()),
      (f"{ALL[0]}: its settings ['runner'] come from the built engine, which doesn't supply them: no runner",)),
     ("an install beside a live option", None, _beside_a_live_option, (f"options installed outside this composition are live: ['{ALL[0]}']",)),
-    ("a Commit at TP 2", None, lambda: PO.commit_context(TargetProfile(protocols=ROW_SET), world=2), (AT_TP_2,)),
+    ("a Commit at TP 2", None, lambda: PO.commit_context(TargetProfile.default().with_overrides(protocols=ROW_SET), world=2), (AT_TP_2,)),
     ("a row whose knob contradicts its target", None,
-     lambda: PO.at_row(",".join(ROW_SET), {"engine": {"target": {"protocols": [ALL[0], ALL[2]]}}}),
+     lambda: ROW.row_protocols(",".join(ROW_SET), {"engine": {"target": {"protocols": [ALL[0], ALL[2]]}}}),
      (f"PROTOCOLS {list(ROW_SET)} contradicts the workload target's protocols {[ALL[0], ALL[2]]}",)),
-    ("a row without SPOT", None, lambda: PO.at_row("pous:s1", {}),
+    ("a row without SPOT", None, lambda: ROW.row_protocols("pous:s1", {}),
      (f"['pous:s1']: a row is a {SPOT} run, so its set names {SPOT}:<scheme> (serve without it through verity_vllm.LLM)",)),
-    ("a row at TP 2", None, lambda: PO.at_row(",".join(ROW_SET), {}, world=2), (AT_TP_2,)),
+    ("a row at TP 2", None, lambda: ROW.row_protocols(",".join(ROW_SET), {}, world=2), (AT_TP_2,)),
 ]
 
 
@@ -299,18 +299,6 @@ def test_a_refusal_reads_protocol_options_refused_and_then_its_reasons(monkeypat
     assert str(e.value) == "protocol options refused: " + "; ".join(reasons) and e.value.args == (str(e.value),)
 
 
-@pytest.mark.parametrize("kw,reason", [
-    ({"installs": False}, "this Commit (TP) installs no protocol options yet"),
-    ({"commit_scheme": "vllm-v1"}, (f"{ALL[2]} is what the target declares the Commit commits under, but its committer commits "
-                                    "under vllm-v1: run it with --commit-scheme rows-sha512"))])
-def test_the_commit_guard_says_its_own_refusal_as_the_package_does_on_one_line(monkeypatch, capsys, kw, reason):
-    _fake_adapter(monkeypatch, "pous", _pous([]))
-    with pytest.raises(SystemExit) as e:
-        PO.commit_guard(TargetProfile(protocols=ROW_SET), **kw)
-    assert e.value.code == 3
-    assert capsys.readouterr().out == f"[delta] REFUSE (fail-closed): protocol options refused: {reason}\n"
-
-
 def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
     _fake_adapter(monkeypatch, "pous", _pous([]))
@@ -325,10 +313,10 @@ def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch)
 
 def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(monkeypatch):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
-    p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
+    p = TargetProfile.default().with_overrides(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
     ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, SPOT: {}})
     assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"rounds": 7}})
-    assert PO.capture_context(None) is None and PO.capture_context(TargetProfile()) is None
+    assert PO.capture_context(None) is None and PO.capture_context(TargetProfile.default()) is None
     with pytest.raises(PO.Refused) as e:
         PO.capture_context(p, settings={"pous": {}})
     assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
@@ -392,7 +380,7 @@ def test_spot_alone_at_the_commit_adds_no_hooks():
     assert comp.verdict() == {"protocols": list(ALL[2:]), "record": comp.record()["digest"]}
 
 
-def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
+def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses():
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
     refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with."""
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
@@ -400,29 +388,28 @@ def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still
                                          r"recorded runs: .* declare sampled-proofs:rows-sha512"):
         PO.install(Model(), PO.Context(stage="commit", enabled=("sampled-proofs:vllm-v1",)))
     with pytest.raises(PO.Refused, match="kept only to read recorded runs"):
-        PO.at_row("sampled-proofs:vllm-v1", {})
-    recorded = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
+        ROW.row_protocols("sampled-proofs:vllm-v1", {})
+    recorded = TargetProfile.default().with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
     assert recorded.protocols == ("pouw:ncp-v2", "sampled-proofs:vllm-v1")
-    assert recorded.digest() != TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512")).digest()
-    with pytest.raises(SystemExit):
-        PO.commit_guard(recorded)
-    assert "kept only to read recorded runs" in capsys.readouterr().out
-    declared = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
-    assert PO.commit_guard(declared, commit_scheme="rows-sha512") is declared
-    with pytest.raises(SystemExit):
-        PO.commit_guard(declared, commit_scheme="vllm-v1")
-    assert "its committer commits under vllm-v1" in capsys.readouterr().out
-    assert PO.commit_guard(TargetProfile(), commit_scheme="vllm-v1") == TargetProfile()
+    assert recorded.digest() != TargetProfile.default().with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512")).digest()
+    with pytest.raises(PO.Refused, match="kept only to read recorded runs"):
+        PO.commit_context(recorded)
+    declared = TargetProfile.default().with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
+    assert PO.commit_context(declared, commit_scheme="rows-sha512") is not None
+    with pytest.raises(PO.Refused) as r:
+        PO.commit_context(declared, commit_scheme="vllm-v1")
+    assert r.value.reasons == (("sampled-proofs:rows-sha512 is what the target declares the Commit commits under, but its "
+                                "committer commits under vllm-v1: run it with --commit-scheme rows-sha512"),)
+    assert PO.commit_context(TargetProfile.default(), commit_scheme="vllm-v1") is None
 
 
 def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_set(monkeypatch):
-    assert PO.commit_context(None) is None and PO.commit_context(TargetProfile()) is None
+    assert PO.commit_context(None) is None and PO.commit_context(TargetProfile.default()) is None
     versions: dict = {}
-    assert PO.commit_guard(TargetProfile(), installs=False) == TargetProfile() and PO.commit_guard(None) is None
-    assert PO.at_commit(TargetProfile(), Model(), versions) is None and versions == {}
-    PO.into_verdict(None, versions, "/nonexistent", TargetProfile(), program_digest=None, manifest=None)
+    assert PO.at_commit(TargetProfile.default(), Model(), versions) is None and versions == {}
+    PO.into_verdict(None, versions, "/nonexistent", TargetProfile.default(), program_digest=None, manifest=None)
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
-    p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
+    p = TargetProfile.default().with_overrides(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
     ctx = PO.commit_context(p, settings={"pouw": {"draws": 7}})
     assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.scheme("pouw"), ctx.settings_of("pouw")) == \
         ("commit", ALL[:1] + ALL[2:], False, "ncp-v1", {"draws": 7})
@@ -430,22 +417,12 @@ def test_the_commit_context_is_none_for_the_default_and_checked_for_a_declared_s
         PO.commit_context(p, world=2)
 
 
-@pytest.mark.parametrize("kw,match", [({"world": 2}, "TP 2"), ({"installs": False}, "TP"),
-                                      ({"settings": {"pous": {}}}, "does not enable")])
-def test_the_commit_guard_exits_3_naming_every_reason(monkeypatch, capsys, kw, match):
-    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
-    with pytest.raises(SystemExit) as e:
-        PO.commit_guard(TargetProfile(protocols=ALL[:1] + ALL[2:]), **kw)
-    out = capsys.readouterr().out
-    assert e.value.code == 3 and "REFUSE (fail-closed)" in out and match in out
-
-
 def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypatch, tmp_path):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
-    p, model = TargetProfile(protocols=ALL[1:]), Model()
+    p, model = TargetProfile.default().with_overrides(protocols=ALL[1:]), Model()
     versions: dict[str, Any] = {}
-    assert PO.commit_guard(p) is p
+    assert PO.commit_context(p) is not None
     with PO.at_commit(p, model, versions) as comp:
         assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
         verdict = {"commit_pass": True, "run_roots": ["ab" * 32]}
@@ -463,8 +440,8 @@ import json, sys
 from verity_vllm import protocols as PO
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-p, model, versions = TargetProfile(), object(), {"engine_kwargs": {}}
-assert p.protocols is None and PO.commit_guard(p) is p and PO.at_row(None, {}) is None
+p, model, versions = TargetProfile.default(), object(), {"engine_kwargs": {}}
+assert p.protocols is None and PO.commit_context(p) is None
 protocols = PO.at_commit(p, model, versions, None)
 assert protocols is None and versions == {"engine_kwargs": {}}
 assert PO.weights_view(protocols, model) is model
@@ -558,15 +535,15 @@ def test_a_row_refuses_a_set_it_cannot_run_before_any_stage(monkeypatch, knob, t
     else:
         monkeypatch.setitem(config.PROTOCOLS, "pous", "not_landed_here")
     with pytest.raises(PO.Refused, match=match):
-        PO.at_row(knob, {"engine": {"target": target}}, world=world)
+        ROW.row_protocols(knob, {"engine": {"target": target}}, world=world)
 
 
 def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
-    assert PO.at_row(None, {}) is None and PO.at_row("sampled-proofs:rows-sha512", {"engine": {"target": {"flash_attn_version": 2}}}) is None
+    assert ROW.row_protocols(None, {}) is None and ROW.row_protocols("sampled-proofs:rows-sha512", {"engine": {"target": {"flash_attn_version": 2}}}) is None
     _fake_adapter(monkeypatch, "pous", _pous([]))
-    assert PO.at_row("sampled-proofs:rows-sha512,pous:s1", {"engine": {"target": {}}}) == ("pous:s1", "sampled-proofs:rows-sha512")
+    assert ROW.row_protocols("sampled-proofs:rows-sha512,pous:s1", {"engine": {"target": {}}}) == ("pous:s1", "sampled-proofs:rows-sha512")
     with pytest.raises(PO.Refused, match="does not enable"):
-        PO.at_row("sampled-proofs:rows-sha512,pous:s1", {"protocols_config": {"pouw": {}}})
+        ROW.row_protocols("sampled-proofs:rows-sha512,pous:s1", {"protocols_config": {"pouw": {}}})
 
 
 def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_path, capsys):
@@ -644,13 +621,12 @@ def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
         assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:rows-sha512")) == (_refused_beside_spot(scheme),)
     for scheme in POUW_SCHEMES:
         assert PO.refusals(_serve(f"pouw:{scheme}")) == ()
-    p = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
-    assert PO.commit_guard(p) is p and PO.at_row(None, {"engine": {"target": p.to_json()}}) == p.protocols
-    with pytest.raises(SystemExit) as e:
-        PO.commit_guard(TargetProfile(protocols=("pouw:ncp-v1", "sampled-proofs:rows-sha512")))
-    assert e.value.code == 3
+    p = TargetProfile.default().with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
+    assert PO.commit_context(p) is not None and ROW.row_protocols(None, {"engine": {"target": p.to_json()}}) == p.protocols
+    with pytest.raises(PO.Refused):
+        PO.commit_context(TargetProfile.default().with_overrides(protocols=("pouw:ncp-v1", "sampled-proofs:rows-sha512")))
     with pytest.raises(PO.Refused) as r:
-        PO.at_row("pouw:ncp-v1,sampled-proofs:rows-sha512", {})
+        ROW.row_protocols("pouw:ncp-v1,sampled-proofs:rows-sha512", {})
     assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
 
 
@@ -692,13 +668,13 @@ def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
     row = f"{PEARL},sampled-proofs:rows-sha512"
     with pytest.raises(PO.Refused) as r:
-        PO.at_row(row, {"protocols_config": {"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}}})
+        ROW.row_protocols(row, {"protocols_config": {"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}}})
     assert len(r.value.reasons) == 1 and "a row's Commit replays the row's request Programs" in r.value.reasons[0]
     with pytest.raises(PO.Refused) as r:
-        PO.at_row(row, {"protocols_config": {"pouw": PEARL_SETTINGS}})
+        ROW.row_protocols(row, {"protocols_config": {"pouw": PEARL_SETTINGS}})
     assert r.value.reasons == (uncut,)
     with pytest.raises(PO.Refused) as r:
-        PO.commit_context(TargetProfile(protocols=config.parse_protocols(row)),
+        PO.commit_context(TargetProfile.default().with_overrides(protocols=config.parse_protocols(row)),
                           settings={"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}})
     assert "a row's Commit replays" in r.value.reasons[0]
 

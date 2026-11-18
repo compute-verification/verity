@@ -214,7 +214,7 @@ def test_the_v2_forms_keep_their_word_views() -> None:
 
 
 def _tp(cc):
-    return TargetProfile(compute_capability=cc)
+    return TargetProfile.default().with_overrides(compute_capability=cc)
 
 
 def test_blackwell_consumer_records_the_moe_step_with_its_own_measurement() -> None:

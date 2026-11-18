@@ -66,3 +66,12 @@ def test_the_probe_names_no_architecture_of_its_own(monkeypatch, tmp_path, capsy
     with pytest.raises(SystemExit):
         tc_probe.main()
     assert why in capsys.readouterr().err
+
+
+def test_the_compiler_is_the_machine_s_toolkit_and_none_is_refused_by_name(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("CUDA_HOME", str(tmp_path))
+    assert tc_probe.cuda_bin("nvcc") == str(tmp_path / "bin" / "nvcc")
+    monkeypatch.delenv("CUDA_HOME")
+    monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
+    with pytest.raises(SystemExit, match=r"^no CUDA toolkit 13\.0: set CUDA_HOME"):
+        tc_probe.cuda_bin("cuobjdump")

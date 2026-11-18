@@ -11,7 +11,7 @@ arithmetic. These properties say what a check that passes establishes, against t
 (`Definitions.Spot.Sampling.Partitioning`) that `audit_exfiltration` and the free-compute guarantees read:
 
 * `LeakCheckSound`: when `leakBound d` returns `v`, sampling the design's `units` units independently with probability
-  `num / den` (`SamplingDesign.bernoulli`) certifies at most `v` bits at `delta`, every unit exporting at most `width` bits
+  `num / den` (`Verity.SamplingDesign.bernoulli`) certifies at most `v` bits at `delta`, every unit exporting at most `width` bits
   (`CertifiesLeak`).
 * `LeakCountSound`: there, more than `count` incorrect proof blocks escape that sampling with probability below `delta`.
 * `WorkCheckSound`: when `checkWork d` accepts, every assignment of units to the design's strata, each unit sampled
@@ -36,14 +36,14 @@ open _root_.Spot.PlanCheck (Leak Rate Work leakBound checkWork)
 Bernoulli sampling certifies at most `v` bits at `delta`. -/
 def LeakCheckSound : Prop :=
   ∀ (d : Leak) (v : ℚ), leakBound d = some v →
-    ∃ k : ℕ, d.den = k + 1 ∧ CertifiesLeak (SamplingDesign.bernoulli d.units d.num (k + 1)) (fun _ => d.width) d.delta v
+    ∃ k : ℕ, d.den = k + 1 ∧ CertifiesLeak (Verity.SamplingDesign.bernoulli d.units d.num (k + 1)) (fun _ => d.width) d.delta v
 
 /-- **The leak check certifies its count**: a design `leakBound` answers has `den = k + 1` for some `k`, and more than
 `count` incorrect proof blocks escape its Bernoulli sampling with probability below `delta`, the count a write bound of
 `width · count` bits reads. -/
 def LeakCountSound : Prop :=
   ∀ (d : Leak) (v : ℚ), leakBound d = some v →
-    ∃ k : ℕ, d.den = k + 1 ∧ (SamplingDesign.bernoulli d.units d.num (k + 1)).miss (d.count + 1) < ENNReal.ofReal d.delta
+    ∃ k : ℕ, d.den = k + 1 ∧ (Verity.SamplingDesign.bernoulli d.units d.num (k + 1)).miss (d.count + 1) < ENNReal.ofReal d.delta
 
 /-- **The work check is sound**: a design `checkWork` accepts has `den = k + 1` for some `k`, and however `n` units are
 assigned to its strata, sampling each with its stratum's probability meets the target `target` at `delta`. -/

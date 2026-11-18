@@ -22,8 +22,8 @@ misses a set `B` of units.
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
 
-`subset n k`, core's uniform `k`-subset of `n` units (`Verity.SamplingDesign.subset`), has a hypergeometric escape:
-`C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
+Core's uniform `k`-subset of `n` units, `Verity.SamplingDesign.subset n k`, has a hypergeometric escape:
+`C(n - |B|, k) / C(n, k)` (`Verity.SamplingDesign.subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 
 The lemmas named here are `Proofs/Spot/Sampling/SamplingDesign.lean`'s.
@@ -43,17 +43,7 @@ namespace SamplingDesign
 
 variable {n : ℕ}
 
-/-! ## The uniform `k`-subset -/
-
-/- The uniform `k`-subset of `n` units is core's (`Verity.SamplingDesign.subset`). -/
-export Verity.SamplingDesign (subset)
-
 /-! ## Bernoulli samples -/
-
-/-- Each unit sampled independently with probability `num / den`. -/
-abbrev bernoulli (n num den : ℕ) [NeZero den] : SamplingDesign n where
-  Ω := Fin n → Fin den
-  draw ω := Finset.univ.filter fun u => (ω u).val < num
 
 /-- Each unit `u` sampled independently with probability `num u / den`. -/
 abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : SamplingDesign n where
