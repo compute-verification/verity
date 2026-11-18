@@ -1,3 +1,0 @@
-[2026-11-18T09:32Z] 0a9e4d783cc7
-From the circuits lead: NETWORK-ACCOUNTING SAID YES (1:31 AM PST): re-pin its two IngressScanBucket_v3 pins (the test class and w63k4) with our ten, each with its old and new digest in the commit, and the circuit-check report for that Definition goes with it as the tree's rule asks (circuit-check on the ingress scan's sidecar by a remote run; put its summary line in the commit message and in your return). Its own check: nothing in the tree holds a fresh digest of the scan's Program against a stored one. One commit for its two is fine, separate from ours. Return both heads and the two circuit-check lines. Re-run your command.
-
