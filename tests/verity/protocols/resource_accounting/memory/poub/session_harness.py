@@ -183,7 +183,9 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         except BaseException as e:
             raised.append(e)
             clock.fail(e)
-            # the verifier's reader reads the end, as of a prover process that exited: a wait off the clock wakes too
+            # the verifier's reader reads the end, as of a prover process that exited: a wait off the clock wakes too.
+            # A close alone sends no end while the prover's own reader is blocked on the socket.
+            pconn.sock.shutdown(socket.SHUT_RDWR)
             pconn.sock.close()
             raise
 

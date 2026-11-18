@@ -1157,6 +1157,7 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
             heard.append(str(e))
         except BaseException as e:
             raised.append(e)
+            b.shutdown(socket.SHUT_RDWR)
             b.close()
             raise
 
