@@ -566,15 +566,11 @@ def _exit_on_sigterm(signum: int, _frame: object) -> None:
 
 
 def _copy_properties(name: str, run_dir: Path) -> None:
-    """A --local-only --machine run's inputs/NAME.toml: NAME's [properties] where the register here holds its file (on a Slurm
+    """A --local-only --machine run's inputs/NAME.toml: NAME's [properties] where the register here holds its record (on a Slurm
     job's node, the copy the payload carries)."""
-    import tomllib
+    from .pods import registry
 
-    from .pods import registry, slurm
-
-    d = registry.registry_dir(remote.machines_path())
-    entry = d / f"{name}.toml" if d else None
-    if entry and entry.is_file() and (props := slurm.properties_copy(name, tomllib.loads(entry.read_text()))):
+    if props := registry.recorded_properties(name, remote.machines_path()):
         (run_dir / "inputs").mkdir(exist_ok=True)
         (run_dir / "inputs" / f"{name}.toml").write_text(props)
 

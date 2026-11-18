@@ -21,7 +21,6 @@ RUN` and `research fetch RUN` find it.  No lease, slot or pool of ours exists th
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import re
 import shlex
@@ -33,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import remote
+from . import registry
 from ..telemetry.events import utc_now_ms
 from ..telemetry.job import write_json_atomic
 
@@ -68,28 +68,6 @@ def problem(entry: dict) -> str | None:
     if not (type(entry.get("max_minutes")) is int and entry["max_minutes"] > 0):
         return f"max_minutes {entry.get('max_minutes')!r} is not a positive whole number of minutes"
     return None
-
-
-def _toml(v: Any) -> str:
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, (int, float)):
-        return repr(v)
-    if isinstance(v, (list, tuple)):
-        return "[" + ", ".join(_toml(x) for x in v) + "]"
-    if isinstance(v, dict):
-        return "{ " + ", ".join(f"{json.dumps(str(k))} = {_toml(x)}" for k, x in v.items()) + " }"
-    return json.dumps(str(v), ensure_ascii=True)
-
-
-def properties_copy(name: str, entry: dict) -> str | None:
-    """The run's inputs/NAME.toml: the machine's name and its `[properties]` table, and no other field of its entry; None for an
-    entry without the table."""
-    props = entry.get("properties")
-    if not isinstance(props, dict):
-        return None
-    return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml(name)}\n\n"
-            "[properties]\n" + "".join(f"{json.dumps(str(k))} = {_toml(v)}\n" for k, v in props.items()))
 
 
 def refusal(ns: argparse.Namespace, harness_opts: list[str], command: list[str], m: dict) -> str | None:
@@ -178,7 +156,7 @@ def build_payload(src: Path, run_id: str, name: str, m: dict, cmd_min: int, ns: 
     for e in ns.env:
         args += ["--env", e]
     with tempfile.TemporaryDirectory(prefix="research-slurm-") as t:
-        if (props := properties_copy(name, m)) is not None:
+        if (props := registry.properties_copy(name, m)) is not None:
             (Path(t) / f"{name}.toml").write_text(props)
             args += ["--properties", str(Path(t) / f"{name}.toml")]
         with into.open("wb") as out:

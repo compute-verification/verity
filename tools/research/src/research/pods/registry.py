@@ -292,6 +292,16 @@ def properties_copy(name: str, entry: dict) -> str | None:
             "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
 
 
+def recorded_properties(name: str, machines_toml: Path) -> str | None:
+    """`properties_copy` of machine `name` as the register here holds it; None where the register is off or holds no record of
+    it, or the record has no `[properties]`."""
+    d = registry_dir(machines_toml)
+    entry = d / f"{name}.toml" if d else None
+    if not (entry and entry.is_file()):
+        return None
+    return properties_copy(name, tomllib.loads(entry.read_text()))
+
+
 def write_entry(d: Path, name: str, entry: dict) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{name}.toml"
