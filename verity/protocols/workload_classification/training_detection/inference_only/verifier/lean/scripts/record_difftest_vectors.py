@@ -91,7 +91,7 @@ import verity.circuits
 import verity.commitments.periods.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.population import mixed_population_program
+from verity.circuits.population import mixed_population_program, wired_population_program
 from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 
@@ -313,9 +313,12 @@ class Circuit:
         return {codec.descriptor_id(fn): n for fn, n in self.templates}
 
     def program(self) -> tuple[str, str]:
-        """The circuit's Program, a population of its templates over its values: its descriptor's text and digest."""
-        desc = codec.encode_program(mixed_population_program(
-            self.templates, values=[(v, self.params[v], 16) for v in self.values]))
+        """The circuit's Program, a population of its templates over its values whose root reads each wire's writer's
+        output (`wired_population_program`), so its edges are the circuit's wires: its descriptor's text and digest."""
+        rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
+               "wires": [w.doc() for w in self.wires], **({"order": self.order} if self.order is not None else {}),
+               "registered": {"params": dict(self.params), "values": list(self.values)}}
+        desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
         return codec.canonical_json(desc).decode(), codec.program_digest(desc)
 
     def doc(self, digest: str) -> dict:
@@ -324,13 +327,19 @@ class Circuit:
                "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {}),
                **({"formats": self.formats} if self.formats else {})}
         return json.loads(json.dumps({
-            "format": IF.CIRCUIT, "name": self.name, "templates": [[t, n] for t, n in self.units.items()],
+            "format": IF.CIRCUIT, "name": self.name, "templates": self.listed(),
             "program": digest, "wires": [w.doc() for w in self.wires],
             **({"cuts": self.cuts} if self.cuts else {}), **({"registered": reg} if self.registered else {}),
             **({"ingress": self.ingress} if self.ingress else {}),
             **({"order": [list(b) for b in self.order]} if self.order is not None else {}),
             "blocks": {"format": IF.BLOCKS, "proof": {"units": sum(self.units.values()), "partition": ""},
                        "inference": {"slots": self.slots, "steps": self.steps, "entries": self.entries}}}))
+
+    def listed(self) -> list[list]:
+        """The templates with their units, in the order of their first range in the order (the Program's root's)."""
+        units = self.units
+        first = list(dict.fromkeys([b[0] for b in self.order or []] + list(units)))
+        return [[t, units[t]] for t in first]
 
     def slot(self) -> dict[str, list[int]]:
         """Each unit's slot, entry by entry."""
