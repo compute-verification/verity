@@ -20,6 +20,7 @@ DECLARATIONS = (
     "verity.protocols.experimental.dither.scheme",
     "verity.protocols.resource_accounting.compute.pouw.scheme",
     "verity.protocols.resource_accounting.memory.poub.scheme",
+    "verity.protocols.resource_accounting.memory.pous.scheme",
     "verity.protocols.resource_accounting.network.scheme",
 )
 

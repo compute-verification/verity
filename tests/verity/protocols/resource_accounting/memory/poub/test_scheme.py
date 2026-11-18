@@ -50,6 +50,16 @@ def test_the_binder_subscribes_under_the_declaration() -> None:
     assert ex.requests == [("poub", poub.REUSE_OLDEST_FREED)] and poub.REUSE_OLDEST_FREED in poub.REQUESTS
     assert ex.subscribed == [("poub", "memory"), ("poub", "steps")]
     assert {type(r) for r in poub.REQUESTS} == {H.ReuseOldestFreed, H.RefuseProperty, H.RequireProperty}
+    assert poub.requests() == poub.REQUESTS and poub.requests(8)[-1] == H.FixRanges(8)
+
+
+def test_the_requests_refuse_a_run_the_session_cannot_follow() -> None:
+    ok = {"prefix_cache": False, "async_steps": False, "in_process": True}
+    filed = [("poub", r) for r in poub.REQUESTS]
+    assert H.unmet(filed, ok) == []
+    for key, bad in (("prefix_cache", True), ("async_steps", True), ("async_steps", None), ("in_process", False)):
+        [(who, request)] = H.unmet(filed, {**ok, key: bad})
+        assert who == "poub" and request.property == key
 
 
 def test_no_block_is_declared_and_the_requirement_says_where_the_opening_unit_is() -> None:

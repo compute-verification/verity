@@ -30,6 +30,7 @@ import time
 from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any
 
+from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover.ids_protocol import (
     ID_PAYLOAD,
     id_request_fields,
@@ -59,8 +60,8 @@ StreamIds = Callable[[asyncio.StreamReader], AsyncIterator[list[int]]]
 READERS = ("server-request", "stream-token-ids")
 
 
-class Broken(Exception):
-    """Why the server's stream of an id request ends without its trailer."""
+#: why the server's stream of an id request ends without its trailer: the workload's readers' error
+Broken = H.Broken
 
 
 async def _first(reader: asyncio.StreamReader) -> bytes:

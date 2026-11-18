@@ -13,7 +13,7 @@ Neither bundle carries a registered weight: a window made from one composes the 
     python -m tests.pipeline.served_experts OUT        (from adapters/vllm)
 
 writes both with ``OUT/row`` (the Program of record), ``OUT/ckpt`` and ``OUT/checkpoints.json`` (the checkpoint and its shard's
-pin), ``OUT/tables-rank0.json`` and ``OUT/tables.key`` (the per-expert tables' registration and the committer's key),
+pin), ``OUT/tables-rank0.json`` and ``OUT/tables-rank0.salts`` (the per-expert tables' registration and its salts),
 ``OUT/partition.json`` (each projection's scale-row reads and fused blocks) and ``OUT/hook``, and prints their paths as one
 JSON line.  No Build made the Program: its digest is the SHA-512 of its parameters and rows as written here.
 
@@ -56,7 +56,6 @@ UNITS = {"w13": (NV * 2 * I // G, NV * 2 * I // BLOCKS["w13"]), "w2": (NV * H //
 #: the units one flock-circuit statement holds (`serving_rows.chunk_caps`, which stages the template with the verifier's tools)
 CAP = 48
 REPO, REV = "test/fp8-moe-served", "abc"
-KEY = bytes(range(32))
 REQUEST = "r0"
 DESIGN = "stratified:1"
 LABEL = "fp8-moe-cpu"
@@ -263,7 +262,7 @@ def partition() -> dict[str, Any]:
 
 
 def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
-    """Under ``root``: the checkpoint and its pins, the Program's row dir, the tables' registration and key, the partition file
+    """Under ``root``: the checkpoint and its pins, the Program's row dir, the tables' registration and its salts, the partition file
     and the deferred Commit's output dir over the layer's committed step; and the committer, its run commitment and the served
     weights, for `hook` and `serve`.  ``seed`` samples the checkpoint, the logits and the input."""
     import torch
@@ -291,9 +290,9 @@ def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
         json.dump(inst, f)
     (row_dir / "build_request" / "result.json").write_text(json.dumps({"program_digest": inst["digest"]}))
     (root / "tables-rank0.json").write_text(json.dumps(
-        ET.register(str(row_dir / "build_request"), str(ckpt), KEY, BLOCKS, checkpoints_manifest=str(man)), indent=1) + "\n")
-    (root / "tables.key").write_bytes(KEY)
-    tables = {"key": str(root / "tables.key"), "registration": str(root / "tables-rank{rank}.json")}
+        ET.register(str(row_dir / "build_request"), str(ckpt), BLOCKS, salts_to=root / "tables-rank0.salts",
+                    checkpoints_manifest=str(man)), indent=1) + "\n")
+    tables = {"registration": str(root / "tables-rank{rank}.json")}
     pf = root / "partition.json"
     pf.write_text(json.dumps(partition()) + "\n")
 

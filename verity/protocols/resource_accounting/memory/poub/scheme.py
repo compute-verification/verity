@@ -97,16 +97,24 @@ POUB = S.register(S.Scheme(
     },
 ))
 
-#: what `POUB` asks of the workload, for the adapter to file under its name: a freed range is reused as late as the
-#: workload allows, no range comes back holding another input's values, and a step's output is taken before the next
-#: step is scheduled. The binder files the first itself (`Binder(fifo=True)`); the two properties are filed once the
-#: adapter declares them.
+#: what `POUB` asks of every workload, in the properties a served run declares (`verity.hooks.Declared`): a freed
+#: range is reused as late as the workload allows, no range comes back holding another input's values, a step's
+#: outputs are read before the next step is scheduled, and the steps are taken in the binder's process. The binder
+#: files the first itself (`Binder(fifo=True)`); the rest are filed from the scheme's requests once the interface
+#: gives a scheme's requests a home, and until then the adapter's remote session refuses the same three itself.
 REUSE_OLDEST_FREED = H.ReuseOldestFreed()
 REQUESTS: tuple[H.Request, ...] = (
     REUSE_OLDEST_FREED,
-    H.RefuseProperty("prefix-caching", True, "a prefix hit brings a range back with the values another input wrote"),
-    H.RequireProperty("async-scheduling", False, "a pass follows each step's schedule and its output in turn"),
+    H.RefuseProperty("prefix_cache", True, "a prefix hit brings a range back with the values another input wrote"),
+    H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its outputs in turn"),
+    H.RequireProperty("in_process", True, "the binder reads the store in the process that takes the steps"),
 )
+
+
+def requests(ranges: int | None = None) -> tuple[H.Request, ...]:
+    """`REQUESTS`, and with ``ranges`` the request that the workload's memory hold exactly that many (a session whose
+    store's size is its registration's)."""
+    return REQUESTS if ranges is None else (*REQUESTS, H.FixRanges(ranges))
 
 
 def settings(given: Mapping[str, Any]) -> dict[str, Any]:
@@ -118,4 +126,4 @@ def settings(given: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["BANDWIDTH", "CHARGES", "DEADLINE_NS", "DELTA_SCHEME", "POUB", "REFRESH_GOAL", "REQUESTS",
-           "REUSE_OLDEST_FREED", "settings"]
+           "REUSE_OLDEST_FREED", "requests", "settings"]

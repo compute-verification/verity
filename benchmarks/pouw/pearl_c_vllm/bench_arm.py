@@ -284,6 +284,7 @@ class PearlCArm:
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
         from verity_torch.pouw.pearl_c import run_device as PPDR
 
@@ -312,7 +313,7 @@ class PearlCArm:
         tiles, rows = self._capacity(target, kernel.run.TILE, PPD.ROW_ALIGN,
                                      [t.shape[0] for t in weights.values()], PPD.LEAF_CAPACITY, PPD.FLAG_ROWS)
         try:
-            run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+            run = PPDR.PearlCDeviceRun(pouw_schemes.get(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
                                       capacity=tiles, flag_rows=rows, salt_key=salt_key,
                                       pass_index=None if self.session is None else self.session.k, **self.run_options)

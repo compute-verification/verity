@@ -321,7 +321,7 @@ def test_each_stage_on_bits_is_staged_in_the_form_verify_zk_takes(tmp_path):
             d = tmp_path / name
             st = composed(m.template, d)
             assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), m.template
-            got = st.stage(g["rows"], d, bytes(32), indices=range(m.base, m.base + m.n))
+            got = st.stage(g["rows"], d, indices=range(m.base, m.base + m.n))
             assert g["outs"] and all(np.array_equal(got["outs"][q], a) for q, a in g["outs"].items()), m.template
             assert PF.ks_form_why(d / "circuit.txt", d / "pub.bin") is None, m.template
             seen.append(name)

@@ -14,7 +14,6 @@ in range, at its ends and past them), the rest random. Writes ``DIR/unit-block-W
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import resource
 import sys
@@ -84,7 +83,7 @@ def build(word_id: str, firsts: list[int], stage: int, scratch: Path) -> dict:
         t0 = time.time()
         rows = _rows(d, firsts, stage, 0)
         out = scratch / f"stage-{d.name}"
-        got = st.stage(rows, out, hashlib.sha512(b"benchmarks/unit_block").digest())
+        got = st.stage(rows, out)
         rec["staged"] = {"instances": stage, "firsts": firsts,
                          "outputs": [hex(sum(int(w) << 16 * k for k, w in enumerate(r))) for r in got["outs"]["o0"]],
                          "inst_bin_bytes": (out / "inst.bin").stat().st_size, "pub_bin_bytes": (out / "pub.bin").stat().st_size,

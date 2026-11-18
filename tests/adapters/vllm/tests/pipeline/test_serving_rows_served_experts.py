@@ -46,7 +46,7 @@ def deferred(served, tmp_path_factory) -> Path:
                                    "--partition", str(served["partition"]), "--out", str(out), "--workers", "1",
                                    "--checkpoint-dir", str(served["checkpoint"]),
                                    "--checkpoints-manifest", str(served["checkpoints_manifest"]),
-                                   "--tables", served["tables"]["registration"], "--tables-key", served["tables"]["key"]])
+                                   "--tables", served["tables"]["registration"]])
     assert DRW.main(o) == 0
     return out
 
@@ -111,8 +111,6 @@ def test_the_cut_is_refused_without_its_tables_their_key_or_the_checkpoint(serve
     ck = WR.CheckpointIndex(str(served["checkpoint"]), checkpoints_manifest=str(served["checkpoints_manifest"]))
     with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
         DRW.from_bundle(bundle, *at, tmp_path / "w1", checkpoint=ck, workers=1)
-    with pytest.raises(ValueError, match=r"read under its committer's key file \(--tables-key\)"):
-        DRW.from_bundle(tmp_path / "no-bundle", *at, tmp_path / "w2", tables={"registration": served["tables"]["registration"]})
     with pytest.raises(LookupError, match=r"registered weight field \S+\.experts\.w\S+ is not available"):
         DRW.from_bundle(bundle, *at, tmp_path / "w3", workers=1, tables=served["tables"])
     assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w2", "w3"))

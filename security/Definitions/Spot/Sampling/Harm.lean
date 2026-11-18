@@ -19,8 +19,6 @@ risk, at the price where the fill stops.
 
 namespace Spot.Sampling
 
-open FlockSoundness
-
 open Finset
 open scoped ENNReal
 variable {n : ℕ}
