@@ -448,7 +448,8 @@ def test_the_launcher_starts_each_process_a_named_scheme_files_with_this_servers
         called.append((request_of, stream_ids))
         return run
 
-    stand_in = SimpleNamespace(attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
+    stand_in = SimpleNamespace(name="stand-in", settings={}, requests=lambda ctx: (),
+                               attach=lambda ex, ctx: ex.request("stand-in", H.StartBeside("relay", tuple(F.READERS))))
     monkeypatch.setitem(schemes.SCHEMES, "stand-in", stand_in)
     monkeypatch.setitem(schemes.PROCESSES, "relay", process)
     try:

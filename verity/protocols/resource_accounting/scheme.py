@@ -38,6 +38,11 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
   reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`).
+  ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
+  the key of the build it attaches to (one per exchange); and what the launcher passes, which the network attester
+  reads as ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log``, ``clock`` and ``schedule``.
+  The adapter's exchange attaches it (``Exchange.attach``), files those of ``requests(ctx)`` that ``attach`` did not,
+  and declares it with its settings under its name (`verity.hooks.Declared`).
 
 What it gets back: `bound` gives `Bound`, `GetsBack`'s numbers; `credited` gives `Placed.credited`, the first-level blocks
 the integrity profile's ``credited`` takes.

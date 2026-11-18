@@ -4,6 +4,7 @@ before, and its reader reads what it read before."""
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace as NS
 
 import pytest
 from verity import hooks as H
@@ -229,6 +230,28 @@ def test_one_exchange_a_build_and_the_build_in_scope_is_current():
     finally:
         M.close()
     assert M.current() is not ex
+
+
+def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_entries_and_its_requests_filed_once():
+    """`Exchange.attach` hands ``attach`` and ``requests`` one ``ctx``, files each request ``attach`` did not, and keeps
+    the scheme's settings under its name for the build's `Declared`; a setting it does not have is refused."""
+    seen: list = []
+    eager = H.RequireProperty("eager", True, "its kernels")
+    world = H.RequireProperty("world", 1, "its passes")
+
+    def attach(ex, ctx):
+        seen.append(ctx)
+        ex.request("pearl", eager)
+        return "front"
+
+    pearl = NS(name="pearl", settings={"coins": "", "tie": False}, attach=attach, requests=lambda ctx: (eager, world))
+    ex = M.Exchange()
+    assert ex.attach(pearl, {"coins": "live"}, submit=print) == "front"
+    assert seen == [{"settings": {"coins": "live", "tie": False}, "build": ex.key, "submit": print}]
+    assert ex.requests == [("pearl", eager), ("pearl", world)] and ex.attached == {"pearl": {"coins": "live", "tie": False}}
+    assert M.Exchange().key != ex.key
+    with pytest.raises(ValueError, match=r"pearl has no setting \['salt'\]"):
+        ex.attach(pearl, {"salt": 1})
 
 
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):

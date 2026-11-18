@@ -22,7 +22,7 @@ type Handle = object
 class Declared:
     """``declared``: what the workload declares before it runs: the card's file id, its properties (``stage``: serve,
     capture or commit; ``world``; ``eager``; ``async_steps``, whether a step is scheduled before the last one's outputs
-    are read; a precision, a cache, a sampler), the schemes enabled with it as ``name:scheme`` and each scheme's own
+    are read; a precision, a cache, a sampler), the schemes attached to it by name and, under each one's name, its
     settings."""
 
     hook: ClassVar[str] = "declared"
