@@ -37,7 +37,7 @@ def test_only_the_steps_the_metrics_take_medians_of_repeat_and_oprove_s_log_is_s
     out = tmp_path / "out"
     subprocess.run(["/bin/bash", "benchmarks/recursion_e2e/job.sh", f"OUT={out}", f"FLOCK_WORK={tmp_path / 'work'}",
                     "STEPS=icheck,vstage,vcap,oprove,oreplay,lean", "REPEAT=3", "NEG=", "GPU=0"], cwd=tree,
-                   env={"PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(tmp_path)}, capture_output=True, text=True)
+                   env={"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path)}, capture_output=True, text=True)
     runs = {s.name: sorted(r.name for r in s.iterdir()) for s in (out / "steps").iterdir()}
     assert runs == {"icheck": ["r1"], "oreplay": ["r1"], "oprove": ["r1"], "vstage": ["r1", "r2", "r3"],
                     "vcap": ["r1", "r2", "r3"], "lean": ["r1", "r2", "r3"]}
