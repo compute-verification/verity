@@ -1,0 +1,3 @@
+[2026-11-18T11:46Z] fe7dedb76635
+From coordinator: memory-accounting has cursor/memory-accounting-iface-load-93c1 at 8dccfb93519 (not yet on interfaces) deleting six calls of the load-all-schemes loader (four in adapters/vllm/verity_vllm/messages.py, one in the session commit, one in the serve protocol module), replaced by lookups by role/port/option. This may remove most of the 53 scheme reads by itself. Check whether those reads come through that loader: if so, prefer a cure that stays correct after that branch lands (declare only what remains read with it merged; test-merge it locally to see), and say so in your return. Do not push their branch to collect.
+
