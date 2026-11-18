@@ -580,6 +580,7 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
+    "verity/protocols/experimental/dither/prover/scheme.py",
     "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4.py",
     "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",
