@@ -105,7 +105,8 @@ def designOk (samplingDesign : Option Draw.SamplingDesign) (l : Spot.Slots.SlotO
 /-- **Template `t`'s member**: the first of the interior audit's members whose circuit is the one the params name for
 template `t`. -/
 def memberOf (p : SampledTwo.Params) (t : Nat) : Option Spot.OneStageZk.Member :=
-  (p.circuits[t]?).bind fun c => p.members.find? (·.own.circuit == c.2.1)
+  (p.circuits[t]?).bind fun c => p.members.find? fun m =>
+    (m.own.circuitFile.toOption.map fun f => Flock.hexOf (Sha512.hash f)) == some c.2.1
 
 /-- A file read as JSON, as `verity-verify-proof verify` reads its inputs: UTF-8, then `JsonParse.parse`. -/
 def jsonOf (what : String) (b : ByteArray) : Except String Json :=
@@ -160,7 +161,7 @@ structure Ref where
 member's public file and registered reads, read and set up as `verity-verify-proof verify --zk` reads and sets it up. -/
 def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
   let some m := memberOf p t | throw s!"template {t}: no member's circuit is the one the params name"
-  let circuit ← bs.get m.own.circuit "circuit"
+  let circuit ← m.own.circuitFile
   let pub ← bs.get m.own.pub "public file"
   let some tags := Tags.byName? Spot.OneStageZk.STATEMENT | throw "unknown statement"
   if tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"

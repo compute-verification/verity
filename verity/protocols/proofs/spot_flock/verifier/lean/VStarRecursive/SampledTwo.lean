@@ -233,7 +233,8 @@ def paramsParsed (j : Json) : V Params := do
   if !familiesApart (bp.challenger.map (·.2)) (audit.base.challenger.map (·.2)) then throw SAME_FAMILY
   let some members := audit.members | throw "the interior audit names no members"
   for m in members do
-    if !circuits.any (·.2.1 == m.own.circuit) then throw (MEMBER_CIRCUIT m.name)
+    let file ← m.own.circuitFile
+    if !circuits.any (·.2.1 == Flock.hexOf (Sha512.hash file)) then throw (MEMBER_CIRCUIT m.name)
   pure { boundary := bp, rule, values := ← valuesOf (getD j "values") "values", declared, challenger,
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
@@ -423,7 +424,8 @@ def stmtOf (name : String) (pub : ByteArray) (sampleB registeredB : Option ByteA
 /-- **The statement the `t`-th of the statements' sessions makes** (`stmtOf`): template `t`'s, at the public file of
 the member the session's statement names, the sample in the session's record and the member's registered reads, each
 as `Flock.RecordText.printT` prints it. None where the member's circuit is not template `t`'s, or the session's
-record or the member's circuit or public file is on no blob, or a field doesn't read. -/
+record or the member's public file is on no blob, its circuit file is not derived (`OneStageZk.restrict`), or a field
+doesn't read. -/
 def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option Json := do
   let st ← (e.statements.toList.flatMap fun st => st.sessions.toList.map fun _ => st)[t]?
   let s ← (e.statements.toList.flatMap (·.sessions.toList))[t]?
@@ -431,9 +433,9 @@ def stmtOwnAt (p : Params) (e : Evidence) (bs : Core.Blobs) (t : Nat) : Option J
   let m ← p.members.find? (·.name == name)
   let c ← p.circuits[t]?
   let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
-  let _ ← (bs.get m.own.circuit "circuit").toOption
+  let file ← m.own.circuitFile.toOption
   let pub ← (bs.get m.own.pub "public file").toOption
-  if m.own.circuit == c.2.1 then
+  if Flock.hexOf (Sha512.hash file) == c.2.1 then
     stmtOf c.1 pub ((Flock.Witness.recordDraw record).map fun j => (Flock.RecordText.printT j).toUTF8)
       (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)
   else none
@@ -788,14 +790,14 @@ def stmtSize (o : OneStageZk.Own) (circuit pub : ByteArray) (tables : Nat) (draw
 
 /-- `stmtSize` of the session `s` of the statement `st` on the blobs: its member's (the member of the parameters
 the statement names), at the member's circuit and public files and the session's record's sample. None where the
-statement names no member of the parameters, or the blobs hold no such record, circuit or public file: the sessions'
-run refuses each (`inputAt`). -/
+statement names no member of the parameters, the blobs hold no such record or public file, or the member's circuit
+file is not derived (`OneStageZk.restrict`): the sessions' run refuses each (`inputAt`). -/
 def stmtSizeAt (p : Params) (bs : Core.Blobs) (tables : Nat) (st : OneStageZk.StatementFiles)
     (s : OneStageZk.RunFiles) : Option Nat := do
   let name ← st.member
   let m ← p.members.find? (·.name == name)
   let record ← (bs.get s.record "record").toOption.bind String.fromUTF8?
-  let circuit ← (bs.get m.own.circuit "circuit").toOption
+  let circuit ← m.own.circuitFile.toOption
   let pub ← (bs.get m.own.pub "public file").toOption
   pure (stmtSize m.own circuit pub tables (Flock.Witness.recordDraw record))
 
@@ -807,8 +809,8 @@ def bytesFit (limit : Nat) (session : String) : Option Nat → V Unit
 #guard (bytesFit 300 "s" (some 299)).toOption.isSome
 #guard (bytesFit 300 "s" (some 300)).toOption.isNone
 #guard (bytesFit 300 "s" none).toOption.isSome
-#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", "", none⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
-#guard stmtSize ⟨.null, .empty, .null, "", "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
+#guard stmtSize ⟨.null, ⟨#[1, 2]⟩, .null, "", none⟩ ⟨#[3]⟩ .empty 7 none == STMT_HEAD + 1 + 7 + 2 + 4
+#guard stmtSize ⟨.null, .empty, .null, "", some (.str "ab")⟩ .empty .empty 0 (some .null) ==
   STMT_HEAD + 4 + 4 + 4
 #guard tablesSize [("ab", ⟨#[1, 2, 3]⟩), ("", .empty)] == 16 + 2 + 3 + 16
 
