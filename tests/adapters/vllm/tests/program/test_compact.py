@@ -599,6 +599,8 @@ def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_wha
     with pytest.raises(ValueError) as lean:
         K.lean_root(json.loads(lookalike), REGISTRY)
     assert str(lean.value) == str(refused.value)
+    with pytest.raises(ValueError, match="E_SCHEMA"):
+        K.lean_root(encode_program(Program(calls), "verity-ir/descriptor/v0"), REGISTRY)
 
 
 def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):

@@ -477,21 +477,12 @@ def lean_root(desc: dict, registry: DefinitionTable) -> dict:
     decode_program's own reader, `codec.definition_decoder`, refusals included (they are the Definitions' small bodies: their spec
     ids come from the same SpecializedDefinition objects, `descriptor_id`, so the spec strings are the record's).  Returns
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
-    v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
-    descriptors have no aliases."""
-    from verity.circuits.codec import (
-        SCHEMA_V0,
-        definition_decoder,
-        descriptor_id,
-        type_from_json,
-    )
+    an `alias` is the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); a
+    descriptor of another schema is refused by `definition_decoder`."""
+    from verity.circuits.codec import definition_decoder, descriptor_id, type_from_json
     get = definition_decoder(desc, registry)
-    schema = desc["schema"]
-    if schema == SCHEMA_V0:
-        callee_id, arg_type = (lambda f: f), type_from_json
-    else:
-        callees, types = desc["callees"], [type_from_json(t) for t in desc["types"]]
-        callee_id, arg_type = callees.__getitem__, types.__getitem__
+    callees, types = desc["callees"], [type_from_json(t) for t in desc["types"]]
+    callee_id, arg_type = callees.__getitem__, types.__getitem__
     b = desc["definitions"][desc["root"]]["body"]
     args_of: list[list[list[Prog]]] = []   # node k -> compact operands (alias targets)
     out_nodes = []
@@ -509,12 +500,10 @@ def lean_root(desc: dict, registry: DefinitionTable) -> dict:
         if fid is None:
             fid = spec_cache[fkey] = descriptor_id(get(callee_id(fkey)))
         okey = nd["out"]
-        out = out_cache.get(okey) if not isinstance(okey, dict) else None
+        out = out_cache.get(okey)
         if out is None:
-            out = str(arg_type(okey))
-            if not isinstance(okey, dict):
-                out_cache[okey] = out
-        args = [from_json(a["refs"], alias if schema != SCHEMA_V0 else None) for a in nd["args"]]
+            out = out_cache[okey] = str(arg_type(okey))
+        args = [from_json(a["refs"], alias) for a in nd["args"]]
         args_of.append(args)
         out_nodes.append((k, fid, nd["form"], args, out, nd.get("n", 1)))
     return {"nodes": out_nodes, "n_nodes": len(b["nodes"]), "params": [n for n, _ in b["params"]]}
