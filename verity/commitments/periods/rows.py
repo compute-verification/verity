@@ -590,13 +590,14 @@ class Committed:
         each at the tree over its own rows (its table's, in a shared-row member) that Flock holds its public file to. A port
         that is not its own tree (`Binding.held`) gets that tree here from its public strings alone: a header root anyone
         makes again from the public body, which the record never names, under the binding of the tree holding the port
-        (`Binding.tree`: a wired port's writer's, where the verifier places it), a registered value's port under its
-        registration's (`registered_value.domain`)."""
+        (`Binding.tree`: a wired port's writer's, where the verifier places it). A registered value's port is under its own
+        port's (`Binding.domain`): a table reused from an earlier registration (`h1.commit.Reused`) names its registration's
+        domain by id alone, with no binding to put here."""
         m, w = self.window.members[k], self.window
         names = [p for p, _ in m.all_rows]
         rows = {p: dict(m.tables).get(p, m.n) if p not in dict(m.outs) else m.n for p in names}
-        local = {p: CommitmentDomain((self.given[m.port(p)].value.domain if p in m.values else self.domains[w.tree(m, p)]).binding,
-                                     OWNER, RangeIndexedDomain(0, rows[p]), hash="sha512")
+        local = {p: w.domain(m.port(p), m.schema(p), rows[p]) if p in m.values
+                 else CommitmentDomain(self.domains[w.tree(m, p)].binding, OWNER, RangeIndexedDomain(0, rows[p]), hash="sha512")
                  for p in names if not w.held(m, p)}
         made, _ = commit_ports({p: d for p, d in local.items()}, {}, {}, {}, schemas={p: m.schema(p) for p in local},
                                strings={p: bytes(self.bc[m.port(p)]) for p in local})
