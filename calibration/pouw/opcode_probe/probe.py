@@ -33,7 +33,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import statistics
 import subprocess
 import sys
@@ -62,11 +61,15 @@ rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
 def nvcc() -> str:
-    for c in (os.environ.get("NVCC"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin", "nvcc"),
-              shutil.which("nvcc"), "/usr/local/cuda/bin/nvcc"):
-        if c and os.access(c, os.X_OK):
-            return c
-    raise SystemExit("probe: no nvcc (set NVCC or CUDA_HOME)")
+    """The executable NVCC names, else the nvcc of the machine's toolkit at 13.0 (`kit.toolkit`: CUDA_HOME, else the run's
+    machine's record)."""
+    named = os.environ.get("NVCC")
+    if named and os.access(named, os.X_OK):
+        return named
+    found = os.path.join(_kit().toolkit("13.0"), "bin", "nvcc")
+    if os.access(found, os.X_OK):
+        return found
+    raise SystemExit(f"probe: no nvcc at {found} (set NVCC or CUDA_HOME)")
 
 
 def _kit():

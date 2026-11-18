@@ -30,8 +30,8 @@ case "$MODE" in
 build)
   SKU=${1:?usage: emp.sh build SKU SRC..., SKU the card file to build for (calibration/hardware/cards/SKU.toml)}
   shift
-  NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "emp.sh: no nvcc" >&2; exit 2; }
+  NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "emp.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+  [ -x "$NVCC" ] || { echo "emp.sh: no nvcc at $NVCC" >&2; exit 2; }
   export NVCC PATH="$(dirname "$NVCC"):$PATH"
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"' EXIT
