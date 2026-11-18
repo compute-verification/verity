@@ -10,10 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
+from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
 from verity.commitments.gates.bits import ands
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import hm96
+from verity_vllm.compiler import charge_rows as CR
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 
 FIXTURE = Path(__file__).parent / "fixtures" / "arith_encode_vectors.json"
 PROGRAM, REGISTRATION = "charge-chain-test", "ab" * 64
@@ -39,9 +41,9 @@ def _chain(book, rows_out, start=None):
     for w, out in enumerate(rows_out):
         if w == 0 and start is not None:
             values.append(produced.commit(PROGRAM, CC.VALUE, [CC.row(start[0]), CC.row(out)], REGISTRATION,
-                                          [start[1], hm96.SHA512.fresh_salt()], CC.WORD_BITS, CC.SCHEMA))
+                                          [start[1], hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA))
         else:
-            values.append(CC.commit_window(PROGRAM, book, CC.carry_of(out), REGISTRATION, values[-1] if values else None))
+            values.append(CR.commit_window(PROGRAM, book, CC.carry_of(out), REGISTRATION, values[-1] if values else None))
     return values
 
 
@@ -54,7 +56,7 @@ def test_the_chain_is_code_v1s_over_the_whole_stream():
         ses = CC.session(N, book, wins)
         assert [s[0] for s in ses] == lens, source
         values = _chain(book, [s[2] for s in ses])
-        assert CC.check_chain([CC.openings(v) for v in values], PROGRAM, book) is None
+        assert CR.check_chain([CR.openings(v) for v in values], PROGRAM, book) is None
         cb, prior = AE.charge_book(book, N)
         cases = [(cb, CC.unrow(v.rows[0]), CC.unrow(v.rows[1]), en, bits) for v, (en, bits) in zip(values, wins)]
         assert [c[1] for c in cases] == [s[1] for s in ses]
@@ -107,20 +109,20 @@ def test_a_reset_carry_is_refused():
     (_l0, in0, out0), (_l1, _in1, out1) = CC.session(N, book, wins)
     cb, prior = AE.charge_book(book, N)
     honest = _chain(book, [out0, out1])
-    assert CC.check_chain([CC.openings(v) for v in honest], PROGRAM, book) is None
+    assert CR.check_chain([CR.openings(v) for v in honest], PROGRAM, book) is None
     for reset, cheap in ((prior, 20), (AE.Carry(((0, 18000), (0, 0), (0, 0)), 0), 16)):
         ok, length, nxt = AE.reference_charge(N, cb, reset, *wins[1])
         assert (ok, length) == (1, cheap)
         assert CC.evaluate_links(N, [(cb, CC.encode(reset), CC.encode(nxt), *wins[1])]) == [(1, cheap)]
-        for salt in (hm96.SHA512.fresh_salt(), CC.start_salt(PROGRAM)):
+        for salt in (hm96.SHA512.fresh_salt(), CR.start_salt(PROGRAM)):
             forged = produced.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(reset)), CC.row(CC.encode(nxt))],
-                                     REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, CC.SCHEMA)
-            got = CC.check_chain([CC.openings(honest[0]), CC.openings(forged)], PROGRAM, book)
+                                     REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
+            got = CR.check_chain([CR.openings(honest[0]), CR.openings(forged)], PROGRAM, book)
             assert got == "CH-carry: window 1's carry-in isn't window 0's carry-out"
         assert CC.evaluate_links(N, [(cb, in0, CC.encode(reset), *wins[0])])[0][0] == 0
     same_rows = produced.commit(PROGRAM, CC.VALUE, [honest[0].rows[1], CC.row(out1)], REGISTRATION,
-                                [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], CC.WORD_BITS, CC.SCHEMA)
-    assert CC.check_chain([CC.openings(honest[0]), CC.openings(same_rows)], PROGRAM, book).startswith("CH-carry")
+                                [hm96.SHA512.fresh_salt(), hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
+    assert CR.check_chain([CR.openings(honest[0]), CR.openings(same_rows)], PROGRAM, book).startswith("CH-carry")
 
 
 def test_check_chain_refusals():
@@ -129,18 +131,18 @@ def test_check_chain_refusals():
     N, book, wins, _lens = _two_windows()
     ses = CC.session(N, book, wins)
     values = _chain(book, [s[2] for s in ses])
-    ops = [CC.openings(v) for v in values]
-    assert CC.check_chain(ops, PROGRAM, book) is None and CC.check_chain(ops[:1], PROGRAM, book) is None
-    assert CC.check_chain([], PROGRAM, book) is None
-    assert CC.check_chain([ops[0], ops[1] + ops[1][:1]], PROGRAM, book).startswith("CH-rows: window 1 has 3")
-    assert CC.check_chain([ops[0][:1]], PROGRAM, book).startswith("CH-rows: window 0 has 1")
-    assert CC.check_chain(ops, "another-program", book).startswith("CH-first")
+    ops = [CR.openings(v) for v in values]
+    assert CR.check_chain(ops, PROGRAM, book) is None and CR.check_chain(ops[:1], PROGRAM, book) is None
+    assert CR.check_chain([], PROGRAM, book) is None
+    assert CR.check_chain([ops[0], ops[1] + ops[1][:1]], PROGRAM, book).startswith("CH-rows: window 1 has 3")
+    assert CR.check_chain([ops[0][:1]], PROGRAM, book).startswith("CH-rows: window 0 has 1")
+    assert CR.check_chain(ops, "another-program", book).startswith("CH-first")
     other = {**book, "priors": {**book["priors"], "arrived/0": [1, 1]}}
-    assert CC.check_chain(ops, PROGRAM, other).startswith("CH-first")
+    assert CR.check_chain(ops, PROGRAM, other).startswith("CH-first")
     prior = CC.encode(AE.first_carry(book))
-    for start in ((prior, hm96.SHA512.fresh_salt()), (CC.encode(AE.Carry()), CC.start_salt(PROGRAM)),
-                  (prior, CC.start_salt("another-program"))):
-        assert CC.check_chain([CC.openings(v) for v in _chain(book, [s[2] for s in ses], start)], PROGRAM,
+    for start in ((prior, hm96.SHA512.fresh_salt()), (CC.encode(AE.Carry()), CR.start_salt(PROGRAM)),
+                  (prior, CR.start_salt("another-program"))):
+        assert CR.check_chain([CR.openings(v) for v in _chain(book, [s[2] for s in ses], start)], PROGRAM,
                               book).startswith("CH-first")
 
 
@@ -243,7 +245,7 @@ def test_rows():
     N, book, wins, _lens = _two_windows()
     ses = CC.session(N, book, wins)
     v0, v1 = _chain(book, [s[2] for s in ses])
-    assert v0.salts[0] == CC.start_salt(PROGRAM) and v0.bcs[0] == CC.start_opening(PROGRAM, book)
+    assert v0.salts[0] == CR.start_salt(PROGRAM) and v0.bcs[0] == CR.start_opening(PROGRAM, book)
     assert v0.rows[0] == CC.row(CC.encode(AE.first_carry(book)))
     assert (v1.rows[0], v1.salts[0], v1.bcs[0]) == (v0.rows[1], v0.salts[1], v0.bcs[1])
     assert v0.salts[1] != v1.salts[1] and CC.reads() == {CC.VALUE: {"carry_in": 0, "carry_out": 1}}
