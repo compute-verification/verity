@@ -116,6 +116,27 @@ def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
     assert [w["draws_sent_ns"] for w in seen[:2]] == [22, 42]
 
 
+class Stalled(RuntimeError):
+    pass
+
+
+@pytest.mark.parametrize("side, step", [(prover.ProverSide, "register"), (TickingBackend, "run_pass")])
+def test_a_prover_that_raises_at_its_first_step_ends_the_run_with_what_it_raised(monkeypatch, side, step):
+    """A stand-in prover that raises before its hello or at its first pass, ending its thread: the run raises that
+    error, the verifier woken by the stream's end where it waits on a frame and on the pass clock where it waits on a
+    pass, never left waiting on a prover that is gone."""
+    hooked: list = []
+    monkeypatch.setattr(threading, "excepthook", hooked.append)
+
+    def stalled(self, *args, **kw):
+        raise Stalled(f"the stand-in's {step}")
+
+    monkeypatch.setattr(side, step, stalled)
+    with pytest.raises(Stalled, match=f"^the stand-in's {step}$"):
+        run("honest")
+    assert [type(a.exc_value) for a in hooked] == [Stalled]
+
+
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
     """The capacity is the verifier's, and the prover's calibration can only raise it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
