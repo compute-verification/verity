@@ -33,6 +33,7 @@ from verity.commitments.rowleaf import (
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
@@ -127,7 +128,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     w = window(9, 4)
     c = SR.commit(w, data(w))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
-    win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
+    win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=DK)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         DM.REGISTRATION_V1, 13, w.partition_digest, "served", RUN)
@@ -155,10 +156,10 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     assert "R2-population" in R.check(rec, fewer.program, fewer.query, DESIGN, SR.SCHEME, SR.expected_ports(fewer),
                                       leaf_layer=SR.leaf_layer(publics)).codes
     # a stand-in is the same record but for its kind, which provenance cannot override; a kind core does not know is refused
-    stand = SR.registration(c, {"kind": "served", "run": "other", "of": {"run_root": RUN}}, kind="stand-in", registrar=R)
+    stand = SR.registration(c, {"kind": "served", "run": "other", "of": {"run_root": RUN}}, kind="stand-in", registrar=DK)
     assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
     with pytest.raises(ValueError, match="window kind 'replayed'"):
-        SR.registration(c, {}, kind="replayed", registrar=R)
+        SR.registration(c, {}, kind="replayed", registrar=DK)
 
 
 def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
@@ -173,7 +174,7 @@ def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp
     (tmp_path / "d").mkdir()
     (tmp_path / "d" / "index.json").write_text("{}")
     (tmp_path / "d" / "index.json").chmod(0o644)
-    wins = {d: SR.write(c, tmp_path / d, {"row": 101}, idx, registrar=R, index_salt=salt if d < "c" else None) for d in "abcd"}
+    wins = {d: SR.write(c, tmp_path / d, {"row": 101}, idx, registrar=DK, index_salt=salt if d < "c" else None) for d in "abcd"}
     leaves = {d: win["index_leaf"] for d, win in wins.items()}
     assert leaves["a"] == leaves["b"] == SR.index_leaf(ib, salt).hex() and len(set(leaves.values())) == 3
     other = IX.index_doc(w.members, [[[0, 9, "r1", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
@@ -187,14 +188,14 @@ def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp
         public = "".join((out / f).read_text() for f in ("registration.json", "window.json"))
         assert hashlib.sha512(ib).hexdigest() not in public and hashlib.sha512(SR.INDEX_TAG + ib).hexdigest() not in public
     with pytest.raises(ValueError, match="an index's salt is 192 bytes"):
-        SR.write(c, tmp_path / "e", {"row": 101}, idx, registrar=R, index_salt=salt[:-1])
+        SR.write(c, tmp_path / "e", {"row": 101}, idx, registrar=DK, index_salt=salt[:-1])
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     w = window(4, 3)
     d = data(w)
     c = SR.commit(w, d)
-    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=R)
+    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {},
             "statement": "verity/flock-circuit", "subcircuit": "norm/n128"}
@@ -230,7 +231,7 @@ def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_cir
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
     c = SR.commit(w, data(w))
-    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=R)
+    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64},
             "program_sha512": "ab" * 64, "program_digests": {"t": "ef" * 64}, "subcircuit": "norm/n128"}
@@ -277,7 +278,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
         + c.salts[m.port("x")] + c.salts[m.port("w")] + c.salts[m.port("y")]
     with pytest.raises(ValueError, match="refs"):
         SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs + [0, 5]}])
-    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc((m,), [[]], RUN), registrar=R)
+    SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc((m,), [[]], RUN), registrar=DK)
     meta = {"scheme": SR.SCHEME, "ports": [["x", 64, 1], ["w", 64, 1], ["y", 64, 1]], "input_ports": 2, "out_ports": [["y", 1]],
             "vus_per_block": 4, "units_per_vu": 1, "subcircuit": "gemm/k64"}
     got = FI.flock_input_files(tmp_path / "w", 0, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "m0")
@@ -319,7 +320,7 @@ def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_templat
         assert dom.binding == w.binding(t, schema, len(bcs))
         fv = FrameV3({t: Port(dom, RowLeaf("sha512", ROLE_X, 16, 64))})
         assert c.roots[t] == fv.root(t, [row_leaf(dom, i, inst.tree_leaf(key, b), schema) for i, b in enumerate(bcs)])
-    win = SR.write(c, tmp_path, {"row": 101}, IX.index_doc(ms, [[], []], RUN), registrar=R)
+    win = SR.write(c, tmp_path, {"row": 101}, IX.index_doc(ms, [[], []], RUN), registrar=DK)
     for k, m in enumerate(ms):
         units = json.loads((tmp_path / f"m{k}-units.json").read_text())
         assert units["indices"] == list(range(m.base, m.base + m.n)) and units["member"] == m.name

@@ -853,6 +853,10 @@ def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_
     assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
 
 
+#: what the sampled proofs' and the inference-only rows' ``answer_from`` end with (`served_verdicts.MAIN_FORM`)
+MAIN = f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}"
+
+
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
@@ -914,14 +918,15 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
 
 
 def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
-    """The answer the bandwidth session's piece writes of an accepted session (`served_bandwidth.answer`) names the term
+    """The answer the bandwidth session's piece writes of an accepted session (`p2_stage.bandwidth.public_answer`) names the term
     its eps leaves out, PoUB's ledger's object (`ledger.NAMED_TERMS`). The block record, which `block_record.check`
     holds, carries it beside the error sum under the bandwidth audit's name, the sum's number the answer's eps, and the
     accept's clause in the composed reason says the error with the term beside it in the ledger's own words
     (`ledger.DELTA_FORM` with the error for δ). At an eps the record establishes at neither δ, the clause that says so
     prints the error the same way. The same answer with the term struck from its profile is the bandwidth audit's
     error: the composed verdict is ``reject``, with no block record."""
-    import served_bandwidth as SB
+    from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
+    from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
 
     beside = ledger.DELTA_FORM.removeprefix("δ")
     (d := tmp_path / "bandwidth").mkdir()
@@ -930,10 +935,11 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     def written(delta: str, samples: int) -> dict:
         """The piece's answer of an accepted session at ``delta`` that sampled ``samples`` openings: its eps is
         ``delta`` + ``samples``/2^64."""
-        session = {"registration": {"digest": "cd" * 64},
-                   "answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
+        session = {"answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
                               "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
-        return SB.answer(session, "beside the served window", 1000)
+        judged = p2_parties.core_answer({"protocol": p2_parties.PROTOCOL, "registration": "cd" * 64,
+                                         **session["answer"]})
+        return BW.public_answer(judged, bytes(64), "beside the served window", 1000, tmp_path)
 
     def composed(answer: dict) -> tuple:
         (d / "answer.json").write_text(json.dumps(answer))
@@ -1512,8 +1518,9 @@ def test_the_record_carries_the_inference_only_verifiers_verdict_as_a_row_the_co
                                  inference_only=io)
     assert report["protocols"].pop("inference-only") == {
         "verdict": verdict, "protocol": io["format"], "reason": io["reason"], "answer": {"c": 1, "k": 2, "n": 3, "theta": io["theta"]},
-        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY})", "combined": S.INFERENCE_ONLY_UNREAD}
+        "answer_from": f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY}){MAIN}", "combined": S.INFERENCE_ONLY_UNREAD}
     assert line.pop("not_combined") == {"the inference-only verifier": verdict}
+    assert line["answers"].pop("the inference-only verifier") == f"{S.AS_WRITTEN} ({S.INFERENCE_ONLY}){MAIN}"
     assert (report, rec["composed"], line) == (bare, bare_rec["composed"], bare_line)
 
 
@@ -1633,8 +1640,8 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert rc == 2 and (line["composed"], line["record_missing"]) == ("pending", []), line
     assert rows["integrity"]["answer"] == answer
     pouw_from = f"{S.AS_WRITTEN} (its piece files in pouw/)"
-    assert line["answers"] == {"sampled proofs": S.LEAN_HERE, "PoUW": pouw_from}
-    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE, pouw_from)
+    assert line["answers"] == {"sampled proofs": S.LEAN_HERE + MAIN, "PoUW": pouw_from}
+    assert (rows["integrity"]["answer_from"], rows["work"]["answer_from"]) == (S.LEAN_HERE + MAIN, pouw_from)
     seen = json.loads((tmp_path / "seen.json").read_text())
     w = tmp_path / "serve" / "sampled-proofs-served" / "window"
     assert seen["argv"][:2] == ["sampled", "check"] and seen["argv"][5:] == [str(w / "m0" / "p0.bin")]
@@ -1652,7 +1659,7 @@ def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_
     assert edited["integrity"] == rows["integrity"] and (line["composed"], line["record_missing"]) == ("pending", [])
     _rc, _line, node_edited = _recorded(tmp_path, plain, capsys)
     assert node_edited["integrity"] != node_rows["integrity"]
-    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']})"
+    assert node_rows["integrity"]["answer_from"] == f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}){MAIN}"
     (tmp_path / "pieces" / "pouw" / "answer.json").write_text(json.dumps({
         "verdict": "reject", "reason": "the node says so", "commitment": "ef" * 64, "protocol": "verity/pouw/v1",
         "public": None, "profile": None}))
@@ -1723,7 +1730,7 @@ def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nod
     assert row["verdict"] == verdict and said in row["reason"], row
     assert row["answer_from"] == (S.LEAN_HERE if change != "no-v2" else (
         f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): the records audit wrote no v2 case (window/case-v2.json), so "
-        "there are no proofs to recompute it from"))
+        "there are no proofs to recompute it from")) + MAIN
     assert line["answers"]["sampled proofs"] == row["answer_from"]
 
 
@@ -1761,7 +1768,7 @@ def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_
     assert {k: v for k, v in row["not_started"].items() if k != "reason"} == {
         "blobs": 1, "blob_bytes": size, "limit_bytes": limit}
     assert row["answer_from"] == (f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): this host's Lean check of the audit's v2 "
-                                  f"case was not started: {row['not_started']['reason']}")
+                                  f"case was not started: {row['not_started']['reason']}{MAIN}")
     assert line["answers"][S.NAMES["integrity"]] == row["answer_from"]
 
 
@@ -1850,22 +1857,41 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
 
 @pytest.mark.parametrize("product", ["onsite", "remote"])
 def test_a_premise_in_the_record_names_who_ran_its_check(tmp_path, monkeypatch, product):
-    """Every premise a record's development row states, met or not, ends its ``why`` with its runner's phrase on the
-    record's path (`PREMISE_RUNNERS`), and the phrase follows the runner: a met premise never reads as an auditor's."""
-    assert set(S.PREMISE_RUNNERS) == set(BR.PRODUCTS)
+    """Every premise a record's development row states ends its ``why`` with who ran its check on the record's path
+    (`RAN_BY`), and so does each row `RAN_BY` names, at the end of its ``answer_from`` (the ``RECORD`` line's
+    ``answers``): a met premise never reads as an auditor's, and the words follow the table when its runner changes."""
+    assert set(S.RAN_BY) == set(BR.PRODUCTS)
     doc = {"verdict": "accept", "AcceptedLive": {"met": True, "why": S.LIVE_MET},
            "SaltIsLiveCoin": {"met": True, "why": S.SALT_MET}}
-    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc}}
+    rows = {**_rows(_accepted(), tmp_path), "work": {"verdict": "missing", "why": S.DEV_WHY, "development": doc},
+            "space": {"verdict": "error", "why": "x", "owner": "memory-accounting"},
+            "bandwidth": {"verdict": "error", "why": "x", "owner": "memory-accounting",
+                          "answer": {"profile": {"placement": {"graded_by": "graded by its own piece"}}}},
+            "communication": {"verdict": "error", "why": "x", "owner": "network-accounting"}}
+    io = {"verdict": "accept", "format": "verity/inference-only/v1"}
 
-    def stated() -> dict:
-        report, _rec, _line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product)
-        return report["protocols"]["work"]["development"]
+    def stated() -> tuple[dict, dict]:
+        report, _rec, line = S.record(rows, window=1, steps=(0, 4), node="n", run="r", product=product, inference_only=io)
+        return report["protocols"], line["answers"]
 
-    got = stated()
+    got, answers = stated()
+    said = S.RAN_BY[product]
     for p in S.PREMISES:
-        assert got[p]["met"] and got[p]["why"] == f"{doc[p]['why']}; {S.RAN_BY['piece']}"
-    monkeypatch.setitem(S.PREMISE_RUNNERS, product, {**S.PREMISE_RUNNERS[product], "SaltIsLiveCoin": "lean"})
-    assert stated()["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; {S.RAN_BY['lean']}" != got["SaltIsLiveCoin"]["why"]
+        assert got["work"]["development"][p]["met"] and said[p].startswith(S.PIECE)
+        assert got["work"]["development"][p]["why"] == f"{doc[p]['why']}; {said[p]}"
+    assert all((S.ONSITE_UNDECIDED in said[p]) is (product == "onsite") for p in S.PREMISES)
+    for k in ("integrity", S.INFERENCE_ONLY_ROW):
+        assert got[k]["answer_from"].endswith(f"; {said[k]}")
+    if product == "onsite":
+        assert got["space"]["answer_from"].endswith(f"; {S.PIECE}; {S.ONSITE_UNDECIDED}")
+        assert got["bandwidth"]["answer_from"].endswith(f"; graded by its own piece; {S.ONSITE_UNDECIDED}")
+        assert S.PIECE not in got["communication"]["answer_from"]
+    else:
+        assert {got[k]["verdict"] for k in ("space", "bandwidth", "communication")} == {"dropped"}
+    assert answers["sampled proofs"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
+    assert answers["the inference-only verifier"].endswith(f"; {S.BLOCKS_ALONE}; {S.TIED_BY_CONSTRUCTION}")
+    monkeypatch.setitem(S.RAN_BY, product, {**said, "SaltIsLiveCoin": "recomputed elsewhere"})
+    assert stated()[0]["work"]["development"]["SaltIsLiveCoin"]["why"] == f"{S.SALT_MET}; recomputed elsewhere"
     assert doc["SaltIsLiveCoin"]["why"] == S.SALT_MET, "the piece's own document is left as it wrote it"
 
 
@@ -6666,7 +6692,7 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
                                        "tree": GATE_PIN, "tree_on": "remote"}
     row = composed["protocols"]["integrity"]
-    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
+    assert row["answer_from"] == S.LEAN_HERE + MAIN and row["answer"]["commitment"] == DD.digest(LEAN_RECORD), row
     seen = json.loads((tmp_path / "seen.json").read_text())
     assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
     assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
@@ -7056,13 +7082,11 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     ((), (), ("", "", "")),
     (("benchmarks/pous/streamed_wipe/served_wipe.sh",), (), ("wipe", "", "")),
     (("benchmarks/pous/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
-    (("benchmarks/one_stage/served_bandwidth.sh", "store/setup.json"), ("vy-auditor2-bw",), ("", "", "session")),
-    (("benchmarks/one_stage/served_bandwidth.sh",), ("vy-auditor2-bw",), ("", "", "")),
 ])
 def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
     """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
     POUS_CMD where it has PoUS's and the node the memory attester's key, and BANDWIDTH_CMD to collect PoUS's session
-    then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
+    then, and to nothing without it."""
     tree, home = tmp_path / "tree", tmp_path / "home"
     for f in files:
         (tree / f).parent.mkdir(parents=True, exist_ok=True)
@@ -7074,8 +7098,7 @@ def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_no
                           'printf "%s\\n" "${WIPE_CMD-}" "${POUS_CMD-}" "${BANDWIDTH_CMD-}"'],
                          env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
                          check=True, capture_output=True, text=True).stdout.split("\n")[:3]
-    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_bandwidth.py collect",
-             "session": "served_bandwidth.sh"}
+    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_piece.py collect-bandwidth"}
     assert all((marks[w] in g) if w else g == "" for w, g in zip(want, got)), got
 
 

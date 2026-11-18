@@ -72,7 +72,7 @@ VARIABLES = {
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "ONSITE_PIECES": "benchmarks/pous/onsite_pieces.sh",
     "POUS_ARGS": f"--trusted-sha512 {PIN['pous']} --rounds 320 --challenger-address 192.0.2.1:7000 "
                  f"--bw-trusted-sha512 {PIN['bandwidth']} --bw-host 192.0.2.2",
-    "BANDWIDTH_CMD": '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"',
+    "BANDWIDTH_CMD": '"$PY" benchmarks/pous/served_piece.py collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"',
 }
 KEYS = ["network-attester.network-attester.gate", "network-attester.network-attester.peer"]
 #: each runtime party: its protocol (None while a half isn't in the tree), its role there, its machine and its clock
@@ -661,6 +661,19 @@ def test_a_component_declaring_a_channel_to_an_undeclared_party_is_refused():
     with pytest.raises(Refused) as e:
         K.check(K.parse(CONFIG.read_text()), {**REG.components, "pous": bad}, REG.workloads)
     assert e.value.name == "declaration" and "oracle" in e.value.detail
+
+
+def test_the_bandwidth_audit_listed_before_storage_is_refused_by_order():
+    """The bandwidth audit reads the store PoUS binds on the same exchange, so the application lists ``pous`` first."""
+    cfg = K.parse(CONFIG.read_text())
+    names = cfg["protocols"]
+    assert names.index("pous") < names.index("bandwidth")
+    i, j = names.index("pous"), names.index("bandwidth")
+    names[i], names[j] = names[j], names[i]
+    with pytest.raises(Refused) as e:
+        K.check(cfg, REG.components, REG.workloads)
+    assert (e.value.name, str(e.value)) == ("order", "order: bandwidth requires pous, so protocols lists pous before "
+                                                     "bandwidth")
 
 
 @pytest.mark.parametrize("fixed", ["subset:1", "stratified:1", "work:1", "work-rate:1/8", "bernoulli:1/8"])

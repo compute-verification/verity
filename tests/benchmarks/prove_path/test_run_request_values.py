@@ -13,6 +13,7 @@ import pytest
 
 RUN_SH = Path(__file__).resolve().parents[3] / "benchmarks" / "prove_path" / "run.sh"
 PUBF = RUN_SH.parents[1] / "one_stage" / "public_files.py"
+PL = RUN_SH.parent / "public_log.py"
 PROMPT = [918273, 827364, 736455]
 NEEDLES = (b"918273", b"prompt_ids", b"streamed_ids", b"prompt_token_ids")
 
@@ -93,7 +94,7 @@ STUB_PP = "#!/bin/sh\necho '{\"name\": \"c\", \"digest\": \"d\"}'\n"
 
 
 def served_code(out: Path, serve: Path, run: str) -> str:
-    return (f'O={out}; K={out.parent / "keep"}; PUBF={PUBF}; PP={out.parent / "pp"}; TG=(); CH=()\nrun() {{ {run} }}\n'
+    return (f'O={out}; K={out.parent / "keep"}; PUBF={PUBF}; PL={PL}; PP={out.parent / "pp"}; TG=(); CH=()\nrun() {{ {run} }}\n'
             f'{block("records() {", "}")}{block("  served() {", "  }")}served served {serve} 0\n')
 
 
@@ -118,6 +119,7 @@ def test_records_finds_every_file_it_opens_after_served(tmp_path):
     (tmp_path / "part.json").write_text(json.dumps({"law": "work-rate:1/1"}))
     (tmp_path / "py").write_text(
         f'#!/bin/bash\n[ "$1" = -c ] && exec {sys.executable} "$@"\necho "$*" >> {log}\n'
+        'case "$*" in *records_audit.py*) echo \'RECORDS {"ok": true, "leak": {"advice_bits": 4242424}}\';; esac\n'
         f'for a in "$@"; do case "$a" in {out}/*|{serve}/*|{tmp_path / "keep"}/*) [ -e "$a" ] || {{ echo "missing $a" >> {log}; exit 3; }};; esac; done\n')
     (tmp_path / "py").chmod(0o755)
     run = f'mkdir -p $O/$1 $K/$1; REC_NAME=$1; records $1 {tmp_path / "part.json"} || return 1;'
@@ -128,6 +130,8 @@ def test_records_finds_every_file_it_opens_after_served(tmp_path):
     assert "missing" not in calls and "records_audit.py audit" in calls and "--run " + "ab" * 64 in calls
     no_secret(out)
     assert (tmp_path / "keep/served/compilers.json").is_file() and not list(out.rglob("compilers.json"))
+    assert b"4242424" not in (out / "served/audit.log").read_bytes() and "4242424" not in got.stdout
+    assert b"4242424" in (tmp_path / "keep/served/audit.log").read_bytes()
 
 
 def test_the_standins_workload_prompts_never_reach_out(tmp_path):
@@ -166,13 +170,15 @@ while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
 case $cmd in
   commit) mkdir -p $out/rank0 && for f in window partition index; do echo "{\"planted\": \"planted-$f\"}" > $out/rank0/$f.json; done
           echo '{"window": "public"}' > $out/rank0/registration.json; echo planted-bin > $out/rank0/m0-public.bin
-          echo '{}' > $out/commit.json; echo committed;;
-  audit) mkdir -p $out && echo '{"ok": true}' > $out/summary.json && echo 'PROVE-PATH {"forged": false, "ok": true}'
-         echo planted-auditerr >&2;;
+          echo '{}' > $out/commit.json; echo '[prove-path commit] rank 0: {"bits": 4242423}';;
+  audit) mkdir -p $out && echo '{"ok": true}' > $out/summary.json
+         echo 'PROVE-PATH {"advice_bits": 4242421, "forged": false, "ok": true, "ranks": {"0": {"accepted": true, "charge": {"c": 4242422}}}}'
+         echo 'a5 progress planted-progress'; echo planted-auditerr >&2;;
   compiler) echo '{"name": "c", "digest": "d"}';;
 esac
 """
-PLANTED_RUN = (b"planted-partition", b"planted-window", b"planted-index", b"planted-bin", b"planted-auditerr")
+PLANTED_RUN = (b"planted-partition", b"planted-window", b"planted-index", b"planted-bin", b"planted-auditerr",
+               b"4242421", b"4242422", b"4242423", b"planted-progress")
 
 
 def _run_arm(tmp_path: Path, arm: str) -> tuple[Path, Path]:
@@ -181,10 +187,11 @@ def _run_arm(tmp_path: Path, arm: str) -> tuple[Path, Path]:
     (tmp_path / "pp").chmod(0o755)
     for d in (out, keep, w):
         d.mkdir()
-    code = (f"O={out}; K={keep}; W={w}; PUBF={PUBF}; PP={tmp_path / 'pp'}; TG=(); CH=(); PLAIN=(); TIME=\n"
+    code = (f"O={out}; K={keep}; W={w}; PUBF={PUBF}; PL={PL}; PP={tmp_path / 'pp'}; TG=(); CH=(); PLAIN=(); TIME=\n"
             f"{block('keep() {', '}')}{block('run() {', '}')}{arm}\n")
     got = subprocess.run(["bash", "-c", code], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
+    assert not [n for n in PLANTED_RUN if n in got.stdout.encode()], "the run's stdout carries a planted value"
     return out, keep
 
 
@@ -202,7 +209,9 @@ def test_a_runs_partition_its_siblings_and_error_output_stay_in_the_keep(tmp_pat
     assert f"{name}/commit.log" in files and f"{name}/summary.json" in files
     kept = {p.relative_to(keep).as_posix() for p in keep.rglob("*") if p.is_file()}
     assert {f"{name}/windows/rank0/{f}" for f in ("partition.json", "index.json", "window.json", "m0-public.bin")} <= kept
-    assert f"{name}/audit.err" in kept
+    assert f"{name}/audit.err" in kept and b"4242421" in (keep / name / "audit.log").read_bytes()
+    line = json.loads(files[f"{name}/audit.log"].decode().split("PROVE-PATH ", 1)[1].splitlines()[0])
+    assert line == {"forged": False, "ok": True, "ranks": {"0": {"accepted": True}}}
 
 
 def test_pp_keep_under_out_or_the_run_dir_is_refused_before_anything_is_written(tmp_path):
@@ -218,3 +227,16 @@ def test_pp_keep_under_out_or_the_run_dir_is_refused_before_anything_is_written(
                           f"PP_KEEP={keep}; W={tmp_path}\n{code}"], capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
     assert keep.stat().st_mode & 0o777 == 0o700
+
+
+def test_public_log_lets_no_advice_length_or_charge_go():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("public_log", PL)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert m.public_line('RECORDS {"ok": true, "draw_counts": {"t": 2}, "leak": {"advice_bits": 9, "bound": "vacuous"}}') \
+        == 'RECORDS {"draw_counts": {"t": 2}, "ok": true}'
+    assert m.public_line('PROVE-PATH {"advice_bits": 9, "proof": "zk", "ranks": {"0": {"charge": {"c": 9}, "ok": true}}}') \
+        == 'PROVE-PATH {"proof": "zk", "ranks": {"0": {"ok": true}}}'
+    assert m.public_line("ValueError: boom") == "ValueError: boom"
+    assert "9" not in m.public_line("PROVE-PATH not json 9") and m.public_line("[prove-path commit] rank 0: {}") is None
