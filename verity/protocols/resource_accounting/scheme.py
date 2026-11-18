@@ -76,6 +76,7 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
@@ -134,7 +135,7 @@ RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "b
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 _ENTRY = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*")
-_LAUNCHER = re.compile(r"[A-Za-z_]\w*")
+_TARGET = re.compile(r"[A-Za-z0-9][\w-]*")
 
 
 @dataclass(frozen=True)
@@ -255,15 +256,37 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Executable:
+    """One of a scheme's own Lean executables, a Lake target: ``package``, its Lake package's directory relative to the
+    tree, and ``target``, the executable's target name. `built` is the file ``lake build <target>`` writes in that
+    package, the one whose digest a verdict's record carries."""
+
+    package: str
+    target: str
+
+    def __post_init__(self) -> None:
+        parts = self.package.split("/")
+        if not self.package or self.package.startswith("/") or any(s in ("", ".", "..") for s in parts):
+            raise ValueError(f"an executable's package is a directory relative to the tree, not {self.package!r}")
+        if not _TARGET.fullmatch(self.target):
+            raise ValueError(f"an executable's target is a Lake target's name ({_TARGET.pattern}), not {self.target!r}")
+
+    def built(self, root: Path | str) -> Path:
+        return Path(root) / self.package / ".lake" / "build" / "bin" / self.target
+
+
+@dataclass(frozen=True)
 class Launch:
     """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
     the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
     the one of them whose absence makes it a development run that starts the party it reaches on its own machine;
     ``reaches``, that party, said only where no declared channel joins it to one auditor party; and ``starts``, the
     bindings the party it reaches writes for it when `verity run` starts that party, in order, with ``starts_optional``
-    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``. ``launcher`` names
-    the launcher that gives the runner's variables for it, an attribute of the table that runs the served window; a
-    piece whose launch names none is refused by name when it is launched."""
+    those of them the start may leave out. A start writes only some of ``binds`` and ``optional``. ``entry``, a
+    ``module:attribute``, names the callable the launcher calls with one argument, the scheme's declaration, for the
+    piece's hooks and the scripts they run; it launches and collects and decides nothing, and nothing a node sets
+    overrides it. ``executables`` are the scheme's own Lean executables the piece builds and answers with
+    (`Executable`). A piece whose launch declares either one not is refused by name when it is launched."""
 
     binds: tuple[str, ...] = ()
     optional: tuple[str, ...] = ()
@@ -271,7 +294,8 @@ class Launch:
     reaches: str = ""
     starts: tuple[str, ...] = ()
     starts_optional: tuple[str, ...] = ()
-    launcher: str | Lacks = UNDECLARED
+    entry: str | Lacks = UNDECLARED
+    executables: tuple[Executable, ...] | Lacks = UNDECLARED
 
 
 @dataclass(frozen=True)
@@ -445,9 +469,15 @@ class Scheme:
                 if extra := sorted(set(p.starts_optional) - set(p.starts)):
                     raise ValueError(f"{self.name}: what {party}'s start may leave out is among what it writes, "
                                      f"not {extra}")
-                if not isinstance(p.launcher, Lacks) and not _LAUNCHER.fullmatch(p.launcher):
-                    raise ValueError(f"{self.name}: {party}'s launcher is an attribute's name ({_LAUNCHER.pattern}), "
-                                     f"not {p.launcher!r}")
+                if not isinstance(p.entry, Lacks) and not _ENTRY.fullmatch(p.entry):
+                    raise ValueError(f"{self.name}: {party}'s entry is a module:attribute ({_ENTRY.pattern}), "
+                                     f"not {p.entry!r}")
+                if not isinstance(p.executables, Lacks):
+                    if not all(isinstance(e, Executable) for e in p.executables):
+                        raise ValueError(f"{self.name}: {party}'s executables are Executable records, not "
+                                         f"{p.executables!r}")
+                    if len(set(p.executables)) != len(p.executables):
+                        raise ValueError(f"{self.name}: {party} declares an executable twice")
             object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         if not isinstance(self.reads, Lacks):
             named = set() if isinstance(self.parties, Lacks) else {r.name for r in self.parties}
@@ -720,7 +750,7 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 
 
 __all__ = ["BESIDE_STORAGE", "BESIDE_STORAGE_NOT_SHOWN", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
-           "Answers", "Charge", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "Answers", "Charge", "Executable", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "answering", "credited", "declared", "layout", "order_refusals", "register", "register_process", "settings",
            "unbounded"]

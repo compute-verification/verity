@@ -28,6 +28,7 @@ from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.memory.pous.attester import onsite
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_party as CP
+from verity.protocols.resource_accounting.memory.pous import launch as PL
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
@@ -1015,7 +1016,7 @@ def test_the_wipe_runs_in_the_workload_under_the_configurations_pin_and_no_party
     got = T.live(R.load(NETWORK, REG), state, [T.WORKERS, T.PROVER]).outcomes
     assert got[T.PROVER] == got[T.WORKERS] == {"outcome": {"served-window": 0}, "refused": None}
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {T.WIPE_SCRIPT} "$1" "$2" "$3"'
+    assert hooks["WIPE_CMD"] == f'WIPE_KEY_SHA512={NETWORK_PIN} bash {PL.WIPE_SCRIPT} "$1" "$2" "$3"'
     assert (hooks["WIPE_ADDRESS"], hooks["WIPE_CHALLENGER"], hooks["WIPE_COMMAND"]) == (
         "192.0.2.1:7001", "auditor-1", "ssh auditor-1")
 
@@ -1148,7 +1149,7 @@ def test_unbound_the_memory_attesters_are_the_runs_and_each_piece_says_so_before
     cfg = R.load(CONFIG, REG)
     got = T.variables(cfg, NO_ATTESTERS)
     assert got["POUS_ARGS"] == "--run-keys --rounds 320"
-    assert got["WIPE_CMD"] == f'bash {T.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
+    assert got["WIPE_CMD"] == f'bash {PL.WIPE_SCRIPT} "$1" "$2" "$3" --run-keys'
     assert not [k for k, v in got.items() if k != "VERITY_PINS" and any(p in v for p in PIN.values())]
     assert not {"WIPE_ADDRESS", "WIPE_CHALLENGER", "WIPE_COMMAND"} & set(got)
     rc, plan, err = dry(capsys, "--bindings", bindings(tmp_path, NO_ATTESTERS))
@@ -1179,7 +1180,7 @@ def served_piece(tmp: Path, pous_args: str, **env: str) -> tuple[subprocess.Comp
     run = {"PATH": lake_path(tmp), "HOME": str(tmp), "PY": str(py), "P2_LIB": str(tmp),
            "TPY": str(executable(tmp, "tpy", TPY)), "GPU_LEASE_UUID": "no-such-card", "VERITY_PINS": "[]",
            "POUS_ARGS": pous_args, **env}
-    p = subprocess.run(["bash", "-c", f'bash {T.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
+    p = subprocess.run(["bash", "-c", f'bash {PL.POUS_SCRIPT} "$@"', "_", str(tmp / "serve"), "3", str(tmp / "pous")],
                        cwd=ROOT, env=run, capture_output=True, text=True, check=False)
     return p, tmp / "argv.txt"
 
@@ -1192,7 +1193,7 @@ def test_with_run_keys_served_piece_starts_the_attesters_here_under_one_key_made
                                                  "--challenger-address", "--challenger-command", "--bw-party",
                                                  "--bw-host", "--rounds")}
     keys = tmp_path / "serve" / "private" / "run-keys"
-    attester = f"bash {ROOT / T.ATTESTER_SCRIPT} "
+    attester = f"bash {ROOT / PL.ATTESTER_SCRIPT} "
     assert flag == {"--trusted-sha512": RUN_KEY, "--bw-trusted-sha512": RUN_KEY,
                     "--challenger-host": subprocess.run(["hostname"], capture_output=True, text=True).stdout.strip(),
                     "--challenger-address": "127.0.0.1:47610", "--bw-host": "127.0.0.1", "--rounds": "320",
@@ -1222,7 +1223,7 @@ def test_the_run_attesters_take_the_gates_words_and_the_runs_key(tmp_path):
     env = {"PATH": os.pathsep.join([str(Path(sys.executable).parent), os.defpath]), "HOME": str(tmp_path)}
 
     def attester(*words: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["bash", str(ROOT / T.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
+        return subprocess.run(["bash", str(ROOT / PL.ATTESTER_SCRIPT), words[0], str(py), str(keys), *words[1:]],
                               env=env, capture_output=True, text=True, check=False)
 
     assert attester("challenger_party").returncode == 0

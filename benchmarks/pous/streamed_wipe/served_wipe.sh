@@ -154,7 +154,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the node's link
   rm -f "$DIR"/{answer,served,summary,wipe,period}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
   stamp start
-  # served_table.py's form (`_wipe`), until it hands SETTINGS: `--run-keys`, or the bound attester's
+  # the wipe's launcher's form (`memory/pous/launch.py`), until it hands SETTINGS: `--run-keys`, or the bound attester's
   # WIPE_CHALLENGER, WIPE_ADDRESS and WIPE_COMMAND
   if [ "$SETTINGS" = --run-keys ]; then
     for v in WIPE_KEY_SHA512 WIPE_ADDRESS WIPE_CHALLENGER WIPE_COMMAND; do
@@ -168,7 +168,7 @@ print(json.dumps({"host": h, "address": a, "command": shlex.split(c), "reads": 5
       "${WIPE_CHALLENGER:-vy-auditor-2}" "${WIPE_ADDRESS:-10.96.0.36:47611}" "$WIPE_COMMAND")
   fi
   [ "${WIPE_KEY_SHA512-unset}" != "" ] || refuse "no challenger key is pinned: WIPE_KEY_SHA512 is set empty, which" \
-    "pins none (served_table.py's command when the configuration pins no key for the wipe)"
+    "pins none (the wipe's launcher's command when the configuration pins no key for the wipe)"
   command -v ip > /dev/null || refuse "this host has no \`ip\` (iproute2), which names the node's links: apt-get install iproute2"
   read -r DEV SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
   export WIPE_CTRL=${DEV:+$DEV $SRC $(cat "/sys/class/net/$DEV/speed" 2>/dev/null || echo -)}

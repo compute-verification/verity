@@ -176,7 +176,11 @@ BANDWIDTH = S.register(S.Scheme(
     colocated=(),
     needs=frozenset({"receipts"}),
     depends=("pous",),
-    pieces={"prover": S.Launch(optional=("host", "command"), development="host", launcher="BANDWIDTH_LAUNCHER")},
+    pieces={"prover": S.Launch(
+        optional=("host", "command"), development="host",
+        entry="verity.protocols.resource_accounting.memory.poub.launch:bandwidth",
+        executables=(S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-p2-protocol"),
+                     S.Executable("verity/protocols/resource_accounting/memory/poub/verifier/lean", "poub-verifier")))},
     reads={P2.CLOSER_PARTY: {"challenger": ("pous", "memory-challenger")}},
     answers="verity.protocols.resource_accounting.memory.poub.prover.p2_stage.bandwidth:ANSWERS",
     unchecked=P2.mc.UNCHECKED,

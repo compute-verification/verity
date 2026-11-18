@@ -3,6 +3,7 @@ a table that only shrinks; every other component is its scheme's declaration (`s
 ``depends`` is a requirement a configuration is refused without."""
 from __future__ import annotations
 
+import importlib
 import sys
 
 import pytest
@@ -64,23 +65,53 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
     assert (e.value.name, e.value.detail) == (name, detail)
 
 
-#: the declared pieces whose launch names no launcher yet, each refused by name when launched; only shrinks
-NO_LAUNCHER = {("sampled-proofs", T.WORKERS), ("pearl-plus", T.WORKERS), ("network-attester", T.WORKERS)}
+#: the declared pieces whose launch declares no entry or no executables yet (`Launch.entry`, `Launch.executables`),
+#: each refused by name when launched, by who owes the declaration; only shrinks
+NO_ENTRY = {("sampled-proofs", T.WORKERS): ("entry", "proofs"),
+            ("pearl-plus", T.WORKERS): ("entry", "compute-accounting"),
+            ("network-attester", T.WORKERS): ("entry", "network-accounting"),
+            ("pouw", T.WORKERS): ("executables", "compute-accounting")}
 
 
-def test_every_declared_piece_names_its_launcher_and_one_that_names_none_is_refused_by_name() -> None:
-    said = {(n, p): x.launcher for n in T.MANIFESTS for p, x in T.launches(n).items()}
-    assert {k for k, v in said.items() if isinstance(v, T.Lacks)} == NO_LAUNCHER
-    for (n, p), name in said.items():
-        hooks = T.PIECES[n][p].hooks
-        if (n, p) in NO_LAUNCHER:
+def test_every_declared_piece_names_its_entry_and_executables_and_one_lacking_either_is_refused_by_name() -> None:
+    said = {(n, p): x for n in T.MANIFESTS for p, x in T.launches(n).items()}
+    lacking = {k: next(f for f in ("entry", "executables") if isinstance(getattr(x, f), T.Lacks))
+               for k, x in said.items() if isinstance(x.entry, T.Lacks) or isinstance(x.executables, T.Lacks)}
+    assert lacking == {k: f for k, (f, _) in NO_ENTRY.items()}, "NO_ENTRY only shrinks: delete what is declared now"
+    for (n, p), x in said.items():
+        piece = T.PIECES[n][p]
+        if (n, p) in NO_ENTRY:
             with pytest.raises(Refused) as e:
-                hooks({}, {}, {}, [])
-            assert e.value.name == "no-launcher" and e.value.detail.startswith(f"{n} declares a piece for {p} whose")
-        else:
-            assert hooks is getattr(T, name).hooks
-    with pytest.raises(ValueError, match="names the launcher 'ABSENT', which is no Launcher of served_table"):
-        T._launcher("x", T.PROVER, Launch(launcher="ABSENT"))
+                piece.hooks({}, {}, {}, [])
+            assert e.value.name == f"no-{lacking[n, p]}" and e.value.detail.startswith(f"{n} declares a piece for {p} whose")
+            continue
+        module, attribute = x.entry.split(":")
+        made = getattr(T if module == "served_table" else importlib.import_module(module), attribute)(
+            T.UNDECLARED[n][0] if n in T.UNDECLARED else schemes.get(n))
+        assert (piece.hooks, piece.scripts, piece.executables) == (made[0], made[1], x.executables)
+
+
+def test_an_entry_is_the_declarations_alone_and_nothing_a_node_sets_overrides_it(monkeypatch) -> None:
+    """`Launch.entry` and `Launch.executables` are read from the registered declaration and nowhere else: the table's
+    former by-name launchers (``ENTRIES``, the ``*_LAUNCHER`` attributes) and the scripts' former program overrides
+    (``POUS_EXE``, ``BW_CASE_EXE``, ``BW_PARTY_EXE``, ``WIPE_PROTOCOL_EXE``) set to another change no piece."""
+    def launched() -> dict:
+        return {(n, r): (p.hooks.__code__, p.scripts, p.executables, p.what)
+                for n, c in T.MANIFESTS.items() for r, p in T._pieces(c).items()}
+
+    before = launched()
+    other = T.Launcher(lambda cfg, params, bound, pinned: {"POUS_CMD": "evil"}, ("evil.sh",))
+    monkeypatch.setattr(T, "ENTRIES", {(n, p): other for n in T.MANIFESTS for p in T.launches(n)}, raising=False)
+    for name in ("SPOT", "POUW", "PEARLPLUS", "POUS", "BANDWIDTH", "ATTESTER", "WIPE"):
+        monkeypatch.setattr(T, f"{name}_LAUNCHER", other, raising=False)
+    for var in ("POUS_EXE", "BW_CASE_EXE", "BW_PARTY_EXE", "WIPE_PROTOCOL_EXE", "VERITY_ENTRY"):
+        monkeypatch.setenv(var, "/tmp/evil")
+    assert launched() == before
+
+
+def test_an_entry_that_gives_no_hooks_is_refused_by_name() -> None:
+    with pytest.raises(ValueError, match="gives .* not its hooks and scripts"):
+        T._launcher("x", T.PROVER, Launch(entry="builtins:str", executables=()), None)
 
 
 def test_a_piece_reaches_its_declared_channels_gate_party_and_says_one_only_where_none_joins() -> None:

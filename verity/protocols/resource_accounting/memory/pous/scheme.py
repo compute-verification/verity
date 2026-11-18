@@ -40,7 +40,8 @@ from verity.protocols.resource_accounting.memory.pous.attester import memory_att
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
+from verity.protocols.resource_accounting.scheme import (Charge, Executable, Lacks, Launch, Order, Reading, Scheme,
+                                                         register)
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -132,7 +133,8 @@ POUS = register(Scheme(
     needs=frozenset({"store"}),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
-                            launcher="POUS_LAUNCHER")},
+                            entry="verity.protocols.resource_accounting.memory.pous.launch:pous",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/verifier/check", "pous-run-protocol"),))},
     reads={},
     answers=Lacks("its kept session is answered by the PoUS piece's own code, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
@@ -192,7 +194,8 @@ WIPE = register(Scheme(
     needs=frozenset(),
     depends=(),
     pieces={"prover": Launch(optional=("address", "host", "command"), development="address",
-                            launcher="WIPE_LAUNCHER")},
+                            entry="verity.protocols.resource_accounting.memory.pous.launch:wipe",
+                            executables=(Executable("verity/protocols/resource_accounting/memory/pous/attester/lean", "wipe-protocol"),))},
     answers=Lacks("its case is answered by the composite's case writer, not yet by functions of this package"),
     unchecked=MA.UNCHECKED,
     record="wipe",

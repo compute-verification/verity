@@ -57,7 +57,7 @@ from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import Lacks, Launch, Scheme, declared, settings
+from verity.protocols.resource_accounting.scheme import Executable, Lacks, Launch, Scheme, declared, settings
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.registration.verifier import registration as RL
@@ -196,7 +196,7 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
                channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                          Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
-     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), launcher="POUW_LAUNCHER")}),
+     {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",), entry="served_table:pouw_entry")}),
 )}
 #: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
 #: ``record`` names its row (a scheme with no row, an experimental one or a session's own, is no component here)
@@ -384,6 +384,8 @@ class Piece:
     writes: tuple[str, ...] = ()
     starts: tuple[str, ...] = ()
     starts_optional: tuple[str, ...] = ()
+    #: the scheme's own Lean executables the piece builds and answers with (`Launch.executables`)
+    executables: tuple[Executable, ...] = ()
 
     def __post_init__(self) -> None:
         if self.runs not in RUNS:
@@ -477,57 +479,8 @@ def _pouw(cfg, params, bound, pinned):
             **({"MAIN_FILE": bound["main-file"]} if "main-file" in bound else {})}
 
 
-#: the scripts' one flag for a development run's attester: on the workload's machine, under a key made for the run
-RUN_KEYS = "--run-keys"
-DEVELOPMENT = {"DEVELOPMENT": "1"}
-
-
-WIPE_SCRIPT = "benchmarks/pous/streamed_wipe/served_wipe.sh"
-#: served_wipe.sh's variable for each binding of the wipe's memory attester
-_WIPE = {"address": "WIPE_ADDRESS", "host": "WIPE_CHALLENGER", "command": "WIPE_COMMAND"}
-
-
-def _wipe(cfg, params, bound, pinned):
-    """The streamed wipe of the card before the workload's engine loads (WIPE_CMD, served_wipe.sh). The key is the configuration's pin alone, on the command line, so neither the environment nor a binding gives
-    another; with no pin served_wipe.sh refuses. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
-    if "address" not in bound:
-        return {"WIPE_CMD": f'bash {WIPE_SCRIPT} "$1" "$2" "$3" {RUN_KEYS}', **DEVELOPMENT}
-    return {"WIPE_CMD": f'WIPE_KEY_SHA512={"".join(pinned)} bash {WIPE_SCRIPT} "$1" "$2" "$3"',
-            **{v: bound[k] for k, v in _WIPE.items() if k in bound}}
-
-
-POUS_SCRIPT, ONSITE_PIECES = "benchmarks/pous/served_piece.sh", "benchmarks/pous/onsite_pieces.sh"
-ATTESTER_SCRIPT = "benchmarks/pous/run_attester.sh"
-BANDWIDTH_SCRIPT = "benchmarks/pous/served_piece.py"
-#: served_piece.py's flag for each binding of PoUS's memory attester, and of PoUB's bandwidth verifier
-_POUS = {"address": "--challenger-address", "host": "--challenger-host", "command": "--challenger-command"}
-_BANDWIDTH = {"host": "--bw-host", "command": "--bw-party"}
-
-
 def _pinned(cfg: Mapping[str, Any], party: str, protocol: str) -> list[str]:
     return [p["key-sha512"] for p in cfg.get("pin", []) if (p["party"], p["protocol"]) == (party, protocol)][:1]
-
-
-def _pous_piece(cfg, params, bound, pinned):
-    """PoUS's prover after the workload (POUS_CMD, served_piece.sh): the memory attester's timed reads answered from
-    the served weights held as P2's C* on the card, with the memory attester on the workload's machine in a development
-    run. The memory attester's key is the configuration's pin alone, on the command line; with no pin the piece
-    trusts no session. Unbound, the key is the run's (`RUN_KEYS`), and no pin is passed."""
-    words = [*(["--trusted-sha512", *pinned] if pinned else []), *([] if "address" in bound else [RUN_KEYS]),
-             "--rounds", str(params["challenges"]),
-             *(w for k, flag in _POUS.items() if k in bound for w in (flag, bound[k]))]
-    return {"POUS_CMD": f'bash {POUS_SCRIPT} "$@"', "POUS_ARGS": shlex.join(words), "ONSITE_PIECES": ONSITE_PIECES,
-            **({} if "address" in bound else DEVELOPMENT)}
-
-
-def _bandwidth_piece(cfg, params, bound, pinned):
-    """PoUB's prover inside PoUS's piece (served_piece.py's --bw-*): the held store proved to the bandwidth verifier a
-    pass at a time, its answer collected by BANDWIDTH_CMD. The close's key is the configuration's pin for the bandwidth verifier alone; with no pin the session has no
-    case. Unbound, PoUS's `RUN_KEYS` starts the bandwidth party too, under PoUS's key made for the run."""
-    words = [*(["--bw-trusted-sha512", *pinned] if pinned else []),
-             *(w for k, flag in _BANDWIDTH.items() if k in bound for w in (flag, bound[k]))]
-    return {**({"POUS_ARGS": shlex.join(words)} if words else DEVELOPMENT),
-            "BANDWIDTH_CMD": f'"$PY" {BANDWIDTH_SCRIPT} collect-bandwidth --serve-dir "$1" --window "$2" --out "$3"'}
 
 
 _PEARLPLUS_LIVE = {"gate": "PEARLC_CHALLENGER_GATE", "peer": "PEARLC_CHALLENGER_PEER", "key-sha512": "H1_KEY_SHA512"}
@@ -689,37 +642,53 @@ SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on
               writes=("D/requests.jsonl", "D/windows.jsonl", "D/seals.jsonl", "D/serve.json", "D/windows/w<K>/",
                       "D/advice/w<K>/", "OUT/serve/", "OUT/machine.txt"))
 class Launcher(NamedTuple):
-    """A declared piece's launcher, the attribute of this table its `Launch.launcher` names: ``hooks(cfg, params,
-    bound, pinned)``, the runner's variables for it, whose docstring says what the piece does, and the scripts it runs."""
+    """What a declared piece's `Launch.entry` gives, called with its scheme's declaration: ``hooks(cfg, params, bound,
+    pinned)``, the runner's variables for it, whose docstring says what the piece does, and the scripts it runs."""
 
     hooks: Hooks
     scripts: tuple[str, ...] = ()
 
 
-SPOT_LAUNCHER = Launcher(_spot_challenger)
-POUW_LAUNCHER = Launcher(_pouw)
-PEARLPLUS_LAUNCHER = Launcher(_pearlplus, (PEARLPLUS_SCRIPT,))
-POUS_LAUNCHER = Launcher(_pous_piece, (POUS_SCRIPT, ONSITE_PIECES, ATTESTER_SCRIPT))
-BANDWIDTH_LAUNCHER = Launcher(_bandwidth_piece, (BANDWIDTH_SCRIPT,))
-ATTESTER_LAUNCHER = Launcher(_attester_piece, (ATTESTER_PIECE,))
-WIPE_LAUNCHER = Launcher(_wipe, (WIPE_SCRIPT,))
+def spot_entry(declaration: Any) -> Launcher:
+    return Launcher(_spot_challenger)
 
 
-def _launcher(component: str, party: str, said: Launch) -> Launcher:
-    """The launcher ``said`` names (`Launch.launcher`); where it names none, one whose hooks refuse by name
-    (``no-launcher``) when the piece is launched, so nothing launches in its place."""
-    if isinstance(said.launcher, Lacks):
-        def lacking(cfg, params, bound, pinned):
-            raise Refused("no-launcher", f"{component} declares a piece for {party} whose launch names no launcher "
-                                         "(`Launch.launcher`): its declaration names the attribute of this table that "
-                                         "launches it")
-        lacking.__doc__ = f"{component}'s {party}: its launch names no launcher (`Launch.launcher`)"
-        return Launcher(lacking)
-    found = globals().get(said.launcher)
-    if not isinstance(found, Launcher):
-        raise ValueError(f"{component}'s piece for {party} names the launcher {said.launcher!r}, which is no Launcher "
-                         "of served_table")
-    return found
+def pouw_entry(declaration: Any) -> Launcher:
+    return Launcher(_pouw)
+
+
+def pearlplus_entry(declaration: Any) -> Launcher:
+    return Launcher(_pearlplus, (PEARLPLUS_SCRIPT,))
+
+
+def attester_entry(declaration: Any) -> Launcher:
+    return Launcher(_attester_piece, (ATTESTER_PIECE,))
+
+
+def _refusing(component: str, party: str, what: str) -> Launcher:
+    def lacking(cfg, params, bound, pinned):
+        raise Refused(f"no-{what}", f"{component} declares a piece for {party} whose launch declares no {what} "
+                                    f"(`Launch.{what}`): its scheme's declaration states it, and nothing else does")
+    lacking.__doc__ = f"{component}'s {party}: its launch declares no {what} (`Launch.{what}`)"
+    return Launcher(lacking)
+
+
+def _launcher(component: str, party: str, said: Launch, declaration: Any) -> Launcher:
+    """What ``said``'s `Launch.entry` gives, called with ``declaration``; read from the declaration alone, so no
+    variable, flag or file of a node's names another. Where the launch declares no entry or no executables, a launcher
+    whose hooks refuse by name (``no-entry``, ``no-executables``) when the piece is launched, so nothing launches in its
+    place."""
+    for lacking in ("entry", "executables"):
+        if isinstance(getattr(said, lacking), Lacks):
+            return _refusing(component, party, lacking)
+    module, attribute = said.entry.split(":")
+    # this table, by whatever name it was loaded under (`run.REGISTRY`'s, a test's, `verity_cli.served_table`)
+    found = globals() if module == __name__.rpartition(".")[2] else vars(importlib.import_module(module))
+    made = found[attribute](declaration)
+    if not (isinstance(made, tuple) and len(made) == 2 and callable(made[0])
+            and isinstance(made[1], tuple) and all(isinstance(s, str) for s in made[1])):
+        raise ValueError(f"{component}'s piece for {party}: {said.entry} gives {made!r}, not its hooks and scripts")
+    return Launcher(*made)
 
 
 def launches(name: str) -> Mapping[str, Launch]:
@@ -757,13 +726,14 @@ def _pieces(c: Component) -> dict[str, Piece]:
                                 f"the gate: {c.name}'s {r.name}" if runs == GATE else f"{c.name}'s {r.name}")
             continue
         said = mine[r.name]
-        entry = _launcher(c.name, r.name, said)
+        entry = _launcher(c.name, r.name, said, UNDECLARED[c.name][0] if c.name in UNDECLARED else schemes.get(c.name))
         follows = next((d for d in c.requires if said.development and launches(d).get(r.name, Launch()).development),
                        "")
         out[r.name] = Piece(c.name, r.name, runs, " ".join((entry.hooks.__doc__ or "").split()), scripts=entry.scripts,
                             reaches=_reaches(c, r.name, said.reaches), binds=said.binds, optional=said.optional,
                             hooks=entry.hooks, development=said.development, follows=follows, starts=said.starts,
-                            starts_optional=said.starts_optional)
+                            starts_optional=said.starts_optional,
+                            executables=() if isinstance(said.executables, Lacks) else said.executables)
     return out
 
 
