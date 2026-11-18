@@ -14,6 +14,7 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -89,7 +90,7 @@ def _spans(seed: int) -> tuple[IR.Span, IR.Span]:
 
 
 def _boundary_window() -> CS.Binding:
-    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+    return CS.Binding(PN.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
                       "b0" * 64, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
 
 
@@ -247,16 +248,16 @@ def test_the_links_are_the_ones_round_2_derives_from_the_replay_block(staged):
     unit's row; the two the verifier supplies by their indices, the rest the replay's. They are this module's by hand,
     in the body's order."""
     _stream, reg, _first_ = staged
-    got = IR.links(P.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS, CELLS,
+    got = IR.links(PN.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS, CELLS,
                    {x.value.rsplit("/", 1)[1]: x.index for x in SUPPLIES})
     assert len(got) == len(LINKS) and set(got) == set(LINKS)
     assert [x.value.rsplit("/", 1)[1] for x in got] == ["x0", "best", "c", "yx0", "ybest", "i"]
     bare = {"roots": [{"port": "ingress"}]}
-    assert [x.value for x in IR.links(P.population_program(BLOCK, SPANS), KEY, bare, MEMBERS, CELLS)][:3] == ["x0", "best", "c"]
+    assert [x.value for x in IR.links(PN.population_program(BLOCK, SPANS), KEY, bare, MEMBERS, CELLS)][:3] == ["x0", "best", "c"]
     with pytest.raises(ValueError, match="makes no links"):
-        IR.links(P.population_program(BLOCK, SPANS), "Elsewhere_v1", reg.record, MEMBERS, CELLS)
+        IR.links(PN.population_program(BLOCK, SPANS), "Elsewhere_v1", reg.record, MEMBERS, CELLS)
     with pytest.raises(ValueError, match="a template the window has none of"):
-        IR.links(P.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS[:1], CELLS[:1])
+        IR.links(PN.population_program(BLOCK, SPANS), KEY, reg.record, MEMBERS[:1], CELLS[:1])
 
 
 def test_an_interior_salts_its_own_ports_fresh_and_leaves_a_linked_ports_to_its_value(staged):
@@ -296,7 +297,7 @@ def test_round_2_reads_an_index_port_at_the_name_the_served_records_ports_give_i
     and refuses a read moved one row; without one the link is the bare parameter, and the same read is refused. The
     links `interior_rows.links` derives from the record carry the name round 2 will hold."""
     _stream, reg, first = staged
-    program, q = P.population_program(BLOCK, SPANS), len(first.units)
+    program, q = PN.population_program(BLOCK, SPANS), len(first.units)
     it = _interior(reg, first, [_spans(s) for s in first.units])
     c, w = it.committed, it.committed.window
     parts = (SS.Part(P.template_id(A), 0, NC), SS.Part(P.template_id(B), q * NC, G * W))

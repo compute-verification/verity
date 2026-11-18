@@ -12,6 +12,7 @@ import hashlib
 
 import numpy as np
 import pytest
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import reference as REF
@@ -268,7 +269,7 @@ def test_a_window_of_one_wire_read_whole_is_in_the_form_round_two_derives():
     defn = WR.replay(circuit, _record(circuit))
     assert [(n.form, n.fn.id) for n in defn.body.nodes] == [("call", C2.id), ("call", C1.id)]
     c1, c2 = descriptor_id(C1), descriptor_id(C2)
-    assert SS.replay_wires(P.population_program(defn, 3), descriptor_id(defn)) == (SS.Wire(c1, "idx", c2, "o0"),)
+    assert SS.replay_wires(PN.population_program(defn, 3), descriptor_id(defn)) == (SS.Wire(c1, "idx", c2, "o0"),)
     assert read_back(defn)[0] == _cells(circuit) == {(c1, "idx"): {(0, 0): (c2, "o0", 0)}}
 
 

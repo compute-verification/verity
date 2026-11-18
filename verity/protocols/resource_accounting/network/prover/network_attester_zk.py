@@ -60,6 +60,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.network.prover import leak_scan as LS, proof_drivers
 from verity.protocols.resource_accounting.network.verifier import record_files as RF, relay_check as RC
 from verity.circuits import boolean as BL
@@ -254,7 +255,7 @@ def public_header(out: Path, n: int) -> dict:
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     """The statement program and partition (one template, n proof blocks) and the proof block's stager."""
     defn = bind(WardenRowIdentity, B=B)
-    program = M.P.mixed_population_program([(defn, n)])
+    program = PN.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
     out.mkdir(parents=True, exist_ok=True)

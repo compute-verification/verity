@@ -71,6 +71,7 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -364,7 +365,7 @@ class IngressTie:
 
     @cached_property
     def _program(self) -> Program:
-        return P.population_program(self.unit, self.T)
+        return PN.population_program(self.unit, self.T)
 
     @cached_property
     def _partition(self) -> dict[str, Any]:

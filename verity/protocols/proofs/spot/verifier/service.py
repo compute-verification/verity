@@ -168,6 +168,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Iterable, Mapping, NoReturn, Sequence, TypeVar
 
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.partition import Level
@@ -1698,7 +1699,7 @@ class Stream:
             raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
                              "sequence of templates and its replay block")
         if values or span_values:
-            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
+            PN.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -2074,7 +2075,7 @@ class Stream:
         `program` where its ranges are `counts`; None when `counts` don't fit the stream. A two-stage stream's is
         `replay`'s N instances, its replay blocks."""
         if self.templates is None or self.replay is not None:
-            return P.population_program(self.replay or self.unit, n) if counts is None else None
+            return PN.population_program(self.replay or self.unit, n) if counts is None else None
         ids = [P.template_id(t) for t in self.templates]
         if not (isinstance(counts, Mapping) and set(counts) == set(ids)
                 and all(type(counts[i]) is int and counts[i] >= 1 for i in ids) and sum(counts.values()) == n):
@@ -2082,7 +2083,7 @@ class Stream:
         if self.program is not None:
             ranges = {tid: m for tid, _lo, m in P.ranges(self.program, self.query)}
             return self.program if ranges == dict(counts) else None
-        return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
+        return PN.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)], values=self.values)
 
     def _public(self, record: Mapping[str, Any], interior: bool = False) -> Verdict:
         """`check_public` by the verifier (`verifier.check_public`): on a docket's values under its query, or on
@@ -2235,9 +2236,9 @@ class Stream:
         `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
-            return P.population_program(self.unit, q * self.n_rho)
+            return PN.population_program(self.unit, q * self.n_rho)
         spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+        return PN.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
                                           values=self.values + spans)
 
     def _sampled_op(self, draw: Draw) -> dict[str, Any]:

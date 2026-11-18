@@ -10,6 +10,7 @@ import hashlib
 
 import pytest
 
+from verity.circuits import population as PN
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
@@ -86,8 +87,8 @@ def test_the_interior_program_takes_the_streams_values_then_its_per_span_values(
     cells = [(w, n * Q) for w, n in zip(WINDOW, stream.cells)]
     span = ("hist", Q, (8, 64, 1))
     got = P.program_digest(stream.interior_program(Q))
-    assert got == P.program_digest(P.mixed_population_program(cells, values=(x, span)))
-    assert got != P.program_digest(P.mixed_population_program(cells, values=(span, x)))
+    assert got == P.program_digest(PN.mixed_population_program(cells, values=(x, span)))
+    assert got != P.program_digest(PN.mixed_population_program(cells, values=(span, x)))
 
 
 def test_a_per_span_value_of_digests_is_registered_in_digest_order_and_its_flat_form_refused():
@@ -133,5 +134,5 @@ def test_per_span_values_are_a_two_stage_windows():
 def test_a_window_without_per_span_values_keeps_its_interior_program():
     stream = FC.Stream(_spec(), WINDOW, replay=MIXED, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     assert stream.span_values == ()
-    assert stream.interior_program(Q).root.id == P.mixed_population_program([(w, n * Q) for w, n in
+    assert stream.interior_program(Q).root.id == PN.mixed_population_program([(w, n * Q) for w, n in
                                                                             zip(WINDOW, stream.cells)]).root.id
