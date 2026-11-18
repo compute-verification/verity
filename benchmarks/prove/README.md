@@ -108,9 +108,11 @@ verity bench prove layers --flock R --zk R --sampling R --recursion R
   k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
-- **Under `--system spot`, SPOT's resampling holes in the code that ran**, over the runs among its inputs (not its
-  arts): the label (`SPOT`, or `SPOT soundness` only when both holes are closed), each hole's status, and the theorem
-  with its open premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
+- **Under `--system spot`, SPOT's holes in the code that ran**, over the runs among its inputs (not its arts): the
+  label (`SPOT`, or `SPOT soundness` only when every hole is closed), each hole's status, and the theorem with its open
+  premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON). The holes are the two
+  resampling holes and the wires between proof blocks, open until the registered circuit carries its wires; while it
+  is open, the audit's limit: each sampled block on its own inputs; the wires between blocks are not held.
 
 `--system flock` proves every block. `--system spot` takes the same costs at the blocks a sampling plan samples: a
 system is a `prove.ProofSystem`, a census in and a table out, and SPOT wraps one with a plan.
@@ -360,7 +362,8 @@ The table's columns, after the layer and its workload:
   last (the smallest δ): `at most 3 of 500 incorrect proof blocks except with probability 0.5; at most 40 except with
   probability 1e-9 (summary.json epsilon, the first and last of its 6 pairs)`. Without one, the audit's `wrong_units` (a
   `layers.sh` summary, an a5 summary, or an arm's one `A5` line) gives one pair. A prove_path arm with neither prints
-  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`.
+  `ε not stated at δ 0.5` from its `PROVE-PATH` line's `delta`. Under a table with such a bound, the line `- ε at δ:`
+  gives its limit: each sampled block on its own inputs; the wires between blocks are not held.
 - **prover, Lean, proof bytes:** each cell starts with its figure's unit and what it is per, so no figure is read as
   another's: `2.5 s a sampled proof block (Flock's prove_total_s, the mean over 8)`, `400,000 bytes a sampled proof
   block (...)`, and recursion's `1500 s a run, wall (one recursive run's path without Lean's step: ...)`. The four
