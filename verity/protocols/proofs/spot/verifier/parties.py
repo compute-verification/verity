@@ -6,8 +6,8 @@ id):
   commits its values. The proof server replays the sampled proof blocks and proves them (`flock-circuit prove --zk`). The
   verifier holds the challenger's live coins and signed log, with the challenger on its side, and runs the Lean verifier.
   There is no ZK server and no recursion: the proof server talks only to the verifier.
-- **SPOT[Flock] in two stages** (`SPOT_TWO_ID`: `SPOT_TWO_MANIFEST`, `SPOT_TWO_PROTOCOL`), the same three roles under a
-  two-stage sampling design. The sample samples replay blocks; the proof server replays them and registers their interiors
+- **SPOT[Flock] in two stages**: `SPOT_ID` at ``levels`` 2 (`spot_params_of`), whose definition `SPOT_PROTOCOL`
+  chooses (`SPOT_TWO_MANIFEST`, `SPOT_TWO_PROTOCOL`), the same three roles under a two-stage sampling design. The sample samples replay blocks; the proof server replays them and registers their interiors
   (the interior docket), and the verifier then samples the second stage on fresh coins and audits both stages.
 - **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for both composites (remote and onsite).
   Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
@@ -77,7 +77,8 @@ is a fault of the machine: it leaves the party, and the run fails by name (the r
 The run's parameters are its execution phases (``blocks``) and what its coins are (``coins``: ``simulated`` when the
 challenger's host is a machine the prover's parties share, else ``development``, a key made for the session); the core
 deployment's (`params_of`) also list the configuration's subprotocols (``components``: exactly one composite's, by name,
-`SUBPROTOCOLS`, `verity.config.COMPOSITES`), SPOT[Flock]'s, in one stage or two (`spot_params_of`), none.
+`SUBPROTOCOLS`, `verity.config.COMPOSITES`), SPOT[Flock]'s its ``levels``, 2 for two stages and absent for one
+(`spot_params_of`).
 
 Every verifier takes block ``i``'s coins only once its registration and the challenger's address are in, in order of the
 blocks, so no coin is flipped for a block before its docket (live coins, after the commitment). SPOT[Flock]'s samples
@@ -135,8 +136,6 @@ COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 #: SPOT[Flock] on its own: no ZK server, no recursion and no composite
 SPOT_ID = "verity/sampled-proofs/spot/v1"
-#: SPOT[Flock] on its own under a two-stage sampling design
-SPOT_TWO_ID = "verity/sampled-proofs/spot/two-stage/v1"
 CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
@@ -203,7 +202,7 @@ def _spot_manifest(protocol: str, proof_server: tuple[str, ...], verifier: tuple
 
 SPOT_MANIFEST = _spot_manifest(SPOT_ID, ("prove",), ("draw", "audit"), ("Draw",), ("Proof",))
 SPOT_TWO_MANIFEST = _spot_manifest(
-    SPOT_TWO_ID, ("interior", "prove"), ("draw", "second", "audit"), ("Draw", "Second"), ("Interior", "Proof"),
+    SPOT_ID, ("interior", "prove"), ("draw", "second", "audit"), ("Draw", "Second"), ("Interior", "Proof"),
     (Schema("Interior", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION)),
      Schema("Second", 1, "coins", {"block": Int(0, MAX_BLOCKS - 1), "address": Str(255)}, Body(max=MAX_SAMPLE))))
 
@@ -235,11 +234,14 @@ def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, A
     return {"blocks": blocks, "components": listed, "coins": coins}
 
 
-def spot_params_of(blocks: int, coins: str) -> dict[str, Any]:
-    """SPOT[Flock]'s parameters (module docstring), or a ValueError saying which is wrong."""
+def spot_params_of(blocks: int, coins: str, levels: int = 1) -> dict[str, Any]:
+    """SPOT[Flock]'s parameters (module docstring), ``levels`` named only where it is 2, or a ValueError saying which is
+    wrong."""
     _blocks(blocks)
     _coins(coins)
-    return {"blocks": blocks, "coins": coins}
+    if type(levels) is not int or levels not in (1, 2):
+        raise ValueError(f"levels is 1 or 2, not {levels!r}")
+    return {"blocks": blocks, "coins": coins, **({"levels": 2} if levels == 2 else {})}
 
 
 def _params(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -249,9 +251,12 @@ def _params(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _spot_params(params: Mapping[str, Any]) -> dict[str, Any]:
-    if set(params) != {"blocks", "coins"}:
-        raise ValueError(f"the parameters are blocks and coins, not {sorted(params)}")
-    return spot_params_of(params["blocks"], params["coins"])
+    if set(params) - {"levels"} != {"blocks", "coins"}:
+        raise ValueError(f"the parameters are blocks and coins, and levels where two, not {sorted(params)}")
+    out = spot_params_of(params["blocks"], params["coins"], params.get("levels", 1))
+    if out != dict(params):
+        raise ValueError("levels is named only where it is 2")
+    return out
 
 
 class Unavailable(Exception):
@@ -666,15 +671,20 @@ class TwoStageVerifier(SpotVerifier):
 
 
 PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, ZK_SERVER: ZkServer, WORKERS: Workers, VERIFIER: Verifier})
+def _spot_at(params: Mapping[str, Any]) -> ProtocolDef:
+    """SPOT[Flock]'s definition at the parameters' ``levels``: two stages at 2, else one."""
+    return SPOT_TWO_PROTOCOL if params.get("levels") == 2 else SPOT_PROTOCOL
+
+
 SPOT_PROTOCOL = ProtocolDef(SPOT_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
-                                            PROOF_SERVER: ProofServer, VERIFIER: SpotVerifier})
+                                            PROOF_SERVER: ProofServer, VERIFIER: SpotVerifier}, choose=_spot_at)
 SPOT_TWO_PROTOCOL = ProtocolDef(SPOT_TWO_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
                                                     PROOF_SERVER: TwoStageProofServer, VERIFIER: TwoStageVerifier})
-PROTOCOLS = {ID: PROTOCOL, SPOT_ID: SPOT_PROTOCOL, SPOT_TWO_ID: SPOT_TWO_PROTOCOL}
+PROTOCOLS = {ID: PROTOCOL, SPOT_ID: SPOT_PROTOCOL}
 
 
 __all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "ZK_SERVER", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
            "NO_CASE", "PROOF_SERVER", "PROTOCOL", "PROTOCOLS", "SPOT_ID", "SPOT_MANIFEST", "SPOT_PROTOCOL", "SPOT_SCHEMAS",
-           "SPOT_TWO_ID", "SPOT_TWO_MANIFEST", "SPOT_TWO_PROTOCOL", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS",
+           "SPOT_TWO_MANIFEST", "SPOT_TWO_PROTOCOL", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS",
            "Challenger", "ZkServer", "InferenceServer", "ProofServer", "SpotVerifier", "TwoStageProofServer",
            "TwoStageVerifier", "Unavailable", "Verifier", "Workers", "ids_of", "params_of", "spot_params_of"]
