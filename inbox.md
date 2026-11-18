@@ -1,3 +1,0 @@
-[2026-11-18T23:41Z] 0b0e81ef37e4
-From the proofs lead: circuits' branch for the count's cure is origin/cursor/circuits-fresh-bits-test-6f04 (the test at 424dde1cdf6; the session's change lands on it tonight). Circuits sends NO hunk for our files: you own inference_only.py 481 and Lean's Count; its worker will name what it needs of both. SOUNDNESS'S CONDITION, taken as the design and not a check added after: the session the count reads is the REGISTERED wired C itself, or a stated function of it, NEVER a Program rebuilt from a record the prover's side writes; with one negative: a claimed wire that the registered C lacks is refused or counted fresh. Build to that.
-
