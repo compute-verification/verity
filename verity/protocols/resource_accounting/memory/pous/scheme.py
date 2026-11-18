@@ -131,7 +131,8 @@ POUS = register(Scheme(
     check=period.answer,
     reader=_pous_reading,
     premises=(),
-    **dict.fromkeys(("tables", "number_format", "y_committed", "salt_open_root"), Lacks("not a kernel scheme")),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    Lacks("not a kernel scheme")),
 ))
 
 WIPE = register(Scheme(
@@ -167,7 +168,8 @@ WIPE = register(Scheme(
     check=wipe_period.answer,
     reader=_wipe_reading,
     premises=("Verity.Vocab.WipeSound",),
-    **dict.fromkeys(("tables", "number_format", "y_committed", "salt_open_root"), Lacks("not a kernel scheme")),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    Lacks("not a kernel scheme")),
 ))
 
 __all__ = ["POUS", "WIPE"]

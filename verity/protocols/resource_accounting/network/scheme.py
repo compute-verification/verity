@@ -142,7 +142,8 @@ NETWORK_ATTESTER = register(Scheme(
     check=S.Lacks("the network attester's verifier of record is its owner's to declare"),
     reader=_reading,
     premises=S.Lacks("the network attester's premises are its owner's to name"),
-    **dict.fromkeys(("tables", "number_format", "y_committed", "salt_open_root"), S.Lacks("not a kernel scheme")),
+    **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
+                    S.Lacks("not a kernel scheme")),
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",

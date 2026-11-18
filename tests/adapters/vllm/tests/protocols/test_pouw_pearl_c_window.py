@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.commitments import domains as DM
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
@@ -72,7 +73,7 @@ def test_w_registers_each_retained_timed_rounds_calls_under_the_rounds_served_nu
     passes = served(tmp_path)
     w = PWR.write(tmp_path / "out" / "w.json", passes, [2, 3])
     assert json.loads((tmp_path / "out" / "w.json").read_text()) == w
-    assert (w["format"], w["protocol"], w["previous"]) == (REG.FORMAT_V2, REG.PROTOCOL, None)
+    assert (w["format"], w["protocol"], w["previous"]) == (DM.REGISTRATION, DM.ONE_STAGE_PROTOCOL, None)
     assert w["window"] == {"kind": "served", "entry": ENTRY, "scheme": SCHEME, "salt": SALT.hex(), "version": PWR.VERSION}
     assert PWR.version_of(w) == PWR.VERSION == 2
     assert [e["value"] for e in w["registered"]] == ["pearl-a/2/0", "pearl-y/2/0", "pearl-a/2/1", "pearl-y/2/1",

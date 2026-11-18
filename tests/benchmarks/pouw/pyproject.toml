@@ -163,8 +163,6 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "security/Proofs/ResourceAccounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/resource_accounting/compute/pouw/verifier/receipts", "benchmarks/pouw/filler", "verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler",
           "calibration/machine_model", "benchmarks/pouw/README.md",
-          # test_mma_gate runs torch_gpu's build gate, which reads the build through verity/protocols/resource_accounting/compute/pouw/prover/sass_gate.py's mma_gate
-          "benchmarks/kernels/s8_linear/sass_gate.py",
           # ../../../benchmarks/pouw/pearl_c4/replay.py, ../../../benchmarks/pouw/hidden_zk/stage.py and test_pearl_c4_replay load Pearl-C4's scheme, circuit and vectors
           "verity/protocols/experimental/pearl_c4", "verity/protocols/experimental/__init__.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",

@@ -275,10 +275,16 @@ class Scheme:
     accept or names its refusal; ``reader``, which takes its row as the runner read it from what its piece wrote
     (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`; and ``premises``,
     each Lean `Prop`, by name, that its charge or bound is proved under, empty where its instance takes none (an
-    empty tuple claims that), which `bound` carries and the record writes beside the scheme's figure. ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
-    ``t/...``; ``number_format``, the number format of the output y its blocks hand the served model (``bf16``); and
-    ``y_committed``, whether each of its calls commits that y; and ``salt_open_root``, the root its salt coin is
-    opened after, a function of the weights' root and the salt epoch's number.
+    empty tuple claims that), which `bound` carries and the record writes beside the scheme's figure.
+    ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
+    ``t/...``; ``output_format``, the number format the output y leaves its blocks in for the served model
+    (``bf16``), not the format of the arithmetic that made it; ``product_family``, the number family of its useful
+    products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
+    FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
+    commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
+    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
+    otherwise.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -322,9 +328,11 @@ class Scheme:
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
     premises: tuple[str, ...] | Lacks = UNDECLARED
     tables: tuple[str, ...] | Lacks = UNDECLARED
-    number_format: str | Lacks = UNDECLARED
+    output_format: str | Lacks = UNDECLARED
+    product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
+    kernels: Callable[..., str] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
