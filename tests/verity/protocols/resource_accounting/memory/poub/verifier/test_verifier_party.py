@@ -126,8 +126,10 @@ def test_the_party_follows_period_json() -> None:
     assert wired == Side("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
     assert verifier_party.placement("n0", "n0")["trusted-device"].startswith("unmet: ")
     held = verifier_party.placement("n0", "auditor-host")
-    assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
-    assert held["trusted-device"].startswith("holds: ")
+    machine, prover = verifier_party.VERIFIER_MACHINE, verifier_party.mc.PROVER_MACHINE
+    assert held["parties"] == {"challenger": machine, "prover": prover, "verifier": machine}
+    assert held["trusted-device"] == f"holds: the verifier and its challenger ran on {machine}, not on {prover}"
+    assert "auditor-host" not in repr(held) and "n0" not in repr(held), held
 
 
 class Handed(Exception):
