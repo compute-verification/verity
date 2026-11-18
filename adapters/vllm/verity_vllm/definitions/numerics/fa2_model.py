@@ -62,16 +62,28 @@ def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
         _lib = _jit.load(build, SOURCES)
-        _lib.fa2_rows.restype = None
-        _lib.fa2_rows.argtypes = (
-            [ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3
-            + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 5
-        )
+        _jit.declare(_lib, "fa2_rows", ROWS_ARGTYPES)
         for name in ("mufu_ex2_words", "mufu_rcp_words"):
-            fn = getattr(_lib, name)
-            fn.restype = None
-            fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
+            _jit.declare(_lib, name, [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p])
+        _jit.declare(_lib, "fa_s_words", [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+                                          ctypes.c_int, ctypes.c_void_p])
     return _lib
+
+
+#: `fa2_rows`' and `fa3_rows`' arguments: Q, K, V, KVH, D, kvh, col_limit, n_block_max, nrows, kBlockN, scale_log2, the ex2 and
+#: rcp tables, out, out_f32, flags
+ROWS_ARGTYPES = ([ctypes.c_void_p] * 3 + [ctypes.c_int, ctypes.c_int] + [ctypes.c_void_p] * 3
+                 + [ctypes.c_int, ctypes.c_int, ctypes.c_float] + [ctypes.c_void_p] * 5)
+
+
+def s_words(q: np.ndarray, k: np.ndarray, *, hopper: bool = False) -> np.ndarray:
+    """The S words `fa2_rows` (``hopper``: `fa3_rows`) computes for each query row of ``q`` (n, D) u16 against each key row of
+    ``k`` (nkeys, D) u16: (n, nkeys) u32, the chain of that entry point's own tensor-core step (`fa_s_words`)."""
+    q, k = np.ascontiguousarray(q, dtype=np.uint16), np.ascontiguousarray(k, dtype=np.uint16)
+    (n, D), nk = q.shape, k.shape[0]
+    s = np.zeros((n, nk), np.uint32)
+    lib().fa_s_words(int(hopper), q.ctypes.data, k.ctypes.data, n, nk, D, s.ctypes.data)
+    return s
 
 
 # ---- MUFU tables --------------------------------------------------------------------------------
