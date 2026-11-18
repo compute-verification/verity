@@ -20,7 +20,7 @@ Program gives it; its parameter bits are the block's input port bits in order, i
 
 namespace FlockSoundness.Assumptions
 
-open Flock Flock.Tmpl Spot.Sampling FlockSoundness.SparseRows
+open Flock Flock.Tmpl
 
 /-- **The template `lower` writes of Definition `d` computes `d`**: wherever the rows of its unrolled net hold with the
 constant 1, output port bit `k` of every output leaf `k` of `d` is `Prog.evalBool P d`'s bit `k` on the input port bits
