@@ -10,7 +10,8 @@
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   Inside pytest it writes nothing into the research run the process started under (`refuse_the_started_run`).
   A trial run (`VERITY_BENCH_TRIAL` set to anything but 0, `is_trial`) writes each measurement to
-  `out/trial-measurements.json` instead, and its result says ``trial: true``: a trial's numbers reach no metric's line.
+  `out/trial-measurements.json` instead, and its result says ``trial: true``: a trial's numbers reach no metric's line,
+  and every record step refuses a labelled trial with `trial_why`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once, and
   `writer(out, kind)` writes a result of that `kind`, the artifact kind `research` stores it as.
   `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
@@ -67,6 +68,7 @@ import numbers
 import os
 import platform
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -301,6 +303,20 @@ def trial_attempt(attempt: Mapping[str, Any]) -> bool:
     """Whether `research run` started the attempt as a trial (`--env VERITY_BENCH_TRIAL=1`, its ``params.env``)."""
 
     return is_trial((attempt.get("params") or {}).get("env") or {})
+
+
+def trial_why(run: str, attempt: Mapping[str, Any], result: Mapping[str, Any] | None = None) -> str | None:
+    """Why a labelled `run` is never of record, where it is a trial: its `result` says ``trial`` (passed where the
+    record step reads it) or its attempt set `TRIAL`; with the launch that makes it of record, the same command and
+    `--env` without the variable. None where it is no trial."""
+
+    if not ((result or {}).get("trial") is True or trial_attempt(attempt)):
+        return None
+    params = attempt.get("params") or {}
+    env = "".join(f" --env {shlex.quote(f'{k}={v}')}" for k, v in sorted((params.get("env") or {}).items()) if k != TRIAL)
+    argv = shlex.join(str(word) for word in params.get("argv") or ())
+    return (f"{run} is a trial run ({TRIAL}), and a trial is never of record: to make one of record, launch the same "
+            f"command without {TRIAL}: `research run ...{env} -- {argv or 'COMMAND'}`")
 
 
 _TRIALS_SAID: set[Path] = set()

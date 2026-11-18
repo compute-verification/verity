@@ -389,7 +389,9 @@ proof block and the last a build:
 | `benchmarks/proof-layer-proof-bytes` | one proof's bytes over its sampled proof blocks: an a5, `layers.sh` or prove_path result's one rep's (its reps are timed repeats of one proof, and differing reps give none). prove_path's own `per_unit` sums the reps, so its benchmark result reads them from the arm's rank or window `summary.json`, and prints `every rep's` only where no such file states them |
 | `benchmarks/proof-layer-build-seconds` | the build step's wall seconds, a5's only, with its `build_cache`; null where `steps.txt` has no `build cache:` line |
 
-Each measurement's fields name its `prover_batch`, and the build's its `build_cache`. Under each id it writes three
+Each measurement's fields name its `prover_batch` and its `prover_device` (`processors` where the table's device
+column states the CPU, else that column's words: the card in a member's name is the one the workload was served on),
+and the build's its `build_cache`. Under each id it writes three
 measurements, in this order, each member the model and card (`benchmarks/README.md`'s `member`) an a5 output's
 machine.txt states, the model of its row dir's row and the `short` of the card record (`kit.card_short`) whose
 `driver` holds the `nvidia-smi -L` name of the card it took, then the layer's words. A name no card record holds
@@ -400,7 +402,9 @@ writes no measurement, and the layer's note says why:
 3. the sampling layer last, member `llama-3.2-1b-h200`: Flock with zero knowledge at the sampling plan, the system as
    served, and the one the metric's title, unit and axis are for.
 
-Where no output states a model and card it writes none, and outputs that state two are refused.
+A batch study (`--batch LO-HI`, which `proof_layers.sh` passes for an `A5_STEPS` other than the partition file's own
+steps) ends every member in its batch (`llama-3.2-1b-h200-flock-b16` for 1-16), so the plain members hold the own batch
+alone. Where no output states a model and card it writes none, and outputs that state two are refused.
 
 prove_path and a5 both give these figures by dividing a member's session timing by its proof blocks sampled
 (`draw_counts`), as prove_path's own `per_unit` does. A member whose timing has no count of sampled proof blocks (one

@@ -1313,8 +1313,6 @@ class Landing:
             v = max((v for v in verdicts if v[1] and v[2] == later), key=lambda v: v[0])
             return old, (f"{v[3].by.lstrip('@')}'s hold at {later[:12]} ({v[3].ref or 'no reason'}), a later head, voids the land "
                          f"at {old[:12]}"), False
-        if _who(CI) in {_who(o) for o in owners if o}:
-            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
         d = self.delta(old, m.head, landed, trusted)
         return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
 

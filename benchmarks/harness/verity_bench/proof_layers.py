@@ -51,7 +51,9 @@ from verity_bench.proof_layers_parse import (
 from verity_bench.proof_layers_print import (
     document,
     has_number,
+    batch_word,
     measured,
+    prover_device,
     render,
 )
 from verity_bench.proof_layers_result import (
@@ -97,6 +99,7 @@ __all__ = [
     "Result",
     "Unreadable",
     "add_arguments",
+    "batch_word",
     "detect",
     "document",
     "fetch",
@@ -104,6 +107,7 @@ __all__ = [
     "locate",
     "measured",
     "per_unit",
+    "prover_device",
     "read",
     "read_a5",
     "read_layers_sh",
@@ -551,9 +555,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         parser.add_argument(f"--{layer}", metavar="DIR|RUN",
                             help=f"the output the benchmark result for {named[layer]} is read from: a run's out/ directory, "
                                  "or a run id fetched through the store")
+    parser.add_argument("--batch", metavar="LO-HI",
+                        help="a batch study's request steps, not the partition file's own scope: every member it writes "
+                             "ends in that batch (-b16 for 1-16), so the plain members hold the own batch alone")
 
 
 def run(args: argparse.Namespace) -> int:
     results = [read(layer, getattr(args, layer)) for layer in LAYERS]
-    kit.report(REPORT, render(results), document(results), measured(results, getattr(args, "metrics", None) or {}))
+    kit.report(REPORT, render(results), document(results),
+               measured(results, getattr(args, "metrics", None) or {}, getattr(args, "batch", None)))
     return 0 if has_number(results) else 1

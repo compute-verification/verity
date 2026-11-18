@@ -1489,14 +1489,15 @@ def cut_of(t: Any) -> list[tuple[Any, int]] | None:
     return None if cut is None else cut(t)
 
 
-def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, str], list[dict]]:
-    """Of ``entries``, the Definitions `block_held.held` holds past the block, each with why, and a ``block/stale-hold``
-    failure for each held one checked whole whose block fits (a cut Call's, each unit of its cut); over the whole catalog
-    (``catalog``: an unsharded ``--all`` or every shard of one), a ``block/absent-hold`` failure for each held id no entry
-    names, which nothing is checked as any longer."""
+def _held_blocks(entries: list[dict], catalog: bool = False,
+                 holds: dict[str, tuple[str, str]] | None = None) -> tuple[dict[str, str], list[dict]]:
+    """Of ``entries``, the Definitions `block_held.held` (or ``holds``, what it returned) holds past the block, each with why,
+    and a ``block/stale-hold`` failure for each held one checked whole whose block fits (a cut Call's, each unit of its cut);
+    over the whole catalog (``catalog``: an unsharded ``--all`` or every shard of one), a ``block/absent-hold`` failure for each
+    held id no entry names, which nothing is checked as any longer."""
     from . import block_held as BH
 
-    HELD = BH.held()
+    HELD = BH.held() if holds is None else holds
 
     def fix(d: str) -> str:
         return f"delete its entry ({HELD[d][1]}) and lower MAX (block_held.py)"
@@ -1795,6 +1796,17 @@ def classified(r: dict) -> dict:
     return {**r, "warnings": [*r.get("warnings", ()), *F.warnings]}
 
 
+def _counted(e: dict, held: dict[str, str]) -> list[dict]:
+    return [f for f in e.get("failures", []) if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held]
+
+
+def counted(e: dict, holds: dict[str, tuple[str, str]]) -> tuple[int, str | None]:
+    """How many of target ``e``'s failures `summarize` counts, a ``block/stale-hold`` included, and why ``holds``
+    (`block_held.held`) holds it past the block, None when it doesn't."""
+    held, stale = _held_blocks([e], holds=holds)
+    return len(_counted(e, held)) + len(stale), held.get(e.get("definition") or e.get("target"))
+
+
 def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     """Totals over entries: failures by name (`ok` is none: whether one may stay red is drive's policy, never the runner's),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
@@ -1811,8 +1823,7 @@ def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     warns: dict[str, dict] = {}
     held, stale = _held_blocks(entries, catalog)
     for e in entries:
-        fails.update((f["name"], f) for f in e.get("failures", [])
-                     if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held)
+        fails.update((f["name"], f) for f in _counted(e, held))
         warns.update((w["name"], w) for w in e.get("warnings", []))
     fails.update((f["name"], f) for f in stale)
     fails, warns = list(fails.values()), list(warns.values())
@@ -1862,6 +1873,6 @@ def report(targets: list[dict], opts: Options, catalog: bool = False) -> dict:
 
 
 __all__ = ["Findings", "Options", "SCHEMA", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
-           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "cut_of", "dead_gates",
+           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "counted", "cut_of", "dead_gates",
            "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
            "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]

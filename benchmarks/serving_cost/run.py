@@ -194,20 +194,21 @@ def circuit_verdict(run: str | None, bindings: list[str] | None) -> dict:
         refuse("exact", "no circuit-check verdict on the real model's bindings: give --circuit-check RUN, "
                         f"{CIRCUIT_CHECK_RUN}, and --bindings NAME..., the bindings it must hold. No set in the tree "
                         "names GLM-5.3's served bindings for circuit-check (they are bindings of the sidecars under "
-                        "adapters/vllm/verity_vllm/definitions/registry/), and no command stores circuit-check's "
-                        "report as a result of its own: both are circuits'")
+                        "adapters/vllm/verity_vllm/definitions/registry/); circuits' command for that set is coming")
     if not RUN_ID.fullmatch(run):
         refuse("exact", f"--circuit-check {run!r} is not a run id: give {CIRCUIT_CHECK_RUN}")
     doc = read(fetch(run, [CIRCUIT_CHECK]) / CIRCUIT_CHECK)
     if doc.get("schema") != CIRCUIT_CHECK_SCHEMA:
         refuse("exact", f"run {run} holds no circuit-check report at {CIRCUIT_CHECK} (schema {doc.get('schema')!r}): "
                         f"give {CIRCUIT_CHECK_RUN}")
-    names = {e.get("definition") or e.get("target") or e.get("subcircuit") or e.get("row")
-             for e in doc.get("targets") or ()}
+    held = {e["target"]: e for e in doc.get("targets") or () if isinstance(e, dict) and e.get("target")}
     summary = doc.get("summary") or {}
-    missing = [b for b in bindings if b not in names]
-    return {"run": run, "ok": bool(summary.get("ok")) and not missing, "targets": len(names), "missing": missing,
-            "failures": summary.get("failure_names") or []}
+    missing = [b for b in bindings if b not in held]
+    unchecked = [b for b in bindings if b in held and held[b].get("warnings")]
+    return {"run": run, "ok": summary.get("ok") is True and not missing, "targets": len(held), "missing": missing,
+            "failures": summary.get("failure_names") or [],
+            "unchecked": {"count": len(unchecked), "of": len(bindings), "bindings": unchecked,
+                          "report": summary.get("unchecked") or {}}}
 
 
 def exact(a: argparse.Namespace) -> int:
@@ -229,7 +230,11 @@ def exact(a: argparse.Namespace) -> int:
               + ("passed" if cc["ok"] else "failed")
               + f" over {cc['targets']} targets"
               + (f", failing {', '.join(cc['failures'])}" if cc["failures"] else "")
-              + (f", holding none of {', '.join(cc['missing'])}" if cc["missing"] else ""))
+              + (f", holding none of {', '.join(cc['missing'])}" if cc["missing"] else "")
+              + (f"; {(u := cc['unchecked'])['count']} of the {u['of']} named bindings unchecked (a warning, which "
+                 f"never fails{': ' + ', '.join(u['bindings']) if u['bindings'] else ''}; the report's "
+                 f"`summary.unchecked`: {u['report'].get('items', 0)} items on {u['report'].get('definitions', 0)} "
+                 "definitions)"))
     out = place(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / Path(EXACT).name).write_text(json.dumps({

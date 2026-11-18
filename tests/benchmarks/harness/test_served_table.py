@@ -278,6 +278,35 @@ def test_a_labelled_run_is_its_protocols_row_over_a_newer_unlabelled_one(tmp_pat
     assert _commit_rows(table)["b8-p512-mixed"]["run"] == "r20261024-030000-0002"
 
 
+def test_a_labelled_trial_is_left_out_of_its_record_and_the_live_rows_with_why(tmp_path):
+    producer = Producer(tmp_path)
+    kept = "r20261024-020000-0001"
+    producer.ran(kept, COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0))
+    producer.ran("r20261024-030000-0002", COMMIT_SPEC, "b32-p512-mixed", _result("b32-p512-mixed", 9.0),
+                 env={"VERITY_BENCH_TRIAL": "1"})
+    for run in (kept, "r20261024-030000-0002"):
+        producer.label(run, "run_of_record", "commit", "2026-10-24T05:00:00Z")
+    producer.live("r20261024-210000-0003", *_live_summary([16.0, 16.0, 16.0], [4.0, 4.0, 4.0]))
+    producer._attempt("r20261024-210000-0003", "bash", {"env": {"VERITY_BENCH_TRIAL": "1"}},
+                      {"result": None, "run_record": "art:x"}, validation=None, rc=0)
+    live = producer.table([{"device": "H200", "run": "r20261024-210000-0003", "arm": LIVE_ARM,
+                            "control": LIVE_CONTROL}], "live")
+    producer.label(live, "run_of_record", served_table.LIVE, "2026-10-24T05:00:01Z")
+    of_record = served_table.Protocol("of record", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit",
+                                      record="commit")
+
+    table = served_table.build(store=_fresh(tmp_path, producer), root=tmp_path, added=lambda spec: ADDED,
+                               log=lambda _: None, protocols=(of_record,), factors=BY_SPEC["factors"], breakdowns=())
+    assert [(row["point"], row["run"]) for row in table["rows"]] == [("b8-p512-mixed", kept), ("—", None)]
+    assert table["live"] == []
+    why = {s["run"]: s["why"] for s in table["skipped"]}
+    assert set(why) == {"r20261024-030000-0002", "r20261024-210000-0003"}
+    assert all(w.startswith(f"{run} is a trial run (VERITY_BENCH_TRIAL), and a trial is never of record") and
+               w.endswith(" -- COMMAND`") for run, w in why.items())
+    passed_over = served_render.render(table).split("Passed over")[1]
+    assert all(f"{run} is a trial run" in passed_over for run in why)
+
+
 def test_local_only_reads_the_catalog_alone(tmp_path):
     producer = Producer(tmp_path)
     producer.ran("r20261024-020000-0001", COMMIT_SPEC, "b8-p512-mixed", _result("b8-p512-mixed", 1.0))
