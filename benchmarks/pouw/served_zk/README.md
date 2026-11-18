@@ -2,15 +2,14 @@
 
 This directory takes a served Pearl-C execution phase through the proof system: a retained served pass, committed as one
 audit execution phase in the ZK statement's format, is registered, sampled once, proved hidden tile by tile under Flock
-`--zk` and judged as PoUW's verifier says, with every control refused. It also measures what committing a served call's
-rows as hm96-sha512 leaves costs on the GPU beside the scheme's own rows.
+`--zk` and judged as PoUW's verifier says, with every control refused.
 
 ## Try it
 
 Without a GPU, check the host side the row commitments' gates rest on:
 
 ~~~sh
-uv run pytest tests/benchmarks/pouw/test_served_zk_rows_bench.py -q
+uv run pytest tests/benchmarks/pouw/test_served_zk_statement.py -q
 ~~~
 
 It prints `3 passed`.
