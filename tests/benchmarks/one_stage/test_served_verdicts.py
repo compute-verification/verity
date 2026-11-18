@@ -918,14 +918,15 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
 
 
 def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
-    """The answer the bandwidth session's piece writes of an accepted session (`served_bandwidth.answer`) names the term
+    """The answer the bandwidth session's piece writes of an accepted session (`p2_stage.bandwidth.public_answer`) names the term
     its eps leaves out, PoUB's ledger's object (`ledger.NAMED_TERMS`). The block record, which `block_record.check`
     holds, carries it beside the error sum under the bandwidth audit's name, the sum's number the answer's eps, and the
     accept's clause in the composed reason says the error with the term beside it in the ledger's own words
     (`ledger.DELTA_FORM` with the error for δ). At an eps the record establishes at neither δ, the clause that says so
     prints the error the same way. The same answer with the term struck from its profile is the bandwidth audit's
     error: the composed verdict is ``reject``, with no block record."""
-    import served_bandwidth as SB
+    from verity.protocols.resource_accounting.memory.poub.prover.p2_stage import bandwidth as BW
+    from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties
 
     beside = ledger.DELTA_FORM.removeprefix("δ")
     (d := tmp_path / "bandwidth").mkdir()
@@ -934,10 +935,11 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     def written(delta: str, samples: int) -> dict:
         """The piece's answer of an accepted session at ``delta`` that sampled ``samples`` openings: its eps is
         ``delta`` + ``samples``/2^64."""
-        session = {"registration": {"digest": "cd" * 64},
-                   "answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
+        session = {"answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
                               "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
-        return SB.answer(session, "beside the served window", 1000)
+        judged = p2_parties.core_answer({"protocol": p2_parties.PROTOCOL, "registration": "cd" * 64,
+                                         **session["answer"]})
+        return BW.public_answer(judged, bytes(64), "beside the served window", 1000, tmp_path)
 
     def composed(answer: dict) -> tuple:
         (d / "answer.json").write_text(json.dumps(answer))
@@ -6979,13 +6981,11 @@ def test_a_missing_onsite_pieces_file_is_refused(tmp_path):
     ((), (), ("", "", "")),
     (("benchmarks/pous/streamed_wipe/served_wipe.sh",), (), ("wipe", "", "")),
     (("benchmarks/pous/served_piece.sh",), ("vy-auditor2-pous",), ("", "pous", "collect")),
-    (("benchmarks/one_stage/served_bandwidth.sh", "store/setup.json"), ("vy-auditor2-bw",), ("", "", "session")),
-    (("benchmarks/one_stage/served_bandwidth.sh",), ("vy-auditor2-bw",), ("", "", "")),
 ])
 def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_node_its_key(tmp_path, files, keys, want):
     """`onsite_piece_commands` (benchmarks/pous/onsite_pieces.sh) sets WIPE_CMD where the tree has the wipe's piece,
     POUS_CMD where it has PoUS's and the node the memory attester's key, and BANDWIDTH_CMD to collect PoUS's session
-    then, else to the bandwidth session where the tree has it and the node the verifier's key and its registered store."""
+    then, and to nothing without it."""
     tree, home = tmp_path / "tree", tmp_path / "home"
     for f in files:
         (tree / f).parent.mkdir(parents=True, exist_ok=True)
@@ -6997,8 +6997,7 @@ def test_onsite_pieces_defaults_are_set_where_the_tree_has_each_piece_and_the_no
                           'printf "%s\\n" "${WIPE_CMD-}" "${POUS_CMD-}" "${BANDWIDTH_CMD-}"'],
                          env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree), "BW_STORE": str(tree / "store")},
                          check=True, capture_output=True, text=True).stdout.split("\n")[:3]
-    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_bandwidth.py collect",
-             "session": "served_bandwidth.sh"}
+    marks = {"wipe": "streamed_wipe/served_wipe.sh", "pous": "served_piece.sh", "collect": "served_piece.py collect-bandwidth"}
     assert all((marks[w] in g) if w else g == "" for w, g in zip(want, got)), got
 
 
