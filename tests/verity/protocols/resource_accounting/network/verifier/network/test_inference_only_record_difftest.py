@@ -382,13 +382,14 @@ def test_a_weight_its_units_share_is_held(shaped):
         r = vectors.results(m["case"])
         program = vectors.reference.desc_program(m["case"]["instance"]["program"]) if stage != "program" else None
         if stage is None:
-            assert ref.shared_of(program), what
+            assert ref.shared_of(program, ref.row_runs(program)[1]), what
             assert r["detail"] == held["detail"] and r["public"] == held["public"], what
         else:
             message = {"own-rows": ref.OWN_ROWS, "shared-unheld": ref.SHARED_UNHELD}.get(stage)
             assert r["detail"] == r["public"] == {"error": stage, **({"message": message} if message else {})}, what
     gemm = vectors.reference.desc_program(shaped["2x3 Gemm's weights shared in turn, held"]["case"]["instance"]["program"])
-    assert any(inner // (count // gemm.root.body.nodes[k].n) > 1 for k, _, _, _, inner, count in ref.shared_of(gemm))
+    shared = ref.shared_of(gemm, ref.row_runs(gemm)[1])
+    assert any(inner // (count // gemm.root.body.nodes[k].n) > 1 for k, _, _, _, inner, count in shared)
     assert ROWS["2x3 a row every unit shares"] == "own-rows"
 
 
