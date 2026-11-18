@@ -12,7 +12,8 @@ A registered class is served as its unwired Program with explicit positions: eac
 names its writer, the writer's output field and the leaf there. Two named `Prop`s, stated and not proved.
 
 `Vocab.PositionsCarry`, owed a proof from the per-block check and the sample: on a play the sampled proofs accept, all
-but a `2ε` share of the units hold, at each input position, the writer's committed output at the position named.
+but an `ε` share of the units hold, at each input position, the value the writer's output is committed to at the
+position named.
 
 `Vocab.CutIsRegistered`, open until the registration's check exists: the unwired Program and positions the sampled
 proofs are verified against are the cut of the registered wired Program. Both read the registered wired Program and
@@ -60,14 +61,15 @@ noncomputable def uncarried (named : (θ : ByteArray) → (F : Array ByteArray) 
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (X : (V.circuitOf θ F).Trace) : Finset (Fin (V.units θ F)) :=
   Finset.univ.filter fun u => u ∈ unbound (V.partsOf θ F) (V.Opens θ F c) X ∨ ¬ V.Carries named θ F c X u
 
-/-- **The positions carry** (`WiresSound` over the registered reads' positions `named`): on a play the sampled proofs
-accept, all but at most a `2ε` share of the units carry their inputs, but for twice the sampled proofs' error. -/
+/-- **The positions carry** (`SpotSound`'s form over the registered reads' positions `named`): on a play the sampled
+proofs accept, all but at most an `ε` share of the units are bound and carry their inputs, but for the sampled proofs'
+error. -/
 def PositionsCarry (k : Verity.Registration.Composite)
     (named : (θ : ByteArray) → (F : Array ByteArray) → Fin (V.circuitOf θ F).N → Option Place) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k .sampled o ∧
-        ¬ ((V.uncarried named θ F c (V.extract θ F c σ)).card : ℝ) ≤ 2 * (V.certOf θ).ε * V.units θ F)
-      (V.game θ F c) σ ≤ 2 * V.error .sampled θ F c σ
+        ¬ ((V.uncarried named θ F c (V.extract θ F c σ)).card : ℝ) ≤ (V.certOf θ).ε * V.units θ F)
+      (V.game θ F c) σ ≤ V.error .sampled θ F c σ
 
 /-- **The unwired Program is the cut of the registered one**: on an accepted case, the Program the circuit file
 decodes to, with the positions `posOf` reads, is the cut (`CutOf`) of the registered wired Program `wired` under the
