@@ -1,4 +1,4 @@
-"""The verifier's check of how the charges' carry rows join from window to window (`protocol/charge-chain.md`): the
+"""The verifier's check of how the charges' carry rows join from window to window (`../verifier/protocol/charge-chain.md`): the
 session's first carry-in is the book's first carry under its public salt, and each later one the last carry-out.
 `check_chain` is `charge_chain.ChargeLink_v1`'s (`VALUE` "replay-charge"); `window_check_chain` is
 `window_charge.ChargeLink_v2`'s."""

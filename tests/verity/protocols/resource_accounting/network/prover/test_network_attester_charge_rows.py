@@ -12,7 +12,7 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
 from verity.protocols.proofs.spot.prover import produced as PP
-from verity.protocols.resource_accounting.network.verifier import charge_check as CK
+from verity.protocols.resource_accounting.network.prover import charge_check as CK
 from verity.protocols.resource_accounting.network.prover import charge_rows as CR
 
 FIXTURE = Path(__file__).parents[1] / "verifier" / "fixtures" / "arith_encode_vectors.json"
