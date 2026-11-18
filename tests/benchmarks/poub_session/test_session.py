@@ -1127,13 +1127,17 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
         return {k: x for k, x in (head | (hello or {})).items() if k not in drop}
 
     p.conn.send = lambda head, body=b"": send(greet(head) if head["type"] == "hello" else head, body)
-    heard = []
+    heard, raised = [], []
 
     def prove() -> None:
         try:
             p.register(codec=P512)
         except wire.Closed as e:
             heard.append(str(e))
+        except BaseException as e:
+            raised.append(e)
+            b.close()
+            raise
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
@@ -1144,6 +1148,11 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
         v.register()
     except ValueError as e:
         refused = e
+    except wire.Closed:
+        if not raised:
+            raise
+        th.join()
+        raise raised[0]
     th.join()
     v.stop()
     return v, refused, heard
