@@ -1,9 +1,9 @@
 """The replay ladder: on each model of a ladder of pinned checkpoints, does replaying a saturated served window under its
 recorded schedule give the served tokens, compiled, run after run, and how far do the tokens depend on the batch?
 
-    ladder.py serve   --model ID --c4 C4.json.gz --out DIR [--span-s 60] [--over 1.45] [--burst 800] [--docs N]
-    ladder.py replay  --model ID --out DIR --index I
-    ladder.py alone   --model ID --out DIR [--requests 64]
+    ladder.py serve   --model ID --c4 C4.json.gz --private P --out DIR [--span-s 60] [--over 1.45] [--burst 800] [--docs N]
+    ladder.py replay  --model ID --private P --out DIR --index I
+    ladder.py alone   --model ID --private P --out DIR [--requests 64]
     ladder.py summary DIR... --out DIR
 
 A model (`LADDER`) is a role of the integration's checkpoints.json, served at the integration's vLLM pin by serve_tax's
@@ -24,6 +24,9 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 - ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (how Inductor
   chose in the processes that served and replayed it, `pin`). A row of output is one request's token at one position; its
   share exact is the window's output tokens less those that differ, over the window's output tokens.
+
+What holds request values stays on the node under ``--private``, a directory outside every run's: the record arm's
+step trace in P/record, each replay's tokens in P/replay-I, the alone requests' tokens in P/alone.
 
 Serving and every replay pin and log Inductor's on-device choices as the environment says (`inductor_pin`); the capacity
 server and each replay's processes log the configs they kept at run time.
@@ -207,7 +210,8 @@ def serve(a: argparse.Namespace) -> int:
         raise SystemExit(f"{a.plan} holds {plan_len} requests, fewer than the window at {rate} req/s for {a.span_s:g} s "
                          f"may send ({S.plan_need({LOAD: rate}, a.span_s, None)}): build a longer one")
     rc = S.main(["run", "--arm", "record", *base, "--rates", f"{LOAD}={rate}", "--span-s", str(a.span_s),
-                 "--plan", str(out / "plan.jsonl"), "--out", str(out / "record")])
+                 "--plan", str(out / "plan.jsonl"), "--private", str(Path(a.private) / "record"),
+                 "--out", str(out / "record")])
     rec = S.arm_metrics(out / "record")
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
@@ -269,7 +273,8 @@ def replay(a: argparse.Namespace) -> int:
         os.environ["LADDER_TOPK_PROBE_OUT"] = str(out / f"replay-{a.index}" / "topk")
         probe_topk()
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
-            "--tp", str(LADDER[a.model].tp), *(["--logprobs"] if a.logprobs else [])]
+            "--tp", str(LADDER[a.model].tp), *(["--logprobs"] if a.logprobs else []),
+            "--private", str(Path(a.private) / f"replay-{a.index}")]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
     return R.main(argv)
@@ -313,14 +318,15 @@ def alone(a: argparse.Namespace) -> int:
            "token_positions_differing": sum(x["positions"] for x in d), "requests_differing": d,
            "engine_ready_s": ready, "wall_s": wall}
     first = out / "replay-1"
-    if (first / "replay_tokens.jsonl.gz").exists():
-        rep = R.read_tokens(first)
+    if (first / "replay.json").is_file() and (kept := S.private_of(first)):
+        rep = R.read_tokens(kept)
         dr = R.token_diff({k: rep[k] for k in served if k in rep}, tokens)
         res["against_replay"] = {"replay": str(first), "requests_tokens_differing": len(dr),
                                  "token_positions_differing": sum(x["positions"] for x in dr)}
     (out / "alone").mkdir(parents=True, exist_ok=True)
     (out / "alone" / "alone.json").write_text(json.dumps(res, indent=1))
-    with gzip.open(out / "alone" / "alone_tokens.jsonl.gz", "wt") as f:
+    (Path(a.private) / "alone").mkdir(mode=0o700, parents=True, exist_ok=True)
+    with gzip.open(R._kept(Path(a.private) / "alone", "alone_tokens.jsonl.gz"), "wt") as f:
         for rid in sorted(tokens):
             f.write(json.dumps({"request": rid, "tokens": tokens[rid]}, separators=(",", ":")) + "\n")
     print(json.dumps({k: res[k] for k in ("model", "requests", "requests_tokens_differing", "token_positions_differing",
@@ -458,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--model", required=True, choices=sorted(LADDER))
     s.add_argument("--c4", required=True)
     s.add_argument("--out", required=True)
+    s.add_argument("--private", required=True, help="a directory outside every run's, for what holds request values")
     s.add_argument("--span-s", type=float, default=60.0)
     s.add_argument("--over", type=float, default=1.45, help="the window's arrival rate over the measured capacity")
     s.add_argument("--burst", type=int, default=800, help="the capacity burst's requests")
@@ -470,12 +477,14 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("replay")
     r.add_argument("--model", required=True, choices=sorted(LADDER))
     r.add_argument("--out", required=True)
+    r.add_argument("--private", required=True, help="a directory outside every run's, for what holds request values")
     r.add_argument("--index", type=int, required=True)
     r.add_argument("--logprobs", action="store_true", help="record each sampled token's logprob and, from the second "
                                                            "replay on, compare them with the first replay's bit for bit")
     al = sub.add_parser("alone")
     al.add_argument("--model", required=True, choices=sorted(LADDER))
     al.add_argument("--out", required=True)
+    al.add_argument("--private", required=True, help="a directory outside every run's, for what holds request values")
     al.add_argument("--requests", type=int, default=64)
     sm = sub.add_parser("summary")
     sm.add_argument("dirs", nargs="+", type=Path)

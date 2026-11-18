@@ -273,15 +273,14 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
     ex = messages.current()
-    for _, r in ex.requests:
-        if isinstance(r, H.ReleaseValue):
-            raise NotImplementedError(f"vllm/adapter-imports-no-protocol: a scheme asks registered value {r.value}'s "
-                                      "storage released and restored, which the adapter does not do yet")
     if fixed := sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)}):
         if len(fixed) > 1 or kw.get("num_gpu_blocks_override") not in (None, fixed[0]):
             raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
                                f"{kw.get('num_gpu_blocks_override')}: one size")
         kw["num_gpu_blocks_override"] = fixed[0]
+    if kw.get("async_scheduling") is None and (want := {r.value for _, r in ex.requests if isinstance(r, H.RequireProperty)
+                                                          and r.property == "async_steps"}):
+        kw["async_scheduling"] = want.pop() if len(want) == 1 else None
     ex.answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
@@ -293,6 +292,9 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     runner = handle.model_runner(llm) if world == 1 else None
     model = runner.get_model() if runner is not None else None
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, admission=admitted)
+    if kw.get("async_scheduling") is not None and resolved_async_scheduling(llm) not in (None, kw["async_scheduling"]):
+        raise RuntimeError(f"the engine was declared with async_steps {kw['async_scheduling']} and vLLM resolved "
+                           f"async scheduling {resolved_async_scheduling(llm)}")
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
         raise RuntimeError(f"execution mismatch after build: the row declares {execution!r} but vllm_config.model_config.enforce_eager="
