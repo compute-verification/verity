@@ -80,7 +80,7 @@ inputs = ["tools/check", ".agents/skills/using-slack/registry.json", "READY.json
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
           "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "security/Proofs/lake-manifest.json", "security/Proofs/lean-audit.json",
-          "tools/research/src/research/checkview.py", "tools/research/src/research/store/custody.py", "tools/research/src/research/store/evict.py",
+          "tools/research/src/research/checkview.py", "tools/research/src/research/store/custody.py", "tools/research/src/research/store/private.py", "tools/research/src/research/store/evict.py",
           "tools/research/src/research/store/fetchset.py", "tools/research/src/research/store/fixtures.py",
           "tools/research/src/research/store/labels_sync.py", "tools/research/src/research/executor.py",
           "tools/research/src/research/store/sealed.py", "tools/research/src/research/telemetry/cancel.py",

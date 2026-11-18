@@ -45,7 +45,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/store/canon.py", "tools/research/src/research/store/cli.py",
           "tools/research/src/research/store/cli_prov.py", "tools/research/src/research/store/derivation.py",
           "tools/research/src/research/store/ids.py", "tools/research/src/research/store/index.py",
-          "tools/research/src/research/store/kinds.py", "tools/research/src/research/store/local.py",
+          "tools/research/src/research/store/kinds.py", "tools/research/src/research/store/local.py", "tools/research/src/research/store/private.py",
           "tools/research/src/research/store/model.py", "tools/research/src/research/store/remote.py",
           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
