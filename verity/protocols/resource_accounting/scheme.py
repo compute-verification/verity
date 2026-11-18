@@ -594,6 +594,32 @@ def register_circuits(name: str, circuits: Circuits) -> Circuits:
     return circuits
 
 
+def order_refusals(listed: Sequence[Scheme]) -> list[str]:
+    """Every reason ``listed``, a configuration's schemes in its order, can't attach in that order, from what each
+    declares, each as `verity.channel.Refused` prints it; empty: it attaches in its own order, which nothing reorders.
+    A scheme is listed after each it ``depends`` on (``requires`` and ``order``, as `verity.config.check` names them),
+    and storage (``needs`` the workload's ``store``) before useful work (``resource`` compute): where two listed
+    schemes wrap one site the earlier listed is the outer, and storage hands useful work the weight (``outer``)."""
+    names = [s.name for s in listed]
+    out = []
+    for i, s in enumerate(listed):
+        if isinstance(s.depends, Lacks):
+            out.append(f"depends: {s.name}'s declaration does not say which schemes it depends on (depends is undeclared)")
+            continue
+        if missing := [d for d in s.depends if d not in names]:
+            out.append(f"requires: {s.name} requires {', '.join(missing)}, which protocols doesn't list")
+        if later := [d for d in s.depends if d in names and names.index(d) > i]:
+            out.append(f"order: {s.name} requires {', '.join(later)}, so protocols lists {', '.join(later)} before {s.name}")
+    work = [i for i, s in enumerate(listed) if s.resource == "compute"]
+    for i, s in enumerate(listed):
+        if s.resource == "memory" and not isinstance(s.needs, Lacks) and "store" in s.needs:
+            if before := [names[j] for j in work if j < i]:
+                out.append(f"outer: {s.name} is storage (it needs the workload's store) and is listed after {', '.join(before)}, "
+                           f"useful work (resource compute); where both wrap one site the earlier listed is the outer, so "
+                           f"protocols lists {s.name} before {', '.join(before)}")
+    return out
+
+
 def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Sequence[int]]]]) -> frozenset[int]:
     """`Verity.Scheme.Placed.credited`: the numbers of the first-level proof blocks that ``schemes`` credit, in the
     numbering the integrity profile's ``credited`` takes. ``strata`` are the registered circuit's first-level proof blocks
@@ -624,5 +650,5 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
 __all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
            "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
-           "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
+           "credited", "declared", "layout", "order_refusals", "register", "register_circuits", "register_process", "settings",
            "unbounded"]

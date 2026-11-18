@@ -338,6 +338,20 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
     assert json.loads(out.stdout) == dict(schemes.DECLARATIONS), "each name maps to the module that registers it"
 
 
+def test_every_reason_a_list_cannot_attach_in_its_order_is_given_from_its_declarations() -> None:
+    base, store = _toy("base", depends=()), _toy("store", resource="memory", needs=frozenset({"store"}), depends=())
+    over = _toy("over", depends=("base", "absent"))
+    work = _toy("work", resource="compute", depends=("base",))
+    assert S.order_refusals([base, store, work]) == []
+    assert S.order_refusals([over, work, base, store, _toy("unsaid")]) == [
+        "requires: over requires absent, which protocols doesn't list",
+        "order: over requires base, so protocols lists base before over",
+        "order: work requires base, so protocols lists base before work",
+        "depends: unsaid's declaration does not say which schemes it depends on (depends is undeclared)",
+        "outer: store is storage (it needs the workload's store) and is listed after work, useful work (resource compute); "
+        "where both wrap one site the earlier listed is the outer, so protocols lists store before work"]
+
+
 def test_a_scheme_attaches_nothing_by_default_and_registers_its_processes(monkeypatch) -> None:
     monkeypatch.setattr(S, "PROCESSES", {})
     assert _toy().requests(None) == () and _toy().attach(None, None) is None
