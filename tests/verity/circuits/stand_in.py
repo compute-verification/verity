@@ -3,6 +3,8 @@ this module loads: the catalog's body where it has one, a stand-in for a primiti
 primitive of `verity` or an adapter with none."""
 from __future__ import annotations
 
+import contextlib
+
 from verity.circuits import boolean as BL
 from verity.circuits import program as PG
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -44,6 +46,18 @@ def _lookup(p: PrimitiveDefinition):
         if getattr(p.evaluate, "__module__", "").split(".")[0] in ("verity", "verity_vllm", "verity_torch"):
             raise
         return stand_in_body(p)
+
+
+@contextlib.contextmanager
+def registered():
+    """This module's lookup inside the block, and the lookup registered before it after: for a suite where another module
+    registers its own."""
+    saved = list(PG._BODY_LOOKUP)
+    PG.register_boolean_bodies(_lookup)
+    try:
+        yield
+    finally:
+        PG._BODY_LOOKUP[:] = saved
 
 
 PG.register_boolean_bodies(_lookup)
