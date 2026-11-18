@@ -98,12 +98,12 @@ class Lean:
         return self.lean.call({"op": "settle", "id": self.checks})
 
 
-def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None, tamper=None) -> tuple[list, dict, list]:
+def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None, tamper=None) -> tuple[list, dict, list, list]:
     """W windows of L = 2 over N registered blocks, each opened by its due re-keys, pages in windows 0, 1 (two appends,
     F = 2) and 2, `PASSES` passes a window over the refresh plan (every block without refresh); `freed` names the chunks
     freed at the start of a window.  Every receipt is sampled and opened, `tamper` rewriting each opening.  The windows'
-    settled verdicts, the session's outcome and the appends sent as (slot, origin, count).  Without refresh the
-    session appends nothing."""
+    settled verdicts, the session's outcome, the appends sent as (slot, origin, count) and the blocks withdrawn.
+    Without refresh the session appends nothing."""
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
@@ -113,7 +113,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
     prover = audit_prover.Prover(s, None, entropy=Entropy(b"salts"))
     challenge = lean.coins.challenge(0, lean.latest)
     assert lean.event({"kind": "start"}, coins.coin(challenge), at=0) == {"released": 0}
-    challenges, head, step, passes, sent, plan_sent = [challenge], None, -1, {}, [], receipts.Plan.whole(N)
+    challenges, head, step, passes, sent, plan_sent, withdrawn = [challenge], None, -1, {}, [], receipts.Plan.whole(N), []
 
     def send(a: audit_prover.Append, t: int) -> None:
         nonlocal head
@@ -130,6 +130,7 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
         sent.append((a.slot, a.origin, a.count))
 
     def release(old, gone=()) -> None:
+        withdrawn.extend(gone)
         if old or gone:
             assert lean.event(lv.release_event(runs_of([*old, *gone]), runs_of(gone))) == {"ok": True}
 
@@ -170,34 +171,35 @@ def session(exe, refresh: bool = True, freed: dict[int, list[int]] | None = None
             break
     outcome = lean.lean.call({"op": "outcome", "node": NODE.hex(), "session": 0})
     lean.lean.close()
-    return verdicts, outcome, sent
+    return verdicts, outcome, sent, withdrawn
 
 
 def test_the_lean_accepts_a_refresh_session_of_the_reference_prover(exe):
-    verdicts, outcome, sent = session(exe)
+    verdicts, outcome, sent, withdrawn = session(exe)
     assert [v.get("accepted") for v in verdicts] == list(range(WINDOWS)), verdicts
     assert outcome["outcome"] == "accepted" and outcome["record"]["refresh"] is True
     slots = [k for k, _, _ in sent]
     assert slots == sorted(set(slots))
     kinds = {o[0] if o else "fresh" for _, o, _ in sent}
-    assert kinds == {"fresh", "registered", "append"}
+    assert kinds == {"fresh", "registered", "append"} and not withdrawn
 
 
 def test_the_lean_accepts_a_refresh_session_whose_rekeys_withdraw_freed_chunks(exe):
     """A page freed before its re-key and registered blocks freed before theirs leave each re-key whole, with the
     freed chunks' blocks withdrawn."""
-    verdicts, outcome, _ = session(exe, freed={2: [N + 1], 3: [5, 6]})
+    verdicts, outcome, _, withdrawn = session(exe, freed={2: [N + 1], 3: [5, 6]})
     assert outcome["outcome"] == "accepted", (verdicts, outcome)
+    assert len(withdrawn) == len(range(2, WINDOWS, LIFETIME)) + 2 * len(range(3, WINDOWS, LIFETIME))
 
 
 def test_the_lean_rejects_a_rekey_s_opening_at_another_origin(exe):
     def rewrite(_s, o: audit.Opening) -> audit.Opening:
         return o if o.origin_position is None else dataclasses.replace(o, origin_position=o.origin_position ^ 1)
-    verdicts, outcome, _ = session(exe, tamper=rewrite)
+    verdicts, outcome, *_ = session(exe, tamper=rewrite)
     assert [("accepted" in v) for v in verdicts] == [True, False] and outcome["outcome"] != "accepted"
 
 
 def test_with_refresh_off_the_reference_prover_s_session_is_accepted_and_names_no_slot(exe):
-    verdicts, outcome, sent = session(exe, refresh=False)
+    verdicts, outcome, sent, _ = session(exe, refresh=False)
     assert outcome["outcome"] == "accepted" and "refresh" not in outcome["record"], (verdicts, outcome)
     assert all(k is None and o is None for k, o, _ in sent)
