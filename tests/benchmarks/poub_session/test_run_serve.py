@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_bench.kit import free_port
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -187,12 +188,6 @@ def row_file(path: Path, steps: int | None = 32, target: dict | None = None) -> 
     doc = {"row_id": ROW, "engine": {"target": declared if target is None else target}}
     path.write_text(json.dumps(doc if steps is None else doc | {"expected_engine_steps": steps}))
     return path
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def gone(pid: int) -> bool:

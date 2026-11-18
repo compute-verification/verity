@@ -17,7 +17,7 @@ cd benchmarks/pouw/harness
 python bench.py --plan rtx-pro-6000-server
 ~~~
 
-It prints one line a shape, from `m2048-n2048-k2048` to the models' linears, with its sets, burst and memory.
+It prints one line a shape, from `m2048-n2048-k2048` to Llama-3.1-70B's linears, with its sets, burst and memory.
 
 ## Running it
 

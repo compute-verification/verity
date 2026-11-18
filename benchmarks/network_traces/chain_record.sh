@@ -190,14 +190,15 @@ export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
 WHOLE=(-name 'warden-registration*.json' -o -name answers.json   # a step's files that hold a row registration whole,
   -o -name '*.log' -o -name '*.err' -o -name '*.out')              # and its children's logs (a session's prove.log)
-keep() {   # keep FROM TO: the public files and what the verifier received, never a prover's file, circuit or archive;
-           # a file holding a row registration whole, or a child's log, goes to the chain's private side,
-           # $Q/witness/STEP, and not to TO
-  mkdir -p "$2" "$Q/witness/${2##*/}"
-  (cd "$1" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name prover-instances.bin ! -name instances.bin \
-    ! -name signer-state.json ! -path '*/archive/*' ! \( "${WHOLE[@]}" \) -print0 | xargs -0 -r -I{} cp --parents {} "$2/")
-  (cd "$1" && find . -type f \( "${WHOLE[@]}" \) ! -path '*/archive/*' -print0 \
-    | xargs -0 -r -I{} cp --parents {} "$Q/witness/${2##*/}/")
+keep() {   # keep FROM TO FILE...: the named files (a step's summary and public parameters) go to TO; a file holding a
+           # row registration whole, or a child's log, goes to the chain's private side, $Q/witness/STEP; the rest, what
+           # the verifier received among it, stays in $W
+  local from=$1 to=$2 f
+  shift 2
+  mkdir -p "$to" "$Q/witness/${to##*/}"
+  for f in "$@"; do [ -f "$from/$f" ] && (cd "$from" && cp --parents "$f" "$to/"); done
+  (cd "$from" && find . -type f \( "${WHOLE[@]}" \) ! -path '*/archive/*' -print0 \
+    | xargs -0 -r -I{} cp --parents {} "$Q/witness/${to##*/}/")
 }
 n2() {
   export NETWORK_CERTIFIER BIN LEAN N2OUT=$W/n2
@@ -208,7 +209,7 @@ n2() {
   case $cmd in *--debug-clear*) log "chain: n2: --debug-clear is a run by hand's, never the chain's"; exit 3;; esac
   mkdir -p "$Q/witness/n2"
   bash -c "$cmd" > "$OUT/n2.log" 2>> "$Q/witness/n2/n2.log"
-  echo $? > "$W/n2.rc"; keep "$N2OUT" "$OUT/n2"; log "chain: n2 done, rc $(cat "$W/n2.rc")"
+  echo $? > "$W/n2.rc"; keep "$N2OUT" "$OUT/n2" summary.json; log "chain: n2 done, rc $(cat "$W/n2.rc")"
   [ "$(cat "$W/n2.rc")" = 0 ] || tail -n 1 "$OUT/n2.log" | cut -c1-600 > "$W/n2.why"
 }
 scan() {
@@ -220,7 +221,7 @@ scan() {
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
   else "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
-  echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
+  echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan" summary.json joint/program.json; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$NETWORK_CERTIFIER" > "$W/scan.network_attester"
 }
@@ -231,7 +232,8 @@ tie() {
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1
-  echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie"; log "chain: tie done, rc $(cat "$W/tie.rc")"
+  echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie" summary.json stager/program.json stager/partition.json
+  log "chain: tie done, rc $(cat "$W/tie.rc")"
   [ "$(cat "$W/tie.rc")" = 0 ] || tail -n 1 "$OUT/tie.log" | cut -c1-600 > "$W/tie.why"
 }
 if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; tie; scan; fi

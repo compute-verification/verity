@@ -97,8 +97,8 @@ Open premises (`open`):
   start of its stretch of execution phases (`../prover/scan_period.py`: the deployment's one key and session, from execution
   phase 0), and its evidence, whose `"starts"` show each listed entry's session's signed start (the deployment's
   `start`).
-- **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
-  tests of `adapters/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`, the vectors
+- **Files others load by path**: `tests/verity/protocols/resource_accounting/network/verifier/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
+  tests of `adapters/vllm`); `tests/verity/protocols/resource_accounting/network/verifier/egress_traffic.py` (`benchmarks/network_traces`); in `tests/verity/protocols/resource_accounting/network/verifier/fixtures`, the vectors
   `benchmarks/network_e2e/encodings` writes; and in `network/tests`,
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
@@ -194,8 +194,7 @@ A spec-level reference for network attestation's timing channel:
   `CompileSlice_v7`, `CompileSlice_v1` with `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot
   for each attested arrival read from ``cert`` (its output length and its attested max_tokens), so an execution phase's charge
   covers `code_v1`'s segment and its length tail. vLLM's served execution phases name it (`serve_commit.SERVED_SLICE`), except
-  under `--admit tick`, and `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain,
-  ``--plain``);
+  under the network attester's order `tick`;
 - the served rows, in vLLM's compiler (`verity_vllm.compiler.served_rows`): the step rows a served execution phase ran, from the
   server's kept rows, committed before the sample under the run root as a hiding-commitment registration, a row each
   block of G steps (G = P unless given: an execution phase's row, the slice's ``srv`` row; at G < P block j is the slice's
@@ -243,7 +242,7 @@ A spec-level reference for network attestation's timing channel:
   runs it;
 - the release order on the server's side (`release`): a network attester puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
-  releases, for `serve-openai --admit release-order`. The network attester adds `x-verity-release-bucket: a`, the
+  releases, for a server under the network attester's order `release-order`. The network attester adds `x-verity-release-bucket: a`, the
   bucket of the request's `END`. With `NetworkAttester(watermark=…)` it also sends the server a watermark stream:
   one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once

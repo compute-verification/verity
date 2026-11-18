@@ -11,18 +11,11 @@ whose `driver` holds it (`card_sku`, through `verity.device`'s reader)."""
 from __future__ import annotations
 
 import json
-from functools import cache
-
-from verity.device import gpu_card_reporting, load_card, skus
-from verity_vllm.config import CARD_FILES, workload_file
+from verity.device import gpu_card_reporting
+from verity_vllm.config import CARD_FILES, _gpu_cards, workload_file
 from verity_vllm.target_family import device_token_of_row
 
 __all__ = ["card_sku", "class_device_name", "device_name", "device_name_of_row", "fused_moe_config"]
-
-
-@cache
-def _gpu_records() -> tuple[dict, ...]:
-    return tuple(load_card(sku, directory=CARD_FILES) for sku in skus("gpu", directory=CARD_FILES))
 
 
 def _driver_names(record: dict) -> list[str]:
@@ -38,7 +31,7 @@ def card_sku(name: str) -> str:
 def class_device_name(token: str) -> str | None:
     """The name a GPU of row class `token` reports: the one `driver` name of the one GPU card record whose `short` is `token`; None
     for a class no record names, or whose record states no one name."""
-    found = [r for r in _gpu_records() if r.get("short") == token]
+    found = [r for r in _gpu_cards() if r.get("short") == token]
     names = _driver_names(found[0]) if len(found) == 1 else []
     return names[0] if len(names) == 1 else None
 

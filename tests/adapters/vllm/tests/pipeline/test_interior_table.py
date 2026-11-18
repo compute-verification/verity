@@ -127,7 +127,7 @@ def _spec() -> S.Spec:
     parameters, registered: the reads' two supplied values and the four the replay gives."""
     names = {m.port(p): (m.schema(p), "serve") for m in _boundary().members for p in CS.port_leaves(m)}
     names |= {n: (HT.SCHEMA, "serve") for n in NAMES}
-    w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.link_values(LINKS, Q))
+    w = IR.interior_window(MEMBER, CELLS, "00", [0], links=LINKS)
     names |= {m.port(p): (m.schema(p), "interior") for m in w.members for p in CS.port_leaves(m)}
     supplied = tuple(x.value for x in LINKS)
     public = (S.Public("population", "structure", "N, the sample's range"),

@@ -138,7 +138,7 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     twin = run(twin_cmd, "--test-instance")
     doc = json.loads((said_honest / "pearlplus-verify.json").read_text())
     assert twin["exit"] == 0 and doc["answer"]["verdict"] == "accept", twin["lines"]
-    assert V.judge(honest, [twin], "shape")["why"] == f"no line starting ACCEPT names sha256:{V.sha256_file(honest)}"
+    assert V.judge(honest, [twin], "shape")["why"] == f"no line starting ACCEPT names sha256:{hashlib.sha256(honest.read_bytes()).hexdigest()}"
     agreed = lean(lean_cmd, printout(doc), 0)
     got = V.judge(honest, [twin, agreed], "shape")
     assert got["accepted"] and got["accept_line"] == agreed["lines"][-1] and got["accept_line"].startswith("ACCEPT ")
@@ -146,7 +146,7 @@ def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
     for said, rc in ((printout(doc, work={**work, "credited": work["credited"] + 1}), 0), ("", 0)):
         refused = lean(lean_cmd, said, rc)
         assert refused["exit"] == 2 and refused["lines"][-1].startswith("lean REFUSED: ")
-        assert V.judge(honest, [twin, refused], "shape") == {"sha256": V.sha256_file(honest), "exits": [0, 2],
+        assert V.judge(honest, [twin, refused], "shape") == {"sha256": hashlib.sha256(honest.read_bytes()).hexdigest(), "exits": [0, 2],
                                                              "accepted": False, "why": "a verifier command exited [0, 2]"}
 
     said_control = V.verdicts_dir(tmp_path / "run", "negative/arm/shape/manifest.json")
@@ -356,7 +356,7 @@ def test_the_door_s_node_side_imports_the_arm_without_the_harness_or_torch():
     assert top <= set(sys.stdlib_module_names), top
 
 
-SALT, SALT_KEY = bytes(range(32)), bytes(range(32, 64))
+SALT = bytes(range(32))
 #: y's shapes held to `audit.commit_rows`: the door's linears at 80 rows (not a power of two, so the pads are written, and
 #: one chunk) and at 384 (past s512_tree_small's widest level, so s512_nodes runs, and two chunks at gate_up's width), and
 #: the LM head's width at 16 rows (501 segments, the wide row digests)
@@ -433,7 +433,7 @@ def _trees(dev):
     s, cpu = pouw_schemes.get(OA.SERVED), torch.device("cpu")
     const = PPDR._constants(cpu)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
-                          const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
+                          const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, cur=None)
     return SYD.DeviceTrees(run)
 
 

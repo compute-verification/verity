@@ -230,7 +230,7 @@ def test_its_links_are_the_ones_round_two_derives_and_its_window_takes_them() ->
         IR.interior_window(ms, cells, "00", [0], wires)
     for q in (1, 2):
         values = IL.link_values(links, q)
-        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, values, rows)
+        w = IR.interior_window(ms, cells, "00", list(range(q)), wires, links, rows)
         assert [m.n for m in w.members] == [q * n for n in cells]
         want = P.mixed_population_program([(x, q * n) for x, n in zip(L.templates, cells, strict=True)], values=values)
         digests.append(P.program_digest(w.program))

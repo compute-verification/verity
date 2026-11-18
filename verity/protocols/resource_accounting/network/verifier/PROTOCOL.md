@@ -667,8 +667,8 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   and the profile's framing is the network attester's cut (`tie_service.framing`) with no own frame. A connection's
   lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the proof blocks together hold each
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
-  `tests/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
-  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
+  `tests/verity/protocols/resource_accounting/network/verifier/test_network_attester_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
+  phase 6's split, refused through the verifier, on stand-in proofs (`tests/verity/protocols/resource_accounting/network/verifier/standin.py`), and
   `verity/protocols/resource_accounting/network/prover/n2_tie_zk.py` proves them live, its `network_attester` class the network attester path's tie.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
@@ -1593,8 +1593,7 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the attested record is a stand-in, the honest cert row under the network attester's
     salt, until max_tokens is read from the attested body. The circuit bounds max_tokens only from above, so a lower
-    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
-    stand-in (its ``max-tokens`` proof block is refused by the b‖c check alone); a proof of the length rule is open
+    one the output still fits passes at a lower charge. A proof of the length rule is open
     (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
   as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. A session past it is refused.
@@ -1618,8 +1617,7 @@ carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the se
 attested tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each attested
 arrival, its attested max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and
 what binds its inputs, why every advised execution phase is proved, a served execution phase at its engine's class (w212 under its
-AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class), and its `--zk` runs through
-`benchmarks/network_traces/compile_slice_zk.py`.
+AsyncScheduler, 1,021,302 ANDs, and 857,866 at the sync class).
 
 ## The replay at the served shape
 
@@ -2051,8 +2049,8 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   is attested and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
   `warden-rehearse` (`verity/protocols/compose/verifier/live_challenger/auditor.py`) runs the same rehearsal on the auditor's
   device.
-- The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
-  release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
+- The server's copy of each request carries its release order (`release`), so that a server under the network
+  attester's order `release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network attester's `run_id` (in
   `deployment.json`), and `x-verity-release-bucket: a`, the bucket of that `END`. The server gets a request whole at
   its `END`'s release, and nothing of a connection that fails before it.
