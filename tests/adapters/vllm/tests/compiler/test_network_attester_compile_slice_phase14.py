@@ -2,14 +2,14 @@
 and ``carry``, so a prover under-counts by clearing an asked slot's enable or choosing the carry until the slice binds
 them. In `compile_slice.CompileSlice_v1` none of the three is witness: ``en`` is i < ``count`` and ``bit`` is ``adv``'s
 decisions, the committed advice that ReplayLoad holds the scanned window row to, and the carry is ``cin``, which
-`charge_chain.ChargeLink_v1` holds to ``cout`` and the verifier chains window to window (`charge_chain.check_chain`).
+`charge_chain.ChargeLink_v1` holds to ``cout`` and the verifier chains window to window (`charge_rows.check_chain`).
 Each case runs on w212 at its vLLM engine class (`test_network_attester_compile_slice_w212.py`)."""
 from __future__ import annotations
 
 import pytest
 from verity.commitments import hm96
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge import charge_chain as CC
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 
 from tests.compiler.test_network_attester_compile_slice import BOOK
@@ -21,6 +21,8 @@ from tests.compiler.test_network_attester_compile_slice_w212 import (
     _load,
 )
 from verity_vllm.compiler import compile_slice as CS
+from verity_vllm.compiler import charge_rows as CR
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 
 PROGRAM, REGISTRATION = "compile-slice-phase14", "cd" * 64
 
@@ -87,13 +89,13 @@ def test_a_chosen_carry_is_refused(x):
     honest = CS.case(x.S, x.sl, BOOK, served=x.served, carry=CARRY)
     restart = CS.case(x.S, x.sl, BOOK, served=x.served, carry=FITTED)
     assert restart.verdict == CS.ACCEPT and restart.length == 25 < honest.length
-    before = CC.commit_window(PROGRAM, BOOK, CARRY, REGISTRATION)
-    ok = CC.commit_window(PROGRAM, BOOK, honest.carry, REGISTRATION, carry=before)
-    assert CC.check_chain([CC.openings(before), CC.openings(ok)], PROGRAM, BOOK) is None
-    for salt in (hm96.SHA512.fresh_salt(), CC.start_salt(PROGRAM)):
+    before = CR.commit_window(PROGRAM, BOOK, CARRY, REGISTRATION)
+    ok = CR.commit_window(PROGRAM, BOOK, honest.carry, REGISTRATION, carry=before)
+    assert CR.check_chain([CR.openings(before), CR.openings(ok)], PROGRAM, BOOK) is None
+    for salt in (hm96.SHA512.fresh_salt(), CR.start_salt(PROGRAM)):
         forged = produced.commit(PROGRAM, CC.VALUE, [CC.row(CC.encode(FITTED)), CC.row(CC.encode(restart.carry))],
-                                 REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, CC.SCHEMA)
-        got = CC.check_chain([CC.openings(before), CC.openings(forged)], PROGRAM, BOOK)
+                                 REGISTRATION, [salt, hm96.SHA512.fresh_salt()], CC.WORD_BITS, SCHEMA)
+        got = CR.check_chain([CR.openings(before), CR.openings(forged)], PROGRAM, BOOK)
         assert got == "CH-carry: window 1's carry-in isn't window 0's carry-out"
     claimed = CS.case(x.S, x.sl, BOOK, served=x.served, carry=CARRY, cout=FITTED)
     assert _refused(claimed) == {"code"}
