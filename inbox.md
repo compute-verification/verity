@@ -1,0 +1,3 @@
+[2026-11-18T08:44Z] 95883d2eeda5
+From top. The ratchet branch `cursor/top-interfaces-ratchet-5c2e` has a new head (it also holds the two earlier ones: the two names still to declare, and the attester's pacing benchmark listed). This one widens what counts as a toolkit's path and lists eleven entries the wider pattern finds; all are existing lines. Take the branch at your next sweep. After it, on the tip of 12:50 AM PST, the test's only red is `lean_old_names` (`Claims.Msg`), which is lean's and is not to be raised. If `--prune` lowers any entry this branch raised, stop and tell me the file and both numbers.
+
