@@ -1,4 +1,4 @@
-"""machine.py toolkit [VERSION] | arch [NAME] | sku NAME | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
+"""machine.py toolkit [VERSION] | arch [NAME] | sku [NAME] | session-node NAME SLOT: the kit's readers of the machine's record and the card's (`verity_bench.kit`),
 printed for a shell script, or refused by name before the script takes a card.
 
     toolkit VERSION  `kit.toolkit`: $CUDA_HOME where it is set and not another version, else the directory the run's
@@ -9,6 +9,8 @@ printed for a shell script, or refused by name before the script takes a card.
     arch NAME        `kit.card_arch`: the `arch` of the card record whose `driver` holds NAME, the name nvidia-smi reports.
     arch             `kit.machine_arch`: the `arch` of the run's machine's card, with no card needed.
     sku NAME         `kit.card_sku`: the `sku` of the card record whose `driver` holds NAME.
+    sku              `kit.run_card_sku`: the `sku` of the card the run is on, `kit.card_sku` of the name
+                     nvidia-smi reports for the lease's GPUs, else the host's (vLLM's CARD_SKU).
     session-node NAME SLOT  `kit.session_node`: the node a PoUB session on that card registers (NAME `cpu`: no card).
 """
 from __future__ import annotations
@@ -40,6 +42,8 @@ def main(argv: list[str]) -> int:
             print(kit.card_sku(name))
         case ["session-node", name, slot]:
             print(kit.session_node(None if name == "cpu" else name, slot))
+        case ["sku"]:
+            print(kit.run_card_sku())
         case _:
             raise SystemExit(__doc__)
     return 0
