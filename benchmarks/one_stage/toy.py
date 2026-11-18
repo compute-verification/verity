@@ -208,11 +208,12 @@ def links(window: CS.Binding) -> list[dict[str, str]]:
     return [{"template": window.members[t].template, "port": p, "value": names[b]} for t, (p, b) in LINKS.items()]
 
 
-def boundary(u: np.ndarray, q: int, *, salt_key: bytes | None = None) -> CS.Committed:
-    """Serving's commitment of the spans ``u``: each span's ingress and egress under fresh salts (``salt_key``: tests only)."""
+def boundary(u: np.ndarray, q: int, *, salts_of: Mapping[str, bytes] | None = None) -> CS.Committed:
+    """Serving's commitment of the spans ``u``: each span's ingress and egress under fresh salts (``salts_of``: a test's,
+    `rows.commit`)."""
     win = boundary_window(len(u), q)
     return CS.commit(win, [{"rows": {"ingress": np.asarray(u, dtype=np.uint16)}, "outs": {"o0": replay(u)["egress"]}}],
-                     salt_key=salt_key)
+                     salts_of=salts_of)
 
 
 # --- the interior registration ----------------------------------------------------------------------------------------
@@ -268,11 +269,11 @@ class Interior:
 
 
 def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None, *,
-             salt_key: bytes | None = None, replayed: np.ndarray | None = None) -> Interior:
+             salts_of: Mapping[str, bytes] | None = None, replayed: np.ndarray | None = None) -> Interior:
     """The proof server's interior of the replay sample ``sample``: each span replayed from its ingress, the boundary record's
     row (``bc``, the boundary's commitment), and committed, each link member's boundary port under the boundary's salts at the
     sample's leaves. ``replayed``: the ingress replayed instead, ``(Q, 2H/16)`` u16: a prover's whose link rows don't open the
-    boundary record (tests and refused runs)."""
+    boundary record (tests and refused runs). ``salts_of``: a test's salts for the rest (`rows.commit`)."""
     at = [int(s) for s in sample]
     win = interior_window(boundary_digest, at, sampling_design)
     names = boundary_ports(bc.window)
@@ -285,8 +286,8 @@ def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], samp
             {"rows": {"row": CS.WIRED}, "outs": {"o0": r["egress"]}}]
     for d, m in zip(data, win.members):
         d["refs"] = np.array([win.refs(m, p) for p, _ in m.rows], dtype=np.int64).T
-    salts_of = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
-    c = CS.commit(win, data, salt_key=salt_key, salts_of=salts_of)
+    links = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
+    c = CS.commit(win, data, salts_of={**(salts_of or {}), **links})
 
     def opened(m: CS.Member, p: str) -> dict:
         return LK.Port.of(c, win.tree(m, p)).header(win.leaves(m, p).tolist())

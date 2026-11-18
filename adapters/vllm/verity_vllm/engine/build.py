@@ -10,6 +10,7 @@ from the engine's `vllm_config` and checked against the declaration.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -271,10 +272,21 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
                            "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
-    messages.current().answer(H.Declared(card, {
+    ex = messages.current()
+    for _, r in ex.requests:
+        if isinstance(r, H.ReleaseValue):
+            raise NotImplementedError(f"vllm/adapter-imports-no-protocol: a scheme asks registered value {r.value}'s "
+                                      "storage released and restored, which the adapter does not do yet")
+    if fixed := sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)}):
+        if len(fixed) > 1 or kw.get("num_gpu_blocks_override") not in (None, fixed[0]):
+            raise RuntimeError(f"schemes fix the KV pool at {fixed} blocks and the engine's arguments at "
+                               f"{kw.get('num_gpu_blocks_override')}: one size")
+        kw["num_gpu_blocks_override"] = fixed[0]
+    ex.answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
         "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
-        "kernels": served.kernels(engine_args)}))
+        "kernels": served.kernels(engine_args), "async_steps": kw.get("async_scheduling"),
+        "in_process": os.environ.get("VLLM_ENABLE_V1_MULTIPROCESSING") == "0"}))
     t0 = time.perf_counter()
     llm, admitted, _ = hooked(lambda: LLM(**kw))
     build_s = time.perf_counter() - t0

@@ -53,7 +53,7 @@ HASH_CARD = ROOT / "benchmarks" / "spot_figures" / "cards" / "commitment.all.jso
 #: the lock guarantee whose δ these terms are, and the composite's union bound it instantiates
 GUARANTEE = "Verity.Sampled.remote_soundness_deployedReady"
 COMPOSITE = "Verity.remote_soundness_of_subprotocols"
-DESCRIPTION = ("bound's formula proved in Lean under four open premises; value evaluated in Python; "
+DESCRIPTION = ("bound's formula proved in Lean under three open premises; value evaluated in Python; "
                "SPOT's part only")
 #: the composite's errors the total leaves out, each with the Lean premise or target it rests on
 OPEN = ("pouw (Pearl+): open, not in the total (Verity.Vocab.PouwSound, an open premise of the guarantee; its error is "
