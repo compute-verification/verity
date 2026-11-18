@@ -21,7 +21,8 @@ type Handle = object
 @dataclass(frozen=True)
 class Declared:
     """``declared``: what the workload declares before it runs: the card's file id, its properties (``stage``: serve,
-    capture or commit; ``world``; ``eager``; a precision, a cache, a sampler), the schemes enabled with it as
+    capture or commit; ``world``; ``eager``; ``async_steps``, whether a step is scheduled before the last one's outputs
+    are read; ``in_process``, whether the steps are taken in this process; a precision, a cache, a sampler), the schemes enabled with it as
     ``name:scheme`` and each scheme's own settings."""
 
     hook: ClassVar[str] = "declared"
@@ -34,11 +35,13 @@ class Declared:
 
 @dataclass(frozen=True)
 class RegisteredValues:
-    """``memory``: the registered values once resident, by name."""
+    """``memory``: the registered values once resident, by name; ``linear`` names those that are a linear block's
+    weight."""
 
     hook: ClassVar[str] = "memory"
     values: tuple[tuple[str, Handle], ...]
     step: int = 0
+    linear: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -57,7 +60,8 @@ class InputArrived:
 @dataclass(frozen=True)
 class StepBegan:
     """``steps``: workload step ``step`` begins, computing for ``inputs`` over ``slots`` slots, with ``queued`` started
-    inputs left waiting for a slot."""
+    inputs left waiting for a slot. Steps are numbered from 0, each ends in one `StepEnded`, and a step that computes
+    nothing has ``slots == 0`` and no ``inputs``."""
 
     hook: ClassVar[str] = "steps"
     step: int
@@ -69,6 +73,24 @@ class StepBegan:
 @dataclass(frozen=True)
 class StepEnded:
     hook: ClassVar[str] = "steps"
+    step: int
+
+
+@dataclass(frozen=True)
+class RunBegan:
+    """``steps``: the instrumented run ``run`` begins: its steps from ``step`` on are the run's."""
+
+    hook: ClassVar[str] = "steps"
+    run: str
+    step: int
+
+
+@dataclass(frozen=True)
+class RunEnded:
+    """``steps``: the instrumented run ``run`` ends after step ``step``."""
+
+    hook: ClassVar[str] = "steps"
+    run: str
     step: int
 
 
@@ -87,7 +109,7 @@ class ValueProduced:
 @dataclass(frozen=True)
 class BlockDue:
     """``blocks``: block ``block`` (``key`` stable across ranks, ``shape`` this rank's, its operands in ``format``) is
-    about to be computed from ``inputs``."""
+    about to be computed from ``inputs``; ``weights`` names, by input, the registered value an input is."""
 
     hook: ClassVar[str] = "blocks"
     block: str
@@ -96,6 +118,7 @@ class BlockDue:
     format: str
     inputs: Mapping[str, Handle]
     step: int = 0
+    weights: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -162,7 +185,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete)
+          RangeAllocated, RangeWritten, RangeFreed, OutputReleased, OutputsComplete, RunBegan, RunEnded)
 
 
 @dataclass(frozen=True)
@@ -289,6 +312,21 @@ class ReuseOldestFreed:
 
 
 @dataclass(frozen=True)
+class FixRanges:
+    """A scheme's request that the workload's memory hold exactly ``ranges`` ranges (`RangesDeclared`)."""
+
+    ranges: int
+
+
+@dataclass(frozen=True)
+class ReleaseValue:
+    """A scheme's request that registered value ``value``'s storage be released while no block reads it, and restored,
+    with the same bytes, before one does."""
+
+    value: str
+
+
+@dataclass(frozen=True)
 class StartBeside:
     """A scheme's request to start the process it registered as ``process``
     (`verity.protocols.resource_accounting.scheme.register_process`) beside the workload, called with the workload's
@@ -299,11 +337,11 @@ class StartBeside:
 
 
 type Request = (RequireProperty | RefuseProperty | ComputeBlockWith | StartOnBoundary | HoldRelease | HoldResident
-                | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput)
+                | StartBeside | ReuseOldestFreed | ServeRoute | RefuseInput | FixRanges | ReleaseValue)
 
 
 __all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle", "HoldRelease", "HoldResident",
-           "Broken", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
-           "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "Request", "RequireProperty", "ReuseOldestFreed",
-           "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
+           "Broken", "FixRanges", "InputArrived", "Kernel", "OutputReleased", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+           "RangesDeclared", "RefuseInput", "RefuseProperty", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
+           "Route", "RunBegan", "RunEnded", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

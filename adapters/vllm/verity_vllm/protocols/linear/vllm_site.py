@@ -30,7 +30,9 @@ def linear_types() -> tuple[type, ...]:
 
 
 def discover(model: Any, shard: Shard = _UNSHARDED, types: tuple[type, ...] | None = None) -> list[tuple[LinearSite, Any]]:
-    """Every linear layer of `model` (``LinearBase`` unless `types` says otherwise), in module order, with its site."""
+    """Every linear layer of `model` (``LinearBase`` unless `types` says otherwise), in module order, with its site.  A
+    site's qualname names its weight as the registered values do (`kv_blocks.registered_values`) only when `model` is the
+    runner's model they are read from."""
     types = types or linear_types()
     named = model.named_modules() if hasattr(model, "named_modules") else ((str(i), m) for i, m in enumerate(model.modules()))
     layers: list[tuple[str, Any]] = [(q, m) for q, m in named if isinstance(m, types)]
@@ -57,7 +59,8 @@ def attach(sites: Sequence[tuple[LinearSite, Any]], hooks: Hooks) -> None:
             if site is None or not (ex.computes() or ex.wants("blocks")):
                 return original(layer, x, bias)
             due = H.BlockDue(site.qualname, site.weight_id, {"n": site.n, "k": site.k}, site.weight_format,
-                             {"x": x, "weight": layer.weight, "bias": bias}, ex.step)
+                             {"x": x, "weight": layer.weight, "bias": bias}, ex.step,
+                             weights={"weight": f"{site.qualname}.weight"})
 
             def own(given: Any) -> Any:
                 given = given or {}

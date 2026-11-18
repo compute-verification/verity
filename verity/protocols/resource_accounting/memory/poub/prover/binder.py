@@ -18,8 +18,8 @@ StepBegan                           a verifier's message since the last pass end
                                     allocated pages, tagged with the step (a pass still open from an earlier step is
                                     ended first)
 StepEnded                           end_pass, with the device reader's roots, and end_step (the step's KV is written by
-                                    now, so a memory map takes its digests; the pages vLLM frees after this are freed
-                                    at this step)
+                                    now, so a memory map takes its digests; the pages vLLM frees in the step, before
+                                    or after this, are freed at this step); again for a step that began none, nothing
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -325,7 +325,8 @@ class Binder:
     def on_event(self, e: Any) -> None:
         """One of the exchange's ``memory`` or ``steps`` events."""
         if isinstance(e, StepBegan):
-            self.on_step(e)
+            if e.slots > 0:
+                self.on_step(e)
         elif isinstance(e, StepEnded):
             self.end()
         elif isinstance(e, RangeWritten):

@@ -9,10 +9,11 @@ row builds Boolean-first (`verity.circuits.ops.boolean.versions`).
     U8ToU16_v2          (t: Array<8, Value<1>>) -> Array<16, Value<1>>; word view: U8ToU16_v1.  No gates: t's bits, then 8 zeros
     U8x4ToU32_v2        (a, b, c, d: Array<8, Value<1>>) -> Array<32, Value<1>>; word view: U8x4ToU32_v1.  No gates: a's bits,
                         then b's, c's and d's
-    Int8QuantElement_v2, Int8RowScale_v2{K}, Int8StaticQuant_v2{K}, Int8RowQuant_v2{K}, Int8Linear_v2{K,N}, Int8AttnScale_v2{SCALE},
+    Int8QuantElement_v2, Int8RowScale_v2{K}, Int8StaticQuant_v2{K}, Int8RowQuant_v2{K}, Int8AttnScale_v2{SCALE},
     Int8LutSoftmax_v3{S}, Int8AttnOut_v2, Int8LutAttentionRow_v3{D,S,SCALE}, Int8ColumnQuant_v2{S,D}, Int8KvQuant_v2{S,D}
                         σ of the word composite (`boolean.sigma_lift`): its body at each binding with each Call the Boolean
                         version of its Definition; word views: their _v1 at the same statics
+    Int8Linear_v4{K,N}  σ of `Int8Linear_v3{K,N}` likewise, W's rows and scales as u16 words; word view: Int8Linear_v3
     Int8RowQuant_v4{K,R}
                         σ of `Int8RowQuant_v3{K,R}` likewise, x as R rows of K/R values; word view: Int8RowQuant_v3
     Int8RowQuant_v6{K,R,ROUND}
@@ -22,7 +23,7 @@ row builds Boolean-first (`verity.circuits.ops.boolean.versions`).
 `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2`, the forms that read `exp2_lut127` as an operand, have no Boolean version here;
 `_v3` of each is σ of `_v1`, whose LUT is the Definition's own.  The callees beyond this module's leaves are core's
 (`ops.boolean`'s F32Div_v3, F32Mul_v3, F32Add_v3, Bf16ToF32_v2, F32ToBf16Rn_v2, F32Fmaxf_v2, F32Fminf_v2, F32Fabs_v2, SelectI32_v2,
-I32Le_v2, I32Add_v2, S32LowByte_v2, S8Matmul_v2, ScaledMmS8_v2 and `Const<w>[0x..]_v2`), and `boolean_dsa`'s I32Sub_v2 and
+I32Le_v2, I32Add_v2, S32LowByte_v2, S8Matmul_v2, ScaledMmS8_v4 and `Const<w>[0x..]_v2`), and `boolean_dsa`'s I32Sub_v2 and
 I32ToF32_v2.
 """
 from __future__ import annotations
@@ -72,7 +73,7 @@ Int8QuantElementV2 = sigma_lift(IE.Int8QuantElement, 2)
 Int8RowScaleV2 = sigma_lift(IE.Int8RowScale, 2)
 Int8StaticQuantV2 = sigma_lift(IE.Int8StaticQuant, 2)
 Int8RowQuantV2 = sigma_lift(IE.Int8RowQuant, 2)
-Int8LinearV2 = sigma_lift(IE.Int8Linear, 2)
+Int8LinearV4 = sigma_lift(IE.Int8LinearV3, 4)
 Int8AttnScaleV2 = sigma_lift(IE.Int8AttnScale, 2)
 Int8LutSoftmaxV3 = sigma_lift(IE.Int8LutSoftmax, 3)
 Int8AttnOutV2 = sigma_lift(IE.Int8AttnOut, 2)
@@ -83,6 +84,6 @@ Int8RowQuantV4 = sigma_lift(IE.Int8RowQuantV3, 4)
 Int8RowQuantV6 = sigma_lift(IE.Int8RowQuantV5, 6)
 
 INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16, U8x4ToU32]
-INT8_SIGMA = [Int8QuantElementV2, Int8RowScaleV2, Int8StaticQuantV2, Int8RowQuantV2, Int8LinearV2, Int8AttnScaleV2,
+INT8_SIGMA = [Int8QuantElementV2, Int8RowScaleV2, Int8StaticQuantV2, Int8RowQuantV2, Int8LinearV4, Int8AttnScaleV2,
               Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2, Int8RowQuantV4,
               Int8RowQuantV6]
