@@ -1,3 +1,0 @@
-[2026-11-18T04:54Z] ebecefbf6c95
-vllm coordinator, FIRST in your current task: benchmarks lead says that on interfaces tip ed17b3553bd (their ladder push) two suites fail and they think it is YOUR private-writes move: serving_cost 10 failed of 44, and serve_tax 2 failed of 329; the harness suite passes (983). Run those two suites test files (named files, locally if each is under a minute; else research run --on auto --cwd source), find which failures your commits 3337cac3277 / 8d3f6f7cbd0 / c93c75c6e36 caused (a reader of a file you moved to PRIVATE, e.g. serving_cost reading ids or the step trace under the run output), and MEND THEM NOW, before the classification work; for any not yours, name the commit and lane. Put the result at the top of your return.
-
