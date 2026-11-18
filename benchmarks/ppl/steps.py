@@ -1368,6 +1368,7 @@ def pearl_c_run(weight: torch.Tensor, tag: str) -> object:
         raise SystemExit("pearl_c: PEARLC_CUBIN names no cubin: build it with benchmarks/harness/setup/pearl_c_sm90.sh "
                          "(benchmarks/ppl/h200.sh sources it)")
     import numpy as np
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
@@ -1378,7 +1379,7 @@ def pearl_c_run(weight: torch.Tensor, tag: str) -> object:
     weights, salt_key = {0: weight}, digest[:32]
     roots = pearl_c_weight_roots(kernel, weights, PEARL_C_SCHEME, salt_key=salt_key)
     ch = Challenger(0, np.random.default_rng(int.from_bytes(digest[32:40], "little")).bytes)
-    return PearlCDeviceRun(PPD.scheme_of(PEARL_C_SCHEME), f"pouw:{PEARL_C_SCHEME}", kernel, weights, roots, ch.commitment,
+    return PearlCDeviceRun(pouw_schemes.get(PEARL_C_SCHEME), f"pouw:{PEARL_C_SCHEME}", kernel, weights, roots, ch.commitment,
                            ch.open("salt", weights_root(roots)), capacity=PEARL_C_TILES, salt_key=salt_key)
 
 
