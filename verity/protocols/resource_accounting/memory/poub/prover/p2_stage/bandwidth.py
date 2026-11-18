@@ -718,9 +718,10 @@ def key_of(deployment: Mapping[str, Any], trusted_sha512: str | None = None) -> 
     return trusted_sha512 or min(pinned, default=None)
 
 
-def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping[str, Any], host: str) -> dict[str, Any]:
+def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping[str, Any]) -> dict[str, Any]:
     """``key_pin`` is ``run``: the pins this machine was handed are used only to refuse, and ``pins_matched`` says
-    whether they give the key `trusted_sha512` names for the close."""
+    whether they give the key `trusted_sha512` names for the close; the premise names the close's signer's machine by
+    its party (`memory_attester.ATTESTER_MACHINE`), never by the address the party was reached at."""
     key = p2_case.close_key(case)
     key_sha = None if key is None else hashlib.sha512(key).hexdigest()
     pinned = mc.pinned(deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT)
@@ -728,7 +729,7 @@ def key_record(case: Mapping[str, Any], trusted_sha512: str, deployment: Mapping
             "key_pin": "run", "pins_matched": trusted_sha512 in pinned,
             mc.PREMISE: mc.trusted_device(
                 deployment["pins"], p2_parties.CLOSER_PARTY, p2_parties.COMPONENT, key_sha,
-                f"the bandwidth verifier, which signs the close with the memory attester's key on {host}",
+                f"the bandwidth verifier, which signs the close with the memory attester's key on {mc.ATTESTER_MACHINE}",
                 configuration=deployment["configuration"], committed=deployment["committed"])}
 
 
@@ -752,7 +753,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     answer, record, steps = doc["answer"], doc["verifier_record"], doc["steps"] or []
     r_bytes_per_s = doc["r_bytes_per_s"]
     kept = json.loads((private / HELD).read_text()) if (private / HELD).is_file() else None
-    summary: dict[str, Any] = {"window": window, "request": doc["request"], "party_host": doc["party_host"],
+    request = {k: v for k, v in doc["request"].items() if k != "node"}   # the node's name: in the private record only
+    summary: dict[str, Any] = {"window": window, "request": request,
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",
                                "private": str(private), "decided_by": period.decided_by(None),
                                "setup_s": doc["setup_s"], "session_wall_s": doc["session_wall_s"],
@@ -776,7 +778,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
         except (AttributeError, KeyError, TypeError, ValueError) as e:
             out = _no("reject", f"the session's close doesn't decode: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:
-            summary |= key_record(kept, trusted_sha512, deployed, doc["party_host"])
+            summary |= key_record(kept, trusted_sha512, deployed)
             t = time.perf_counter()
             try:
                 judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None

@@ -253,7 +253,8 @@ def _judge(monkeypatch, kw: dict) -> None:
         else serve(exe, cases))
 
 
-def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host: str = AUDITOR, **kw):
+def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host: str = AUDITOR, node: str = NODE,
+         address: tuple[str, int] = ("192.0.2.36", 47610), **kw):
     auditor = auditor or Auditor(tmp_path)
     _judge(monkeypatch, kw)
     monkeypatch.setattr(CS, "salt", auditor.salt)
@@ -262,8 +263,8 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host:
     key = hashlib.sha512(auditor.signer.public_key).hexdigest()
     kw.setdefault("trusted_sha512", key)
     kw.setdefault("deployment", _deployment(key))
-    answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
-                    party=Side(host, ("ssh", host, "challenger_party"), ("192.0.2.36", 47610)),
+    answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=node,
+                    party=Side(host, ("ssh", host, "challenger_party"), address),
                     private=s.private, pins=[s.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, auditor.calls
 
@@ -320,7 +321,7 @@ def test_with_no_lean_an_honest_store_is_undecided_and_the_python_is_named(serve
     assert answer["public"] is None and answer["profile"] is None
     assert json.loads((served.private / "run.json").read_text())["answer"]["verdict"] == "undecided"
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
+    assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE} and "lean_s" not in doc
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
 
 
@@ -368,13 +369,13 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
     assert prof["placement"][CS.PREMISE] == (
         f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins for memory-challenger's pous "
-        f"sessions; the memory attester ran on {AUDITOR}, not the prover's {NODE}")
+        f"sessions; the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
     assert prof["placement"]["setup"] == CS.SETUP == "setup checked by the developer, not the auditor"
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
     assert request["k"] == SP.ROUNDS == 320 and prof["k"] == 320
-    assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
+    assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {mc.ATTESTER_MACHINE} from its OS")
     assert prof["placement"]["graded_by"] == SP.GRADED_BY and prof["placement"]["unchecked"] == dict(mc.UNCHECKED)
     assert SV.graded_by(row) == SP.GRADED_BY
     assert SV.ran_by("space", row | {"answer_from": "as written"}, "remote")["answer_from"] == f"as written; {SP.GRADED_BY}"
@@ -382,7 +383,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", True) and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
-    assert doc["decided_by"] == {"program": JUDGE, "host": socket.gethostname()} and doc["lean_s"] >= 0
+    assert doc["decided_by"] == {"program": JUDGE, "host": mc.PROVER_MACHINE} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
     assert doc["key_sha512"] == hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
@@ -399,7 +400,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     assert answer["verdict"] == "accept", answer["reason"]
     where = answer["profile"]["placement"]
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
-        f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {host}, not the prover's {NODE}")
+        f"{mc.REHEARSAL} (configuration {CONF}); the memory attester ran on {mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and (doc["key_pin"], doc["pins_matched"]) == ("run", False) and doc["key_sha512"] != "ab" * 64
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}; setup checked by the developer, not the auditor")
@@ -463,12 +464,12 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     assert first["verdict"] == "accept", first["reason"]
     again, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert again["verdict"] == "undecided" and len(calls) == 1
-    assert again["reason"].startswith(f"the memory attester on {AUDITOR} drew no salt for the setup: ")
+    assert again["reason"].startswith(f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: ")
     assert "draws one salt an audit, and a retry never redraws it" in again["reason"]
     monkeypatch.setattr(auditor, "salt", lambda party, audit, commitment: auditor.sources[0])
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert replay["verdict"] == "undecided" and len(calls) == 1
-    assert replay["reason"].startswith(f"the memory attester's session on {AUDITOR} did not complete: RuntimeError: "
+    assert replay["reason"].startswith(f"the memory attester's session on {mc.ATTESTER_MACHINE} did not complete: RuntimeError: "
                                        f"the side on {AUDITOR} refused: a session has run for the request's `audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
 
@@ -733,7 +734,7 @@ def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(serv
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                     pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
-        f"the memory attester on {AUDITOR} drew no salt for the setup: ")
+        f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
     assert not (served.private / "case.json").exists()
 
@@ -821,7 +822,7 @@ def test_with_its_lean_the_answer_is_the_leans_and_the_summary_names_it(served, 
     answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(run_exe))
     assert answer["verdict"] == "accept", answer["reason"]
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["decided_by"] == {"program": RUN_EXE, "host": socket.gethostname()}
+    assert doc["decided_by"] == {"program": RUN_EXE, "host": mc.PROVER_MACHINE}
     assert doc["lean_s"] >= 0 and "lean_peak_rss_kib" in doc and doc["key_pinned"]
     case = json.loads((served.private / "case.json").read_text())
     own = json.loads((served.private / "answer.json").read_text())
@@ -858,7 +859,7 @@ def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(s
     assert SV.check_answer(answer) and SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
     assert not (served.private / "case.json").exists() and not (served.private / "answer.json").exists()
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and doc["lean_s"] >= 0
+    assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
     assert run["answer"]["verdict"] == "undecided" and run["answer"]["reason"] == answer["reason"]
 
@@ -978,6 +979,14 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     public = s.out.parent / "bandwidth"
     bw = json.loads((public / "answer.json").read_text())
     assert bw["verdict"] == "accept", bw["reason"]
+    for name in (NODE, NODE.encode().hex(), "127.0.0.1", socket.gethostname()):   # the party is reached on loopback
+        assert name.encode() not in _public(public), name
+    assert json.loads((public / "bandwidth.json").read_text())[mc.PREMISE].endswith(
+        f"the memory attester's key on {mc.ATTESTER_MACHINE}")
+    for name in (NODE, NODE.encode().hex(), "127.0.0.1", socket.gethostname()):   # the party is reached on loopback
+        assert name.encode() not in _public(public), name
+    assert json.loads((public / "bandwidth.json").read_text())[mc.PREMISE].endswith(
+        f"the memory attester's key on {mc.ATTESTER_MACHINE}")
     published = json.loads((s.private / "run.json").read_text())["published"]
     request = calls[0][1]
     setup = CS.setup_of(request)
@@ -1071,7 +1080,7 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     assert SV.piece_row("bandwidth", served.out.parent)["verdict"] == "undecided"
     assert not (served.serve / "private" / "bandwidth").exists()
     doc = json.loads((served.out.parent / "bandwidth" / "bandwidth.json").read_text())
-    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE}
 
 
 def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
@@ -1105,7 +1114,7 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
     assert json.loads((private / p2_case.ANSWER).read_text()) == lean
     assert (bw["verdict"], bw["protocol"], bw["public"] is None) == (lean["verdict"], lean["protocol"],
                                                                     lean["public"] is None)
-    assert doc["decided_by"] == {"program": p2_case.EXE, "host": socket.gethostname()} and doc["lean_s"] >= 0
+    assert doc["decided_by"] == {"program": p2_case.EXE, "host": mc.PROVER_MACHINE} and doc["lean_s"] >= 0
     assert doc["verdict"] == lean["verdict"] and SV.piece_row("bandwidth", s.out.parent)["verdict"] == lean["verdict"]
     opening = json.loads((private / "opening.json").read_text())
     assert opening["row"] == lean["commitment"] and opening["root"] == bw["commitment"]
@@ -1179,7 +1188,7 @@ def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(re
     assert bw["verdict"] == "undecided" and bw["reason"].startswith(f"{exe} doesn't answer the case: CalledProcessError")
     assert bw["public"] is None and bw["commitment"] is None and SV.check_answer(bw)
     assert not (private / p2_case.CASE).exists() and not (private / p2_case.ANSWER).exists()
-    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
+    assert doc["decided_by"] == {"program": "python", "host": mc.PROVER_MACHINE} and "lean_s" not in doc
     assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "undecided"
     assert json.loads((registered.out / "pous.json").read_text())["bandwidth"]["verdict"] == "undecided"
     # the case its Lean has not answered stays, with what PoUS's answer needs, for another --answers
@@ -1201,7 +1210,7 @@ def test_a_bandwidth_lean_that_refuses_the_case_undecoded_is_the_answer(register
     assert bw["verdict"] == "reject" and bw["reason"].startswith("params: not the request's; ")
     assert bw["commitment"] is None and SV.check_answer(bw)
     assert json.loads((private / p2_case.ANSWER).read_text()) == refusal and not (private / "opening.json").exists()
-    assert doc["decided_by"] == {"program": p2_case.EXE, "host": socket.gethostname()}
+    assert doc["decided_by"] == {"program": p2_case.EXE, "host": mc.PROVER_MACHINE}
     assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "reject"
 
 
@@ -1283,3 +1292,23 @@ def test_the_bandwidth_answer_names_who_graded_it_where_the_launcher_reads_it(tm
     for product, tail in (("remote", ""), ("onsite", f"; {SV.ONSITE_UNDECIDED}")):
         said = SV.ran_by("bandwidth", row | {"answer_from": "as written"}, product)["answer_from"]
         assert said == f"as written; {BW.GRADED_BY}{tail}" and SV.PIECE not in said
+
+
+def _public(*dirs: Path) -> bytes:
+    return b"".join(f.read_bytes() for d in dirs for f in sorted(d.rglob("*")) if f.is_file())
+
+
+def test_no_machine_name_reaches_storages_public_output_or_its_answer(served, tmp_path, monkeypatch):
+    """An accepted PoUS piece with the node, the memory attester's host and its address each distinctively named: no
+    byte of the piece's public output (``answer.json``, ``pous.json``) or of the answer it returns holds any of them or
+    this machine's own name; the placement names the machines by their parties (`memory_attester.machines`) and the
+    premise reads as it does under any names."""
+    node, host, address = "node-zq7-distinct", "attester-xk4-distinct", ("192.0.2.177", 47999)
+    answer, _ = _run(served, tmp_path, monkeypatch, host=host, node=node, address=address)
+    assert answer["verdict"] == "accept", answer["reason"]
+    said = _public(served.out) + json.dumps(answer).encode()
+    for name in (node, host, address[0], str(address[1]), node.encode().hex(), socket.gethostname()):
+        assert name.encode() not in said, name
+    where = answer["profile"]["placement"]
+    assert where["parties"] == {"memory_attester": mc.ATTESTER_MACHINE, "prover": mc.PROVER_MACHINE,
+                                "verifier": mc.PROVER_MACHINE} and where["kind"] == "own-host"

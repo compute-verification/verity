@@ -35,7 +35,7 @@ SIDE = Path(__file__).resolve().parents[2] / "verity" / "protocols" / "resource_
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in judge, on this host
-DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
+DECIDED = {"program": "wipe-protocol", "host": mc.PROVER_MACHINE}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(SIDE))["key_sha512"]()
 #: the wipe key the run's configuration pins (VERITY_PINS): the pin of a run that sets none of its own
@@ -237,8 +237,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on vy-auditor-2, not the developer's "
-                                         "vy-dc-h200")
+    assert placement["trusted-device"] == (f"{mc.UNCOMMITTED} (no configuration); the memory attester ran on "
+                                         f"{mc.ATTESTER_MACHINE}, not on {mc.PROVER_MACHINE}")
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
     case = json.loads((private / "wipe.case.json").read_text())

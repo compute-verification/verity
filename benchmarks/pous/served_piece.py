@@ -414,7 +414,8 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     out.mkdir(parents=True, exist_ok=True)
     for name in (STORE, HELD):   # what an earlier run kept is never answered as this one's
         (private / name).unlink(missing_ok=True)
-    summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
+    prover, attester = mc.machines(node, party.host)
+    summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": prover, "challenger": attester,
                                "binding": bind.hex(), "registration_sha512": reg_sha,
                                "decided_by": period.decided_by(None)}
 
@@ -454,7 +455,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
                                  {n: dict(v) for n, v in ex.attached.items()}))
             ex.emit(H.RegisteredValues(tuple(values.items()), operands={n: i for i, n in enumerate(values)}))
         except NoSalt as e:
-            why = f"the memory attester on {party.host} drew no salt for the setup: {e}"[:1000]
+            why = f"the memory attester on {mc.ATTESTER_MACHINE} drew no salt for the setup: {e}"[:1000]
             if bw_party is not None:
                 BW.missing(bw_out, window, f"no PoUS session bound a store: {why}")
             return done(_no("undecided", why, None, protocol))
@@ -479,7 +480,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
             key = bytes.fromhex(rep["public_key"])
             session = R.ChallengePhaseRecord.from_json(rep["session"])
         except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
-            why = (f"the memory attester's session on {party.host} did not complete: "
+            why = (f"the memory attester's session on {mc.ATTESTER_MACHINE} did not complete: "
                    f"{type(e).__name__}: {e}"[:1000])
             if bw_party is not None:
                 BW.missing(bw_out, window, f"no PoUS session bound a store: {why}")

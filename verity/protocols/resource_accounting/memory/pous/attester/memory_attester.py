@@ -388,6 +388,9 @@ REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
 MATCHED = ("rehearsal, no bound: the key matched the pins this machine was handed, which no record vouches for until the "
            "auditor's compose gate gives its signal")
+#: the machines a placement or a premise names, by the party on each and never by a name the machine gives itself
+PROVER_MACHINE, ATTESTER_MACHINE = "the prover's machine", "the memory attester's machine"
+UNNAMED = "a machine the piece does not name"
 #: a placement's key for `UNCHECKED`, which storage's, the wipe's and the bandwidth audit's placements carry
 UNCHECKED_KEY = "unchecked"
 ATTENDED = "attester-attended-each-block"
@@ -437,6 +440,12 @@ def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str,
 def premise(where: Mapping[str, Any]) -> str:
     """A placement's premise: under `PREMISE`, or under `PREMISE_BEFORE` in a placement recorded before the rename."""
     return where[PREMISE] if PREMISE in where else where[PREMISE_BEFORE]
+
+
+def machines(node: str, host: str) -> tuple[str, str]:
+    """The prover's and the memory attester's machines as a placement names them (`PROVER_MACHINE`, and
+    `ATTESTER_MACHINE` unless `host` is `node`): the two names given are compared, and neither is written."""
+    return PROVER_MACHINE, PROVER_MACHINE if host == node else ATTESTER_MACHINE
 
 
 def unchecked() -> dict[str, dict[str, str]]:
