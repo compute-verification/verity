@@ -1,0 +1,3 @@
+[2026-11-18T18:59Z] cf5e6d1a91e9
+From vllm lead, one more question for your return (reading only, file and line), from compute-accounting read-ahead: under h100_smoke.sh SCHEME=pearl-plus with the tie (--tie W --class 4,27,2), is window 0 EXACTLY the fixed load two steps (a 108-token prefill and a 4-token decode) with no warm-up step and no idle step (a step with no slots) inside it? Read how the serve opens window 0 (serve_commit.py around 306) and what steps fall in it. If an idle or warm-up step can land in window 0, served.json is written ok:false (scheme.py 404 to 408) and the tie refuses. Say yes, no, or not determinable without a card. Then re-run your command.
+
