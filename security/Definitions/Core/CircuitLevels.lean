@@ -96,6 +96,11 @@ noncomputable def Chain.levels : {nc : ℕ} → {Pc : Partition C nc} → Chain 
   | _, _, .nil => []
   | _, _, .cons Pf R rule rest => ⟨Pf.blocks, R.design rule⟩ :: rest.levels
 
+/-- The chain's last partition: `Pc` with no level below it, else the last level's. -/
+def Chain.last : {nc : ℕ} → {Pc : Partition C nc} → Chain C Pc → (n : ℕ) × Partition C n
+  | _, Pc, .nil => ⟨_, Pc⟩
+  | _, _, .cons _ _ _ rest => rest.last
+
 theorem Chain.nestedBelow {nc : ℕ} {Pc : Partition C nc} (ch : Chain C Pc) (P : Finset (Finset C.Computed))
     (hP : ∀ u, (Pc.block u).Nonempty → ∃ X ∈ P, Pc.block u ⊆ X) : Level.NestedBelow P ch.levels := by
   induction ch generalizing P with

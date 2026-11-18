@@ -107,6 +107,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import window as
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     HM96,
     commit_rows,
+    hm96_salt,
     salt_of,
     weights_root,
 )
@@ -1948,7 +1949,10 @@ def test_a_window_on_the_gpu_path_hashed_by_the_hosts_twins_registers_what_numpy
             rows = words.view(torch.uint8).numpy().view("<u2") if on else words
             values.append((on, public is not None, also is not None))
             if also is not None:
-                self.z, *made = RGD.host_zy(rows, key, nonce, domain_id, also)
+                # H1's prover still names its tables' salts by key and nonce; `host_zy` takes them as data, so this
+                # stand-in hands it the bytes the prover's own tables derive
+                value, call = (b"".join(hm96_salt(key, at, j) for j in range(len(rows))) for at in (nonce, also[1]))
+                self.z, *made = RGD.host_zy(rows, value, domain_id, (also[0], call))
                 self.made = tuple(made)
             else:
                 salts = row_salts if public is None else RGD.host_public_salts(public[0], public[1], len(rows), public[2])
@@ -2106,7 +2110,7 @@ def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_
                                  f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
     stager = PC.stagers().FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
     with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
-        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
+        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
 
 
@@ -2491,7 +2495,7 @@ def test_a_host_library_that_returns_nonzero_is_refused_by_what_it_was_asked(mon
     with pytest.raises(ValueError, match=r"^rr_commit_host refused the value's layout \(3\)$"):
         RGD.host_commit(words, KEY, 7, None, bytes(64))
     with pytest.raises(ValueError, match=r"^zy_commit_host refused the records' layout \(3\)$"):
-        RGD.host_zy(words, KEY, 7, bytes(64), (bytes(64), 9))
+        RGD.host_zy(words, bytes(3 * 192), bytes(64), (bytes(64), bytes(3 * 192)))
     for ok in (False, True):
         with pytest.raises(ValueError, match="^the host's public salts refused the salt head$"):
             RGD.host_public_salts(b"a salt head", 5, 3, ok)

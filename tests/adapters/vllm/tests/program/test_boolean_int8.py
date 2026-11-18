@@ -214,12 +214,12 @@ def test_the_lut_attention_row_is_its_word_definition(S) -> None:
 def test_the_linear_is_its_word_definition() -> None:
     rng = np.random.default_rng(12)
     n = 300
-    word = bind(IE.Int8Linear, K=32, N=2)
+    word = bind(IE.Int8LinearV3, K=32, N=2)
     x = _rows(rng, n, 32)
     w = rng.integers(-127, 128, (n, 2, 32)).astype(np.int64).astype(np.uint8).astype(np.uint64)
     sw = _f32(np.abs(rng.standard_normal((n, 2))) * 0.02 / 127)
     sw[:3] = _f32([[0.0, 1.4e-45], [3.4028235e38, np.inf], [np.nan, 1.0]])
-    _agree(word, [x, w, sw])
+    _agree(word, [x, w[..., 0::2] | w[..., 1::2] << np.uint64(8), np.stack([sw & np.uint64(0xFFFF), sw >> np.uint64(16)], axis=-1)])
 
 
 #: the 8B row's Calls of the four Definitions (Llama-3.1-8B: hidden 4096, intermediate 14336, 8 KV heads of d = 128; a 256-token

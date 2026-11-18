@@ -12,14 +12,14 @@ RangeFreed                          kv_free of the pages (with kv=False, none); 
                                     allows
 RangeAllocated reused               refused: a prefix-cache hit would bring a page back with its KV (run without it)
 RangeWritten                        the step's writes, kept for its StepBegan (with kv=False, none)
-StepBegan                           a verifier's message since the last pass ends the window, the next challenge begins
-                                    one; then kv_append of the step's writes, which closes the last step's memory-map
+StepBegan                           every step, one with no slots too: a verifier's message since the last pass ends
+                                    the window, the next challenge begins one; then kv_append of the step's writes, which closes the last step's memory-map
                                     line (with its re-keys for the window just begun), and begin_pass over the
                                     allocated pages, tagged with the step (a pass still open from an earlier step is
                                     ended first)
 StepEnded                           end_pass, with the device reader's roots, and end_step (the step's KV is written by
                                     now, so a memory map takes its digests; the pages vLLM frees in the step, before
-                                    or after this, are freed at this step); again for a step that began none, nothing
+                                    or after this, are freed at this step)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -49,13 +49,13 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReuseOldestFreed,
-                          StepBegan, StepEnded)
+from verity.protocols.resource_accounting.memory.poub.scheme import POUB, PROVER
+from verity.hooks import RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
 #: the binder's name on the exchange
-NAME = "poub"
+NAME = POUB.name
 
 
 
@@ -325,8 +325,7 @@ class Binder:
     def on_event(self, e: Any) -> None:
         """One of the exchange's ``memory`` or ``steps`` events."""
         if isinstance(e, StepBegan):
-            if e.slots > 0:
-                self.on_step(e)
+            self.on_step(e)
         elif isinstance(e, StepEnded):
             self.end()
         elif isinstance(e, RangeWritten):
@@ -383,11 +382,12 @@ class Binder:
 
     def install(self, exchange: Any) -> Binder:
         """Subscribe to ``exchange`` (the adapter's: ``subscribe(name, hook, fn)`` returning the removal, and
-        ``request(name, request)``), filing `ReuseOldestFreed` with ``fifo``; before the engine is built."""
+        ``request(name, request)``), filing the declaration's requests (`POUB.requests`: `ReuseOldestFreed` with
+        ``fifo``); before the engine is built."""
         if self._off:
             raise RuntimeError("the binder is installed")
-        if self.fifo:
-            exchange.request(NAME, ReuseOldestFreed())
+        for r in POUB.requests({"fifo": self.fifo}):
+            exchange.request(NAME, r)
         self._off = [exchange.subscribe(NAME, hook, self.on_event) for hook in ("memory", "steps")]
         return self
 
@@ -407,3 +407,6 @@ class Binder:
                 "registration": self.store.registration().count, "steps": self.step, "windows": self.windows,
                 "hooks": {k: {"calls": c.calls[k], "seconds": c.seconds[k], "us_per_call": 1e6 * c.seconds[k] / c.calls[k]}
                           for k in sorted(c.calls)}}
+
+
+PROVER["binder"] = Binder

@@ -60,6 +60,10 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
 
     pg = sz.program(M, setup.cls, sz.TEMPLATES, h.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in honest.members]
+    for mr, m in zip(honest.members, members):
+        assert sorted(p.name for p in m["ports"]) == sorted(mr.salts), mr.name
+        assert {p: [bytes(s) for s in ss] for p, ss in m["salts"].items()} == \
+            {p: [bytes(s) for s in ss] for p, ss in mr.salts.items()}, mr.name
     carry = sz.carry_of(pg, setup.cls, [], honest.members[0].ports["sin"])
 
     LC = sz.proof_drivers.drivers().local_challenger

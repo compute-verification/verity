@@ -126,7 +126,7 @@ theorem parts_of_check {h : Held} {own : Spot.SecondStage.Own} {st : Roots} {rec
 /-- A passing round 2's statements are at most one a template. -/
 theorem lt_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Json} {st : Roots} {rec draw : Json}
     {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
-    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) {t : ℕ} (ht : t < ss.size) : t < h.ms.length := by
+    (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) {t : ℕ} (ht : t < ss.size) : t < h.ms.length := by
   obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
   obtain ⟨s, -, -, -, -, hi, -⟩ := hst t ht
@@ -222,7 +222,7 @@ theorem count_of_check : CountOfCheck := by
 the links, wires and rows, which the running verifier holds as the model does. -/
 theorem designOk_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Json} {st : Roots} {rec draw : Json}
     {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
-    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) :
     Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true := by
   obtain ⟨-, -, ps, hp, hl, hw, -⟩ := Spot.SecondStage.check_ok hc
   obtain rfl := parts_of_check hA hp
@@ -332,7 +332,7 @@ templates' names are distinct, each template `t` has a statement at position `t`
 code check against its part. -/
 theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondStage.Own} {ss : Array Json}
     {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
-    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    (hc : (Spot.SecondStage.check own (some ss)).codes = #[]) :
     Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
       Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true ∧
       Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true ∧

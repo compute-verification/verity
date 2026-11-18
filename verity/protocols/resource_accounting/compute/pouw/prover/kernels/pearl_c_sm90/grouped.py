@@ -233,9 +233,10 @@ def gemm_smem(R, dev, name: str) -> int:
 
 class Grouped:
     """The grouped calls of one (n, k) and expert count over buffers the caller owns (`b`: device pointers, `sizes`' at `rows`
-    and `count`, and the experts' `STACKED`), with the constant keys `keys` (``salt_key``, ``hm``).  Its tensor maps, two sets
-    in its own ``tma`` (the chain's: A, the experts' B̃, P_A, their P_B; A'F_B's: A and their F_B transposed), are encoded once,
-    and a zero row's digest (`zero_state`) goes up once into its own ``zero``."""
+    and `count`, the experts' `STACKED`, and ``salts_a``, the call's rows' hm96 salts, `R.HM_SALT` bytes a row of A in row
+    order, which the caller fills with fresh bytes before each call), with the constant key `keys` (``hm``).  Its tensor
+    maps, two sets in its own ``tma`` (the chain's: A, the experts' B̃, P_A, their P_B; A'F_B's: A and their F_B transposed),
+    are encoded once, and a zero row's digest (`zero_state`) goes up once into its own ``zero``."""
 
     def __init__(self, R, dev, n: int, k: int, experts: int, rows: int, count: int, b: dict[str, int], keys: dict[str, int]):
         if n % 64 or k % 256 or k > R.PD_MAX_K or rows % SEG:
@@ -268,12 +269,13 @@ class Grouped:
             raise ValueError(f"{len(us)} units of {sum(u.seg for u in us)} rows, {len(keys)} key bytes: past the call's "
                              f"{self.count} units and {self.rows} rows, or not {KEY_BYTES} key bytes a unit")
         b, k, n, kk, R = self.b, self.k, self.n, self.keys, self.R
+        salts = R.Pipeline.salts(self, "a")
         rec = np.zeros((len(us), REC), np.uint8)
         commit, tiles, tree = np.zeros(len(us), ARGS), np.zeros(len(us), ARGS), np.zeros(len(us), ARGS)
         for j, u in enumerate(us):
             key = b["meta"] + REC * j + KEYS_AT
             commit["p"][j, :13] = (b["xa"] + 4 * k * u.row, b["rowdig_a"] + 64 * u.row, b["tree_a"] + tree_bytes(R) * j,
-                                   b["seeds_a"] + 32 * u.row, b["lkeys_a"] + 32 * u.row, key + 64, key, kk["salt_key"], kk["hm"],
+                                   b["seeds_a"] + 32 * u.row, b["lkeys_a"] + 32 * u.row, key + 64, key, salts + R.HM_SALT * u.row, kk["hm"],
                                    b["pd_count"] + 16 * j, b["seed_a"] + 32 * j, b["line_a"] + 32 * j, b["ea_codes"] + 32 * u.row)
             commit["p"][j, 14] = 0 if "hashzero" in PLACE else self.zero
             commit["i"][j, :5] = (u.m16, k, int(split), u.seg, u.m)

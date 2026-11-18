@@ -462,6 +462,21 @@ def test_under_the_admission_hooks_steps_the_memory_map_is_the_one_steps_ending_
     assert got == run(False) and got[0].count("\n") == 3
 
 
+def test_every_step_opens_its_memory_map_line_an_empty_one_too():
+    """Every call of the scheduler is a step, and the remote session's backend (`StoreBackend.advance`) finds one line a
+    step: steps of 1, 0 and 1 slots leave the map's last line at 0, 1 and 2."""
+    s = NodeMemory()
+    b = Binder(s, passes=False, kv=False)
+    load(b, runner())
+    m = s.record_memory_map(registration=bytes(range(64)))
+    last = []
+    for step, slots in [(0, 1), (1, 0), (2, 1)]:
+        b.on_event(StepBegan(step, slots=slots))
+        b.on_event(StepEnded(step))
+        last.append(m.last)
+    assert last == [0, 1, 2] and b.step == 3
+
+
 def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_its_z():
     """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
     receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,
@@ -593,7 +608,7 @@ def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touche
 def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_reads_the_output(monkeypatch, binder):
     """Under the admission hook, the steps' one emitter: `Scheduler.schedule` runs vLLM's own first, with its arguments,
     and then opens the step's pass; the pass ends after vLLM's own `Scheduler.update_from_output`, and a ``schedule``
-    that schedules no token opens none."""
+    that schedules no token is a step too, its pass over nothing new."""
     s = NodeMemory()
     v = vllms_classes(monkeypatch, s)
     b = binder(s, install=True, block_bytes=1024)
@@ -607,4 +622,4 @@ def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_after_vllm_r
     assert v.calls[-1] == ("update_from_output", True, "out", True) and not s.in_pass
     sched.output = SimpleNamespace(num_scheduled_tokens={}, total_num_scheduled_tokens=0)
     sched.update_from_output(sched.schedule(), "out")
-    assert not s.in_pass and b.step == 1 and s.counters.calls["end_pass"] == 1
+    assert not s.in_pass and b.step == 2 and s.counters.calls["end_pass"] == 2

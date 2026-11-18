@@ -96,11 +96,10 @@ command -v nvdisasm > /dev/null || for d in /usr/local/cuda*/bin; do
 done
 [ -x "$HOME/.elan/bin/lake" ] && export PATH=$HOME/.elan/bin:$PATH
 if [ -z "${ARCH:-}" ]; then
-  case $(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null) in
-    *H200* | *H100*) ARCH=90a ;;
-    *"RTX PRO 6000"*) ARCH=120a ;;
-    *) say "PREFLIGHT: ARCH (90a, 120a) is not given and the card's name does not tell it"; exit 3 ;;
-  esac
+  ARCH=$(python3 "$TREE/benchmarks/kernels/machine.py" arch \
+    "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${CARDS%%,*}" 2> /dev/null)" 2>&1) \
+    || { say "PREFLIGHT: ARCH is not given and the card's record doesn't give it: $ARCH"; exit 3; }
+  ARCH=${ARCH#sm_}
 fi
 B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B

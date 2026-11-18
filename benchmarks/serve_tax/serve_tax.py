@@ -2066,6 +2066,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         meta["server_stop"] = stop(server, TERM_GRACE_S if termed else 120.0)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
+        public_steps(out)
         shutil.rmtree(out / ".site", ignore_errors=True)
     return rc
 
@@ -2394,6 +2395,7 @@ def certified_server(a: argparse.Namespace, popen: Callable[..., subprocess.Pope
         rec["prefix_resets"] = [json.loads(x) for f in sorted(srv.glob("prefix_resets.*.jsonl"))
                                 for x in f.read_text().splitlines() if x.strip()]
         (out / SERVER_RECORD).write_text(json.dumps(rec, indent=1))
+        public_steps(out)
         shutil.rmtree(out / ".site", ignore_errors=True)
     return rc
 
@@ -2629,6 +2631,34 @@ def trace_records(trace: Path) -> list[dict]:
 
     with (gzip.open if trace.suffix == ".gz" else open)(trace, "rt", encoding="utf-8") as f:
         return [json.loads(x) for x in f if x.strip()]
+
+
+#: a step trace's public steps beside the arm's other server records, by its engine core's pid (`public_steps`)
+STEPS = "steps.{}.jsonl.gz"
+
+
+def public_steps(arm_dir: Path) -> list[Path]:
+    """Each of the arm's step traces (`step_traces`) written to its server/ as its public steps: the speculative
+    tokens a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens,
+    with no request id, emitted count or stop reason. A price reads these off the node."""
+    import gzip
+
+    got = []
+    for trace in step_traces(arm_dir):
+        lines = []
+        for r in trace_records(trace):
+            if r["kind"] == "header":
+                spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+                lines.append({"kind": "header", "num_speculative_tokens": spec})
+            elif r["kind"] == "step":
+                lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
+                              "rows": [[start, m] for _, start, m in r["rows"]]})
+        f = arm_dir / "server" / STEPS.format(trace.name.split(".")[1])
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(f, "wt", encoding="utf-8") as g:
+            g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
+        got.append(f)
+    return got
 
 
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
