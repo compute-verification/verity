@@ -24,7 +24,9 @@ steps, every subprotocol in one shape, the Lean verdict with the JointPooledLive
   `NAMES_TERMS` (bandwidth) always carries and another may, is the terms its ``error`` leaves out, as its answer's
   profile names them: PoUB's ``ledger.NAMED_TERMS``, each term ``{claim, term, value: null, in_total: false, status}``.
   They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
-  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A subprotocol whose ``server``
+  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. ``premises``, which
+  every subprotocol but `BY_NAME`'s carries, is each Lean premise its scheme's guarantee is stated under, by name
+  (`Scheme.premises`, ``[]`` claiming none), or why its declaration does not say them. A subprotocol whose ``server``
   is not the block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check``, or ``remote check`` or
   ``remote-v1 check``)'s answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
@@ -224,10 +226,18 @@ def subprotocol(name: str, row: Mapping[str, Any], *, server: str, runs: Sequenc
         raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
+    premises = {} if name in BY_NAME else {"premises": _premises(_scheme(name))}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
-            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}})
+            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}}) \
+        | premises
+
+
+def _premises(scheme: S.Scheme) -> list[str] | str:
+    """What the record writes beside a declared scheme's figure: each Lean premise its guarantee is stated under, by
+    name (`Scheme.premises`), or, where its declaration does not say them, why not."""
+    return scheme.premises.why if isinstance(scheme.premises, S.Lacks) else list(scheme.premises)
 
 
 def compose(server: str, subprotocols: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:

@@ -88,6 +88,9 @@ _LIVE = ("its Lean verifier ({}) checks the session live, an event a line, and n
          "against the verifier's registration")
 
 
+#: the route's named premise, unproved: the incorrect receipts are counted (`Remote.Run.Counted`)
+_COUNTED = "ResourceAccounting.Remote.Run.Counted"
+
 _REQUIRES = {
     "log-order": "the verifier party's own log of the session",
     "log-times": "the verifier party's clock on the auditor's host",
@@ -133,6 +136,7 @@ BANDWIDTH = S.register(S.Scheme(
     published=("bytes", Fraction(1, 8)),
     check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
     reader=_bandwidth_reading,
+    premises=(_COUNTED,),
 ))
 
 POUB = S.register(S.Scheme(
@@ -172,6 +176,8 @@ POUB = S.register(S.Scheme(
     published=S.Lacks("the remote session publishes no certified quantity in a combined record"),
     check=S.Lacks(_LIVE.format("session.lean_verifier, as session.verifier runs it")),
     reader=S.Lacks("no combined record has a row for the remote session"),
+    premises=("ResourceAccounting.Assumptions.WorkHardness",
+              "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it

@@ -273,7 +273,9 @@ class Scheme:
     it is the same); ``check``, its verifier of record, the entry its Lean port is held to, with that entry's own
     arguments (a run's record and what the verifier is registered with, its trusted keys among them), which answers
     accept or names its refusal; and ``reader``, which takes its row as the runner read it from what its piece wrote
-    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`.
+    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`; ``premises``, each
+    Lean `Prop`, by name, that its charge or bound is proved under, empty where its instance takes none (an empty
+    tuple claims that), which `bound` carries and the record writes beside the scheme's figure.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -315,6 +317,7 @@ class Scheme:
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
+    premises: tuple[str, ...] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -386,7 +389,8 @@ class Bound:
     probability above ``delta``, plus each of its charges' bounds, with probability at most ``delta`` plus ``epsilon``,
     the audit's own error (its knowledge and binding errors, the audit's to give), plus ``delta_scheme``, the scheme's own
     term: where that is a `Term`, ``term`` names its Lean constant and
-    ``parameters`` the values it was evaluated at."""
+    ``parameters`` the values it was evaluated at; all of it under ``premises``, each Lean `Prop`, by name, the
+    scheme's guarantee is stated under, which whatever writes the bound writes beside it."""
 
     scheme: str
     delta: Fraction
@@ -396,6 +400,7 @@ class Bound:
     epsilon: Fraction = Fraction(0)
     term: str = ""
     parameters: Mapping[str, Any] = field(default_factory=dict)
+    premises: tuple[str, ...] = ()
 
     @property
     def excess(self) -> int:
@@ -425,6 +430,10 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
         raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
                          "own term by name, zero where none of its assumptions can fail"
                          + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""))
+    if isinstance(scheme.premises, Lacks):
+        raise ValueError(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
+                         "declaration names each Lean Prop its guarantee is stated under, () where none"
+                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""))
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     if epsilon is None or not 0 <= epsilon < 1:
@@ -436,7 +445,7 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
         if given:
             raise ValueError(f"{scheme.name}: its own term is the number {term}, which takes no parameters {sorted(given)}")
         return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), Fraction(term),
-                     Fraction(epsilon))
+                     Fraction(epsilon), premises=scheme.premises)
     if missing := [p for p in term.parameters if p not in given]:
         raise ValueError(f"{scheme.name}: its own term {term.lean} is evaluated at {list(term.parameters)}, and "
                          f"{missing} were not given")
@@ -446,7 +455,7 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     if not 0 <= value < 1:
         raise ValueError(f"{scheme.name}: its own term {term.lean} at {given} is {value}, outside [0, 1): no bound")
     return Bound(scheme.name, Fraction(delta), missable, MappingProxyType(dict(charges)), value, Fraction(epsilon),
-                 term.lean, MappingProxyType(given))
+                 term.lean, MappingProxyType(given), scheme.premises)
 
 
 #: the registered schemes, by name: a scheme's module registers it when imported, and a reader gets it through

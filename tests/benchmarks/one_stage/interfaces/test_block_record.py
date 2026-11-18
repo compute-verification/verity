@@ -199,6 +199,7 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
                                    "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
     assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
+    assert lg["premises"] == ["Verity.Vocab.WipeSound"]
 
 
 def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_read_by_name() -> None:
@@ -211,6 +212,8 @@ def test_each_declared_schemes_row_is_its_readers_and_only_the_undeclared_are_re
     assert R._quantity("certifier", row) == ({"symbol": "K", "value": 9, "unit": "bits", "windows": 3},
                                              Fraction(1, 4), "quantity.eps")
     assert set(R.BY_NAME) <= {"integrity", "pouw"}
+    assert R._premises(R._scheme("bandwidth")) == ["ResourceAccounting.Remote.Run.Counted"]
+    assert R._premises(R._scheme("pous")) == [] and "owner's to name" in R._premises(R._scheme("certifier"))
     with pytest.raises(ValueError, match="not a subprotocol"):
         R._quantity("attester", row)
 

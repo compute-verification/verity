@@ -25,7 +25,7 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
         "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
         "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"},
         "delta_scheme": Fraction(0), "over": "the session's credited bits, cleared of (1 - γ)",
-        "under": "the tier's reads, in bits", **kw})
+        "under": "the tier's reads, in bits", "premises": (), **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -244,7 +244,7 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "from verity.protocols.resource_accounting import scheme as S\n"
              "C.load()\n"
              "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
-             "     'published', 'check', 'reader')\n"
+             "     'published', 'check', 'reader', 'premises')\n"
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"

@@ -130,6 +130,7 @@ POUS = register(Scheme(
     published=("bits", Fraction(1)),
     check=period.answer,
     reader=_pous_reading,
+    premises=(),
 ))
 
 WIPE = register(Scheme(
@@ -164,6 +165,7 @@ WIPE = register(Scheme(
     published=("bits", Fraction(1)),
     check=wipe_period.answer,
     reader=_wipe_reading,
+    premises=("Verity.Vocab.WipeSound",),
 ))
 
 __all__ = ["POUS", "WIPE"]

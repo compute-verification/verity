@@ -136,6 +136,7 @@ NETWORK_ATTESTER = register(Scheme(
     published=("bits", Fraction(1)),
     check=S.Lacks("the network attester's verifier of record is its owner's to declare"),
     reader=_reading,
+    premises=S.Lacks("the network attester's premises are its owner's to name"),
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",
