@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import subprocess
@@ -437,10 +438,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
+        """A pass's tile digest is written into `leaves` by its call (not with ``hash_leaf`` omitted) over the poison, and
+        each end draws fresh salts, so its roots are its own (`fresh`, `writes`: a run that breaks either)."""
+        fresh, writes = True, True
+
         def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-h100-v1-h3"), SimpleNamespace(name="deferred")
             self.commits = {"weights_root": "ab" * 64, **commits}
+            self.nb, self.leaves, self.ended = 64, torch.zeros(64, dtype=torch.uint8), 0
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
@@ -452,13 +458,18 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             return 7
 
         def poison(self):
-            pass
+            self.leaves.fill_(0xA5)
 
         def gemm(self, w, x, W, bias):
-            return self.y(x, W)
+            y = self.y(x, W)
+            if self.writes and "hash_leaf" not in self.omit:
+                digest = hashlib.sha512(y.contiguous().view(torch.uint8).numpy().tobytes()).digest()
+                self.leaves.copy_(torch.frombuffer(bytearray(digest), dtype=torch.uint8))
+            return y
 
         def end(self):
-            return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
+            self.ended += self.fresh
+            return {"transcript_root": f"root-{self.ended}", "activation_roots": f"a-{self.ended}", "units": 1, "tiles": 1}
 
     def exact_y(x, W):
         return (x.float() @ W.float().T).to(torch.bfloat16)
@@ -471,6 +482,10 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
+    for broken in ("fresh", "writes"):          # roots that repeat (salts not fresh), leaves the call never writes
+        run = Run(exact_y)
+        setattr(run, broken, False)
+        assert not _pearl_c_gate(run, "pearl-plus")["passed"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
     live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
