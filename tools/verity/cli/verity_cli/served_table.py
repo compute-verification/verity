@@ -95,6 +95,11 @@ CHALLENGER, MEMORY_ATTESTER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
+#: remote's line read from the serving node's own record and not from a compose gate's answer: its ``source`` and the
+#: sentence that leads its reason, so neither the line nor the record it writes reads as the auditor's
+SERVING_NODE = "serving-node"
+FROM_SERVING_NODE = ("read from the serving node's own record: a development verdict; the auditor's device did not "
+                     "compose it")
 
 
 # --- what each component and the workload declare -------------------------------------------------------------------
@@ -1024,7 +1029,8 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     gate-compose`'s) where one was written, else the served node's own record (``out``), which it composed over its
     composite (``out/composite``, served_composite.sh's, under ``COMPOSE_OFF_NODE=0`` with ``COMPOSITE`` not set
     empty). As onsite's line, under ``VERITY_HOLD_PLACEMENT=1`` each accept of a record the served node composed, a
-    row's or the composed verdict, reads undecided, `AS_WRITTEN` in the reason. Refused by name: ``record`` where the
+    row's or the composed verdict, reads undecided, `AS_WRITTEN` in the reason. A line read from the node's own record
+    says so: its ``source`` is `SERVING_NODE` and its reason begins with `FROM_SERVING_NODE`. Refused by name: ``record`` where the
     record can't be read or is another product's, ``composite`` where there is neither the gate's answer nor the
     node's composite."""
     out = state / "out"
@@ -1058,11 +1064,13 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     reason = line.get("why") or (f"missing {sorted(line['missing'])}" if line.get("missing") else None) \
         or (line.get("lean") if not gate and verdict != "accept" else None) \
         or (f"not accepted: {', '.join(sorted(held))}" if held else None)
+    if not gate:
+        reason = "; ".join(x for x in (FROM_SERVING_NODE, reason) if x)
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
             "verdict": "undecided" if verdict == "accept" and held else verdict,
-            **({"charges_nothing": free} if free else {})}
+            **({"charges_nothing": free} if free else {}), **({} if gate else {"source": SERVING_NODE})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:

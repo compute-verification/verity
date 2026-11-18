@@ -380,7 +380,8 @@ def test_remotes_line_reads_the_record_the_served_node_composed_over_its_composi
     nodes_composite(tmp_path / "out")
     written(tmp_path / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert (got["verdict"], got["components"], got["reason"], got["block"]) == ("accept", ALL_ACCEPTED, None, 3)
+    assert (got["verdict"], got["components"], got["reason"], got["block"]) == (
+        "accept", ALL_ACCEPTED, T.FROM_SERVING_NODE, 3)
     monkeypatch.setenv("VERITY_HOLD_PLACEMENT", "1")
     got = T.remote_check(cfg, tmp_path)
     assert got["verdict"] == "undecided" and set(got["components"].values()) == {"undecided"}
@@ -392,7 +393,31 @@ def test_remotes_line_reads_the_record_the_served_node_composed_over_its_composi
     written(tmp_path / "out", {"composed": "pending", "product": "remote", "lean": "its Lean gave no answer"},
             {**ACCEPTED, "inference-only": CHECKED})
     got = T.remote_check(cfg, tmp_path)
-    assert (got["verdict"], got["reason"]) == ("undecided", "its Lean gave no answer")
+    assert (got["verdict"], got["reason"]) == ("undecided", f"{T.FROM_SERVING_NODE}; its Lean gave no answer")
+
+
+def test_a_line_from_the_serving_nodes_own_record_says_so_and_a_gates_does_not(tmp_path, capsys, monkeypatch):
+    """Nothing the prover runs is trusted: a line read from the serving node's own record says so in words, leading
+    its reason, and by its ``source``, in the VERDICT line and the record `verity run` writes; a line read from the
+    compose gate's answer carries neither."""
+    monkeypatch.delenv("VERITY_HOLD_PLACEMENT", raising=False)
+    assert T.FROM_SERVING_NODE == ("read from the serving node's own record: a development verdict; the auditor's "
+                                   "device did not compose it")
+    for gate in (False, True):
+        state = tmp_path / str(gate)
+        nodes_composite(state / "out")
+        written(state / "out", YES, {**ACCEPTED, "inference-only": CHECKED})
+        if gate:
+            written(state / "out" / "compose", YES, {**ACCEPTED, "inference-only": CHECKED})
+        R.run_main([str(CONFIG), "--on", T.AUDITOR_REMOTE, "--bindings", bindings(tmp_path, STARTED), "--state",
+                    str(state)], REG)
+        line, = said(capsys.readouterr().out, "VERDICT")
+        kept, = (json.loads(x) for x in (state / "record" / "verdicts.jsonl").read_text().splitlines())
+        for got in (line, kept):
+            if gate:
+                assert "source" not in got and T.FROM_SERVING_NODE not in str(got["reason"]), got
+            else:
+                assert got["source"] == T.SERVING_NODE and got["reason"].startswith(T.FROM_SERVING_NODE), got
 
 
 def test_remotes_verifier_refuses_by_name_a_record_it_cannot_read_or_of_another_product(tmp_path):

@@ -76,6 +76,8 @@ onsite's ``block`` is its execution phase's seal digest, the one the served wind
 onsite's line reads a record the workload's node composed, its verdicts as the record has them; ``answer_from`` names
 each row's stated source and decides nothing. Under ``VERITY_HOLD_PLACEMENT=1`` its accepts, each row's and the combined
 one, read ``undecided`` (`served_table.AS_WRITTEN` in the reason).
+remote's line read from the serving node's own record, not a compose gate's answer, has ``source`` ``serving-node`` and
+its reason begins with `served_table.FROM_SERVING_NODE`.
 onsite's line also has ``trusted-device``: each memory attester's premise that its device ran on a machine the
 developer doesn't control (`memory_attester.trusted_device`), by component, from the outcome of its run here, and the
 network attester's, from its piece's placement (where it ran, its key and its ``coins_on``).
