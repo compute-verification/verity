@@ -272,10 +272,13 @@ class Scheme:
     the exact factor from ``unit`` (``("bytes", 1/8)`` for an amount in bits published in bytes, ``(unit, 1)`` where
     it is the same); ``check``, its verifier of record, the entry its Lean port is held to, with that entry's own
     arguments (a run's record and what the verifier is registered with, its trusted keys among them), which answers
-    accept or names its refusal; and ``reader``, which takes its row as the runner read it from what its piece wrote
-    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`; ``premises``, each
-    Lean `Prop`, by name, that its charge or bound is proved under, empty where its instance takes none (an empty
-    tuple claims that), which `bound` carries and the record writes beside the scheme's figure.
+    accept or names its refusal; ``reader``, which takes its row as the runner read it from what its piece wrote
+    (``answer``, the answer, and ``quantity``, the figures read of it) and returns its `Reading`; and ``premises``,
+    each Lean `Prop`, by name, that its charge or bound is proved under, empty where its instance takes none (an
+    empty tuple claims that), which `bound` carries and the record writes beside the scheme's figure. ``tables``, the names of the value tables its run registers in the window record, a value of table ``t`` named
+    ``t/...``; ``number_format``, the number format of the output y its blocks hand the served model (``bf16``); and
+    ``y_committed``, whether each of its calls commits that y; and ``salt_open_root``, the root its salt coin is
+    opened after, a function of the weights' root and the salt epoch's number.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -318,6 +321,10 @@ class Scheme:
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
     premises: tuple[str, ...] | Lacks = UNDECLARED
+    tables: tuple[str, ...] | Lacks = UNDECLARED
+    number_format: str | Lacks = UNDECLARED
+    y_committed: bool | Lacks = UNDECLARED
+    salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):

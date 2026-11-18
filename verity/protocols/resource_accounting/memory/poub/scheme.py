@@ -137,6 +137,7 @@ BANDWIDTH = S.register(S.Scheme(
     check=S.Lacks(_LIVE.format("p2_lean, as p2_parties.drive runs it")),
     reader=_bandwidth_reading,
     premises=(_COUNTED,),
+    **dict.fromkeys(("tables", "number_format", "y_committed", "salt_open_root"), S.Lacks("not a kernel scheme")),
 ))
 
 POUB = S.register(S.Scheme(
@@ -178,6 +179,7 @@ POUB = S.register(S.Scheme(
     reader=S.Lacks("no combined record has a row for the remote session"),
     premises=("ResourceAccounting.Assumptions.WorkHardness",
               "ResourceAccounting.Remote.Held.Assumptions.SquaringCeiling", _COUNTED),
+    **dict.fromkeys(("tables", "number_format", "y_committed", "salt_open_root"), S.Lacks("not a kernel scheme")),
 ))
 
 #: a freed range is reused as late as the workload allows, so one freed inside a window is not written again in it

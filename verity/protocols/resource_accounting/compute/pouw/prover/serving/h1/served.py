@@ -112,7 +112,7 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.model_key import ModelKey, model_key
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.names import (
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins.names import (
     B_NONCE,
     IDS_NONCE,
     LIVE_NONCE,

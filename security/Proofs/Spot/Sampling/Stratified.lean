@@ -14,10 +14,10 @@ The strata are the units a map `σ : Fin n → Fin m` assigns to each `s`, for e
 stratified samplingDesign draws an independent uniform `k s`-subset inside each stratum (`SamplingDesign.stratified`,
 `docs/sampling-strategies.md` §1, §4).
 
-* `stratified_escape`: a set `B` with `m_s` units in stratum `s` escapes with the product of hypergeometrics
+* `stratified_missProb`: a set `B` with `m_s` units in stratum `s` escapes with the product of hypergeometrics
   `∏ s C(n_s − m_s, k_s) / C(n_s, k_s)`. It depends only on the counts, as `verity.proofs.profile.Stratified` computes
   it. The uniform `k`-subset is the case of one stratum.
-* `stratified_escape_floor`: **a floor catches its whole stratum**. With `1 ≤ k s`, a set containing stratum `s` never
+* `stratified_missProb_floor`: **a floor catches its whole stratum**. With `1 ≤ k s`, a set containing stratum `s` never
   escapes.
 * `stratified_sample_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
   unit and `miss K = 0` for `K ≥ 1` (`SamplingDesign.miss_eq_zero_of_sample_univ`).
@@ -81,7 +81,7 @@ theorem filter_eq_inter_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (
 
 /-- **The stratified missProb**: the product over strata of the hypergeometric missProb of the stratum's count,
 `∏ s C(n_s − m_s, k_s) / C(n_s, k_s)` with `n_s = |stratum s|` and `m_s = |B ∩ stratum s|`. -/
-theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_missProb (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
     (stratified σ k hk).missProb B =
       ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
@@ -103,10 +103,10 @@ theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s
   rw [card_powersetCard_disjoint, card_powersetCard, filter_eq_inter_stratum]
 
 /-- **A floor catches its whole stratum**: with `1 ≤ k s`, a set containing stratum `s` never escapes. -/
-theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
+theorem stratified_missProb_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (h : 1 ≤ k s) {B : Finset (Fin n)} (hB : stratum σ s ⊆ B) :
     (stratified σ k hk).missProb B = 0 := by
-  rw [stratified_escape]
+  rw [stratified_missProb]
   refine Finset.prod_eq_zero (mem_univ s) ?_
   have hc : (B.filter (σ · = s)).card = (stratum σ s).card := by
     rw [filter_eq_inter_stratum, inter_eq_right.2 hB]
@@ -145,7 +145,7 @@ theorem audit_whole_stratum (A : Analysis (SamplingDesign.stratified σ k hk) Re
         (audit (SamplingDesign.stratified σ k hk) Reg session) σ' ≤ εks + δlink := by
   refine (audit_profile A hks hlink (fun B => SamplingDesign.stratum σ s ⊆ B) σ').trans ?_
   have h0 : (⨆ (B : Finset (Fin n)) (_ : SamplingDesign.stratum σ s ⊆ B), (SamplingDesign.stratified σ k hk).missProb B) = 0 :=
-    le_antisymm (iSup₂_le fun B hB => (SamplingDesign.stratified_escape_floor σ k hk s h hB).le) (zero_le)
+    le_antisymm (iSup₂_le fun B hB => (SamplingDesign.stratified_missProb_floor σ k hk s h hB).le) (zero_le)
   rw [h0, zero_add]
 
 /-- **A wholly incorrect floored stratum is caught** (compiled layer, randomized extractor): at most
@@ -161,7 +161,7 @@ theorem extraction_audit_whole_stratum (A : ExtractionAnalysis (SamplingDesign.s
       Disjoint ((SamplingDesign.stratified σ k hk).draw ω) (A.incorrect (A.committedOf σ'))) = 0 := by
     by_cases hB : SamplingDesign.stratum σ s ⊆ A.incorrect (A.committedOf σ')
     · exact le_antisymm ((prCoin_mono fun ω h => h.2).trans
-        (SamplingDesign.stratified_escape_floor σ k hk s h hB).le) (zero_le)
+        (SamplingDesign.stratified_missProb_floor σ k hk s h hB).le) (zero_le)
     · exact le_antisymm ((prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans prCoin_false.le) (zero_le)
   rw [h0, zero_add]
 

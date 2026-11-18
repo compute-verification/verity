@@ -52,7 +52,7 @@ from verity.config import Component, Workload
 from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.compose import schemes
 from verity.protocols.resource_accounting.network.verifier import parties as NC
-from verity.protocols.resource_accounting.scheme import settings
+from verity.protocols.resource_accounting.scheme import declared, settings
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.resource_accounting.memory.poub.verifier import p2_parties as P2
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
@@ -84,8 +84,8 @@ BANDWIDTH_VERIFIER, NETWORK_ATTESTER = P2.CLOSER_PARTY, NC.NETWORK_ATTESTER
 #: served_verdicts.py's record reads each piece's answer by its runner name
 RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only": "inference-only", "space": "pous",
                 "bandwidth": "bandwidth", "communication": "certifier", "wipe": "wipe"}
-#: each component's row in the record: Pearl+'s is ``work``, as H1's is
-ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": "work"}
+#: each component's row in the record: Pearl+'s is the one it declares
+ROWS = {v: k for k, v in RECORD_NAMES.items()} | {"pearl-plus": declared(schemes.get("pearl-plus"), "record")}
 #: served_verdicts.py's ``answer_from`` for a row it carries from a file the served node wrote (its ``AS_WRITTEN``)
 AS_WRITTEN = "as the served node wrote it"
 
@@ -184,10 +184,8 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
                         Channel(WORKERS, VERIFIER, ("H1Record",), after=("H1Coins",))),
               needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)),
-    Component("pearl-plus", SP.IDS["pearl-plus"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
-                                                           Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
-              channels=(Channel(CHALLENGER, WORKERS, ("PearlSalt",), carries_coins=True),),
-              needs=frozenset({"windows"}), params=_pearlplus_params),
+    Component("pearl-plus", SP.IDS["pearl-plus"], params=_pearlplus_params,
+              **{f: declared(schemes.get("pearl-plus"), f) for f in ("parties", "channels", "needs")}),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_ATTESTER, VERIFIER, ("SignedRun",), after=("End",))),

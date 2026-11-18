@@ -244,7 +244,8 @@ def test_every_declaration_fills_each_field_or_says_why_not() -> None:
              "from verity.protocols.resource_accounting import scheme as S\n"
              "C.load()\n"
              "F = ('parties', 'channels', 'channel_schemas', 'colocated', 'needs', 'depends', 'record', 'symbol',\n"
-             "     'published', 'check', 'reader', 'premises')\n"
+             "     'published', 'check', 'reader', 'premises', 'tables', 'number_format', 'y_committed',\n"
+             "     'salt_open_root')\n"
              "print(json.dumps(sorted([n, f] for n in C.DECLARATIONS for f in F if getattr(C.get(n), f) == S.UNDECLARED)))\n")
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout) == [], "fill each field a declaration leaves unset, or say why not with S.Lacks(why)"

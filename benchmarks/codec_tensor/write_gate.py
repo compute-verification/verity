@@ -33,7 +33,10 @@ MARK = "WRITE-GATE "                  # starts the child's line of its launches
 def profile(kernels: str, child: list[str]) -> subprocess.CompletedProcess:
     """`child`, a command line that prints its launches after MARK, under Nsight Compute: METRICS of each kernel whose
     name matches `kernels`, as CSV on its stdout."""
-    ncu = shutil.which("ncu") or "/usr/local/cuda-13.0/bin/ncu"
+    ncu = shutil.which("ncu")
+    if ncu is None:
+        from verity_bench import kit
+        ncu = f"{kit.toolkit('13.0')}/bin/ncu"
     return subprocess.run([ncu, "--csv", "--print-units", "base", "--target-processes", "all", "--kernel-name", kernels,
                            "--metrics", ",".join(METRICS), *child], capture_output=True, text=True, check=False)
 

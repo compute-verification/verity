@@ -30,6 +30,7 @@ from typing import Any
 
 from verity import hooks as H
 from verity.protocols.resource_accounting.compute.pouw.prover import workload
+from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
@@ -468,11 +469,14 @@ PEARL_PLUS = register(Scheme(
     needs=frozenset({"windows"}),
     depends=(),
     record="work",
-    symbol=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s certified quantity is its owner's to name"),
-    published=Lacks("Pearl+ declares its costs in MACs and its Lean instance in the reference work unit: the exact "
-                    "factor between them is its owner's to say"),
+    symbol="V",
+    published=("MACs", Fraction(1)),
     channel_schemas=Lacks("no Schema is declared for PearlSalt"),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
     premises=Lacks("Pearl+'s premises are its owner's to name"),
-    reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s certified quantity is its owner's to name"),
+    reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
+    tables=("pearl-a", "pearl-y", "pearl-b"),
+    number_format="bf16",
+    y_committed=True,
+    salt_open_root=epoch_open_root,
 ))
