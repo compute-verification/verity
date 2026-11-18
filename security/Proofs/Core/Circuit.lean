@@ -297,15 +297,6 @@ theorem restrict_run_iff_correct (X : C.Trace) (u : Fin n) :
   · rintro h g ⟨hc, hu⟩
     exact h g hc hu
 
-theorem rblk_iff {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
-    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) (X : C.Trace)
-    (π : Fin C.N → Sc.Op) :
-    P.Rblk Sc H enc L c u X π ↔
-      (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u),
-          ∃ p, P.pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g (X g)) (π g)) ∧
-        P.Correct X u :=
-  and_congr Iff.rfl (P.restrict_run_iff_correct X u)
-
 /-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
 theorem mem_committed_sdiff_boundary {g : Fin C.N} :
     g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ ∀ h, g ∉ C.reads h := by
@@ -402,18 +393,6 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
   have hio : g ∈ P.io u := by simp only [io, Finset.mem_filter]; exact ⟨hg, Or.inl hu⟩
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
-
-/-- **The free inputs are free**: `Rblk` reads the trace only at in(S) and out(S), so every other gate, a gate outside
-`S` that `S` never reads among them, takes any value without changing it. -/
-theorem rblk_congr {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
-    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (L : Layout C) (c : Root → Sc.Com) (u : Fin n) {X X' : C.Trace}
-    (π : Fin C.N → Sc.Op) (hX : ∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), X g = X' g) :
-    P.Rblk Sc H enc L c u X π ↔ P.Rblk Sc H enc L c u X' π := by
-  have hio : ∀ g ∈ P.io u, X g = X' g := fun g hg => hX g (P.into_union_exits_eq_io u ▸ hg)
-  rw [P.rblk_iff, P.rblk_iff]
-  refine and_congr ?_ ⟨fun h => P.correct_congr (fun g hg => (hio g hg).symm) h, P.correct_congr hio⟩
-  refine forall₂_congr fun g hg => ?_
-  rw [hX g hg]
 
 /-! ## Refinement -/
 
