@@ -30,8 +30,8 @@ The refusals, by name: `edge-parts` (an argument of a root node has more parts t
 root, as reader or writer), `not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row
 across a part's edge, not one whole writer field, or not in closed form: a row across runs or not contiguous, members
 whose rows are no mixed radix of the lane's levels, an explicit part naming a non-input node, a reference to a
-parameter) and
-`edge-width` (a reader row's bits are not the field's).
+parameter), `edge-fields` (one of those, where the part reads more than one output field of one writer: one field
+a part is the rule, `crossesFields`) and `edge-width` (a reader row's bits are not the field's).
 
 The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block. The
 parts are read only after `argPartsOk` has bounded them by the root's nodes.
@@ -167,6 +167,38 @@ def laneWire (run : Nat) (lanes : List Lane) (k0 L len n : Nat) : Except String 
   if levels.isEmpty then return (ln.i, leaf.toNat, [1], [0])
   return (ln.i, leaf.toNat, levels.map (·.1), levels.map (·.2))
 
+/-- The index of the field of `t` holding leaf `o`. -/
+def fieldIx (t : Ty) (o : Nat) : Option Nat :=
+  ((fieldsOf t).foldl (fun (acc : Option Nat × Nat × Nat) ty =>
+    (if acc.2.1 ≤ o && o < acc.2.1 + ty.leaves && acc.1.isNone then some acc.2.2 else acc.1,
+      acc.2.1 + ty.leaves, acc.2.2 + 1)) (none, 0, 0)).1
+
+/-- Reference `k` of the grid `(run, lanes)`: its lane's collection and its leaf. -/
+def leafAt (run : Nat) (lanes : List Lane) (k : Nat) : Option (Bool × Nat × Int) :=
+  let g := lanes.length
+  if run == 0 || g == 0 then none else
+  let ln := lanes[k % (g * run) / run]!
+  let ds := digitsOf (k / (g * run)) ln.lv
+  some (ln.p, ln.i, ln.b + ((k % (g * run) % run : Nat) : Int) * ln.e +
+    ((ds.zip ln.lv).map fun (d, _, st) => (d : Int) * st).sum)
+
+/-- Whether the rows `k0 + m·L` (`m < cnt`), `len` references each, of the grid `(run, lanes)` (`c` references) read
+more than one output field of one writer node, at a row's last reference or the next member's row. -/
+def crossesFields (P : Prog) (run : Nat) (lanes : List Lane) (c k0 L len cnt : Nat) : Bool :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  match leafAt run lanes k0 with
+  | some (false, w, l0) =>
+    if l0 < 0 || w ≥ nodes.size then false else
+    let wd := P.defs[nodes[w]!.fn]!
+    let LW := wd.outLeaves
+    if LW == 0 then false else
+    let f0 := fieldIx wd.ret (l0.toNat % LW)
+    let ks := [k0 + len - 1] ++ (if cnt > 1 then [k0 + L, k0 + L + len - 1] else [])
+    ks.any fun k => k < c && match leafAt run lanes k with
+      | some (false, w', l) => w' == w && l ≥ 0 && fieldIx wd.ret (l.toNat % LW) != f0
+      | _ => false
+  | _ => false
+
 /-- Whether root node `k` calls an input. -/
 def isInputNode (P : Prog) (k : Nat) : Bool :=
   let f := P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!
@@ -202,7 +234,11 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
         throw "edge-rows"
       continue
     let (run, lanes) := partLanes q
-    let (w, l0, radix, steps) ← laneWire run lanes (x0 + lo * L - s0) L len cnt
+    let k0 := x0 + lo * L - s0
+    let rows := if crossesFields P run lanes q.count k0 L len cnt then "edge-fields" else "edge-rows"
+    let (w, l0, radix, steps) ← match laneWire run lanes k0 L len cnt with
+      | .ok v => pure v
+      | .error e => throw (if e == "edge-rows" then rows else e)
     if w ≥ k then throw "not-topological"
     if isInputNode P w then continue
     let wnode := nodes[w]!
@@ -212,8 +248,8 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let wd := P.defs[wnode.fn]!
     let LW := wd.outLeaves
     if LW == 0 then throw "edge-rows"
-    let some (f, fl, fb) := fieldAt wd.ret (l0 % LW) | throw "edge-rows"
-    if fl != len || (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw "edge-rows"
+    let some (f, fl, fb) := fieldAt wd.ret (l0 % LW) | throw rows
+    if fl != len || (radix.zip steps).any (fun (r, d) => r > 1 && d % (LW : Int) != 0) then throw rows
     if fb != bitsOf ty / cuts then throw "edge-width"
     let wire : Spot.Wires.Wire :=
       { reader := rt, port := port, writer := wt, out := "o" ++ toString f, start := rb + lo, radix := radix,
