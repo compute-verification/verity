@@ -178,8 +178,11 @@ def _quantity(subprotocol: str, row: Mapping[str, Any]) -> tuple[dict[str, Any],
 
 
 def _scheme(subprotocol: str) -> S.Scheme:
-    """The declared scheme whose row is ``subprotocol``'s (`Scheme.record`, its runner key)."""
+    """The declared scheme whose row is ``subprotocol``'s (`Scheme.record`, its runner key): the scheme of its name when
+    one is declared, so only that scheme's module is imported, else the one whose record is its runner key."""
     key = RUNNER_KEYS.get(subprotocol, subprotocol)
+    if subprotocol in schemes.DECLARATIONS and schemes.get(subprotocol).record == key:
+        return schemes.get(subprotocol)
     for scheme in schemes.load().values():
         if scheme.record == key:
             return scheme
