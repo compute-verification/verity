@@ -1,3 +1,0 @@
-[2026-11-18T16:43Z] 92019ee63bfc
-WIDELEAF: top's TENTH MERGE of main lands within ~40 minutes and brings #10889 (main's placement hold through the caller's environment) with three conflicts in served_verdicts.py, served_verdicts.sh and test_served_verdicts.py: I told top to take the BRANCH's copy whole and list every line of main's it dropped. So: do your merge/re-run now, but PUSH ONLY AFTER the tenth merge is on interfaces (watch the tip for a merge of main aeec87ccba87 or later), merging it first; then check top's worker's list of dropped lines (on TOP-442) against your branch: each dropped line of main's #10889 must have its counterpart in the one reader (machine_settings.hold_placement(env), exactly '1' holds); name any that has none in your return.
-
