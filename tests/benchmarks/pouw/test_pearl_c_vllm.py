@@ -1605,17 +1605,21 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
 
 def test_a_seeded_serve_draws_the_same_coins_and_no_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
     """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
-    installs (`seed_install`) hold challengers of one coin commitment, and seed nothing else: every leaf's salt is fresh, so
-    there is no salt key to seed; ``--seeded`` is refused beside retention and beside the challenger gate, before anything
-    is built."""
+    installs (`seed_install`) give the attached scheme's in-process challenger (`serving.in_process_coins`) one coin
+    commitment, and seed nothing else: every leaf's salt is fresh, so there is no salt key to seed; ``--seeded`` is
+    refused beside retention and beside the challenger gate, before anything is built."""
+    from verity.protocols.resource_accounting.compute.pouw.prover import serving as SV
+    from verity.protocols.resource_accounting.compute.pouw.verifier import verifier
+
     SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
     assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salts")(32) != SP.seeded("coins")(32)
-    one, two = {"coins": None}, {}
-    SP.seed_install(one)
-    SP.seed_install(two)
-    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
-    assert set(one) == set(two) == {"coins"} and not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
+    monkeypatch.setattr(verifier, "coins", verifier.coins)
+    SP.seed_install()
+    one = SV.in_process_coins(0).commitment.to_json()
+    SP.seed_install()
+    assert SV.in_process_coins(0).commitment.to_json() == one
+    assert not hasattr(PPD, "new_salt_key") and not hasattr(PPD, "no_salt_key")
     argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
     with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
         SP.main(argv)
@@ -5229,6 +5233,17 @@ def _served_step_profile(path: Path) -> Path:
         kernel(s + 7_100_000, s + 7_500_000, s + 7_600_000, 6)
     con.commit()
     return path
+
+
+def test_served_step_refuses_the_rtx_pro_6000s_pearl_c_arm_by_name():
+    """No declared scheme serves Pearl-C on sm_120, so ``served_step.py run`` refuses an arm of that entry by name
+    (`undeclared`, which `_engine` asks before any engine) and passes the H100's, and ``served_step.sh``'s RTX PRO 6000
+    default arms are stock FP8's alone."""
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
+    assert "pouw:pearl-c-sm120-v1-h3: no declared scheme serves Pearl-C on that card" in S.undeclared(
+        ["stock-fp8", "pouw:pearl-c-sm120-v1-h3"])
+    assert S.undeclared(["pouw:pearl-c-h100-v1-h3"]) is None
+    assert "ARMS=${ARMS:-stock-fp8@compiled,stock-fp8}; SPEC" in (POUW / "pearl_c_vllm" / "served_step.sh").read_text()
 
 
 def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):
