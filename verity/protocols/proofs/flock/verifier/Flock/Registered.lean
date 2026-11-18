@@ -309,6 +309,8 @@ end OneCircuit
 
 namespace Registered
 
+open Lean (Json)
+
 /-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
 requires of every link, which the class circuits name `out`. -/
 def OUT_FIELD : String := "out"
