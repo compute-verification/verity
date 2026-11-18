@@ -29,17 +29,17 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
-from verity.protocols.resource_accounting.compute.pouw.prover import workload
-from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import runs_on
-from verity.protocols.resource_accounting.compute.pouw.verifier.salt import epoch_open_root
-from verity.protocol import Channel, Role
-from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
+from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
+from verity.protocol import VERIFIER
+from verity.protocols.resource_accounting.scheme import Block, Charge, Lacks, Order, Scheme, Term, register
 
 #: the kernel scheme it runs, on every card its row allows
 KERNEL = "pearl-c-h100-v1-h3"
 OPTION = f"pouw:{KERNEL}"
-#: the weight formats its kernel reads, quantizing them itself; a quantized (FP8) weight is refused, not misread
-READS = ("bf16", "fp16", "fp32")
+#: the weight formats its kernel reads: BF16 only, since a weight's tree commits its FP32 words and its retained rows are
+#: BF16 (run_device._weight_words); any other weight (FP16, FP32, FP8, INT8) is refused, not misread
+READS = ("bf16",)
 
 
 def tile_macs(shape: Mapping[str, int]) -> int:
@@ -52,10 +52,11 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: the salt's source, ``coins`` (``in-process``: a challenger held in this
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
-#: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`); and
-#: ``tie-uniform``
+#: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`);
+#: ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset: every
+#: phase's); and ``tie-uniform``
 SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": ""}
+                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
 COINS = ("", "in-process")
 
 
@@ -79,6 +80,10 @@ def check_settings(own: Mapping[str, Any]) -> str | None:
         return "a challenger needs a session (the gate's reserve answer) or lane and peer to reserve each epoch's"
     if own["session"] and not isinstance(own["session"].get("session"), str):
         return f"session is the gate's reserve answer, {{'session': SESSION_ID, ...}}, not {own['session']!r}"
+    try:
+        re.compile(own["users"])
+    except re.error as e:
+        return f"users is a regular expression, and {own['users']!r} is not ({e})"
     return None
 
 
@@ -112,11 +117,10 @@ def spend_epoch(private: str | os.PathLike[str]) -> int:
     directory, before it is returned: a killed server's number is never handed out again, so no later server opens a
     session on a root already used (the gate's one session a root); a number may be skipped."""
     path = Path(private) / EPOCH_FILE
-    try:
-        text = path.read_text()
-    except FileNotFoundError:
+    if not path.exists():
         k = 0
     else:
+        text = path.read_text()
         if not re.fullmatch(r"(0|[1-9][0-9]*)\n", text) or int(text) >= 2**64 - 1:
             raise ValueError(f"pearl-plus: {path} holds {text[:40]!r}, not the last salt epoch number spent below 2^64 - 1: "
                              "refused rather than risk a number already used")
@@ -177,6 +181,7 @@ class Attached:
         self.declared: H.Declared | None = None
         self.weights: dict[int, H.Handle] | None = None
         self.run: Any = None
+        """The open epoch's device run, which benchmarks' harness gate reads (`verity_bench.vllm.runner._pearl_c_gate`)."""
         self.session: Any = None
         self.reserved: dict[str, Any] | None = None
         self.epochs = 0
@@ -187,6 +192,11 @@ class Attached:
         self.phases: dict[int, dict[str, Any]] = {}
         self.busy: dict[int, int] = {}
         self.computed: set[int] = set()
+        self.users = re.compile(self.own["users"]) if self.own["users"] else None
+        self.user_of: dict[str, str | None] = {}
+        self.held = False
+        self.unopened: set[int] = set()
+        self.life_unopened = False
 
     def declare(self, event: H.Declared) -> None:
         self.declared = event
@@ -211,7 +221,15 @@ class Attached:
         too; with no phase, one epoch for the server's life, opened at the first step with tokens and finished at
         `release`. A pass ends at each `StepComputed`, once the step's blocks are all issued. A step that computed and
         ended without one is refused: under a multiprocess executor the adapter emits no `StepComputed`, and no pass
-        would end."""
+        would end. Under ``users``, an epoch opens instead at its phase's (or the server's life's) first step whose inputs'
+        users all match it, if no step of the phase computed before it; a phase that ran another's inputs first serves
+        no epoch and takes no coins, and a step deciding it with an input that named no user is refused."""
+        if isinstance(event, H.InputArrived):
+            if self.users is not None:
+                self.user_of[event.input] = event.user
+            return
+        if isinstance(event, H.OutputsComplete):
+            self.user_of.pop(event.input, None)
         if isinstance(event, H.PhaseOpened):
             if self.run is not None and not self.phased:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} opens at step {event.step}, after steps outside any "
@@ -222,17 +240,27 @@ class Attached:
             if self.weights is None:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} opens before its linear weights registered")
             self.phased, self.phase, self.first_step = True, event.phase, event.step
-            self.run = self.open(self.weights, self.own)
+            if self.users is None:
+                self.run = self.open(self.weights, self.own)
+            else:
+                self.held = True
             return
         if isinstance(event, H.PhaseClosed):
             if self.phase != event.phase:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} closes, and the open phase is {self.phase}")
+            if self.run is None:
+                self.unopened.add(event.phase)
+                self.held, self.phase = False, None
+                return
             self.phases[event.phase] = {**self.close(event.step - self.first_step + 1), "first_step": self.first_step,
                                         "last_step": event.step,
                                         "program": event.program.hex(), "root": None}
             self.phase = None
             return
         if isinstance(event, H.PhaseCommitted):
+            if event.phase in self.unopened:
+                self.unopened.discard(event.phase)
+                return
             if event.phase not in self.phases:
                 raise RuntimeError(f"pearl-plus: phase {event.phase}'s root comes before the phase closed")
             if self.phases[event.phase]["root"] is not None:
@@ -240,8 +268,16 @@ class Attached:
             self.phases[event.phase]["root"] = event.root.hex()
             return
         if isinstance(event, H.StepBegan) and self.run is None and not self.phased and event.slots \
-                and self.weights is not None:
-            self.run = self.open(self.weights, self.own)
+                and self.weights is not None and not self.life_unopened:
+            if self.users is None or self.tied(event.inputs):
+                self.run = self.open(self.weights, self.own)
+            else:
+                self.life_unopened = True
+        if isinstance(event, H.StepBegan) and self.held:
+            if self.tied(event.inputs):
+                self.held, self.run = False, self.open(self.weights, self.own)
+            elif event.slots:
+                self.held = False
         if self.run is None:
             return
         if isinstance(event, H.StepBegan):
@@ -257,6 +293,16 @@ class Attached:
                 raise RuntimeError(f"pearl-plus: step {event.step} computed and ended with no StepComputed, so its pass "
                                    "never ends (a multiprocess executor emits none); serve with a uniprocess executor")
             self.computed.discard(event.step)
+
+    def tied(self, inputs: tuple[str, ...]) -> bool:
+        """Whether ``inputs`` are some, and every one's user matches ``users`` in full; refused where one arrived naming
+        no user (`InputArrived.user`), since no answer about it is the setting's. A user is matched here only, and never
+        written anywhere."""
+        if missing := [i for i in inputs if self.user_of.get(i) is None]:
+            raise RuntimeError(f"pearl-plus: inputs {missing[:4]} name no user, and its 'users' setting "
+                               f"{self.users.pattern!r} opens an epoch only on a step whose inputs' users all match it: "
+                               "the adapter fills InputArrived.user with each input's user")
+        return bool(inputs) and all(self.users.fullmatch(self.user_of[i]) for i in inputs)
 
     def kernel(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         if due.format not in READS:
@@ -443,7 +489,9 @@ def attach(exchange: Any, ctx: Any) -> Attached:
 
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
-    messages=workload.MESSAGES,
+    # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
+    # scheme, and H1 has none
+    messages=tuple(m for m in workload.MESSAGES if m.type in ("PoUWScheme", "PearlPass", "H1Registration")),
     protocol="verity/pouw/pearl-plus/v1",
     resource="compute",
     blocks=(Block("PearlPlusTile_v1", tile_macs), Block("PearlCTileRead_v1", tile_macs)),
@@ -466,22 +514,23 @@ PEARL_PLUS = register(Scheme(
               "one-design": "its own tile sampling by ticket weight"},
     requests=requests,
     attach=attach,
-    parties=(Role("challenger", "auditor", needs=("host",)), Role("workers", "developer", needs=("serve",)), VERIFIER),
-    channels=(Channel("challenger", "workers", ("PearlSalt",), carries_coins=True),),
+    parties=(*workload.PEARL_PARTIES, VERIFIER),
+    channels=workload.PEARL_CHANNELS,
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
-    channel_schemas=Lacks("no Schema is declared for PearlSalt"),
+    channel_schemas=(workload.PEARL_SALT,),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
-    premises=Lacks("Pearl+'s premises are its owner's to name"),
+    premises=("Verity.Vocab.PouwSound", "Pouw.PearlPlus.Setting.ChargeHolds"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
     tables=("pearl-a", "pearl-y", "pearl-b"),
     output_format="bf16",
     product_family="fp8-e4m3-rowwise",
     y_committed=True,
-    salt_open_root=epoch_open_root,
+    salt_open_root=serving.epoch_open_root,
     kernels=runs_on(KERNEL),
+    keeps_weight_copy=True,
 ))

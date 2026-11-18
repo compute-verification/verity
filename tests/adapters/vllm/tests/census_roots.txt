@@ -71,11 +71,9 @@ verity_vllm.engine.stock      # a stock engine at the pin with no protocol on
 # (protocol_options.adapter)
 verity_vllm.protocols
 verity_vllm.protocols.interface
-verity_vllm.protocols.pous
 verity_vllm.protocols.pouw
 verity_vllm.protocols.pouw.h1_hooks
 verity_vllm.protocols.pouw.h1_ranks
 verity_vllm.protocols.pouw.h1_settings
 verity_vllm.protocols.spot
 tests/regression/
-verity_vllm/protocols/poub/      # PoUB's node store on the engine, imported by the protocol driver and the benchmarks

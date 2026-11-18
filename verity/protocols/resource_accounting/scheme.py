@@ -77,11 +77,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
-from verity.channel import Schema
-from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -105,8 +103,13 @@ class Lacks:
 
 
 UNDECLARED = Lacks()
-#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
-VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
+
+
+class Kernels(Protocol):
+    """A scheme's ``kernels``: the kernel scheme it runs on the card whose short name is ``card`` and whose card file's
+    ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
+
+    def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -263,8 +266,9 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
-    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    `verity.protocol.VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of
+    each message its channels carry that has one, by its type, which this module types by name only, so it loads
+    neither module; ``colocated``, the pairs of its parties on one machine; ``needs``, what
     the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
     ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
@@ -282,9 +286,10 @@ class Scheme:
     products, the operands' format and scaling (``fp8-e4m3-rowwise``: E4M3 operands, one scale per row of each, an
     FP32 accumulator), named as the harness names a stock kernel's family; ``y_committed``, whether each of its calls
     commits that y; ``salt_open_root``, the root its salt coin is opened after, a function of the weights' root
-    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card, of the card's short name and
-    ``pinned=`` (whether registration pins the weights), `LookupError` naming the cards and pinnings it runs on
-    otherwise.
+    and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
+    name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
+    cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
+    against the committed root once at build.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -315,14 +320,14 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
-    parties: tuple[Role, ...] | Lacks = UNDECLARED
-    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    parties: tuple[Any, ...] | Lacks = UNDECLARED
+    channels: tuple[Any, ...] | Lacks = UNDECLARED
     colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
     needs: frozenset[str] | Lacks = UNDECLARED
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    channel_schemas: tuple[Any, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
@@ -332,7 +337,8 @@ class Scheme:
     product_family: str | Lacks = UNDECLARED
     y_committed: bool | Lacks = UNDECLARED
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
-    kernels: Callable[..., str] | Lacks = UNDECLARED
+    kernels: Kernels | Lacks = UNDECLARED
+    keeps_weight_copy: bool | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -429,6 +435,34 @@ class Bound:
         return self.delta + self.epsilon + self.delta_scheme
 
 
+class Unbounded(ValueError):
+    """`bound`'s refusal of a declaration whatever its caller gives: the sentence, and ``terms``, the name of each
+    term it lacks (each charge nothing bounds, by its name; ``Verity.Scheme.δscheme``; ``premises``)."""
+
+    def __init__(self, why: str, terms: tuple[str, ...]) -> None:
+        super().__init__(why)
+        self.terms = terms
+
+
+def unbounded(scheme: Scheme) -> Unbounded | None:
+    """Why ``scheme``'s declaration lets `bound` give no bound at any inputs, None where it can: a known charge
+    nothing bounds yet, its own term not said, or its premises not said, the first of these."""
+    if open_ := [c for c in scheme.charges if not c.bounded]:
+        return Unbounded(f"{scheme.name} has known charges nothing bounds yet: "
+                         f"{', '.join(f'{c.name} ({c.bound})' for c in open_)}; a bound without them would read as "
+                         "complete", tuple(c.name for c in open_))
+    if isinstance(scheme.delta_scheme, Lacks):
+        return Unbounded(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
+                         "own term by name, zero where none of its assumptions can fail"
+                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""),
+                         ("Verity.Scheme.δscheme",))
+    if isinstance(scheme.premises, Lacks):
+        return Unbounded(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
+                         "declaration names each Lean Prop its guarantee is stated under, () where none"
+                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""), ("premises",))
+    return None
+
+
 def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, int],
           parameters: Mapping[str, Any] | None = None, *, epsilon: Fraction | None = None) -> Bound:
     """``scheme``'s `Bound`, carrying its own term, evaluated at ``parameters`` where it is a `Term` (``N`` read from
@@ -436,19 +470,10 @@ def bound(scheme: Scheme, delta: Fraction, missable: int, charges: Mapping[str, 
     scheme with a known charge nothing bounds yet or whose own term is not said, parameters other than exactly the
     term's, and an audit's error ``epsilon`` not given (`GetsBack`'s ε, which the audit supplies, never the scheme)."""
     declared(scheme, "resource")
+    if (refused := unbounded(scheme)) is not None:
+        raise refused
     if sorted(charges) != sorted(c.name for c in scheme.charges):
         raise ValueError(f"{scheme.name}'s charges are {sorted(c.name for c in scheme.charges)}, not {sorted(charges)}")
-    if unbounded := [f"{c.name} ({c.bound})" for c in scheme.charges if not c.bounded]:
-        raise ValueError(f"{scheme.name} has known charges nothing bounds yet: {', '.join(unbounded)}; a bound "
-                         "without them would read as complete")
-    if isinstance(scheme.delta_scheme, Lacks):
-        raise ValueError(f"{scheme.name}: its delta_scheme (Verity.Scheme.δscheme) is not said: a declaration says its "
-                         "own term by name, zero where none of its assumptions can fail"
-                         + (f"; it says why not: {scheme.delta_scheme.why}" if scheme.delta_scheme.why else ""))
-    if isinstance(scheme.premises, Lacks):
-        raise ValueError(f"{scheme.name}: its premises are not said, so a bound would read as unconditional; a "
-                         "declaration names each Lean Prop its guarantee is stated under, () where none"
-                         + (f"; it says why not: {scheme.premises.why}" if scheme.premises.why else ""))
     if not 0 < delta < 1 or missable < 0 or any(v < 0 for v in charges.values()):
         raise ValueError(f"{scheme.name}: δ lies in (0, 1) and every amount is at least 0")
     if epsilon is None or not 0 <= epsilon < 1:
@@ -569,6 +594,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "bound", "credited", "declared",
-           "layout", "register", "register_circuits", "register_process", "settings"]
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Charge", "Circuits", "Kernels", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+           "bound",
+           "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
+           "unbounded"]

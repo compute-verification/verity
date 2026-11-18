@@ -220,6 +220,7 @@ def test_unbounded_charge_refuses_a_bound() -> None:
     s = _toy(charges=(S.Charge("on-chip", "on_chip_bits"), S.Charge("padding", "Network.PaddingBound", bounded=False)))
     with pytest.raises(ValueError, match="nothing bounds yet: padding"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0, "padding": 0})
+    assert S.unbounded(s).terms == ("padding",) and S.unbounded(_toy()) is None
 
 
 def test_ports() -> None:
@@ -321,7 +322,8 @@ def test_every_scheme_is_a_line_of_the_one_table() -> None:
 
     root = Path(__file__).resolve().parents[4]
     declaring = {str(p.relative_to(root).with_suffix("")).replace("/", ".")
-                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental")
+                 for d in ("verity/protocols/resource_accounting", "verity/protocols/experimental",
+                           "verity/protocols/proofs/spot", "verity/protocols/workload_classification")
                  for p in (root / d).rglob("scheme.py") if "register(" in p.read_text()}
     declaring.discard("verity.protocols.resource_accounting.scheme")
     assert declaring == set(schemes.DECLARATIONS.values()), "add each declaring module's names to compose.schemes"

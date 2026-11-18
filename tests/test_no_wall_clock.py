@@ -51,8 +51,6 @@ ALLOWED: dict[str, str] = {
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
-    "tests/adapters/vllm/tests/protocols/pous_gpu.py":
-        "the PoUS option's GPU smoke (not collected) records its load, install, decode and step seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "tests/adapters/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",

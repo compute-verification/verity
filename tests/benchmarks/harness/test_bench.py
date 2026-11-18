@@ -464,15 +464,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         return (x.float() @ W.float().T).to(torch.bfloat16)
 
     run = Run(exact_y)
-    exact = _pearl_c_gate(run)
+    exact = _pearl_c_gate(run, "pearl-plus")
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)), "pearl-plus")
     assert not wrong["passed"] and wrong["provided"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
-    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0), "pearl-plus")
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
@@ -524,10 +524,35 @@ def test_a_served_schemes_gate_refuses_by_name_where_its_device_run_is_not_found
         assert gate["passed"] is False and gate["provided"] is True and gate["scheme"] == "pearl-plus"
         assert "could not find the served scheme pearl-plus's device run" in gate["refused"]
     run = object.__new__(PearlCDeviceRun)
-    monkeypatch.setattr(E, "_pearl_c_gate", lambda r: {"passed": r is run, "provided": True})
+    run.retain_dir = None
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: {"passed": r is run and s == "pearl-plus", "provided": True})
     assert engine(arm, SimpleNamespace(run=run)).custom_gate() == {"passed": True, "provided": True}
     h1 = replace(arm, protocols=("pouw:eps1-sm120-h1fx1",))
     assert engine(h1, None).custom_gate() == {"passed": True, "provided": False}
+
+
+def test_the_harness_gate_is_refused_on_a_run_that_retains_its_passes(monkeypatch, tmp_path):
+    """The gate's call check begins and ends passes of its own, each retained (`passes.pass_dir`) on a run that retains:
+    on a retained Pearl+ run, three steps with the gate after the first left 15 pass directories against 2 passes listed.
+    So the harness refuses the gate by name on a run with a retain directory, and no pass directory is added."""
+    from verity_torch.pouw.pearl_c.passes import pass_dir
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
+
+    from verity_bench.vllm import engine as E
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
+    arm = next(a for a in resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings) if a.protocols)
+    run = object.__new__(PearlCDeviceRun)
+    run.retain_dir, run.retained = tmp_path / "passes", 1
+    (run.retain_dir / "pass-00000").mkdir(parents=True)
+    monkeypatch.setattr(E, "_pearl_c_gate", lambda r, s: (Path(pass_dir(r)).mkdir(), {"passed": True, "provided": True})[1])
+    got = object.__new__(E._VllmEngine)
+    got.arm, got.obj, got.served = arm, None, E._served_scheme(arm)
+    got.llm = SimpleNamespace(protocols=None, scheme=SimpleNamespace(run=run))
+    with pytest.raises(SystemExit, match="the harness gate begins and ends passes of its own; it can't run on a run that "
+                                         "retains its passes"):
+        got.custom_gate()
+    assert sorted(p.name for p in run.retain_dir.iterdir()) == ["pass-00000"]
 
 
 def test_the_readme_states_the_contract_the_code_keeps():

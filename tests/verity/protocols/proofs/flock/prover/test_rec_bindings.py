@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
@@ -29,11 +30,11 @@ def _statement(version, n: int = 3) -> tuple[dict, dict]:
     if version == "wired":
         prog, query = _wired(I32Add, n)
     else:
-        prog, query = P.population_program(I32Add, n, version=version), P.template_instance_query(I32Add)
+        prog, query = PN.population_program(I32Add, n, version=version), P.template_instance_query(I32Add)
     return P.partition(prog, query), json.loads(json.dumps(encode_program(prog)))
 
 
-@pytest.mark.parametrize("version", ["wired", *P.POPULATION_VERSIONS])
+@pytest.mark.parametrize("version", ["wired", *PN.POPULATION_VERSIONS])
 def test_the_bindings_of_a_population_program_at_either_version(version):
     part, desc = _statement(version)
     assert RB.POPULATION[version].fullmatch(desc["program_fn"])
@@ -92,7 +93,7 @@ def test_v_stars_definition_of_each_unit():
 
 def test_a_program_of_another_function_is_refused():
     """A `TemplatePopulations` program batches the template too, but is no `population_program` of it."""
-    prog = P.mixed_population_program([(I32Add, 3)])
+    prog = PN.mixed_population_program([(I32Add, 3)])
     part = {**P.partition(prog, P.template_instances_query([I32Add])), "query": P.template_instance_query(I32Add)}
     with pytest.raises(ValueError, match="is not WiredPopulations_v1 of one template"):
         RB.bindings(part, json.loads(json.dumps(encode_program(prog))))

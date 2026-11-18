@@ -15,8 +15,7 @@ from verity_cli import run as R
 REG = R.registry()
 T = sys.modules["served_table"]
 #: who declares each undeclared row's scheme, and then deletes the row
-OWNERS = {"sampled-proofs": "proofs", "pouw": "compute-accounting", "inference-only": "proofs (workload classification)",
-          "certifier": "network-accounting"}
+OWNERS = {"pouw": "compute-accounting"}
 
 
 def test_the_undeclared_rows_only_shrink() -> None:
@@ -50,3 +49,15 @@ def test_the_launch_data_refuses_a_name_it_has_no_pieces_for_by_name(name: str, 
     for read in (lambda: T.pieces(cfg, T.WORKERS), lambda: T.variables(cfg, {}), lambda: T.unbound(cfg, {})):
         with pytest.raises(Refused, match=why):
             read()
+
+
+@pytest.mark.parametrize(("given", "name", "detail"), [
+    ({"extra": 1}, "unknown-key", "pous has no setting ['extra']: its settings are ['challenges']"),
+    ({"challenges": 0}, "params", "pous: challenges is a positive integer, not 0"),
+    ({"challenges": "x"}, "params", "pous.challenges is a int, not 'x'")])
+def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: dict, name: str, detail: str) -> None:
+    pous = T.MANIFESTS["pous"]
+    assert pous.default_params == schemes.get("pous").settings
+    with pytest.raises(Refused) as e:
+        pous.params({**pous.default_params, **given})
+    assert (e.value.name, e.value.detail) == (name, detail)
