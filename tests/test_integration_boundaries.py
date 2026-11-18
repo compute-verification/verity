@@ -51,7 +51,6 @@ KNOWN = {
     ("tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py", "verity_vllm.definitions.registry.prims"),
     ("tests/verity/protocols/proofs/flock/prover/test_ir_lowering.py", "verity_vllm.definitions.registry.sampling"),
     ("tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py", "verity_vllm.definitions.registry"),
-    ("tests/verity/protocols/proofs/flock/prover/test_ir_sampling.py", "verity_vllm.definitions.registry.prims"),
     ("tests/verity/protocols/proofs/flock/prover/test_lean_typed_statement.py", "verity_vllm.definitions.registry.prims"),
     ("tests/verity/protocols/proofs/flock/prover/test_partition_units.py", "verity_vllm.definitions.registry"),
     ("tests/verity/protocols/proofs/flock/prover/test_stage_typed.py", "verity_vllm.definitions.registry.prims"),
