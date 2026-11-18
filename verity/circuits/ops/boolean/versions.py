@@ -44,8 +44,10 @@ import importlib
 import json
 import pkgutil
 import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Callable
+from types import MappingProxyType
+from typing import Any, Callable, NamedTuple
 
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
@@ -417,16 +419,74 @@ def lift_body(fn: SpecializedDefinition, override: Callable[[FunctionDefinition]
     return _bit_replayer(fn.body, [t for _, t in params], callee)
 
 
-def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
+def lift(fn: SpecializedDefinition, override: Callable[[FunctionDefinition], FunctionDefinition | None] | None = None
+         ) -> SpecializedDefinition:
     """``fn`` (a derived function: an unregistered composite whose body Calls registered Definitions) on bits, with the static
-    ``IR="boolean"`` beside its own.  `NoBooleanVersion` names every Definition its body Calls that has no Boolean version."""
-    body = lift_body(fn)
+    ``IR="boolean"`` beside its own, each Call lifted as `lift_body` lifts it.  `NoBooleanVersion` names every Definition its
+    body Calls that has no Boolean version."""
+    body = lift_body(fn, override)
     params, ret = fn.signature()
     bparams, bret = tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
     defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret), body,
                                doc=f"{fn.defn.doc}; on bits (each Call the Boolean version of its Definition)",
                                conformance=fn.defn.conformance, register=False)
     return bind(defn, **fn.bindings, IR="boolean")
+
+
+class BooleanBody(NamedTuple):
+    """A primitive's Boolean body: its Boolean Definition, that Definition's descriptor id and its Program's digest."""
+    fn: FunctionDefinition
+    id: str
+    digest: str
+
+
+def boolean_table(program) -> Mapping[str, BooleanBody]:
+    """Each word primitive ``program`` reaches, by descriptor id, to its Boolean body (`boolean_version`, looked up once
+    here): a Boolean primitive or an input has none, being a gate or an input of C.  `NoBooleanVersion` names every word
+    primitive with none."""
+    from verity.circuits.codec import program_digest
+    from verity.circuits.program import Program, is_input
+
+    out: dict[str, BooleanBody] = {}
+    missing: dict[str, str] = {}
+    for fid, fn in sorted(_reachable([program.root]).items()):
+        if not isinstance(fn, PrimitiveDefinition) or is_input(fn) or BL.is_boolean(fn):
+            continue
+        try:
+            v = boolean_version(fn)
+        except NoBooleanVersion as e:
+            missing.update(e.missing)
+            continue
+        v = bind(v) if isinstance(v, CompositeDefinition) else v
+        out[fid] = BooleanBody(v, descriptor_id(v), program_digest(Program(v)))
+    if missing:
+        raise NoBooleanVersion(missing)
+    return MappingProxyType(out)
+
+
+def block_circuit(fn: FunctionDefinition, table: Mapping[str, BooleanBody], memo: dict[str, FunctionDefinition] | None = None
+                  ) -> FunctionDefinition:
+    """``fn`` on bits with every word primitive it reaches, at any depth, the body ``table`` names: each composite lifted
+    once per descriptor id (`lift`), so its Definitions stay shared.  `NoBooleanVersion` names a primitive ``table`` lacks."""
+    from verity.circuits.program import is_input
+
+    memo = {} if memo is None else memo
+    fid = descriptor_id(fn)
+    if (hit := memo.get(fid)) is not None:
+        return hit
+    if isinstance(fn, PrimitiveDefinition):
+        if is_input(fn) or BL.is_boolean(fn):
+            out: FunctionDefinition = fn
+        elif fid in table:
+            out = table[fid].fn
+        else:
+            raise NoBooleanVersion({fid: "the Boolean table names no body for it"})
+    elif BL.is_boolean(fn):
+        out = fn
+    else:
+        out = lift(fn, lambda f: block_circuit(f, table, memo))
+    memo[fid] = out
+    return out
 
 
 def _word_static(v: Any) -> Any:
@@ -485,10 +545,13 @@ def _merged(rs, offs: dict | None = None) -> list[tuple[str, int, int, int]]:
     return [tuple(r) for r in out]
 
 
-def sigma_check(word: SpecializedDefinition, bits: SpecializedDefinition) -> dict:
-    """``bits`` against σ(``word``), node by node and without `lift`: each node Calls the Boolean version of the word node's
-    Definition in the same form (n, axes, scan inputs, name), and each operand and the return are the word's runs on the bits they
-    occupy (`bit_offsets`), in the bit types.  {"nodes", "definitions" (σ's entries), "mismatches" (the first 8), "ok"}."""
+def sigma_check(word: SpecializedDefinition, bits: SpecializedDefinition,
+                version: Callable[[FunctionDefinition], FunctionDefinition] | None = None) -> dict:
+    """``bits`` against σ(``word``), node by node and without `lift`: each node Calls ``version`` of the word node's
+    Definition (its Boolean version by default) in the same form (n, axes, scan inputs, name), and each operand and the
+    return are the word's runs on the bits they occupy (`bit_offsets`), in the bit types.  {"nodes", "definitions" (σ's
+    entries), "mismatches" (the first 8), "ok"}."""
+    version = boolean_version if version is None else version
     (wp, wr), (bp, br) = word.signature(), bits.signature()
     bad = [] if ([BL.bit_type(t) for _, t in wp], BL.bit_type(wr)) == ([t for _, t in bp], br) else ["signature: not the word's on bits"]
     wb, bb = word.body, bits.body
@@ -499,7 +562,7 @@ def sigma_check(word: SpecializedDefinition, bits: SpecializedDefinition) -> dic
     one = {"primitive": "call"}  # a word primitive's Call is a Call of its Boolean composite
     for k, (w, b) in enumerate(zip(wb.nodes, bb.nodes)):
         if id(w.fn) not in sigma:
-            v = boolean_version(w.fn)
+            v = version(w.fn)
             sigma[id(w.fn)] = descriptor_id(bind(v) if isinstance(v, CompositeDefinition) else v)
         if b.fn is not w.fn and descriptor_id(b.fn) != sigma[id(w.fn)]:
             bad.append(f"node {k}: Calls {descriptor_id(b.fn)}, σ({descriptor_id(w.fn)}) = {sigma[id(w.fn)]}")
@@ -666,6 +729,6 @@ def load_program(path: Path):
     return decode_program(desc, REGISTRY), program_digest(desc)
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "catalog_loader", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
+__all__ = ["BooleanBody", "NoBooleanVersion", "boolean_table", "block_circuit", "boolean_version", "catalog_loader", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
            "boolean_function", "purity", "dry_run", "derived_calls", "gate_table", "load_program", "word_descriptor",
            "write_word"]
