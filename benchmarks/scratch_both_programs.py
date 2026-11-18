@@ -49,6 +49,13 @@ def both(label, circuit):
     unwired, uq = population_program(list(circuit.templates), several=len(circuit.templates) > 1,
                                      values=I.program_values(circuit.registered))
     w, u = summary("wired", wired, wq), summary("unwired", unwired, uq)
+    b = wired.fn.bindings
+    wt = [descriptor_id(t) if not isinstance(t, str) else t for t in b["templates"]]
+    by = {descriptor_id(fn): fn for fn, _ in circuit.templates}
+    from_root = [(by[t], int(c)) for t, c in zip(wt, b["counts"])]
+    again, _ = population_program(from_root, several=len(from_root) > 1, values=I.program_values(circuit.registered))
+    w["root_template_order_is_circuit_order"] = wt == [descriptor_id(fn) for fn, _ in circuit.templates]
+    w["unwired_from_wired_root_statics_digest_equal"] = program_digest(again) == program_digest(unwired)
     tmpl = Counter({descriptor_id(fn): n for fn, n in circuit.templates})
     print(json.dumps({"circuit": label, "templates": len(tmpl), "units": sum(tmpl.values()),
                       "wired_counts_match": Counter(w["per_template"]) == tmpl,
@@ -64,7 +71,6 @@ both("periods rounded pair", I.Circuit("bits", ((ROUND, n), (WIDEN, n)), wires=(
 
 if "--class" in sys.argv:
     from tests.program.predict import test_window_circuit_fa3 as F
-    from verity_vllm.program.predict.window_circuit import WindowClass, class_circuit
-    from verity_vllm.pearl import PearlTables
+    from verity_vllm.program.predict.window_circuit import PearlTables, WindowClass, class_circuit
     reg = F._registered(config=json.loads(F.LLAMA_1B.read_text()))
     both("llama-3.2-1b sm_90 4,27,2 tied", class_circuit(reg, WindowClass(4, 27, 2), tables=PearlTables(F.PEARL)))
