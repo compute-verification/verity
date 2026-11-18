@@ -68,7 +68,7 @@ def test_eps_tensor_l32_bounds_the_adversary_by_the_balance_and_by_the_round_tri
     e = pipe.eps_tensor_l32([], rates, 256.0)
     assert e["T1"] == 0.5 and e["honest_config"] == {"nb": 4, "lw": 2, "mi": 1} and e["rho_sync"] == 64.0
     assert e["round_trip_config"] == {"nb": 2, "lw": 1, "mi": 0, "arm": 3}
-    assert e["bandwidth"] == {"t": 0.9, "tcgen05_words": 0.9 * 256, "mma_sync_words": (1.0 - 0.9) * 64,
+    assert e["load_bandwidth"] == {"t": 0.9, "tcgen05_words": 0.9 * 256, "mma_sync_words": (1.0 - 0.9) * 64,
                               "adversary_words": 0.9 * 256 + (1.0 - 0.9) * 64,
                               "eps": 1 - 128 / (0.9 * 256 + (1.0 - 0.9) * 64)}
     assert e["round_trip"]["t"] == 0.625 and e["round_trip"]["adversary_words"] == 160.0 + 0.375 * 64

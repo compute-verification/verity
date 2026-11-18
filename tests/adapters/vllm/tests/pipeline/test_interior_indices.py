@@ -97,8 +97,7 @@ def _first(links=LINKS):
     """A window stream over `A` and `B` taking ``links``' values a sampled span (`interior_rows.span_values`), a stand-in
     boundary registered and its first stage sampled (spans 0 and 2)."""
     names: dict[str, tuple[str, str]] = {}
-    values = IR.link_values(links, Q)
-    for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(MEMBERS, CELLS, "00", [0], values=values))):
+    for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(MEMBERS, CELLS, "00", [0], links=links))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
     supplied = tuple(v for v, _per, _leaf in IR.span_values(links))
     public = (S.Public("population", "structure", "N, the sample's range"),
@@ -173,7 +172,7 @@ def test_an_index_port_is_rows_of_the_value_the_verifier_fills_from_its_own_byte
     assert IR.link_schemas(MEMBERS, SUPPLIES) == {x.value: m.schema("idx") for x, m in zip(SUPPLIES, w.members)}
     assert IR.sources(LINKS, Q) == srcs
     for q in (1, SPANS):
-        sized = IR.interior_window(MEMBERS, CELLS, "00", list(range(q)), values=IR.link_values(LINKS, q))
+        sized = IR.interior_window(MEMBERS, CELLS, "00", list(range(q)), links=LINKS)
         assert P.program_digest(stream.interior_program(q)) == P.program_digest(sized.program)
     formats = IR.link_schemas(MEMBERS, LINKS)
     other = {**srcs, f"{KEY}/c": [[{"bytes": f"{r + 1:08x}"}] for _ in range(Q) for r in range(NC)]}

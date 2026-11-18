@@ -21,8 +21,8 @@ STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test
 
 
 class FakeRun:
-    def __init__(self, weight, tag):
-        self.weight, self.tag, self.calls, self.ends = weight, tag, 0, 0
+    def __init__(self, weight):
+        self.weight, self.calls, self.ends = weight, 0, 0
 
     def gemm(self, w, x, weight, bias):
         assert (w, bias) == (0, None) and weight is self.weight
@@ -52,14 +52,14 @@ def test_the_model_is_the_one_the_compute_benchmark_serves():
 def test_each_seed_layer_and_linear_has_its_own_run_and_each_call_its_own_pass(llama, ids, monkeypatch):
     made = []
 
-    def fake(weight, tag):
-        made.append(FakeRun(weight, tag))
+    def fake(weight):
+        made.append(FakeRun(weight))
         return made[-1]
 
     monkeypatch.setattr(steps, "pearl_c_run", fake)
     r = engine.evaluate(llama, ids[:3], [0, 1, 2], [spec.load("pearl-c-linears")], (0, 1), None, device="cpu",
                         log=lambda s: None, hf_check=False)
-    assert sorted(x.tag for x in made) == sorted(f"ppl/{s}/{li}/{n}" for s in (0, 1) for li in (0, 1) for n in LINEARS)
+    assert len(made) == 2 * 2 * len(LINEARS)
     assert {(x.calls, x.ends) for x in made} == {(3, 3)}
     assert r["gates"]["pearl_c"]["failed"] == 0 and r["gates"]["pearl_c"]["checked"] == 3 * len(made)
     got, want = (float(np.exp(r["nll"][k].mean(dtype=np.float64))) for k in ("pearl-c-linears/s0", "bf16/s0"))
@@ -69,7 +69,7 @@ def test_each_seed_layer_and_linear_has_its_own_run_and_each_call_its_own_pass(l
 def test_without_a_cubin_the_step_says_how_to_build_one(monkeypatch):
     monkeypatch.delenv("PEARLC_CUBIN", raising=False)
     with pytest.raises(SystemExit, match="pearl_c_sm90.sh"):
-        steps.pearl_c_run(torch.zeros(64, 256, dtype=torch.bfloat16), "ppl/0/0/mlp.up_proj")
+        steps.pearl_c_run(torch.zeros(64, 256, dtype=torch.bfloat16))
 
 
 def a_result(passed=True):

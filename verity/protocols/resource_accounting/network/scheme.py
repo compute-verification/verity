@@ -1,9 +1,11 @@
 """The network attester as a resource scheme (`verity.protocols.resource_accounting.scheme`): what it bounds is egress,
-the bits that leave beyond what the registered circuit explains."""
+the bits that leave beyond what the registered circuit explains. Its Lean instance (`NetTiming.Attester.scheme`)
+is at one execution phase, and its charge there is a named premise (`NetTiming.Attester.Phase.ChargeHolds`)."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from fractions import Fraction
 from typing import Any
 
 from verity.circuits.defs import bind
@@ -16,7 +18,8 @@ from verity.protocols.resource_accounting.network.verifier.blocks import SCAN_ST
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
+from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
@@ -109,6 +112,10 @@ NETWORK_ATTESTER = register(Scheme(
         Charge("start", "start"),
         Charge("tied-entries", "scans[].faulty_entries"),
     ),
+    delta_scheme=Term("Claims.ecrBound", ("q",), lambda q: Fraction(q, 2**256)),
+    over="bits: the ceiling of log2 of the number of records (the attester's rows and the channel) that committed values "
+         "with the phase's incorrect blocks explain",
+    under="bits: zero; the attester credits nothing",
     settings=SETTINGS,
     check_settings=_check,
     hooks=("declared", "steps"),
@@ -118,6 +125,16 @@ NETWORK_ATTESTER = register(Scheme(
     requests=requests,
     attach=attach,
     processes={"id-relay": id_relay.process},
+    parties=NC.MANIFEST.parties,
+    channels=NC.MANIFEST.channels,
+    channel_schemas=NC.MANIFEST.messages,
+    colocated=(("challenger", NC.NETWORK_ATTESTER),),
+    needs=frozenset({"windows", "ingress-relay"}),
+    depends=("sampled-proofs",),
+    record="communication",
+    symbol="K",
+    published=("bits", Fraction(1)),
+    record_owner="network-accounting",
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",

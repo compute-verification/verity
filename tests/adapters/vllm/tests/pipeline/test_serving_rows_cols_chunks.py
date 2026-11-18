@@ -20,6 +20,7 @@ from verity_vllm.definitions.registry import boolean_sigma as SG
 from verity_vllm.definitions.registry import boolean_tp_allreduce as BTA
 from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 
@@ -110,8 +111,8 @@ def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_re
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
     win = CS.Binding(*IF.listed_program([(SRW.template(T).fn, 2 * NH)], ()), {"law": "subset", "k": 2}, "ab" * 32,
-                    tuple(ms))
-    assert CS.commit(win, [g for g, _e in got]).window.population == 2 * NH
+                    tuple(CH.shared_tables(ms)))
+    assert CS.commit(win, CH.held_rows(win, [g for g, _e in got])).window.population == 2 * NH
 
 
 def test_the_fused_norm_row_s_residual_part_is_chunks_of_its_blocks(monkeypatch):

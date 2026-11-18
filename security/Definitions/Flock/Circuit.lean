@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Boolean
+public import Definitions.Core.Partition
 public import Mathlib.Data.Fintype.Card
 
 /-!
@@ -40,13 +41,16 @@ namespace Spot.Sampling
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
-structure Partition (C : Verity.Boolean.Circuit) (n : ℕ) where
-  unit : Fin C.N → Option (Fin n)
-  input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
+abbrev Partition (C : Verity.Boolean.Circuit) (n : ℕ) : Type := Verity.Partition C.toCircuit n
 
 namespace Partition
 
 variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
+
+def unit : Fin C.N → Option (Fin n) := Verity.Partition.unit P
+
+theorem input_iff (g : Fin C.N) : P.unit g = none ↔ (C.op g).isInput = true :=
+  Verity.Partition.input_iff P g
 
 open Classical in
 /-- The committed wires: inputs, outputs, and every gate that a gate of another unit reads. -/
@@ -80,9 +84,17 @@ noncomputable def io (u : Fin n) : Finset (Fin C.N) :=
 /-! ## Refinement -/
 
 /-- `Pf` refines `Pc`: every fine unit lies inside one coarse unit, its `parent`. -/
-structure Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) where
-  parent : Fin nf → Fin nc
-  sub : ∀ g, Pc.unit g = (Pf.unit g).map parent
+abbrev Refines {nf nc : ℕ} (Pf : Partition C nf) (Pc : Partition C nc) : Type :=
+  Verity.Partition.Refines Pf Pc
+
+def Refines.parent {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (R : Refines Pf Pc) :
+    Fin nf → Fin nc :=
+  Verity.Partition.Refines.parent R
+
+theorem Refines.sub {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc} (R : Refines Pf Pc)
+    (g : Fin C.N) :
+    Pc.unit g = (Pf.unit g).map R.parent :=
+  Verity.Partition.Refines.sub R g
 
 end Partition
 

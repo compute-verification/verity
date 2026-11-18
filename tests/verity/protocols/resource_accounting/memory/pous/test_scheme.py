@@ -40,6 +40,6 @@ def test_pous_takes_its_challenges_setting() -> None:
 
 
 def test_pous_says_its_own_term_and_is_refused_a_bound_while_its_help_is_unbounded() -> None:
-    assert POUS.delta_scheme == Fraction(1, 2**128) and WIPE.delta_scheme is None
+    assert POUS.delta_scheme == Fraction(1, 2**128) and isinstance(WIPE.delta_scheme, S.Lacks)
     assert [c.name for c in POUS.charges if not c.bounded] == ["help"]
     assert all((s.over, s.under) for s in (POUS, WIPE))

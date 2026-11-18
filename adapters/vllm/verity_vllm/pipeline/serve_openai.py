@@ -140,9 +140,9 @@ from verity_vllm import messages as M
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL,
-                                   serve_release as RL, serve_day as SD, serve_poub as SR, serve_row as RW,
-                                   serve_seal as SS)
+from verity_vllm.pipeline import (commit_coins as CC, seal_process as SP, serve_guard as SG, serve_h1 as SH,
+                                   serve_learn as SL, serve_release as RL, serve_day as SD, serve_poub as SR,
+                                   serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.scheme_plugin import write_reports
 from verity_vllm.pipeline.serve_admit import Admission, Delta, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
@@ -262,7 +262,8 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
                                                "(serve_h1.config_of, scheme_settings)")
-    gate: SH.GateOptions = group(SH.GateOptions)
+    gate: CC.GateOptions = group(CC.GateOptions)
+    h1: SH.H1Options = group(SH.H1Options)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
@@ -618,7 +619,7 @@ def scheme_refusal(opts: Any, scheme: Any) -> str | None:
     g, after = opts.gate, getattr(getattr(opts, "retention", None), "release_after", "") or ""
     if len({bool(g.challenger_gate), bool(g.challenger_peer), bool(g.challenger_lane)}) > 1:
         return f"--challenger-gate, --challenger-peer and --challenger-lane go together under {opts.protocols}"
-    if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(g).items() if k.startswith("h1_") and v]:
+    if h1 := [f"--{k.replace('_', '-')}" for k, v in vars(opts.h1).items() if v]:
         return f"{', '.join(h1)}: PoUW H1's, not {opts.protocols}'s"
     if g.challenger_gate and not private():
         return (f"--challenger-gate under {opts.protocols}: VERITY_PROTOCOLS_CONFIG's private, the directory outside the run "

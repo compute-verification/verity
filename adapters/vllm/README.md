@@ -160,7 +160,9 @@ Imports point down a fixed layer order, with `pipeline` at the top and `config` 
 ## Running
 
 `uv sync --all-packages --extra torch-cpu` installs it with CPU-only torch. The `torch` extra is the CUDA build, and
-vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds. The tools read their inputs
+vLLM serves only on a GPU node, whose runtime `verity_vllm/ops/pod_bootstrap.sh` builds; it records the environment's
+path for this user (`${XDG_STATE_HOME:-$HOME/.local/state}/verity-bench/venv`, which the benchmarks' `env.sh` reads), and
+`--record-venv PATH` records one a machine bootstrapped before it already has. The tools read their inputs
 relative to this directory, so run them from here. The suite runs from its own directory, remotely like every suite
 (`uv run tools/check/suites.py verity-vllm` from the root), and `python3 tools/suite_parts.py launch` splits it into
 parallel `research run` jobs.
