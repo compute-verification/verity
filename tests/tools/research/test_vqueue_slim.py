@@ -7,7 +7,6 @@ the content the step reads at the candidate and at its base, so `vqueue.decide` 
 base, each failure by the tests it names."""
 from __future__ import annotations
 
-import importlib.util
 import itertools
 import json
 import os
@@ -404,30 +403,12 @@ def test_a_launch_again_after_infra_goes_to_other_machines_of_each_shards_set(wo
     assert machines == want and rec["avoid"] == ["m1"]
 
 
-def _choose():
-    """check.py's `choose`, which places a check on the first machine of its list with a slot free, from this tree's check.py."""
-    spec = importlib.util.spec_from_file_location("repo_check_choose", Path(__file__).resolve().parents[3] / "tools" / "check" / "check.py")
-    check = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(check)
-    return check.choose
-
-
-def _slots(held: bool) -> dict:
-    """A machine's slots documents (`check.read_slots`): one check slot, held or free, and no Lean audit limit."""
-    holder = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "run": "r-held", "took": "2026-10-03T17:10Z",
-              "held_minutes": 40} if held else None
-    return {"check": {"file": "slots", "now": "2026-10-03T17:50Z", "waiters": [],
-                      "slots": [{"name": "a", "cpus": "0-47", "windows": None, "lead": 30, "holder": holder, "blocked": None,
-                                 "upcoming": []}]},
-            "lean": {"file": "lean-slots", "now": "2026-10-03T17:50Z", "pools": None}}
-
-
-def test_a_rebuilds_shards_name_their_predecessors_machines_first_and_take_another_free_slot_at_once(world, monkeypatch):
+def test_a_rebuilds_shards_name_their_predecessors_machines_first_and_every_other_after(world, monkeypatch):
     """`start` with ``prefer`` (each shard's machines its dropped predecessor's took, `preferred`) launches each shard on its
     set with its own of them first and the rest of the set after in its order, those the set lacks or ``avoid`` names left
     out, and the record keeps them.  check.py places a check on the first machine of its list with a slot free
-    (`check.choose`): on the predecessor's while it has one, where its passes are kept, and at once on another with one free
-    while it has none, never waiting there."""
+    (`check.choose`, `test_placement`): on the predecessor's while it has one, where its passes are kept, and at once on the
+    next with one free while it has none, never waiting there."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_after_landing
     h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
@@ -440,10 +421,6 @@ def test_a_rebuilds_shards_name_their_predecessors_machines_first_and_take_anoth
     assert machines[3:] == ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
     assert start(h.d, sha, base, shards=1, prefer=[["m3"]])["prefer"] == [["m3"]] and machines[6] == "m3,m1,m2,m4"
     assert "prefer" not in start(h.d, sha, base, shards=3, prefer=[[], []]) and machines[7:] == shard_machines("m1,m2,m3,m4", 3)
-    choose, first = _choose(), machines[0].split(",")
-    assert choose(first, {m: _slots(False) for m in first})[0] == "m4"
-    assert choose(first, {m: _slots(m == "m4") for m in first})[0] == "m1"
-    assert choose(first, {m: _slots(m in ("m4", "m1")) for m in first})[0] == "m2"
 
 
 def test_an_auto_plans_shards_launched_later_prefer_the_machines_the_record_keeps(world, monkeypatch, tmp_path):
