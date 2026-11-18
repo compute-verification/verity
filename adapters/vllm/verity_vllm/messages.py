@@ -19,6 +19,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from verity import hooks as H
@@ -26,11 +27,17 @@ from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
+from verity_vllm import settings
 
 __all__ = ["Exchange", "append", "attach_listed", "body", "build", "close", "current", "declaring", "line", "lines", "listed_refusals",
            "named", "option", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
+
+
+def _pins(entries: Any) -> tuple[Mapping[str, str], ...]:
+    """The application's ``[[pin]]`` entries, read-only (`Exchange.attach`'s ``ctx["pins"]``)."""
+    return tuple(MappingProxyType(dict(p)) for p in entries)
 
 _KEYS = itertools.count()
 
@@ -55,6 +62,8 @@ class Exchange:
         self.reports: dict[str, Any] = {}
         #: this build's key, unique in the process: a scheme's ``ctx["build"]``
         self.key = f"build-{next(_KEYS)}"
+        #: the model's `H.RegisteredValues` has been emitted: its weights are loaded, and `attach` refuses
+        self.registered = False
 
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
                gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
@@ -66,8 +75,28 @@ class Exchange:
         (`commit_coins.ChallengerGate.call`), or None where the launcher holds none.  ``ctx["private"]`` is the scheme's
         own directory under the launcher's ``private`` (``private/<scheme's name>``, made here), outside every run
         output, where it keeps what never leaves the node across servers; None where the launcher holds none.
+        ``ctx["pins"]`` is the application's ``[[pin]]`` entries, read-only, as the launcher's ``pins`` gives them or
+        else as it was given them (``VERITY_PINS``), ``()`` for an application that pins nothing and None where neither
+        is given; ``ctx["configuration"]`` the committed configuration's hash likewise (``configuration``,
+        ``VERITY_CONFIGURATION``); a keyword and a setting that differ are refused (`ValueError`).
         Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
-        `request` refuses them."""
+        `request` refuses them.
+
+        In an engine's process (``ctx["process"]`` `hooks.ENGINE`) a launcher attaches every scheme before the
+        workload's model begins to load, so an attach that returns has run with none of the workload's bytes on the
+        device; the exchange refuses an engine's attach once the model's `hooks.RegisteredValues` has been emitted on
+        it (`RuntimeError`). That catches a late attach, not one during the load: a scheme that needs an empty device
+        checks the device itself (the wipe's idle-card check). An attach that names no engine process may come
+        after the load (`serve_openai.network_admission` attaches admission to the loaded engine's exchange)."""
+        if self.registered and launcher.get("process") == H.ENGINE:
+            raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
+                               "engine runs before the load")
+        for key, name, read in (("pins", "VERITY_PINS", _pins), ("configuration", "VERITY_CONFIGURATION", str)):
+            handed, held = launcher.get(key), settings.get(name)
+            if handed is not None and held is not None and read(handed) != read(held):
+                raise ValueError(f"{scheme.name}: the launcher's {key} differ from {name}, the {key} it was given: "
+                                 "hand one, or the same")
+            launcher[key] = None if (got := held if handed is None else handed) is None else read(got)
         own = None
         if private is not None:
             own = Path(private) / scheme.name
@@ -152,6 +181,8 @@ class Exchange:
     def emit(self, event: Any) -> None:
         if isinstance(event, H.StepBegan):
             self.step = event.step
+        elif isinstance(event, H.RegisteredValues):
+            self.registered = True
         for _, fn in tuple(self.subscribers[event.hook]):
             fn(event)
 
