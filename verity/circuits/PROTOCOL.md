@@ -46,10 +46,19 @@ its body's `params` and `ret_type`. The rest of a descriptor is integers bounded
 and strings of a fixed vocabulary, which the decoder checks (§4.6).
 
 A stored descriptor file need not be canonical (builds write it with spaces). The program digest, `program_digest`, is the hex
-SHA-512 of the canonical bytes of the descriptor without `annotations`: the Build's program digest and the `program` field of
-`verity/partition/v1`. `annotations` never enter it, and no verdict of this format reads them; one, `theta`, means something
-to the port facts (§12). It carries no domain prefix (the
-partition object's digests do).
+SHA-512 of the canonical bytes of
+
+~~~text
+{"schema": <schema>, "program_fn": <program_fn>, "inputs": <inputs>, "root": <the root's digest>,
+ "functions": {<id>: <its digest>, ...}, "boolean": {<word primitive id>: <its body's digest>, ...}}
+~~~
+
+each digest a definition's (§4.8), `functions` holding the functions `program_fn`'s binding record names (§4.1). It is the
+Build's program digest and the `program` field of `verity/partition/v1`. It is composed from the definitions' digests, not
+taken over the descriptor's bytes: the interning tables' order and the aliases a writer chose do not enter it, and a
+definition two Programs share enters each by the same digest. `annotations` never enter it, and no verdict of this format
+reads them; one, `theta`, means something to the port facts (§12). It carries no domain prefix (the partition object's digests
+do).
 
 Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
 refusal), `program_digest`.
@@ -146,6 +155,7 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 ~~~text
 {"schema": "verity-ir/descriptor/v2",
  "root": <id>, "program_fn": <id>,
+ "inputs": [[<name>, <node count>], ...],
  "definitions": {<id>: <definition>, ...},
  "boolean": {<word primitive id>: <Boolean Definition id>, ...},
  "callees": [<id>, ...], "types": [<type>, ...],
@@ -155,8 +165,10 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 - `root`: the key in `definitions` of the root (§5).
 - `program_fn`: the descriptor id of the program function, which the root inlines. It is part of the identity, and the
   functions its binding record names are definitions too.
+- `inputs`: each parameter of the program function, in parameter order, with how many input nodes it lowers to (§5.1).
 - `definitions`: exactly the definitions reachable from `root` (node callees and the functions binding records name,
-  transitively), from `program_fn`'s record and from the bodies `boolean` names.
+  transitively), from `program_fn`'s record and from the bodies `boolean` names; the decoder refuses any other
+  (`E_UNREACHED`), so the program digest (§1) covers every definition.
 - `boolean`: each word primitive's one Boolean Definition (§4.9).
 - `callees`, `types`: the interning tables. A node's `fn` indexes `callees`; a node's `out` and each argument's `type` index
   `types`.
@@ -266,6 +278,8 @@ have):
 - a `schema` other than `verity-ir/descriptor/v2`: a v0 or v1 descriptor, which holds no Boolean bodies, is refused by name
   (`E_SCHEMA`) and never read as v2;
 - a `boolean` map that §4.9 refuses (`E_BODY_KEY`, `E_BODY_MISSING`, `E_BODY_NOT_BOOLEAN`);
+- `inputs` that §5.1 refuses (`E_INPUTS`, `E_INPUTS_NAME`, `E_INPUTS_COUNT`, `E_INPUTS_MIXED`), read after the map;
+- a definition reached neither from `root`, from `program_fn`'s record nor from the map's bodies (`E_UNREACHED`), read last;
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
@@ -316,18 +330,29 @@ written (`encode_specialization` keeps its entries) and never read: `decode_prog
 
 ### 4.8 The definition digest
 
-A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. A
-primitive's canonical entry is its entry. A composite's is its self-contained entry (§4.7) with every reference sequence of a
-node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or as its only part when it
-has one. From a v1 entry a reader builds the same, with the tables read in place and each `{"alias": [k, a]}` replaced by the
-flat parts of argument a of node k (§4.5). Every other key stays as written.
+A definition's *canonical entry*: a primitive's is its entry. A composite's is its self-contained entry (§4.7) with every
+reference sequence of a node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or
+as its only part when it has one. From a v2 entry a reader builds the same, with the tables read in place and each
+`{"alias": [k, a]}` replaced by the flat parts of argument a of node k (§4.5). Every other key stays as written. Parts compare
+by form and fields, as in §4.5, so two entries that write one reference sequence in different forms differ.
 
-So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
-the body nested its concatenations when it was built. Callees enter by descriptor id, so the digest covers the definition's own body, not its
-callees' bodies. Parts compare by form and fields, as in §4.5, so two entries that write one reference sequence in different
-forms have different digests.
+A definition's *digest* is the hex SHA-512 of the canonical bytes (§1) of its canonical entry with every function it
+references replaced by that function's digest: each node's `fn`, and each `{"fn": <id>}` of its binding record, becomes the
+digest, a string (`{"fn": <digest>}` in the record); and a word primitive's (§4.9) gains the key `"boolean"`, its Boolean
+body's digest. No domain prefix. The references form no cycle (a definition never reaches itself, and a Boolean body
+reaches only gates, constant bits and 1-bit inputs), so a writer or reader computes the digests callees first, each once,
+in work proportional to the descriptor.
 
-Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`. Vectors:
+So a definition's digest covers its callees' bodies and, for a word primitive, its Boolean body: a changed body moves the
+digest of every definition that reaches it, and of no other. A definition has one digest in every program that holds it,
+from either schema's bytes, whichever aliases the writer chose and however the body nested its concatenations, and so a
+Program's digest (§1) composes from its definitions'.
+
+The *entry digest*, the hex SHA-512 of the canonical entry itself, names a definition's own body with its callees by id;
+tools that key a definition's own text read it, and the program digest does not.
+
+Reference: `codec.definition_digests(program_or_desc)` (every definition's digest), `codec.definition_digest(entry, desc)`
+(the entry digest; `desc` supplies a v2 entry's tables) and `codec.canonical_entry`. Vectors: `definition_digests` and
 `definition_digest` (descriptor id, digest), one per definition of the descriptor vector.
 
 ### 4.9 The Boolean map
@@ -335,7 +360,8 @@ Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's 
 A *word primitive* is a primitive that is neither a Boolean gate (§9: an `And<n>`, `Xor<n>` or `Not`, a constant bit) nor an
 input (§5.2). C's semantics at the bit level are its Boolean Definitions: `boolean` maps each word primitive among
 `definitions`, by its id, to the id of its one Boolean Definition, which is among `definitions` with everything it calls. An id
-names one body: the map is part of the program digest (§1), and no reader looks a body up anywhere else.
+names one body: a word primitive's digest holds its body's (§4.8), the map is part of the program digest (§1), and no reader
+looks a body up anywhere else.
 
 ~~~text
 "boolean": {"AmpereBF16TcDot16_v2": "AmpereBF16TcDot16_v3", "F2fpBf16_v1": "F2fpBf16_v2", ...}
@@ -385,6 +411,19 @@ input nodes are emitted per parameter, in parameter order, by lowering its type 
 `Array<2, Tuple(Value<16>, Value<32>)>` gives four. The binding times change only the input nodes' callees: the layout, the
 gates and the Calls are those of the same program with every parameter run, and the descriptor, so both digests, bind which
 parameters are registered.
+
+`inputs` names the parameters: `[name, n]` per parameter of the program function, in parameter order, n the input nodes it
+lowers to above (0 for a type without leaves). The parameters' nodes lead the root's body, so parameter i's are the n nodes
+after the first i parameters'. A registered value is named by its parameter: the registered-input nodes of `[name, n]` are
+its value, leaf by leaf in the order above. `inputs` is under the program digest. `decode_program` refuses, in this order:
+
+- `E_INPUTS`: `inputs` is not an array of `[string, natural]` pairs;
+- `E_INPUTS_NAME`: a name is empty, or two parameters share one;
+- `E_INPUTS_COUNT`: the counts do not sum to the input nodes that lead the root's body, or an input node follows a node
+  that is no input node;
+- `E_INPUTS_MIXED`: one parameter's nodes are not all `Input` nodes or all `RegisteredInput` nodes.
+
+Vectors: `inputs` (the descriptor vector's), and `decoder_rejects`' `E_INPUTS*` and `E_UNREACHED` mutations.
 
 ### 5.2 Input nodes are recognized by id
 
@@ -439,7 +478,11 @@ to registered inputs under new ids.
 
 ## 6. The canonical layout
 
-Gates are numbered by laying bodies out in node order, recursively.
+Gates are numbered by laying bodies out in node order, recursively. This is C's index at word level: a word primitive is one
+gate, and every given or registered thing (a partition's units, a port, a committed value's position, a registered value's
+gates) is named by it. The bit level, each word primitive's gate replaced by its Boolean body's gates (§4.9), is laid out
+from this index and is read only inside a proof block's statement and for counts; nothing outside a block names a bit
+gate.
 
 - **Gate counts.** A primitive is 1 gate, and a composite's gates are its body's last offset. A node's gates: primitive 1,
   call gates(callee), batch and scan n · gates(callee).
