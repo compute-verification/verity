@@ -1665,3 +1665,49 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     setup = SZ.SETUPS[CP.V3C_SCAN_CLASS]
     c = setup.cls
     assert table.SCAN_CLASS == f"{c.SLOTS * setup.params.window // c.EVERY},{c.KI},{c.KO},{c.lanes},{c.EVERY}"
+
+
+def _served(d: Path, windows: dict[int, list[tuple[str, list[int]]]]) -> Path:
+    """A serve dir whose window ``k`` seals ``windows[k]``'s requests, each a user and the windows it was in."""
+    d.mkdir()
+    reqs = {u: ks for rs in windows.values() for u, ks in rs}
+    (d / "seals.jsonl").write_text("".join(json.dumps({"window": k, "requests": [u for u, _ in rs]}) + "\n"
+                                           for k, rs in windows.items()))
+    (d / "windows.jsonl").write_text("".join(json.dumps({"window": k, "passed": True, "commit": {"steps": 2}}) + "\n"
+                                             for k in windows))
+    (d / "requests.jsonl").write_text("".join(json.dumps({"user": u, "windows": ks, "check": {"passed": True}}) + "\n"
+                                              for u, ks in reqs.items()))
+    return d
+
+
+def test_picker_under_the_tie_needs_the_fronts_window_apart(tmp_path):
+    """The tie's two picks, the fixed load's window and the network attester's: a front group sharing the fixed load's
+    windows leaves neither, and the front's one request in a window before the load's gives both."""
+    fixed = [f"fixed.{j:05d}" for j in range(4)]
+    mixed = _served(tmp_path / "mixed", {0: [("user-0", [0]), ("user-1", [0]), (fixed[1], [0])],
+                                         1: [("user-2", [1]), (fixed[2], [1]), (fixed[3], [1])],
+                                         2: [(fixed[0], [1, 2])]})
+    for kw in ({"users": fixed}, {"attested": True}):
+        with pytest.raises(ValueError, match="0 sealed windows hold"):
+            S.pick(mixed, slots=4, **kw)
+    apart = _served(tmp_path / "apart", {0: [("user-0", [0])], 1: [(u, [1]) for u in fixed]})
+    assert S.pick(apart, slots=4, users=fixed)["window"] == 1
+    assert S.pick(apart, slots=4, attested=True)["window"] == 0
+
+
+def test_front_waits_for_its_groups_window(tmp_path):
+    """The front returns once serve-openai records its group's requests, and says so when they aren't within the bound."""
+    a = argparse.Namespace(prompts=1)
+    users = tmp_path / CP.SS.USERS
+    t = [0.0]
+
+    def sleep(s):
+        t[0] += s
+        if t[0] >= 3:
+            users.write_text(json.dumps({"user": "fixed.00000"}) + "\n" + json.dumps({"user": "user-0"}) + "\n")
+
+    assert CP.group_closed(a, tmp_path, clock=lambda: t[0], sleep=sleep) and t[0] == 3
+    users.write_text(json.dumps({"user": "fixed.00000"}) + "\n")
+    t[0] = 0.0
+    assert not CP.group_closed(a, tmp_path, clock=lambda: t[0], sleep=lambda s: t.__setitem__(0, t[0] + s))
+    assert t[0] > CP.GROUP_CLOSE_S

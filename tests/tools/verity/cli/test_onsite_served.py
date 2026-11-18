@@ -54,11 +54,13 @@ ATTESTERS = ("memory-challenger", "bandwidth-verifier")
 WRITTEN = {"network-certifier.certifier.gate", "network-certifier.certifier.peer"}
 UNBOUND = sorted(k for k in (f"{p}.{c}.{k}" for p, cs in BINDINGS.items() if p not in ATTESTERS for c, ks in cs.items()
                              if c != "pearl-plus" for k in ks) if k not in WRITTEN)
+#: the front's flags under Pearl+'s tie at the 2-step class: one request, on the scan's longest tick
+TIED_FRONT = "--prompts 1 --tokens 2 --bucket-ms 4000"
 #: the served window's runner's variables under `BINDINGS`, and the bindings the pieces read, in the pieces' order
 VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/attester_piece.py piece "$@"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" "$3" '
-                       "--gate user@gate-1 --peer peer-1 --tokens 2",
+                       f"--gate user@gate-1 --peer peer-1 {TIED_FRONT}",
     "CLASSES": "4,27,2", "V3C_CLASS": "4,27,2",
     "H1_KEY_SHA512": KEY, "LOAD": "fixed", "PEARLPLUS_TIE_UNIFORM": "1", "PEARLC_CHALLENGER_GATE": "gate-command",
     "PEARLC_CHALLENGER_PEER": "peer-1", "PEARLPLUS_TIE": "1", "POUW": "pearlplus", "PRODUCT": "onsite",
@@ -274,7 +276,8 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert (hooks["PEARLC_CHALLENGER_GATE"], hooks["PEARLC_CHALLENGER_PEER"], hooks["H1_KEY_SHA512"]) == (
         "gate-command", "peer-1", KEY)
     assert (hooks["POUW"], hooks["PEARLPLUS_TIE"]) == ("pearlplus", "1") and "H1_GATE" not in hooks
-    assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2") and "PP_CHALLENGER" not in hooks
+    assert hooks["CERTIFIER_FRONT"].endswith(f"--gate user@gate-1 --peer peer-1 {TIED_FRONT}")
+    assert "PP_CHALLENGER" not in hooks
     assert "DEVELOPMENT" not in hooks
 
 
@@ -355,7 +358,7 @@ def test_the_runners_variables_and_the_bindings_keys_are_these():
     unbound = T.variables(cfg, {})
     assert set(unbound) == set(VARIABLES) - {"WIPE_ADDRESS", "H1_KEY_SHA512"} | set(deployed) | {"DEVELOPMENT"}
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>' "
-                                               "--peer '<network-certifier.certifier.peer>' --tokens 2")
+                                               f"--peer '<network-certifier.certifier.peer>' {TIED_FRONT}")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
 
@@ -409,10 +412,10 @@ def test_under_pearl_pluss_tie_the_attesters_piece_is_whole_sets_no_class_and_fi
     assert (got["V3C_CLASS"], got["CLASSES"], got["PEARLPLUS_TIE"]) == ("4,27,2", "4,27,2", "1")
     assert got["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
     assert not {"CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} & set(got)
-    assert got["CERTIFIER_FRONT"].endswith("--gate user@gate-1 --peer peer-1 --tokens 2")
+    assert got["CERTIFIER_FRONT"].endswith(f"--gate user@gate-1 --peer peer-1 {TIED_FRONT}")
     assert REG.parties["certifier"][NC.WORKERS].variables(cfg, BINDINGS) == {
         "SERVE_ARGS": T.ID_FORM, "CERTIFIER_CMD": VARIABLES["CERTIFIER_CMD"],
-        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + " --tokens 2"}
+        "CERTIFIER_FRONT": SPLIT["CERTIFIER_FRONT"] + f" {TIED_FRONT}"}
 
 
 def test_without_pearl_pluss_tie_the_attesters_piece_is_split_at_the_scan_class():
@@ -459,7 +462,7 @@ def test_the_network_attester_starts_first_as_the_local_gate_on_the_workloads_ma
     R.bind(tmp_path, NC.NETWORK_ATTESTER, written)
     assert side.variables(cfg, T.bindings_of(tmp_path)) == {
         **BOUND_FRONT, "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/attester_piece.py front "$1" "$2" '
-                                          f'"$3" --gate local --peer {T.PROVER_NODE} --tokens 2'}
+                                          f'"$3" --gate local --peer {T.PROVER_NODE} {TIED_FRONT}'}
     rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, NO_NETWORK_ATTESTER))
     assert rc == 0 and got["dry"][0]["unbound"] == [], err
     assert {x["party"]: x.get("writes") for x in got["plan"]}[NC.NETWORK_ATTESTER] == {"certifier": ["gate", "peer"]}

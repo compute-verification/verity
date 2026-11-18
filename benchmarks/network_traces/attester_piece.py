@@ -230,6 +230,9 @@ HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
 #: windows closed
 WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
+#: the users the gate's rehearsal gives the group's requests (`served_verdicts.ATTESTER_USER`), and how long the front waits
+#: for their windows to close after its session
+GROUP_USER, GROUP_CLOSE_S = re.compile(r"user-[0-9]+"), 300
 #: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
 #: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks
 GRACE_S, POLL_S = 5, 0.05
@@ -285,6 +288,9 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
             warm = warmup(a, serve_dir)
             (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
         rc = SS.session(a, data, ps)
+        if not group_closed(a, serve_dir):
+            print(f"the group's {a.prompts} requests are not all recorded in {serve_dir / SS.USERS} within "
+                  f"{GROUP_CLOSE_S} s, so a request after the front may share their window", file=sys.stderr, flush=True)
         if (doc := out / "session.json").is_file():
             shutil.copyfile(doc, keep / json.loads(doc.read_text())["run"] / SESSION)
         return rc
@@ -292,6 +298,19 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+
+
+def group_closed(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
+                 sleep: Callable[[float], object] = time.sleep) -> bool:
+    """Whether serve-openai recorded the group's ``--prompts`` requests (`GROUP_USER`) in `served_session.USERS`, which it
+    does once each one's window has closed, within `GROUP_CLOSE_S`: whatever the session's verdict, the front returns
+    only after its group's window, so the run's next requests are in windows of their own."""
+    until = clock() + GROUP_CLOSE_S
+    while sum(bool(GROUP_USER.fullmatch(r.get("user") or "")) for r in _lines(serve_dir / SS.USERS)) < a.prompts:
+        if clock() > until:
+            return False
+        sleep(1)
+    return True
 
 
 def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
