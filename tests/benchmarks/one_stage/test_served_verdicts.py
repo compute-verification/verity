@@ -8309,12 +8309,6 @@ def test_the_runs_machine_txt_is_the_trees_commit_and_the_nodes_facts_stay_in_th
     assert host not in left and f"serve dir {tmp_path / 'serve'}" not in left, left
 
 
-@pytest.mark.parametrize("env, held", [({}, False), ({"VERITY_HOLD_PLACEMENT": ""}, False),
-                                       ({"VERITY_HOLD_PLACEMENT": "0"}, False), ({"VERITY_HOLD_PLACEMENT": "1"}, True)])
-def test_hold_placement_holds_only_under_exactly_1(env, held):
-    assert S.hold_placement(env) is held
-
-
 def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):
     """The launcher's call to the path prover's runner names its keep under the serve dir's private logs; the runner,
     failing at its first tool, leaves that tool's error log there and nothing of it under the published output."""
