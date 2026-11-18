@@ -24,8 +24,11 @@ there when the workload exits and publishes to the store:
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`;
 - never a private file, whatever names it (`research/store/private.py`: salt keys, salts, a Pearl+ pass's `pass-NNNNN/` retain
   directory, a JSON file holding `hm96_salt_key`). Custody stores the rest, prints `custody REFUSED N private file(s)`, lists
-  each in `custody-refused.json` and `.custody`, and leaves it on the machine, never evicted; `research status RUN` says so. Keep
-  such files out of the run dir; to change the list, add a line there in a reviewed change.
+  each in `custody-refused.json` and `.custody`, and leaves it on the machine, never evicted; `research status RUN` says so, and
+  `research fetch --all` copies none. Keep such files out of the run dir; to change the list, add a line there in a reviewed
+  change. A job whose own paths are private names them in `$RESEARCH_RUN_DIR/private-paths.json`
+  (`{"schema": "research/private-paths/v1", "rules": [{"path": "out/x/*.bin", "reason": "...", "owner": "@lane"}]}`; `name` or
+  `under` in place of `path`); custody refuses those the same way, and stores nothing of a run whose file it can't read.
 
 A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
 on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
