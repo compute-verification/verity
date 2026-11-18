@@ -2,7 +2,7 @@ module
 
 public import Properties.Verity.Game
 public import Proofs.Properties.InferenceOnly.RecordRowsComplies
-public import Proofs.Properties.Verity.Soundness.Composite
+public import Proofs.Properties.Verity.Soundness
 public import Proofs.Core.Game.Prob
 
 /-!
@@ -12,8 +12,11 @@ A composite's acceptance holds each of its cases to its check's, and the three b
 so a rows case the clause reads is a case the rows check accepted (`rowsHeld_of_same`), and what that check accepts is
 `Properties.Remote.RowsHeld` (`Properties.Remote.SecurityProofs.rowsHeld`, from `RowsComplies`). The policy's target is
 therefore proved, with no premise, at every composite where v0 doesn't decide the policy (`Vocab.inferenceOnlySound_rows`),
-remote's plain sibling among them. Where the composite lists the rows check, the policy's component accepting gives the
-case the clause reads (`rowsCase_of_component`).
+remote's plain sibling among them, where it gives `plain_soundness_of_subprotocols`. Where the composite lists the rows
+check, the policy's component accepting gives the case the clause reads (`rowsCase_of_component`).
+
+`Proofs.Properties.Verity.Soundness` doesn't import this module: `RowsComplies`' proof reaches ArkLib, whose global
+`notation3 "X"` would make `X` a token in every module importing `Soundness`.
 -/
 
 @[expose] public section
@@ -86,5 +89,9 @@ theorem inferenceOnlySound_rows (k : Verity.Registration.Composite)
     _ ≤ V.error .inferenceOnly θ F c σ := zero_le
 
 end Vocab
+
+theorem plain_soundness_of_subprotocols : PlainSoundness :=
+  fun ι α _ d V hS hW =>
+    soundness_at_of_targets ι α d V .plain (V.targets_plain hS hW (V.inferenceOnlySound_rows .plain (by decide)))
 
 end Verity
