@@ -13,11 +13,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from verity.channel import Message, Phase, Refused
 from verity.party import Finish, Identity, Received, Send
 from verity.protocol import ProtocolDef, Start
-from verity.channel import Message, Phase, Refused
-from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 from verity.protocols.resource_accounting.memory.pous.attester.challenger_session import ONSITE_GOAL
+from verity.protocols.resource_accounting.memory.pous.verifier import wipe_party as WP
 from verity.protocols.resource_accounting.memory.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
 
 from . import wipe_store

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # The recursion bench's job (README.md): verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
-# every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
+# vstage, vcap and lean REPEAT times (both metrics are medians over their repeats), icheck and oreplay once, and every GPU
+# step once with its runs, oprove's log a stamped line each; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
 # it, a run behind the ZK server (85's CPU prover, GPU=0) as a plain run on a CPU node:
-#   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
+#   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 326m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
 # and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
 # env: K=4096 N=2 (85's inner statement: N template instances of GemmCoordinate_v2{K})
-#      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
+#      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (vstage, vcap and lean; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's runs)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's releases)
 #      OPROVE_JOBS=1 (V* statements proved at once; 85's own default is 4)
 #      MODES=zk_server (oprove's prover sides; the last one's releases are what oreplay and lean read)
@@ -64,9 +65,10 @@ mem_gb=$(( $(getconf _PHYS_PAGES) * $(getconf PAGE_SIZE) >> 30 ))
 need_gb=64; [[ ,$MODES, == *,zk_server,* && ,$STEPS, == *,oprove,* ]] && need_gb=128
 [ "$mem_gb" -ge $need_gb ] || refuse "$mem_gb GiB of memory, and the job asks $need_gb: run it with --mem-gb $need_gb on a node with that much"
 [ $refused = 0 ] || exit 2
-PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
+PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires never --priority keep \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
-  --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
+  --why "the recursion bench's builds, each under its sources' digest (85's KEY, LSHA, CSHA, FSHA), and a KEEP_DATA=1 run's data/TAG" \
+  > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
 # 85 moves HOME where it can't write; its Lean builds (the Lean verifier, the ZK server's Lean session loop) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
@@ -84,15 +86,20 @@ LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key veri
   echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-} tree_from=${TREE_FROM:-test-os} parameters=development release=${RELEASE:-0}" \
     "release_windows_s=${RELEASE_WINDOWS_S:-} release_budget=${RELEASE_BUDGET:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
 
-# timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status
+stamp() { while IFS= read -r l; do printf '%s %s\n' "$(date -u +%FT%TZ)" "$l"; done; }
+# timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status. oprove's
+# step.log has each line's UTC time first, so its phases (V*'s inputs, each statement's start and end) are timed
 timed() {
-  local name=$1 i=$2; shift 2
+  local name=$1 i=$2 rc; shift 2
   local d=$O/steps/$name/r$i
   mkdir -p "$d"
   log "$name r$i: start"
   printf '%s\t%s\t%s\n' "$name" "$i" "$(date +%s.%N)" >> "$O/phases.tsv"
-  RESEARCH_RUN_DIR="$d" /usr/bin/time -v -o "$d/time-step.txt" "$@" > "$d/step.log" 2>&1
-  local rc=$?
+  if [ "$name" = oprove ]; then
+    RESEARCH_RUN_DIR="$d" /usr/bin/time -v -o "$d/time-step.txt" "$@" 2>&1 | stamp > "$d/step.log"; rc=${PIPESTATUS[0]}
+  else
+    RESEARCH_RUN_DIR="$d" /usr/bin/time -v -o "$d/time-step.txt" "$@" > "$d/step.log" 2>&1; rc=$?
+  fi
   echo $rc > "$d/rc"
   printf '%s\t%s\t%s\t%s\n' "$name" "$i" "$(date +%s.%N)" "$rc" >> "$O/phases.tsv"
   log "$name r$i: exit $rc"
@@ -112,7 +119,7 @@ result() {
 # the run's --max-min (SIGTERM) writes the result so far; `research cancel` ends the scope first (`run.py table RUN`)
 trap 'log "SIGTERM: the result so far"; result; exit 143' TERM
 
-# reps STEP: REPEAT_<STEP> (REPEAT_VSTAGE=1, ...) else REPEAT
+# reps STEP: REPEAT_<STEP> (REPEAT_VSTAGE=1, ...) else REPEAT; icheck and oreplay feed neither metric and run once
 reps() { local v=REPEAT_${1^^}; seq ${!v:-$REPEAT}; }
 rc=0
 for s in ${STEPS//,/ }; do
@@ -132,7 +139,8 @@ for s in ${STEPS//,/ }; do
       # Lean sources
       step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1
       loop=$L/lean-$LSHA/flock-zk-server; [[ ,$M, != *,zk_server,* ]] || [ ! -x $loop ] || sha256sum $loop >> "$O/params.txt" ;;
-    icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
+    icheck|oreplay) step $s 1 || rc=1 ;;
+    vcap) for i in $(reps vcap); do step vcap $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i "FORGE=${FORGE//,/ }" || { rc=1; break; }; done ;;
     lean) for i in $(reps lean); do step lean $i JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
     # the lean step once more with rep 0's coins flipped (85's NEG_INNER): Lean must refuse each flipped coin
