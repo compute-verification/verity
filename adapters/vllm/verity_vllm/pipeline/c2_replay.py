@@ -35,7 +35,7 @@ from verity_vllm.pipeline import commit_plan as CP
 # inside the functions that read them, as `vu_store` is: the driver's import puts the catalog's Definitions into the Definition
 # table, and a process that only imports this module (the Commit before its replay, a deferred Commit) is to hold none of them.
 
-__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts", "live_only", "live_only_entry",
+__all__ = ["ProgramSources", "ReplaySources", "arrivals", "cached_prefixes", "linkage_facts",
            "live_weights", "live_weights_check", "no_weights", "plan", "programs_of_record", "request_labels", "retention_of",
            "rss_kb", "run", "sampling_design_of", "seed_of", "serving_rows", "vu_export"]
 
@@ -391,22 +391,6 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
         logger.warning("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
                        "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS")
     return _sr_kw, _ep_facts
-
-
-def live_only(s: ReplaySources) -> str | None:
-    """`live_only_entry` of the run's protocols."""
-    return live_only_entry(s.protocols)
-
-
-def live_only_entry(protocols: Any) -> str | None:
-    """The protocol entry with a circuit (`protocols.has_circuit`), whose replay reads the live run: such a run's C2 cannot be
-    deferred to a bundle."""
-    entries = getattr(protocols, "entries", None) or ()
-    if not entries:
-        return None
-    from verity_vllm import protocols as PO
-
-    return next((e for e in entries if PO.has_circuit(e)), None)
 
 
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:

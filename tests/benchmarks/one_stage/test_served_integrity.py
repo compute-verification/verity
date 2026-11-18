@@ -34,7 +34,6 @@ from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
@@ -92,11 +91,9 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
                                            ({"complete": None}, False), ({"complete": 1}, False)])
 def test_an_accept_carries_the_audit_records_own_complete(tmp_path, said, complete):
     """The accept's public ``complete`` is the audit record's own, whether every verdict ran; a record that doesn't
-    say it in that form, as one kept before the answer had the field, is an accept that is not complete
-    (`audit.answer_complete`). The verdict, the bound and the other public outputs are the same either way."""
+    say it in that form, as one kept before the answer had the field, is an accept that is not complete. The verdict, the bound and the other public outputs are the same either way."""
     a = I.answer(write(tmp_path / "a", dict(SUMMARY), {**record(True), **said}), REG)
     assert check_answer(a) == a and a["verdict"] == "accept" and a["public"]["complete"] is complete
-    assert A.answer_complete(a) is complete
     assert {k: v for k, v in a["public"].items() if k != "complete"} == {
         "bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "drawn": [5, 700], "per_template": None,
         "proved": [5, 700]}

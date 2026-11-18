@@ -486,26 +486,6 @@ def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
         audit.answer(refused, Fraction(1, 4))
 
 
-def test_an_answer_is_complete_only_as_an_accept_that_says_so():
-    """`audit.answer_complete`: an accept whose public ``complete`` is true. An answer without the field reads as not
-    complete, as one written before the field was; so do a field that is not the boolean true, a reject and an
-    undecided, which have no public outputs, and anything that is no answer."""
-    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    a = audit.answer(_accepted({"lean": lean}), Fraction(1, 4))
-    assert audit.answer_complete(a)
-    part = audit.answer(_accepted({"lean": lean, "other": {"accepted": None}}), Fraction(1, 4))
-    assert part["verdict"] == "accept" and not audit.answer_complete(part)
-    before = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
-    assert not audit.answer_complete(before)
-    for said in (False, None, 1, "true", [True]):
-        assert not audit.answer_complete({**a, "public": {**a["public"], "complete": said}}), said
-    for verdict in ("reject", "undecided"):
-        assert not audit.answer_complete({**a, "verdict": verdict, "reason": "r", "public": None, "profile": None})
-        assert not audit.answer_complete({**a, "verdict": verdict})
-    for no_answer in (None, [], "accept", {}, {"verdict": "accept"}, {"verdict": "accept", "public": [True]}):
-        assert not audit.answer_complete(no_answer), no_answer
-
-
 def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
     """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
