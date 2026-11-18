@@ -451,13 +451,13 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
-    """The call runs as vLLM runs it, under inference mode, so its shape's buffers are inference tensors; the retained pass
-    begins outside it (execution phase 's verify pass failed there)."""
+    """The call runs as vLLM runs it, under inference mode, and its shape's buffers are still normal tensors; the retained
+    pass begins outside it (execution phase 's verify pass failed there)."""
     make, kernel, weights, *_ = device_run
     run = make()
     with torch.inference_mode():
         run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
-    assert all(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
+    assert not any(t.is_inference() for sh in run.shapes.values() for t in sh.b.values())
     run.end()
     run.begin(retain=str(tmp_path))
     assert bool((run.leaves == 0xA5).all()) and all(bool((t == 0xA5).all()) for sh in run.shapes.values() for t in sh.b.values())
@@ -478,6 +478,27 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in calls)
     (check,) = [r for r in rows if r["check"] == "screen"]
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
+
+
+def test_the_whole_retained_check_names_the_first_call_and_field_that_differ(tmp_path):
+    """`retained_differences`: two retained passes the same but for one call's A tree names that call, its matmul and
+    its entry's differing field, and the one file on disk; two passes the same are ok."""
+    from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
+    mms = [Matmul(i, Shape(16, 2048, 3072), 7 + i) for i in range(3)]
+    files = [{"rows": {"path": f"calls/{i}.rows.bf16", "bytes": 4}, "tree": {"path": f"calls/{i}.tree", "bytes": 8, "sha256": "a"}}
+             for i in range(3)]
+    moved = [*files[:1], {**files[1], "tree": {**files[1]["tree"], "sha256": "b"}}, *files[2:]]
+    dirs = [tmp_path / "eager", tmp_path / "replayed"]
+    for d, tree in zip(dirs, (b"x", b"y"), strict=True):
+        (d / "calls").mkdir(parents=True)
+        (d / "calls" / "1.tree").write_bytes(tree)
+    want, got = ([None] * 3, files, {"tiles": 3}, mms), ([None] * 3, moved, {"tiles": 3}, mms)
+    assert E2E.retained_differences(want, got, dirs) == {
+        "ok": False, "disk": {"differ": 1, "first": ["calls/1.tree"]},
+        "call_files": {"calls": [3, 3], "first": 1, "matmul": {"index": 1, "shape": [16, 2048, 3072], "weight": 8},
+                       "fields": ["tree.sha256"]}}
+    assert E2E.retained_differences(want, want, [dirs[0], dirs[0]]) == {"ok": True}
 
 
 # ---- one pass per engine step, through the PoUW option (`Option.end_pass`) ---------------------------------------------
