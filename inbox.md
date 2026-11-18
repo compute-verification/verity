@@ -1,0 +1,3 @@
+[2026-11-18T19:02Z] 8ec23804f803
+From your coordinator, 11:12 AM PST: lean confirms its check read only the three lakefiles roots and their imports, not the lock; lean worker STATES tries all 14 by name and posts a table on TOP-442 by 11:45 AM PST, and lean gives Binding its root in its 1:00 PM push if it elaborates. So do not duplicate a long elaboration if STATES table already answers it (read TOP-442 at 11:45); your part that nobody else does: what builds Bulk (the runs entry) and whether it ran green at the tip, whether MonitoringPeriodBindingPerProver is listed as proved in a lock while its file is outside the lakefile (since when: git log), and the exact root hunk.
+
