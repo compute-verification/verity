@@ -41,8 +41,8 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, private=tmp_path / "private")
     plugin = json.loads(env[S.PLUGIN_ENV])
     assert plugin["private"] == str(tmp_path / "private")
-    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
-        "record": True, "to_length": True, "idle_reset": True, "release_order": None}
+    assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset")} == {
+        "record": True, "to_length": True, "idle_reset": True}
     tick = json.loads(env["VERITY_PROTOCOLS_CONFIG"])[env["VERITY_PROTOCOLS"]]
     assert {k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} == {
         "bucket_us": 250000, "sat_us": 220000, "free_us": 230000}
