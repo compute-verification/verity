@@ -15,6 +15,7 @@ import socket
 
 import pytest
 
+from verity.clock import ClockRefused
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF, io_tie as IT, pacer, network_attester as device_module
 from verity.protocols.resource_accounting.network.verifier.link_frame import DATA, HEADER, PAD, encode_frame
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
@@ -525,9 +526,9 @@ def test_a_host_without_a_raw_clock_starts_no_network_attester(monkeypatch):
     async def sleep(delay):
         waits.append(delay)
 
-    monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
+    monkeypatch.setattr(pacer.time, "clock_gettime_ns", refuse)
     device = NetworkAttester(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
-    with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
+    with pytest.raises(ClockRefused, match="no raw monotonic clock"):
         asyncio.run(device.run())
     assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
 

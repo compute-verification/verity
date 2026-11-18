@@ -188,7 +188,7 @@ whether and where a connection fails, chooses one of at most (cells + 1) outcome
 **The clock.** The network attester has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
 service steers: `origin` is a reading of it, a tick runs once it reads the tick's boundary and never before, a tick's
 lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network attester does
-not start (`pacer.ClockRefused`): it runs on no other.
+not start (`verity.clock.ClockRefused`): it runs on no other.
 
 **The pacer** (`NetworkAttester(paced=…)`, which a network attester on the host's clock must have): a bucket written on the loop leaves
 when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,

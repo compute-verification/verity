@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
+from verity.clock import ClockRefused
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.verifier.certificate import DeviceState, StartRefused
-from verity.protocols.resource_accounting.network.verifier.pacer import ClockRefused
 from verity.protocols.resource_accounting.network.verifier.run_clock import VirtualClock
 
 from tests.verity.protocols.resource_accounting.network.attester.relay_runs import PARAMS, SESSION

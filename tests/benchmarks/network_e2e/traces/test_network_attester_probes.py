@@ -183,22 +183,23 @@ def test_time_keeps_times_each_keep_as_the_publisher_process_calls_it(tmp_path, 
 def test_a_probe_given_no_clock_reads_the_network_attesters_own(tmp_path, probe_mod, runner, monkeypatch):
     """A probe's times are laid against the network attester's origin, a reading of its host's raw clock: with no
     clock given, the probe, its collections and the publisher's keeps each read that clock, by its clock id."""
+    from verity import clock
     from verity.protocols.resource_accounting.network.verifier import pacer
 
     read = []
 
-    def raw(clock_id: int) -> float:
+    def raw(clock_id: int) -> int:
         read.append(clock_id)
-        return 12.5
+        return 12_500_000_000
 
-    monkeypatch.setattr(pacer.time, "clock_gettime", raw)
+    monkeypatch.setattr(clock.time, "clock_gettime_ns", raw)
     probe = probe_mod.Probe()
     assert probe.clock is probe.collections.clock is probe_mod.Collections().clock is pacer.raw_clock
-    assert probe.clock() == 12.5 and read == [pacer.time.CLOCK_MONOTONIC_RAW]
+    assert probe.clock() == 12.5 and read == [clock.time.CLOCK_MONOTONIC_RAW]
     probe_mod.time_keeps(runner.Publisher)
     runner.Publisher(tmp_path).keep(runner.kept, None)
     assert json.loads((tmp_path / probe_mod.PUBLISHER_KEEPS).read_text()) == [12.5, 0.0, "requests", 0]
-    assert read == [pacer.time.CLOCK_MONOTONIC_RAW] * 3
+    assert read == [clock.time.CLOCK_MONOTONIC_RAW] * 3
 
 
 def test_collections_sees_the_interpreters_own_collections(mod):
