@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.pipeline.ids_protocol import ID_PAYLOAD, IdsProtocol
+from verity.protocols.resource_accounting.network.prover.ids_protocol import ID_PAYLOAD, IdsProtocol
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 

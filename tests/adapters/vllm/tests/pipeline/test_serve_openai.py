@@ -32,7 +32,7 @@ from verity_vllm.engine.step_trace import scheduler_config
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
-from verity_vllm.pipeline import ids_protocol as idp
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission, Delta

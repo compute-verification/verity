@@ -23,7 +23,7 @@ from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import ids_front as F
-from verity_vllm.pipeline import ids_protocol as idp
+from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity_vllm.pipeline import serve_protocol as proto
 
 P = 140
