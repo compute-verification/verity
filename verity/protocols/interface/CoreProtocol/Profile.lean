@@ -91,7 +91,9 @@ structure Integrity where
   /-- Members actually sampled at each level, all passed, in level order. -/
   drawn : Array (String × Nat)
   /-- The credited blocks, the blocks a scheme credits (`Verity.Scheme.Block`), by their number among the first level's
-  members. Each is a block of the first level and of every later one (`creditedProblem`). -/
+  members. Each is a block of the first level and of every later one (`creditedProblem`). Under a profile with a later
+  level that splits, no block can be credited, by design: a profile credits only with one level, or later levels of
+  size 1. -/
   credited : Array Nat := #[]
   deriving BEq, DecidableEq, Repr
 

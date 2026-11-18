@@ -9218,3 +9218,22 @@ def test_the_recorded_public_files_pass_the_population_check(pieces):
         case = {"program": json.loads(_population(((0, n),))), "query": query, "public": b.hex()}
         assert file_population(copy.deepcopy(case)) == {"why": None}, p
         assert D.replay(FILE_POPULATION, case, pieces) == ("output", D.canonical({"why": None})), p
+
+
+def test_round_two_of_record_is_the_twin_held_to_the_leans_codes_on_tampered_inputs(pieces):
+    """`second_stage.check` over runs a prover tampered with: no statements, one dropped, a read of a value neither docket
+    registers (`second-read`). The Lean's codes (`second_statements`) are the verdict, and the same call with any other
+    codes is `disagree` alone."""
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    cases = [honest, {**honest, "statements": None}, {**honest, "statements": honest["statements"][:-1]},
+             _read_interior(honest, 5)]
+    refused = 0
+    for case in cases:
+        kind, body = D.replay(SECOND_STATEMENTS, case, pieces)
+        assert kind == "output"
+        lean = json.loads(body)["codes"]
+        allow, own, statements = _second_own(copy.deepcopy(case))
+        assert list(SS.check(allow, own, statements, lean).codes) == lean
+        assert list(SS.check(allow, own, statements, [*lean, "second-read"]).codes) == ["disagree"]
+        refused += bool(lean)
+    assert refused >= 2 and not json.loads(D.replay(SECOND_STATEMENTS, honest, pieces)[1])["codes"]
