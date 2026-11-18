@@ -161,6 +161,17 @@ def AllGather(B, S, parts):
     return parts.reshape(Array(int(S.WORLD) * S.N, BF16))
 
 
+@composite("AllGatherTail", 1, ["WORLD", "N", "TAIL", "TN"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.N, BF16))), ("tail", Array(int(S.TAIL), Array(S.TN, BF16)))),
+                      Array(int(S.WORLD) * S.N + int(S.TAIL) * S.TN, BF16)),
+           conformance="protocol-defined: the node window's gather of rows of two widths, a copy with no gates")
+def AllGatherTail(B, S, parts, tail):
+    """WORLD rows of N words, then TAIL rows of TN words, as one row: a gather of rows of two widths, such as a whole read of
+    a count of rows no chunk size divides (its chunks, then the rows left over). A copy: the output IS the parts in turn, then
+    the tail's rows (no gate)."""
+    return Coll(Array(int(S.WORLD) * S.N + int(S.TAIL) * S.TN, BF16), concat([parts.refs, tail.refs]))
+
+
 def all_reduce(world: int, N: int):
     """The all-reduce Definition bound for a `world`-rank communicator: `AllReduce2_v1{N}` at world 2 (the recorded identity), else
     `AllReduce_v2{WORLD,N}`.  Both take ONE `parts` operand `Array<world, Array<N, bf16>>` in rank order."""
