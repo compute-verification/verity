@@ -47,6 +47,7 @@ import json
 import random
 import re
 import shutil
+import sys
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
@@ -96,6 +97,7 @@ from verity.circuits.refs import array_of, record_of, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.window import window_binding
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from holes import waits_on
 from test_challenger_difftest import DEPLOYED, SAMPLE_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
