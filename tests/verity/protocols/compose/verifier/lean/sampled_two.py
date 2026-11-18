@@ -51,16 +51,18 @@ def _get(j: Any, k: str) -> Any:
 
 
 def split(j: Any, what: str) -> dict:
-    """`SampledTwo.split`: an object naming the form ``two-stage``, and ``levels`` 2 where it names any, without
-    either."""
+    """`SampledTwo.split`: an object naming the form ``two-stage`` and ``levels`` 2 where present, one at least,
+    without either."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
-    if not isinstance(j.get("form"), str):
-        raise Reject(f"the {what} names no form")
-    if j["form"] != TWO_STAGE:
-        raise Reject(f"the {what} name the form {j['form']}, not \"{TWO_STAGE}\"")
     if "levels" in j and not (type(j["levels"]) is int and j["levels"] == 2):
         raise Reject(f"levels-form-mismatch: the {what}' levels is {canonical(j['levels'])}, and their form is {TWO_STAGE}")
+    form = j.get("form")
+    if isinstance(form, str):
+        if form != TWO_STAGE:
+            raise Reject(f"the {what} name the form {form}, not \"{TWO_STAGE}\"")
+    elif not (form is None and "levels" in j):
+        raise Reject(f"the {what} names no form")
     return {k: v for k, v in j.items() if k not in ("form", "levels")}
 
 

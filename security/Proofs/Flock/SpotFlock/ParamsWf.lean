@@ -269,8 +269,7 @@ theorem split_wf {j j' : Json} {what : String} (hj : Wf j) (h : VStar.Recursive.
     Wf j' := by
   unfold VStar.Recursive.SampledTwo.split at h
   do_walk h to j'
-  cases h
-  exact wf_without hj "form"
+  all_goals (cases h; exact wf_without (wf_without hj "form") "levels")
 
 /-- **Parameters `paramsAt` returns are `paramsParsed`'s of the tree `Core.canonicalJson` returned.** -/
 theorem paramsAt_ok {x : Json} {q : Spot.OneStage.Params} (h : VStar.Recursive.SampledTwo.paramsAt x = .ok q) :
