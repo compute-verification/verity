@@ -1,0 +1,3 @@
+[2026-11-18T08:20Z] 53fad3b7f864
+From coordinator, queue behind the ratchet fix and the 29 tests: top reader names a serving stack name inside verity/: serving/h1/__init__.py 118 and 181 (`VllmInt8LinearH1`), and model names at verifier/credit.py 287. For each say: rename/remove now (what reads it; does any stored record or pin hold the string?) or keep with which of the four reasons (a card, stored bytes, a missing proof, Daniel decision). Do the removal if no stored bytes read it and tests pass; else return the evidence. Needed for the 2:00 AM PST board: return a line on these by 1:45 AM PST even if the rest is unfinished.
+
