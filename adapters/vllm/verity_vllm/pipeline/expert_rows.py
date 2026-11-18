@@ -56,7 +56,7 @@ from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
 
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.pipeline import slice_rows as SL
+from verity_vllm.pipeline import chain_rows as CH, slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, shard_block, template
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.records import expert_tables as XT
@@ -349,15 +349,16 @@ def wire(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
                                  "a window cuts a token's router row and its pair rows together")
             routers = tuple(base[plan.slots] + plan.router[(key[0], plan.pair[key][2][1])] for key in keys)
             if what in ("w", "ws", "fused"):
-                wired.append(("in0", f"o{topk + k}", routers))
+                wired += CH.pieces(ms, m, "in0", f"o{topk + k}", routers)
             if what in ("gemm", "fused") and ARGS[plan.family[t]][1] is not None:
-                wired.append((_port(t, "g"), f"o{k}", routers))
+                wired += CH.pieces(ms, m, _port(t, "g"), f"o{k}", routers)
         if what in ("gemm", "fused"):
             G = int(plan.of[t][0][3]["statics"]["G"])
             bs = [b for _p, b in plan.units[t][lo:lo + m.n]]
             for port, src, at in zip(("w", "ws"), plan.reads(t), (bs, [b * n // G for b in bs]), strict=True):
                 if src is not None and (what == "gemm" or port == "ws"):
-                    wired.append((_port(t, port), "o0", tuple(base[src] + plan.at[src][(key, a)] for key, a in zip(keys, at, strict=True))))
+                    wired += CH.pieces(ms, m, _port(t, port), "o0",
+                                       [base[src] + plan.at[src][(key, a)] for key, a in zip(keys, at, strict=True)])
         out.append(replace(m, wired=tuple(wired)))
     return out
 
@@ -397,7 +398,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     held, under the salts of ``committer``'s registration at the ``program`` it names (`committer`), by parameter.  Refused for
     a table the registration holds no salts for, and, publishing none of them, where any table's root is not its registered
     one (`_registered`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
         registered_commit,
     )
@@ -419,7 +420,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
             if held is None or held[0] != g:
                 held = (g, _stack(slices, x, store, weights, int((arrivals or {}).get(x[0], 0)), arg, 8 if of == "w" else 32))
             out[param] = registered_commit(committer["program"], param, table_words(held[1], of, E, N, K, G_, n, b), bytes(32), 0,
-                                           keep_rows=True, row_salts=ys, schema=G.SCHEMA_SEG)
+                                           keep_rows=True, row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
     return _registered(out, committer)
 
 
@@ -475,7 +476,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     registration holds the shard's tables at its one width, and a table at any other is none of its; and, holding none of them,
     where a table's root is not the registered one (`_registered`)."""
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import registered_commit
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
 
     W = shard_block(H)
     out: dict[str, Any] = {}
@@ -490,7 +491,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
                 words = shard()
             V, start = committer["vocab"][param]
             new[at] = registered_commit(at[1], param, shard_words(words, V, start, b), bytes(32), 0, keep_rows=True,
-                                        row_salts=ys, schema=G.SCHEMA_SEG)
+                                        row_salts=ys, schema=SCHEMA_HM96_SHA512_ROW_SEG)
         out[param] = _SHARDS.get(at) or new[at]
     _registered({at[2]: v for at, v in new.items()}, committer)
     _SHARDS.update(new)
