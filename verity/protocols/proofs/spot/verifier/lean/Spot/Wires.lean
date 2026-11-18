@@ -138,6 +138,32 @@ def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
 
+/-- `pairwiseDisjoint`, without every pair: sorted by reader, port and first unit, each wire is tested against the
+earlier wires of its port whose reader units reach its first unit, the only ones `disjoint` can refuse it with. Its cost
+is the sort and, per wire, the wires of its port live at its first unit. -/
+def pairwiseDisjointSorted (ws : List Wire) : Bool := Id.run do
+  let a := ws.toArray.qsort fun x y =>
+    x.reader < y.reader || (x.reader == y.reader && (x.port < y.port || (x.port == y.port && x.start < y.start)))
+  let mut live : Array Wire := #[]
+  for w in a do
+    live := live.filter fun v => v.reader == w.reader && v.port == w.port && w.start < v.start + v.readerUnits
+    if live.any fun v => !disjoint v w then return false
+    live := live.push w
+  return true
+
+private def toyWire (port : String) (start n cut0 : Nat) : Wire :=
+  { reader := "R", port, writer := "W", out := "out", start, radix := [n], base := 0, step := [1], cut0, cuts := 1 }
+
+private def toyLists : List (List Wire) :=
+  [[], [toyWire "x" 0 4 0], [toyWire "x" 0 4 0, toyWire "x" 2 4 0], [toyWire "x" 0 4 0, toyWire "x" 2 4 1],
+   [toyWire "x" 0 4 0, toyWire "x" 4 4 0], [toyWire "x" 0 4 0, toyWire "y" 2 4 0],
+   [toyWire "x" 8 4 0, toyWire "x" 0 4 0, toyWire "x" 0 16 1, toyWire "x" 3 2 0],
+   [toyWire "x" 0 2 0, toyWire "x" 2 2 0, toyWire "x" 4 2 0, toyWire "x" 0 6 1, toyWire "x" 5 1 1]]
+
+#guard toyLists.all fun ws => pairwiseDisjointSorted ws == pairwiseDisjoint ws &&
+  pairwiseDisjointSorted ws.reverse == pairwiseDisjoint ws
+#guard toyLists.map pairwiseDisjoint == [true, true, false, true, true, true, false, false]
+
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
   wires : List Wire
@@ -275,7 +301,7 @@ def check (c : Wiring) : Except Refusal Summary :=
   else match firstWire c (wireCode c) with
     | some r => .error r
     | none =>
-      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
+      if !pairwiseDisjointSorted c.wires then .error ⟨.overlap, none⟩
       else match orderCode c orderedWire with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
