@@ -105,7 +105,6 @@ from verity.protocols.resource_accounting.network.verifier.certificate import (D
 from verity.protocols.resource_accounting.network.verifier.grid import BlockGrid
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
-from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import registered_value as RV
 
@@ -489,7 +488,7 @@ def _schedules(head: CellsHead, params: NetworkAttesterParams) -> None:
 def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> dict[str, Any]:
     e = {"leaves": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
          "domain": head.domain.hex()}
-    return produced.port(value, e, head.root.hex(), rows, SCHEMA) | \
+    return RV.port(value, e, head.root.hex(), rows, SCHEMA) | \
         ({RV.READS_FROM: int(reads_from)} if reads_from else {})
 
 
