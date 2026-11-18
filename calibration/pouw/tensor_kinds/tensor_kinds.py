@@ -40,9 +40,8 @@ MMA = re.compile(r"^(IMMA|HMMA|QMMA|OMMA|DMMA|BMMA)")
 REF = "imma_s8_m16n8k32"
 #: The one SASS instruction `REF`'s PTX MMA is on every target: a reference that lowers otherwise measures something else.
 REF_SASS = "IMMA.16832.S8.S8"
-CARDS = Path(__file__).resolve().parents[2] / "hardware/cards"
-#: A card record's `arch` -> the TK_SM tensor_kinds.cu has forms for.
-TARGETS = {"sm_120a": 120, "sm_90a": 90, "sm_100a": 100, "sm_89": 89}
+#: The targets (a card record's `arch`) tensor_kinds.cu has forms for.
+TARGETS = ("sm_120a", "sm_90a", "sm_100a", "sm_89")
 NOISE = 0.02
 #: The mixed points' lane op (IADD3 and FFMA alternating) alone must issue at least this many warp instructions a
 #: SMSP-cycle, or the mixed points bind on a pipe's own rate instead of the issue facet and overstate a.
@@ -476,19 +475,22 @@ def search_report(out: Path) -> tuple[str, list[str]]:
 METRIC = "compute-research/eight-bit-mma-issue-cost"
 
 
-def target(card: str, directory: Path = CARDS) -> tuple[str, int]:
-    """(short, TK_SM) of the card record in `directory` whose `driver` holds `card`, the name nvidia-smi gives the GPU;
-    refused, naming why, for a card no record holds (`kit.card_short`) or an `arch` tensor_kinds.cu has no forms for."""
-    from verity.device import load_card, skus
+def target(card: str, directory: Path | None = None) -> tuple[str, int]:
+    """(short, TK_SM) of the card the kit finds for `card`, the name nvidia-smi gives the GPU (`kit.card_short`,
+    `kit.card_arch`, in `directory` or the kit's), TK_SM its architecture file's capability's digits; refused, naming why,
+    for a card no record holds or an `arch` tensor_kinds.cu has no forms for or no architecture file states."""
+    from verity.device import load_architecture
     from verity_bench import kit
 
-    short = kit.card_short(card, directory=directory)
-    [rec] = [c for c in (load_card(s, directory=directory) for s in skus("gpu", directory=directory))
-             if card in {d["value"] for d in c.get("driver", ())}]
-    if rec.get("arch") not in TARGETS:
-        raise SystemExit(f"tensor_kinds: the {short} card's arch is {rec.get('arch')!r}, and tensor_kinds.cu has forms "
+    short, arch = kit.card_short(card, directory=directory), kit.card_arch(card, directory=directory)
+    if arch not in TARGETS:
+        raise SystemExit(f"tensor_kinds: the {short} card's arch is {arch!r}, and tensor_kinds.cu has forms "
                          f"for {', '.join(TARGETS)} only: no build, no point")
-    return short, TARGETS[rec["arch"]]
+    try:
+        capability = load_architecture(arch, directory=kit.cards_directory().parent / "architectures")["capability"]
+    except KeyError as e:
+        raise SystemExit(f"tensor_kinds: the {short} card's {e.args[0]}: no build, no point") from None
+    return short, int(capability.replace(".", ""))
 
 
 def _built(out: Path) -> int | None:
