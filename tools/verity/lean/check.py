@@ -5965,7 +5965,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     own = isinstance(replay_cache, set)
+    took, at = {}, [time.monotonic()]
+    def lap(part):
+        took[part], at[0] = round(time.monotonic() - at[0], 1), time.monotonic()
     keys = replay_keys(facts, toolchain, digest) if replay_cache is not None else {}
+    lap("keys")
     def passed(m):
         return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
@@ -5977,18 +5981,22 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         lean += ["-j", str(threads)]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if alone else contextlib.nullcontext():
+        lap("wait")
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        lap("plan")
         evicted = 0
         if keys and store and not own:
             fresh = {*facts["modules"], *deps_checked}
             evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
+        lap("touch")
         rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
                         *(["--closure-reused", *deps_reused] if deps_reused else [])],
                        pkg, work / "replay.log", timeout=CLOSURE_TIMEOUT if closure else REPLAY_TIMEOUT)
+        lap("lean")
         doc = json.loads(found.read_text()) if found.exists() and not killed(rc) else {}
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
@@ -5999,8 +6007,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
+        lap("store")
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
-             "phases": doc.get("seconds", {}), "evicted": evicted}
+             "phases": doc.get("seconds", {}), "evicted": evicted, "seconds": took}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -6113,7 +6122,9 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     kept = "the replay cache"
     if replay_cache is None or not store:
         replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
+    s = time.monotonic()
     keys = replay_keys(facts, toolchain, digest)
+    first_keys = round(time.monotonic() - s, 1)
     def passed(m):
         return has_replay(replay_cache, keys[m])
     threads = replay_threads(pkg) or int(lake_env()["LEAN_NUM_THREADS"])
@@ -6130,7 +6141,9 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
                       "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]})
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
+    took = stats.get("seconds", {}) | {"first-keys": first_keys, "first": round(sum(s["seconds"] for s in steps), 1)}
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
+                           "seconds": took,
                            "first_kept": kept, "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
 
 
@@ -6984,6 +6997,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
         stats = rep["replay"] if isinstance(rep["replay"], dict) else {}
+        rep["seconds"] |= {f"replay-{k}": v for k, v in (stats.get("seconds") or {}).items()}
         log(f"replay: {rel(pkg)}: ended in {rep['seconds']['replay']} s, {stats.get('checked')} modules checked and "
             f"{stats.get('reused')} reused")
         if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):

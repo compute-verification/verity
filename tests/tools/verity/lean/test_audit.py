@@ -8951,6 +8951,33 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
 
 
+def test_a_replay_reports_the_seconds_of_each_part_outside_the_kernels_phases(tmp_path, monkeypatch):
+    """A replay that checks nothing still takes minutes outside the phases `Replay.lean` reports. `replay_step` splits them
+    into the keys, the wait for `_HEAVY_REPLAY`, the plan, the cache's touch, the `lean` process and the store, and
+    `replay_in_steps` adds its own pass over the keys and its listed steps, read here from a clock the stubs move."""
+    clock = [0.0]
+    monkeypatch.setattr(A.time, "monotonic", lambda: clock[0])
+    facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
+
+    def keys(facts, toolchain, digest=None):
+        clock[0] += 3
+        return {m: m for m in facts["graph"]}
+
+    def run(cmd, cwd, log, timeout=None):
+        clock[0] += 7
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "replay_keys", keys)
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+    monkeypatch.setattr(A, "run", run)
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
+    assert fails == [] and stats["seconds"] == {"keys": 3, "wait": 0, "plan": 0, "touch": 0, "lean": 7, "store": 0}
+    monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "B", "threads": 1, "why": "w"}])
+    fails, stats = A.replay_in_steps(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, tmp_path / "cache")
+    assert fails == [] and stats["seconds"]["first-keys"] == 3 and stats["seconds"]["keys"] == 3
+
+
 def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
     """An unsealed audit (a control, a stubbed test) hashes its replay keys from the live `.lake`, so
     a stored verdict a dependent's build could have tampered with would poison a later sealed run. With ``store`` false it
