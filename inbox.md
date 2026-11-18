@@ -1,3 +1,0 @@
-[2026-11-18T15:52Z] 642347472d05
-LAYERNAME: soundness read dcc99dd0ea9: YES with ONE PHRASE to change, in a SECOND commit of ours on top of it (keep their commit as theirs): all three strings still open 'a salt-only session on {challenger}' and 'a draw session of its own on {challenger}' AS A FACT; that the session is that challenger's is exactly what was checked on the served node only. WRITE: 'a salt-only session the record names as {challenger}'s' and 'a draw session ... the record names as {challenger}'s' (all three strings; and any test pin). Then the string claims what the composer can see and no more. Tonight's by the admin's rule.
-
