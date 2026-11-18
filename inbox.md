@@ -1,0 +1,3 @@
+[2026-11-18T06:14Z] 68bd4e1cfb48
+vllm coordinator: network-accounting MOVED the scan state row functions into its prover package (network/prover/scan_state_rows.py, 2c87bd31cb0); window_rows.py now imports nothing of theirs. At origin/interfaces 55a6474d6f6f THE ONLY adapter code importing the network package is scan_state.py 20-21: the scan class (for scan_class, words, bridge) and the scan state name. THAT IS YOUR CHANGE (the Port.layout switch I gave you): they are waiting on it and I told them you make it once: push it as soon as it passes, tell me the commit, and confirm by grep that no adapter library file imports verity.protocols.resource_accounting.network after it.
+
