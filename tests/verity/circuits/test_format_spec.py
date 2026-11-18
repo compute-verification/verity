@@ -358,7 +358,23 @@ REJECT = [
      "E_BODY_NOT_BOOLEAN"),
     ("a word body", lambda d: d["boolean"].__setitem__("TAdd32_v1", "TPair_v1"), "E_BODY_NOT_BOOLEAN"),
     ("a RegisteredInput node inside a Definition", lambda d: _inner_input(d, "RegisteredInput32_v1"), "appears only in the root's body"),
+    ("inputs that are not [name, count] pairs", lambda d: d.update(inputs=[["x", -1], ["r", 2]]), "E_INPUTS:"),
+    ("an empty parameter name", lambda d: d["inputs"][0].__setitem__(0, ""), "E_INPUTS_NAME"),
+    ("a parameter name twice", lambda d: d["inputs"][1].__setitem__(0, "x"), "E_INPUTS_NAME"),
+    ("counts unlike the root's input nodes", lambda d: d["inputs"][1].__setitem__(1, 1), "E_INPUTS_COUNT"),
+    ("a parameter mixing run and registered inputs", lambda d: _mix(d), "E_INPUTS_MIXED"),
+    ("a definition nothing reaches", lambda d: d["definitions"].__setitem__("Input8_v1", {"form": "primitive", "id": "Input8_v1", "params": [],
+                                                                                    "ret": ["Value", 8]}),
+     "E_UNREACHED"),
 ]
+
+
+def _mix(desc: dict) -> None:
+    """Parameter r's second input node, `b`, becomes a registered input: r's nodes mix run and registered inputs."""
+    fid = "RegisteredInput32_v1"
+    desc["definitions"][fid] = dict(desc["definitions"]["Input32_v1"], id=fid)
+    desc["callees"].append(fid)
+    _node(desc, 2)["fn"] = len(desc["callees"]) - 1
 
 
 def _rename(desc: dict, old: str, new: str) -> None:
@@ -453,6 +469,8 @@ def build() -> dict:
         "alias_writer": [[label, list(at) if at else None, enc.refs(r, at)] for label, at, r in ALIAS],
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
         "definition_digest": [[fid, codec.definition_digest(e, desc)] for fid, e in sorted(desc["definitions"].items())],
+        "definition_digests": sorted(codec.definition_digests(desc).items()),
+        "inputs": desc["inputs"],
         "decoder_rejects": rejects,
         "boolean_map": desc["boolean"],
         "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
@@ -542,10 +560,105 @@ def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
             codec.encode_program(Program(top))
 
 
+def composed(desc: dict) -> dict[str, str]:
+    """§4.8 restated: each definition's digest over its canonical entry with every function reference replaced by its digest, a
+    word primitive's with its Boolean body's under `boolean`."""
+    out: dict[str, str] = {}
+
+    def refs(e) -> list[str]:
+        if isinstance(e, dict):
+            return [e["fn"]] if set(e) == {"fn"} and isinstance(e["fn"], str) else [f for v in e.values() for f in refs(v)]
+        return [f for v in e for f in refs(v)] if isinstance(e, list) else []
+
+    def sub(e):
+        if isinstance(e, dict):
+            return {"fn": out[e["fn"]]} if set(e) == {"fn"} and isinstance(e["fn"], str) else {k: sub(v) for k, v in e.items()}
+        return [sub(v) for v in e] if isinstance(e, list) else e
+
+    def digest(fid: str) -> str:
+        if fid not in out:
+            e = canonical_entry(desc, fid)
+            calls = [n["fn"] for n in e["body"]["nodes"]] if e["form"] == "composite" else []
+            for f in calls + refs(e.get("bindings", {})) + ([desc["boolean"][fid]] if fid in desc["boolean"] else []):
+                digest(f)
+            c = dict(e, bindings=sub(e["bindings"])) if "bindings" in e else dict(e)
+            if e["form"] == "composite":
+                c["body"] = dict(e["body"], nodes=[dict(n, fn=out[n["fn"]]) for n in e["body"]["nodes"]])
+            if fid in desc["boolean"]:
+                c["boolean"] = out[desc["boolean"][fid]]
+            out[fid] = hashlib.sha512(jcs(c)).hexdigest()
+        return out[fid]
+
+    for fid in desc["definitions"]:
+        digest(fid)
+    return out
+
+
+def program_digest(desc: dict) -> str:
+    """§1 restated: the schema, `program_fn`, `inputs`, the root's digest, the digests of the functions `program_fn`'s record
+    names, and the Boolean map's body digests."""
+    d = composed(desc)
+    fns = [f for f in re.findall(r'\{"fn":"([^"]+)"\}', desc["program_fn"]) if f in d]
+    return hashlib.sha512(jcs({"schema": desc["schema"], "program_fn": desc["program_fn"], "inputs": desc["inputs"],
+                               "root": d[desc["root"]], "functions": {f: d[f] for f in fns},
+                               "boolean": {k: d[v] for k, v in desc["boolean"].items()}})).hexdigest()
+
+
 def test_the_program_digests(decoded):
-    b = VECTORS["descriptor"].encode()
-    assert hashlib.sha512(b).hexdigest() == VECTORS["program_digest"] == codec.program_digest(decoded.desc)
-    assert codec.program_digest(Program(PROG)) == VECTORS["program_digest"], REWRITE
+    desc = json.loads(VECTORS["descriptor"])
+    assert program_digest(desc) == VECTORS["program_digest"] == codec.program_digest(decoded.desc) == codec.program_digest(desc)
+    assert codec.program_digest(Program(PROG)) == codec.program_digest(decoded) == VECTORS["program_digest"], REWRITE
+    assert [list(x) for x in sorted(composed(desc).items())] == VECTORS["definition_digests"]
+    assert sorted(codec.definition_digests(Program(PROG)).items()) == sorted(codec.definition_digests(desc).items())
+
+
+def test_the_inputs_name_each_parameter_with_its_node_count(live, decoded):
+    """§5.1: `inputs` names each parameter of the program function in order with the input nodes it lowers to, which lead the
+    root's body, and is under the program digest."""
+    assert live["inputs"] == VECTORS["inputs"] == decoded.inputs == [["x", 1], ["r", 2]], REWRITE
+    desc = json.loads(VECTORS["descriptor"])
+    renamed = {**desc, "inputs": [["y", 1], ["r", 2]]}
+    assert codec.program_digest(renamed) != codec.program_digest(desc)
+    assert codec.definition_digests(renamed) == codec.definition_digests(desc)
+
+
+def _callers(desc: dict, fid: str) -> set[str]:
+    """``fid`` and every definition that reaches it: by a node, a binding record, or as a word primitive's Boolean body."""
+    reach = {f: {n for n in re.findall(r'"fn":"([^"]+)"', jcs(canonical_entry(desc, f)).decode())} | (
+             {desc["boolean"][f]} if f in desc["boolean"] else set()) for f in desc["definitions"]}
+    out, grew = {fid}, True
+    while grew:
+        more = {f for f, r in reach.items() if r & out} - out
+        out |= more
+        grew = bool(more)
+    return out
+
+
+@pytest.mark.parametrize("fid", ["TPair_v1", "TAdd32_v1"])
+def test_a_callees_changed_body_moves_every_callers_digest_and_no_other(fid):
+    """§4.8: a definition's digest covers its callees' bodies, a word primitive's its Boolean body's; one changed body moves the
+    digests of the definitions that reach it, and of no other."""
+    desc = json.loads(VECTORS["descriptor"])
+    before = codec.definition_digests(desc)
+    changed = json.loads(VECTORS["descriptor"])
+    target = changed["boolean"][fid] if fid in changed["boolean"] else fid
+    changed["definitions"][target]["body"]["params"][0][0] += "_"
+    after = codec.definition_digests(changed)
+    moved = {f for f in before if before[f] != after[f]}
+    assert moved == _callers(desc, target) and {fid, desc["root"]} <= moved and len(moved) < len(before)
+    assert codec.program_digest(changed) != codec.program_digest(desc)
+
+
+def test_two_programs_sharing_a_definition_give_it_one_digest():
+    """§4.8: a definition's digest is the same in every Program that holds it, here PROG's and a second Program's that calls
+    only TPair_v1, as run and as registered inputs."""
+    params, ret = Pair.signature()
+    other = _comp("TOther", (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(Pair, *a))
+    one = codec.definition_digests(Program(PROG))
+    for prog in (Program(other), Program(other, registered=(params[0][0],)), Program(PROG, registered=("r",))):
+        two = codec.definition_digests(prog)
+        shared = (set(one) & set(two)) - {codec.descriptor_id(Program(PROG).root)}
+        assert "TPair_v1" in shared and all(one[f] == two[f] for f in shared)
 
 
 # -- 2. types, 3. reference sequences ----------------------------------------------------------------------------------------------
@@ -589,7 +702,7 @@ def test_the_descriptor_round_trips(decoded):
     assert _canon(codec.encode_program(Program(PROG))) == VECTORS["descriptor"], REWRITE
     assert _canon(codec.encode_program(decoded)) == VECTORS["descriptor"]
     desc = json.loads(VECTORS["descriptor"])
-    assert sorted(desc) == ["boolean", "callees", "definitions", "program_fn", "root", "schema", "types"]
+    assert sorted(desc) == ["boolean", "callees", "definitions", "inputs", "program_fn", "root", "schema", "types"]
     assert desc["schema"] == "verity-ir/descriptor/v2" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
 
 
@@ -686,7 +799,7 @@ def test_the_self_contained_entry_and_v0(decoded):
     flattens node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
     program = Program(PROG)
     v0 = codec.encode_program(program, codec.SCHEMA_V0)
-    assert sorted(v0) == ["annotations", "boolean", "definitions", "program_fn", "root", "schema"]
+    assert sorted(v0) == ["annotations", "boolean", "definitions", "inputs", "program_fn", "root", "schema"]
     assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
     with pytest.raises(ValueError, match="E_SCHEMA"):
         codec.decode_program(v0, REG)
