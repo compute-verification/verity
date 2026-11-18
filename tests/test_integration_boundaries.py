@@ -44,7 +44,6 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py", "verity_vllm.definitions.registry"),
-    ("verity/protocols/proofs/flock/prover/python/verity_flock/tail.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py", "verity_vllm.definitions.registry"),
     # SiluMul_v2's unit is the registry's Boolean SiluMulBf16_v4, which only this import registers; core has no SiluMulBf16_v2
     ("verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py", "verity_vllm.definitions.registry.boolean_silu"),

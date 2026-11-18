@@ -108,7 +108,6 @@ files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
