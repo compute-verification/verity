@@ -707,10 +707,10 @@ def residues (stride : Int) (count L cap : Nat) : Option (List Nat) :=
   let s := (stride % (L : Int)).toNat
   let g := Nat.gcd s L
   if count ≥ L / g then (if L / g ≤ cap then some ((List.range (L / g)).map (· * g)) else none)
-  else if count ≤ cap then some ((List.range count).map fun k => k * s % L).eraseDups else none
+  else if count ≤ cap then some ((List.range count).map fun k => k * s % L) else none
 
 /-- `{(x + y) mod L : x ∈ A, y ∈ B}`. -/
-def sumMod (L : Nat) (A B : List Nat) : List Nat := (A.flatMap fun x => B.map fun y => (x + y) % L).eraseDups
+def sumMod (L : Nat) (A B : List Nat) : List Nat := A.flatMap fun x => B.map fun y => (x + y) % L
 
 /-- The residues mod `L` that `Lane.leafAt`'s levels `lv` add at the periods they count, where each level's and each
 sum's have at most `cap` members. -/

@@ -578,18 +578,18 @@ def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | No
 _RCAP = 1 << 16
 
 
-def _level_res(L: int, levels: tuple[tuple[int, int], ...]) -> set[int] | None:
+def _level_res(L: int, levels: tuple[tuple[int, int], ...]) -> list[int] | None:
     """The residues mod L of a lane's levels' contributions over its periods (`Widths.levelRes`), None past `_RCAP`."""
     if not levels:
-        return {0}
+        return [0]
     (r, d), rest = levels[0], levels[1:]
     A = _residues(d, r, L, _RCAP)
     if not rest:
-        return A
+        return None if A is None else list(A)
     B = _level_res(L, rest)
     if A is None or B is None or len(A) * len(B) > _RCAP:
         return None
-    return {(x + y) % L for x in A for y in B}
+    return [(x + y) % L for x in A for y in B]
 
 
 def _lane_width(S: Type, w: int, lo: int, hi: int, b: int, run: int, e: int, levels, exact: bool) -> bool | None:

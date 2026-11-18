@@ -57,7 +57,7 @@ theorem residues_mem (stride : ℤ) (count L bound : ℕ) (A : List ℕ) (hL : 0
     · rw [ite_eq_left hbound] at h
       injection h with h
       subst h
-      rw [List.mem_eraseDups, List.mem_map]
+      rw [List.mem_map]
       exact ⟨k, List.mem_range.2 hk, rfl⟩
     · rw [ite_eq_right hbound] at h
       exact absurd h (by simp)
