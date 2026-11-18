@@ -5369,6 +5369,11 @@
         "tests/adapters/vllm/tests/compiler/test_network_attester_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_charge_rows.py",
         "tests/adapters/vllm/tests/compiler/test_network_attester_window_charge_rows.py": "tests/verity/protocols/resource_accounting/network/prover/test_network_attester_window_charge_rows.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py": "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py"
+      }
     }
   ]
 }

@@ -528,7 +528,7 @@ def no_weights(*a: Any, **kw: Any) -> Any:
 
 
 def replayed(protocols: Any, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
-    from verity_vllm.check.replay import pouw_circuit as PWC
+    from verity_vllm.protocols.pouw import pouw_circuit as PWC
 
     return PWC.replayed(protocols, run)
 
