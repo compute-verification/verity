@@ -660,17 +660,18 @@ constexpr int CONSUMER_THREADS = 128;
 constexpr size_t CONSUMER_STAGING = (size_t)CONSUMER_THREADS / 32 * 32 * SK_ROWS * sizeof(int);
 constexpr size_t CONSUMER_STAGING64 = (size_t)CONSUMER_THREADS / 32 * 32 * SK64_ROWS * sizeof(int);
 
+// The body of pass_consumer_kernel and pass_consumer_at_kernel: `base`, the store index its own tiles hash their
+// receipts at, is the tree's position base_leaf · 16 in the first and its own argument in the second.
 template <int KS>
-__global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const uint4 *__restrict__ data, u64 n,
-                                                                         u64 base_leaf, const u32 *__restrict__ pk,
-                                                                         u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
-                                                                         u64 chunk, u64 ready_blocks, int h0, int hc,
-                                                                         u64 chunks) {
+__device__ __forceinline__ void pass_consumer_body(const uint4 *__restrict__ data, u64 n, u64 base_leaf, u64 base,
+                                                   const u32 *__restrict__ pk, u64 *ys, unsigned *ctr,
+                                                   u64 *__restrict__ kept, u64 chunk, u64 ready_blocks, int h0, int hc,
+                                                   u64 chunks) {
   extern __shared__ __align__(16) u64 scratch[];
   __shared__ unsigned claimed;
   __shared__ int chunk_last;
   const u64 lc = chunk / PER_LEAF, leaves = 1ULL << h0, groups = lc >> h0, subtrees = n / (PER_LEAF << h0);
-  const u64 tiles = n / 32, nl = n / PER_LEAF, base = base_leaf * PER_LEAF;
+  const u64 tiles = n / 32, nl = n / PER_LEAF;
   const unsigned tiles_per = (unsigned)(ready_blocks / 32);
   unsigned *ready = ctr + 1, *subtree_done = ready + n / ready_blocks;
   unsigned *claim = subtree_done + chunks;
@@ -748,6 +749,27 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
     }
     __syncthreads();   // before the next claim rewrites `claimed` and the staging
   }
+}
+
+template <int KS>
+__global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const uint4 *__restrict__ data, u64 n,
+                                                                         u64 base_leaf, const u32 *__restrict__ pk,
+                                                                         u64 *ys, unsigned *ctr, u64 *__restrict__ kept,
+                                                                         u64 chunk, u64 ready_blocks, int h0, int hc,
+                                                                         u64 chunks) {
+  pass_consumer_body<KS>(data, n, base_leaf, base_leaf * PER_LEAF, pk, ys, ctr, kept, chunk, ready_blocks, h0, hc,
+                         chunks);
+}
+
+// pass_consumer_kernel for a shard whose receipts are at store indices jbase … (`rs_pass_at`).
+template <int KS>
+__global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_at_kernel(const uint4 *__restrict__ data, u64 n,
+                                                                            u64 base_leaf, u64 jbase,
+                                                                            const u32 *__restrict__ pk, u64 *ys,
+                                                                            unsigned *ctr, u64 *__restrict__ kept,
+                                                                            u64 chunk, u64 ready_blocks, int h0,
+                                                                            int hc, u64 chunks) {
+  pass_consumer_body<KS>(data, n, base_leaf, jbase, pk, ys, ctr, kept, chunk, ready_blocks, h0, hc, chunks);
 }
 
 // --- the leaf pass: a shard's leaves hashed by the warps that read it (`rs_leaf_pass`) ------------------------------
@@ -1466,10 +1488,11 @@ __global__ void __launch_bounds__(TOP_THREADS) top_kernel(const TopSegs s, u64 *
 constexpr int PER_LEAF_LOG2 = 4;
 static_assert(PER_LEAF == 1 << PER_LEAF_LOG2, "a leaf is 16 receipts");
 
-__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(const uint4 *__restrict__ data, u64 base,
-                                                                              const u64 *__restrict__ c, int h0,
-                                                                              const u32 *__restrict__ pk,
-                                                                              u64 *__restrict__ ys, u64 tiles) {
+// The bodies of the receipts kernels: a subtree's position j0 reads data at j0 − base and hashes at store index
+// j0 + shift (0 for rs_subtrees, its argument for rs_subtrees_at).
+__device__ __forceinline__ void subtree_receipts_body(const uint4 *__restrict__ data, u64 base, u64 shift,
+                                                      const u64 *__restrict__ c, int h0, const u32 *__restrict__ pk,
+                                                      u64 *__restrict__ ys, u64 tiles) {
   __shared__ u32 sg[SK16_PACK];
   __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
   sk16_prologue(sg, pk);
@@ -1478,14 +1501,14 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(co
   if (tile >= tiles) return;
   const int per_log2 = h0 + PER_LEAF_LOG2 - 5;   // tiles a subtree
   const u64 q = tile >> per_log2, b0 = (tile & ((1ULL << per_log2) - 1)) * 32, j0 = c[q] * PER_LEAF;
-  sk16_tile(data + (j0 - base) * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, sg, st[warp],
+  sk16_tile(data + (j0 - base) * (BLOCK / 16), j0 + shift, (u64)PER_LEAF << h0, b0, sg, st[warp],
             ys + (q << (h0 + PER_LEAF_LOG2)) * 8, lane);
 }
 
-// subtree_receipts_kernel at 64 rows.
-__global__ void SK64_BOUNDS subtree64_receipts_kernel(const uint4 *__restrict__ data, u64 base,
-                                                      const u64 *__restrict__ c, int h0, const uint4 *__restrict__ pk,
-                                                      u64 *__restrict__ ys, u64 tiles) {
+__device__ __forceinline__ void subtree64_receipts_body(const uint4 *__restrict__ data, u64 base, u64 shift,
+                                                        const u64 *__restrict__ c, int h0,
+                                                        const uint4 *__restrict__ pk, u64 *__restrict__ ys,
+                                                        u64 tiles) {
   extern __shared__ uint4 smem[];
   int *st = sk64_prologue(smem, pk);
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
@@ -1493,8 +1516,37 @@ __global__ void SK64_BOUNDS subtree64_receipts_kernel(const uint4 *__restrict__ 
   if (tile >= tiles) return;
   const int per_log2 = h0 + PER_LEAF_LOG2 - 5;   // tiles a subtree
   const u64 q = tile >> per_log2, b0 = (tile & ((1ULL << per_log2) - 1)) * 32, j0 = c[q] * PER_LEAF;
-  sk64_data_tile(data + (j0 - base) * (BLOCK / 16), j0, (u64)PER_LEAF << h0, b0, smem, st,
+  sk64_data_tile(data + (j0 - base) * (BLOCK / 16), j0 + shift, (u64)PER_LEAF << h0, b0, smem, st,
                  ys + (q << (h0 + PER_LEAF_LOG2)) * 8, lane);
+}
+
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(const uint4 *__restrict__ data, u64 base,
+                                                                              const u64 *__restrict__ c, int h0,
+                                                                              const u32 *__restrict__ pk,
+                                                                              u64 *__restrict__ ys, u64 tiles) {
+  subtree_receipts_body(data, base, 0, c, h0, pk, ys, tiles);
+}
+
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_at_kernel(const uint4 *__restrict__ data,
+                                                                                 u64 base, u64 shift,
+                                                                                 const u64 *__restrict__ c, int h0,
+                                                                                 const u32 *__restrict__ pk,
+                                                                                 u64 *__restrict__ ys, u64 tiles) {
+  subtree_receipts_body(data, base, shift, c, h0, pk, ys, tiles);
+}
+
+// subtree_receipts_kernel at 64 rows.
+__global__ void SK64_BOUNDS subtree64_receipts_kernel(const uint4 *__restrict__ data, u64 base,
+                                                      const u64 *__restrict__ c, int h0, const uint4 *__restrict__ pk,
+                                                      u64 *__restrict__ ys, u64 tiles) {
+  subtree64_receipts_body(data, base, 0, c, h0, pk, ys, tiles);
+}
+
+__global__ void SK64_BOUNDS subtree64_receipts_at_kernel(const uint4 *__restrict__ data, u64 base, u64 shift,
+                                                         const u64 *__restrict__ c, int h0,
+                                                         const uint4 *__restrict__ pk, u64 *__restrict__ ys,
+                                                         u64 tiles) {
+  subtree64_receipts_body(data, base, shift, c, h0, pk, ys, tiles);
 }
 
 __global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restrict__ ys, const u64 *__restrict__ c,
@@ -1562,7 +1614,7 @@ int rs_rows(int rows) {
 }
 
 // A 64-row receipt kernel's dynamic shared memory (SK64R_SMEM is past the default limit), asked once a device.
-enum { K64_PASS, K64_SUBTREES, K64_KERNELS };
+enum { K64_PASS, K64_SUBTREES, K64_SUBTREES_AT, K64_KERNELS };
 static int shared64(const void *k, int id) {
   constexpr int DEVICES = 64;
   static bool opted[K64_KERNELS][DEVICES];
@@ -1861,9 +1913,10 @@ static int pass_pads(uint64_t pad_r0, uint64_t pad_n, uint64_t *pad, uint64_t *p
 // for the whole shard pass before anything queued on it after. consumers > 0 is the one consumer grid's CTAs on sb, for
 // a shard read beside another on the same device (pinned host memory over PCIe, whose few receipt CTAs leave it the
 // device but whose consumers would otherwise fill it).
-int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig,
-            uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
-            uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int consumers) {
+static int pass_shard(const void *data, uint64_t n, uint64_t base, uint64_t jbase, bool at, const uint32_t *pk,
+                      unsigned *ctr, uint64_t *ys, uint64_t *dig, uint64_t *up, uint64_t *kept, int h0, uint64_t chunk,
+                      int ctas, uint64_t pad_r0, uint64_t pad_n, uint64_t *pad, uint64_t *pad_out, cudaStream_t sa,
+                      cudaStream_t sb, int consumers) {
   int dev;
   cudaEvent_t go, end;
   if (pass_events(&dev, &go, &end)) return 4;
@@ -1885,7 +1938,11 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
   const bool wide = gRows == SK64_ROWS;
   using Consumer = void (*)(const uint4 *, u64, u64, const u32 *, u64 *, unsigned *, u64 *, u64, u64, int, int, u64);
+  using ConsumerAt = void (*)(const uint4 *, u64, u64, u64, const u32 *, u64 *, unsigned *, u64 *, u64, u64, int, int,
+                              u64);
   const Consumer consumer = wide ? pass_consumer_kernel<SK64_ROWS> : pass_consumer_kernel<SK_ROWS>;
+  const ConsumerAt consumer_at = wide ? pass_consumer_at_kernel<SK64_ROWS> : pass_consumer_at_kernel<SK_ROWS>;
+  const void *consumer_fn = at ? (const void *)consumer_at : (const void *)consumer;
   const void *producer = wide ? (const void *)sketch64_pass_kernel : (const void *)sketch16_pass_kernel;
   const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
   const size_t staging = wide ? CONSUMER_STAGING64 : CONSUMER_STAGING;
@@ -1896,7 +1953,7 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
-    else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, receipts ? ctas : 0, shared,
+    else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, consumer_fn, receipts ? ctas : 0, shared,
                                   groups, &side, &tail)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
@@ -1907,17 +1964,23 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
     return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
   if (receipts && wide)
-    sketch64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>((const uint4 *)data, n, base, (const uint4 *)pk,
+    sketch64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>((const uint4 *)data, n, jbase, (const uint4 *)pk,
                                                                      ys, ctr, ready_tiles, started);
   else if (receipts)
-    sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
+    sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, jbase, pk, ys, ctr, ready_tiles,
                                                            started);
   if (cudaGetLastError()) return 4;
   // The padding's nodes are hashed at the start, under the reads.
   if (pad_n && (rc = pass_pads(pad_r0, pad_n, pad, pad_out, hc, sb))) return rc;
   // h0 <= 8 fits the consumer's two 2^h0-digest reduction buffers in CUDA's default dynamic-shared-memory limit. Keep the old exact path
   // for diagnostic configurations with larger retained subtrees.
-  if (fused) {
+  if (fused && at) {
+    consumer_at<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, jbase, pk, ys,
+                                                                  ctr, kept, chunk, ready_blocks, h0, hc, chunks);
+    if (tail)
+      consumer_at<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>((const uint4 *)data, n, base_leaf, jbase, pk, ys,
+                                                                    ctr, kept, chunk, ready_blocks, h0, hc, chunks);
+  } else if (fused) {
     consumer<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>((const uint4 *)data, n, base_leaf, pk, ys, ctr, kept,
                                                                chunk, ready_blocks, h0, hc, chunks);
     if (tail)
@@ -1942,6 +2005,23 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   }
   if (cudaEventRecord(end, sb) || cudaStreamWaitEvent(sa, end, 0)) return 4;
   return cudaGetLastError() ? 4 : 0;
+}
+
+int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig,
+            uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
+            uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int consumers) {
+  return pass_shard(data, n, base, base, false, pk, ctr, ys, dig, up, kept, h0, chunk, ctas, pad_r0, pad_n, pad,
+                    pad_out, sa, sb, consumers);
+}
+
+// rs_pass for a shard at tree positions base … base + n − 1 whose blocks are the store's jbase … jbase + n − 1: each
+// receipt hashed at its block's index, its leaf and nodes at its position (a refresh plan's run, `DeviceStore`).
+int rs_pass_at(const void *data, uint64_t n, uint64_t base, uint64_t jbase, const uint32_t *pk, unsigned *ctr,
+               uint64_t *ys, uint64_t *dig, uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas,
+               uint64_t pad_r0, uint64_t pad_n, uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb,
+               int consumers) {
+  return pass_shard(data, n, base, jbase, true, pk, ctr, ys, dig, up, kept, h0, chunk, ctas, pad_r0, pad_n, pad,
+                    pad_out, sa, sb, consumers);
 }
 
 // rs_pass for a shard in a GPU's own memory with the leaves hashed by the warps that read: the same store blocks,
@@ -2188,6 +2268,27 @@ int rs_subtrees(const void *data, uint64_t base, const uint32_t *pk, const uint6
   } else {
     subtree_receipts_kernel<<<grid(tiles, SK16_WARPS) , 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, base, c, h0,
                                                                                  pk, ys, tiles);
+  }
+  subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
+  for (int h = 0; h + 1 < h0; ++h)
+    subtree_level_kernel<<<grid(count << (h0 - h - 1), 128), 128, 0, s>>>(nodes, c, h0, h, count << (h0 - h - 1));
+  return cudaGetLastError() ? 4 : 0;
+}
+
+// rs_subtrees for a shard whose block at position p is the store's block p + shift (mod 2^64): its receipts at the
+// blocks' indices, its leaves and nodes at their positions (`rs_pass_at`'s).
+int rs_subtrees_at(const void *data, uint64_t base, uint64_t shift, const uint32_t *pk, const uint64_t *c,
+                   uint64_t count, int h0, uint64_t *ys, uint64_t *nodes, cudaStream_t s) {
+  if (!data || !pk || !c || !ys || !nodes || h0 < 1 || h0 > 20 || h0 + 1 > NODE_LEVELS) return 1;
+  if (!count) return 0;
+  const uint64_t tiles = count << (h0 + PER_LEAF_LOG2 - 5);
+  if (gRows == SK64_ROWS) {
+    if (shared64((const void *)subtree64_receipts_at_kernel, K64_SUBTREES_AT)) return 4;
+    subtree64_receipts_at_kernel<<<grid(tiles, SK64R_WARPS), 32 * SK64R_WARPS, SK64R_SMEM, s>>>(
+        (const uint4 *)data, base, shift, c, h0, (const uint4 *)pk, ys, tiles);
+  } else {
+    subtree_receipts_at_kernel<<<grid(tiles, SK16_WARPS), 32 * SK16_WARPS, 0, s>>>((const uint4 *)data, base, shift, c,
+                                                                                  h0, pk, ys, tiles);
   }
   subtree_leaves_kernel<<<grid(count << h0, 128), 128, 0, s>>>(ys, c, h0, count << h0, nodes);
   for (int h = 0; h + 1 < h0; ++h)
