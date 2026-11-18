@@ -17,7 +17,6 @@ REGISTRY = Path(__file__).with_name("registry")
 class Gpu:
     id: str
     display_name: str
-    census_id: str
     nebius_platforms: tuple[str, ...]
     nebius_preset: str
     runpod_type_id: str
