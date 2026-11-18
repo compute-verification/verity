@@ -220,6 +220,10 @@ means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
 
 [[tree]]
+path = "verity/protocols/proofs/spot/scheme.py"
+means = "the sampled proofs as a scheme that charges nothing, registered as sampled-proofs"
+
+[[tree]]
 path = "verity/protocols/proofs/spot/verifier/challenger/"
 means = "the challenger's program, which the auditor's device runs"
 
@@ -278,6 +282,10 @@ means = "the network attester as a resource scheme, registered as network-attest
 path = "verity/protocols/workload_classification/training_detection/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/workload_classification/training_detection/inference_only/scheme.py"
+means = "the inference-only check as a scheme that charges nothing, registered as inference-only"
 
 [[tree]]
 path = "verity/protocols/registration/"
