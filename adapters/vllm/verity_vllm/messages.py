@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "providing", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "declaring", "line", "lines", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
 
@@ -56,14 +56,23 @@ class Exchange:
         self.key = f"build-{next(_KEYS)}"
 
     def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
-               gate: Callable[..., Mapping[str, Any]] | None = None, **launcher: Any) -> Any:
+               gate: Callable[..., Mapping[str, Any]] | None = None, private: str | Path | None = None,
+               **launcher: Any) -> Any:
         """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
-        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; **launcher}``: its ``attach(self, ctx)``,
-        then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.  ``gate`` is the
-        auditor device's challenger gate in its own words, ``gate(*words) -> answer`` (`commit_coins.ChallengerGate.call`),
-        or None where the launcher holds none.  Attached before the build is answered, it is declared (`H.Declared`);
-        after, its requests are refused as `request` refuses them."""
-        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, **launcher}
+        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; "private"; **launcher}``: its
+        ``attach(self, ctx)``, then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.
+        ``gate`` is the auditor device's challenger gate in its own words, ``gate(*words) -> answer``
+        (`commit_coins.ChallengerGate.call`), or None where the launcher holds none.  ``ctx["private"]`` is the scheme's
+        own directory under the launcher's ``private`` (``private/<scheme's name>``, made here), outside every run
+        output, where it keeps what never leaves the node across servers; None where the launcher holds none.
+        Attached before the build is answered, it is declared (`H.Declared`); after, its requests are refused as
+        `request` refuses them."""
+        own = None
+        if private is not None:
+            own = Path(private) / scheme.name
+            own.mkdir(parents=True, exist_ok=True)
+        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, "private": own,
+               **launcher}
         got = scheme.attach(self, ctx)
         for r in scheme.requests(ctx):
             if (scheme.name, r) not in self.requests:
@@ -209,12 +218,21 @@ class Exchange:
         return out
 
 
+def _one(what: str, has: Callable[[schemes.Scheme], bool]) -> schemes.Scheme:
+    found = [s for s in declarations.load().values() if has(s)]
+    if len(found) != 1:
+        raise LookupError(f"one declared scheme {what}, not {len(found)}: {[s.name for s in found]}")
+    return found[0]
+
+
 def providing(role: str) -> schemes.Scheme:
     """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
-    found = [s for s in declarations.load().values() if role in s.provides]
-    if len(found) != 1:
-        raise LookupError(f"one declared scheme provides {role!r}, not {len(found)}: {[s.name for s in found]}")
-    return found[0]
+    return _one(f"provides {role!r}", lambda s: role in s.provides)
+
+
+def declaring(port: str) -> schemes.Scheme:
+    """The one declared scheme with a port named ``port`` (`Scheme.ports`); `LookupError` naming those that have otherwise."""
+    return _one(f"declares port {port!r}", lambda s: any(p.name == port for p in s.ports))
 
 
 _CURRENT: Exchange | None = None

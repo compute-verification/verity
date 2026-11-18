@@ -5,8 +5,11 @@ compressions a by-reference commit spends on them: every output row hashed fresh
 port's tree, since a wired row's b||c is its writer's and a registered row's the docket's.
 
     python class_rows.py --tiny [--slots]                                 # TINY, locally
-    python class_rows.py --llama1b [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s
-    python class_rows.py --llama1b [--class 8,1024,64,4,16] --out FILE    # the class of record (~22 min, ~42 GB)
+    python class_rows.py --llama1b --card SKU [--int8] --probe 1,2,2                 # one Program at a probe class, ~2 s
+    python class_rows.py --llama1b --card SKU [--class 8,1024,64,4,16] --out FILE    # the class of record (~22 min, ~42 GB)
+
+``--card`` names the target's card file (`calibration/hardware/cards`): the RTX PRO 6000's ``rtx-pro-6000-server``, the
+H200's ``h200-sxm-141gb``; its capability and SM count are read from it.
 """
 from __future__ import annotations
 
@@ -17,8 +20,6 @@ import sys
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-
-CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
 
 
 def kinds_of(circuit, IF):
@@ -91,9 +92,13 @@ def main(argv=None) -> int:
     ap.add_argument("--slots", action="store_true", help="TINY at the class of record's slots (8, 4 a boundary)")
     ap.add_argument("--class", dest="cls", default=None)
     ap.add_argument("--probe", default=None, help="lower one Program at this class only")
-    ap.add_argument("--int8", action="store_true", help="the exact-int8 checkpoint on the H200 (int8_exact linears)")
+    ap.add_argument("--card", default=None, help="--llama1b: the target's card, by its card file's name under "
+                    "calibration/hardware/cards (no default)")
+    ap.add_argument("--int8", action="store_true", help="the exact-int8 checkpoint (int8_exact linears)")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
+    if a.llama1b and not a.card:
+        ap.error("--llama1b needs --card SKU: the target's card file (h200-sxm-141gb, rtx-pro-6000-server, ...)")
     sys.path.insert(0, str(Path.cwd() / "adapters/vllm"))
     sys.path.insert(0, str(Path.cwd() / "adapters/torch"))
     from verity_vllm.program.predict import window_circuit as WC
@@ -101,7 +106,7 @@ def main(argv=None) -> int:
     from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
-    from verity.device import load_card, number
+    from verity_bench import kit
 
     t0 = time.perf_counter()
     if a.tiny:
@@ -111,12 +116,12 @@ def main(argv=None) -> int:
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
         cfg = json.loads((Path.cwd() / "tests/adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
-        target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server", directory=CARD_FILES)["sm"]["count"]))}
+        card = kit.gpu_target(a.card)
+        target = {"compute_capability": card["compute_capability"], "num_sms": card["num_sms"]}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT
             cfg = {**cfg, "quantization_config": dict(INT8_EXACT_QUANT)}
-            target = {"compute_capability": [9, 0], "num_sms": int(number(load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"])),
-                      "int8_exact": "linears"}
+            target = {**target, "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD

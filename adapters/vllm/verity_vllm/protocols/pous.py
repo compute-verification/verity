@@ -30,7 +30,7 @@ vLLM's model, attaches the decode to its layers and holds the option.
   point no certificate covers).  In `PousOption.subprotocol` the memory attester runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
-  keeps a weight-derived copy resident across forwards is the selector's to refuse (`verity_vllm.protocols.keeps_weight_copy`); POUS keeps
+  keeps a weight-derived copy resident across forwards is the selector's to refuse (`verity_vllm.protocols.pouw.keeps_weight_copy`); POUS keeps
   only ``C*``.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocols.weights_view`).
@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.resource_accounting.memory.pous.scheme import POUS
+from verity.protocols.resource_accounting.memory.pous.prover import served
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
 from verity import hooks as H
@@ -68,24 +69,6 @@ def schemes() -> tuple[str, ...]:
         schemes as pous_schemes,
     )
     return tuple(sorted(pous_schemes.REGISTRY))
-
-
-def _source_refusal(source: Any) -> str | None:
-    """Why ``salt_source`` can't give the auditor's coin, or None."""
-    if source is None:
-        return ("no salt_source: the salt is setup.sample_salt(source, commitment), the source the auditor's coin drawn after "
-                "the commitment (its hex, a callable of the commitment, or {'command': argv})")
-    if callable(source):
-        return None
-    if isinstance(source, str):
-        try:
-            return None if bytes.fromhex(source) else "salt_source is empty"
-        except ValueError:
-            return f"salt_source {source[:16]!r}... is not hex"
-    if isinstance(source, Mapping) and set(source) == {"command"} and isinstance(source["command"], (list, tuple)) \
-            and source["command"]:
-        return None
-    return f"salt_source is hex, a callable of the commitment or {{'command': argv}}, not {type(source).__name__}"
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -104,15 +87,14 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
         reason = pous_schemes.get(scheme).experimental
         if reason and not own.get("experimental"):
             out.append(f"{scheme} is experimental ({reason}); settings pous.experimental = true runs it anyway")
-    why = _source_refusal(own.get("salt_source"))
+    why = served.source_refusal(own.get("salt_source"))
     if why:
         out.append(why)
     return tuple(out)
 
 
 def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
-    return (H.RequireProperty("eager", True, "compiled execution: the decode wrappers are not graph-capturable, so pous "
-                              "runs eager"),)
+    return tuple(POUS.requests(ctx))
 
 
 def linear_types() -> tuple[type, ...]:
@@ -246,7 +228,7 @@ def install(scheme: str, target: Target) -> PousOption:
 
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)
-    why = _source_refusal(own.get("salt_source"))
+    why = served.source_refusal(own.get("salt_source"))
     if why:
         raise ValueError(f"{entry}: {why}")
     layers, names, tensors = _plaintext(entry, target.model)

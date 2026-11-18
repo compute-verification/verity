@@ -78,7 +78,7 @@ def test_the_chain_is_the_cc_12_step_not_hoppers():
 
 
 def test_bound_on_cc_12_only_with_its_own_step():
-    sm, hopper, ada = (TargetProfile(compute_capability=cc) for cc in ((12, 0), (9, 0), (8, 9)))
+    sm, hopper, ada = (TargetProfile.default().with_overrides(compute_capability=cc) for cc in ((12, 0), (9, 0), (8, 9)))
     for bias in (False, True):
         spec = TG.scaled_mm_fp8_spec(sm, 1536, 2048, bias)
         assert spec.id == bind(fp8.ScaledMmFp8NoSwap, K=1536, N=2048, BIAS=bias, DOT=DOT).id

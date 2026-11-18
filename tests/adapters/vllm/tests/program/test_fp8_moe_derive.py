@@ -155,7 +155,7 @@ def test_scales_on_another_block_grid_refuse(on_target):
 
 @pytest.mark.parametrize("cc", [(8, 0), (8, 9)])
 def test_a_target_without_an_e4m3_step_refuses_by_name(cc, on_target):
-    on_target(TargetProfile(compute_capability=cc))
+    on_target(TargetProfile.default().with_overrides(compute_capability=cc))
     hint = _hint(_derive(_Launch(True), _inputs(True)))
     assert "FusedMoeKernelFp8[vllm-moe]_v1: numerics_unregistered: block-FP8 fused-MoE experts on" in hint and "no registered e4m3 step" in hint, hint
 
