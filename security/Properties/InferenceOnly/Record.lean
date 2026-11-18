@@ -177,13 +177,13 @@ def InLeaf (P : Prog) (sc : Scope) (k : ℕ) (port : String) (row l g lo hi : �
     Flock.Program.resolve P sc (⟨true, i, (inRow (P.defs[sc.d]!) i k row).1 + l⟩ : Ref) = .ok g ∧
     lo = bitAt (inRow (P.defs[sc.d]!) i k row).2 l ∧ hi = lo + (inRow (P.defs[sc.d]!) i k row).2[l]!
 
-/-- Leaf `l` of the field that starts at word `off` of the output row of the activation `sc` is Program gate `g`, at
-bits `[lo, hi)` of the field: the field `f` whose first word is `off` (`Spot.Edges.fieldWord`), which a wire at offset
-`off` reads. An activation of a primitive has the default body, whose `ret` resolves to the activation's own gate:
+/-- Leaf `l` of the field that starts at leaf `off` of the output row of the activation `sc` is Program gate `g`, at
+bits `[lo, hi)` of the field: the field `f`, of a leaf or more, whose first leaf is `off` (`Spot.Edges.fieldOffset`),
+which a wire at offset `off` reads. An activation of a primitive has the default body, whose `ret` resolves to the activation's own gate:
 the one leaf of its one field, at word 0, is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (off : ℕ) (l g lo hi : ℕ) : Prop :=
-  ∃ f, Spot.Edges.fieldWord (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
-    0 < bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]! ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
+  ∃ f, Spot.Edges.fieldOffset (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
+    0 < ((fieldsOf (P.defs[sc.d]!).ret)[f]!).leaves ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 
@@ -193,15 +193,15 @@ def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l 
 
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s one output is the row
-`out`, `d`'s return fields end to end, each its bits rounded up to whole words, never down (`Spot.Edges.fieldWord`
-at the last field's end): a row wired to `out` lies inside its words (`Spot.Wires.check`). It does not ask that a
+`out`, `d`'s return fields end to end, each its bits rounded up to whole words, never down
+(`Spot.RecordText.Tmpl.wired`): a row wired to `out` lies inside its words (`Spot.Wires.check`). It does not ask that a
 parameter or a field has a bit, which `Spot.RecordText.templatesOf` asks of every template it gives. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
     (∀ (p : String) (q : Spot.Wires.Port), (p, q) ∈ t.rows ↔ ∃ i, i < d.params.size ∧ p = d.params[i]!.1 ∧
       q.words = bitsOf d.params[i]!.2 / 16 ∧ q.outer = outerOf d.params[i]!.2) ∧
-    ∀ (o : String) (n : ℕ), (o, n) ∈ t.outs ↔ o = "out" ∧ n = Spot.Edges.fieldWord d.ret (fieldsOf d.ret).length
+    ∀ (o : String) (n : ℕ), (o, n) ∈ t.outs ↔ o = "out" ∧ n = ((fieldsOf d.ret).map fun ty => (bitsOf ty + 15) / 16).sum
 
 /-- **The wiring's templates are the Program's**: a template of the wiring has the units the Program's root has of it,
 and is the template of their Definition. -/

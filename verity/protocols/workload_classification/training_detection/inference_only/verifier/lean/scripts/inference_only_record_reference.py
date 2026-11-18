@@ -197,13 +197,15 @@ class Template:
                 raise Malformed("templates")
             self.rows.append((name, bits // 16, ty.n if isinstance(ty, Array) else 1))
             self.widths[name] = tuple(ty.leaf_widths())
-        #: each return field's first word in the unit's output row `out` (`Spot.Edges.fieldWord`), to the field
+        #: each return field's first leaf, a wire's `offset` (`Spot.Edges.fieldOffset`), to the field
         self.firsts: dict[int, int] = {}
+        at = 0
         for j, ty in enumerate(fields_of(ret)):
             bits = sum(ty.leaf_widths())
             if bits == 0:
                 raise Malformed("templates")
-            self.firsts[sum(n for _, n in self.outs)] = j
+            self.firsts[at] = j
+            at += len(ty.leaf_widths())
             self.outs.append((f"o{j}", -(-bits // 16)))
             self.widths.setdefault(f"o{j}", tuple(ty.leaf_widths()))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):
@@ -340,8 +342,8 @@ def hands_on(program, tid: str, port: str) -> bool:
 
 def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict, form_only: bool = False) -> None:
     """The Lean's `unwhole` (`leaf-widths`). The rule, restated. A wire reads the field of its writer's return
-    whose first word in the unit's output row is the wire's `offset` (`Template.firsts`); an offset that is no
-    field's first word is refused. Of every wire, that field's bits are the row's words' (so the row is that one
+    whose first leaf is the wire's `offset` (`Template.firsts`); an offset that is no field's first leaf is
+    refused. Of every wire, that field's bits are the row's words' (so the row is that one
     field, whole). And a wire is taken where the reader's row is closed (`Template.closed`), or where the reader's
     row and the writer's field each have leaves of one width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
     rows' bits or its two widths, and the fix. Then, unless `form_only`, what the rule stands for, leaf by leaf, of
@@ -361,8 +363,8 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         f = by[w["writer"]].firsts.get(offset)
         if f is None:
             raise refused("leaf-widths", (
-                f"{wire}word {offset} of the writer's output row is no field's first word. A wire reads one whole "
-                "field of its writer's return, from that field's first word. Fix the Program, not the record: have "
+                f"{wire}leaf {offset} of the writer's output row is no field's first leaf. A wire reads one whole "
+                "field of its writer's return, from that field's first leaf. Fix the Program, not the record: have "
                 "the root read each writer's field whole, from its first leaf."))
         row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[f"o{f}"]
         k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)

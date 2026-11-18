@@ -259,12 +259,10 @@ theorem templateOf_of {d : Defn} {t : Tmpl} {t' : Spot.Wires.Template}
       · rw [getElem!_pos d.params i hi, ho']; exact he.2.2.symm
     · rintro ⟨i, hi, rfl, hw, ho'⟩
       exact ⟨_, _, List.mem_map.2 ⟨d.params[i]!, hmem i hi, rfl⟩, by rw [hw, bitsOf_eq], ho'⟩
-  · have hsum : (t.outs.map (·.2)).sum = Spot.Edges.fieldWord d.ret (fieldsOf d.ret).length := by
+  · have hsum : (t.outs.map (·.2)).sum = ((fieldsOf d.ret).map fun ty => (bitsOf ty + 15) / 16).sum := by
       have e : (fun x : Ty × ℕ => (bits x.1 + 15) / 16) = (fun ty => (bitsOf ty + 15) / 16) ∘ Prod.fst :=
         funext fun x => by simp [bitsOf_eq]
       rw [houts, List.map_map]
-      unfold Spot.Edges.fieldWord
-      rw [List.take_length]
       show ((fieldsOf d.ret).zipIdx.map fun x : Ty × ℕ => (bits x.1 + 15) / 16).sum = _
       rw [e, ← List.map_map, List.zipIdx_map_fst]
     rw [ho, hsum]

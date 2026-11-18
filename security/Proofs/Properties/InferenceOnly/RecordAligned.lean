@@ -238,8 +238,8 @@ variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.
 theorem outLeaf_intro {ts : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {f l : ℕ} (hf : f < (fieldsOf (P.defs[sc.d]!).ret).length)
-    (hb : 0 < bitsOf (fieldsOf (P.defs[sc.d]!).ret)[f]!) (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
-    ∃ g, OutLeaf P sc (Spot.Edges.fieldWord (P.defs[sc.d]!).ret f) l g (bitAt (outRow (P.defs[sc.d]!) f).2 l)
+    (hb : 0 < ((fieldsOf (P.defs[sc.d]!).ret)[f]!).leaves) (hl : l < (outRow (P.defs[sc.d]!) f).2.size) :
+    ∃ g, OutLeaf P sc (Spot.Edges.fieldOffset (P.defs[sc.d]!).ret f) l g (bitAt (outRow (P.defs[sc.d]!) f).2 l)
       (bitAt (outRow (P.defs[sc.d]!) f).2 l + (outRow (P.defs[sc.d]!) f).2[l]!) := by
   obtain ⟨g, hg⟩ := unit_ret_ok hP hrs hu (outRow_lt _ f l hf hl)
   exact ⟨g, f, rfl, hf, hb, hl, hg, rfl, rfl⟩
@@ -303,8 +303,8 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
 /-! ## The two rows of a wire -/
 
 /-- **What the record check has tested of a row with a writer.** The row is a row of a parameter of its unit, and
-the wire's offset is the first word of a field of the writer's return that has a bit; the row and that field have the
-same bits; and either the parameter has leaves of one bit and is none of what the unit's Definition passes on, or
+the wire's offset is the first leaf of a field of the writer's return of a leaf or more; the row and that field have
+the same bits; and either the parameter has leaves of one bit and is none of what the unit's Definition passes on, or
 each side's leaves are of one width and the writer's divides the reader's. The check tests a wire on the text's
 templates `ts`, whose ids are apart (`tmpls_named`), each the text's reading of its Definition
 (`templatesOf_tmplOf`), with the words `Spot.Wires.check` gives its row (`mem_rowWords`), and a unit's Definition is
@@ -318,8 +318,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
     (hw : S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out, off)) :
     ∃ sc sc' i f, UnitAt P rs r.tid r.unit sc ∧ 0 ≤ wu ∧ UnitAt P rs wt wu.toNat sc' ∧
       i < (P.defs[sc.d]!).params.size ∧ (P.defs[sc.d]!).params[i]!.1 = r.port ∧
-      f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧ Spot.Edges.fieldWord (P.defs[sc'.d]!).ret f = off ∧
-      0 < bitsOf (fieldsOf (P.defs[sc'.d]!).ret)[f]! ∧ r.row < W.cutsOf r.tid r.port ∧
+      f < (fieldsOf (P.defs[sc'.d]!).ret).length ∧ Spot.Edges.fieldOffset (P.defs[sc'.d]!).ret f = off ∧
+      0 < ((fieldsOf (P.defs[sc'.d]!).ret)[f]!).leaves ∧ r.row < W.cutsOf r.tid r.port ∧
       (inRow (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row).2.foldl (· + ·) 0 =
         (outRow (P.defs[sc'.d]!) f).2.foldl (· + ·) 0 ∧
       ((Flock.Program.Widths.homo (P.defs[sc.d]!).params[i]!.2 = some 1 ∧
@@ -353,8 +353,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
   rw [hdw] at hf hfw hb h16f
   have hn : Spot.Wires.rowWords W w = p.words / W.cutsOf r.tid r.port := by
     simp only [Spot.Wires.rowWords, hrd, hpt, hlr, hlp]
-  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hfw.trans hoff, by rw [bitsOf_eq]; exact hb, hrow, ?_,
-    hwhole⟩
+  refine ⟨sc, sc', i, f, hsc, h0, hsc', hi, hpi.symm, hf, hfw.trans hoff, hb, hrow, ?_, hwhole⟩
   rw [outRow_bits, inRow_bits _ _ _ _ (by rw [← houter]; exact hko) hrow]
   obtain ⟨m, hm⟩ := h16 i hi
   have hA : bitsOf (P.defs[sc.d]!).params[i]!.2 = 16 * p.words := by omega
@@ -363,8 +362,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
   rw [hA, hC, Nat.mul_div_assoc _ (Nat.dvd_of_mod_eq_zero hkw)]
 
 /-- **A wired row holds its output** (`OutFits`), of a record whose wires pass the check's `unwhole`: the writer's
-field at the wire's offset is the row's bits (`wired_row`), and a unit, its parameter by name, and a field with a bit
-by its first word are each one (`unitAt_fun`, `portsNamed`, `fieldWord_inj`). -/
+field at the wire's offset is the row's bits (`wired_row`), and a unit, its parameter by name, and a field of a leaf
+or more by its first leaf are each one (`unitAt_fun`, `portsNamed`, `fieldOffset_inj`). -/
 theorem outFits {tids : Array String} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
@@ -378,7 +377,7 @@ theorem outFits {tids : Array String} (hP : ReadProg P)
   have e2 := unitAt_fun P rs _ _ _ _ hsc₀' hsc'
   subst e1 e2
   have e3 : i₀ = i := portsNamed hrs hT _ _ _ i₀ i hsc₀ hi₀ hi (hp₀.trans hp.symm)
-  have e4 : f₀ = f := fieldWord_inj _ hf₀ hf hb₀ hb (hoff₀.trans hoff.symm)
+  have e4 : f₀ = f := fieldOffset_inj _ hf₀ hf hb₀ hb (hoff₀.trans hoff.symm)
   subst e3 e4
   exact Nat.le_of_eq hbits.symm
 
@@ -389,7 +388,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
+    (hwh : unwhole P ts
       (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, o, off, sc₁, hw, -, hu₁, hout₁⟩ := hwl
@@ -398,7 +397,7 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     rw [← unitAt_fun P rs wt wu.toNat sc₁ sc' hu₁ hsc']
     exact hout₁
   obtain ⟨f₁, hf₁w, hf₁, hb₁, hl', -, hlo, hhi⟩ := hout
-  have e : f = f₁ := fieldWord_inj _ hf hf₁ hb hb₁ (hoff.trans hf₁w.symm)
+  have e : f = f₁ := fieldOffset_inj _ hf hf₁ hb hb₁ (hoff.trans hf₁w.symm)
   rw [← e] at hl' hlo hhi
   subst hlo hhi
   rcases hwhole with ⟨-, hnot⟩ | ⟨a, o, ha, ho, ho0, hdiv⟩
@@ -438,7 +437,7 @@ theorem filled (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
-    (hwh : unwhole ts
+    (hwh : unwhole P ts
       (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) : Filled P rs W S := by
   intro r l g lo up hsome hrl b _ hb2
   obtain ⟨⟨wt, wu, out, off⟩, hw⟩ := Option.isSome_iff_exists.1 hsome
