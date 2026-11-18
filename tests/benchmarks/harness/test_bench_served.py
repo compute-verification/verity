@@ -128,7 +128,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
-    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
     assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
     control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -161,7 +161,7 @@ def test_the_h200_pearl_c_setup_serves_without_batch_invariance_and_with_sm90s_b
     python.write_text('#!/bin/sh\necho "${VLLM_BATCH_INVARIANT-unset} $PEARLC_BF16_ROWS ${PEARLC_CUBIN#$RESEARCH_RUN_DIR/}"\n')
     for script in (stand_in / "bash", python):
         script.chmod(0o755)
-    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served@h200")
     env = {"PATH": f"{stand_in}:/usr/bin:/bin", "VERITY_BENCH_VENV": str(tmp_path / "venv312"), "CUDA_HOME": str(tmp_path),
            "RESEARCH_RUN_DIR": str(tmp_path / "run"), "VLLM_BATCH_INVARIANT": "1", **jobs.point_environment(spec)}
 
@@ -186,7 +186,7 @@ def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(mon
     def flipped(n):
         raise AssertionError("served_passes.py arm flipped challenges")
     monkeypatch.setattr(verifier, "coins", flipped)
-    spec, out = str(SPEC_ROOT / "llama32-1b-1gpu-pouw-protocol-served-h200.toml"), tmp_path / "config.json"
+    spec, out = str(SPEC_ROOT / "llama32-1b-1gpu-pouw-protocol-served@h200.toml"), tmp_path / "config.json"
     monkeypatch.delenv("PEARLC_KERNEL", raising=False)
     monkeypatch.setenv("PEARLC_CUBIN", "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
     with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
@@ -268,7 +268,7 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
                   "kv_cache_memory_bytes")
         assert len({tuple(b[k] for k in shared) for b in built}) == 1
         assert built[0]["kv_cache_memory_bytes"] == 8 << 30 and built[0]["max_num_batched_tokens"] == 4096
-    assert engine_args(load_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True, eager=True)["max_num_seqs"] == 128
+    assert engine_args(resolve_spec("llama31-8b-fp8-1gpu").preset, "fp8", resident=True, eager=True)["max_num_seqs"] == 128
 
     b32 = resolve_spec("llama31-8b-1gpu-pouw-protocol-served-b32")
     assert (b32.arms, b32.arm_settings, b32.setup, b32.eager, b32.preset) == (

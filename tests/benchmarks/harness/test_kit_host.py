@@ -143,7 +143,7 @@ def test_any_other_card_is_refused_naming_the_workloads(card):
     assert not kit.is_card(card, "h200")
     assert kit.wrong_card("steady", "h200", card) == (
         f"the card is a {card}, not the h200 of spec 'steady' (NVIDIA H200): run it on a node whose card is a NVIDIA H200, "
-        "or use the spec for this card")
+        "or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 def test_each_gpu_a_spec_may_name_is_one_card_records_short():

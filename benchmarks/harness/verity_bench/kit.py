@@ -420,7 +420,7 @@ def wrong_card(workload: str, short: str, card: str, *, directory: Path | None =
         return None
     want = " or ".join(d["value"] for c in _gpu_cards(directory) if c.get("short") == short for d in c.get("driver", ()))
     return (f"the card is a {card}, not the {short} of spec {workload!r} ({want}): run it on a node whose card is a "
-            f"{want}, or use the spec for this card")
+            f"{want}, or name this card where the spec lists it (`SPEC@CARD`)")
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
