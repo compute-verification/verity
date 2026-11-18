@@ -23,13 +23,12 @@ import json
 from dataclasses import dataclass
 from typing import Callable
 
+from verity.commitments.hm96 import SHA512
+
 SCHEME = "coin-tree/hm96-sha512/v2"
 SALT_BYTES, KEY_BYTES, NONCE_BYTES = 192, 256, 32
 #: the session's own stream: round 0 is the link points sampled at ``Commit``
 SESSION = "session"
-SALT_TAG = b"verity/hm96-sha512/salt/v1\0"
-LEAF_TAG = b"verity/hm96-sha512/leaf/v1\0"
-_WINDOW = (1 << 512) - 1
 
 
 @dataclass(frozen=True)
@@ -64,11 +63,6 @@ class Spec:
         return n + 4 + SALT_BYTES // 16 + 4 * (self.rounds_log + self.streams_log)
 
 
-def _padded128(*parts: bytes) -> bytes:
-    b = b"".join(parts)
-    return b + bytes(128 - len(b))
-
-
 def f128_bytes(w: int) -> bytes:
     return w.to_bytes(16, "little")
 
@@ -89,15 +83,13 @@ class Rules:
         if len(nonce) != NONCE_BYTES or len(key) != KEY_BYTES:
             raise ValueError(f"a coin-tree nonce is {NONCE_BYTES} bytes and a key {KEY_BYTES}")
         self.nonce, self.key = bytes(nonce), bytes(key)
-        self._key_int = int.from_bytes(key, "little")
-        self._windows: list[int] | None = None
         self._base = hashlib.sha512(self.nonce)
         def tag(name: str) -> bytes:
             return f"verity/coin-tree/{name}/v2\0".encode()
 
         self.tail, self.chain_tag, self.round_tag, self.pad_tag = tag("tail"), tag("chain"), tag("round"), tag("pad")
-        self.salt_prefix = _padded128(SALT_TAG)
-        self.leaf_prefix = _padded128(LEAF_TAG, hashlib.sha512(key).digest())
+        self.salt_prefix = SHA512.salt_prefix
+        self.leaf_prefix = SHA512.leaf_prefix(self.key)
         self._chain = self._prefixed(self.chain_tag)
 
     def _prefixed(self, *parts: bytes):
@@ -108,18 +100,6 @@ class Rules:
 
     def h(self, *parts: bytes) -> bytes:
         return self._prefixed(*parts).digest()
-
-    def mask(self, salt: bytes) -> bytes:
-        """hm96's ``M(K)·y``: bit ``i`` is ``⊕_j K_{i+j} y_j`` (``i < 512``, ``j < 1536``), bit ``t`` of a byte string bit
-        ``t % 8`` of byte ``t / 8``: each set bit ``j`` of ``y`` adds the key's 512-bit window at ``j``."""
-        if self._windows is None:
-            self._windows = [(self._key_int >> j) & _WINDOW for j in range(8 * SALT_BYTES)]
-        w, acc = self._windows, 0
-        for i, v in enumerate(salt):
-            for b in range(8):
-                if v >> b & 1:
-                    acc ^= w[8 * i + b]
-        return acc.to_bytes(64, "little")
 
     def link(self, coin: bytes, t: bytes) -> bytes:
         """``T_i`` from ``c_i`` (its 16 bytes) and ``T_{i+1}``."""
@@ -134,7 +114,7 @@ class Rules:
     def leaf(self, stream: int, rnd: int, t0: bytes, salt: bytes) -> bytes:
         x = self.h(self.round_tag, stream.to_bytes(4, "big"), rnd.to_bytes(4, "big"), t0)
         c = self.h(self.salt_prefix, salt)
-        b = bytes(p ^ q for p, q in zip(x, self.mask(salt)))
+        b = bytes(p ^ q for p, q in zip(x, SHA512.mask(self.key, salt)))
         return self.h(self.leaf_prefix, b, c)
 
     def node(self, left: bytes, right: bytes) -> bytes:

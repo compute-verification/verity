@@ -11,7 +11,6 @@ none of them, so they come in as one `ProofDrivers`, installed by the command li
 """
 from __future__ import annotations
 
-import socket
 from typing import Any, Protocol
 
 
@@ -52,10 +51,3 @@ def drivers() -> ProofDrivers:
                            "or call proof_drivers.install first")
     return _installed
 
-
-def free_port() -> int:
-    """A loopback port the OS has free now, for an ``a8.session``. A pool's slots share a machine, and the nodes'
-    7811-7899 are the challenger gate's tunnels, so a fixed port collides across runs."""
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
