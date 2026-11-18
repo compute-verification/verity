@@ -39,8 +39,10 @@ def row_refusal(build: str, compiler: Mapping[str, str] | None = None) -> str | 
     how = ("the served Commit binds the row's Build of record, the ahead-of-time compiler's: write it with `verity-vllm predict "
            "row --row ROW --out DIR` and pass --row-build DIR (a traced Build is its cross-check, `verity-vllm predict compare "
            "ROW_DIR --predicted DIR`)")
+    from verity_vllm import messages as M
+
     try:
-        rec = PR.PredictedRow.of(json.loads((path := Path(build) / PR.FILE).read_text()), str(path))
+        rec = PR.PredictedRow.of(json.loads(M.read(path := Path(build) / PR.FILE, "Circuit")), str(path))
     except (OSError, ValueError) as e:
         return f"--row-build {build}: no record of predict's in it ({type(e).__name__}: {e}): {how}"
     if compiler is None:
