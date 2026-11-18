@@ -115,11 +115,12 @@ from .one_stage import verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
-#: `SecondStage.FORM`, on: the verifier accepts the two-stage form ahead of its proof, by Daniel's ruling of Mon 16
-#: Nov. Three things stand between the form and its proof: SPOT[Flock]'s two-stage guarantee takes as a premise that each
-#: gate's value has one address fixed before the run, which nothing proves from round 2's check; no theorem says a run
-#: the verifier accepts is one the verifier that guarantee is stated about accepts; and the composite's sampled
-#: component has no two-stage form, nor a subprotocol for one, under the one soundness theorem.
+#: `SecondStage.FORM`, on: the verifier accepts the two-stage form ahead of its proof, and the accept's record says what
+#: is not covered; nothing quotes a guarantee for such a run. Three things stand between the form and its proof:
+#: SPOT[Flock]'s two-stage guarantee takes as a premise that each gate's value has one address fixed before the run,
+#: which nothing proves from round 2's check; no theorem says a run the verifier accepts is one the verifier that
+#: guarantee is stated about accepts; and the composite's sampled component has no two-stage form, nor a subprotocol
+#: for one, under the one soundness theorem.
 FORM = True
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
             "soundness proof does not cover")
