@@ -54,7 +54,7 @@ def _registered():
 
 
 def _lowered(reg):
-    return WC.lower(reg, CLASS, None, GRAIN, provable=False).circuit
+    return WC.lower(reg, CLASS, None, GRAIN).circuit
 
 
 def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words():
@@ -67,7 +67,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
     its lowering registers the weights and the scan state."""
     reg = _registered()
-    window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
+    window = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
     add = "RMSNormFusedCudaAdd_v2{N=64,C=64,AT=0,R=8}"
     assert {t: k for fn, k in window.templates if (t := _label(fn)).startswith("RMSNormFused")} == {
         "RMSNormFusedCuda_v2{N=64}": 20, add: 20, "RMSNormFusedCudaTail_v1{N=64}": 20}
@@ -127,7 +127,7 @@ def test_the_int8_class_wired_program_reads_the_s8_weights_as_registered_words_a
     """Each s8 slice reads its weight rows and row scales as the u16 words the weights registration commits
     (`ScaledMmS8_v3`), so the class circuit is one wired Program with no free row. Slow (about two minutes): only the
     whole int8 class holds the s8 reads."""
-    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN, provable=False)
+    circuit = WC.class_circuit(_registered(), CLASS, None, GRAIN)
     prog, _ = wired(circuit)
     assert prog.annotations["free"] == []
     wired_matches_by_hand(circuit, prog)

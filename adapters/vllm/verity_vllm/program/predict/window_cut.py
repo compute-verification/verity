@@ -35,23 +35,22 @@ class Linears:
     calls: tuple[tuple[int, int, int], ...]
 
 
-def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
-    """Whether `LinearOut_v3{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
+def _hands_on(N: int, W: int, rows: int) -> bool:
+    """Whether `LinearOut_v3{N, W}` is within ``rows`` rows and a proof block Flock proves."""
     if rows < N // W + 1:
         return False
-    if provable:
-        try:
-            IF.check_proof_block(bind(LC.LinearOut, N=N, W=W))
-        except ValueError:
-            return False
+    try:
+        IF.check_proof_block(bind(LC.LinearOut, N=N, W=W))
+    except ValueError:
+        return False
     return True
 
 
-def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
+def linears(fn: Any, words: int, rows: int) -> Linears:
     """The class Program ``fn``'s `Linears`, each call's W the least of ``words`` doubled that divides its N and leaves its
-    `LinearOut_v3` within ``rows`` rows and, unless not ``provable``, a proof block Flock's composer proves
-    (`interface.check_proof_block`; a call's y row is read whole). Refused where it has an int8 linear, a position's
-    linears aren't the first position's, an N has no such W, or there is none to cut."""
+    `LinearOut_v3` within ``rows`` rows and a proof block Flock's composer proves (`interface.check_proof_block`; a call's
+    y row is read whole), so the layout is one whether or not the circuit is then proved. Refused where it has an int8
+    linear, a position's linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
     if (q := next((n for n in nodes if n.fn.name == "Int8RowQuant"), None)) is not None:
         raise Unexpressible(f"{q.fn.id}: an int8 linear, and Pearl+'s tables cut BF16 linears (`Gemm_v2`) alone")
@@ -71,12 +70,12 @@ def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
     calls = []
     for K, N in by[0]:
         W = words
-        while N % W == 0 and not _hands_on(N, W, rows, provable):
+        while N % W == 0 and not _hands_on(N, W, rows):
             W *= 2
         calls.append((K, N, W))
     if bad := sorted({(K, N) for K, N, W in calls if N % W}):
         raise Unexpressible(f"{fn.id}: linears (K, N) {bad}, whose y no rows of Pearl+'s {words} words doubled hand on in "
-                            f"one unit within {rows} rows" + (" that Flock proves" if provable else ""))
+                            f"one unit within {rows} rows that Flock proves")
     return Linears(heads, tuple(calls))
 
 

@@ -26,7 +26,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import resource
 import sys
 import time
@@ -43,13 +42,15 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import 
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 ROLE, K, N, OUT = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 FLIP = {"row_a": "fa", "row_b": "g"}      # the anchor whose word 0, instance 0, bit 0 the controls flip
-STAGE = os.environ.get("HZ_STAGE", "fast")
-SALTS = Path(os.environ["HZ_SALTS"]) if os.environ.get("HZ_SALTS") else None
+SETTINGS = of(__file__)
+STAGE = SETTINGS.HZ_STAGE
+SALTS = Path(SETTINGS.HZ_SALTS) if SETTINGS.HZ_SALTS else None
 
 
 def _load(name: str, path: Path):
