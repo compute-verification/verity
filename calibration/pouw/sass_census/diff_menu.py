@@ -43,6 +43,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "facet_break"))
 from loads import class_of  # noqa: E402  the model's own SASS opcode -> census class
 from sass_semantics import classify  # noqa: E402
+from verity_machine_model.cover import ISA_TABLE  # noqa: E402
 from verity_machine_model.model import device, devices  # noqa: E402
 
 MM = Path(__file__).resolve().parents[2] / "machine_model" / "data"
@@ -62,8 +63,6 @@ def device_rows(family: str) -> Path | None:
     return device(family) / "rows.csv" if family in devices() else None
 
 
-#: NVIDIA's Instruction Set Reference table an architecture family maps to
-ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell"}
 #: an MMA SASS base -> the census-kind token its peak would appear under (QMMA covers FP8/FP6/FP4 mma.sync on sm_120)
 MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA", "BMMA": "BMMA", "DMMA": "DMMA",
                   "HGMMA": "HGMMA", "IGMMA": "IGMMA", "QGMMA": "QGMMA", "OGMMA": "OGMMA", "BGMMA": "BGMMA",

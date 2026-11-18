@@ -521,29 +521,76 @@ def fieldRootOf (rec : Json) (template field port : String) : Option Json := do
   pure (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"), ("port", .str port),
     ("root", getD r "root")])
 
+/-- The refusal of a member's root of its own at a port C wires into it (`fieldRoots`): a crossing wire is committed
+once, in its writer's output field's tree, and the reader's row opens that tree by path. -/
+def OWN_ROOT_WHY (member port : String) : String :=
+  s!"member {member}: port {port} is a row of in(S) (C wires it from another block's outputs), and the registration " ++
+    "holds a root of its own for it: a crossing wire is committed once, in its writer's output field's tree"
+
 /-- **The members' roots with their wired ports'**: each member's roots `rootsOf` gives (`roots`), then, for each
-wire of the wiring `W` into the template whose range of the partition `rs` holds the member's units, at a port the
-member has no root of, its writer's output field's tree (`fieldRootOf`), the first wire's of each port. A reader's
-wired rows are references with paths into that tree; one whose writer's field the record names no tree of gets none,
-so its member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the members' and the wires'
-numbers. -/
+wire of the wiring `W` whose reader units meet the member's (a wire's are its template's own count, so a range's
+are those of its template's earlier ranges on), its writer's
+output field's tree (`fieldRootOf`), the first wire's of each port. A wired port the member holds a root of its own
+of is refused by name (`OWN_ROOT_WHY`). A reader's wired rows are references with paths into that tree; one whose
+writer's field the record names no tree of gets none, so its member's public file naming it is refused by name
+(`UNWIRED_WHY`). Its cost is the members' and the wires' numbers. -/
 def fieldRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member) (rec : Json)
-    (roots : Std.HashMap String (Array Json)) : Std.HashMap String (Array Json) :=
-  ms.foldl (fun acc m =>
-    let inRange := fun (w : Spot.Wires.Wire) => rs.any fun (t, a, c) =>
-      t == w.reader && decide (a ≤ m.first) && decide (m.first + m.count ≤ a + c)
+    (roots : Std.HashMap String (Array Json)) : V (Std.HashMap String (Array Json)) :=
+  let lbase := (rs.foldl (fun (acc : Array Nat × Std.HashMap String Nat) (t, _, c) =>
+    (acc.1.push (acc.2.getD t 0), acc.2.insert t (acc.2.getD t 0 + c))) (#[], {})).1
+  ms.foldlM (fun acc m => do
+    let inRange := fun (w : Spot.Wires.Wire) => (List.range rs.size).any fun j =>
+      let (t, a, c) := rs[j]!
+      let lo := lbase[j]! + (m.first - a)
+      t == w.reader && decide (a ≤ m.first) && decide (m.first + m.count ≤ a + c) &&
+        decide (lo < w.start + w.units / max w.cuts 1) && decide (w.start < lo + m.count)
+    let own := roots.getD m.name #[]
+    if let some w := W.wires.find? fun w => inRange w && own.any (getD · "port" == Json.str w.port) then
+      throw (OWN_ROOT_WHY m.name w.port)
     let mine := W.wires.foldl (fun (got : Array Json) w =>
       if got.any (getD · "port" == Json.str w.port) || !inRange w then got
       else match fieldRootOf rec w.writer w.out w.port with
         | some r => got.push r
-        | none => got) (roots.getD m.name #[])
-    acc.insert m.name mine) roots
+        | none => got) own
+    pure (acc.insert m.name mine)) roots
 
 /-- **in(S)'s row cuts**: `ioCuts : C -> Partition -> {template: {port: rows}}`, the rows each port of a block's
-circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). -/
-def ioCuts (_P : Flock.Program.Prog) (_rs : Array Flock.TemplateQuery.TRange) :
-    V (List (String × List (String × Nat))) :=
-  throw (Flock.OneCircuit.notDerived "ioCuts : C -> Partition -> {template: {port: rows}} (in(S)'s row cuts)")
+circuit is cut into, from C and the partition (the ranges `rs`), in O(C's description). A port a part of a root node's argument reads from a non-input root node is cut into its leaves over the leaves of the
+writer's output field at the part's first reference (`Spot.Edges.leafAt`, `fieldIx`); an uncut port is left out.
+`edgesOf` holds every row so cut to one whole writer field, so a cut here only decides which rows it checks. Its work
+is the root's nodes, arguments and parts. A scan at the root is refused by name (no closed form yet, `edgesOf`'s
+`edge-form`), and so is a port of one template read in rows of two lengths. -/
+def ioCuts (P : Flock.Program.Prog) (rs : Array Flock.TemplateQuery.TRange) :
+    V (List (String × List (String × Nat))) := do
+  let fu := Spot.Edges.firstUnits rs
+  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+  let mut cs : List (String × List (String × Nat)) := []
+  for k in [0:nodes.size] do
+    if Spot.Edges.isInputNode P k then continue
+    let node := nodes[k]!
+    if node.form == .scan then
+      throw (Flock.OneCircuit.notDerived "ioCuts : a scan node of C's root (edge-form: no closed form yet)")
+    let some (rt, _) := fu[k]? | throw "edge-template"
+    let defn := P.defs[node.fn]!
+    for i in [0:node.args.size] do
+      let (port, ty) := defn.params[i]!
+      for q in node.args[i]!.seq.parts do
+        let (run, lanes) := Spot.Edges.partLanes q
+        let some (false, w, l) := Spot.Edges.leafAt run lanes 0 | continue
+        if l < 0 || w ≥ nodes.size || Spot.Edges.isInputNode P w then continue
+        let wd := P.defs[nodes[w]!.fn]!
+        if wd.outLeaves == 0 then continue
+        let some f := Spot.Edges.fieldIx wd.ret (l.toNat % wd.outLeaves) | continue
+        let fl := ((Flock.Program.fieldsOf wd.ret)[f]?.map (·.leaves)).getD 0
+        if fl == 0 || ty.leaves % fl != 0 then throw "edge-rows"
+        let kc := ty.leaves / fl
+        let ports := (cs.lookup rt).getD []
+        match ports.lookup port with
+        | some k' =>
+          if k' != kc then
+            throw s!"ioCuts: template {rt}'s port {port} is read in rows of {ty.leaves / k'} and of {fl} leaves"
+        | none => cs := (rt, ports ++ [(port, kc)]) :: cs.filter (·.1 != rt)
+  return (cs.reverse.map fun (t, ps) => (t, ps.filter (·.2 > 1))).filter (!·.2.isEmpty)
 
 /-- Whether C's root has an edge: an argument part of a root node that reads a root node that is no input. Its work is
 the root's nodes, arguments and parts. -/
@@ -567,7 +614,7 @@ def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMa
   if !hasEdge P.prog then return roots
   let rs ← Partition.evaluate P (getD p.own.partition "query")
   let W ← derivedWiring P.prog rs
-  pure (fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms rec roots)
+  fieldRoots W (rs.map fun r => (r.template, r.first, r.count)) ms rec roots
 
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
@@ -1356,8 +1403,8 @@ private def wiringT (wired : Bool) (writer : String := "W") : Spot.Wires.Wiring 
 private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
   let reg := (recordT 4 [("r/z", "bb")]).setObjVal! "fields" (Json.arr #[(rootJ "" "aa").setObjVal! "template"
     (Json.str "W") |>.setObjVal! "field" (Json.str "y")])
-  match rootsOf wiredMs reg with
-  | .ok rs => (memberT "r" #[(2, 4)]).slice reg (fieldRoots W #[("W", 0, 2), ("R", 2, 2)] wiredMs reg rs)
+  match rootsOf wiredMs reg >>= fieldRoots W #[("W", 0, 2), ("R", 2, 2)] wiredMs reg with
+  | .ok rs => (memberT "r" #[(2, 4)]).slice reg rs
   | .error _ => Json.null
 
 #guard refusal (headerHeld (wiredSliceT (wiringT true)) (headerT 2 [("x", "aa"), ("z", "bb")])) == ""
@@ -1366,6 +1413,53 @@ private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
 #guard refusal (headerHeld (wiredSliceT (wiringT false)) (headerT 2 [("x", "aa"), ("z", "bb")])) == UNWIRED_WHY "x"
 #guard refusal (headerHeld (wiredSliceT (wiringT true "V")) (headerT 2 [("x", "aa"), ("z", "bb")])) ==
   UNWIRED_WHY "x"
+
+/-- A row of 16 `v16` leaves, a `Gemm{K=16, N=16}` unit's `x` and its output. -/
+private def rowT : Flock.Program.Ty := .array 16 (.value 16)
+
+/-- The periods' `chain()`: two requests' inputs, then four root nodes of one template `G`, two members each, each
+reading the node before it whole (layer 0 at step 0 reads the input), so units `u ≥ 2` read unit `u - 2`'s output. -/
+private def chainP : Flock.Program.Prog :=
+  let input : Flock.Program.Defn :=
+    { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := .value 16, gates := 1,
+      paramLeaves := 0, outLeaves := 1 }
+  let gemm : Flock.Program.Defn :=
+    { key := "G", id := "G", prim := true, params := #[("x", rowT)], ret := rowT, gates := 1, paramLeaves := 16,
+      outLeaves := 16 }
+  let layer (src : Nat) : Flock.Program.Node :=
+    { form := .batch, fn := 1, out := .array 2 rowT, n := 2,
+      args := #[{ ty := .array 2 rowT, seq := Flock.Program.Seq.ofParts #[.affine false src 0 32], dims := some (2, 16) }] }
+  let nodes := #[{ form := .batch, fn := 0, args := #[], out := .array 32 (.value 16), n := 32 }, layer 0, layer 1,
+    layer 2, layer 3]
+  let root : Flock.Program.Defn :=
+    { key := "R", id := "R", prim := false, params := #[], ret := rowT, gates := 0, paramLeaves := 0, outLeaves := 16,
+      body := { params := #[], retType := rowT, nodes := nodes, ret := default, offsets := #[] } }
+  { defs := #[input, gemm, root], index := {}, root := 2, programFn := "", sha512 := .empty }
+
+private def chainRs : Array Flock.TemplateQuery.TRange := #[⟨1, "G", 0, 2⟩, ⟨2, "G", 2, 2⟩, ⟨3, "G", 4, 2⟩, ⟨4, "G", 6, 2⟩]
+
+/-- `chain()`'s four members, one a root node's two units. -/
+private def chainMs : Array Member := #[memberT "c0" #[(0, 2)], memberT "c1" #[(2, 4)], memberT "c2" #[(4, 6)],
+  memberT "c3" #[(6, 8)]]
+
+/-- `chain()`'s registration: `G`'s output field `o0`'s one tree, and the member roots given. -/
+private def chainRecT (roots : List (String × String)) : Json :=
+  (recordT 8 roots).setObjVal! "fields" (Json.arr #[(rootJ "" "aa").setObjVal! "template" (Json.str "G")
+    |>.setObjVal! "field" (Json.str "o0")])
+
+/-- `fieldRoots` on `chain()` at C's wiring under its partition (`derivedWiring`), each member's roots. -/
+private def chainRootsT (roots : List (String × String)) : V (Std.HashMap String (Array Json)) := do
+  let W ← derivedWiring chainP chainRs
+  fieldRoots W (chainRs.map fun r => (r.template, r.first, r.count)) chainMs (chainRecT roots)
+    (← rootsOf chainMs (chainRecT roots))
+
+#guard (ioCuts chainP chainRs).toOption == some []
+#guard ((derivedWiring chainP chainRs).toOption.map (·.wires.map fun w => (w.start, w.radix, w.base, w.out))) ==
+  some [(2, [2], 0, "o0"), (4, [2], 2, "o0"), (6, [2], 4, "o0")]
+#guard ((chainRootsT [("c0/x", "bb")]).toOption.map fun r =>
+    ["c0", "c1", "c3"].map fun m => (r.getD m #[]).map (getD · "root")) ==
+  some [#[Json.str "bb"], #[Json.str "aa"], #[Json.str "aa"]]
+#guard whyT (chainRootsT [("c0/x", "bb"), ("c2/x", "cc")]) == OWN_ROOT_WHY "c2" "x"
 
 #guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0000000000000001" ++ "0000000000000002" ++ "6162"
 #guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==

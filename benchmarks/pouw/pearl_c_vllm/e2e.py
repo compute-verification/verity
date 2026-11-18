@@ -66,6 +66,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import multiprocessing as mp
 import random
@@ -309,10 +310,40 @@ def arm_of(mode: str, run, args):
                                                       run_id=settings.RESEARCH_RUN_ID))
 
 
+def under_salt(run, ended: dict) -> dict:
+    """An ended pass as the call check compares it: its transcript root and its tiles' unsalted digests, the leaves the
+    tree salts (`run.leaves`, read before the next pass poisons them; a pass ended without `lag`)."""
+    return {"transcript_root": ended["transcript_root"],
+            "digests": run.leaves[:run.nb * ended["tiles"]].cpu().numpy().tobytes()}
+
+
+def unsalted(run, ended: dict) -> dict:
+    """What two passes of the same calls must share although each draws fresh salts: the SHA-512 of their tiles' unsalted
+    digests (`under_salt`), their units and their tiles; never a root."""
+    return {"digests": hashlib.sha512(under_salt(run, ended)["digests"]).hexdigest(), "units": ended["units"],
+            "tiles": ended["tiles"]}
+
+
+def call_verdict(commits: list[dict], err: float) -> dict:
+    """The call check's verdict on `under_salt` of the same call twice and then with its tile leaves omitted.  Every leaf's
+    salt is fresh operating-system bytes, so the two calls' roots differ and what repeats is under the salt: their tile
+    digests are equal (the call is deterministic), their roots are not (the salts are fresh), and the omitted call's
+    digests are not the first's (the leaves are the call's own, not what the poison left). One commitment (no hashing)
+    checks y alone."""
+    if len(commits) == 1:
+        return {"rel_rms": err, "digests_repeat": True, "salts_fresh": True, "omitted_leaves_rejected": True, "ok": err < ERR}
+    a, b, omitted = commits
+    same, fresh = a["digests"] == b["digests"], a["transcript_root"] != b["transcript_root"]
+    control = omitted["digests"] != a["digests"]
+    return {"rel_rms": err, "digests_repeat": same, "salts_fresh": fresh, "omitted_leaves_rejected": control,
+            "ok": err < ERR and same and fresh and control}
+
+
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
-    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
-    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across passes."""
+    """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control (`call_verdict`),
+    at every distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes
+    repeat one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the execution phase numbers calls across
+    passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -329,14 +360,13 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
                 run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
                 served = y if served is None else served
-                commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+                ended = run.end()
+                commits.append(under_salt(run, ended) if run.hashing else ended)
             run.omit = frozenset()
             ref = x.float() @ W.float().T
             err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
-            same = len(commits) == 1 or commits[0] == commits[1]
-            control = len(commits) == 1 or commits[2]["transcript_root"] != commits[0]["transcript_root"]
-            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing, "rel_rms": err,
-                        "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing,
+                        **call_verdict(commits, err)})
     if run.hashing:
         out.append(screen_check(run, weights))
     if run.hashing and run.schedule.side:
@@ -373,7 +403,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
     twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
     and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
-    decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
+    decode steps replay it: each pass must give the eager pass's tile digests (`unsalted`: each pass's salts are fresh, so
+    its roots are its own), screen flags and outputs, bit for bit,
     and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
     stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured.  The arm
     `bf16_race` names fails it before anything is captured, ``refused`` saying why (`BF16_RACE`)."""
@@ -387,10 +418,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     rows = 2 * m * len(weights) if run.hashing else 0
     def forward():
         return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
-    keep = ("transcript_root", "activation_roots", "units", "tiles")
-
     def ended(ys):
-        return [y.clone() for y in ys], run.flag_buf[:rows].clone(), {k: v for k, v in run.end().items() if k in keep}
+        return [y.clone() for y in ys], run.flag_buf[:rows].clone(), unsalted(run, run.end())
 
     run.graphs = False
     run.begin()
@@ -517,8 +546,9 @@ def _differing(a, b, at: str = "") -> list[str]:
 
 def schedule_check(run, weights: dict) -> dict:
     """The run's schedule on the card: the same calls (m = 32 on the 64 x 64 path, m = 128 on the 128 x 128 one), each
-    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must commit the same A roots and
-    tile roots.  The run's schedule is its own again after."""
+    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must give the same
+    tile digests (`unsalted`: each pass's salts are fresh, so its roots are its own).  The run's schedule is its own again
+    after."""
     import torch
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
@@ -529,7 +559,7 @@ def schedule_check(run, weights: dict) -> dict:
         run.poison()
         for x in xs:
             run.gemm(w, x, W, None)
-        commits[name] = {k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots", "tiles")}
+        commits[name] = unsalted(run, run.end())
     run.begin(schedule=mine)
     return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
             mine: commits[mine], "ok": commits["serial"] == commits[mine]}
@@ -537,7 +567,7 @@ def schedule_check(run, weights: dict) -> dict:
 
 def graphs_check(run, weights: dict) -> list[dict]:
     """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
-    fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
+    fresh pass on poisoned outputs, must give the same tile digests (`unsalted`), screen flags and y, bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
     from verity_torch.pouw.pearl_c import run_device as PPDR
@@ -555,11 +585,9 @@ def graphs_check(run, weights: dict) -> list[dict]:
             run.poison()
             y = run.gemm(w, x, W, None).clone()
             flags = run.flag_buf[:BATCH].clone()
-            c = run.end()
-            got.append((c["transcript_root"], c["activation_roots"], flags, y))
+            got.append((unsalted(run, run.end()), flags, y))
         run.graphs = True
-        same = all(g[0] == got[0][0] and g[1] == got[0][1] and torch.equal(g[2], got[0][2]) and torch.equal(g[3], got[0][3])
-                   for g in got[1:])
+        same = all(g[0] == got[0][0] and torch.equal(g[1], got[0][1]) and torch.equal(g[2], got[0][2]) for g in got[1:])
         out.append({"check": "graphs", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": BATCH, "eager_equals_replay": same,
                     "ok": same})
     w, W = next(iter(weights.items()))
