@@ -410,9 +410,9 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. The verifier trusts the
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
-    With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier), once `ready` returns for it (a caller whose build runs beside the wipe waits there), and must agree
-    with the Python; without it the Python may only refuse: its reject or undecided stands,
+    With `wipe-protocol` among the period's tools, the Lean answers alone (the verifier), held to this node
+    (``--server NODE serve``), once `ready` returns for it (a caller whose build runs beside the wipe waits there);
+    without it the Python may only refuse: its reject or undecided stands,
     and its accept is undecided (`wipe_period.NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and
     `out/wipe.json`, which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-device`'s premise holds (the session's key against the pins of
@@ -482,10 +482,7 @@ def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[...
     answer, lean = wipe.answer, None
     if "wipe-protocol" in tools:
         ready(tools["wipe-protocol"])
-        lean = serve(tools["wipe-protocol"], [wipe.case])[0]
-        if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
-            raise RuntimeError(f"wipe-protocol answered {lean}, the Python {answer}")
-        answer = lean
+        answer = lean = serve(tools["wipe-protocol"], [wipe.case], "--server", node)[0]
     elif answer["verdict"] == "accept":
         answer = answer | {"profile": None, "public": None, "reason": W.NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:

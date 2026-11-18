@@ -26,13 +26,12 @@
 #
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
 # (default 128, in a systemd scope where this user can make one, else under prlimit's address-space limit, else not
-# answered: PoUS's case is held by the Python and written as its
-# line, four times C*, to the Lean, which works in a few times that line), all three at once: PoUB-P2's case
+# answered: PoUS's case is written as its line, four times C*, to the Lean, which works in a few times that line),
+# both at once: PoUB-P2's case
 # answered by poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects
-# (served_piece.py collect-bandwidth), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by the Python
-# and by pous-run-protocol, which must agree with it. This part starts only when the sessions' part exits 0 and
-# those two programs are built. A run that ended in it, or whose Lean
-# didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by
+# (served_piece.py collect-bandwidth), and its case to SERVE_DIR/private/bandwidth; and PoUS's case answered by
+# pous-run-protocol alone. This part starts only when the sessions' part exits 0 and those two programs are built. A
+# run that ended in it, or whose Lean didn't answer (the window is then undecided), keeps what the sessions left and can be answered again by
 # hand (served_piece.py's arguments with --answers), with no new session; once each Lean has answered, C* is removed.
 #
 # POUS_ARGS adds served_piece.py's options, as shell words (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device,

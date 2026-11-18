@@ -606,7 +606,7 @@ def _distinct(key: Path, **more) -> str:
 
 def _public_bytes(r: subprocess.CompletedProcess, d: Path) -> bytes:
     """What of a wipe piece leaves the node in public: its answer or its refusal, its served counts but for ``server``
-    (the case's server id, which `served_case.wipe_piece` checks against it), and its last line."""
+    (the case's server id, which `wipe-protocol --server NODE serve` holds the case to), and its last line."""
     out = [r.stdout.strip().splitlines()[-1].encode()]
     for name in ("answer.json", "refused.txt"):
         if (d / name).exists():
