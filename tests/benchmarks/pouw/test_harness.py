@@ -715,6 +715,7 @@ def test_the_card_is_the_one_its_card_file_records_for_its_name():
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "575.51.03")["arch"] == "sm_90a"
     assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
+    assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["short"] == "h100"
     assert I.check_card("NVIDIA B200", "10.0", 148, "575.51.03")["arch"] == "sm_100a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "575.1"),
                 ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
