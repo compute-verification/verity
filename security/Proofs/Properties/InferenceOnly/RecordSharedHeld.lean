@@ -544,7 +544,7 @@ theorem plan_of {P : Prog} {rs : Array TRange} {ts : List Spot.RecordText.Tmpl} 
       | some pp =>
         obtain ⟨port', ty⟩ := pp
         simp only [sharedPlan, hr, ht, hp, bind, Option.bind] at h
-        refine ⟨r, t, ty, by first | rfl | exact hr, by first | rfl | exact ht, ?_⟩
+        refine ⟨r, t, ty, rfl, ht, ?_⟩
         cases hw : t.rows.lookup port' with
         | none => simp [hw] at h
         | some wv =>
@@ -627,5 +627,188 @@ theorem unit_defn {j tr : Lean.Json} {c : Case} (h : read j tr = .ok c) {rs : Ar
   refine ⟨t, ?_, hd⟩
   rw [← htid]
   exact find_tid (Properties.Record.SecurityProofs.tmpls_named hts).1 ht
+
+/-- The parts `rowRuns` reads: every part of an argument of a root node that is no input node, but an edge's. -/
+def rowParts (P : Prog) : List Part :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  let units := nodes.toList.filter fun n => !InferenceOnlyVerifier.Desc.isInputNode P n
+  let edge := fun (q : Part) => match q with
+    | .affine false i _ _ | .strided false i _ _ _ _ _ =>
+      (nodes[i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | .explicit it => it.any fun r => !r.p &&
+      (nodes[r.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | .grid _ lanes => lanes.all fun l => !l.p &&
+      (nodes[l.i]?.map fun n => !InferenceOnlyVerifier.Desc.isInputNode P n).getD false
+    | _ => false
+  units.flatMap fun n => n.args.toList.flatMap fun a => a.seq.parts.toList.filter (!edge ·)
+
+theorem rowRuns_runsOf {P : Prog} {R : Runs} (h : rowRuns P = some R) : runsOf P (rowParts P) = some R := by
+  unfold rowRuns at h
+  dsimp only at h
+  split at h
+  · exact h
+  · cases h
+
+/-- **A shared run is a run of some leaf of a part `runsOf` reads.** -/
+theorem runsOf_shared {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P parts = some R)
+    {x : Nat × Nat × Nat} (hx : x ∈ R.shared) : 0 < x.2.2 ∧ ∃ q ∈ parts, ∃ b, partRun P q = some (x, b) := by
+  unfold runsOf at h
+  dsimp only at h
+  split at h
+  · cases h
+    have hin : ∀ r ∈ ((parts.filterMap (partRun P)).filter fun r => r.1.2.2 > 0).mergeSort runOrd,
+        0 < r.1.2.2 ∧ ∃ q ∈ parts, partRun P q = some r := by
+      intro r hr
+      obtain ⟨hrf, hpos⟩ := List.mem_filter.1 (List.mem_mergeSort.1 hr)
+      obtain ⟨q, hq, hpq⟩ := List.mem_filterMap.1 hrf
+      exact ⟨by simpa using hpos, q, hq, hpq⟩
+    simp only [List.mem_append, List.mem_filterMap] at hx
+    rcases hx with ⟨r, hr, hre⟩ | ⟨⟨a, b'⟩, hab, hre⟩
+    · split at hre
+      · cases hre
+        obtain ⟨hpos, q, hq, hpq⟩ := hin r hr
+        exact ⟨hpos, q, hq, r.2, hpq⟩
+      · cases hre
+    · split at hre
+      · cases hre
+        obtain ⟨hpos, q, hq, hpq⟩ := hin a (List.of_mem_zip hab).1
+        exact ⟨hpos, q, hq, a.2, hpq⟩
+      · cases hre
+  · cases h
+
+/-- **Two nonempty runs of parts `runsOf` reads that hold one leaf of one node are one run.** -/
+theorem run_eq_of_gate {P : Prog} {parts : List Part} {R : Runs} (h : runsOf P parts = some R)
+    {q q' : Part} (hq : q ∈ parts) (hq' : q' ∈ parts) {x y : Nat × Nat × Nat} {bx byy : Bool}
+    (hx : partRun P q = some (x, bx)) (hy : partRun P q' = some (y, byy)) (hx0 : 0 < x.2.2) (hy0 : 0 < y.2.2)
+    {jx jy : Nat} (hjx : x.2.1 ≤ jx ∧ jx < x.2.1 + x.2.2) (hjy : y.2.1 ≤ jy ∧ jy < y.2.1 + y.2.2)
+    (hgate : x.1 = y.1 ∧ jx = jy) : x = y := by
+  rcases runsOf_eqOrApart h hq hq' hx hy hx0 hy0 with e | hne | hle | hle
+  · exact e
+  · exact absurd hgate.1 hne
+  · omega
+  · omega
+
+/-- **A unit's parameter leaf in a shared run is read by a part of its argument over that run.** A leaf of member `m`
+of a unit node `k`, parameter `i`, that lies in a shared run `x` of `rowRuns`: the node has that argument, and one of
+its parts is a run of `x` (`partRun`), strided parts and parts read more than once included. Open: the leaf lemma of
+`ResolveRows` (`LeafAt`, `arg_leaf`) with the shared case, and `runsOf_eqOrApart`, prove it. -/
+def LeafPart : Prop :=
+  ∀ (P : Prog), Properties.Record.SecurityProofs.ReadProg P → ∀ R, rowRuns P = some R →
+    ∀ k, k < (P.defs[P.root]!).body.nodes.size →
+      InferenceOnlyVerifier.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false →
+      (((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch) →
+      ∀ m, m < ((P.defs[P.root]!).body.nodes[k]!).members → ∀ i t g,
+        i < (P.defs[(P.child P.rootScope k m).d]!).params.size →
+        Flock.Program.resolve P (P.child P.rootScope k m) (⟨true, i, t⟩ : Flock.Program.Ref) = .ok g →
+        ∀ x ∈ R.shared, (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 ≤ g →
+          g < (P.defs[P.root]!).body.offsets[x.1]! + x.2.1 + x.2.2 →
+          i < ((P.defs[P.root]!).body.nodes[k]!).args.size ∧
+            ∃ q ∈ (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.parts.toList, ∃ b, partRun P q = some (x, b)
+
+/-- **`SharedHeld`, from the stage, where a shared leaf is read by a part over its run** (`LeafPart`). -/
+theorem sharedHeld_of (h3 : LeafPart) : SharedHeld := by
+  intro j tr c rs hread hrs g hg
+  obtain ⟨R, ⟨xi, xb, xn⟩, hR, hx, hlo, hhi⟩ := hg
+  have hP := Properties.Record.SecurityProofs.readProg_of_read hread
+  obtain ⟨hin, hsh⟩ := read_shared hread
+  have hsr : sharedRuns c.f.P = R.shared := by
+    unfold sharedRuns
+    rw [hR]
+    rfl
+  have hne : (sharedRuns c.f.P).isEmpty = false := by
+    rw [hsr]
+    cases hs : R.shared with
+    | nil => rw [hs] at hx; cases hx
+    | cons => rfl
+  obtain ⟨sh, rs', hsho, hrs', hrows⟩ := decide_rows (by simpa [sharedHeld] using hsh) hne
+  have hrr : rs' = rs := by
+    have := hrs'.symm.trans hrs
+    cases this
+    rfl
+  subst hrr
+  obtain ⟨hlist, hall⟩ := ranges_spec (Properties.Record.SecurityProofs.read_bodies hP).1 hP.2.2.2.2.2.2
+    (Properties.Record.SecurityProofs.readProg_inputs hP) hrs
+  have hrow : ∀ r l lo hi, Properties.Record.RowLeaf c.f.P rs' c.W r l g lo hi →
+      ∃ s ∈ sh, s.input = xi ∧ ∃ cc < sharedCuts c.f.P rs' c.f.ts c.W s, ∀ m,
+        sharedRow c.f.P rs' c.f.ts c.W c.x.decls c.isTheta s cc = some (some m) →
+          m.1 = xi ∧ fillAt c.x.decls r = some (.read m.2.1) ∧ c.isTheta m.2.1 = true := by
+    intro r l lo hi hrl
+    obtain ⟨sc, hU, pi, hpi, hport, hrw, -, hres, -, -⟩ := hrl
+    obtain ⟨i, mm, hi, htm, hmm, hu, hsc⟩ := hU
+    have hri : rs'[i]! = rs'[i] := getElem!_pos rs' i hi
+    rw [hri] at htm hmm hsc
+    have hmem : rs'[i] ∈ rs'.toList := Array.mem_toList_iff.2 (Array.getElem_mem hi)
+    obtain ⟨hK, -, hfK, hcK⟩ := hall _ hmem
+    have hkey : Flock.Program.isInputId
+        (c.f.P.defs[((c.f.P.defs[c.f.P.root]!).body.nodes[rs'[i].node]!).fn]!).key = false := by
+      have hn : rs'[i].node ∈ rs'.toList.map (·.node) := List.mem_map.2 ⟨_, hmem, rfl⟩
+      rw [hlist] at hn
+      simpa using (List.mem_filter.1 hn).2
+    have hu' : InferenceOnlyVerifier.Desc.isInputNode c.f.P ((c.f.P.defs[c.f.P.root]!).body.nodes[rs'[i].node]!) =
+        false := by
+      unfold InferenceOnlyVerifier.Desc.isInputNode
+      simp [hkey]
+    subst hsc
+    obtain ⟨hargs, q, hq, b, hpr⟩ := h3 c.f.P hP R hR _ hK hu' hfK mm (by rw [← hcK]; exact hmm) pi _ g hpi hres
+      (xi, xb, xn) hx hlo hhi
+    have hc' : (sharedRuns c.f.P).contains (xi, xb, xn) = true := by
+      rw [hsr]
+      exact List.contains_iff_mem.2 hx
+    obtain ⟨-, s, hs, hsn, hsa, hsi, -, -, -⟩ := sharedOf_arg hsho hK hu' hargs hq hpr hc'
+    obtain ⟨t, ht, htd⟩ := unit_defn hread hrs ⟨i, mm, hi, by rw [hri]; exact htm, by rw [hri]; exact hmm,
+      hu, by rw [hri]⟩
+    have hpar : (c.f.P.defs[t.defn]!).params[s.arg]? = some ((c.f.P.defs[t.defn]!).params[pi]!) := by
+      rw [hsa, htd, getElem!_pos _ pi hpi]
+      exact Array.getElem?_eq_getElem hpi
+    have hpt : ((c.f.P.defs[t.defn]!).params[pi]!).1 = r.port := by
+      rw [htd]
+      exact hport
+    have hfind : rs'.find? (·.node == s.node) = some rs'[i] := by
+      rw [hsn]
+      exact find_node hrs hi
+    have hfindt : c.f.ts.find? (·.tid == rs'[i].template) = some t := by
+      rw [htm]
+      exact ht
+    refine ⟨s, hs, hsi, r.row, ?_, fun mk hmk => ?_⟩
+    · have hcuts : sharedCuts c.f.P rs' c.f.ts c.W s = c.W.cutsOf r.tid r.port := by
+        unfold sharedCuts
+        rw [hfind]
+        simp only [Option.bind_some]
+        rw [hfindt]
+        simp only [Option.bind_some]
+        rw [hpar]
+        simp only [Option.map_some, Option.getD_some]
+        rw [htm, hpt]
+      rw [hcuts]
+      exact hrw
+    · obtain ⟨tid', port', u0, n, p, gg, gb, o, hplan, hheld, rfl⟩ := row_of hmk
+      obtain ⟨r', t', ty, hr', ht', hp', htid, hu0, hn, -⟩ := plan_of hplan
+      rw [hfind] at hr'
+      cases hr'
+      rw [hfindt] at ht'
+      cases ht'
+      rw [hpar] at hp'
+      have hport' : port' = r.port := by
+        rw [← hpt, Option.some.inj hp']
+      have hu0' := u0_eq (evaluate_chained hrs) hi rs'[i].template
+      rw [htm] at hu0'
+      rw [htm] at hu0
+      obtain ⟨hth, d, hd, hcov, hfill⟩ := heldFrom_cover _ _ hheld r.unit (by omega) (by omega)
+      refine ⟨hsi, ?_, hth⟩
+      rw [htid, htm, hport'] at hcov
+      rw [Properties.Record.SecurityProofs.fillAt_of_covers
+        (Properties.Record.SecurityProofs.inputsOf_decls hin).1 hd hcov, hfill]
+  by_cases hex : ∃ r l lo hi, Properties.Record.RowLeaf c.f.P rs' c.W r l g lo hi
+  · obtain ⟨r0, l0, lo0, hi0, h0⟩ := hex
+    obtain ⟨s0, hs0, -, cc0, hcc0, hm0⟩ := hrow _ _ _ _ h0
+    obtain ⟨m0, hsr0, hagree⟩ := hrows s0 hs0 cc0 hcc0
+    refine ⟨m0.2.1, fun r l lo hi hrl => ?_⟩
+    obtain ⟨s, hs, -, cc, hcc, hm⟩ := hrow _ _ _ _ hrl
+    obtain ⟨m, hsr', -⟩ := hrows s hs cc hcc
+    have he : m0 = m := hagree s hs cc hcc m hsr' (by rw [(hm0 m0 hsr0).1, (hm m hsr').1])
+    obtain ⟨-, hf, ht⟩ := hm m hsr'
+    rw [he]
+    exact heldAt_read hf ht
+  · exact ⟨"", fun r l lo hi hrl => absurd ⟨r, l, lo, hi, hrl⟩ hex⟩
 
 end InferenceOnlyVerifier.Record.SecurityProofs
