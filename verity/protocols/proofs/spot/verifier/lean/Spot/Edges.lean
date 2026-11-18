@@ -41,7 +41,7 @@ parts are read only after `argPartsOk` has bounded them by the root's nodes.
 
 namespace Spot.Edges
 
-open Flock.Program (Prog Node Arg Part Ty Defn fieldsOf isInputId)
+open Flock.Program (Prog Node Arg Part Ty Defn Lane fieldsOf isInputId)
 open Flock.TemplateQuery (TRange)
 open Spot.Bits (bitsOf)
 
@@ -51,11 +51,13 @@ def firstUnits (rs : Array TRange) : Std.HashMap Nat (String × Nat) :=
     let b := acc.2.getD r.template 0
     (acc.1.insert r.node (r.template, b), acc.2.insert r.template (b + r.count))) ({}, {})).1
 
-/-- The space a part reads: its node or parameter, or an explicit part's first reference's; none for an empty one. -/
+/-- The space a part reads: its node or parameter, or an explicit part's first reference's, or a grid's first lane's;
+none for an empty one. -/
 def partKey : Part → Option (Bool × Nat)
   | .affine p i _ _ => some (p, i)
   | .strided p i _ _ _ _ _ => some (p, i)
   | .explicit it => it[0]?.map fun r => (r.p, r.i)
+  | .grid _ lanes => lanes[0]?.map fun l => (l.p, l.i)
 
 /-- Whether an argument of root node `k`, in a root of `np` parameters, has at most one part more than the spaces
 (`partKey`) its parts read. A builder that folds an argument's reads of one writer node into one part, and its reads
@@ -99,16 +101,6 @@ def membersIn (x0 L len M s0 c : Nat) : Except String (Nat × Nat) :=
     let on := if olo ≤ ohi then ohi - olo + 1 else 0
     if cn != on then .error "edge-rows" else .ok (clo.toNat, cn.toNat)
 
-/-- A lane of a part (`circuits/PROTOCOL.md` §3): its collection `(p, i)`, base `b`, inner stride `e` and levels
-`(radix, step)`, innermost first. -/
-structure Lane where
-  p : Bool
-  i : Nat
-  b : Int
-  e : Int
-  lv : List (Nat × Int)
-  deriving Inhabited
-
 /-- A part's run and lanes, the grid it spells; an explicit part none. -/
 def partLanes : Part → Nat × List Lane
   | .affine p i b c => (max c 1, [⟨p, i, b, 1, []⟩])
@@ -116,6 +108,7 @@ def partLanes : Part → Nat × List Lane
     let T := max 1 ((c + inner - 1) / inner)
     (inner, [⟨p, i, b, is, if T > 1 then [(T, os)] else []⟩])
   | .explicit _ => (0, [])
+  | .grid run lanes => (run, lanes.toList)
 
 /-- The digits of period `t` in levels `lv`, innermost first, the last unbounded. -/
 def digitsOf (t : Nat) : List (Nat × Int) → List Nat

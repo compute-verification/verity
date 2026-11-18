@@ -199,36 +199,31 @@ structure Ref where
 
 def Ref.toJson (r : Ref) : Json := Json.arr #[Json.str (if r.p then "p" else "n"), Lean.toJson r.i, Lean.toJson r.j]
 
-/-- A lane of a grid (PROTOCOL.md §3): leaves of parameter or node `i` from `base`, `e` apart within a run, and its levels
-`(radix, step)`, innermost first, the last one unbounded. -/
+/-- A lane of a grid (PROTOCOL.md §3): its collection `(p, i)`, base `b`, inner stride `e` and levels `(radix, step)`,
+innermost first, the last one unbounded. -/
 structure Lane where
   p : Bool
   i : Nat
-  base : Int
+  b : Int
   e : Int
-  levels : Array (Nat × Int)
+  lv : List (Nat × Int)
   deriving Inhabited, BEq
 
 /-- The periods a lane's levels count: their radices' product. -/
-def Lane.periods (l : Lane) : Nat := l.levels.foldl (fun a (r, _) => a * r) 1
+def Lane.periods (l : Lane) : Nat := l.lv.foldl (fun a (r, _) => a * r) 1
 
 /-- The leaf of lane `l` at period `t`, offset `o` in its run (`refs.grid_ref`'s arithmetic). -/
-def Lane.leafAt (l : Lane) (t o : Nat) : Int := Id.run do
-  let mut leaf := l.base + (o : Int) * l.e
-  let mut t := t
-  for n in [0:l.levels.size] do
-    let (r, d) := l.levels[n]!
-    if n + 1 == l.levels.size then
-      leaf := leaf + (t : Int) * d
-    else
-      leaf := leaf + ((t % r : Nat) : Int) * d
-      t := t / r
-  return leaf
+def Lane.leafAt (l : Lane) (t o : Nat) : Int :=
+  let rec go : List (Nat × Int) → Nat → Int
+    | [], _ => 0
+    | [(_, d)], t => (t : Int) * d
+    | (r, d) :: rest, t => ((t % r : Nat) : Int) * d + go rest (t / r)
+  l.b + (o : Int) * l.e + go l.lv t
 
 /-- The least and greatest leaf lane `l` of a whole grid of runs of `run` reaches (`refs.lane_bounds`). -/
 def Lane.bounds (run : Nat) (l : Lane) : Int × Int :=
-  (#[(run, l.e)] ++ l.levels).foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0))
-    (l.base, l.base)
+  ((run, l.e) :: l.lv).foldl (fun (lo, hi) (r, d) => (lo + ((r : Int) - 1) * min d 0, hi + ((r : Int) - 1) * max d 0))
+    (l.b, l.b)
 
 inductive Part where
   | affine (p : Bool) (i base count : Nat)
@@ -252,39 +247,39 @@ def Part.count : Part → Nat
     ⟨l.p, l.i, (l.leafAt (k / (lanes.size * run)) (k % run)).toNat⟩
 
 /-- Adjacent levels where one continues the other, merged (`refs._merged_levels`). -/
-def mergedLevels (lv : Array (Nat × Int)) : Array (Nat × Int) :=
-  lv.foldl (fun out (r, d) => match out.back? with
-    | some (r', d') => if d == (r' : Int) * d' then out.pop.push (r' * r, d') else out.push (r, d)
-    | none => out.push (r, d)) #[]
+def mergedLevels (lv : List (Nat × Int)) : List (Nat × Int) :=
+  (lv.foldl (fun out (r, d) => match out with
+    | (r', d') :: rest => if d == (r' : Int) * d' then (r' * r, d') :: rest else (r, d) :: out
+    | [] => [(r, d)]) []).reverse
 
 /-- Whether the grid `(run, lanes)` needs the grid form: no affine, strided or explicit part spells it (`refs.spell`,
 which tries those first, after merging). -/
 def gridNeeded (run : Nat) (lanes : Array Lane) : Bool := Id.run do
-  let mut lanes := lanes.map fun l => { l with levels := mergedLevels l.levels }
+  let mut lanes := lanes.map fun l => { l with lv := mergedLevels l.lv }
   let mut run := run
   let g := lanes.size
   if g ≥ 2 then
     let l0 := lanes[0]!
-    if lanes.all (fun l => l.p == l0.p && l.i == l0.i && l.e == l0.e && l.levels == l0.levels) then
-      let c := lanes[1]!.base - l0.base
-      if (List.range g).all (fun j => lanes[j]!.base == l0.base + (j : Int) * c) && (run == 1 || c == (run : Int) * l0.e) then
+    if lanes.all (fun l => l.p == l0.p && l.i == l0.i && l.e == l0.e && l.lv == l0.lv) then
+      let c := lanes[1]!.b - l0.b
+      if (List.range g).all (fun j => lanes[j]!.b == l0.b + (j : Int) * c) && (run == 1 || c == (run : Int) * l0.e) then
         lanes := #[{ l0 with e := if run == 1 then c else l0.e }]
         run := run * g
   if lanes.size == 1 then
     let l := lanes[0]!
     let mut e := l.e
-    let mut lv := l.levels
-    for _ in [0:l.levels.size] do
-      match lv[0]? with
-      | some (r, d) =>
+    let mut lv := l.lv
+    for _ in [0:l.lv.length] do
+      match lv with
+      | (r, d) :: rest =>
         if run == 1 || d == (run : Int) * e then
           e := if run == 1 then d else e
           run := run * r
-          lv := mergedLevels (lv.extract 1 lv.size)
+          lv := mergedLevels rest
         else break
-      | none => break
-    if lv.size ≤ 1 then return false
-  if run == 1 && lanes.all (·.levels.isEmpty) then return false
+      | [] => break
+    if lv.length ≤ 1 then return false
+  if run == 1 && lanes.all (·.lv.isEmpty) then return false
   return true
 
 /-- A flat sequence of parts (a concatenation spliced in), with each part's first index. -/
@@ -376,7 +371,7 @@ def parsePartsIn (fuel : Nat) (j : Json) (leaves : Bool → Nat → Option Nat) 
         let (some r, some d) := (natJ? r, intJ? d) | throw shape
         if r < 2 || d < low then throw shape
         pure (r, d)
-      pure ({ p, i, base := b, e, levels } : Lane)
+      pure ({ p, i, b, e, lv := levels.toList } : Lane)
     if lanes.any (·.periods != lanes[0]!.periods) then
       throw s!"grid-shape: grid {g.compress}: its lanes' radices multiply to different period counts"
     if !gridNeeded run lanes then throw s!"grid-spelled: grid {g.compress}: an affine, strided or explicit part spells it"
@@ -757,26 +752,14 @@ def partOk (s : Src) (t : Ty) (ht : Option Nat) (a : Nat) (q : Part) : M Bool :=
       if wAt S (at_ k) != wAt t (a + k) then return false
     return true
   | .grid run lanes =>
-    -- lane by lane: one width, or the residues its run and levels reach within an array element; else leaf by leaf
+    -- lane by lane: the source's one width, or one width over the leaves between the lane's extremes; else leaf by
+    -- leaf
     let laneOk := fun (w : Nat) (l : Lane) => match s.ty? l.p l.i with
       | none => true
       | some S =>
         s.homo? l.p l.i == some w ||
         let (lo, hi) := l.bounds run
-        rangeWidths S lo.toNat (hi.toNat + 1) == [w] ||
-        match cover S lo.toNat (hi.toNat + 1) with
-        | (.array _ f, off) =>
-          let L := f.leaves
-          L > 0 &&
-          match (#[(run, l.e)] ++ l.levels).foldlM (init := [0]) fun (acc : List Nat) (r, d) => do
-              let R ← residues d r L 4096
-              let c := (acc.flatMap fun x => R.map fun y => (x + y) % L).eraseDups
-              if c.length ≤ 4096 then some c else none with
-          | some A =>
-            let r0 := ((l.base - (off : Int)) % (L : Int)).toNat
-            A.all fun x => wAt f ((r0 + x) % L) == w
-          | none => false
-        | _ => false
+        rangeWidths S lo.toNat (hi.toNat + 1) == [w]
     if let some w := ht then
       if lanes.all (laneOk w) then return true
     for k in [0:q.count] do

@@ -54,7 +54,7 @@ from pathlib import Path
 from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import input_id, is_input
-from verity.circuits.refs import Affine, Concat, Explicit
+from verity.circuits.refs import Affine, Concat, Explicit, Grid
 from verity.circuits.types import Array, RecordType, Tuple
 
 
@@ -166,7 +166,8 @@ def passed_on(fn, memo: dict | None = None) -> frozenset[int]:
         def of(refs) -> frozenset[int]:
             """The parameters the parts of `refs` name, or reach through the nodes they name."""
             named = {(s, i) for p in _parts(refs) if p.count
-                     for s, i in ({r[:2] for r in p.items} if isinstance(p, Explicit) else [(p.space, p.idx)])}
+                     for s, i in ({r[:2] for r in p.items} if isinstance(p, Explicit) else
+                                  {ln[:2] for ln in p.lanes} if isinstance(p, Grid) else [(p.space, p.idx)])}
             return frozenset().union(*({i} if s == "p" else reach[i] for s, i in named))
 
         for n in fn.body.nodes:
@@ -262,7 +263,7 @@ def own_rows(program, form_only: bool = False) -> None:
     from verity.circuits.cut import member_refs
     from verity.circuits.layout import Scope, resolve_gate
     from verity.circuits.parts import n_members
-    from verity.circuits.refs import Grid, Strided
+    from verity.circuits.refs import Strided
     nodes = program.root.body.nodes
 
     def reads(s, i) -> bool:

@@ -466,6 +466,7 @@ def partNodes : Program.Part → Array Nat
   | .affine p i _ _ => if p then #[] else #[i]
   | .strided p i _ _ _ _ _ => if p then #[] else #[i]
   | .explicit it => (it.filter (!·.p)).map (·.i)
+  | .grid _ lanes => (lanes.filter (!·.p)).map (·.i)
 
 /-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
 def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)

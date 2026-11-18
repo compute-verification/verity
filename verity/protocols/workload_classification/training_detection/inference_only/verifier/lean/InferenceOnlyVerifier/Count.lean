@@ -132,6 +132,7 @@ def argTheta (root : Bool) (mask : Array Bool) (th : Option (Array Bool)) (a : A
     | .affine p i _ c => c == 0 || names p i
     | .strided p i _ _ _ _ c => c == 0 || names p i
     | .explicit it => it.all fun r => names r.p r.i
+    | .grid _ lanes => lanes.all fun l => names l.p l.i
 
 /-- What `walk` gives, per Definition: its activations outside every block (`mult`), its blocks when it is a block
 Definition (`count`), and which of its parameters are θ at every call site outside every block (`theta`: none where it
