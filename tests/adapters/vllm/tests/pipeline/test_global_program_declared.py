@@ -140,7 +140,8 @@ COUPLED = "the lag declaration is coupled to the pinned implementation"
     ({}, {"vllm_revision": "0ld"}, f"component (LP=64, T=7) BAD was derived for vLLM 0ld but the workload's target pins {VLLM}: {COUPLED}"),
 ], ids=["a-synchronous-component", "a-synchronous-workload", "another-vllm"])
 def test_the_first_component_of_another_scheduler_or_another_vllm_is_named_and_none_after_it_is_read(tmp_path, workload, component, refusal):
-    first, bad, after = _component(tmp_path, "first", workload), _component(tmp_path, "bad", component), _component(tmp_path, "after", {"num_sms": "many"})
+    first, bad = _component(tmp_path, "first", {**GPU, **workload}), _component(tmp_path, "bad", {**GPU, **component})
+    after = _component(tmp_path, "after", {**GPU, "num_sms": "many"})
     out = GP.workload_lag(_manifest(**workload), {(256, 31): after, (64, 7): bad, (8, 1): first})
     assert out["refusal"] == refusal.replace("BAD", bad) and out["value"] == (0 if workload else 1)
     assert list(out["components"]) == [PP.shape_key((8, 1)), PP.shape_key((64, 7))] and out["components"][PP.shape_key((64, 7))]["dir"] == bad
@@ -151,7 +152,7 @@ def test_the_first_component_of_another_scheduler_or_another_vllm_is_named_and_n
     ({"num_sms": "many"}, "invalid literal for int() with base 10: 'many'"),
 ])
 def test_a_component_s_declared_target_that_is_not_a_target_profile_is_refused_and_is_not_among_the_components(tmp_path, declared, why):
-    first, bad = _component(tmp_path, "first", {}), _component(tmp_path, "bad", declared)
+    first, bad = _component(tmp_path, "first", GPU), _component(tmp_path, "bad", {**GPU, **declared})
     out = GP.workload_lag(_manifest(), {(64, 7): bad, (8, 1): first})
     assert out["refusal"] == f"component (LP=64, T=7) {bad}: target.declared does not parse as a TargetProfile: {why}"
     assert list(out["components"]) == [PP.shape_key((8, 1))]
