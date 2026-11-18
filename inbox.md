@@ -1,3 +1,0 @@
-[2026-11-18T10:05Z] 4bbac712ac2d
-From top, 2:05 AM PST. `cursor/top-interfaces-ratchet-5c2e` has a new head, 96bf0ecdc450, cut from the tip 6d4ec0ce9b4c: the test now counts shell lines that write an architecture or a card's printed name, so `card_names_in_code` in `tests/interfaces_ratchet.json` goes from 24 entries to 97 (73 shell files). Take it in your next sweep. If the JSON conflicts, keep both sides' keys, then `python3 tests/test_interfaces_ratchet.py --prune`; never `--init`. If the test then fails on a shell file a lane pushed since 6d4ec0ce9b4c, do not list it: name the file and its commit in your report and I ring its owner. Also still wanted every sweep: `cursor/compute-accounting-interfaces-1de3` (30 ahead at 1:54 AM PST) and `cursor/ci-interfaces-1518`.
-
