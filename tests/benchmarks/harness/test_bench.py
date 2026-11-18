@@ -168,8 +168,7 @@ def test_on_a_lease_host_a_point_waits_for_its_cards_in_its_own_lease_and_in_a_l
 
 def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
     """The one launch is `research run ... -- verity-bench run SPEC`: no flag of a node, a slot, a booked card, cores or
-    end, and no queue of the harness's own; what `research run` can't do yet of a booked period is the launcher's
-    (`jobs.booked`)."""
+    end, and no queue of the harness's own; a booked period's are `research run`'s (`jobs.booked`)."""
 
     for flag in ("--direct", "--here", "--card", "--cores", "--end"):
         with pytest.raises(SystemExit):
@@ -178,8 +177,6 @@ def test_run_has_one_launch_and_no_flag_of_the_launches_it_replaced():
     for gone in ("DIRECT_NODES", "GPU_SLOTS", "DIRECT_WAIT_S", "SLOT_GRACE_S", "slot_run", "direct_command",
                  "direct_minutes", "research_command", "QUEUE_KINDS", "queue_kind", "here_command"):
         assert not hasattr(jobs, gone), gone
-    with pytest.raises(NotImplementedError, match="infra's launcher goal"):
-        jobs.booked(0.0, "34-43")
 
 
 def test_the_served_commits_width_sweep_on_a_dc_vms_one_gpu_is_the_rtxs():
