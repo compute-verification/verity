@@ -422,7 +422,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 424
+KNOWN_MAX = 423
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -521,8 +521,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the data sheet (`Verity.Accel.Card`; `ResourceAccounting.TS.Sheet`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
-    "security/Definitions/Flock/Circuit.lean::Spot.Sampling.Partition":
-        "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game":
         "duplicate of `Verity.Game`: becomes it (deleted) (lean)",
     "security/Definitions/Flock/Game.lean::FlockSoundness.Game.Strategy":
@@ -697,8 +695,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/proved_ticks.py::Sheet": "homonym, a family's priced headline design: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
-        "homonym, one replayed window's checks: rename (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py::Statement":

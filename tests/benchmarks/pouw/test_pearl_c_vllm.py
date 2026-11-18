@@ -546,7 +546,7 @@ def seeded_device_salts(monkeypatch, seed=11):
 def _served(monkeypatch, kernel, weights, more=None, **run):
     """`weights` served under the PoUW option as `verity_vllm.LLM` installs it (`protocol_options.install`), on `kernel`,
     with the execution phase's coins from a seeded challenger, the further pouw settings `more` and the weights' B salts
-    `salts_b` as the entry's kept salts (a registration's, so two installs compared byte for byte share them) and every
+    `salts_b` as the entry's fresh weight salts (seeded, so two installs compared byte for byte share them) and every
     fresh salt from `seeded_device_salts`; `run` overrides the device run's buffer sizes."""
     import functools
 
@@ -554,7 +554,7 @@ def _served(monkeypatch, kernel, weights, more=None, **run):
     from verity_vllm.protocols import pouw
     monkeypatch.setattr(pouw, "linear_types", lambda: (_Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
-    monkeypatch.setattr(pouw, "_WEIGHT_SALTS", {f"pouw:{SCHEME}": salts_b(weights)})
+    monkeypatch.setattr(PPDR, "fresh_weight_salts", salts_b)
     seeded_device_salts(monkeypatch)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
     model = _Model(weights)

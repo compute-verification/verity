@@ -5438,6 +5438,11 @@
     },
     {
       "paths": {
+        "verity/protocols/proofs/spot/prover/audit/class_size.py": "benchmarks/prove_path/class_size.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/window.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/window.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/challenger.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
         "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/requests.py": "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",

@@ -8,6 +8,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 OUT=${1:-/tmp/pearl-c-sm120-ship}
 CUDA_HOME=$(python3 "$ROOT/benchmarks/kernels/machine.py" toolkit 13.0); export CUDA_HOME
+GENCODE=$(python3 "$ROOT/benchmarks/kernels/machine.py" gencode sm_120a); export GENCODE
 bash "$HERE/../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/build.sh" "$OUT"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/../../../verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm120/run.py" "$OUT/"

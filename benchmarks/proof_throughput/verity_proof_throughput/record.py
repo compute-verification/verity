@@ -16,9 +16,8 @@ PORT = 7710
 
 def card_slug(card: str) -> str:
     from verity_bench import kit
-    from verity_bench.overhead import CARD_FILES
 
-    return "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
+    return "cpu" if card == "none" else kit.card_short(card)
 
 
 def member(workload: str, card: str, provers: int) -> str:

@@ -7,6 +7,7 @@ the files that hold one on its private side."""
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -161,16 +162,15 @@ def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_pa
                "egress/warden-registration.json": whole, "tie/w0-registration.json": {"roots": []},
                "honest/circuit.txt": "c", "honest/inst-4.bin": "i", "honest/archive/answers.json": whole,
                "honest/archive/session.json": {}})
-    copy = block("chain_record.sh", "WHOLE=(", "}")
-    got = run(copy + 'keep "$W/scan" "$OUT/scan"', W=step.parent, OUT=out, Q=q)
+    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept("SCANOUT", "scan"), W=step.parent, OUT=out, Q=q,
+              SCANOUT=step)
     assert got.returncode == 0, got.stderr
     private = ["scan/answers.json", "scan/egress/warden-registration.json",
                "scan/honest/verifier/warden-registration-egress-0.json",
                "scan/honest/verifier/warden-registration-ingress-0.json",
                "scan/tampered/verifier/warden-registration-egress-0-tampered.json"]
     assert sorted(p.relative_to(q / "witness").as_posix() for p in (q / "witness").rglob("*") if p.is_file()) == private
-    assert published(out) == ["scan/honest/registered.json", "scan/honest/registration.json", "scan/summary.json",
-                              "scan/tie/w0-registration.json"]
+    assert published(out) == ["scan/summary.json"]
     assert not [p for p in out.rglob("*") if p.is_file() and b"17" * 64 in p.read_bytes()]
 
 
@@ -198,6 +198,89 @@ def test_n2_tie_zk_keeps_its_verdicts_and_public_parameters_and_never_its_inputs
 def test_the_chains_tie_step_keeps_its_verdicts_and_public_parameters_and_never_its_inputs(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
     put(w / "tie", TIE_RUN)
-    got = run(block("chain_record.sh", '  echo $? > "$W/tie.rc"; mkdir', "    [ -f"), W=w, OUT=out)
+    got = run(block("chain_record.sh", "WHOLE=(", "}") + kept('W/tie', "tie"), W=w, OUT=out, Q=tmp_path / "q")
     assert got.returncode == 0, got.stderr
     assert published(out) == [f"tie/{f}" for f in TIE_KEPT]
+
+
+def kept(source: str, step: str) -> str:
+    """chain_record.sh's own call of ``keep`` for ``step``, whose files are under ``$source``."""
+    (line,) = re.findall(rf'keep "\${source}" "\$OUT/{step}"[^;\n]*', (HERE / "chain_record.sh").read_text())
+    return line + "\n"
+
+
+#: an N2 run's directory: its summary and public parameters, and what its verifier received
+N2_RUN = {"summary.json": {"ok": True}, "stager/program.json": {"units": 1}, "stager/partition.json": {"program": "p"},
+          "honest/verifier/w000-registration.json": {"roots": [{"root": "ab" * 64}]},
+          "honest/verifier/w000-certificates.json": [{"window": 0}], "honest/verifier/w000-syncs.json": [],
+          "honest/verifier/w000-delivered.json": {"salts": {"0": {"pub": "cd" * 32}}},
+          "honest/verifier/w000-outcome.json": {"public": {"verdict": 1}}, "honest/verifier/period.json": {"units": [0]},
+          "honest/verifier/w000-pub-1.bin": "p", "honest/verifier/w000-session-s-session.json": {}}
+
+
+def test_n2_zk_keeps_its_summary_and_public_parameters_and_nothing_the_verifier_received(tmp_path):
+    w, out = tmp_path / "W", tmp_path / "OUT"
+    put(w / "n2zk", N2_RUN)
+    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/n2zk"', "  [ -f"), W=w, OUT=out)
+    assert got.returncode == 0, got.stderr
+    assert published(out) == [f"n2zk/{f}" for f in TIE_KEPT]
+
+
+def test_the_chains_n2_and_scan_steps_keep_their_summaries_and_the_scans_program_alone(tmp_path):
+    """The chain releases N2's summary alone (its one file `released_keys.json` classifies) and the scan's summary and
+    joint Program (the attester piece's period case reads both); what each step's verifier received stays in $W."""
+    w, out, q = tmp_path / "W", tmp_path / "OUT", tmp_path / "q"
+    put(w / "n2", N2_RUN)
+    put(w / "scan", {"summary.json": {"ok": True}, "joint/program.json": {"units": 2},
+                     "honest-0/verifier/program.json": {"units": 3}, "honest-0/verifier/openings.json": [{"o0": 1}],
+                     "honest-0/registration.json": {"window": {"units": {"cells": [[1, 4]]}}}})
+    code = block("chain_record.sh", "WHOLE=(", "}") + kept("N2OUT", "n2") + kept("SCANOUT", "scan")
+    got = run(code, OUT=out, Q=q, N2OUT=w / "n2", SCANOUT=w / "scan")
+    assert got.returncode == 0, got.stderr
+    assert published(out) == ["n2/summary.json", "scan/joint/program.json", "scan/summary.json"]
+
+
+ENDPOINT_PY = """#!/bin/sh
+out=; while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done
+echo '{"chain": {"bits": {"bound_why": "certified requests are in none (s0-needle)", "commit_windows": [{"requests": 7}]}}}' > "$out"
+echo "the endpoint's stdout: s0-needle"
+"""
+
+
+def test_the_chains_endpoint_step_keeps_its_report_and_logs_on_the_private_side(tmp_path):
+    """The endpoint's report holds its advice rebuilt in the clear and each Commit window's counts, and its log and the
+    advice's what it printed: whether the step rebuilds it or takes the served node's, none of it reaches $OUT."""
+    py = tmp_path / "py"
+    py.write_text(ENDPOINT_PY)
+    py.chmod(0o755)
+    code = ('unpack() { mkdir -p "$2"; cp -r "$1"/. "$2"; }\n'
+            + block("chain_record.sh", 'if [ -n "${CR_ENDPOINT:-}" ]', "fi"))
+    for k, files in enumerate(({"r/advice_trace.jsonl": "{}\n", "r/advice.log": "s0-needle\n"},
+                               {"r/report.json": '{"bits": "s0-needle"}'})):
+        ep, out, q, w = (tmp_path / f"{x}{k}" for x in ("ep", "OUT", "Q", "W"))
+        put(ep, files)
+        out.mkdir()
+        got = run(code, CR_ENDPOINT=ep, CR_EOS_IDS="1", NETWORK_CERTIFIER="g/run", G="g", PY=py, CR="cr", OUT=out, Q=q,
+                  W=w)
+        assert got.returncode == 0, got.stderr
+        assert published(out) == ["job.log"] and b"s0-needle" not in (out / "job.log").read_bytes()
+        kept = sorted(p.name for p in (q / "witness" / "endpoint").iterdir())
+        assert kept == (["advice.log", "endpoint.log", "report.json"] if k == 0 else ["report.json"])
+
+
+def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone():
+    """The report's endpoint step (chain_record.py's, from the private report) names no request and counts no window's
+    requests: the attested I/O's violations by their count, the advice's binding by its Commit windows'."""
+    sys.path.insert(0, str(HERE.parents[1]))
+    from benchmarks.network_traces import chain_record as cr
+
+    bits = {"bound": False, "rebuilt": False, "bound_why": "2 certified requests are in none (s0-needle, s1-needle)",
+            "commit_windows": [{"window": 0, "requests": 7, "bound": True, "rebuilt": True},
+                               {"window": 1, "requests": 5, "bound": False, "why": "s1-needle"}]}
+    for io in ({"accepted": True}, {"accepted": False, "violations": [[3, "a request of s0-needle"], [9, "x"]]}):
+        step = cr.network_attester_endpoint_step({"warden_run": "r", "io": io, "chain": {"bits": bits}})
+        assert step["verdict"] == "refused" and "needle" not in json.dumps(step) and '"requests"' not in json.dumps(step)
+        assert step["advice"] == {"bound": False, "rebuilt": False, "commit_windows": 2, "bound_windows": 1}
+        assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
+        e2e = cr.endpoint_step({"chain": {"bits": bits, "tie": {}}})
+        assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]

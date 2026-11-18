@@ -92,10 +92,6 @@ def _card_why(card: O.Gpu, result: dict) -> str | None:
     return None
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _write(path: Path, doc: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(doc, indent=1, default=str) + "\n")
@@ -238,8 +234,10 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         cubin = (a.cubin if a.cubin.is_file() else a.run_dir / "inputs" / a.cubin).absolute()
     out, scratch = a.out, a.scratch
     passes = a.scratch / "passes"
+    with sent.open("rb") as f:
+        points_sha = hashlib.file_digest(f, "sha256").hexdigest()
     fingerprint = {"door": "run", "card": card.gpu, "scheme": sch.id, "point": a.point, "points_art": a.points_art,
-                   "points_sha256": _sha256(sent), "cubin_art": a.cubin_art if cubin else None}
+                   "points_sha256": points_sha, "cubin_art": a.cubin_art if cubin else None}
     doc: dict = {"schema": O.RUN_SCHEMA, "scheme": sch.id, "family": sch.family, "card": card.gpu,
                  "model": pts.get("model"), "points_art": a.points_art, "points_sha256": fingerprint["points_sha256"],
                  "cpu_sm_s_per_core_s": card.cpu_sm_s_per_core_s, "points": {}, "whys": []}
@@ -282,7 +280,10 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         build = rec.get("build") or {}
         gated = [{k: b.get(k) for k in ("path", "sha256", "ok")}
                  for b in (result.get("sass_gate") or {}).get("binaries") or []]
-        sha = _sha256(cubin) if cubin else None
+        sha = None
+        if cubin:
+            with cubin.open("rb") as f:
+                sha = hashlib.file_digest(f, "sha256").hexdigest()
         doc["arm"] = {"name": arm, "cubin_art": a.cubin_art if cubin else None, "cubin_sha256": sha,
                       "binaries": build.get("binaries"), "gated": gated, "verifier": rec.get("verifier"),
                       "commits_y": sch.commits_y}
