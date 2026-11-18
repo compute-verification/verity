@@ -1597,7 +1597,7 @@ def _share(nodes: list, node: dict, j: int, member: int) -> None:
 
 def _commit(case: dict, record: str, program: str | None = None) -> None:
     """The instance's record replaced by `record`, the run's own record committing it (and the Program `program`,
-    where one is given), and the log's chain remade."""
+    where one is given), the log's chain remade, and the SPOT instance's wires and order read again."""
     tr = case["trusted"]
     at = [reference.record_digest(r) for r in tr["log"]].index(tr["run"])
     case["instance"]["record"] = record
@@ -1610,8 +1610,9 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
     doc = json.loads(record)
     if case.get("spot") is not None and isinstance(doc, dict):
         wires = _program_wires(case["instance"]["program"], case["spot"]["templates"], doc.get("cuts", {}))
+        order = [list(b) for b in ref.root_order(json.loads(case["instance"]["program"]), case["spot"]["templates"])]
         case["spot"] = None if isinstance(wires, Exception) else {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}),
-                                                   "wires": wires}
+                                                   "wires": wires, "order": order}
 
 
 def _misformat(rng, made: dict, doc: dict, how: str) -> bool:
