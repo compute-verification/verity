@@ -1,4 +1,4 @@
-# `verity-ir/descriptor/v1`: the program format
+# `verity-ir/descriptor/v2`: the program format
 
 This is the byte format of a Program and the rules that turn it into a circuit: from the canonical bytes of a descriptor, a
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
@@ -13,8 +13,8 @@ implementation, such as the Lean port of `Q_word` (`verity/protocols/proofs/spot
 - Conformance: `tests/verity/circuits/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `tests/verity/circuits/partition_vectors.json` pins `Q_word` v1 on top of this format.
-- Scope: schema v1; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries, and
-  §4.8 the definition digest.
+- Scope: schema v2; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries, §4.8
+  the definition digest, and §4.9 the Boolean map, which v2 adds to v1.
 
 Indices are 0-based, `[a, b)` is half-open, and a *leaf* is one scalar position of a type.
 
@@ -139,14 +139,15 @@ type is T without that axis.
 
 Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, references).
 
-## 4. The descriptor, schema v1
+## 4. The descriptor, schema v2
 
 ### 4.1 Top level
 
 ~~~text
-{"schema": "verity-ir/descriptor/v1",
+{"schema": "verity-ir/descriptor/v2",
  "root": <id>, "program_fn": <id>,
  "definitions": {<id>: <definition>, ...},
+ "boolean": {<word primitive id>: <Boolean Definition id>, ...},
  "callees": [<id>, ...], "types": [<type>, ...],
  "annotations": {...}}
 ~~~
@@ -155,7 +156,8 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 - `program_fn`: the descriptor id of the program function, which the root inlines. It is part of the identity, and the
   functions its binding record names are definitions too.
 - `definitions`: exactly the definitions reachable from `root` (node callees and the functions binding records name,
-  transitively) and from `program_fn`'s record.
+  transitively), from `program_fn`'s record and from the bodies `boolean` names.
+- `boolean`: each word primitive's one Boolean Definition (§4.9).
 - `callees`, `types`: the interning tables. A node's `fn` indexes `callees`; a node's `out` and each argument's `type` index
   `types`.
 
@@ -261,6 +263,9 @@ any tables whose entries are valid; the order matters only to reproduce a writer
 `decode_program` refuses, with `ValueError` (`KeyError` for an id without a definition, or a primitive the registry does not
 have):
 
+- a `schema` other than `verity-ir/descriptor/v2`: a v0 or v1 descriptor, which holds no Boolean bodies, is refused by name
+  (`E_SCHEMA`) and never read as v2;
+- a `boolean` map that §4.9 refuses (`E_BODY_KEY`, `E_BODY_MISSING`, `E_BODY_NOT_BOOLEAN`);
 - a descriptor outside the canonical JSON domain (§1);
 - a primitive keyed other than by its `id`; a composite whose `id` is not `Name_vN`, or whose key is not its `id` and binding
   record (§4.3);
@@ -306,8 +311,8 @@ The entry keeps the nesting that v1 flattens, so it is a function of how a body 
 the v1 descriptor vector changes the root's entry, which nests a concatenation at node 12. A definition's digest is taken over
 the entry's canonical form instead (§4.8).
 
-A `verity-ir/descriptor/v0` descriptor is §4.1's without `callees` and `types`, each definition its self-contained entry. It
-decodes as §4.6 says, with the callee id and the types read in place, and its decode gives back the same entries.
+A `verity-ir/descriptor/v0` descriptor is §4.1's without `callees` and `types`, each definition its self-contained entry. It is
+written (`encode_specialization` keeps its entries) and never read: `decode_program` refuses it (`E_SCHEMA`, §4.6).
 
 ### 4.8 The definition digest
 
@@ -324,6 +329,32 @@ forms have different digests.
 
 Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`. Vectors:
 `definition_digest` (descriptor id, digest), one per definition of the descriptor vector.
+
+### 4.9 The Boolean map
+
+A *word primitive* is a primitive that is neither a Boolean gate (§9: an `And<n>`, `Xor<n>` or `Not`, a constant bit) nor an
+input (§5.2). C's semantics at the bit level are its Boolean Definitions: `boolean` maps each word primitive among
+`definitions`, by its id, to the id of its one Boolean Definition, which is among `definitions` with everything it calls. An id
+names one body: the map is part of the program digest (§1), and no reader looks a body up anywhere else.
+
+~~~text
+"boolean": {"AmpereBF16TcDot16_v2": "AmpereBF16TcDot16_v3", "F2fpBf16_v1": "F2fpBf16_v2", ...}
+~~~
+
+The map's keys are exactly the word primitives among `definitions`; each value is the key of a Boolean Definition (§9: every
+primitive it reaches a gate, a constant bit or a 1-bit input) whose signature is its word's with each `Value<w>` an
+`Array<w, Value<1>>` (`Value<1>` stays a bit). `decode_program` refuses:
+
+- `E_BODY_KEY`: `boolean` is not an object of strings, or it names an id that is no word primitive among `definitions`;
+- `E_BODY_MISSING`: a word primitive among `definitions` has no entry;
+- `E_BODY_NOT_BOOLEAN`: an entry names no definition, or one that is not Boolean or not of its word's bit signature.
+
+A writer takes the map from the Program (`program.Program.boolean`), computed once at its build by the lookup the catalog
+registers (`program.register_boolean_bodies`); a Program with a word primitive that has no Boolean Definition, or several, is
+refused at build (`E_NO_BODY`). The decoder still holds each primitive's `params`, `ret` and `ports` to the registry's (§4.2),
+which binds the registry's evaluator to it; that evaluator decides nothing about C's bits, which its body fixes.
+
+Vectors: `boolean_map` (the descriptor vector's map), and `decoder_rejects`' `E_SCHEMA` and `E_BODY_*` mutations.
 
 ## 5. Programs and input nodes
 

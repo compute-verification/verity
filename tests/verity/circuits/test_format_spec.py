@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import stand_in  # noqa: F401  (the test primitives' Boolean bodies, also when run as a script)
 from verity.circuits import codec, cut, partition_object as PO
 from verity.circuits.defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.layout import resolve
@@ -180,9 +181,9 @@ def expand(j) -> list[list]:
 
 
 def first_seen_tables(desc: dict) -> tuple[list, list]:
-    """The v1 tables from the definitions alone: a post-order walk from `root` (a composite's callees in node order, then the
-    functions its binding record names, in record order), then those `program_fn`'s record names; each composite, when
-    finished, adds per node its callee, its argument types and its output type."""
+    """The tables from the definitions alone: a post-order walk from `root` (a composite's callees in node order, then the
+    functions its binding record names, in record order), then those `program_fn`'s record names, then the bodies `boolean`
+    names in key order; each composite, when finished, adds per node its callee, its argument types and its output type."""
     D, C, T = desc["definitions"], desc["callees"], desc["types"]
     seen: set[str] = set()
     callees: list[str] = []
@@ -216,6 +217,8 @@ def first_seen_tables(desc: dict) -> tuple[list, list]:
     for f in named(desc["program_fn"]):
         if f in D:
             visit(f)
+    for k in sorted(desc.get("boolean", {})):
+        visit(desc["boolean"][k])
     return callees, types
 
 
@@ -575,8 +578,8 @@ def test_the_descriptor_round_trips(decoded):
     assert _canon(codec.encode_program(Program(PROG))) == VECTORS["descriptor"], REWRITE
     assert _canon(codec.encode_program(decoded)) == VECTORS["descriptor"]
     desc = json.loads(VECTORS["descriptor"])
-    assert sorted(desc) == ["callees", "definitions", "program_fn", "root", "schema", "types"]
-    assert desc["schema"] == "verity-ir/descriptor/v1" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
+    assert sorted(desc) == ["boolean", "callees", "definitions", "program_fn", "root", "schema", "types"]
+    assert desc["schema"] == "verity-ir/descriptor/v2" and desc["root"] == "Root[TProg_v1]_v1" and desc["program_fn"] == "TProg_v1"
 
 
 def test_the_interning_tables_are_first_seen_order():
@@ -657,13 +660,14 @@ def test_the_builders_refuse_a_parameter_name_twice():
 
 
 def test_the_self_contained_entry_and_v0(decoded):
-    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
-    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, and no decoder reads it (`E_SCHEMA`); a v2 decode
+    flattens node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
     program = Program(PROG)
     v0 = codec.encode_program(program, codec.SCHEMA_V0)
-    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert sorted(v0) == ["annotations", "boolean", "definitions", "program_fn", "root", "schema"]
     assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
-    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    with pytest.raises(ValueError, match="E_SCHEMA"):
+        codec.decode_program(v0, REG)
     via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
     assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
     nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
