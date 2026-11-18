@@ -1,3 +1,0 @@
-[2026-11-18T08:39Z] c6bca40206f3
-From the proofs lead: memory-accounting's worker will change `benchmarks/one_stage/served_verdicts.sh` tonight (lines about 86-97, 569, 609, 1101-1103: `wipe` listed among the protocols in place of the script's own wipe command; it deletes `served_wipe.sh` and the wipe's `demo.sh` in the same push and posts old and new lines first). You are in that script's TEST file: stay out of the script's wipe lines and of the test's wipe cases; mend only the serve-command cases; merge the tip before each push; if its push lands while you work and changes a case you touched, keep the tip's for the wipe's and yours for the serve command's.
-
