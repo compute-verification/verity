@@ -1,6 +1,6 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
-id = "llama31-8b-fp8-rtx-served-arm"
+id = "llama31-8b-fp8-served-arm"
 cards = ["rtx-pro-6000"]
 # G2's served arm (benchmarks/served_commit/served_arm.py) at benchmarks' compiled-serving point: the Commit at
 # rows-sha512's 4 KiB rows, compiled (served-commit-rows-4k, control stock-fp8@compiled) and eager (commit-rows-4k-eager,
@@ -18,7 +18,7 @@ eager = true
 control = "none"
 
 [preset]
-id = "llama31-8b-fp8-rtx-served-arm"
+id = "llama31-8b-fp8-served-arm"
 model = "unsloth/Llama-3.1-8B"
 revision = "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
 case = "LLAMA31_8B"

@@ -22,7 +22,7 @@ from verity_bench.vllm.presets import SPEC_ROOT
 
 ROOT = Path(__file__).resolve().parents[3]
 STEADY = sorted(path.stem for path in SPEC_ROOT.glob("*.toml") if SP.is_steady(path))
-HEAD = "glm53-flock-steady-head-block-h200"
+HEAD = "glm53-flock-steady-head-block"
 SETUP = "benchmarks/harness/setup/flock_prover.sh"
 LAUNCHER = "benchmarks/harness/steady_point.sh"
 

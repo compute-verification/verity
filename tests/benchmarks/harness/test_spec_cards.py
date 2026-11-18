@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, served_table
+from verity_bench import jobs, kit, served_table, steady_spec
 from verity_bench.cli import main
 from verity_bench.vllm import presets
 from verity_bench.vllm.presets import FORMER_IDS, SPEC_ROOT, load_spec, resolve_spec, split_card
@@ -99,6 +99,7 @@ def test_a_cards_arms_replace_the_specs_and_its_arm_settings_add_to_the_specs_on
     with pytest.raises(ConfigError, match=r"card_settings.h200.arm_settings \['stock@compiled'\] name no arm"):
         load_spec(path)
 
+
 def test_a_spec_argument_names_its_card_after_an_at_by_id_or_recorded_path():
     assert split_card(POUW) == (POUW, None)
     assert split_card(f"{POUW}@h100") == (POUW, "h100")
@@ -111,8 +112,9 @@ def test_each_former_id_is_its_spec_on_a_card_that_spec_lists_and_no_file_holds_
     assert former and presets.former_specs() == {old: (e["spec"], e["card"]) for old, e in former.items()}
     for old, (spec, card) in presets.former_specs().items():
         assert not (SPEC_ROOT / f"{old}.toml").exists(), old
-        assert card in load_spec(spec).cards, old
-        assert presets.current_spec(old) == (spec if load_spec(spec).cards == (card,) else f"{spec}@{card}")
+        cards = (steady_spec.load_spec(spec).card,) if steady_spec.is_steady(spec) else load_spec(spec).cards
+        assert card in cards, old
+        assert presets.current_spec(old) == (spec if cards == (card,) else f"{spec}@{card}")
     assert presets.current_spec(POUW) == POUW
 
 

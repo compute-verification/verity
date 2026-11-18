@@ -39,11 +39,11 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   own stock.
 - `llama31-8b-fp8-1gpu-commit-served-width`: the compiled Commit over compiled stock FP8, from batch 1 to 32, on one RTX
   PRO 6000 or H200.
-- `llama31-8b-fp8-rtx-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
+- `llama31-8b-fp8-served-arm`: `served_commit`'s served arm on Llama-3.1-8B FP8, compiled and eager, against stock
   in both.
 - `llama32-1b-bf16-served-arm`: the same on Llama-3.2-1B in BF16, on one RTX PRO 6000, H200 or H100.
-- `qwen3-8b-bf16-rtx-served-arm`: the compiled served arm on Qwen3-8B in BF16.
-- `qwen3-8b-bf16-rtx-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
+- `qwen3-8b-bf16-served-arm`: the compiled served arm on Qwen3-8B in BF16.
+- `qwen3-8b-bf16-served-arm-eager`: the eager served arm on Qwen3-8B, in a run of its own: four Qwen3-8B engines
   don't fit one GPU beside the Commit's buffers.
 
 ## PoUW
@@ -57,7 +57,7 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   step (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pearl-c-whole-served`: the same on one H100 with the whole-step arm beside its three arms: the ceiling
   of the served Pearl-C arm under one CUDA graph a decode step, not the protocol arm.
-- `llama32-1b-1gpu-stock-served-h100`: its two stock arms alone, with no setup: a served point on an H100 whose machine
+- `llama32-1b-1gpu-stock-served`: its two stock arms alone, with no setup: a served point on an H100 whose machine
   has no CUDA toolkit to build Pearl-C with (`verity-bench run SPEC` on VCF's node).
 
 ## PoUS's bandwidth audit
@@ -70,14 +70,14 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## The proof server at steady state
 
-- `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
+- `glm53-flock-steady-head-block`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
   two and four provers on one H200 with ten cores, each statement fetched from the store.
-- `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
+- `glm53-flock-steady-head-block-walk`: the first spec's `FIRST=false` point at one prover with the units' level
   walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
   metric.
-- `llama32-1b-flock-steady-gemm-h200`: Llama 3.2 1B's `Gemm_v2` block at K 2,048 and N 16 at one prover on one H200
+- `llama32-1b-flock-steady-gemm`: Llama 3.2 1B's `Gemm_v2` block at K 2,048 and N 16 at one prover on one H200
   with ten cores, the units walked on the host.
-- `llama32-1b-flock-steady-gemm-h200-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
+- `llama32-1b-flock-steady-gemm-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
   with the one above, the same metric's Llama member.
 
 ## Sweeps
