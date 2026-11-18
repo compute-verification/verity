@@ -29,6 +29,8 @@ def test_the_sheets_figures_are_the_shared_fixtures():
 def test_the_command_writes_the_figures_the_verifier_reads(capsys):
     assert sheets.main([RTX]) == 0
     assert timing.Figures.of_json(json.loads(capsys.readouterr().out)) == sheets.figures(RTX)
+    assert sheets.main(["--sha512", RTX]) == 0
+    assert capsys.readouterr().out == sheets.figures(RTX).sha512() + "\n"
 
 
 def test_a_node_kind_without_a_node_file_is_refused_by_name(capsys):

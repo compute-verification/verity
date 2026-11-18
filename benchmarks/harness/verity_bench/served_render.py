@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity_bench import kit, settings
+from verity_bench.checked_by import CHECKED_BY, NOT_RECORDED, PIECE
 from verity_bench.breakdown import AUDIT, AUDIT_SPANS, DECODE_ROWS, PLAIN, PLAIN_SPANS, ms_cell
 from verity_bench.served_table import CAVEAT_KEYS, LIVE_CAVEAT_KEYS, PER_DECODE, PER_OUTPUT, SERVED
 from verity_bench.vllm.presets import current_spec
@@ -36,6 +37,10 @@ def _caveat(caveats: Sequence[Mapping[str, Any]], keys: Sequence[str] = CAVEAT_K
 
 def _art(art: str | None) -> str:
     return f"`{art[:16]}`" if art else "—"
+
+
+def _checked(row: Mapping[str, Any]) -> str:
+    return row.get("checked_by") or NOT_RECORDED
 
 
 def _sources(row: Mapping[str, Any]) -> list[str]:
@@ -97,17 +102,20 @@ def render(table: Mapping[str, Any]) -> str:
          "step over its control's (the int8-exact engine without PoUW, same run, same GPU), per step, not per token: "
          "it is not comparable with the per-token ratios over stock FP8 below. A row stands only when its run's gates "
          "all passed: the device gate on poisoned (0xA5) buffers, the arm's tokens equal to the int8-exact engine's at "
-         "the gate and at every timed rep, and a passing live window at the run's end on off-node coins."),
+         "the gate and at every timed rep, and a passing live window at the run's end on off-node coins. Every one of those "
+         "gates is the run's own check: the run is the served node's own process, and its record doesn't say who ran its "
+         f"gates, so `checked by` is `{NOT_RECORDED}` until it does (`{PIECE}` would be: {CHECKED_BY[PIECE]}). Only the "
+         "coins came from off the node."),
         "",
         ("| device | machine | B | T | PoUW decode step, ms | control | control's step, ms | PoUW / control, per decode "
-         "step | reps | coins | run | run record | caveat |"),
-        "|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---|---|",
+         "step | reps | coins | checked by | run | run record | caveat |"),
+        "|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---|---|---|",
     ]
     for row in table["live"]:
         lines.append("| " + " | ".join([
             row["device"], str(row["machine"]), str(row["batch"]), str(row["t"]), f"{row['step_ms']:.3f}",
             f"`{row['control']}`", f"{row['control_ms']:.3f}", f"{row['ratio']:.3f}×", str(row["reps"]), row["coins"],
-            row["run"], _art(row["record"]), _caveat(row["caveats"], LIVE_CAVEAT_KEYS)]) + " |")
+            _checked(row), row["run"], _art(row["record"]), _caveat(row["caveats"], LIVE_CAVEAT_KEYS)]) + " |")
     lines += ["", "PoUW arms and their gates' form:", ""]
     lines += [f"- {row['device']} (`{row['run']}`): `{row['arm']}`; {_cell(row['form'])}" for row in table["live"]]
     lines += [
@@ -120,18 +128,20 @@ def render(table: Mapping[str, Any]) -> str:
          "± 95% half-width (Student t), or the mean alone at one rep; lower is better. A row is its protocol's run of "
          "record (its runs, or an art's, labelled `run_of_record`) or, without one, the newest passing run of its spec and point in "
          "the evidence store; a result labelled `superseded_by` is skipped. The caveat is the newest `label` and `note` "
-         "on the result and its run."),
+         "on the result and its run. A run passes only where every gate its result records passed; `gates checked by` is "
+         f"who ran them as the result says (`{PIECE}`: {CHECKED_BY[PIECE]}), `{NOT_RECORDED}` for a result that predates "
+         "the field."),
         "",
         ("| protocol | device | spec | point | / served stock, per output token | / served stock, per decode token "
-         "| / eager stock, per output token | reps | run | art | caveat |"),
-        "|---|---|---|---|---:|---:|---:|---:|---|---|---|",
+         "| / eager stock, per output token | gates checked by | reps | run | art | caveat |"),
+        "|---|---|---|---|---:|---:|---:|---|---:|---|---|---|",
     ]
     for row in rows:
         eager = _ratio(row["over_eager"][PER_OUTPUT]) if row["over_eager"] else "—"
         served = row["over_served"] or {}
         lines.append("| " + " | ".join([row["protocol"], row["device"] or "—", f"`{row['spec']}`", row["point"],
                                         _ratio(served.get(PER_OUTPUT)), _ratio(served.get(PER_DECODE)), eager,
-                                        *_sources(row)]) + " |")
+                                        _checked(row) if row["run"] else "—", *_sources(row)]) + " |")
     lines += ["", "Arms:", ""]
     seen = set()
     for row in rows:
