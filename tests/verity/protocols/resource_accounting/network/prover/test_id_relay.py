@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from verity.protocols.resource_accounting.network.prover import id_relay as R
 from verity.protocols.resource_accounting.network.prover.workload import FRAME_HEADER, TRAILER, id_event, id_request
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 P = 140
 FIELDS = {"model": "m", "user": "u", "prompt": [128000, 791, 4062], "max_tokens": 2, "temperature": 0.0, "top_p": 1.0, "seed": 0}
