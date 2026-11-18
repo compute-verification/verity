@@ -2325,7 +2325,7 @@ def main(argv: list[str]) -> int:
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
     ap.add_argument("--update", action="store_true", help="with --records: check.py --update")
     ap.add_argument("--moved", type=Path, metavar="FILE", help="with --records --update: check.py --update --moved FILE on PKG "
-                    "and, from their first audit, on its requirers")
+                    "and on its requirers")
     ap.add_argument("--out", type=Path, help="with --records: check.py --out DIR")
     ap.add_argument("--dev-cache", action="store_true", help="with --records: take the check.py --dev-cache path even where "
                     "a build slot is granted (its tree's dependencies are fetched cold, say)")
