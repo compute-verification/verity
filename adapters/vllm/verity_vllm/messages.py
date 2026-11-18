@@ -24,6 +24,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, NamedTuple
 
+import verity_torch.pouw  # noqa: F401 -- the workload's PoUW device code, handed in before any scheme attaches; loads no torch
 from verity import hooks as H
 from verity.channel import Message, MessageTypes, Refused
 from verity.protocols.proofs.spot.prover import workload as spot
