@@ -19,7 +19,7 @@ namespace Spot.Partition
 open Lean (Json)
 open Flock (V)
 
-/-- `partition._committed_bits` by its own walk: per unit `[lo, hi)` of one activation of definition `d`, the summed
+/-- `partition_query._committed_bits` by its own walk: per unit `[lo, hi)` of one activation of definition `d`, the summed
 declared widths of its gates that are Input gates, or that a later gate of the activation reads or the activation
 returns, constants included. -/
 def committedBitsRef (P : Flock.Program.Prog) (d : Nat) (units : Array (Nat × Nat)) : V (Array Nat) := do
