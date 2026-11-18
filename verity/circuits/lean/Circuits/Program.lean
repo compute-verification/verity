@@ -1254,21 +1254,32 @@ private def extendReach (defs : Array Defn) (reach : Array Bool) : Array Bool :=
       if c.prim then isBooleanPrim c.key else here[x.fn]?.getD false)
   return r
 
-/-- §4.9's Boolean map (`codec._decode_boolean`), after the root and `program_fn`'s functions: each primitive entry
-`prims` names decoded, each gate's signature §9's, then the refusals in the format's order, each body decoded by
-`getDef` in key order. -/
-private def booleanMap (desc : Desc) (prims : Array String) (bm : Json) (rootKey : String) :
-    D (Std.HashMap String String) := do
-  for f in prims do discard (getDef Steps.FUEL desc f)
-  for d in (← get).defs do
-    if let some g := gateKind? d.key then
+/-- What §4.9 decodes beyond the root and `program_fn`'s functions: the primitive entries `prims`, then each body the map
+`bm` names by a string, in key order. -/
+def booleanDecodes (prims : Array String) (bm : Json) : Array String :=
+  prims ++ match bm with
+    | .obj kvs => kvs.toArray.filterMap fun (_, v) => match v with | .str s => some s | _ => none
+    | _ => #[]
+
+/-- Each of `fs` that `definitions` has, decoded by `getDef`. -/
+private def decodeAll (desc : Desc) (fs : Array String) : D Unit := do
+  for f in fs do
+    if desc.ddefs.contains f then discard (getDef Steps.FUEL desc f)
+
+/-- §4.9's Boolean map (`codec._decode_boolean`) over the decoded Definitions, once `decodeAll` has decoded what
+`booleanDecodes` names: each gate's signature §9's, every Definition from place `lo` free of input nodes (§5.2), then
+the refusals in the format's order. `has` is whether `definitions` has a key. -/
+def booleanCheck (defs : Array Defn) (index : Std.HashMap String Nat) (lo : Nat) (prims : Array String) (bm : Json)
+    (rootKey : String) (has : String → Bool) : V (Std.HashMap String String) := do
+  for d in defs do
+    if let some g := (if d.prim then gateKind? d.key else none) then
       let (ps, r) := g.signature
       if !(d.params == ps && d.ret == r) then throw s!"primitive {d.key} signature differs from the registry"
+  if let some e := inputOutsideRoot defs rootKey lo then throw e
   let .obj kvs := bm | throw "E_BODY_KEY: `boolean` is not an object of descriptor ids"
   let some pairs := kvs.toArray.mapM (fun (k, v) => match v with | .str s => some (k, s) | _ => none)
     | throw "E_BODY_KEY: `boolean` is not an object of descriptor ids"
-  let st ← get
-  let word := prims.filter fun f => (st.index[f]?.map fun i => isWordPrim st.defs[i]!.prim f).getD false
+  let word := prims.filter fun f => (index[f]?.map fun i => isWordPrim defs[i]!.prim f).getD false
   let keys : Std.HashSet String := pairs.foldl (fun s p => s.insert p.1) {}
   let missing := word.filter (!keys.contains ·)
   if !missing.isEmpty then
@@ -1277,16 +1288,11 @@ private def booleanMap (desc : Desc) (prims : Array String) (bm : Json) (rootKey
   let extra := (pairs.filter (!words.contains ·.1)).map (·.1)
   if !extra.isEmpty then
     throw s!"E_BODY_KEY: `boolean` names {extra.toList.take 4}, which are no word primitive among `definitions`"
-  let mut reach : Array Bool := #[]
+  let reach := extendReach defs #[]
   for (w, b) in pairs do
-    if !desc.ddefs.contains b then throw s!"E_BODY_NOT_BOOLEAN: {w}'s body '{b}' is no definition"
-    let lo := (← get).defs.size
-    let bi ← getDef Steps.FUEL desc b
-    let st ← get
-    if let some e := inputOutsideRoot st.defs rootKey lo then throw e
-    reach := extendReach st.defs reach
-    let bd := st.defs[bi]!
-    let wd := st.defs[st.index[w]?.getD 0]!
+    let some bi := (if has b then index[b]? else none) | throw s!"E_BODY_NOT_BOOLEAN: {w}'s body '{b}' is no definition"
+    let bd := defs[bi]!
+    let wd := defs[index[w]?.getD 0]!
     let boolean := if bd.prim then isBooleanPrim bd.key
       else bd.params.all (·.2.bits) && bd.ret.bits && reach[bi]!
     if !(boolean && bd.params.map (·.2) == wd.params.map (·.2.bitType) && bd.ret == wd.ret.bitType) then
@@ -1342,7 +1348,11 @@ def decode (bytes : ByteArray) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
-  let (boolean, st) ← (booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st
+  let prims := primEntries dkv.toArray
+  let bm := (j.getObjVal? "boolean").toOption.getD .null
+  let lo := st.defs.size
+  let ((), st) ← (decodeAll desc (booleanDecodes prims bm)).run st
+  let boolean ← booleanCheck st.defs st.index lo prims bm rootId desc.ddefs.contains
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
 
@@ -1394,7 +1404,11 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
-  let (boolean, st) ← (booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st
+  let prims := primEntries dkv.toArray
+  let bm := (j.getObjVal? "boolean").toOption.getD .null
+  let lo := st.defs.size
+  let ((), st) ← (decodeAll desc (booleanDecodes prims bm)).run st
+  let boolean ← booleanCheck st.defs st.index lo prims bm rootId desc.ddefs.contains
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
 
@@ -1447,7 +1461,11 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
-  let (boolean, st) ← ((booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st : V _)
+  let prims := primEntries dkv.toArray
+  let bm := (j.getObjVal? "boolean").toOption.getD .null
+  let lo := st.defs.size
+  let ((), st) ← ((decodeAll desc (booleanDecodes prims bm)).run st : V _)
+  let boolean ← (booleanCheck st.defs st.index lo prims bm rootId desc.ddefs.contains : V _)
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
   return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8, boolean }
 
