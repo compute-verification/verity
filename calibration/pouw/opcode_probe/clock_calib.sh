@@ -19,7 +19,7 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-python3 "$HERE/probe.py" build --out "$WORK" ${CLOCK_ARCH:+--arch "$CLOCK_ARCH"} "$HERE/probes/power.cu" >"$WORK/built" \
+python3 "$HERE/probe.py" build --out "$WORK" "$HERE/probes/power.cu" >"$WORK/built" \
   2>"$OUT/build.log" || { cat "$OUT/build.log" >&2; exit 1; }
 python3 "$HERE/probe.py" gate "$WORK/power" --json "$OUT/gate-build.json" >"$OUT/gate-build.txt" 2>&1
 rc=$?
