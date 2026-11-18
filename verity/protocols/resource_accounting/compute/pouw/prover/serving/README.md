@@ -16,7 +16,6 @@ module's docstring says what it holds.
 | Scheme | Where |
 | --- | --- |
 | H1 | [`h1/`](h1/README.md) |
-| The lead | `lead/` |
 | Pearl-C | `pearl_c/` |
 | NCP (`ncp-v1`, `ncp-v2`) | `ncp.py` |
 
