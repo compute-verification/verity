@@ -15,8 +15,7 @@ from verity_cli import run as R
 REG = R.registry()
 T = sys.modules["served_table"]
 #: who declares each undeclared row's scheme, and then deletes the row
-OWNERS = {"sampled-proofs": "proofs", "pouw": "compute-accounting", "inference-only": "proofs (workload classification)",
-          "certifier": "network-accounting"}
+OWNERS = {"pouw": "compute-accounting"}
 
 
 def test_the_undeclared_rows_only_shrink() -> None:

@@ -10,13 +10,13 @@
 #   -> prints  FA2-TAP-OK <sha256 of verity_fa2_matReq.so> hdims=<mask> <path>          (or FA2-TAP-FAIL <reason>, exit 1)
 #
 # What it does: (1) clones vllm-project/flash-attention at the pinned 506341a1 (+ cutlass submodule) into $FA_SRC
-# (default: beside $FA2, /workspace/cp/vllm-flash-attn) when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_fa2_tap.py (parametric (kBlockN, kHeadDim) M1
+# (default: beside $FA2) when absent; (2) copies it to $FA2/trees/tap8 and applies verity_tap_v7.patch + apply_fa2_tap.py (parametric (kBlockN, kHeadDim) M1
 # layout; see fa2_tap_src/apply_fa2_tap.py); (3) builds with `verity-vllm fa2-tap-build` (fa2_tap_src/build_ext.py; same flags as the pinned CMake build, sm arch from the
 # device) into $FA2/build/matReq (the path row_pod.sh / commit_delta --hidden-so use; an earlier hd-64-only .so is kept as
 # build/matReq_hd64_r9/); (4) verifies: the .so loads, exposes verity_set_tap_v8 / verity_tap_hdims, tap mode 3 / src 59, and the
 # hdims mask contains every requested head dim.  Exactness per head dim is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (required), FA2 (default
-# /workspace/cp/fa2), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the arch of the card file
+# <build root>/fa2: VERITY_BUILD_ROOT, else cli.MACHINE's), FA2_TAP_HDIMS (alias HDIMS; default 64,96,128,256), FA2_TAP_ARCH (default: the arch of the card file
 # CARD_SKU names, calibration/hardware/cards; the pinned vLLM _vllm_fa2_C ships sm_80 SASS, pass FA2_TAP_ARCH=8.0
 # to mirror that instead and record it), MAX_JOBS (default 32), REPO (default: this tree), TREE_ONLY=1 (prepare tree, no build),
 # FA2_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa2_matReqG.so` in $FA2/build/matReqG: the same tree with VERITY_ROW_GUARD=1, ROW
@@ -26,7 +26,8 @@ REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
-FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
+[ -n "${FA2:-}" ] || FA2=${VERITY_BUILD_ROOT:-$("$PY" -c "from verity_vllm.pipeline.cli import MACHINE; print(MACHINE[\"RunEnv.build_root\"])")}/fa2 || { echo "FA2-TAP-FAIL no build root (VERITY_BUILD_ROOT)"; exit 1; }
+HDIMS=${HDIMS:-${FA2_TAP_HDIMS:-64,96,128,256}}
 FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
 PIN=506341a143fcabd4bb79052a7605ada727d6b3f5
 SRC=$REPO/verity_vllm/acquire/fa2_tap_src

@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from verity.circuits import population as PN
 
 
 def population(vu: str, n: int) -> Any:
     from circuit_check import targets as TG
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     TG.load_registries()
-    return P.population_program(TG.definition(vu), n, version=0)
+    return PN.population_program(TG.definition(vu), n, version=0)
 
 
 def program() -> Any:

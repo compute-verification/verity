@@ -1936,21 +1936,22 @@ def outside(private: Path, out: Path, flag: str = "--private") -> Path:
 
 #: the run's statement of what its launchers keep on the node, at its directory's root (`stated`)
 PRIVATE_PATHS = "private-paths.json"
-#: the names of what the launchers keep only in a private directory: no file or directory of a run's own has one
-PRIVATE_NAMES = ("plan.jsonl", "plan.base.jsonl", "capture/", "edges/", "step_trace.*.jsonl*", "ids.*.jsonl*",
-                 "outputs.jsonl", "outputs.*.jsonl*", "replay_steps.jsonl*", "replay_tokens.jsonl*",
-                 "replay_logprobs.jsonl*", "*.state.pkl", "*.fp.npy", "*.kv")
 
 
 def stated(private: Path) -> None:
     """``private`` added to the run's `PRIVATE_PATHS`, under research run where its directory is made:
-    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": PRIVATE_NAMES}``."""
+    ``{"schema": "private-paths/v1", "private": [each private directory, absolute], "names": [...]}``, the names
+    the adapter's list (`verity_vllm.pipeline.research_outputs.PRIVATE`) calls private."""
     held = SHARED.RESEARCH_RUN_DIR
     if not held or not Path(held).is_dir():
         return
+    if str(ROOT / "adapters/vllm") not in sys.path:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm.pipeline.research_outputs import PRIVATE
+
     f = Path(held) / PRIVATE_PATHS
     was = json.loads(f.read_text())["private"] if f.is_file() else []
-    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE_NAMES)}
+    doc = {"schema": "private-paths/v1", "private": sorted({*was, str(private)}), "names": list(PRIVATE)}
     f.write_text(json.dumps(doc, indent=1) + "\n")
 
 
@@ -4471,7 +4472,8 @@ def feature_of(words: Sequence[str]) -> Feature:
             raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
         try:
             params[key] = tomllib.loads(f"v = {text}")["v"]
-        except tomllib.TOMLDecodeError:
+        except tomllib.TOMLDecodeError as e:
+            print(f"[serve-tax] --feature {name}: {key}={text!r} is no TOML ({e}), read as that string", file=sys.stderr)
             params[key] = text
     try:
         settings = table[name].params(params)
@@ -4487,11 +4489,8 @@ def feature(words: Sequence[str], stock: str) -> str:
     want = feature_of(words)
     for n in profile_features(stock):
         if (f := ARMS[n].feature) is not None and f.name == want.name:
-            try:
-                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
-                    return n
-            except SystemExit:
-                continue
+            if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                return n
     raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}")
 
 

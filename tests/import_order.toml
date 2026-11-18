@@ -416,6 +416,15 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/scheme.py",
+]
+loads = [
+    "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/prover/candidates.py",
     "verity/protocols/proofs/spot/prover/costfit.py",
@@ -531,7 +540,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/protocols/compose/schemes.py",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
@@ -547,7 +555,6 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
-    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
@@ -882,8 +889,13 @@ loaded_by = [
 paths = [
     "verity/protocols/resource_accounting/scheme.py",
 ]
+
+[[place]]
+paths = [
+    "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
+]
 loads = [
-    "verity/channel.py",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
