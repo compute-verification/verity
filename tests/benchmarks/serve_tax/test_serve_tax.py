@@ -385,10 +385,13 @@ def test_the_pearl_plus_arms_turn_it_on_by_name_inside_vllms_server_at_the_jobs_
         assert "verity_schemes = verity_vllm.pipeline.scheme_plugin:register" in S.entry_points(S.ARMS[arm])
     assert '[ -n "${SCHEME_SETTINGS:-}" ] && count+=(--scheme-settings "$SCHEME_SETTINGS")' in (S.HERE / "run.sh").read_text()
     private = tmp_path / "p"
-    with pytest.raises(SystemExit, match=r"^the arm's schemes need pearl-plus\.kernel, pearl-plus\.session, gate: "):
+    with pytest.raises(SystemExit, match=r"^the arm's schemes need pearl-plus\.kernel, gate: "):
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
                      schemes={"pearl-plus": {"challenger": "auditor:7000"}})
     own = PEARL_PLUS_JOB["pearl-plus"]
+    with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: challenger and session go together"):
+        S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
+                     schemes={"gate": "gate-cmd", "pearl-plus": {k: v for k, v in own.items() if k != "session"}})
     with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: coins and challenger are both set"):
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
                      schemes={"gate": "gate-cmd", "pearl-plus": {**own, "coins": "in-process"}})

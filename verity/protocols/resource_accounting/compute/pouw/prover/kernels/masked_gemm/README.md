@@ -29,7 +29,7 @@ root:
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-  --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+  --send benchmarks/pouw/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 ~~~
 
 It exits 4 when the build fails.
