@@ -39,7 +39,8 @@ from tests.verity.protocols.resource_accounting.memory.poub.session_harness impo
     run,
 )
 
-FIGURES = timing.Figures.of_json(json.loads((Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json").read_text()))
+FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))
 
 BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
 
@@ -162,8 +163,8 @@ def test_the_process_hands_its_node_file_to_the_verifier_and_refuses_a_bad_one_b
     def main(node: object, *flags: str) -> None:
         f = tmp_path / "node.json"
         f.write_text(json.dumps(node))
-        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f), *flags],
-                      figures=FIGURES)
+        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f),
+                       "--figures", str(FIGURES_FILE), *flags])
 
     monkeypatch.setattr(verifier.wire, "listen", refuse)
     fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * FIGURES.read_bytes_per_s)
@@ -1238,7 +1239,7 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     path = tmp_path / "registry.json"
     verifier.save_registry(path, registry)
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--registry", str(path), "--close", b"test-node".hex()])
-    assert verifier.main(figures=FIGURES) == 0
+    assert verifier.main() == 0
     back = verifier.load_registry(path)
     assert back.live(b"test-node") is None and back.closed == [
         audit.Closed(b"test-node", bytes.fromhex("ab" * 64), ("accepted", audit.UNENDED))]
@@ -1368,9 +1369,9 @@ def test_a_session_sampled_two_windows_a_coin_at_one_window_in_flight_is_refused
     """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
     the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out"), "--groups-per-coin", "2",
-                                      "--paced", "2:8:12:2", "2:8:12:2:1"])
+                                      "--paced", "2:8:12:2", "2:8:12:2:1", "--figures", str(FIGURES_FILE)])
     with pytest.raises(SystemExit) as e:
-        verifier.main(figures=FIGURES)
+        verifier.main()
     assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
 

@@ -4,7 +4,6 @@ and recorded, and each way a session goes wrong is rejected with its failure."""
 from __future__ import annotations
 
 import json
-import ast
 import copy
 import dataclasses
 import hashlib
@@ -1079,18 +1078,11 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
     """One GPU's and the host DRAM's write ceilings are their data sheets' rates, which bound every prover where a
     measurement bounds only the kernels tried, each above every write its bench measured: the card's 1,528.98 GB/s on
-    the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  Each docstring names its
-    benches; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under the default codec,
-    and no DPU's is stated."""
+    the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  A fill of derived codec labels
+    is bounded by the labeller, about 1.05 GB/s a GPU under the default codec, and no DPU's is stated."""
     assert FIGURES.gpu_write_bytes_per_s == FIGURES.gpu_spec_bytes_per_s == 1.597568e12 > 1528.98e9 > 56.39e9
     assert FIGURES.host_write_bytes_per_s == FIGURES.host_spec_bytes_per_s == 819.2e9 > 207.69e9
-    body = ast.parse(Path(timing.__file__).read_text()).body
-    docs = {a.targets[0].id: b.value.value for a, b in zip(body, body[1:])
-            if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
-            and isinstance(b.value, ast.Constant)}
-    gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
-    assert "calibration/bandwidth/write.cu" in gpu and "SQUARINGS_PER_S[width]" in gpu
-    assert "calibration/bandwidth/write_host.c" in host and "calibration/bandwidth/write.cu" in host and "No DPU" in host
+    assert "a measured rate bounds only the kernels tried" in " ".join(timing.Figures.__doc__.split())
     labels = FIGURES.gpu_squarings_per_s[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)
     assert not [name for name in vars(timing) if name.startswith("DPU_")]
