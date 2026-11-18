@@ -137,8 +137,8 @@ from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.verifier import charge_chain as CC
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge import charge_chain as CC
 
 from verity_vllm.compiler import cache_step as CST
 from verity_vllm.compiler import replay_chain as RC

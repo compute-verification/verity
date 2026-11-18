@@ -89,8 +89,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.commitments.gates import sha512 as SG
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
-from verity.protocols.resource_accounting.network.verifier.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally
+from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
+from verity.protocols.interface.charge.arith_encode import CW, K_MAX, MAX_TOTAL, RUNS, Tally
 from verity.commitments.gates.bits import BIT
 from verity.circuits.boolean.trace import part as _part
 

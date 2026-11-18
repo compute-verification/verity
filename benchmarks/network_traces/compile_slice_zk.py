@@ -105,7 +105,7 @@ from verity.commitments import advice as ADV  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
-from verity.protocols.resource_accounting.network.prover import window_charge as WC  # noqa: E402
+from verity.protocols.interface.charge import window_charge as WC  # noqa: E402
 from verity_vllm.compiler import charge_rows as CR
 
 FIXTURES = REPO / "tests/verity/protocols/resource_accounting/network/verifier/fixtures"

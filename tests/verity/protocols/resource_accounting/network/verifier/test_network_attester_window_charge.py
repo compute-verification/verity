@@ -11,8 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge import window_charge as WC
 from verity.commitments.gates.bits import ands
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.commitments import hm96

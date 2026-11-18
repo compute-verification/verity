@@ -1,5 +1,5 @@
 """The charge's carry chain: `ChargeCount_v1{N}`'s carry handed from one window to the next under hiding commitments
-(`protocol/charge-chain.md`).
+(`../../resource_accounting/network/verifier/protocol/charge-chain.md`).
 
     ChargeLink_v1{N}  (book, carry_in[96], carry_out[96], en[N], bit[N]) -> (ok, bits[CW])
 
@@ -49,8 +49,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array
 from verity.commitments.history import BC_BYTES
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE
-from verity.protocols.resource_accounting.network.verifier.arith_encode import Carry, ChargeBook
+from verity.protocols.interface.charge import arith_encode as AE
+from verity.protocols.interface.charge.arith_encode import Carry, ChargeBook
 from verity.commitments.gates.bits import BIT
 from verity.circuits.boolean.trace import part as _part
 

@@ -10,8 +10,8 @@ from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.resource_accounting.network.prover import window_charge as WC
-from verity.protocols.resource_accounting.network.verifier import arith_encode as AE, charge_chain as CC
+from verity.protocols.interface.charge import window_charge as WC
+from verity.protocols.interface.charge import arith_encode as AE, charge_chain as CC
 
 _INST = hm96.SHA512
 
