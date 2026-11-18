@@ -4390,12 +4390,15 @@ def test_without_v3c_the_preflight_refuses_step_3s_development_session_outside_a
 @pytest.mark.parametrize("challenger", ["local", "loopback:127.0.0.1:7000"])
 def test_a_run_of_record_takes_a_development_sessions_coins_as_simulated_unless_placement_is_held(tmp_path, challenger):
     """With VERITY_HOLD_PLACEMENT unset, a run of record (DEVELOPMENT unset) on a local or loopback session passes the
-    preflight: V3c's audit runs on it and its COINS line says the coins are simulated, not the auditor's challenger's,
-    and step 3's audit of record with V3c off is let through too."""
+    preflight: V3c's audit runs on it and its COINS line, which is published, names the session's form alone (no
+    loopback host) and says the coins are simulated, not the auditor's challenger's, and step 3's audit of record with
+    V3c off is let through too."""
     rc, lines, order, _limits = _v3c(tmp_path, DEVELOPMENT=None, VERITY_HOLD_PLACEMENT=None, V3C_CHALLENGER=challenger)
     assert rc == 0 and "audit" in order, (lines, order)
-    assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {challenger}), "
+    form = challenger.split(":")[0]
+    assert lines[0] == (f"COINS V3c's audit: a development challenger session where it runs (V3C_CHALLENGER {form}), "
                         "simulated: not the auditor's challenger"), lines[0]
+    assert "127.0.0.1" not in (tmp_path / "out" / "verdicts.txt").read_text()
     rc, lines, order, _limits = _v3c(tmp_path / "step-3", (), HOST="vy-dc-h200", PP_PEER="vy-dc-h200", DEVELOPMENT=None,
                                      VERITY_HOLD_PLACEMENT=None, PP_CHALLENGER=challenger, PREFLIGHT_ONLY="1",
                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'step-3' / 'bin'}:{os.defpath}", **NO_V3C)
@@ -8342,3 +8345,22 @@ def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):
     assert kept.stat().st_mode & 0o777 == 0o700
     assert not any("resolution failed" in f.read_text() for f in out.rglob("*") if f.is_file())
     assert not list(out.rglob("*.log"))
+
+
+UNCHECKED = {
+    "attester-attended-each-block": "not checked by any auditor-side entry: the grader verifies one signature of the memory attester per session (storage: the session's id, coin root, parameters and round times; the wipe: its header, fill times and batch records; the bandwidth audit: one closing signature over its log), which names no period or block; no served path writes a liveness record, and verify_liveness has no caller",
+    "attester-key-pinned-outside-the-case": "not checked by any auditor-side entry: the grader takes the attester's key from the trusted list the case itself carries, which the developer's node fills, and the pins are compared on the served node: the developer's check, built and not yet in force as the auditor's"}
+
+
+@pytest.mark.parametrize("premise", [None, "unmet: the memory attester ran on vy-auditor-2, not the developer's n"])
+def test_a_placements_unchecked_premises_follow_its_trusted_device_by_name(premise):
+    """Each premise a placement's ``unchecked`` names is a term of its own, its name and then its sentence, after the
+    `trusted-device` premise where the placement has one (storage's and the wipe's) and alone where it has none (the
+    bandwidth audit's)."""
+    place = {"links": [], "unchecked": UNCHECKED, **({"trusted-device": premise} if premise else {})}
+    got = S.terms({"answer": {"profile": {"placement": place}}}, None)
+    assert got[:3 if premise else 2] == [*([f"trusted-device {premise}"] if premise else []),
+                                        f"attester-attended-each-block {UNCHECKED['attester-attended-each-block']}",
+                                        "attester-key-pinned-outside-the-case "
+                                        f"{UNCHECKED['attester-key-pinned-outside-the-case']}"]
+    assert S.terms({"answer": {"profile": {"placement": {"links": []}}}}, None) == []
