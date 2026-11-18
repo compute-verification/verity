@@ -74,7 +74,7 @@ def test_the_catch_all_takes_its_issue_slot_alone():
     no other row, so an instruction no other class names, counted there, is never free; `instance` refuses a class off
     one slot on DS_issue, so counting it there moves no bound."""
     i = H.instance()
-    k = H.CATCH_ALL["sm_120"]
+    k = vector(H.SM120.device, H.SM120.data).catch_all
     assert loads.class_of("MOV") == k and k in i.vec
     rows = ["DS_issue", "DS_tensor", "DS_smem", *H.SM120.pipes]
     assert {r: H.coef(i, r, k) for r in rows} == {r: Fraction(r == "DS_issue") for r in rows}
@@ -140,7 +140,7 @@ def bulk_fold(i, loop: dict) -> dict[str, Fraction]:
             if op == "NOP" or k in loads.MMA_FORMS:
                 continue
             counts = loads.bulk_counts(op, int(nbytes)) if nbytes else {
-                k if k in i.classes else H.CATCH_ALL["sm_120"]: Fraction(1)}
+                k if k in i.classes else vector(H.SM120.device, H.SM120.data).catch_all: Fraction(1)}
             for k, v in counts.items():
                 n[k] = n.get(k, Fraction(0)) + c * share * v
     return n
