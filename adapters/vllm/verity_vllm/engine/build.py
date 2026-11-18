@@ -249,7 +249,8 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         prepare_compiled_process_cache()
     messages.current().answer(H.Declared(card, {
         "model": kw.get("model"), "execution": execution, "eager": want_eager, "world": world, "dtype": kw.get("dtype"),
-        "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching"))}))
+        "quantization": kw.get("quantization"), "prefix_cache": bool(kw.get("enable_prefix_caching")),
+        "kernels": served.kernels(engine_args)}))
     from verity_vllm.engine import kv_blocks
     kv_blocks.attach()
     t0 = time.perf_counter()

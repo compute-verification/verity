@@ -26,7 +26,7 @@ HOSTILE = {"WORK": "/workspace", "VENV": "/workspace/venv312", "HF_HOME": "/work
 
 def _run(cwd: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     return subprocess.run([BASH, str(SCRIPT), *args], cwd=cwd, capture_output=True, text=True,
-                          env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **(env or {})})
+                          env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "CUDA_HOME": "/a/toolkit", **(env or {})})
 
 
 def _paths(out: str) -> dict[str, str]:
@@ -53,6 +53,11 @@ def test_dry_run_puts_every_path_under_the_work_dir_whatever_the_environment_nam
     jobs = re.search(r"MAX_JOBS=(\d+) ", build)
     assert "head size 64 only" in build and jobs and 1 <= int(jobs[1]) <= (os.cpu_count() or 1), build
     assert not (tmp_path / ".verity-work").exists(), "a dry run makes nothing"
+
+
+def test_a_run_without_a_cuda_toolkit_is_refused_by_name(tmp_path: Path) -> None:
+    r = _run(tmp_path, "--dry-run", env={"CUDA_HOME": ""})
+    assert r.returncode == 3 and "SERVE-FRESH FAILED check: CUDA_HOME is not set" in r.stdout, r.stdout + r.stderr
 
 
 def test_dry_run_takes_the_directory_the_caller_names(tmp_path: Path) -> None:
