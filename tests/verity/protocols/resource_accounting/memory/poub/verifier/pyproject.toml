@@ -19,6 +19,7 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/circuits/difftest",
           # PoUB's declaration, which the prover's side reads (`period_prover`), and the interface it is declared in
           "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/scheme.py",
+          "verity/hooks.py",
           "verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",

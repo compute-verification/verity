@@ -5,7 +5,8 @@ Each linear of a decoder layer is one call of ``--units`` z/y records of ``ZY_BY
 order qkv, o, gate_up, down; the defaults are a 16-layer model's at T 8,192. Apart: the call table's z root
 (`tables_device.device_hash` over `tables_device.record_rows`) and the value's ``b || c`` strings and tree levels
 (`registered_device.device_hash`), as a served call is hashed with ``tables_device.FUSE`` off. Together: the value's
-`registered_device.device_hash` with ``also`` the z table. For each call:
+`registered_device.device_hash` with ``also`` the z table, each table's salts handed in as data: the bytes the apart arm's
+tables derive, made on the host before any timing, so the two arms commit the same leaves. For each call:
 
   equal    the z root, strings and levels of the two, byte for byte;
   wall     each's seconds from launch to every result on the host, ``--reps`` times, interleaved;
@@ -27,7 +28,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
+from verity.commitments.hm96 import batch
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import records as ZR
 from verity_torch.pouw.h1 import registered_device as D
 from verity_torch.pouw.h1 import tables_device as TD
@@ -42,8 +45,13 @@ def apart(records: Any, z: tuple[bytes, int], value: tuple[bytes, int]) -> tuple
     return pending.roots()[0], hashing.result()
 
 
-def together(records: Any, z: tuple[bytes, int], value: tuple[bytes, int]) -> tuple[bytes, Any]:
-    hashing = D.device_hash(records.view(torch.uint16), KEY, value[1], None, value[0], also=z)
+def stream(nonce: int, n: int) -> bytes:
+    """The ``n`` salts the apart arm's table at ``nonce`` derives, as bytes."""
+    return bytes(batch.salts(KEY, nonce, np.arange(n)))
+
+
+def together(records: Any, z: tuple[bytes, bytes], value: tuple[bytes, int], salts: bytes) -> tuple[bytes, Any]:
+    hashing = D.device_hash(records.view(torch.uint16), KEY, value[1], salts, value[0], also=z)
     return hashing.also(), hashing.result()
 
 
@@ -75,7 +83,8 @@ def kernels(fn: Callable[[], Any]) -> dict[str, float]:
 def one(i: int, name: str, units: int, reps: int, gen: Any) -> dict:
     records = torch.randint(0, 256, (units, ZR.ZY_BYTES), dtype=torch.uint8, device="cuda", generator=gen)
     z, value = (bytes([1 + i]) * 64, (1 << 40) + 3 * i + 1), (bytes([101 + i]) * 64, (1 << 41) + 2 * i)
-    arms = {"apart": functools.partial(apart, records, z, value), "together": functools.partial(together, records, z, value)}
+    arms = {"apart": functools.partial(apart, records, z, value),
+            "together": functools.partial(together, records, (z[0], stream(z[1], units)), value, stream(value[1], units))}
     got = {arm: fn() for arm, fn in arms.items()}
     equal = got["apart"] == got["together"]
     del got

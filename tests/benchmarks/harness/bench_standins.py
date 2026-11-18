@@ -6,7 +6,7 @@ from verity_bench.vllm.arms import (
 )
 from verity_bench.vllm.presets import (
     SweepPoint,
-    load_spec,
+    resolve_spec,
 )
 from verity_bench.vllm.runner import (
     PER_PASS_TOKENS,
@@ -93,7 +93,7 @@ class FakeFactory:
 
 
 def inputs():
-    preset = load_spec("llama31-8b-fp8-1gpu").preset
+    preset = resolve_spec("llama31-8b-fp8-1gpu").preset
     point = SweepPoint(32, 512, "mixed", 64)
     arms = (Arm("stock-fp8", precision="fp8"), Arm("candidate", control="stock-fp8"))
     return preset, (point,), arms

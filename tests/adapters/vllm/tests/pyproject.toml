@@ -90,7 +90,7 @@ untraced = [
 # tests/protocols/test_pous_option.py runs the memory attester, which reads the configuration hashes the verity command
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 inputs_only = true
-inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards", "verity/README.md",
+inputs = ["adapters/vllm", "verity", "tests/verity/protocols/resource_accounting/network/verifier/fixtures/arith_encode_vectors.json", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
           "applications/remote.toml", "applications/onsite_network.toml",
           "benchmarks/one_stage/served_verdicts.sh",
