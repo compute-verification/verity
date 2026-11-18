@@ -760,7 +760,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
         if (off := np.flatnonzero((got != want).any(axis=1))).size:
             bad[tid] = off.tolist()
     assert bad == {}
-    c = win.close(salt_key=bytes(32))
+    c = win.close()
     assert c is not None
     labels = win.labels()
     seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}

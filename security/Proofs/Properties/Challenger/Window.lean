@@ -148,7 +148,7 @@ theorem sig_lms {pre : List LedgerEntry} (hI : SigInv key pre) {x : LedgerEntry}
 -- `mvcgen` splits `challengePhaseNamed` into one goal per check it makes of the session's files
 set_option maxHeartbeats 1000000 in
 /-- **The session `challengePhaseNamed` reads is the one the audited open names.** -/
-theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitment × Log}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ r', challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") = .ok r' ∧
       r'.1 = r.1 ∧ r'.2.1 = r.2 ∧ r'.2.2 = a.session := by
@@ -417,9 +417,9 @@ the sample's window**, withheld, under v2, or the finder outputs a break: `Chall
 `OpensOn`. -/
 theorem sampleCoins_opens {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
-        (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
+        (some roots) = .ok ξ ∧
       ((∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ s.commitment = some c ∧ s.ended = none ∧
-          releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins) := by
+          releasedLogOf c s.log = .ok roots) ∨ Break dev key label coins) := by
   obtain ⟨c, roots, ht, hs⟩ := ChallengePhase.drawCoins_ok h
   refine ⟨c, roots, hs, ?_⟩
   obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedChallengePhaseOf_ok ht

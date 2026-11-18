@@ -49,10 +49,11 @@ from verity_vllm.pipeline import interior_links as IL
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
+from tests.fixed_salts import fixed
 
 #: experts a table, a block's K e4m3 bytes (one row a block), and a table row's u16 words
 E, K, H = 4, 32, 16
-SPANS, Q, SALT, ROW, DELTA = 3, 2, bytes(range(32)), "interior-registered-tables-test", 2.0 ** -40
+SPANS, Q, ROW, DELTA = 3, 2, "interior-registered-tables-test", 2.0 ** -40
 #: a boundary registration's digest and its replay sample, for an interior no stream registers
 BOUNDARY, SAMPLE = "b1" * 64, (0, 2)
 #: the registered tables a span reads, the blocks that each open one, and a span's units
@@ -200,7 +201,7 @@ def _boundary() -> tuple[dict, dict, str]:
     """Round 1's stand-in boundary: its record, the challenger's ports and its leaf layer."""
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(window))
     return (CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
             CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
 
@@ -237,7 +238,7 @@ def _interior(registration: int = 0, boundary: str = BOUNDARY, **kw) -> IR.Inter
     """The interior of `SAMPLE`'s spans on the tables of ``registration``, under this module's links and those
     tables' entries as the pins, unless ``kw`` gives others."""
     tables = _tables(registration)
-    kw = {"salt_key": SALT, "links": _links(), "registered": tables, "pins": _pins(tables),
+    kw = {"links": _links(), "registered": tables, "pins": _pins(tables),
           "spans": [_span(s, registration) for s in SAMPLE], **kw}
     return IR.interior(kw.pop("spans"), CELLS, boundary, list(SAMPLE), row=ROW, **kw)
 
@@ -415,10 +416,10 @@ def test_a_table_read_of_a_registered_table_is_tied_as_a_fused_block_is():
             spans.append(IR.Span(f"s{s}", m, {"rows": rows, "outs": {"o0": rows["row"].copy(),
                                                                       "o1": np.ones((CELLS, 1), np.uint16)}},
                                  [[0, m.n]], "p" * 64))
-        it = IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, salt_key=SALT, links=(*ties, *ops),
+        it = IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, links=(*ties, *ops),
                          registered=tables, pins=_pins(tables))
         assert it.tables == () and [e["value"] for e in it.record["registered"]][:2] == ["read/root", "read/domain"]
         spans[0].data["outs"]["o0"][0, 0] ^= 1
         with pytest.raises(ValueError, match="its h and ok are not the read's"):
-            IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, salt_key=SALT, links=(*ties, *ops),
+            IR.interior(spans, CELLS, BOUNDARY, list(SAMPLE), row=ROW, links=(*ties, *ops),
                         registered=tables, pins=_pins(tables))

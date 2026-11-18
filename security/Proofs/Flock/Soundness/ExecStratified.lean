@@ -142,12 +142,12 @@ theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
           ∃ D, Flock.Draw.subset (S s).k (S s).size (streamOf g) = some D ∧ ∀ j ∈ Bl s, j.val ∉ D) :=
         prCoin_pi_forall (Ω := fun s => Fin (L s) → Fin 256) univ (fun s (g : Fin (L s) → Fin 256) =>
           ∃ D, Flock.Draw.subset (S s).k (S s).size (streamOf g) = some D ∧ ∀ j ∈ Bl s, j.val ∉ D)
-    _ ≤ ∏ s, (subset (S s).size (S s).k (hkS s)).missProb (Bl s) :=
+    _ ≤ ∏ s, (Verity.SamplingDesign.subset (S s).size (S s).k (hkS s)).missProb (Bl s) :=
         Finset.prod_le_prod fun s _ => subset_exec_escape_le _ _ _ (hkS s) (Bl s)
     _ ≤ (stratified σ k hk).missProb B := by
         rw [stratified_escape]
         refine Finset.prod_le_prod fun s _ => ?_
-        rw [subset_escape]
+        rw [Verity.SamplingDesign.subset_escape]
         -- `B`'s units in stratum `s` are the units of `Bl s`'s indices, so `Bl s` is at least as large
         have hcard : (B.filter (σ · = s)).card ≤ (Bl s).card := by
           have hsub : (B.filter (σ · = s)).map Fin.valEmbedding ⊆ (Bl s).image fun j => (S s).unit j.val := by
