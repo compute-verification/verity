@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
-                          ReuseOldestFreed, StepBegan, StepComputed, StepEnded)
+from verity.hooks import (MemoryChanged, RangesDeclared, RegisteredValues, ReleaseValue, ReuseOldestFreed, StepBegan,
+                          StepComputed, StepEnded)
 
 from tests import fake_vllm
 from verity_vllm import messages
@@ -193,13 +193,14 @@ def test_the_events_come_in_vllms_order_each_at_its_step_and_for_its_request(mon
     assert so is sched.output and v.calls[0] == ("schedule", ("x",), {"k": 1}, None)
     assert sched.update_from_output(so, "out") is sched.outputs and v.calls[-1] == ("update_from_output", True, "out", None)
     pool.free_blocks(iter(sched.stm.req_to_blocks["a"]))
-    assert heard == [RangeAllocated((1, 2), "a", step=0), RangeAllocated((3,), "c", step=0),
-                     RangeWritten(1, 0, 16, 0), RangeWritten(2, 0, 4, 0), RangeWritten(3, 0, 3, 0),
-                     StepBegan(0, ("a", "c"), 23), StepEnded(0), RangeFreed((1, 2), step=0)]
+    assert heard == [MemoryChanged("allocated", (1, 2), 0, "a"), MemoryChanged("allocated", (3,), 0, "c"),
+                     MemoryChanged("written", (1,), 0, offset=0, count=16), MemoryChanged("written", (2,), 0, offset=0, count=4),
+                     MemoryChanged("written", (3,), 0, offset=0, count=3),
+                     StepBegan(0, ("a", "c"), 23), StepEnded(0), MemoryChanged("freed", (1, 2), 0)]
     sched.output = output({"c": 1})
     sched.during = lambda: sched.stm.req_to_blocks.update(c=sched.stm.req_to_blocks["c"] + manager.allocate_slots(c, 1))
     sched.schedule()
-    assert heard[-3:] == [RangeAllocated((2,), "c", step=1), RangeWritten(3, 2, 1, 1), StepBegan(1, ("c",), 1)]
+    assert heard[-3:] == [MemoryChanged("allocated", (2,), 1, "c"), MemoryChanged("written", (3,), 1, offset=2, count=1), StepBegan(1, ("c",), 1)]
     assert [x.block_id for x in pool.free_block_queue.q] == [1, 4, 5]
 
 
@@ -218,7 +219,7 @@ def test_the_patches_are_one_set_for_every_attachment_and_the_last_detach_takes_
     d1()
     d1()
     pool.get_new_blocks(1)
-    assert heard == [RangeAllocated((1,), step=0), RangeAllocated((2,), step=0)] and hooks.live(kv_blocks.TAG)
+    assert heard == [MemoryChanged("allocated", (1,), 0), MemoryChanged("allocated", (2,), 0)] and hooks.live(kv_blocks.TAG)
     d2()
     assert hooks.live(kv_blocks.TAG) == () and all(vars(cls)[n] is own for (cls, n), own in v.sites.items())
     off()
@@ -236,7 +237,7 @@ def test_the_hook_emits_no_step_and_stamps_the_exchanges(monkeypatch, subscribe)
     sched.during = lambda: pool.get_new_blocks(1)
     sched.update_from_output(sched.schedule(), None)
     pool.free_blocks(pool.blocks[1:2])
-    assert heard == [RangeAllocated((1,), step=5), RangeFreed((1,), step=4)] and ex.step == 4
+    assert heard == [MemoryChanged("allocated", (1,), 5), MemoryChanged("freed", (1,), 4)] and ex.step == 4
 
 
 @pytest.mark.parametrize("hold", [False, True])
@@ -260,7 +261,7 @@ def test_a_prefix_cache_hit_is_a_reused_allocation_and_a_block_in_use_is_none(mo
     assert pool.touch([got[0], pool.blocks[0]]) == "touched" and heard[1:] == []
     pool.free_blocks(got[2:])
     assert pool.touch([got[2], got[0]]) == "touched"
-    assert heard[1:] == [RangeFreed((3,), step=0), RangeAllocated((3,), reused=True, step=0)]
+    assert heard[1:] == [MemoryChanged("freed", (3,), 0), MemoryChanged("allocated", (3,), 0, reused=True)]
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):

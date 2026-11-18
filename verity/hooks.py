@@ -171,35 +171,30 @@ class RangesDeclared:
     step: int = 0
 
 
+#: what a `MemoryChanged` says of its ranges
+CHANGES = ("allocated", "written", "freed")
+
+
 @dataclass(frozen=True)
-class RangeAllocated:
-    """``memory``: ranges handed to ``input`` (``reused``: handed again, holding values another input wrote)."""
+class MemoryChanged:
+    """``memory``: the workload's memory changed at ``step``: ``ranges`` handed to ``input`` (``allocated``; ``reused``:
+    handed again, holding values another input wrote), ``count`` slots from ``offset`` of the one range of ``ranges``
+    written (``written``), or ``ranges`` returned with no reader left (``freed``)."""
 
     hook: ClassVar[str] = "memory"
+    change: str
     ranges: tuple[int, ...]
+    step: int = 0
     input: str | None = None
     reused: bool = False
-    step: int = 0
+    offset: int = 0
+    count: int = 0
 
-
-@dataclass(frozen=True)
-class RangeWritten:
-    """``memory``: ``count`` slots from ``offset`` of range ``range``, written at ``step``."""
-
-    hook: ClassVar[str] = "memory"
-    range: int
-    offset: int
-    count: int
-    step: int = 0
-
-
-@dataclass(frozen=True)
-class RangeFreed:
-    """``memory``: ranges returned with no reader left."""
-
-    hook: ClassVar[str] = "memory"
-    ranges: tuple[int, ...]
-    step: int = 0
+    def __post_init__(self) -> None:
+        if self.change not in CHANGES:
+            raise ValueError(f"MemoryChanged: change {self.change!r} is not one of {CHANGES}")
+        if self.change == "written" and len(self.ranges) != 1:
+            raise ValueError(f"MemoryChanged: a write is to one range, not {len(self.ranges)}")
 
 
 @dataclass(frozen=True)
@@ -211,7 +206,7 @@ class OutputsComplete:
 
 #: every event a served run emits, each read through its ``hook``
 EVENTS = (Declared, RegisteredValues, InputArrived, StepBegan, StepComputed, StepEnded, ValueProduced, BlockDue, RangesDeclared,
-          RangeAllocated, RangeWritten, RangeFreed, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
+          MemoryChanged, OutputsComplete, PhaseOpened, PhaseClosed, PhaseCommitted)
 
 
 @dataclass(frozen=True)
@@ -361,8 +356,8 @@ type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBesi
                 | RefuseInput | FixRanges | ReleaseValue)
 
 
-__all__ = ["EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "OutputsComplete", "RangeAllocated", "RangeFreed", "RangeWritten",
+__all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "ComputeBlockWith", "Declared", "Gate", "Handle",
+           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputsComplete",
            "RangesDeclared", "RefuseInput", "RegisteredValues", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
            "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded", "ValueProduced",
            "unmet"]

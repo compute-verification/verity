@@ -17,16 +17,16 @@ GPUModelRunner.initialize_kv_cache
                                 block size in slots, each layer's KV cache a store (refused where a kernel block size
                                 is another)
 KVCacheManager.allocate_slots   around: the request the pool's allocations inside it are for
-BlockPool.get_new_blocks        after: RangeAllocated, at the step being scheduled, for that request
-BlockPool.touch                 before: RangeAllocated reused, the blocks it takes back off the free queue (a
+BlockPool.get_new_blocks        after: MemoryChanged allocated, at the step being scheduled, for that request
+BlockPool.touch                 before: MemoryChanged allocated reused, the blocks it takes back off the free queue (a
                                 prefix-cache hit)
-BlockPool.free_blocks           after: RangeFreed, the blocks left with no reader, under ReuseOldestFreed first moved
+BlockPool.free_blocks           after: MemoryChanged freed, the blocks left with no reader, under ReuseOldestFreed first moved
                                 to the back of the free queue (vLLM puts a freed block with no hash at its front)
-Scheduler.schedule              around: the step being scheduled is the one its allocations are at; then a RangeWritten
-                                for each run of slots a scheduled request writes in the step
+Scheduler.schedule              around: the step being scheduled is the one its allocations are at; then a MemoryChanged
+                                written for each run of slots a scheduled request writes in the step
 ~~~
 
-The admission hook is on the scheduler instance, around these class patches, so a step's RangeWritten come before its
+The admission hook is on the scheduler instance, around these class patches, so a step's writes come before its
 StepBegan and a subscriber has the step's writes when it begins; the blocks vLLM frees in ``update_from_output`` are
 freed at the step begun last.  The patches are on the classes: they go on with the first `attach`, before the engine is
 built, and come off with the last detach.
@@ -96,7 +96,7 @@ def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.Range
     return H.RangesDeclared(pages, slots, t.numel() * t.element_size() // (pages * slots), 1, caches, step)
 
 
-def writes(sched: Any, so: Any, step: int) -> tuple[H.RangeWritten, ...]:
+def writes(sched: Any, so: Any, step: int) -> tuple[H.MemoryChanged, ...]:
     """The slots each request in ``so`` (vLLM's scheduler output) writes in step ``step``: ``[computed - n, computed)``
     of its blocks, the scheduler having counted the step's tokens as computed already."""
     stm = sched.kv_cache_manager.coordinator.single_type_managers[0]
@@ -107,7 +107,7 @@ def writes(sched: Any, so: Any, step: int) -> tuple[H.RangeWritten, ...]:
         while s < end:
             pi, off = divmod(s, slots)
             c = min(slots - off, end - s)
-            out.append(H.RangeWritten(blocks[pi].block_id, off, c, step))
+            out.append(H.MemoryChanged("written", (blocks[pi].block_id,), step, offset=off, count=c))
             s += c
     return tuple(out)
 
@@ -171,7 +171,7 @@ class _Hook:
                 pool.free_block_queue.remove(b)
             pool.free_block_queue.append_n(freed)
         if ex.wants("memory"):
-            ex.emit(H.RangeFreed(tuple(b.block_id for b in freed), step=self.at(ex)))
+            ex.emit(H.MemoryChanged("freed", tuple(b.block_id for b in freed), self.at(ex)))
 
     def install(self) -> None:
         from vllm.v1.core.block_pool import BlockPool
@@ -197,7 +197,7 @@ class _Hook:
             def get_new_blocks(pool, n):
                 blocks = orig(pool, n)
                 if blocks and (ex := messages.current()).wants("memory"):
-                    ex.emit(H.RangeAllocated(tuple(b.block_id for b in blocks), hook.request, step=hook.at(ex)))
+                    ex.emit(H.MemoryChanged("allocated", tuple(b.block_id for b in blocks), hook.at(ex), hook.request))
                 return blocks
             return get_new_blocks
 
@@ -205,7 +205,7 @@ class _Hook:
             def touched(pool, blocks):
                 back = tuple(b.block_id for b in blocks if b.ref_cnt == 0 and not b.is_null)
                 if back and (ex := messages.current()).wants("memory"):
-                    ex.emit(H.RangeAllocated(back, hook.request, reused=True, step=hook.at(ex)))
+                    ex.emit(H.MemoryChanged("allocated", back, hook.at(ex), hook.request, reused=True))
                 return orig(pool, blocks)
             return touched
 
