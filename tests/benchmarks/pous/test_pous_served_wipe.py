@@ -315,6 +315,21 @@ def test_the_wipe_runs_while_its_judge_builds(node, tmp_path) -> None:
     assert seen.index("lake start") < seen.index("demo start") < seen.index("lake end"), seen
 
 
+def test_the_wipe_waits_only_for_a_judge_still_being_built_and_raises_the_builds_own_error(tmp_path) -> None:
+    """`wipe_on_node.ready`, which `wipe_run` calls before the judge answers: a judge with no lock beside it is taken
+    as it is; one with a lock whose build ended (`EXE.ok`) is ready; one whose build failed raises that build's error."""
+    ready = runpy.run_path(str(WRAPPER.parent / "wipe_on_node.py"))["ready"]
+    exe = tmp_path / "bin" / "wipe-protocol"
+    exe.parent.mkdir()
+    ready(str(exe))
+    Path(f"{exe}.lock").touch()
+    (exe.parent / "failed").write_text("error: wipe-protocol has a hole\n")
+    with pytest.raises(RuntimeError, match="^error: wipe-protocol has a hole$"):
+        ready(str(exe))
+    Path(f"{exe}.ok").touch()
+    ready(str(exe))
+
+
 def test_a_judge_that_does_not_build_ends_the_piece_after_the_wipe_with_its_own_error(node, tmp_path) -> None:
     """The wipe runs beside the build; the piece then ends with exit 7, the build's own last lines and why, and no
     answer: no headline, no answer.json."""

@@ -30,7 +30,7 @@
 # WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) starts building before the card is
 # asked for, in a scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built
 # already), never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile; it builds beside the
-# lease and the wipe, which waits for it only to answer (WIPE_PROTOCOL_READY, `lean_ready.sh`), and one that doesn't
+# lease and the wipe, which waits for it only to answer (its lock beside it, `lean_ready.sh`), and one that doesn't
 # build ends the piece after the wipe with its own error and exit 7; the build's start is stamped too. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
@@ -90,21 +90,22 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
       | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
     export PATH="$HOME/.elan/bin:$PATH"
-    export WIPE_PROTOCOL_EXE=$S/$L/.lake/build/bin/wipe-protocol WIPE_PROTOCOL_READY=$S/built
-    mkdir -p "$WIPE_PROTOCOL_READY"
+    export WIPE_PROTOCOL_EXE=$S/$L/.lake/build/bin/wipe-protocol
+    BUILT=${WIPE_PROTOCOL_EXE%/*}
+    mkdir -p "$BUILT"
     # the lock is taken before the build starts and held by the build alone, so the answer waits for its end
-    exec {LOCK}>"$WIPE_PROTOCOL_READY/wipe-protocol.lock"
+    exec {LOCK}>"$BUILT/wipe-protocol.lock"
     flock -x "$LOCK"
     stamp "the Lean build starts"
     (
       command -v lake >/dev/null 2>&1 \
         || (exec {LOCK}>&- && bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L") > "$DIR/lake-setup.log" 2>&1
       if (cd "$S/$L" && exec {LOCK}>&- && exec lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1; then
-        : > "$WIPE_PROTOCOL_READY/wipe-protocol.ok"
+        : > "$BUILT/wipe-protocol.ok"
         stamp "built wipe-protocol"
       else
         { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; } \
-          > "$WIPE_PROTOCOL_READY/failed"
+          > "$BUILT/failed"
         stamp "wipe-protocol didn't build"
       fi
     ) &
@@ -148,8 +149,9 @@ else
     ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
 fi
 stamp "the wipe exit $rc"
-if [ -n "${WIPE_PROTOCOL_READY:-}" ] && ! bash "$ROOT/benchmarks/pous/lean_ready.sh" "$WIPE_PROTOCOL_READY" wipe-protocol true 2> /dev/null; then
-  cat "$WIPE_PROTOCOL_READY/failed"
+if [ -e "${WIPE_PROTOCOL_EXE:-}.lock" ] \
+   && ! bash "$ROOT/benchmarks/pous/lean_ready.sh" "${WIPE_PROTOCOL_EXE%/*}" wipe-protocol true 2> /dev/null; then
+  cat "${WIPE_PROTOCOL_EXE%/*}/failed"
   stamp "the piece stops: wipe-protocol didn't build"
   exit 7
 fi
