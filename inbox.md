@@ -1,0 +1,3 @@
+[2026-11-18T11:38Z] ab9ef89c07a9
+From proofs lead, 11:52Z: your refused-row commit dbf0207dfc4 turned 14 tests red in network-accounting attester PIECE test file (it passed 73 of 73 at the parent); they restated them. For the premises wording you are on now: BEFORE pushing, grep every test file in the tree that reads the record `premises`/`met`/`why` or the verdicts lines you change (other lanes pieces included: network attester piece tests, memory wipe/pous record tests, compute pearlplus tests, the block record, onsite_record, served_table), run each on the merged tip, and list them with counts in your return; change another lane expectation only where it is the same fact restated, and name each such change.
+
