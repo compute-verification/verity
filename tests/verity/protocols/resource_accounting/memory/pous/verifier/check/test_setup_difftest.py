@@ -28,13 +28,13 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
-
 import verity_difftest as D
+from hypothesis import strategies as st
+from verity_difftest import protocol as P
+
+from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.resource_accounting.memory.pous.verifier import protocol, setup
 from verity.protocols.resource_accounting.memory.pous.verifier.schemes import p2 as P2
-from verity.commitments.identity import canonical_json_bytes
-from verity_difftest import protocol as P
 
 LEAN = (Path(__file__).resolve().parents[8] / "verity" / "protocols" / "resource_accounting" / "memory" / "pous" / "verifier" / "check")
 ROOT = Path(__file__).resolve().parents[8]

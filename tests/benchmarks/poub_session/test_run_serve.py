@@ -428,7 +428,7 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     assert lease.endswith(" ".join([str(node.ws / "venv312/bin/verity-vllm"), *head, "commit"]))
     assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
     # the registration is encoded on the card: kv.cu built for it at the session's codec, handed to the Commit
-    assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1" in nvcc
+    assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1" in nvcc
     kv = "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.cu"
     assert nvcc.endswith(kv) and (ROOT / kv).is_file()
     assert commit["env"]["EXTRA_COMMIT_ARGS"].split() == [

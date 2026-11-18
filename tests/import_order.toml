@@ -525,6 +525,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/registration/verifier/registration.py",
+    "verity/protocols/registration/verifier/site_log.py",
 ]
 trusted = true
 loads = [
