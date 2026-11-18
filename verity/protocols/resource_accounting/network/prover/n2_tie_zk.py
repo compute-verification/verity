@@ -578,15 +578,12 @@ def prove(a) -> int:
     plan = members()
     rounds = {name: phases(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
     summary: dict = {"class": a.cls, "gpu": a.gpu,
-                     **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS,
-                         "prompt_lens": list(REAL.prompt_lens), "releases": [list(r) for r in REAL.releases]}
-                        if REAL else {}),
+                     **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS} if REAL else {}),
                      "link": {"name": LINK, "shape": list(tie.key), "T": T, "unit": tie.unit.id,
                               "program": tie.partition["program"], "partition": P.digest(tie.partition),
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: what for name, (_, _, _, what) in plan.items()},
-                     "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():

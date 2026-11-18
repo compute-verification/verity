@@ -17,6 +17,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -112,6 +113,33 @@ def test_the_one_publisher_publishes_the_gates_lines_and_no_head_salt_wiring_or_
         docs = [json.loads(x) for x in text.splitlines()] if p.suffix == ".jsonl" else [json.loads(text)]
         assert not keys_of(docs) & set(NOT_PUBLISHED), p.name
         assert not any(v.strip('"') in text for v in private), p.name
+
+
+def test_the_drivers_summary_holds_no_cost_wiring_opened_slot_or_head(tmp_path, monkeypatch):
+    """``prove --dry``'s ``summary.json``, which its runner keeps in the run's output: the counts, the statement's public
+    parameters and the registration's hiding root, and no cost, wiring, opened slot or head, by key or by value. The
+    stager and the staging are stood in for, at the members' own reads."""
+    monkeypatch.setattr(wz, "stager", lambda M, B, n, out: SimpleNamespace(
+        n=n, base=0, lower_s=0.0, defn=SimpleNamespace(id="toy"),
+        st=SimpleNamespace(meta={"k_log": 22, "vus_per_block": 2}, pin="0" * 16)))
+    monkeypatch.setattr(wz, "stage", lambda M, sg, at, name: {
+        "port": "p", "ands": 1, "stage_s": 0.0, "units": "0" * 16, "opens": [True, False],
+        "predicted": None if wz.MEMBERS[name][1] else f"refused: {wz.WHY[name]}"})
+    run = tmp_path / "run"
+    run.mkdir()
+    requests = [tws.ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
+    tws._run(run, tmp_path / "key", requests, [tws._response([" word"] * 40), tws._response([" a"])])
+    out = tmp_path / "out"
+    assert wz.main(["prove", "--dry", "--run", str(run), "--units", str(UNITS), "--out", str(out)]) == 0
+    text = (out / "summary.json").read_text()
+    summary = json.loads(text)
+    at = wz.attestation(run, UNITS)
+    assert summary["registration_root"] == at.registration["root"] and summary["units"] == UNITS
+    assert not keys_of(summary) & {*NOT_PUBLISHED, "warden_cost", "warden_costs", "registration", "connection",
+                                   "pads", "reads", "positions", "slots", "data_rows"}
+    certified = [json.loads(x) for x in (run / "certified.jsonl").read_text().splitlines()]
+    assert at.registration["wiring"] not in text and not any(c["head"]["root"] in text for c in certified)
+    assert all(m["predicted_opens"] == 1 for m in summary["members"].values())
 
 
 def test_the_programs_units_read_the_egress_cells_after_the_delay(at):

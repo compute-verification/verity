@@ -174,3 +174,12 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     assert rec["control"]["holds_all"] and ok
     rec, ok = member(bytes(range(100, 116)) + piece, tmp_path / "inside")
     assert rec["verifier_found"] == rec["leaked"] == [key] and not rec["structured"] and not ok
+
+
+def test_a_dry_prove_s_summary_holds_no_digest_of_the_inputs_nor_their_lengths_or_releases(tmp_path):
+    out = tmp_path / "out"
+    assert tz.main(["prove", "--dry", "--out", str(out)]) == 0
+    s = json.loads((out / "summary.json").read_text())
+    assert set(s["members"]) == set(s["changed"]) == set(tz.EXPECT)
+    assert not {"advice", "inputs", "prompt_lens", "releases"} & set(s), \
+        "the inputs' digest, lengths and releases are witness"
