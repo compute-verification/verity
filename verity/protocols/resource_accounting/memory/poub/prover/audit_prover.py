@@ -7,7 +7,6 @@ audit's (`Store`, `Pass`, `audit.Opening`).
 from __future__ import annotations
 
 import bisect
-import hashlib
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -15,24 +14,9 @@ from dataclasses import dataclass
 from verity.commitments import MerkleTree
 from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, REKEY_MAX, Fresh, Origin, Rota
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, receipts
-from verity.protocols.resource_accounting.memory.poub.verifier.audit import Registration, append_head, append_tree, payload_tree
+from verity.protocols.resource_accounting.memory.poub.verifier.audit import (Registration, append_head, append_tree,
+                                                                             payload_tree, rekey_root)
 from verity.protocols.resource_accounting.memory.poub.verifier.receipts import SALT_BYTES, Plan
-
-REKEY_DOMAIN = b"verity/remote-bandwidth/rekey/v0\0"
-
-
-def rekey_root(registration: bytes, first: int, count: int, origin: Origin) -> bytes:
-    """What a re-key append sends as its root, a declaration over no payload: SHA512(REKEY_DOMAIN ‖ registration ‖
-    u64be first ‖ u64be count ‖ origin), the origin u8 0 ‖ u64be a for `("registered", a)` and u8 1 ‖ u64be k ‖ u64be o
-    for `("append", k, o)`."""
-    if origin[0] == "registered" and len(origin) == 2:
-        tail = b"\0" + origin[1].to_bytes(8, "big")
-    elif origin[0] == "append" and len(origin) == 3:
-        tail = b"\1" + origin[1].to_bytes(8, "big") + origin[2].to_bytes(8, "big")
-    else:
-        raise ValueError(f"an origin is ('registered', a) or ('append', k, o), not {origin!r}")
-    return hashlib.sha512(REKEY_DOMAIN + registration + first.to_bytes(8, "big") + count.to_bytes(8, "big")
-                          + tail).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,12 +321,11 @@ class Prover:
         c = p // receipts.PER_LEAF
         leaf = ps.tree.open(c)
         salt, path, d = self.store.committed(j)
-        at = self.store.origin_position(j)
         return audit.Opening(ps.index, p, self.store.blocks[j],
                              b"".join(ps.receipts[receipts.PER_LEAF * c:receipts.PER_LEAF * (c + 1)]),
                              ps.salts[c], leaf.path, salt, path,
                              b"" if self.tiles is None else self.tiles.evidence(ps.seed, j), d,
-                             **({} if at is None else {"origin_position": at}))
+                             self.store.origin_position(j))
 
 
-__all__ = ["REKEY_DOMAIN", "Append", "Pass", "Prover", "Refresh", "Store", "rekey_root"]
+__all__ = ["Append", "Pass", "Prover", "Refresh", "Store"]
