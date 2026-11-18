@@ -315,13 +315,13 @@ def listed_refusals(listed: Sequence[schemes.Scheme]) -> list[str]:
     checked before any of them attaches; empty: it can."""
     names = [s.name for s in listed]
     twice = [f"{n} is listed {names.count(n)} times" for n in dict.fromkeys(names) if names.count(n) > 1]
-    return twice + weight_copy_refusals(listed)
+    return twice + weight_copy_refusals(listed) + schemes.order_refusals(listed)
 
 
 def attach_listed(exchange: Exchange, listed: Sequence[tuple[schemes.Scheme, Mapping[str, Any]]], **ctx: Any) -> list[Any]:
     """Each scheme of ``listed`` (a configuration's list, each with its settings) attached on ``exchange`` with ``ctx``
-    (`Exchange.attach`) in list order, once `listed_refusals` refuses none, so the scheme listed earlier is the outer
-    (`Exchange.request`); what each attach returned."""
+    (`Exchange.attach`) in list order, once `listed_refusals` refuses none: the order `schemes.order_refusals` holds,
+    in which the scheme listed earlier is the outer (`Exchange.request`); what each attach returned."""
     if bad := listed_refusals([s for s, _ in listed]):
         raise Refused("listed schemes", "; ".join(bad))
     return [exchange.attach(s, given, **ctx) for s, given in listed]
