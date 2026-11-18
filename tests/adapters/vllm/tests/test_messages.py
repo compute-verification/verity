@@ -334,7 +334,7 @@ def test_the_wipe_attaches_with_a_pin_and_refuses_by_name_without_one(unset, tmp
     class Started(Exception):
         pass
 
-    def session(period, node, private, side_of):
+    def session(period, node, private, side_of, **kw):
         raise Started(json.loads((period / "period.json").read_text())["deployment"])
 
     unset.setattr(wipe_served, "card_of", lambda ordinal: "GPU-stand-in")
