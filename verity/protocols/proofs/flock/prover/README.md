@@ -6,10 +6,7 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
 ## Layout
 
 - `python/verity_flock/`: the Python package.
-  - `backend.py`: the pure-block backends over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
-    `FLOCK_BLOCK`, `FLOCK_VLLM_V1`, proved by `flock-pure`). Archived: they commit rows as keyed-BLAKE3 leaves, the
-    Lean verifier does not implement their statements, and they stay for the benchmark tables. `lowering.py` and
-    `unit.py`: the pinned lowering of one tensor-core transition unit.
+  - `lowering.py` and `unit.py`: the pinned lowering of one tensor-core transition unit.
   - `ir_lower.py`: the generic Program lowering, a Definition composed from the per-op circuit pieces of `fp.py` (over
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's proof blocks leave outside.
   - `templates/`: one lowering per subcircuit template; `ir_sampling.py`: the sampling template's lane unit and the
