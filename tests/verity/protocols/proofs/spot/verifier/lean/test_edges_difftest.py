@@ -101,13 +101,14 @@ CASES = [
      {"wires": [_wire(UB, UA, "o0", 0, 0, 0), _wire(UB, UA, "o1", 0, 0, 1),
                 _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
     ("an uncut port over two fields", _of(TUP), {"refusal": "edge-fields"}),
+    ("a ragged strided part", _of(ARR, b_refs=lambda a, a2: {"strided": ["n", a, 0, 3, 3, 1, 4]}), {"refusal": "edge-rows"}),
     ("a template the wiring doesn't list", {**_of(ARR), "wiring": {**_of(ARR)["wiring"], "templates": {}}},
      {"refusal": "edge-template"}),
 ]
 
 
-def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int = 4) -> dict:
-    """The piece's input on a root batching a writer (4 members, each `fields` fields of `width` leaves) and a reader
+def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int = 4, writers: int = 4) -> dict:
+    """The piece's input on a root batching a writer (`writers` members, each `fields` fields of `width` leaves) and a reader
     (`readers` members, each one `rparam`) whose argument is `part(w)` over the writer node `w`."""
     col = Array(width, Value(16))
     writer = bind(CompositeDefinition(f"{name}W", 0, (), lambda S: ((("x", col),), Tuple(*[col] * fields)),
@@ -123,8 +124,8 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
     def body(B, S, x, y):
         return tuple_of(B.batch(writer, x, axes=(0,)), B.batch(reader, y, axes=(0,)))
 
-    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(4, col)), ("y", Array(readers, rparam))),
-                                                            Tuple(Array(4, Tuple(*[col] * fields)),
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(writers, col)), ("y", Array(readers, rparam))),
+                                                            Tuple(Array(writers, Tuple(*[col] * fields)),
                                                                   Array(readers, rparam))), body, register=False))
     desc = json.loads(D.canonical(codec.encode_program(Program(defn))))
     tw, tr = codec.descriptor_id(writer), codec.descriptor_id(reader)
@@ -133,7 +134,7 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
     r = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tr)
     _nodes(desc)[r]["args"][0]["refs"] = part(w)
     template = {"units": 4, "rows": {"x": [1, 1]}, "outs": {"o0": 1}}
-    return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, readers]],
+    return {"program": desc, "ranges": [[w, tw, 0, writers], [r, tr, writers, readers]],
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
 
@@ -163,8 +164,21 @@ def _grid(*lanes, run=1):
 
 _CUT = {UA: {"x": 2}, UB: {"x": 2}}
 
-#: grid parts, read by the twin alone until the Lean's `Part` has the grid (`Spot.Edges.partLanes`)
+TIED = _fields_toy("CoreEdgesTied", 1, 64, Array(64, Value(16)),
+                   lambda w: {"grid": [64, [["n", w, 0, 1, [[4, 0], [32, 64]]]]]}, readers=128, writers=32)
+UNTIED = _fields_toy("CoreEdgesUntied", 1, 2048, Array(2048, Value(16)),
+                     lambda w: {"grid": [2048, [["n", w, 0, 1, [[192, 0], [4, 2048]]]]]}, readers=768, writers=4)
+
+
+def _one_wire(toy, radix, step) -> dict:
+    return {"wires": [{"reader": toy["ranges"][1][1], "port": "x", "writer": toy["ranges"][0][1], "out": "o0", "at": 0,
+                       "radix": radix, "base": 0, "step": step, "cut": [0, 1]}]}
+
+
 GRID_CASES = [
+    ("circuits' tied grid: a row of 64 read by four members, then the next row", TIED, _one_wire(TIED, [32, 4], [1, 0])),
+    ("circuits' untied grid: a row of 2048 read by 192 members, then the next row", UNTIED,
+     _one_wire(UNTIED, [4, 192], [1, 0])),
     ("two lanes over a cut port", _of(TUP, cuts=_CUT, b_refs=_grid(("n", None, 0, 0, [[2, 2]]), ("n", None, 3, 0, [[2, -2]]))),
      {"wires": [_wire(UB, UA, "o0", 0, 0, 0), {**_wire(UB, UA, "o1", 0, 1, 1), "step": [-1]},
                 _wire(UA, UB, "o0", 2, 0, 0), _wire(UA, UB, "o1", 2, 0, 1)]}),
@@ -217,10 +231,19 @@ def test_one_field_a_part(pieces, name, j, want):
     assert pieces.call("edges", j) == ("output", D.canonical(want))
 
 
+#: the grid cases the Lean decoder refuses before `edgesOf` reads them, each with its refusal's name
+DECODED = {"lanes of two period counts": "grid-shape", "a lane past its writer node": "grid-overrun"}
+
+
 @pytest.mark.parametrize("name, j, want", GRID_CASES, ids=[c[0] for c in GRID_CASES])
-def test_the_grid_cases(name, j, want):
-    """Each grid case gives the rule's wires or refusal in the twin."""
+def test_the_grid_cases(pieces, name, j, want):
+    """Each grid case gives the rule's wires or refusal in the twin, and in Lean, or Lean's decoder refuses it first."""
     assert reference(j) == want
+    got = pieces.call("edges", j)
+    if name in DECODED:
+        assert got[0] == "reject" and DECODED[name] in got[1], got
+    else:
+        assert got == ("output", D.canonical(want))
 
 
 def test_a_part_form_it_does_not_know_is_refused_by_name():

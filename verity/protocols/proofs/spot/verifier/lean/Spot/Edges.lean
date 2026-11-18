@@ -25,13 +25,15 @@ across the members a part covers its place moves by the argument's member stride
 of the lanes; the writer leaves the members read are then a mixed radix of the lane's levels (`laneWire`), and a wire
 needs the writer field to stay the same, so each step is a whole number of writer members.
 
-The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows),
+The refusals, by name: `edge-parts` (an argument of a root node has more parts than `argPartsOk` allows, or a
+grid's lanes count different numbers of periods, `gridOk`),
 `edge-template` (a non-input root node whose template the ranges or the wiring don't list), `edge-form` (a scan at the
 root, as reader or writer), `not-topological` (a part reads a later node, or the node itself), `edge-rows` (a reader row
 across a part's edge, not one whole writer field, or not in closed form: a row across runs or not contiguous, members
 whose rows are no mixed radix of the lane's levels, an explicit part naming a non-input node, a reference to a
-parameter), `edge-fields` (one of those, where the part reads more than one output field of one writer: one field
-a part is the rule, `crossesFields`) and `edge-width` (a reader row's bits are not the field's).
+parameter, a grid's lane outside its writer node), `edge-fields` (one of those, where the part reads more than one
+output field of one writer: one field a part is the rule, `crossesFields`) and `edge-width` (a reader row's bits are
+not the field's).
 
 The work is the root's nodes and arguments, then each part times its port's rows: nothing per unit or per block. The
 parts are read only after `argPartsOk` has bounded them by the root's nodes.
@@ -251,6 +253,18 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     out := out ++ [wire]
   return out
 
+/-- A grid part of root node `k`: its lanes count one number of periods (else `edge-parts`), and each lane over an
+earlier root node lies inside that node's outputs at both its extremes (else `edge-rows`), in O(levels) a lane. The
+decoder refuses both first (`grid-shape`, `grid-overrun`); these hold them for a Program built otherwise. -/
+def gridOk (P : Prog) (k run : Nat) (lanes : Array Lane) : Except String Unit := do
+  if lanes.any (·.periods != (lanes[0]?.map Lane.periods).getD 0) then throw "edge-parts"
+  let nodes := (P.defs[P.root]!).body.nodes
+  for l in lanes do
+    if !l.p && l.i < k then
+      let n := nodes[l.i]!
+      let (lo, hi) := l.bounds run
+      if lo < 0 || hi ≥ (((P.defs[n.fn]!).outLeaves * n.members : Nat) : Int) then throw "edge-rows"
+
 /-- **The wires the Program's root states**, under the ranges `rs` and the record's wiring `W` (its templates and
 cuts): the module docstring's rule, in the root's node, argument and part order, or the first refusal. -/
 def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except String (List Spot.Wires.Wire) := do
@@ -267,6 +281,7 @@ def edgesOf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Except Stri
     for i in [0:node.args.size] do
       let s := node.args[i]!.seq
       for qi in [0:s.parts.size] do
+        if let .grid run lanes := s.parts[qi]! then gridOk P k run lanes
         out := out ++ (← partWires P fu W k i s.parts[qi]! s.starts[qi]!)
   return out
 
@@ -284,16 +299,16 @@ private def batch (fn n : Nat) (parts : Array Part) (out : Ty) : Node :=
     args := #[{ ty := .array n row2, seq := Flock.Program.Seq.ofParts parts, dims := some (n, 2) }] }
 
 /-- Inputs, then A (2 members) reading them, B (2) reading A's outputs by `bParts`, and A (2) reading B's. -/
-private def toy (aRet : Ty) (bParts : Array Part) : Prog :=
+private def toy (aRet : Ty) (bParts : Array Part) (bRet : Ty := row2) : Prog :=
   let input : Defn :=
     { key := "Input16_v1", id := "Input16_v1", prim := true, params := #[], ret := v16, gates := 1, paramLeaves := 0,
       outLeaves := 1 }
   let nodes := #[{ form := .batch, fn := 0, args := #[], out := .array 4 v16, n := 4 },
-    batch 1 2 #[.affine false 0 0 4] aRet, batch 2 2 bParts row2, batch 1 2 #[.affine false 2 0 4] aRet]
+    batch 1 2 #[.affine false 0 0 4] aRet, batch 2 2 bParts bRet, batch 1 2 #[.affine false 2 0 4] aRet]
   let root : Defn :=
     { key := "R", id := "R", prim := false, params := #[], ret := row2, gates := 0, paramLeaves := 0, outLeaves := 2,
       body := { params := #[], retType := row2, nodes := nodes, ret := default, offsets := #[] } }
-  { defs := #[input, prim "A" aRet, prim "B" row2, root], index := {}, root := 3, programFn := "", sha512 := .empty }
+  { defs := #[input, prim "A" aRet, prim "B" bRet, root], index := {}, root := 3, programFn := "", sha512 := .empty }
 
 private def toyRanges : Array TRange :=
   #[⟨1, "A", 0, 2⟩, ⟨2, "B", 2, 2⟩, ⟨3, "A", 4, 2⟩]
@@ -331,5 +346,29 @@ private def refuses (P : Prog) (W : Spot.Wires.Wiring) (code : String) : Bool :=
   "edge-rows"
 #guard refuses (toy (.tuple #[.value 8, .value 24]) #[.affine false 1 0 4]) (toyWiring [("B", [("x", 2)])])
   "edge-width"
+
+/-! ## Examples: grid parts (the twin's grid cases) -/
+
+private def pair : Ty := .tuple #[v16, v16]
+private def cut2 : Spot.Wires.Wiring := toyWiring [("A", [("x", 2)]), ("B", [("x", 2)])]
+private def lanes2 (i : Nat) (d : Int := 2) : Array Lane := #[⟨false, i, 0, 0, [(2, d)]⟩, ⟨false, i, 3, 0, [(2, -2)]⟩]
+
+#guard gives (toy pair #[.grid 1 (lanes2 1)] pair) cut2
+  [wire "B" "A" "o0" 0 [2] 0 [1] 0, wire "B" "A" "o1" 0 [2] 1 [-1] 1, wire "A" "B" "o0" 2 [2] 0 [1] 0,
+    wire "A" "B" "o1" 2 [2] 0 [1] 1]
+#guard refuses (toy pair #[.grid 1 (lanes2 1)] pair) (toyWiring []) "edge-fields"
+#guard gives (toy pair #[.grid 1 (lanes2 0)] pair) cut2 [wire "A" "B" "o0" 2 [2] 0 [1] 0, wire "A" "B" "o1" 2 [2] 0 [1] 1]
+#guard refuses (toy pair #[.grid 1 #[⟨false, 1, 0, 0, [(2, 2)]⟩, ⟨false, 1, 0, 0, [(4, 1)]⟩]] pair) cut2 "edge-parts"
+#guard refuses (toy pair #[.grid 1 (lanes2 1 4)] pair) cut2 "edge-rows"
+#guard refuses (toy row2 #[.strided false 1 0 3 3 1 4]) (toyWiring []) "edge-rows"
+
+private def laneGives (run : Nat) (lanes : List Lane) (k0 L len n : Nat) (want : Nat × Nat × List Nat × List Int) :
+    Bool :=
+  match laneWire run lanes k0 L len n with
+  | .ok v => v == want
+  | .error _ => false
+
+#guard laneGives 64 [⟨false, 7, 0, 1, [(4, 0), (32, 64)]⟩] 0 64 64 128 (7, 0, [32, 4], [64, 0])
+#guard laneGives 64 [⟨false, 7, 0, 1, [(4, 0), (32, 64)]⟩] (4 * 64) 64 64 8 (7, 64, [2, 4], [64, 0])
 
 end Spot.Edges
