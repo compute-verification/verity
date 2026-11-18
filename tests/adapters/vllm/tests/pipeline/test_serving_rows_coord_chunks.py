@@ -19,6 +19,7 @@ from verity_vllm.definitions.registry import boolean_fp8_moe as BFM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 E, K, N, G, KB = 3, 64, 40, 32, 32
 NB, KG = -(-N // G), K // G
@@ -108,4 +109,4 @@ def test_a_chunk_on_its_rows_computes_the_committed_words_and_a_flipped_word_is_
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
     w = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * N)], several=True), {"law": "subset", "k": 2}, "ab" * 32, tuple(ms))
-    assert CS.commit(w, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * N
+    assert CS.commit(w, [g for g, _e in got], salts_of=fixed(w)).window.population == 2 * N

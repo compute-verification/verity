@@ -51,6 +51,7 @@ from verity_vllm.query.program_view import spec_statics
 from verity.circuits.defs import bind
 from verity.circuits.codec import descriptor_id
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from tests.fixed_salts import fixed
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BM.SPARSE_MLA_GLM53["DOT"], "INV": BM.SPARSE_MLA_GLM53["INV"]}
@@ -330,7 +331,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     s = Served()
     w = window(s)
     got = read(s, w.members)
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got], salts_of=fixed(w))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     j = next(j for j, m in enumerate(w.members) if m.template == B16 and m.n > 1)
@@ -349,7 +350,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
     bad = [dict(g, rows={**g["rows"], "in5": g["rows"]["in5"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in5 row is not the o2 row")):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad, salts_of=fixed(w))
 
 
 def composed(t: str, d: Path) -> UnitStager:

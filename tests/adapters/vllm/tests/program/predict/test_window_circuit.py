@@ -1055,7 +1055,7 @@ def test_a_tail_wired_out_of_order_of_at_is_refused_by_the_wiring_check(split):
         win.record(p, [x[:, 16 * at:16 * (at + 1)], res], [sums[at]])
     win.record(tail, [None, w], [out[:, :64], out[:, 64:]])
     assert win.mismatches() == {}
-    c, members = win.close(salt_key=bytes(32)), win.window.members
+    c, members = win.close(), win.window.members
     publics = {m.key: c.public_body(k) for k, m in enumerate(members)}
     assert WI.check(members, publics) == {}
     (t,) = [m for m in members if m.wired]

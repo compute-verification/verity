@@ -21,6 +21,7 @@ from verity_vllm.definitions.registry import moe as M
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 TOPK, WORLD, W, w = 3, 4, 8, 2
 NH, CAP = W // w, 3
@@ -110,7 +111,7 @@ def test_a_chunk_on_its_rows_computes_the_row_s_columns_and_a_flipped_word_is_re
         st.reference_check(g["rows"], {"o0": g["outs"]["o0"] ^ np.uint16(1)})
     win = CS.Binding(*CS.population_program([(SRW.template(T).fn, 2 * NH)], several=True), {"law": "subset", "k": 2}, "ab" * 32,
                     tuple(ms))
-    assert CS.commit(win, [g for g, _e in got], salt_key=bytes(32)).window.population == 2 * NH
+    assert CS.commit(win, [g for g, _e in got], salts_of=fixed(win)).window.population == 2 * NH
 
 
 def test_the_fused_norm_row_s_residual_part_is_chunks_of_its_blocks(monkeypatch):

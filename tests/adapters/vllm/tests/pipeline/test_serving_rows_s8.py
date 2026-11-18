@@ -12,6 +12,7 @@ from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
 K = 64
@@ -92,4 +93,4 @@ def test_a_coordinate_reads_a6s_rows_off_the_rows_operands(monkeypatch):
     assert [[e[:2] for e in g[1]] for g in got] == [[[0, 3], [3, 6]], [[3, 6]]]
     w = CS.Binding(*CS.population_program([(bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8), 6)], several=True),
                   {"law": "stratified", "k": 2}, "ab" * 32, tuple(ms))
-    assert CS.commit(w, [g[0] for g in got], salt_key=bytes(32)).window.population == 6
+    assert CS.commit(w, [g[0] for g in got], salts_of=fixed(w)).window.population == 6

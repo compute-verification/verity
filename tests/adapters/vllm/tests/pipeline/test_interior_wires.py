@@ -29,10 +29,11 @@ from verity_vllm.definitions.registry import dead_free as DF
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
+from tests.fixed_salts import fixed
 
 W, T = bind(DF.TokenSelectCombineV2, V=128, C=64), bind(DF.TokenSelectCombineV2, V=64, C=64)
 X = bind(DF.TokenSelectChunkV2, C=64)
-SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, (1, 1, 2), bytes(range(32)), "interior-wires-test", 2.0 ** -40
+SPANS, Q, CELLS, ROW, DELTA = 3, 2, (1, 1, 2), "interior-wires-test", 2.0 ** -40
 
 
 def _block():
@@ -99,7 +100,7 @@ def _first(members):
                       sampler=lambda sampling_design, n: next(draws) if sampling_design["law"] == "subset" else [0] * len(sampling_design["strata"]))
     window = _boundary_window()
     c = CS.commit(window, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
-                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
+                            "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salts_of=fixed(window))
     reg = stream.register(CS.registration(c, {"stand_in": "boundary"}, None, registrar=R), CS.expected_ports(window),
                           leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}))
     return stream, reg, stream.select(reg)

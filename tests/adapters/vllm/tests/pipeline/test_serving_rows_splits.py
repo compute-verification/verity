@@ -60,6 +60,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Tuple, field_types
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from tests.fixed_salts import fixed
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
@@ -479,7 +480,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     got = read(s, w.members)
     for m, (g, _e) in zip(w.members, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
-    c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
+    c = CS.commit(w, [g for g, _e in got], salts_of=fixed(w))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     j = next(j for j, m in enumerate(w.members) if m.template == C2)
@@ -499,7 +500,7 @@ def test_a_window_of_one_row_commits_and_its_wires_hold():
     assert list(WI.check(w.members, {**publics, m.key: bytes(body)})) == [m.key]
     bad = [dict(g, rows={**g["rows"], "in1.0": g["rows"]["in1.0"] ^ np.uint16(1)}) if i == j else g for i, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=re.escape(f"{m.key}: a in1.0 row is not the o0 row")):
-        CS.commit(w, bad, salt_key=bytes(32))
+        CS.commit(w, bad, salts_of=fixed(w))
 
 
 def test_a_split_row_also_holds_each_key_block_as_its_scores_and_values_units():
@@ -789,7 +790,7 @@ def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     got = read(s, w.members, UNITS)
-    c = CS.commit(w, held_values(w, got), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, got), salts_of=fixed(w))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     held = [(m, p) for m in w.members if not m.wired_trees for p, _o, _ws in m.wired]
@@ -875,7 +876,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     assert sum(len(m.wired) for m in copies.members) < sum(len(m.wired) for m in w.members)
 
     def codes(win: CS.Binding, data: list[dict]) -> tuple[str, ...]:
-        c = CS.commit(win, data, salt_key=bytes(32))
+        c = CS.commit(win, data, salts_of=fixed(win))
         rec = CS.registration(c, {"by": "test"}, None, registrar=R)
         return tuple(R.check(rec, w.program, w.query, design, CS.SCHEME, CS.expected_ports(w),
                              leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
@@ -892,7 +893,7 @@ def test_a_unit_in_the_sample_whose_key_reference_names_another_row_of_its_write
     only the member's other units."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
-    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)), salts_of=fixed(w))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     kp = CH.key_places(HALF)
     writer = {(kp[j].split, kp[j].block, kp[j].col): u for (_p, j), u in key_units(w.members, UNITS, UNITS_PLACES).items()}

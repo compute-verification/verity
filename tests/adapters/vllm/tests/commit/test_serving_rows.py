@@ -35,6 +35,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.commit import index as IX
 from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
+from tests.fixed_salts import fixed
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
@@ -89,7 +90,7 @@ def test_m0_serving_row_leaf_vector():
 @pytest.mark.parametrize("n0,n1,workers,chunk", [(1, 1, 1, SR.CHUNK), (37, 5, 1, SR.CHUNK), (37, 5, 2, 8), (64, 17, 3, 16)])
 def test_core_reference_on_the_batch_and_parallel_paths(n0, n1, workers, chunk):
     w = window(n0, n1)
-    c = SR.commit(w, data(w), salt_key=bytes(32), workers=workers, chunk=chunk)
+    c = SR.commit(w, data(w), salts_of=fixed(w), workers=workers, chunk=chunk)
     assert set(c.roots) == {f"{m.template}/{p}" for m in w.members for p, _ in m.rows + m.outs}
     assert c.roots == reference(c)
     d = data(w)
@@ -99,12 +100,13 @@ def test_core_reference_on_the_batch_and_parallel_paths(n0, n1, workers, chunk):
             assert (c.rows[m.port(p)][:, :k] == dk["outs"][p]).all() and not c.rows[m.port(p)][:, k:].any()
 
 
-def test_salts_are_fresh_and_the_key_fixes_them():
+def test_salts_are_fresh_and_salts_handed_in_are_taken_as_given():
     w = window(5, 2)
     d = data(w)
-    a = SR.commit(w, d, salt_key=b"k" * 32)
+    given = fixed(w)
+    a = SR.commit(w, d, salts_of=given)
     ports = [m.port(p) for m in w.members for p, _ in m.all_rows]
-    assert [a.salts[p] for p in ports] == [SR.salts(b"k" * 32, i, len(a.rows[p])) for i, p in enumerate(ports)]
+    assert all(a.salts[p] == given[p] for p in ports if p in given)
     b, c = SR.commit(w, d), SR.commit(w, d)
     out = w.members[0].port("out")
     assert b.salts != c.salts and b.roots[ports[0]] != c.roots[ports[0]] and b.roots[out] != c.roots[out]
@@ -125,7 +127,7 @@ def test_population_is_the_partitions():
 
 def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     w = window(9, 4)
-    c = SR.commit(w, data(w), salt_key=bytes(32))
+    c = SR.commit(w, data(w), salts_of=fixed(w))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
     win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
@@ -167,7 +169,7 @@ def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp
     another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
     a rewrite over a world-readable index included."""
     w = window(9, 4)
-    c = SR.commit(w, data(w), salt_key=bytes(32))
+    c = SR.commit(w, data(w), salts_of=fixed(w))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
     ib, salt = SR.index_bytes(idx), bytes(range(SR.SALT_BYTES))
     (tmp_path / "d").mkdir()
@@ -193,7 +195,7 @@ def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
     w = window(4, 3)
     d = data(w)
-    c = SR.commit(w, d, salt_key=bytes(32))
+    c = SR.commit(w, d, salts_of=fixed(w))
     SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=R)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64}, "program_sha512": "ab" * 64, "program_digests": {},
@@ -229,7 +231,7 @@ def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_cir
     """The audit stages every member's public file before the sample and a sampled member's prover's file after it, from the
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
-    c = SR.commit(w, data(w), salt_key=bytes(32))
+    c = SR.commit(w, data(w), salts_of=fixed(w))
     SR.write(c, tmp_path / "w", {"row": 101}, IX.index_doc(w.members, [[], []], RUN), registrar=R)
     meta = {"scheme": SR.SCHEME, "ports": [["in0", 128, 1], ["in1", 64, 1], ["out.0", 128, 1], ["out.1", 64, 1]], "input_ports": 2,
             "out_ports": [["out.0", 128], ["out.1", 3]], "vus_per_block": 2, "units_per_vu": 8, "partition": {"rule": "verity/partition/v1", "digest": "cd" * 64},
@@ -265,7 +267,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     w = SR.Binding(*SR.population_program([(gemm, 15)]), DESIGN, RUN, (m,))
     assert SR.port_leaves(m) == {"x": 3, "w": 5, "y": 15}
     assert {p: e["leaves"] for p, e in SR.expected_ports(w).items()} == {m.port("x"): 3, m.port("w"): 5, m.port("y"): 15}
-    c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
+    c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salts_of=fixed(w))
     assert c.domains[m.port("x")].count == 3 and c.domains[m.port("w")].count == 5 and c.domains[m.port("y")].count == 15
     assert c.roots == reference(c)
     assert c.bc[m.port("x")][:128] != c.bc[m.port("x")][256:]       # fresh salt per table row
@@ -299,7 +301,7 @@ def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_templat
     rng = np.random.default_rng(5)
     d = [{"rows": {p: rng.integers(0, 1 << 16, size=(m.n, 34), dtype=np.uint16) for p in ("x", "w")},
           "outs": {"o0": rng.integers(0, 1 << 16, size=(m.n, 1), dtype=np.uint16)}} for m in ms]
-    c = SR.commit(w, d, salt_key=bytes(32))
+    c = SR.commit(w, d, salts_of=fixed(w))
     inst, key = hm96.SHA512, hm96.SHA512.default_key
     for m in ms:
         assert m.out_rows == (("o0", 1),) and m.row_schemas == [[SEG, 544], [V2, 544], [V2, 16]]

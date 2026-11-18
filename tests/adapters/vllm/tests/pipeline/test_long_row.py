@@ -330,7 +330,7 @@ def test_a_sampled_spans_units_commit_as_its_interior() -> None:
 
     served = {"roots": [{"port": x.value, "root": x.root.hex(), "leaves": x.leaves, "domain": x.domain.domain_id.hex()}
                         for x in tables]}
-    kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "rows": block, "tables": tables,
+    kw = {"row": "long-row-test", "wires": wires, "rows": block, "tables": tables,
           "served": served, "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
     it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
