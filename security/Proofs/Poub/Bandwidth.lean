@@ -23,7 +23,7 @@ crosses into it (`Bandwidth.SecurityProofs.Causal.audit_reads`, with the chip's 
 alphabets, passive memory and the oracle as a location (`Causal.audit_links`; `Causal.audit_capacity`, the capacity
 form); and bandwidth additivity by counting, for a device that also holds a secret its chip's view determines
 (`Bandwidth.SecurityProofs.AuditJoint`, Mbw), and for the chip as a tick transducer whose view determines it
-(`Bandwidth.SecurityProofs.Ticked.audit_joint`; `Ticked.audit_joint_capacity`, the capacity form), and for the chip of a
+(`Bandwidth.SecurityProofs.Ticked.audit_joint`), and for the chip of a
 strategy causal from every tick over the store and that secret (`Bandwidth.SecurityProofs.Causal.audit_joint`), and
 from its links (`Causal.audit_links_joint`; `Causal.audit_capacity_joint`, the capacity form). -/
 

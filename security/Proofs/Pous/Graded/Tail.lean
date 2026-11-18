@@ -19,8 +19,7 @@ probability at most `c` given the history. `pr_hits_ge_le_binomial` is its tail 
 `t` of the `k` rounds fail is at most `binTail k t c = P[Bin(k, c) ≥ k − t] = Σ_{j ≤ t} C(k, j)·(1 − c)^j·c^(k − j)`,
 for every `c ≤ 1`. It is one induction on `k`, as for `pr_seq_le`. In the step, a first round that succeeds with
 probability `q ≤ c` leaves at most `q·T(t) + (1 − q)·T(t − 1)`, which is at most `c·T(t) + (1 − c)·T(t − 1)` because
-the bound grows with `t` (`binTail_le_succ`, `mix_le`). The bound also grows with `c` on `[0, 1]` (`binTail_mono`), so
-a certified `p₀ ≤ r` may be replaced by `r`.
+the bound grows with `t` (`binTail_le_succ`, `mix_le`).
 
 Pure probability: no game and no primitive. A round is any function of the history, through a state `x : X` that
 `nxt` advances and `ok` judges.
@@ -85,22 +84,6 @@ theorem mix_le {q c a b : ℝ≥0∞} (hqc : q ≤ c) (hc : c ≤ 1) (hba : b �
   calc q * a + (1 - q) * b = q * a + (1 - (q + e)) * b + e * b := by rw [h1, add_mul, ← add_assoc]
     _ ≤ q * a + (1 - (q + e)) * b + e * a := by gcongr
     _ = (q + e) * a + (1 - (q + e)) * b := by rw [add_mul]; exact add_right_comm _ _ _
-
-/-- **The bound grows with `c` on `[0, 1]`.** -/
-theorem binTail_mono {c c' : ℝ≥0∞} (hcc : c ≤ c') (hc' : c' ≤ 1) : ∀ k t, binTail k t c ≤ binTail k t c'
-  | 0, t => by rw [binTail_zero_left, binTail_zero_left]
-  | k + 1, 0 => by
-      rw [binTail_succ_zero, binTail_succ_zero]
-      exact mul_le_mul' hcc (binTail_mono hcc hc' k 0)
-  | k + 1, t + 1 => by
-      rw [binTail_succ_succ, binTail_succ_succ]
-      calc c * binTail k (t + 1) c + (1 - c) * binTail k t c
-          ≤ c * binTail k (t + 1) c' + (1 - c) * binTail k t c' := by
-            gcongr
-            · exact binTail_mono hcc hc' k (t + 1)
-            · exact binTail_mono hcc hc' k t
-        _ ≤ c' * binTail k (t + 1) c' + (1 - c') * binTail k t c' :=
-            mix_le hcc hc' (binTail_le_succ k t c')
 
 /-! ### Probability -/
 

@@ -61,7 +61,6 @@ same `γ` (`RemoteMonitoringPeriodConservation`, `RemoteWindowRunConservation`),
 receipts (`RemoteRunConservationRelay`, `RemoteMonitoringPeriodConservationRelay`, `RemoteWindowRunConservationRelay`),
 and the composed verbatim-sector tensor-sketch session (`RemoteRunConservationSketch`; at the deployed 16-row
 parameters, under the per-pass hash budget, `RemoteRunConservationSketchDeployed`, with the budgeted session bound
-`RemoteRunConservationSketchSum` and the product form kept as
-`RemoteRunConservationSketchDeployedProduct`). -/
+`RemoteRunConservationSketchSum`). -/
 
 @[expose] public section

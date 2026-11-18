@@ -98,7 +98,7 @@ structure Node where
   nodeBytes : ℕ
   rates : Rates
   /-- the δ the line reads its pooled bound at, a nonnegative rational: the line computes at none outside `(0, 1)`
-  (`Pooled.pooled` refuses it, `line_delta`) -/
+  (`Pooled.pooled` refuses it) -/
   delta : ℚ≥0
 
 /-- The session's windows, one group each: its parameters'. -/

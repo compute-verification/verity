@@ -374,11 +374,10 @@ candidates, and grinding multiplies only the tag-guess term. From seven windows 
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96`.
 
 **The reading.** `qtot` is the node's hash budget for one pass, so the deployed cap of at most `2^55` compressions a
-pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
+pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` and the guess term
 `n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
-case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`;
-`ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployedProduct` keeps it stated), which at those caps was
-vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
+case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`), which at
+those caps was vacuous: its query term alone is `2^14` before `n·P`.
 
 Proof: `ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed`, from
 `RemoteRunConservationSketchSum`'s budgeted union over the queries each pass's candidates actually make.

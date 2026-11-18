@@ -23,8 +23,6 @@ does); call that list `pre c_{i-1}`. Changing `H` at `c_{i-1}` changes neither `
 The tweaks of different steps differ, so the charges sum to at most the work, `≤ D·q`. If no step is charged, the
 first rounds asking `c_0, …, c_D` strictly increase, which `D` rounds cannot fit: `c_D` is never asked, and the
 output hits `x_{D+1} = H(c_D)` with probability `1/m`.
-
-Only the total work enters, so the same proof gives `(Q + 1)/m` for `OracleAlgorithm.Bounded D Q` (`b3_chain_bounded`).
 -/
 
 @[expose] public section
@@ -346,11 +344,5 @@ theorem b3_chain (m D q : ℕ) [NeZero m] (x₀ : Fin m)
     pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((D * q + 1 : ℕ) : ℝ≥0∞) / m :=
   b3_pr m D (D * q) x₀ P (fun H => (hP H).1)
     (fun H => (work_le_depth_mul_width H P).trans (Nat.mul_le_mul (hP H).1 (hP H).2))
-
-/-- B3 in the audit game's `(D, Q)` model (`OracleAlgorithm.Bounded`, not drafted): probability at most `(Q + 1)/m`. -/
-theorem b3_chain_bounded (m D Q : ℕ) [NeZero m] (x₀ : Fin m)
-    (P : OracleAlgorithm (IdealModel.randomOracle (Fin (D + 1) × Fin m) (Fin m)) (Fin m)) (hP : P.Bounded D Q) :
-    pr (fun H : Fin (D + 1) × Fin m → Fin m => P.run H = chain H x₀ (D + 1)) ≤ ((Q + 1 : ℕ) : ℝ≥0∞) / m :=
-  b3_pr m D Q x₀ P (fun H => (hP H).1) (fun H => (hP H).2)
 
 end PousPebbling
