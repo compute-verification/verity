@@ -144,6 +144,10 @@ path = "verity/errors.py"
 means = "the shared exception classes"
 
 [[tree]]
+path = "verity/hooks.py"
+means = "the events a served run emits and the requests a scheme files, in the circuit's words"
+
+[[tree]]
 path = "verity/runtime/"
 means = "runs parties over channels (pipes, framing, handshake)"
 
@@ -230,6 +234,10 @@ protocol = true
 path = "verity/protocols/resource_accounting/compute/pouw/"
 means = "proof of useful work"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/resource_accounting/compute/pouw/scheme.py"
+means = "Pearl+ as a resource scheme, registered as pearl-plus"
 
 [[tree]]
 path = "verity/protocols/resource_accounting/memory/pous/"

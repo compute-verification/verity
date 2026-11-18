@@ -5,8 +5,10 @@ that computes `temp == 0` once, and `select_for` picks one of the two under a co
 module names choices among them."""
 from __future__ import annotations
 
-from verity_vllm.definitions.registry.sampling import GumbelTokenSelectSharedGreedy, GumbelTopPTokenSelectSharedGreedy
-
+from verity_vllm.definitions.registry.sampling import (
+    GumbelTokenSelectSharedGreedy,
+    GumbelTopPTokenSelectSharedGreedy,
+)
 
 #: each restated select by the Definition it restates (bound under `TargetProfile.sampler_construction = "shared-greedy"`, the default)
 SHARED_GREEDY = {"GumbelTokenSelect_v1": GumbelTokenSelectSharedGreedy, "GumbelTopPTokenSelect_v1": GumbelTopPTokenSelectSharedGreedy}
