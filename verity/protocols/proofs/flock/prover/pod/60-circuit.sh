@@ -51,19 +51,21 @@ if [ $CH = 1 ]; then
   export CHALLENGER_REPO=$REPO CHALLENGER_PY=python3 CHALLENGER_WORK=$W/challengers/${RESEARCH_RUN_ID:-local-$$}
   . verity/protocols/proofs/flock/prover/pod/challenger.sh; challenger_build
 fi
+. verity/protocols/proofs/flock/prover/pod/selftest.sh
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt; nvidia-smi -L 2>/dev/null | tee -a $O/host.txt
 for tarf in $I/*.tar; do
   t=$(basename $tarf .tar); S=$W/sets/$t; rm -rf $S && mkdir -p $S && tar -xf $tarf -C $S || exit 1
   SET=$(dirname $(find $S -name manifest.json | head -1)); D=$O/$t; mkdir -p $D
   if [ "$MODE" = selftest ]; then
     N=${SELF_N:-4}
-    python3 -m verity_flock.circuit $TY --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; continue; }; cat $D/stage.json
+    python3 -m verity_flock.circuit $TY --input-set $SET --n $N --out $D/stage > $D/stage.json 2> $D/stage.err || { tail -3 $D/stage.err; SELFTEST_FAILED+=" $t (staging)"; continue; }; cat $D/stage.json
     if [ "${CPU_SELF:-1}" = 1 ]; then
-      $B selftest $Z --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-cpu} > $D/selftest-cpu.txt 2> $D/selftest-cpu.err
-      grep SELFTEST $D/selftest-cpu.txt; grep '"pass":false' $D/selftest-cpu.txt | cut -c1-300
+      selftest_run $t/cpu $D/selftest-cpu.txt $D/selftest-cpu.err \
+        $B selftest $Z --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-cpu}
     fi
-    [ $G = 1 ] && { $B selftest $Z --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-gpu} > $D/selftest-gpu.txt 2> $D/selftest-gpu.err;
-                    grep SELFTEST $D/selftest-gpu.txt; grep '"pass":false' $D/selftest-gpu.txt | cut -c1-300; grep -h GPUPHASE $D/selftest-gpu.err | head -2 | cut -c1-600; }
+    [ $G = 1 ] && { selftest_run $t/gpu $D/selftest-gpu.txt $D/selftest-gpu.err \
+                      $B selftest $Z --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables --forged $D/stage/circuit-forged.txt ${RECORD:+--record-dir $D/records-gpu}
+                    grep -h GPUPHASE $D/selftest-gpu.err | head -2 | cut -c1-600; }
     if [ -n "$Z" ] && [ $G = 1 ]; then
       $B zkaudit --zk --gpu --instances $D/stage/inst-$N.bin --circuit $D/stage/circuit.txt --tables $D/stage/tables > $D/zkaudit-gpu.txt 2> $D/zkaudit-gpu.err
       grep -h '"attributed"\|"complete"' $D/zkaudit-gpu.txt | cut -c1-300
@@ -104,4 +106,4 @@ for l in sys.stdin:
     done; done
   fi
 done
-true
+selftest_end
