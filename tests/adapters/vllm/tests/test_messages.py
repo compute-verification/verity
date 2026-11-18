@@ -256,6 +256,16 @@ def test_a_scheme_attaches_with_its_settings_the_build_key_and_the_launchers_ent
         ex.attach(pearl, {"salt": 1})
 
 
+def test_a_scheme_reads_its_private_directory_from_ctx_and_is_refused_by_name_where_the_launcher_gave_none(tmp_path):
+    def attach(ex, ctx):
+        return ctx["private"]
+
+    pearl = NS(name="pearl", settings={}, check_settings=lambda s: None, attach=attach, requests=lambda ctx: ())
+    assert M.Exchange().attach(pearl, private=str(tmp_path)) == tmp_path
+    with pytest.raises(Refused, match=r"^pearl: ctx\['private'\]: this launcher gives no private directory"):
+        M.Exchange().attach(pearl)
+
+
 def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
     monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
     ex = M.Exchange()
