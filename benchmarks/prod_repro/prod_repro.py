@@ -105,6 +105,10 @@ TARGET = 1.0
 #: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
 #: unit
 METRICS = {"glm53": "vllm/prod-serving-cost-glm53", "llama32-1b": "vllm/prod-serving-cost-glm53"}
+#: the arm of ours at the published settings with every change the serving cost's target counts for the tick, the tie
+#: order, the snapshot and the step record on (serve_tax's): its cost over `PROD`'s stock is a point of the cost's
+#: metric beside `PROD`'s own ours, its member and its parts saying which
+ALL_ON = "prod-all-on"
 UNIT = "percent of stock's serving time"
 #: the kind of a cost's interval over lifetimes, as its measurement names it (`serve_tax.session_cost`)
 INTERVAL = "Student's t 95% over the lifetime pairs, t at the pairs less one, every pair counted"
@@ -285,15 +289,17 @@ def topk_counters(dirs: list[Path]) -> dict | None:
     process, written over at the end of each of its calls, so a killed process's calls are in it; its rows are its
     device's as last read, every few thousand calls and at an exit in order): the processes, the calls of the
     indexer's top-k, the rows of more than its keys that were rewritten, those of them with a tie across the k-th
-    key, the rows where vLLM's own kernels may select another set from run to run, and the calls the processes had
-    made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower bound). None where no
-    process kept any."""
+    key, the rows where vLLM's own kernels may select another set from run to run, those whose fast selection was
+    wrong (its k-th key not the row's), bisected by one program or refined by the row's programs, and the calls the
+    processes had made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower
+    bound; the last two only where a process's record holds them). None where no process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
     calls = [sum(r["calls"].values()) for r in recs]
-    return {"processes": len(recs), "calls": sum(calls),
-            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")},
+    devs = [dev for r in recs for dev in r["rows"].values()]
+    kept = ("rows_long", "rows_tied", *(k for k in ("rows_bisected", "rows_refined") if any(k in dev for dev in devs)))
+    return {"processes": len(recs), "calls": sum(calls), **{k: sum(dev.get(k, 0) for dev in devs) for k in kept},
             "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
@@ -809,7 +815,14 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             "how": how, **({} if value is not None else {"why": "an arm served no token in some rep"}),
             "lifetimes": lives, "noise_floor": noise or None, "target": target, "same_work": same,
             "verdict": NOT_SHOWN if same is False else verdict, "stands": stands,
-            "metric": METRICS.get(m) if (stock, ours) == default_arms(m := mine.get("model_id"))[::2] else None}
+            "metric": METRICS.get(m) if costed(stock, ours, m := mine.get("model_id")) else None}
+
+
+def costed(stock: str, ours: str, model_id: str | None) -> bool:
+    """Whether the cost of ``ours`` over ``stock`` is a point of the model's cost metric (`METRICS`): of the model's
+    default arms' ours over their stock, or of `ALL_ON` over `PROD`'s stock."""
+    names = default_arms(model_id)
+    return stock == names[0] and (ours == names[2] or (names == PROD and ours == ALL_ON))
 
 
 def scope(c: dict) -> str:
@@ -818,6 +831,36 @@ def scope(c: dict) -> str:
     at = f"{h['rate']:g} requests a second" if h["client"] != S.BENCH else \
         f"{h['rung']} {'users' if h.get('sessions') else 'in flight'}, {'' if h['saturated'] else 'un'}saturated"
     return f"serving time, one node, one load at {at}"
+
+
+#: (arm, the arm it adds one change to, the change, the arm between them): a layer is left out where the job served the
+#: arm between, whose two layers sum to it
+LAYERS = (("prod-seeded", "prod", "the seeds sent", None),
+          ("prod-trace", "prod-seeded", "the step trace and ids", None),
+          ("prod-trace", "prod", "the seeds sent, the step trace and ids", "prod-seeded"),
+          ("prod-record", "prod-trace", "the canonical top-k", None),
+          ("prod-record-bisect", "prod-trace", "the canonical top-k, every wrong fast selection bisected", None),
+          ("prod-record", "prod-record-bisect", "the top-k's refinement against bisecting", None))
+
+
+def layers(by: dict[str, dict], load: str, target: float) -> dict:
+    """Each served layer's `serve_tax.session_cost`, a fraction of the lower arm's serving time, or why it refuses the
+    pair (``why``)."""
+    if not getattr(S.LOADS.get(load), "sessions", False):
+        return not_measured(f"load {load} is not a sessions load, whose cost alone has an interval over lifetimes")
+    each = []
+    for arm, over, what, finer in LAYERS:
+        if arm not in by or over not in by or finer in by:
+            continue
+        try:
+            c = S.session_cost([by[over], by[arm]], arm, over, target, load)
+        except SystemExit as e:
+            each.append({"arm": arm, "over": over, "what": what, "value": None, "why": str(e)})
+            continue
+        if c is not None:
+            each.append({"arm": arm, "over": over, "what": what, "value": _frac(c["value"]),
+                         "ci95": c["ci95"] and [x / 100 for x in c["ci95"]], "pairs": c["lifetimes"]})
+    return {"measured": bool(each), "each": each, **({} if each else {"why": "no layer's two arms were both served"})}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -957,13 +1000,15 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             figure["metric"] = ids.get(meta.get("model_id")) if ours == default_arms(meta.get("model_id"))[2] else None
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
+            "parts": meta.get("parts"),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by),
                                    **({"beside": list(beside)} if beside else {})},
             "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine,
                     "passes": read("the passes", lambda: passes(out, dirs, per, load, private))},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
-            "tokens": toks, "cost": line, "advice": plan}
+            "tokens": toks, "cost": line, "layers": read("the cost by layer", lambda: layers(by, load, target)),
+            "advice": plan}
 
 
 #: the schema of a run's result.json, whose ``artifacts`` and ``measurement_files`` the store keeps as the run's files
@@ -984,7 +1029,7 @@ def measurement(r: dict) -> dict | None:
     cost (`UNLIKE`). None otherwise. Its mark, ``measured``, is its ``mark`` and the head of its first input, before
     what was timed. It names how it was measured: its lifetime pairs, its counted passes an arm, each lifetime's
     passes left out (``left_out``), its interval's kind (`INTERVAL`, where it has one) and stock against stock, its
-    noise floor."""
+    noise floor; and what ours has on and leaves off, in words (``parts``: `serve_tax.parts_of`), where its record says."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
@@ -998,6 +1043,7 @@ def measurement(r: dict) -> dict | None:
                                   "ci95": n["ci95"] and [S._pct(x) for x in n["ci95"]], "pairs": n.get("pairs")},
             "commit": r["commit"],
             "run": r["run"], "model": r.get("model"), "hardware": r.get("hardware"), **member(r, "cost"),
+            **({"parts": r["parts"]} if r.get("parts") else {}),
             "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
                        f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm ({scope(c)})"]}
 
@@ -1302,6 +1348,9 @@ def _topk(c: dict) -> str:
     return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
             f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten"
             + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else "")
+            + (f", {c['rows_bisected']:,} bisected" if "rows_bisected" in c else "")
+            + (f", {c['rows_refined']:,} refined from the candidate's window" if "rows_refined" in c else "")
+            + (" after a wrong fast selection" if "rows_bisected" in c or "rows_refined" in c else "")
             + ("" if at == c["calls"] else f", the rows as read after {at:,} of the calls"))
 
 
@@ -1447,6 +1496,23 @@ def _noise(n: dict | None, stock: str) -> str:
     return f"{who} {_pct(n['value'])}{ends}, over {n['pairs']} pair{'s' * (n['pairs'] != 1)} of server lifetimes"
 
 
+def _layers(ly: dict | None) -> list[str]:
+    """Empty for a report kept before `layers` was, or where no layer was served."""
+    if ly is None or not ly["measured"] and not ly.get("unread"):
+        return []
+    if not ly["measured"]:
+        return [f"the cost by layer: {ly['why']}"]
+
+    def one(x: dict) -> str:
+        if x["value"] is None:
+            return f"not measured: {x['why']}"
+        ends = (f", 95% interval [{_pct(x['ci95'][0])}, {_pct(x['ci95'][1])}]" if x["ci95"] else " (no interval)")
+        return f"{_pct(x['value'])}{ends} over {x['pairs']} lifetime pair{'s' * (x['pairs'] != 1)}"
+
+    return ["the cost by layer, each arm over the arm it adds one change to, of that arm's serving time "
+            "(serve_tax.session_cost):", *(f"  {x['what']}: {x['arm']} over {x['over']} {one(x)}" for x in ly["each"])]
+
+
 def text(r: dict) -> str:
     a, t, c, ran = r["arms"], r["tokens"], r["cost"], r["ran"]
     stock, ours = a["stock"], a["ours"]
@@ -1527,6 +1593,7 @@ def text(r: dict) -> str:
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")
+    lines += _layers(r.get("layers"))
     lines += _advice(r["advice"]) if r["advice"]["measured"] else [f"advice: not measured: {r['advice']['why']}"]
     done = sum(bool(r[k]["measured"]) for k in ("tokens", "cost", "advice"))
     early = [name for name, s in ran["arms"].items() if not s.get("ok")]

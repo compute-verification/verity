@@ -71,14 +71,14 @@ def git(repo: Path, *args: str) -> str:
                           text=True).stdout.strip()
 
 
-def commit(repo: Path, msg: str, files: dict[str, str | None] = {}) -> str:
+def commit(repo: Path, msg: str, files: dict[str, str | bytes | None] = {}) -> str:
     for path, text in files.items():
         p = repo / path
         if text is None:
             p.unlink()
         else:
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(text)
+            p.write_bytes(text) if isinstance(text, bytes) else p.write_text(text)
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "--allow-empty", "-m", msg)
     return git(repo, "rev-parse", "HEAD")
@@ -340,6 +340,24 @@ def test_a_move_whose_map_main_deleted_after_it_landed_is_crossed_by_the_map_at_
     assert "app/util.py" not in paths(repo, r["result"]) and "tools/move/layout_map.toml" not in paths(repo, r["result"])
 
 
+def test_each_move_is_named_as_its_crossing_starts_and_many_moves_say_how_to_cross_in_parts(repo, monkeypatch, capsys):
+    """A crossing of many moves runs for minutes with nothing to print until its end: each move writes a line as it starts,
+    and from `MANY_MOVES` on the first line counts them and names each, so a carry in parts can begin at once."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    move = generate(repo, LINE)
+    on(repo, "pr", ("add extra", {"app/extra.py": "from app.util import f3\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    said = capsys.readouterr()
+    assert f"restack.py: pr: move 1 of 1, {move[:12]} (" in said.err and "each crossed in turn" not in said.err
+    monkeypatch.setattr(RS, "MANY_MOVES", 1)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    first, started = capsys.readouterr().err.splitlines()[:2]
+    assert "pr lacks 1 moves, each crossed in turn" in first and first.endswith(f"oldest first: {move[:12]}")
+    assert started.startswith("restack.py: pr: move 1 of 1, ")
+
+
 @pytest.fixture
 def late(repo, monkeypatch):
     """main as a move that lands late leaves it: the first move, made on `base`, reaches main by a merge after main went on
@@ -583,6 +601,25 @@ def on_base(monkeypatch):
 
     monkeypatch.setattr(RS, "run_script", run_script)
     return ran
+
+
+def test_the_move_is_checked_only_for_a_branch_its_script_runs_on(repo, on_base):
+    """A layout move's check runs the script over the whole tree on the move's base. A branch based after the move (skipped
+    in a crossing of many), one that already holds it, and one up to date run no script on it, so they pay no check; the
+    branch the script runs on still does."""
+    git(repo, "checkout", "-q", "-b", "later", "base")
+    later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "-s", "ours", "--no-ff", "-m", "land later", later)
+    on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "held", "move")
+    on(repo, "held", ("after the move", {"NOTES.md": "notes\n"}))
+    git(repo, "checkout", "-q", "-b", "moved-on", "move")
+    onto = commit(repo, "main after the move", {"CHANGES.md": "changes\n"})
+    assert RS.restack("later", "move", cwd=str(repo), main="main")["status"] == "based-after" and on_base == []
+    assert RS.restack("held", "move", onto=onto, cwd=str(repo))["status"] == "clean" and on_base == []
+    assert RS.restack("move", "move", cwd=str(repo))["status"] == "up-to-date" and on_base == []
+    assert RS.restack("pr", "move", cwd=str(repo))["status"] == "clean" and on_base == [git(repo, "rev-parse", "base")]
 
 
 def test_without_kept_no_check_is_kept_and_none_is_read(repo, cache, on_base):
@@ -1489,6 +1526,82 @@ def test_a_hand_change_to_a_line_the_branch_changed_is_conflicted_at_hand(repo, 
     on(repo, "pr", ("readme", {"README.md": "readme, the branch's\n"}))
     r = RS.restack("pr", move, cwd=str(repo))
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["README.md"])
+
+
+DOCS = "f1 is in app.util\n\none\ntwo\nthree\n\nf2 is in app.util\n"
+
+
+@pytest.fixture
+def restored(repo, lines):
+    """A move whose hand change puts back the old name the script rewrote in both of the docs' lines, as a pass that
+    restores comments does, and a branch `pr-docs` that changed the first of them."""
+    git(repo, "checkout", "-q", "-b", "docs", "base")
+    commit(repo, "docs", {"docs.md": DOCS})
+    git(repo, "branch", "pr-docs")
+    subprocess.run(["python3", "tools/move/layout.py"], cwd=repo, check=True)
+    move = commit(repo, "layout, and the docs' old names put back" + LINE, {"docs.md": DOCS})
+    git(repo, "checkout", "-q", "main")
+    correct(lines, {move: {"hand": ["docs.md"], "reason": "The docs' names put back."}})
+    on(repo, "pr-docs", ("docs", {"docs.md": edit(DOCS, "f1 is", "f1, the branch's, is")}))
+    return move
+
+
+def test_a_restored_line_the_branch_changed_is_conflicted_at_hand_without_hand_ours(repo, restored):
+    r = RS.restack("pr-docs", restored, cwd=str(repo), pins=False)
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["docs.md"]) and "hand_ours" not in r
+
+
+def test_hand_ours_keeps_the_branch_s_line_in_the_script_s_names_and_every_other_restored_line_and_names_the_file(
+        repo, restored, monkeypatch, capsys):
+    monkeypatch.setattr(RS, "HAND_OURS", True)
+    r = RS.restack("pr-docs", restored, cwd=str(repo), pins=False)
+    assert (r["status"], r["hand_ours"]) == ("clean", ["docs.md"]), r
+    assert show(repo, r["result"], "docs.md") == edit(DOCS, "f1 is in app.util", "f1, the branch's, is in app.core.util")
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr-docs", "--move-commit", restored, "--main", restored, "--hand-ours", "--no-pins", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)[0]["hand_ours"] == ["docs.md"]
+    assert RS.main(["pr-docs", "--move-commit", restored, "--main", restored, "--hand-ours", "--no-pins"]) == 0
+    assert "--hand-ours kept the branch's side where a move's hand change met its own line, in: docs.md" in capsys.readouterr().out
+
+
+BLOB = b"\0blob\0one\0"
+
+
+def hand_crossing(repo: Path, lines: Path, monkeypatch, on_base: dict, by_hand: dict, by_branch: dict) -> tuple[dict, list]:
+    """A crossing under `--hand-ours` of a branch `pr-hand` that made ``by_branch`` on a base holding ``on_base``, across a move
+    that made ``by_hand`` by hand there; and each tree `hand_ours` returned, read before any commit is made of it."""
+    git(repo, "checkout", "-q", "-b", "hand-base", "base")
+    commit(repo, "files", on_base)
+    git(repo, "branch", "pr-hand")
+    subprocess.run(["python3", "tools/move/layout.py"], cwd=repo, check=True)
+    move = commit(repo, "layout, and a hand change beside it" + LINE, by_hand)
+    git(repo, "checkout", "-q", "main")
+    correct(lines, {move: {"hand": sorted(by_hand), "reason": "A line by hand."}})
+    on(repo, "pr-hand", ("branch", by_branch))
+    trees, real = [], RS.hand_ours
+    monkeypatch.setattr(RS, "hand_ours", lambda *a: trees.append(real(*a)) or trees[-1])
+    monkeypatch.setattr(RS, "HAND_OURS", True)
+    return RS.restack("pr-hand", move, cwd=str(repo), pins=False), trees
+
+
+def test_hand_ours_leaves_a_binary_file_it_cannot_merge_conflicted_and_writes_nothing_empty(repo, lines, monkeypatch):
+    r, trees = hand_crossing(repo, lines, monkeypatch, {"blob.bin": BLOB}, {"blob.bin": BLOB.replace(b"one", b"hand")},
+                             {"blob.bin": BLOB.replace(b"one", b"branch")})
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["blob.bin"]) and "hand_ours" not in r, r
+    assert [ours for _, ours in trees] == [[]]
+    assert int(git(repo, "cat-file", "-s", f"{trees[0][0]}:blob.bin")) > 0
+
+
+def test_hand_ours_leaves_a_hand_change_to_a_file_the_branch_deleted_conflicted(repo, lines, monkeypatch):
+    r, trees = hand_crossing(repo, lines, monkeypatch, {"gone.md": "gone\n"}, {"gone.md": "gone, by hand\n"}, {"gone.md": None})
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "hand", ["gone.md"]) and "hand_ours" not in r, r
+
+
+def test_hand_ours_names_the_file_it_resolved_beside_a_binary_one_it_left_conflicted(repo, lines, monkeypatch):
+    r, _ = hand_crossing(repo, lines, monkeypatch, {"docs.md": DOCS, "blob.bin": BLOB},
+                         {"docs.md": DOCS, "blob.bin": BLOB.replace(b"one", b"hand")},
+                         {"docs.md": edit(DOCS, "f1 is", "f1, the branch's, is"), "blob.bin": BLOB.replace(b"one", b"branch")})
+    assert (r["status"], r["step"], r["files"], r["hand_ours"]) == ("conflicted", "hand", ["blob.bin"], ["docs.md"]), r
 
 
 def own_map_move(repo: Path, keep_map: bool) -> str:

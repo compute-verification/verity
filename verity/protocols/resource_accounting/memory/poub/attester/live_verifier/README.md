@@ -5,7 +5,9 @@ user `auditor`, from a tree infra pinned, one run at a time, behind one gate, `v
 runs the memory attester's parties, and the same `host.py`, pinned apart, is the compose gate.
 
 `host.py`'s docstring is the reference: who reaches the gate, what runs, a run, a replay and the store. The host's
-deployed files are `tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py`.
+deployed files are `tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py`. The compose
+gate's pin script (`vy-compose-pin COMMIT BRANCH [--prepare]`) and wrapper are `tools/research/src/research/pods/nebius/compose/`,
+which infra installs by hand with the pin, since the wrapper names host.py's path in the pinned tree.
 
 ## Try it
 

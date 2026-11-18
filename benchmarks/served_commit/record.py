@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from verity_bench import kit
+from verity_bench.overhead import CARD_FILES
 
 ARM = "served-commit-rows-4k"
 METRICS = (("circuits/committed-throughput-over-stock", "tokens_per_s"),
@@ -23,7 +24,7 @@ def main(path: Path) -> None:
     w = kit.writer(path.parent / "metrics")
     card = w.stamp["card"]
     model = doc["identity"]["preset"]["model"]
-    machine = "cpu" if card == "none" else "-".join(card.lower().split()).removeprefix("nvidia-")
+    machine = "cpu" if card == "none" else kit.card_short(card, directory=CARD_FILES)
     short = f"{model.rsplit('/', 1)[-1].lower()}-{machine}"
     for point in sorted(doc["points"], key=lambda p: p["point"]["headline"]):
         at = point["point"]

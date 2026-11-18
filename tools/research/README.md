@@ -106,7 +106,7 @@ research velocity [--line|--json]  # the velocity score from records, never a ga
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
-research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue judge RUN [TWIN...] [--by LANE]  # the mark `queue ready --on` writes, from its quick-tier run (or the twin that ran) that ended after its caller died
 research queue stats [--json] [--short] [--rounds] [--until TS]  # queue_table.py
 research lean-times ...  # Lean tasks' p95
 research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)

@@ -244,15 +244,19 @@ python3 - $O "$STATEMENTS" "$CPU_STATEMENTS" $ROWS <<'EOF' || LEAN_BAD=10
 import json, sys
 from pathlib import Path
 out = Path(sys.argv[1])
-sys.path[:0] = ["benchmarks/harness", "tools/config"]
+sys.path[:0] = [".", "benchmarks/harness", "tools/config"]
 from verity_bench import kit
 res = kit.writer(out)
 card = res.stamp["card"]
-card = "cpu" if card == "none" else card.split(", ")[0].removeprefix("NVIDIA ").lower().replace(" ", "-")
+try:
+    card = "cpu" if card == "none" else kit.card_short(card.split(", ")[0], directory=Path("calibration/hardware/cards"))
+except SystemExit as e:
+    print(f"proofs/flock-s8-block-zk-prove-seconds: no gpu reading, the card {card!r} has no member name: {e}")
+    card = None
 st = json.loads((out / "summary.json").read_text())["statements"]
 bad = []
 for mode, specs, machine in (("gpu", sys.argv[2], card), ("cpu", sys.argv[3], "cpu")):
-    for spec in specs.split():
+    for spec in specs.split() if machine else ():
         if spec.startswith("served"):
             continue
         k, n, *r = spec.split(":")
