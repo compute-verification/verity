@@ -993,6 +993,9 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
+_TOP_KEYS = frozenset({"schema", "program_fn", "inputs", "root", "boolean", "callees", "types", "definitions", "annotations"})
+
+
 def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
     """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
@@ -1001,6 +1004,8 @@ def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, A
                          "program again")
     if schema != SCHEMA:
         raise ValueError(f"E_SCHEMA: unexpected descriptor schema {schema!r}, only {SCHEMA} is read")
+    if extra := sorted(set(desc) - _TOP_KEYS):
+        raise ValueError(f"E_KEYS: the top-level keys {extra[:4]} are not {SCHEMA}'s, and the program digest does not cover them")
     _check_domain(desc)
     ddefs = desc["definitions"]
     built = {} if built is None else built

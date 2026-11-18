@@ -277,6 +277,8 @@ have):
 
 - a `schema` other than `verity-ir/descriptor/v2`: a v0 or v1 descriptor, which holds no Boolean bodies, is refused by name
   (`E_SCHEMA`) and never read as v2;
+- a top-level key other than §4.1's and `annotations` (`E_KEYS`): the program digest (§1) covers every other key, so no
+  byte outside it rides along;
 - a `boolean` map that §4.9 refuses (`E_BODY_KEY`, `E_BODY_MISSING`, `E_BODY_NOT_BOOLEAN`);
 - `inputs` that §5.1 refuses (`E_INPUTS`, `E_INPUTS_NAME`, `E_INPUTS_COUNT`, `E_INPUTS_MIXED`), read after the map;
 - a definition reached neither from `root`, from `program_fn`'s record nor from the map's bodies (`E_UNREACHED`), read last;

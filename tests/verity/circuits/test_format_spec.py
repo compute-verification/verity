@@ -349,6 +349,7 @@ REJECT = [
     ("an Input node inside a Definition", lambda d: _inner_input(d, "Input32_v1"), "appears only in the root's body"),
     ("a v1 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v1"), "E_SCHEMA"),
     ("a v0 descriptor", lambda d: d.update(schema="verity-ir/descriptor/v0"), "E_SCHEMA"),
+    ("a top-level key the format lacks", lambda d: d.update(extra=1), "E_KEYS"),
     ("a Boolean map that is not an object", lambda d: d.update(boolean=[]), "E_BODY_KEY"),
     ("a word primitive with no Boolean body", lambda d: d["boolean"].pop("TAdd32_v1"), "E_BODY_MISSING"),
     ("a Boolean map key that is no word primitive", lambda d: d["boolean"].__setitem__("TPair_v1", d["boolean"]["TAdd32_v1"]),

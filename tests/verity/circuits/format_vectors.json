@@ -1519,6 +1519,10 @@
    "ValueError: E_SCHEMA: a verity-ir/descriptor/v0 descriptor holds no Boolean bodies, and only verity-ir/descriptor/v2 is read; encode the program again"
   ],
   [
+   "a top-level key the format lacks",
+   "ValueError: E_KEYS: the top-level keys ['extra'] are not verity-ir/descriptor/v2's, and the program digest does not cover them"
+  ],
+  [
    "a Boolean map that is not an object",
    "ValueError: E_BODY_KEY: `boolean` is list, not an object of descriptor ids"
   ],
