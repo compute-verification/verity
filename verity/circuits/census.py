@@ -112,7 +112,7 @@ from typing import Any, Callable, Iterable, Iterator
 from verity.circuits import boolean as BL
 from verity.circuits import ports
 from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind, recut_unread
 from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
 from verity.circuits.layout import resolve
 from verity.circuits.liveness import _MEMBER_LIMIT
@@ -1019,6 +1019,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     root Call's own gates, a resolver (`verity.circuits.ops.boolean.versions.boolean_version`) each root Call that is not Boolean through
     the Boolean Definition it returns; either refuses (`NoBooleanWork`) every root Call it cannot count, by name."""
     root = program.root
+    recut_unread(root, "census.census")
     nodes = root.body.nodes
     I = sum(1 for nd in nodes if is_input(nd.fn))
     if any(not is_input(nd.fn) for nd in nodes[:I]):

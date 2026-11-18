@@ -63,7 +63,7 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     got, held = stand_in
     ex, cfg = messages.Exchange(), vllm_config()
     assert SP.attach(ex, cfg, *SP.config(ENV)) == [held]
-    assert got == [(ex, {"settings": {"k": 1}, "build": ex.key, "process": H.ENGINE, "feed": FEED})]
+    assert got == [(ex, {"settings": {"k": 1}, "build": ex.key, "gate": None, "process": H.ENGINE, "feed": FEED})]
     assert cfg.cache_config.num_gpu_blocks_override == 64
     assert ex.declared.properties == {"model": "m", "execution": None, "eager": True, "world": 1, "dtype": "bfloat16",
                                       "quantization": None, "prefix_cache": False, "kernels": "profile",
@@ -71,6 +71,17 @@ def test_the_engine_attaches_each_scheme_with_its_context_and_answers_what_vllms
     assert (ex.declared.schemes, ex.declared.settings) == (("stand-in",), {"stand-in": {"k": 1}})
     with pytest.raises(NotImplementedError, match="vllm/scheme-on-in-vllm-server: schemes inside vLLM's server on one GPU"):
         SP.attach(messages.Exchange(), vllm_config(tp=2), *SP.config(ENV))
+
+
+def test_the_engine_hands_each_scheme_the_challenger_gate_its_configuration_names(stand_in):
+    """``gate`` in the configuration is infra's challenger gate command: each scheme's ``ctx["gate"]`` sends its words
+    there (`commit_coins.ChallengerGate.call`); without it, None."""
+    got, _ = stand_in
+    env = {**ENV, "VERITY_PROTOCOLS_CONFIG": '{"feed": "%s", "gate": "ssh -i KEY gate@host", "stand-in": {"k": 1}}' % FEED}
+    SP.attach(messages.Exchange(), vllm_config(), *SP.config(env))
+    gate = got[0][1]["gate"]
+    assert gate.__name__ == "call" and gate.__self__.command == ["ssh", "-i", "KEY", "gate@host"]
+    assert SP.challenger_gate(None) is None and SP.challenger_gate("") is None
 
 
 def test_register_attaches_before_the_model_loads_and_releases_at_shutdown(stand_in, monkeypatch):
@@ -201,7 +212,7 @@ def test_the_front_answers_a_schemes_route_with_the_body_as_it_streams_in(front_
                                                           {"type": "http.request", "body": b"1 2\n"}])
     assert answer(sent) == (200, "fed") and not app_calls
     assert front_scheme["bodies"] == [("POST /feed HTTP/1.1", "ab", [b"0 1\n", b"1 2\n"])]
-    assert front_scheme["ctx"] == [{"settings": {"k": 0}, "build": front.ex.key, "process": H.FRONT, "feed": FEED}]
+    assert front_scheme["ctx"] == [{"settings": {"k": 0}, "build": front.ex.key, "gate": None, "process": H.FRONT, "feed": FEED}]
 
 
 def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_the_server(front_scheme):
