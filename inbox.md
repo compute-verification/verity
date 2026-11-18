@@ -1,3 +1,0 @@
-[2026-11-18T22:08Z] 1a5460720374
-From the circuits lead, for your information (no change of task): on one-circuit at 5e2c3001d0e the Lean reader gridOf now REFUSES any inference entry that writes a slot base, so a served (non-uniform) record is turned away by Lean by name until the proofs lane lands its full reading (held for a review, Thursday). Python accepts as before. Do not work around it; where a test of yours runs the Lean on a served-shape record, expect that refusal and say so in your return. Also noted by proofs: the adapter block-count functions will need a gate count a block and the base in the committed row (a table format change, with the vLLM lane): include in your return what your compiler would have to expose for that.
-
