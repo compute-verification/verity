@@ -42,7 +42,7 @@ Two kinds of committed run:
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
-        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
+        [--serving-rows-tables REGISTRATION] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --zk-server flock-zk-server --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
@@ -940,8 +940,8 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
 
 def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
     """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
-    ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
-    return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
+    ``--serving-rows-tables`` (``{rank}`` in its path its rank's), its salts the salt file beside it; None without one."""
+    return {"registration": a.serving_rows_tables} if a.serving_rows_tables else None
 
 
 def checkpoint_of(a: argparse.Namespace) -> Any:
@@ -1972,7 +1972,6 @@ def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None,
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
     p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
                    "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
-    p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
     p.add_argument("--checkpoint-dir", help="the checkpoint the registered weights a window's rows read are composed from, each "
                    "held to its committed tensor root (default none: only the tensors the bundle carries open)")
     p = sub.choices["audit"]

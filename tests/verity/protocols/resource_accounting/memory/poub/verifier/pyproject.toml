@@ -17,6 +17,8 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "verity/commitments/lms/lean",
           "verity/circuits/difftest",
+          # PoUB's declaration, which the prover's side reads (`period_prover`), and the interface it is declared in
+          "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/scheme.py",
           "verity/__init__.py", "verity/errors.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",

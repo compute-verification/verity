@@ -125,5 +125,5 @@ def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_no
         kit.gpu_target("xeon-6776p-2s", directory=CARD_FILES)
     h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
     (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
-    with pytest.raises(SystemExit, match="arch 'GH100'"):
+    with pytest.raises(SystemExit, match="no architecture 'GH100'"):
         kit.gpu_target("h200-sxm-141gb", directory=tmp_path)

@@ -254,6 +254,10 @@ means = "PoUB: with no hardware at the site, how many reads of a node's register
 protocol = true
 
 [[tree]]
+path = "verity/protocols/resource_accounting/memory/poub/scheme.py"
+means = "PoUB as a resource scheme, registered as bandwidth"
+
+[[tree]]
 path = "verity/protocols/resource_accounting/network/"
 means = "network attestation: the network attester and its guarantee"
 protocol = true
