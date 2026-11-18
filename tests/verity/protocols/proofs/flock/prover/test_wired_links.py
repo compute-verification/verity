@@ -34,7 +34,8 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.circuits.private_circuits import universal as U
-from verity.circuits.ops.scalar import BF16, I32, BitAnd, BitNot, I32Add, SelectBf16
+from verity.circuits.ops.prims import E4m3ToF32
+from verity.circuits.ops.scalar import BF16, BIT, F32ToS8RniSat, I32, S8, BitAnd, BitNot, I32Add, SelectBf16
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
 
@@ -76,31 +77,51 @@ MIX = CompositeDefinition(
                                    array_of([B.call(BitAnd, z[0], z[1]), B.call(BitNot, z[1])])), register=False)
 
 
-def _mix_program(field: int):
-    """Two layers of `MIX`, layer 1's unit t reading layer 0's unit t's return field ``field`` and circuit inputs else."""
-    fn = bind(MIX)
-    ret = fn.signature()[1]
-    sig = (("ch", Array(N, BF16)), ("cw", Array(N, I32)), ("cz", Array(N, Array(2, U.BIT))))
+def _recode(B, q):
+    """Each 8-bit leaf of ``q`` read as E4M3 and rounded to an s8 code: an 8-bit leaf from an 8-bit leaf."""
+    return array_of([B.call(F32ToS8RniSat, B.call(E4m3ToF32, x)) for x in q])
+
+
+#: return fields of 8-bit leaves in front of a 16-bit or a 32-bit leaf (a quantiser's codes, then its scale), and 32-bit
+#: leaves in front of a 16-bit one: a field's first word is not its first leaf
+PAIR8 = CompositeDefinition(
+    "WiredLinksPair8", 1, (), lambda S: ((("q", Array(2, S8)), ("h", BF16), ("z", BIT)), Tuple(Array(2, S8), BF16)),
+    lambda B, S, q, h, z: tuple_of(_recode(B, q), B.call(SelectBf16, z, h, h)), register=False)
+QUANT = CompositeDefinition(
+    "WiredLinksQuant", 1, (), lambda S: ((("q", Array(4, S8)), ("w", I32)), Tuple(Array(4, S8), I32)),
+    lambda B, S, q, w: tuple_of(_recode(B, q), B.call(I32Add, w, w)), register=False)
+WIDE = CompositeDefinition(
+    "WiredLinksWide", 1, (), lambda S: ((("a", Array(2, I32)), ("h", BF16), ("z", BIT)), Tuple(Array(2, I32), BF16)),
+    lambda B, S, a, h, z: tuple_of(array_of([B.call(I32Add, x, x) for x in a]), B.call(SelectBf16, z, h, h)), register=False)
+
+
+def _mix_program(field: int, defn=MIX):
+    """Two layers of ``defn``, layer 1's unit t reading layer 0's unit t's return field ``field`` into its parameter
+    ``field`` and circuit inputs else."""
+    fn = bind(defn)
+    params, ret = fn.signature()
+    sig = tuple((f"c{i}", Array(N, t)) for i, (_n, t) in enumerate(params))
+    axes = (0,) * len(params)
 
     def body(B, S, *cs):
-        u0 = B.batch(fn, *cs, axes=(0, 0, 0), n=N)
+        u0 = B.batch(fn, *cs, axes=axes, n=N)
         srcs = list(cs)
         srcs[field] = array_of([u0[t][field] for t in range(N)])
-        return B.batch(fn, *srcs, axes=(0, 0, 0), n=N)
+        return B.batch(fn, *srcs, axes=axes, n=N)
 
-    return fn, Program(CompositeDefinition(f"WiredLinksMixTest{field}", 1, (), lambda S: (sig, Array(N, ret)), body,
+    return fn, Program(CompositeDefinition(f"{defn.name}Test{field}", 1, (), lambda S: (sig, Array(N, ret)), body,
                                            register=False))
 
 
-def _stage_mix(d: Path, field: int):
+def _stage_mix(d: Path, field: int, defn=MIX):
     """`_mix_program`'s writers (layer 0) and honest readers (layer 1), each instance's rows its own."""
-    fn, program = _mix_program(field)
+    fn, program = _mix_program(field, defn)
     query = PO.template_instance_query(fn)
     units = PU.PartitionUnits(program, query=query)
     [(shape, cl)] = units.classes().items()
     tp = PO.TemplatePartition(program, query)
-    rng = random.Random(f"test-wired-links/mix/{field}")
-    inputs = [rng.randrange(1 << 16) for _ in range(N)] + [rng.randrange(1 << 32) for _ in range(N)] + [rng.randrange(2) for _ in range(2 * N)]
+    rng = random.Random(f"test-wired-links/{defn.name}/{field}")
+    inputs = [rng.randrange(1 << w) for _n, t in fn.signature()[0] for _ in range(N) for w in t.leaf_widths()]
     assert min(g for u in range(tp.population) for g in tp.outputs(u)) >= len(inputs)
     (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
     (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
@@ -271,7 +292,7 @@ def _stage(topo, d: Path, wired: bool, unit=U.UniversalUnit):
         del wide[port]["words"]
         (d / "no_words.reads.json").write_text(json.dumps({"format": RG.READS, "ports": wide}))
         text = (d / "honest" / "circuit.txt").read_text()
-        (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)))))
+        (d / "links.json").write_text(json.dumps(CS.links_file(program, query, text, list(range(tp.population)), fn)))
     return fn, program, query, tp, st
 
 
@@ -415,10 +436,13 @@ def test_a_wire_of_part_of_a_return_field_or_of_several_is_refused_by_name(topo,
 
 
 def test_a_link_reads_its_field_at_the_fields_first_leaf_and_its_parameters_sit_at_that_fields_first_word():
-    """Behind a 32-bit output leaf a field's first word is past its first leaf: META ``at`` counts leaves (Lean's
-    `HmLinks.fieldSpans`), the link row's frame words, each output leaf ``ceil(bits / 16)`` of them."""
+    """Behind a 32-bit output leaf a field's first word is past its first leaf: the link row's frame words, each output leaf
+    ``ceil(bits / 16)`` of them, and META ``at``, each earlier field ``ceil(bits / 16)`` words (Lean's `HmLinks.fieldSpans`);
+    behind two 8-bit leaves the frame's word 2 is the field's word 1."""
     uc = SimpleNamespace(in_widths=[16, 16], out_widths=[32, 16, 16])
-    assert CS._link_frame(uc, [0, 1, 3], [0, 1], 1) == (2, 4)
+    assert CS._link_frame(uc, [0, 1, 3], [0, 1], 1) == (2, 4) and CS._link_word(uc.out_widths, [0, 1, 3], 1) == 2
+    assert CS._link_word([8, 8, 16], [0, 2, 3], 2) == 1 and CS._link_word([8, 8, 8, 8, 32], [0, 4, 5], 4) == 2
+    assert CS._link_word([32, 32, 16], [0, 2, 3], 2) == 4 and CS._link_word([1, 1], [0, 2], 1) == 0
     with pytest.raises(ValueError, match="not one field's"):
         CS._link_frame(uc, [0, 1, 3], [0, 1], 2)
 
@@ -429,15 +453,16 @@ def test_link_triples_refuse_a_cut_wire_no_link_carries_a_read_at_another_offset
     reads = CS.cut_reads(tp, indices)
     x0 = len(tp.inputs(0)) - N_IN
     n_out = lambda v: len(tp.outputs(v))  # noqa: E731
+    word = lambda _v, leaf: CS._link_word([1] * N_OUT, [0, N_OUT], leaf)  # noqa: E731
     with pytest.raises(ValueError, match="no link port carries it"):
-        CS.link_triples({}, reads, indices, n_out)
-    with pytest.raises(ValueError, match="outputs from 1, and the link's offset is 0"):
-        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN - 1]},
-                                   {"port": "p1", "leaves": [x0 + N_IN - 1, x0 + N_IN]}]}, reads, indices, n_out)
+        CS.link_triples({}, reads, indices, n_out, word)
+    with pytest.raises(ValueError, match=r"outputs from 0 \(word 0\), and the link's offset is word 1"):
+        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN - 1], "at": 1},
+                                   {"port": "p1", "leaves": [x0 + N_IN - 1, x0 + N_IN]}]}, reads, indices, n_out, word)
     with pytest.raises(ValueError, match="not a run of one unit's outputs in order"):
-        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT - 1, x0 + N_IN]}]}, reads, indices, n_out)
+        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT - 1, x0 + N_IN]}]}, reads, indices, n_out, word)
     with pytest.raises(ValueError, match="not one of the statement's units"):
-        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN]}]}, reads[N:], indices[N:], n_out)
+        CS.link_triples({"links": [{"port": "p0", "leaves": [x0 + N_IN - N_OUT, x0 + N_IN]}]}, reads[N:], indices[N:], n_out, word)
 
 
 def _lean(*args: str) -> tuple[dict | None, str]:
@@ -482,11 +507,11 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
     bad, out = at("honest", *bound, reads="wrong_field.reads.json")
     print("wrong_field", out.strip().splitlines()[-1])
     assert bad is None and "reads its writer's whole output row" in out, out
-    # a link reads one whole return field of its writer, from the field's first leaf (the unit's one field, at 0), and
+    # a link reads one whole return field of its writer, from the field's first word (the unit's one field, at 0), and
     # nothing else (HmLinks.checkUnit)
     bad, out = at("wrong_offset", *bound)
     print("wrong_offset", out.strip().splitlines()[-1])
-    assert bad is None and f"read unit 0's outputs [1, {1 + N_OUT}), which are not one whole return field" in out, out
+    assert bad is None and "starts at word 1 of unit 0's output row, where no return field starts" in out, out
     # a link row is its tree port's registered row, whose width the port names (Registered.checkPort's Port.fits)
     port = _meta(d / "honest")["links"][0]["port"]
     bad, out = at("honest", *bound, reads="wrong_width.reads.json")
@@ -550,7 +575,7 @@ def test_lean_accepts_a_read_of_one_return_field_and_refuses_a_made_up_one(field
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-@pytest.mark.parametrize("name,why", [("part", "read unit 0's outputs [1, 2), which are not one whole return field"),
+@pytest.mark.parametrize("name,why", [("part", "read unit 0's outputs [0, 1), which are not one whole return field"),
                                       ("fields", "read unit 0's outputs [0, 2), which are not one whole return field"),
                                       ("straddle", "read unit 0's outputs and other leaves")])
 def test_lean_refuses_a_link_of_part_of_a_field_or_of_two_its_prover_staged_unchecked(unchecked, name, why):
@@ -621,13 +646,13 @@ def test_the_live_verifier_checks_links_against_its_own_file(staged):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("field,at,word", [(1, 1, 1), (2, 2, 3)], ids=["the-32-bit-field", "the-field-behind-it"])
 def test_lean_accepts_a_read_of_one_field_of_a_writer_of_three_widths(field, at, word, tmp_path):
-    """`MIX` returns a 16-bit leaf, a 32-bit leaf and two bits: META ``at`` counts its leaves, its output row's frame words,
-    so the field behind the 32-bit leaf is at leaf 2 and word 3."""
+    """`MIX` returns a 16-bit leaf, a 32-bit leaf and two bits: META ``at`` is the field's first word, so the field behind
+    the 32-bit leaf is at leaf 2 and word 3."""
     CS.cache_slot_circuits()
     uc = _stage_mix(tmp_path, field)
     assert list(uc.out_widths) == [16, 32, 1, 1]
     [link] = _meta(tmp_path / "honest")["links"]
-    assert link.get(FC.LINK_AT, 0) == at and sum(CS._words(w) for w in uc.out_widths[:at]) == word, link
+    assert link.get(FC.LINK_AT, 0) == word and sum(CS._words(w) for w in uc.out_widths[:at]) == word, link
     subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     bound = ["--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.desc")]
     for name, reads in (("writers", "writers.reads.json"), ("honest", "readers.reads.json")):
@@ -636,3 +661,39 @@ def test_lean_accepts_a_read_of_one_field_of_a_writer_of_three_widths(field, at,
         print(field, name, out.strip().splitlines()[-1])
         assert ok is not None, out
     assert f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], out
+
+
+NO_START = "where no return field starts"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("defn,widths,word,cheats", [
+    (PAIR8, [8, 8, 16], 1, {2: NO_START}),
+    (QUANT, [8, 8, 8, 8, 32], 2, {4: NO_START, 1: NO_START, 3: NO_START}),
+    (WIDE, [32, 32, 16], 4, {2: NO_START, 3: NO_START, 5: "is not a hm96-sha512/row/v1 row whose word 5"})],
+    ids=["two-8-bit-leaves", "a-quantisers-codes", "two-32-bit-leaves"])
+def test_lean_reads_a_links_offset_in_its_writers_words(defn, widths, word, cheats, tmp_path):
+    """A reader of the field behind a field of 8-bit or 32-bit leaves: its link's offset is the field's first word, each
+    earlier field ``ceil(bits / 16)`` words (`Flock.Program.wordsOf`), not its first leaf, and the Lean verifier accepts the
+    honest link and refuses it at the field's first leaf (the old offset), a unit off, or inside the earlier field."""
+    CS.cache_slot_circuits()
+    uc = _stage_mix(tmp_path, 1, defn)
+    assert list(uc.out_widths) == widths
+    [link] = _meta(tmp_path / "honest")["links"]
+    assert link[FC.LINK_AT] == word, link
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    bound = ["--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.desc")]
+
+    def at(name: str, reads: str):
+        return _lean("--circuit", str(tmp_path / name / "circuit.txt"), "--public", str(tmp_path / name / f"pub-{N}.bin"),
+                     *bound, "--registered", str(tmp_path / reads))
+
+    for name, reads in (("writers", "writers.reads.json"), ("honest", "readers.reads.json")):
+        ok, out = at(name, reads)
+        assert ok is not None, (name, out)
+    assert f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], out
+    for off, why in cheats.items():
+        _edit_meta(tmp_path / "honest", tmp_path / f"at{off}", lambda m: m["links"][0].update({FC.LINK_AT: off}))
+        bad, out = at(f"at{off}", "readers.reads.json")
+        print(defn.name, off, out.strip().splitlines()[-1])
+        assert bad is None and why in out, (off, out)

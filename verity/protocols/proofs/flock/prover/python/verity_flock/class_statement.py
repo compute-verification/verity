@@ -341,15 +341,25 @@ def _link_frame(uc: ProofBlockCircuit, starts: list[int], group: list[int], at: 
     return sum(_words(w) for w in uc.out_widths[:at]), sum(_words(w) for w in uc.out_widths)
 
 
+def _link_word(widths: Sequence[int], starts: list[int], at: int) -> int:
+    """Output leaf ``at``'s word as the verifier counts a link's offset (Lean's `HmLinks.fieldSpansOf`), of a writer whose
+    output leaves have ``widths``: each earlier return field ``⌈bits / 16⌉`` words of its own (`Flock.Program.wordsOf`), then
+    the bits before it in its own field."""
+    f = max(k for k in range(len(starts) - 1) if starts[k] <= at)
+    ws = list(widths)
+    return sum(-(-sum(ws[starts[k]:starts[k + 1]]) // 16) for k in range(f)) + sum(ws[starts[f]:at]) // 16
+
+
 def _link(port: str, lo: int, hi: int, at: int) -> dict:
     return {"port": port, "leaves": [lo, hi], **({FC.LINK_AT: at} if at else {})}
 
 
-def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -> list[tuple[int, str, int]]:
+def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out, word) -> list[tuple[int, str, int]]:
     """Every link the circuit's META ``links`` declares, as (reader instance, port, writer instance), from the units' reads
     (`cut_reads` of the statement's units ``indices``): a link port's leaves are, in the reader, circuit inputs (no link) or one
-    writer's outputs from the link's offset (`FC.LINK_AT`, 0 without it), the writer one of the statement's instances. Refuses a
-    cut wire (a leaf reading another unit's output) that no link port carries."""
+    writer's outputs from the output whose word (``word(writer, output)``: `_link_word`) is the link's offset (`FC.LINK_AT`,
+    0 without it), the writer one of the statement's instances. Refuses a cut wire (a leaf reading another unit's output)
+    that no link port carries."""
     links = meta.get("links") or []
     pos = {u: i for i, u in enumerate(indices)}
     covered = [(x["port"], *x["leaves"], x.get(FC.LINK_AT, 0)) for x in links]
@@ -366,21 +376,24 @@ def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -
             if run is None:
                 continue
             v = run[0]
-            if run[1] != at:
-                raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}'s outputs from {run[1]}, and the link's "
-                                 f"offset is {at}")
+            if word(v, run[1]) != at:
+                raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}'s outputs from {run[1]} (word "
+                                 f"{word(v, run[1])}), and the link's offset is word {at}")
             if v not in pos:
                 raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}, which is not one of the statement's units")
             out.append((i, port, pos[v]))
     return out
 
 
-def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> dict:
+def links_file(program: Any, query: dict, text: str, indices: Sequence[int], fn: Any) -> dict:
     """The verifier's own ``--links`` file for the live verifier (``flock-circuit serve``): every link of the statement, derived
-    from its own program and query (`link_triples`), bound to the circuit and the partition it checks them for."""
+    from its own program and query (`link_triples`, the writers ``fn``'s units), bound to the circuit and the partition it
+    checks them for."""
     meta = FC.meta_of(text)
     tp = PO.TemplatePartition(program, query)
-    triples = link_triples(meta, cut_reads(tp, indices), indices, lambda v: len(tp.outputs(v)))
+    widths, starts = fn.signature()[1].leaf_widths(), _field_starts(fn)
+    triples = link_triples(meta, cut_reads(tp, indices), indices, lambda v: len(tp.outputs(v)),
+                           lambda _v, leaf: _link_word(widths, starts, leaf))
     return {"format": LINKS_FORMAT, "circuit_sha512": FC.digest(text), "partition": meta["partition"]["digest"],
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
@@ -765,7 +778,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         idents = [idents[o] if s is None else [(("tree", w) if leaf is not None else ("link", w, k)) if w is not None else ("in", k)
                                                for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
-    links = [_link(f"p{i}", *s) for i, s in enumerate(spans) if s is not None]
+    links = [_link(f"p{i}", s[0], s[1], _link_word(uc.out_widths, _field_starts(act.fn), s[2])) for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows, frames=frames)
     whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +

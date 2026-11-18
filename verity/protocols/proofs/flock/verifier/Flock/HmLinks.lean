@@ -12,6 +12,7 @@ public import Flock.LinkUnits
 public import Flock.FV3
 public import Flock.HmOutCols
 public import Flock.TmplSection
+public import Flock.Words
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -29,8 +30,8 @@ reader's row is the writer's committed row as one commitment, not a second commi
 read from the verifier's own program, so in this model the topology is public, a known leak that later work removes. -/
 namespace HmLinks
 
-/-- A link row: input row `port` holds template parameter leaves `[lo, hi)` at its words `[off, off + hi - lo)`, the words
-its writer's output row holds those outputs at. -/
+/-- A link row: input row `port` holds template parameter leaves `[lo, hi)`, its writer's return field that starts at
+word `off` of the writer's output row (`fieldSpansOf`). -/
 structure Link where
   port : Nat
   lo : Nat
@@ -39,9 +40,10 @@ structure Link where
   deriving Inhabited
 
 /-- META `links`: each `{port, leaves: [lo, hi], at}` (`at` 0 when absent), an input row by name that is its writer's whole
-output row, a `hm96-sha512/row/v1` row (neither a bit row nor segmented) holding parameter leaves `[lo, hi)` from its word
-`at`; a row once, the ranges disjoint, at least one, in a statement of one v1 output row. None without the key. The row's
-words are its tree port's registered row's (`Registered.checkPort`), and `at` is the program's (`checkUnit`). -/
+output row, a `hm96-sha512/row/v1` row (neither a bit row nor segmented) holding parameter leaves `[lo, hi)`, the field
+from its word `at` (a word of the row); a row once, the ranges disjoint, at least one, in a statement of one v1 output
+row. None without the key. The row's words are its tree port's registered row's (`Registered.checkPort`), and `at` and
+the field's words within them are the program's (`checkUnit`). -/
 def parse (c : Circuit) : V (Array Link) := do
   let some lj := (c.metaJ.getObjVal? "links").toOption | return #[]
   let xs ← J.asArr lj "META links"
@@ -64,8 +66,8 @@ def parse (c : Circuit) : V (Array Link) := do
     let off ← if keys.contains "at" then J.nat x "at" "META links" else pure 0
     let pt := c.ports.getD p default
     if lv.size != 2 || lv[0]! ≥ lv[1]! then throw s!"META links: {name}'s leaves are not [lo, hi) with lo < hi"
-    if pt.v2 || pt.segs.isSome || off + (lv[1]! - lv[0]!) > pt.words then
-      throw s!"META links: {name} is not a hm96-sha512/row/v1 row holding its {lv[1]! - lv[0]!} leaves from leaf {off} in its {pt.words} words"
+    if pt.v2 || pt.segs.isSome || off ≥ pt.words then
+      throw s!"META links: {name} is not a hm96-sha512/row/v1 row whose word {off} is one of its {pt.words} words"
     if r.any (fun l => l.port == p || (l.lo < lv[1]! && lv[0]! < l.hi)) then
       throw s!"META links: {name} is linked twice, or its leaves overlap another link's"
     r := r.push { port := p, lo := lv[0]!, hi := lv[1]!, off }
@@ -94,14 +96,16 @@ def writerOf (P : Program.Prog) (ns : List NodeUnits) (u t : Nat) : V (Option Na
   let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
   pure ((ops[t]?).bind (ownerAt ns))
 
-/-- A return type's fields (`Program.fieldsOf`) among its output leaves: each one's first leaf and its leaves. In leaves,
-not words: a leaf of more than 16 bits is one leaf here and more than one word of the output row. -/
-def fieldSpansOf (ret : Program.Ty) : List (Nat × Nat) :=
-  ((Program.fieldsOf ret).foldl (fun (acc : List (Nat × Nat) × Nat) t => (acc.1 ++ [(acc.2, t.leaves)], acc.2 + t.leaves))
-    ([], 0)).1
+/-- A return type's fields (`Program.fieldsOf`): each one's first word in the output row (`fieldWord`: the earlier
+fields' `Program.wordsOf`, each field on `⌈bits/16⌉` words of its own, two 8-bit leaves to a word), its first leaf
+among the output leaves (`fieldOffset`), its leaves, and its words. -/
+def fieldSpansOf (ret : Program.Ty) : List (Nat × Nat × Nat × Nat) :=
+  ((Program.fieldsOf ret).foldl (fun (acc : List (Nat × Nat × Nat × Nat) × Nat × Nat) t =>
+    (acc.1 ++ [(acc.2.1, acc.2.2, t.leaves, Program.wordsOf t)], acc.2.1 + Program.wordsOf t, acc.2.2 + t.leaves))
+    ([], 0, 0)).1
 
 /-- Root node `k`'s callee's return fields (`fieldSpansOf`). -/
-def fieldSpans (P : Program.Prog) (k : Nat) : List (Nat × Nat) :=
+def fieldSpans (P : Program.Prog) (k : Nat) : List (Nat × Nat × Nat × Nat) :=
   fieldSpansOf (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).ret
 
 /-- Unit `v`'s template (its node's callee) and its leaf in each of that template's output field trees: its rank among
@@ -116,8 +120,8 @@ def treeLeaf (P : Program.Prog) (ns : List NodeUnits) (v : Nat) : Option (String
 /-- Linking for the population's reader `i` (its place in the public file), with `unitOf` a unit's node and member and
 `ownerOf` the unit whose gates hold a gate (of `n` units): every parameter leaf of the unit that reads another unit's output
 lies in a link of `links`; each link's leaves are either all circuit inputs (the row is an ordinary input row) or one
-whole return field of one unit (`fieldSpans`), from its first leaf `at`, in order, so `at` is the program's; a read of two
-units or of other than one field is refused. Its link row is the writer's whole output row, read by path in the writer
+whole return field of one unit (`fieldSpans`), in order, `at` that field's first word and the field's words within the
+link row's, so `at` is the program's; a read of two units or of other than one field is refused. Its link row is the writer's whole output row, read by path in the writer
 template's tree (`Registered.checkLinked`), whether or not the writer is a unit of the file. The cut wires checked. -/
 def checkUnit (c : Circuit) (P : Program.Prog) (links : Array Link) (popIdx : Array Nat)
     (unitOf : Nat → Option (Nat × Nat)) (ownerOf : Nat → Option Nat) (n i : Nat) : V Nat := do
@@ -141,11 +145,16 @@ def checkUnit (c : Circuit) (P : Program.Prog) (links : Array Link) (popIdx : Ar
       if rd.any (ownerOf · != some v) then
         throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs and other leaves: a link row is one writer unit's, so the reader's port is cut at its writers' units"
       let (kv, mv) := (unitOf v).getD (0, 0)
-      if !(fieldSpans P kv).contains (off, rd.size) then
-        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs [{off}, {off + rd.size}), which are not one whole return field of its (fields at {fieldSpans P kv}): a link row reads one field, from its first leaf"
+      let spans := fieldSpans P kv
+      let some (_, f, _, fw) := spans.find? (·.1 == off)
+        | throw s!"links: unit {u}'s link row {name} starts at word {off} of unit {v}'s output row, where no return field starts (fields at words {spans.map (·.1)}): a link row reads one field, from its first word"
+      if !spans.contains (off, f, rd.size, fw) then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read unit {v}'s outputs [{f}, {f + rd.size}), which are not one whole return field of its (fields at words {spans.map (·.1)}, leaves {spans.map (·.2.1)}): a link row reads one field, from its first word"
+      if off + fw > (c.ports.getD p default).words then
+        throw s!"links: unit {u}'s link row {name} holds {(c.ports.getD p default).words} words, and unit {v}'s field at word {off} is {fw} words"
       let og ← outGates P kv mv
-      if og.extract off (off + rd.size) != rd then
-        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not unit {v}'s field [{off}, {off + rd.size}), in order"
+      if og.extract f (f + rd.size) != rd then
+        throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not unit {v}'s field [{f}, {f + rd.size}), in order"
       wires := wires + 1
   return wires
 

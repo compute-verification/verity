@@ -162,7 +162,7 @@ def stage_chain(d: Path) -> dict:
     rec = CS.stage(units, SPEC, shape, cl, chain_lanes(units, cl, tp, f"rec-reprice/chain/{tp.population}"), d,
                    wiring=wiring, share_rows=False)
     text = (d / "circuit.txt").read_text()
-    links = CS.links_file(prog, query, text, wiring.indices)
+    links = CS.links_file(prog, query, text, wiring.indices, units.activation(cl.definition).fn)
     (d / "links.json").write_text(json.dumps(links))
     return {"shape": shape, "stage": rec, "links": len(links["links"]), "bindings": partition(d, prog)}
 

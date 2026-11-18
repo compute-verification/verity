@@ -733,7 +733,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     The data guard counts a port whose derivation it does not list as data (``verity.circuits.operations.public_data``).
 
     ``links`` (``[{"port", "leaves": [lo, hi], "at"?}]``, META ``links``, `HmOut`): input rows that hold template parameter
-    leaves ``[lo, hi)`` as an output row holds outputs ``at``, ``at + 1``, … (a word per leaf; ``at`` 0 without the key), so
+    leaves ``[lo, hi)`` as an output row holds the return field whose first word is ``at`` (each earlier field ``⌈bits / 16⌉``
+    words, `Flock.Program.wordsOf`; ``at`` 0 without the key), so
     that a reader whose leaves are another unit's outputs commits its writer's whole output row; the verifiers compare the
     two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a size class's own template id is

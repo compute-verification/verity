@@ -80,7 +80,9 @@ open Flock.HmLinks (nodes unitAt ownerAt count outGates) in
 /-- **A link reads its writer's outputs exactly** (`Flock.HmLinks.checkUnit`): where a circuit's links parse and
 `checkUnit` accepts reader `i` of the public file, every parameter leaf of the reader's unit that the program wires to
 another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one whole return field
-of one writer unit (`Flock.HmLinks.fieldSpans`), leaf for leaf, from the field's first leaf. -/
+of one writer unit (`Flock.HmLinks.fieldSpans`), leaf for leaf: the link's offset is the field's first word in the
+writer's output row (each field on `Flock.Program.wordsOf` words of its own), the field's words lie within the link
+row's, and its leaves are read from the field's first leaf. -/
 def LinksExact : Prop :=
   ∀ (c : Flock.Circuit) (P : Flock.Program.Prog) (links : Array Flock.HmLinks.Link) (popIdx : Array Nat) (i w : Nat),
     Flock.HmLinks.parse c = .ok links →
@@ -92,7 +94,8 @@ def LinksExact : Prop :=
         ((∀ t, l.lo ≤ t → t < l.hi → ownerAt (nodes P) ops[t]! = none) ∨
           ∃ (v kv mv : Nat) (og : Array Nat), ownerAt (nodes P) ops[l.lo]! = some v ∧
             unitAt (nodes P) v = some (kv, mv) ∧ outGates P kv mv = .ok og ∧
-            (l.off, l.hi - l.lo) ∈ Flock.HmLinks.fieldSpans P kv ∧ ops.extract l.lo l.hi = og.extract l.off (l.off + (l.hi - l.lo)))
+            ∃ f fw : Nat, (l.off, f, l.hi - l.lo, fw) ∈ Flock.HmLinks.fieldSpans P kv ∧
+              l.off + fw ≤ (c.ports.getD l.port default).words ∧ ops.extract l.lo l.hi = og.extract f (f + (l.hi - l.lo)))
 
 open Flock.HmLinks (nodes writerOf) in
 /-- **Every link row is read by path at its writer's leaf** (`Flock.Registered.check`): where the verifier's registered
