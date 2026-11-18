@@ -243,7 +243,7 @@ running), and without one it is skipped and said. The plan is the lead's, one `[
 `from` and `until` (TOML date-times, UTC) and `metrics`, the ids it is free for: a row naming none is free for none, and
 said. Never `auto`, never vy-nebius-cpu-2, -4, -5 or -6. A pass launches at most `--max`, and nothing while
 `--max-in-flight` of the loop's launches are in flight (launching, queued or running; the pass's line says how many, and how
-many it held back for the cap); never a number whose last launch
+many it held back for it); never a number whose last launch
 of the loop's is in flight (a run whose state can't be read stays so) or passed less than its `every` ago, whatever the door
 says; never a loop's own number (a row whose command's script is under `infra/control/`); never a parked number (a row
 whose `goal` is `top/parked`, rerun only by hand), and said; never a command that takes a value only its owner fills in

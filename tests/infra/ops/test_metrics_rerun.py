@@ -739,7 +739,7 @@ def test_the_checked_in_loop_parses_and_launches_nowhere_it_must_not():
     cfg, ns = R.parse(lp.argv[3:])
     assert not ns.dry_run and not ns.once and cfg.max >= 1 and ns.every == 900, "the row declares its interval"
     assert cfg.stop.parent == cfg.state.parent == Path("/data/watchers")
-    assert "--max-in-flight" in lp.argv and cfg.max_in_flight == 4, "the row declares its cap on runs in flight"
+    assert "--max-in-flight" in lp.argv and cfg.max_in_flight == 4, "the row declares its limit on runs in flight"
     args = ["--tree", "t", "--state", "s", "--stop", "x", "--plan", "p", "--pool", "research", "--every", "900", "--on", "m"]
     assert R.parse(args)[0].max_in_flight == 4
 
@@ -842,8 +842,8 @@ def flying(n):
 
 
 def test_no_launch_past_max_in_flight_counting_this_passes_and_the_pass_says_how_many_it_held(tmp_path):
-    """With three of its runs queued or running and a cap of four, a pass launches one of two due numbers and holds the other
-    back for the cap, whatever --max allows; once one of the three ends, the next pass launches it."""
+    """With three of its runs queued or running and a limit of four, a pass launches one of two due numbers and holds the other
+    back for the limit, whatever --max allows; once one of the three ends, the next pass launches it."""
     files = {f"benchmarks/b{n}": [row(f"benchmarks/n{n}", f"research run --on auto -- bash benchmarks/b{n}/run.sh")] for n in range(2)}
     cfg = setup(tmp_path, files, max=2)
     pod = Pod(states={run_id(90 + k): RUNNING for k in range(3)})
@@ -852,13 +852,13 @@ def test_no_launch_past_max_in_flight_counting_this_passes_and_the_pass_says_how
     assert any("3 in flight (--max-in-flight 4), 1 held back for it; by reason:" in ln for ln in pod.lines)
     assert ("skip benchmarks/n1: benchmarks/n1 has no reading; but 4 of this loop's launches are in flight, its "
             "--max-in-flight 4") in pod.lines
-    assert state["numbers"]["benchmarks/n1"]["reason"] == "cap"
+    assert state["numbers"]["benchmarks/n1"]["reason"] == "limit"
     pod.states[run_id(90)] = ("done", 0, True)
     run(cfg, pod, state, now=NOW + 900)
     assert len(pod.launched) == 2 and pod.launched[1][-1] == "benchmarks/b1/run.sh"
 
 
-def test_a_pass_launches_nothing_while_its_cap_is_in_flight(tmp_path):
+def test_a_pass_launches_nothing_while_its_limit_is_in_flight(tmp_path):
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]}, max_in_flight=2)
     pod = Pod(states={run_id(90 + k): ("queued", None, False) for k in range(2)})
     run(cfg, pod, {"launches": flying(2)})

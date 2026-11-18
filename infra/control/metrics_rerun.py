@@ -175,7 +175,7 @@ REASONS = {
     "failing": "it ended the same way SAME_CAUSE times running, and is held HOLD_S unless its rows change",
     "reset": "the record was reset less than its every ago",
     "max": "the pass made its --max launches",
-    "cap": "the loop has its --max-in-flight launches in flight",
+    "limit": "the loop has its --max-in-flight launches in flight",
     "stopped": "the stop file stands",
 }
 
@@ -578,7 +578,7 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
         else:
             machine, pool = v.machine, cfg.pool
         if flying + launched >= cfg.max_in_flight:
-            skip("cap", f"{why}; but {flying + launched} of this loop's launches are in flight, its --max-in-flight "
+            skip("limit", f"{why}; but {flying + launched} of this loop's launches are in flight, its --max-in-flight "
                         f"{cfg.max_in_flight}")
             continue
         if launched >= cfg.max:
@@ -652,7 +652,7 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
     say(f"main at {commit[:12]}: {sum(len(j.rows) for j in jobs)} numbers declared, {len(said)} said, "
         f"{sum(d.launch for d in out)} to launch" + (" (dry run: none is)" if dry_run else "")
         + f"; {in_flight(record)} in flight (--max-in-flight {cfg.max_in_flight}), "
-          f"{sum(d.reason == 'cap' for d in out)} held back for it; by reason: {', '.join(f'{r} {n}' for n, r in counts)}")
+          f"{sum(d.reason == 'limit' for d in out)} held back for it; by reason: {', '.join(f'{r} {n}' for n, r in counts)}")
     ring_placeholders(state, jobs, out, fx, now, say, dry_run)
     for k, d in enumerate(said):
         nums = ", ".join(d.job.ids)
