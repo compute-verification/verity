@@ -602,7 +602,11 @@ def test_run_sh_on_a_machine_not_ours_names_venv_and_takes_the_hubs_own_place(tm
     ours = next((d for d in ("/workspace/cp/hf", "/workspace/hf") if Path(d).is_dir()), None)
     hub = Path(ours or tmp_path / "c" / "huggingface") / "hub"
     m = S.MODELS["llama32-1b"]
-    assert (rc, out) == (2, f"serve-tax: no checkpoint at {hub}/models--unsloth--Llama-3.2-1B/snapshots/{m.revision}\n")
+    ck = hub / "models--unsloth--Llama-3.2-1B" / "snapshots" / m.revision
+    if ck.is_dir():  # a node whose hub holds the checkpoint passes that check and stops at the next (vLLM's version)
+        assert rc == 2 and not out.startswith("serve-tax: no checkpoint"), (rc, out)
+    else:
+        assert (rc, out) == (2, f"serve-tax: no checkpoint at {ck}\n")
     sh = (S.HERE / "run.sh").read_text()
     assert "[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312" in sh
     assert "[ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf\n[ -d \"$hf\" ] || hf=" in sh

@@ -44,6 +44,8 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # schemes it registers
     "benchmarks/harness/verity_bench/schemes.py",
     "verity/protocols/resource_accounting/scheme.py",
+    # PoUW's scheme, which the schemes' table registers, imports its salt rule
+    "verity/protocols/resource_accounting/compute/pouw/verifier/salt.py",
     "verity/protocols/experimental/__init__.py",
     "verity/protocols/experimental/dither/__init__.py",
     "verity/protocols/experimental/dither/scheme.py",
