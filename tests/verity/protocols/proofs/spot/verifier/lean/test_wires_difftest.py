@@ -452,6 +452,15 @@ def _self(order=None, base: int = 0) -> dict:
     return j | ({"order": order} if order is not None else {})
 
 
+def _ranks() -> dict:
+    """Two ranks of two steps of `G`, rank r's units ``2r`` and ``2r + 1``, as `interface.ordered` orders them given the
+    ranks: a template's ranges rise inside each rank, not across them."""
+    return {"templates": {"G": {"units": 4, "rows": {"x": [2, 1]}, "outs": {"o0": 2}}}, "cuts": {}, "queries": [],
+            "wires": [{"reader": "G", "port": "x", "writer": "G", "out": "o0", "at": 1, "radix": [1], "base": 2, "step": [0]},
+                      {"reader": "G", "port": "x", "writer": "G", "out": "o0", "at": 3, "radix": [1], "base": 0, "step": [0]}],
+            "order": [["G", 0, 1], ["G", 2, 1], ["G", 1, 1], ["G", 3, 1]]}
+
+
 @pytest.mark.parametrize("name, j, want", [
     ("templates that read each other", _back(), refusal("cycle", 0)),
     ("a template that reads an earlier instance of itself", _self(), True),
@@ -468,6 +477,7 @@ def _self(order=None, base: int = 0) -> dict:
      refusal("order", 0)),
     ("an order of the gather with its reader first", _gather(order=[["A", 0, 2], ["G", 0, 6]]), refusal("order", 0)),
     ("an order of the gather", _gather(order=[["G", 0, 6], ["A", 0, 2]]), True),
+    ("two ranks' ranges alternating by step, each rank's step 1 reading the other's step 0", _ranks(), True),
     ("an order with a range of no units", _gather(order=[["G", 0, 6], ["A", 0, 0], ["A", 0, 2]]), refusal("order")),
     ("an order of no template", _gather(order=[["G", 0, 6], ["A", 0, 2], ["Z", 0, 1]]), refusal("order")),
     ("an order short of a template's units", _gather(order=[["G", 0, 5], ["A", 0, 2]]), refusal("order")),
