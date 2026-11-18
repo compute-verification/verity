@@ -216,6 +216,20 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     assert built == {}
 
 
+def test_storages_option_attaches_pous_by_name_though_the_selector_has_no_such_protocol(built, monkeypatch):
+    """``pous`` is no protocol of the selector (`config.PROTOCOLS`); its option names PoUS's declared scheme, which is
+    attached by name: what refuses it here is PoUS's own attach (`served.launcher_refusals`: the in-process LLM hands it
+    no salt source), not the selector.  A name that is neither stays the selector's to refuse, with its message."""
+    attached: list[str] = []
+    attach = messages.Exchange.attach
+    monkeypatch.setattr(messages.Exchange, "attach", lambda ex, s, given, **ctx: (attached.append(s.name), attach(ex, s, given, **ctx))[1])
+    with pytest.raises(ValueError, match="pous:p2-16448/v4: .*no salt_source"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4")
+    assert attached == ["pous"]
+    with pytest.raises(ValueError, match=r"protocol entry 'zk:v1': unknown protocol 'zk' \(known: pouw, sampled-proofs\)"):
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous:p2-16448/v4,zk:v1")
+
+
 def test_pearl_cs_option_attaches_pearl_plus_by_name_on_the_build_and_close_releases_it(built, monkeypatch):
     """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pouw:pearl-c-h100-v1-h3",

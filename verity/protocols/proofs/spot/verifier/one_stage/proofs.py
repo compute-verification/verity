@@ -68,7 +68,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from verity.circuits.library import TABLES
 
 from verity.protocols.proofs.spot.verifier.challenger.challenger import SAMPLE_LINK_FIRST, sample_link_first
-from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as registration_digest
+from verity.commitments.docket_digest import digest as registration_digest
 from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 from verity.commitments.domains import ONE_STAGE_PROTOCOL_V2

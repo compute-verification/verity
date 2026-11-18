@@ -43,6 +43,7 @@ import settings
 pytest.importorskip("torch")
 
 import verity_difftest as D  # noqa: E402
+from verity.commitments import docket_digest as DD  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
@@ -477,7 +478,7 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w.read_text())), "tables": 10}
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w.read_text())), "tables": 10}
     (w3 := tmp_path / "w3.json").write_text(json.dumps(T.window_record(warm, a, b)))
     got = same(exe, [a, b], 8, tie=w3, rounds=[1, 2], dropped=(0,), record=tmp_path / "coin3.json")
     assert got["verdict"] == "accept" and got["tie"]["tables"] == 10
@@ -485,7 +486,7 @@ def test_a_run_tied_to_its_window_record(exe, tmp_path):
     assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
     (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(a, b, version=1)))
     got = same(exe, [a, b], 8, tie=w1, record=tmp_path / "coin1.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w1.read_text())), "tables": 8,
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(w1.read_text())), "tables": 8,
                                                          "weights": VR.WEIGHTS_UNTIED}
 
 
@@ -509,7 +510,7 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
         return f
     wab = w(a, b)
     got = same(exe, [a, b], 8, tie=wab, load=cls, record=tmp_path / "coin.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(wab.read_text())), "tables": 10,
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(json.loads(wab.read_text())), "tables": 10,
                                                          "load": [2, 8, 2]}
     passes = [VR.load(x, VR.epoch_coins(x.parent / "coins.json")) for x in (a, b)]
     work, kept = got["work"], got["exact_work"]
@@ -602,7 +603,7 @@ def test_the_version_2_tie_at_the_run_of_records_size(exe, tmp_path, capsys):
     want = answer(VR.verify_passes(paths, 0, 1, "test", VR.epoch_coins(paths[0].parent / "coins.json"), SOURCE, window=good))
     got, seconds = T.timed(lambda: lean(exe, paths, 0, tie=w))
     assert got == want
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(good), "tables": 576} and not got["verdicts"]
+    assert got["verdict"] == "accept" and got["tie"] == {"record": DD.digest(good), "tables": 576} and not got["verdicts"]
     other = next(e["root"] for e in reg if e["value"] == "pearl-b/38")
     cases = [({**good, "registered": [{**e, "root": other} if e["value"] == "pearl-b/37" else e for e in reg]},
               "ValueError: W's pearl-b/37: its root not the weight's"),
