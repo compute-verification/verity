@@ -22,6 +22,7 @@ order = [
     ["verity/circuits/call_scope.py", "verity/circuits/cross_call.py", "verity/circuits/tiny.py", "verity/circuits/word.py"],
     ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"],
     ["verity/device.py"],
+    ["verity/protocols/resource_accounting/scheme.py"],
     ["verity/commitments/periods"],
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
@@ -530,8 +531,10 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
+    "verity/protocols/compose/schemes.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
@@ -543,7 +546,9 @@ paths = [
 ]
 loads = [
     "verity/protocols/resource_accounting/compute/pouw/prover",
+    "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -638,8 +643,11 @@ paths = [
 loads = [
     "verity/commitments",
     "verity/protocols/resource_accounting/memory/poub/prover",
+    "verity/protocols/resource_accounting/memory/poub/verifier",
     "verity/protocols/resource_accounting/memory/pous/prover",
+    "verity/protocols/resource_accounting/memory/pous/verifier",
     "verity/protocols/resource_accounting/scheme.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -871,6 +879,10 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/resource_accounting/scheme.py",
+]
+loads = [
+    "verity/channel.py",
+    "verity/runtime",
 ]
 
 [[place]]

@@ -30,8 +30,9 @@ from . import fp
 from . import tail_pieces
 from .fp import ceil_pow2
 from .gf2 import Circuit, L, const_bits
+from verity.commitments.domains import FLOCK_IR_BLOCK
 
-FORMAT = "flock-ir-unit/v2"
+FORMAT = FLOCK_IR_BLOCK
 WORD = 128
 #: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
 #: 100 KB), and the characters a digest encodes at a time

@@ -380,17 +380,6 @@ readers = [
 ]
 
 [[message]]
-type = "PoUWValues"
-today = "the adapter calls PoUW's prover package (`verity.protocols.resource_accounting.compute.pouw.prover`: `schemes.pearl_c`, `circuit.h1window`, `circuit.ncp2`, ...)"
-writers = [
-    { lane = "compute-accounting", file = "adapters/vllm/verity_vllm/protocols/pouw/__init__.py", find = "verity\\.protocols\\.accounting\\.pouw\\.prover" },
-]
-readers = [
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py", find = "^SCHEMES|^def get\\(" },
-    { lane = "compute-accounting", file = "verity/protocols/resource_accounting/compute/pouw/prover/circuit/__init__.py", find = "^SCHEMES" },
-]
-
-[[message]]
 type = "PoUSSetup"
 today = "PoUS's Setup: `protocols.install(model, Context(enabled=[pous:...]))`, store these weights as P2's C*"
 writers = [

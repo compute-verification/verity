@@ -26,7 +26,7 @@ item no report holds, refuses the run; with `--keep-reports`, a profiling pass, 
 the fastest stock arm by wall time, beside it over the least-SM-time arm, with the weight side as a bound, the A/A control,
 the cross-check, ε from the scheme's function at the same point and card, and why each point's γ isn't of record. A kernel
 point runs no model, so it has no perplexity; nor does it serve requests, so it has no load counts to keep on the node.
-Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's entry), which the table's
+Beside the arm it records whether the arm's timed call commits y (`arm.commits_y`, the scheme's declared ``y_committed``), which the table's
 note reads.
 
 Both records carry `phases` (`Phases`): the build, each bench.py process by stage, each Nsight export and the verifier.

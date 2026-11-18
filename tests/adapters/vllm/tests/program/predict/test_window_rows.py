@@ -110,7 +110,7 @@ def _window(config=S.TINY, grain=GRAIN):
     """The class circuit lowered, its weights, its registered values (each weight's parameter under fresh salts, and the scan
     state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
-    low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
+    low = WC.lower(_registered(config), CLASS, None, grain)
     fields = _weights(low.fn)
     state = RV.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)

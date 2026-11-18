@@ -1,7 +1,8 @@
 """The network attester as a resource scheme (`verity.protocols.resource_accounting.scheme`): what it bounds is egress,
 the bits that leave beyond what the registered circuit explains. Its Lean instance (`NetTiming.Attester.scheme`)
 is at one execution phase, its charge there a named premise (`NetTiming.Attester.Phase.ChargeHolds`), and its
-incorrect blocks the record's where the committed values carry the attester's rows (`NetTiming.Attester.RowsCommitted`)."""
+incorrect blocks the record's where the committed values carry the attester's rows (`NetTiming.Attester.RowsCommitted`).
+Its check is the Lean program ``network-period`` alone (`verifier.period_check.answer`), with no Python twin."""
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from verity.protocols.resource_accounting.network.verifier.io_request import IoT
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, Term, register
-from verity.protocols.resource_accounting.network.verifier import parties as NC
+from verity.protocols.resource_accounting.network.verifier import parties as NC, period_check
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
@@ -145,8 +146,7 @@ NETWORK_ATTESTER = register(Scheme(
     record="communication",
     symbol="K",
     published=("bits", Fraction(1)),
-    check=S.Lacks("its verifier of record is Lean's `network-period check PARAMS COMMITMENT EVIDENCE` "
-                  "(`NetworkCheck.Period`), which no Python entry runs"),
+    check=period_check.answer,
     reader=_reading,
     premises=("NetTiming.Attester.Phase.ChargeHolds", "NetTiming.Attester.RowsCommitted"),
     **dict.fromkeys(("tables", "output_format", "product_family", "y_committed", "salt_open_root", "kernels"),
