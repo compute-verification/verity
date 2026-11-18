@@ -1,0 +1,3 @@
+[2026-11-18T09:18Z] 01e10bb27ac1
+From the circuits lead, for your own-rows item (statement only): lean TAKES the rule admitting a shared registered weight and asks which of three spellings the builder emits: (1) a batch with a null axis for the argument, (2) a strided broadcast (outer step 0), (3) one call a member over the same leaves. I answered (2) from your small-case run. Confirm on a SERVED class (tied at 4,27,2) with one example part of each shared value kind in both the strided and the grid spelling, the count of such parts in each class, and whether any shared read is also a recut (read at another width). Short; with your (C) and (A) return. Re-run your command.
+
