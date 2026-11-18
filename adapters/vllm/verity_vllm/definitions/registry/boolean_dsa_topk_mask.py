@@ -2,6 +2,8 @@
 circuit-check and tests/adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal to them.
 
     DsaTopKKey_v2                  (s: 32 bits) -> 32 bits; word view DsaTopKKey_v1
+    DsaTopKAtLeast_v2, DsaTopKAtLeastBelow_v2, DsaMaskCount_v2, DsaMaskTag_v2, DsaButterflySet_v2
+                                   word view: their _v1
     DsaRadixPass_v1{N,TOPK}        (eq, gt: N bits, r: RB bits, e: N bits) -> (N bits, N bits, RB bits); traced, no word
                                    Definition (RB = TOPK's bit length)
     DsaRadixPass_v2{N,TOPK}        the same pass as Calls to And2_v1, DsaRadixPassCount_v1{N}, DsaCountSum_v1{W},
@@ -594,7 +596,49 @@ def _row_check(B, S, scores):
 DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)),), Array(S.TOPK, I32)),
                           _row_check, M.DsaTopKRow)
 
-BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaCountSum, DsaCountSplit, DsaRadixTie, DsaRadixTiesV2,
+BF16 = Array(16, BIT)
+
+
+def _ext_ge(C, s, j, key_, at):
+    """ext(s, j) >= ext_of(key_, at) on bits: (key(s), ~j) against (key_, ~at) as 64-bit words, no borrow."""
+    return NOT(sub(C, [NOT(b) for b in j] + key(list(s)), [NOT(b) for b in at] + list(key_), 64)[1])
+
+
+def _bit_at(C, bits: list, sel: list):
+    """bits[sel] by the multiplexer tree over sel's bits, LSB first; len(bits) == 2^len(sel)."""
+    v = list(bits)
+    for b in sel:
+        v = [mux(C, b, [v[2 * i + 1]], [v[2 * i]])[0] for i in range(len(v) // 2)]
+    return v[0]
+
+
+def butterfly_set(C, t, kb, lo, hi):
+    """`DsaButterflySet_v1` on bits: hi's valid bit where t >= kb (u32); below kb, lo's bit t (0 past bit 15) where lo is valid,
+    else hi's valid bit and not hi's bit t (1 past bit 15)."""
+    vl, vh = lo[M.RANK_BITS], hi[M.RANK_BITS]
+    small = NOT(or_reduce(C, t[4:]))
+    lo_t, hi_t = (C.AND(small, _bit_at(C, list(w), t[:4])) for w in (lo, hi))
+    inner = mux(C, vl, [lo_t], [C.AND(vh, NOT(hi_t))])[0]
+    return [mux(C, sub(C, t, kb, 32)[1], [inner], [vh])[0]]
+
+
+DsaTopKAtLeastV2 = definition(
+    "DsaTopKAtLeast", 2, lambda C, s, j, k, at: [_ext_ge(C, s, j, k, at)], (("s", F32), ("j", I32), ("key", I32), ("at", I32)),
+    BIT, word=M.DsaTopKAtLeast, doc="ext(s, j) >= ext_of(key, at) on bits: DsaTopKAtLeast_v1")
+DsaTopKAtLeastBelowV2 = definition(
+    "DsaTopKAtLeastBelow", 2, lambda C, s, j, n, k, at: [C.AND(sub(C, j, n, 32)[1], _ext_ge(C, s, j, k, at))],
+    (("s", F32), ("j", I32), ("n", I32), ("key", I32), ("at", I32)), BIT, word=M.DsaTopKAtLeastBelow,
+    doc="j < n (u32) and ext(s, j) >= ext_of(key, at) on bits: DsaTopKAtLeastBelow_v1")
+DsaMaskCountV2 = definition("DsaMaskCount", 2, lambda C, c, m: add(C, c, [m[0]], width=32), (("c", I32), ("m", BIT)), I32,
+                            word=M.DsaMaskCount, doc="c + m mod 2^32 on bits: DsaMaskCount_v1")
+DsaMaskTagV2 = definition("DsaMaskTag", 2, lambda C, c, m: [C.AND(m[0], b) for b in c[:M.RANK_BITS]] + [m[0]],
+                          (("c", I32), ("m", BIT)), BF16, word=M.DsaMaskTag,
+                          doc="m ? the valid bit and c's rank bits : 0, on bits: DsaMaskTag_v1")
+DsaButterflySetV2 = definition("DsaButterflySet", 2, butterfly_set, (("t", I32), ("kb", I32), ("lo", BF16), ("hi", BF16)), BIT,
+                               word=M.DsaButterflySet, doc="a switch's setting from its two tags, on bits: DsaButterflySet_v1")
+
+BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaTopKAtLeastV2, DsaTopKAtLeastBelowV2, DsaMaskCountV2, DsaMaskTagV2, DsaButterflySetV2,
+                         DsaRadixPass, DsaRadixTies, DsaCountSum, DsaCountSplit, DsaRadixTie, DsaRadixTiesV2,
                          DsaRadixPassCount, DsaRadixPassLeft, DsaRadixPassKey, DsaRadixPassV2,
                          DsaTopKMaskV2, DsaRowValid, DsaRowValidRoot, DsaRowValidStep, DsaRowValidLast, DsaRowValidV2, DsaTopKMaskCountedV2,
                          DsaButterflyTagBits, DsaButterflyTag, DsaButterflyTagsCount, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,

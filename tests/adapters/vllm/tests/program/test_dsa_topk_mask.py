@@ -194,3 +194,40 @@ def test_the_accelerators_resolve_by_id_in_a_cold_decode() -> None:
         M.threshold(4, 5)
     with pytest.raises(ValueError, match="1 <= TOPK <= N"):
         M.counted_threshold(4, 5)
+
+
+WORD_EDGES = [0, 1, 2, 15, 16, 17, 0x7FFF, 0x8000, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFE, 0xFFFFFFFF]
+
+
+def _on_bits(word, *cols) -> list[int]:
+    assert SW.boolean_version(word).id == word.name + "_v2"
+    cols = [np.array(c, dtype=np.uint64).reshape(-1, 1) for c in cols]
+    return np.asarray(BS.evaluate_words(SW.boolean_version(word), *cols)).reshape(-1).tolist()
+
+
+def test_the_ext_comparisons_on_bits_are_their_words_on_ties_edges_and_random_words() -> None:
+    rng = np.random.default_rng(5)
+    keys = [T.topk_key(w) for w in POOL] + [0, 0xFFFFFFFF]
+    edges = [0, 1, 2, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF]
+    rows = [(s, j, k, at) for s in POOL for k in keys for j in edges for at in edges]
+    rows += [(s, j, T.topk_key(s), at) for s in POOL for j in edges for at in edges]
+    rows += [tuple(int(v) for v in rng.integers(0, 1 << 32, 4, dtype=np.uint64)) for _ in range(2000)]
+    assert _on_bits(M.DsaTopKAtLeast, *zip(*rows)) == [M.DsaTopKAtLeast.evaluate(*r) for r in rows]
+    below = [(s, j, n, k, at) for (s, j, k, at) in rows[::3] for n in edges + [int(rng.integers(0, 1 << 32))]]
+    assert _on_bits(M.DsaTopKAtLeastBelow, *zip(*below)) == [M.DsaTopKAtLeastBelow.evaluate(*r) for r in below]
+
+
+def test_the_tag_words_on_bits_are_their_words_on_every_rank_and_edge_and_random_counts() -> None:
+    rng = np.random.default_rng(6)
+    tags = [(int(hi) << 16 | c, m) for c in range(1 << 16) for m in (0, 1) for hi in rng.integers(0, 1 << 16, 1)]
+    assert _on_bits(M.DsaMaskTag, *zip(*tags)) == [M.DsaMaskTag.evaluate(*r) for r in tags]
+    counts = [(c, m) for c in WORD_EDGES + [int(v) for v in rng.integers(0, 1 << 32, 500, dtype=np.uint64)] for m in (0, 1)]
+    assert _on_bits(M.DsaMaskCount, *zip(*counts)) == [M.DsaMaskCount.evaluate(*r) for r in counts]
+
+
+def test_the_switch_setting_on_bits_is_its_word_at_every_small_stage_and_edge() -> None:
+    rng = np.random.default_rng(8)
+    stages = list(range(21)) + WORD_EDGES
+    rows = [(t, kb, int(lo) | vl << 15, int(hi) | vh << 15) for t in stages for kb in stages for vl in (0, 1) for vh in (0, 1)
+            for lo, hi in rng.integers(0, 1 << 15, (2, 2))]
+    assert _on_bits(M.DsaButterflySet, *zip(*rows)) == [M.DsaButterflySet.evaluate(*r) for r in rows]
