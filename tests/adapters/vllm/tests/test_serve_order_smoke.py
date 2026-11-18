@@ -497,6 +497,7 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
         found = so.listed(opts, out)
         ex = M.build()
         M.attach_listed(ex, found, gate=None, ledger=None, private=str(out / "private"), process=H.ENGINE)
+        subscribed = {h for h in H.HOOKS if ex.subscribers[h]}
         broken("attached", ex)
         fixed = sorted({r.ranges for _, r in ex.requests if isinstance(r, H.FixRanges)})
         steps = {r.value for _, r in ex.requests if isinstance(r, H.RequireProperty) and r.property == "async_steps"}
@@ -550,6 +551,8 @@ def serve(names: list[str], out: Path, monkeypatch: pytest.MonkeyPatch,
             if pump.failed is not None:
                 raise pump.failed
             assert loop.error is None and windows.summary()["passed"], (loop.error, windows.summary())
+            lost = sorted(h for h in subscribed if not ex.subscribers[h])
+            assert not lost, f"hooks a scheme subscribed at its attach and no longer hears: {lost}"
             if order == "release-order":
                 got = first_step(events).inputs
                 assert len(got) == REQUESTS, (f"window 0's first step holds {len(got)} of the fixed load's {REQUESTS} "
@@ -655,6 +658,10 @@ NEGATIVE = {
                                                                       "after steps outside any phase"),
     "a step outside any phase after one closed": ("warmed", ["pearl-plus"], second_phase_unopened, RuntimeError,
                                                    "phase 1 closes, and the open phase is None"),
+    "a scheduler that is not FCFS under release order": ("built", ["pearl-plus"], lambda mp: lambda engine: setattr(
+        engine.sched.scheduler_config, "policy", "priority"), RuntimeError, "needs the FCFS scheduler"),
+    "a scheme's subscription to the steps hook dropped": ("attached", ["pearl-plus"], lambda mp: lambda ex: ex.subscribers[
+        "steps"].clear(), AssertionError, r"no longer hears: \['steps'\]"),
     "the load's request 0 sent first under release order": ("load", ["pearl-plus"], lambda mp: lambda sends: sends.insert(
         0, sends.pop()), AssertionError, "window 0's first step holds 1 of"),
 }
@@ -665,5 +672,5 @@ def test_each_broken_stand_in_fails_the_smoke_by_its_reason(control, device, tmp
     stage, names, act, error, reason = NEGATIVE[control]
     with pytest.raises(error, match=reason):
         events, _ = serve(names, tmp_path, monkeypatch, breaking(stage, act(monkeypatch)),
-                          order="release-order" if stage == "load" else "arrival")
+                          order="release-order" if stage == "load" or "release order" in control else "arrival")
         assert not stray(events), f"events of no hook's type: {stray(events)}"
