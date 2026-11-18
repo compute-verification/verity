@@ -1,4 +1,5 @@
-"""The harness kit's reader of a machine record's `[properties]`, over the records in `fixtures/machines/`."""
+"""The harness kit's readers of a machine record's `[properties]`, over the records in `fixtures/machines/`, and of the toolkit
+and the card's architecture they and the card records give."""
 
 from __future__ import annotations
 
@@ -107,3 +108,72 @@ def test_unnamed_it_refuses_a_run_with_no_machine_or_no_copy_by_name(tmp_path, m
     monkeypatch.setenv("RESEARCH_MACHINE", "bare")
     with pytest.raises(SystemExit, match=r"^machine 'bare': .*inputs/bare\.toml is not there: .*only where its record has the table"):
         kit.machine_properties()
+
+
+OTHERS = '[{ directory = "/usr/local/cuda-12.9", version = "12.9" }]'
+
+
+def _toolkits(run: Path, value: str | None = None) -> None:
+    """The run's copy listing CUDA 13.0 as the toolkit's own with 12.9 and 13.3 beside it, as vy-h100-1's does, or `value`."""
+    copy = run / "inputs" / "one-card.toml"
+    text = copy.read_text()
+    assert OTHERS in text
+    text = text.replace(OTHERS, OTHERS[:-1] + ', { directory = "/usr/local/cuda-13.3", version = "13.3" }]')
+    if value is not None:
+        start = text.index("toolkit = { value = ")
+        text = text[:start] + f"toolkit = {{ value = {value}" + text[text.index(', read = "readlink', start):]
+    copy.write_text(text)
+
+
+def test_the_toolkit_is_the_runs_machines_at_the_version_asked_not_the_first_listed(tmp_path, monkeypatch):
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    _toolkits(_run(tmp_path, monkeypatch, "one-card"))
+    assert [kit.toolkit(v) for v in ("13.0", "13.3", "12.9")] == [
+        "/usr/local/cuda-13.0", "/usr/local/cuda-13.3", "/usr/local/cuda-12.9"]
+
+
+def test_cuda_home_where_given_wins_with_no_machine(monkeypatch):
+    monkeypatch.delenv("RESEARCH_MACHINE", raising=False)
+    monkeypatch.setenv("CUDA_HOME", "/opt/cuda-13.3")
+    assert kit.toolkit("13.3") == "/opt/cuda-13.3"
+
+
+@pytest.mark.parametrize(("machine", "says"), [
+    (None, r"^no CUDA toolkit 13\.0: set CUDA_HOME to its directory, or run on a machine `research run --on` names: "
+           r"no machine named"),
+    ("bare", r"^no CUDA toolkit 13\.0: .*machine 'bare': .*inputs/bare\.toml is not there"),
+])
+def test_no_machine_or_no_copy_is_refused_naming_what_to_set(tmp_path, monkeypatch, machine, says):
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    _run(tmp_path, monkeypatch, machine)
+    with pytest.raises(SystemExit, match=says):
+        kit.toolkit("13.0")
+
+
+def test_an_unread_toolkit_is_refused_naming_the_property_and_the_machine(tmp_path, monkeypatch):
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    _toolkits(_run(tmp_path, monkeypatch, "one-card"), '"unread"')
+    with pytest.raises(SystemExit, match=r"^machine 'one-card': its \[properties\] have toolkit unread: read it there, or set CUDA_HOME"):
+        kit.toolkit("13.0")
+
+
+@pytest.mark.parametrize(("value", "lists"), [(None, "13.0, 12.9, 13.3"), ('"none"', "none")])
+def test_a_version_the_machine_does_not_list_is_named(tmp_path, monkeypatch, value, lists):
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    _toolkits(_run(tmp_path, monkeypatch, "one-card"), value)
+    with pytest.raises(kit.NotListed, match=rf"list no CUDA toolkit 13\.1 under toolkit \(they list {lists}\): set CUDA_HOME"):
+        kit.toolkit("13.1")
+
+
+@pytest.mark.parametrize(("name", "arch"), [("NVIDIA H200", "sm_90a"), ("NVIDIA H100 80GB HBM3", "sm_90a")])
+def test_the_arch_is_the_card_records_whose_driver_holds_the_reported_name(name, arch):
+    from verity_bench.overhead import CARD_FILES
+
+    assert kit.card_arch(name, directory=CARD_FILES) == arch
+
+
+def test_a_card_no_record_holds_is_refused_by_name():
+    from verity_bench.overhead import CARD_FILES
+
+    with pytest.raises(SystemExit, match=r"^0 card records under .* have 'NVIDIA A100-SXM4-80GB'"):
+        kit.card_arch("NVIDIA A100-SXM4-80GB", directory=CARD_FILES)

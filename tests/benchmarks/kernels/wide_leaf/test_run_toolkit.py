@@ -1,4 +1,4 @@
-"""run.sh takes CUDA 13.3 from CUDA_TK, CUDA or the run's machine's [properties] (benchmarks/kernels/machine.py), and where
+"""run.sh takes CUDA 13.3 from CUDA_HOME or the run's machine's [properties] (benchmarks/kernels/machine.py), and where
 there are none or their toolkit is unread refuses by name before it builds or leases anything. CPU only: gpu-lease and
 nvidia-smi are stand-ins that say whether they ran."""
 from __future__ import annotations
@@ -22,7 +22,7 @@ def _unread(inputs: Path) -> None:
 
 
 @pytest.mark.parametrize(("machine", "says"), [
-    ({}, "no CUDA toolkit 13.3: set CUDA to its directory, or run on a machine `research run --on` names"),
+    ({}, "no CUDA toolkit 13.3: set CUDA_HOME to its directory, or run on a machine `research run --on` names"),
     ({"RESEARCH_MACHINE": "m"}, "machine 'm': its [properties] have toolkit unread"),
 ])
 def test_no_toolkit_13_3_is_refused_by_name_before_any_build_or_lease(machine: dict, says: str, tmp_path: Path) -> None:
@@ -31,7 +31,7 @@ def test_no_toolkit_13_3_is_refused_by_name_before_any_build_or_lease(machine: d
     for tool in ("gpu-lease", "nvidia-smi"):
         (bin_ / tool).write_text(f"#!/bin/sh\necho {tool} >> {tmp_path}/called\n")
         (bin_ / tool).chmod(0o755)
-    env = {k: v for k, v in os.environ.items() if k not in ("CUDA", "CUDA_TK", "RESEARCH_MACHINE", "GPU_LEASE_UUID")}
+    env = {k: v for k, v in os.environ.items() if k not in ("CUDA_HOME", "CUDA_TK", "RESEARCH_MACHINE", "GPU_LEASE_UUID")}
     env |= {"PATH": f"{bin_}:{env['PATH']}", "RESEARCH_RUN_DIR": str(tmp_path / "run"),
             "FLOCK_WORK": str(tmp_path / "work"), **machine}
     if machine:

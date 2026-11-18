@@ -8,6 +8,9 @@
 - `machine_properties(name, directory=...)`: a machine record's `[properties]` (what a job may do there: its toolkit, profiler,
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
+- `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set, else the run's machine's
+  `[properties]`'; `card_arch(name, directory=...)`: the `arch` of the card `card_short` finds.
+  `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
@@ -203,10 +206,7 @@ def host_stamp() -> dict:
     return stamp
 
 
-def card_short(name: str, *, directory: Path) -> str:
-    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
-    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
-    holds it and has a ``short``, the card's name in a measurement's member."""
+def _card(name: str, directory: Path) -> dict:
     from verity.device import load_card, skus
 
     cards = [load_card(sku, directory=directory) for sku in skus("gpu", directory=directory)]
@@ -216,7 +216,19 @@ def card_short(name: str, *, directory: Path) -> str:
             f"{len(found)} card records under {directory} have {name!r}, the card nvidia-smi names here, in `driver`: add "
             f"{{ value = {json.dumps(name)}, source = ... }} to its one record's `driver` and give it a `short`, the "
             "card's name in a measurement's member, adding its <sku>.toml there if it has none")
-    return found[0]["short"]
+    return found[0]
+
+
+def card_short(name: str, *, directory: Path) -> str:
+    """The ``short`` of the card record in ``directory`` (``verity.device.load_card``) whose ``driver`` has ``name``, the
+    name nvidia-smi gives the card (a stamp's `card`), exactly; refused, naming what to add, unless exactly one record
+    holds it and has a ``short``, the card's name in a measurement's member."""
+    return _card(name, directory)["short"]
+
+
+def card_arch(name: str, *, directory: Path) -> str:
+    """The ``arch`` of the card record `card_short` finds for ``name``: the target (``sm_90a``) machine code is built for."""
+    return _card(name, directory)["arch"]
 
 
 def _text(v: Any) -> bool:
@@ -283,6 +295,34 @@ def machine_properties(name: str | None = None, *, directory: Path | None = None
         if entry["value"] != "unread" and not check(entry["value"]):
             raise refuse(f"gives {field_} the value {entry['value']!r}, which its check refuses (machine_properties' docstring)")
     return table
+
+
+class NotListed(SystemExit):
+    """The run's machine's `[properties]` are read and list no CUDA toolkit at the version asked for."""
+
+
+def toolkit(version: str) -> str:
+    """The directory of CUDA toolkit `version` (major.minor, as a machine's `[properties]` write it): ``$CUDA_HOME`` where it
+    is set, else the one the run's machine's properties (`machine_properties()`) list at exactly that version, the version
+    asked for and not the first listed. Refused by name otherwise, as `NotListed` where the properties list none."""
+    from verity_config.settings import SHARED
+
+    if SHARED.get("CUDA_HOME"):
+        return SHARED.get("CUDA_HOME")
+    try:
+        found = machine_properties()["toolkit"]["value"]
+    except SystemExit as e:
+        raise SystemExit(f"no CUDA toolkit {version}: set CUDA_HOME to its directory, or run on a machine `research run --on` "
+                         f"names: {e}") from None
+    name = settings.RESEARCH_MACHINE
+    if found == "unread":
+        raise SystemExit(f"machine {name!r}: its [properties] have toolkit unread: read it there, or set CUDA_HOME")
+    listed = [] if found == "none" else [found, *found.get("others", [])]
+    at = [t["directory"] for t in listed if t["version"] == version]
+    if not at:
+        raise NotListed(f"machine {name!r}: its [properties] list no CUDA toolkit {version} under toolkit (they list "
+                        f"{', '.join(t['version'] for t in listed) or 'none'}): set CUDA_HOME")
+    return at[0]
 
 
 # ---- the paired ratio --------------------------------------------------------------------------------------------------------
