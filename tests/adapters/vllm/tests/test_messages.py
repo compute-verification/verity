@@ -8,6 +8,7 @@ import json
 import pytest
 from verity import hooks as H
 from verity.channel import Refused
+from verity.protocols.resource_accounting import scheme as schemes
 
 from verity_vllm import messages as M
 from verity_vllm.pipeline import advice as A
@@ -162,8 +163,8 @@ def test_exchange_answers_requests_by_name_before_serving():
         ex.answer(declared)
     ex.requests.pop()
     assert ex.answer(declared) is True and seen == [declared]
-    with pytest.raises(Refused, match="after the requests were answered"):
-        ex.request("c", H.HoldRelease("in-0", 1))
+    with pytest.raises(Refused, match="after the build was answered"):
+        ex.request("c", H.RefuseProperty("world", 1, "one rank"))
     off = ex.subscribe("c", "values", seen.append)
     ex.emit(H.ValueProduced("layers.0", "producer_output", 0, "rows"))
     off()
@@ -226,11 +227,29 @@ def test_one_exchange_a_process():
     assert M.current() is not ex
 
 
-def test_a_process_beside_is_refused_without_a_launcher():
+def test_a_process_beside_is_started_with_the_readers_the_launcher_offers(monkeypatch):
+    monkeypatch.setattr(schemes, "PROCESSES", {"id-front": lambda request, ids: ("relay", request(), ids())})
     ex = M.Exchange()
-    ex.request("network", H.StartBeside("id-front", ("python", "-m", "relay"), ("ingress",)))
-    with pytest.raises(Refused, match="network: starts id-front beside the workload, and no launcher"):
+    ex.request("network", H.StartBeside("id-front", ("server-request", "stream-token-ids")))
+    with pytest.raises(Refused, match=r"network: starts id-front beside the workload with readers \['server-request', "
+                                      r"'stream-token-ids'\] no launcher here offers"):
         ex.answer(H.Declared("", {}))
-    ex.launches = True
+    ex.readers = {"server-request": lambda: "req", "stream-token-ids": lambda: [1, 2]}
     ex.answer(H.Declared("", {}))
-    assert [r.process for _, r in ex.beside()] == ["id-front"]
+    ((process, start),) = ex.beside()
+    assert process == "id-front" and start() == ("relay", "req", [1, 2])
+    other = M.Exchange()
+    other.request("network", H.StartBeside("tap"))
+    with pytest.raises(Refused, match="starts tap beside the workload, which no scheme registered"):
+        other.answer(H.Declared("", {}))
+
+
+def test_a_build_request_is_filed_before_the_build_and_any_other_before_the_first_step():
+    ex = M.Exchange()
+    ex.answer(H.Declared("", {}))
+    with pytest.raises(Refused, match="pouw: files RequireProperty after the build was answered"):
+        ex.request("pouw", H.RequireProperty("eager", True, "its kernels"))
+    ex.request("pouw", H.ComputeBlockWith(lambda due, original: original(None)))
+    ex.emit(H.StepBegan(1))
+    with pytest.raises(Refused, match=r"pouw: files HoldRelease after serving began \(step 1\)"):
+        ex.request("pouw", H.HoldRelease("in-0", 3))

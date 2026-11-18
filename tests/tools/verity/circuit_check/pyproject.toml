@@ -135,7 +135,7 @@ inputs = ["tools/verity/circuit_check", "verity/__init__.py", "tools/config/veri
           "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.json",
           "adapters/vllm/verity_vllm/compiler/tick_step.py", "adapters/vllm/verity_vllm/compiler/tick_step.circuit-check.py",
           "adapters/vllm/verity_vllm/compiler/tick_step.circuit-check.json",
-          "verity/protocols/resource_accounting/network/verifier/advice.py",
+          "adapters/vllm/verity_vllm/pipeline/advice_code/format.py",
           "adapters/vllm/verity_vllm/compiler/advice_check.py",
           "adapters/vllm/verity_vllm/compiler/advice_check.circuit-check.py",
           "adapters/vllm/verity_vllm/compiler/advice_check.circuit-check.json",

@@ -266,7 +266,8 @@ def check(j: Any, inner=stand_in) -> Any:
                    or Ch.first_parent_reason(a.session, opened.get("pinned"), p["main"]))
             if why is not None:
                 raise Ch.CoinError(why)
-            _, roots = Ch.session_named(a, key, ev["session"], lms_verify)
+            c, log = Ch.session_named(a, key, ev["session"], lms_verify)
+            roots = Ch.by_family(c, log)
         except Ch.CoinError as x:
             return _reject("coin", str(x))
         if not Ch.withheld_on(ledger, root):

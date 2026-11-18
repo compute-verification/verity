@@ -41,8 +41,8 @@ class CommitSession:
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
                  pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
-    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner, block pool
-                 and scheduler, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
+    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner and the
+                 adapter's KV block events, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
                  the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
     check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then

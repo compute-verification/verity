@@ -42,7 +42,7 @@ its prompt ids, prompt position p at `ids[position(p)]` for p below `fields`, ea
 `max_tokens`, `seed`, `temperature` and `top_p`. The ids are the scan's own reading of the attested cells, each the
 decimal field of the network attester's signed ingress row its request came in on, so the row is held to the attested
 bytes by the scan's gates and needs no other tie. A Program that reads its slot as i32s (occupancy, prompt length and NP
-ids; vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
+ids; vLLM's `ScanSlots_v3`) reads `occ`, `fields` and the ids each at its bits in the state row (`slot_row`),
 zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
 An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
@@ -597,7 +597,7 @@ def token_row(cls: Class, st: State) -> list[tuple[int, int, tuple[int, ...]]]:
 
 
 def slot_row(cls: Class, j: int, NP: int) -> list[tuple[int, int]]:
-    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v2` reads it: occupancy, prompt length, then the ids of prompt
+    """Where slot j's row of NP + 2 i32s (as vLLM's `ScanSlots_v3` reads it: occupancy, prompt length, then the ids of prompt
     positions 0 … NP − 1) is in the state row: each i32's (offset, width) in bits (`layout`), its value those bits
     zero-extended, least significant first: `occ`, `fields`, then position p's id at `ids[position(p)]`."""
     if not 0 <= j < cls.NR:
