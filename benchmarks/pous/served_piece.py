@@ -24,11 +24,11 @@ same sessions, which no second session replaces. With neither, one process does 
    the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
    serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
    run doesn't need.
-2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, then the salt, which the memory attester samples after it from its own host's OS and logs under
-   the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party`` verb on a salt request),
-   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and the root. Setup's own
-   inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
+2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, at PoUS's declared option ``POUS.option``, its
+   registered point): the commitment to ``W``, then the salt, which the memory attester samples after it from its own
+   host's OS and logs under the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party``
+   verb on a salt request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory attester's table and
+   the root. Setup's own inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory attester's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_prover.session`). The request names the window's
@@ -114,6 +114,7 @@ from typing import Any
 import torch
 
 from verity.runtime.stream import Side
+from verity.protocols.compose import schemes as table
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 from verity.protocols.resource_accounting.memory.pous.prover import challenger_prover as CR
@@ -130,11 +131,12 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 import held_bandwidth as HB
 import served_case as SC
 
-pous = PO.adapter("pous")
+POUS = table.get("pous")
+pous = PO.adapter(POUS.name)
 ROOT = Path(__file__).resolve().parents[2]
 #: the manifests a served model's pin is read from, the first that names it at its revision
 PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
-ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
+ENTRY = POUS.option
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),
           ("self_attn.o_proj", ("self_attn.o_proj",)),
@@ -460,7 +462,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
     types = pous.linear_types
     pous.linear_types = _linear_types
     try:
-        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]), settings={"pous": {
+        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]), settings={POUS.name: {
             "salt_source": _salt_source(party, bind), "p2_lib": p2_lib, "experimental": True}})
         t = time.monotonic()
         try:
@@ -473,7 +475,7 @@ def sessions(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: 
         install_s = round(time.monotonic() - t, 3)
         _stamp(out, "setup done")
         try:
-            opt = comp.get("pous")
+            opt = comp.get(POUS.name)
             s = opt.store
             point = replace(s.point, k=rounds)
             store = s.segments()
@@ -572,7 +574,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str | No
     out.mkdir(parents=True, exist_ok=True)
     session, digests = R.ChallengePhaseRecord.from_json(kept["session"]), (private / "digests.bin").read_bytes()
     deployed = from_runner() if deployment is None else dict(deployment)
-    pinned = mc.pinned(deployed["pins"], CS.CHALLENGER, "pous")
+    pinned = mc.pinned(deployed["pins"], CS.CHALLENGER, POUS.name)
     if trusted_sha512 is None:
         trusted_sha512 = min(pinned, default=None)
     key_sha = hashlib.sha512(key).hexdigest()
