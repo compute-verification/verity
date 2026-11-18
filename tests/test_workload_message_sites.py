@@ -35,9 +35,6 @@ LEFT: list[tuple[str, str]] = [
     ("H1RunCommitment writer adapters/vllm/verity_vllm/pipeline/serve_tie.py", "runs the prover's command; the record it "
      "writes is read as H1Registration"),
     ("H1State reader adapters/vllm/verity_vllm/pipeline/serve_h1.py", FLAG),
-    ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/__init__.py", IN_PROCESS),
-    ("PoUSSetup reader adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
-    ("PoUSStore writer adapters/vllm/verity_vllm/protocols/pous.py", "the memory-accounting lane's file"),
     ("PoUWScheme reader adapters/vllm/verity_vllm/pipeline/serve_openai.py", FLAG),
     ("PoUWValues writer adapters/vllm/verity_vllm/protocols/pouw/__init__.py", "the compute-accounting lane's file"),
     ("RegisteredCompiler reader adapters/vllm/verity_vllm/pipeline/advice.py", "flags whose values are the compiler's "
