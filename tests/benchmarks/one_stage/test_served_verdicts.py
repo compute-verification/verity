@@ -902,13 +902,13 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     rows = _rows(_accepted(), tmp_path)
     report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                  servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
-    assert rec["legs"]["pous"]["at"] == {d: {"holds": False, "why": f"the run established it except with {eps}, more than {d}"}
-                                         for d in ("1/100", "1/1000000")}
+    refusal = BR._bound(BR._scheme("pous"), json.loads((d / "answer.json").read_text())["profile"])["unbounded"]["why"]
+    assert rec["legs"]["pous"]["answer"]["verdict"] == "accept" and rec["legs"]["pous"]["unbounded"]["why"] == refusal
+    assert rec["legs"]["pous"]["at"] == {x: {"holds": False, "why": refusal} for x in ("1/100", "1/1000000")}
     clause = line["reason"].split("; PoUS: ", 1)[1]
     assert clause.startswith(f"accept (its weights {held}, not concurrently with the block; they are 64.9% of the "
                              "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
-                             "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-                             "it except with 1/100 + 2^-128)")
+                             f"its claim; its quantity is not established at δ = 1/100 or 1/1000000: {refusal})")
     assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
     assert line["reason"].startswith(f"{SPOT_ACCEPT}; ")
 
@@ -948,15 +948,19 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     sums = rec["composed"]["joint_horizon"]
     assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
     assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
-    assert all(x["not_established"] == [] for x in sums["at"].values())
-    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    refusal = BR._bound(BR._scheme("bandwidth"), a["profile"])["unbounded"]["why"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept" and rec["legs"]["bandwidth"]["unbounded"]["why"] == refusal
+    assert all(x["not_established"] == ["bandwidth"] for x in sums["at"].values())
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/1099511627776{beside}); ") in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
     _, rec, line = composed(written("1/100", 1))
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
-    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept"
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/100 + 2^-64{beside}); ") in line["reason"]
 
     silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
     report, rec, line = composed(silent)
@@ -1186,10 +1190,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)",
-                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})",
-                "sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        comp = {S.NAMES[k]: v[1] for k, v in S.PIECES.items()} | {S.NAMES["wipe"]: "wipe"}
+        refused = {n: why for n, c in comp.items() if c not in BR.BY_NAME
+                   and (why := BR._bound(BR._scheme(c), ACCEPTS[c]["profile"]).get("unbounded", {}).get("why"))}
+        assert {"the bandwidth audit", "PoUS", "the network certifier"} <= set(refused), refused
+        assert {n: rec["legs"][comp[n]]["unbounded"]["why"] for n in refused} == refused
+        assert all(rec["legs"][comp[n]]["at"][x] == {"holds": False, "why": refused[n]} for n in refused for x in rec["legs"][comp[n]]["at"])
+        beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
+        late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
+                for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
@@ -3886,7 +3895,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
         == {"format": "toy", "after": W_OF_7}
     assert (tmp_path / "order.commit").read_text().split() == [
-        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key")]
+        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-prover", str(d / "private" / "h1" / "w7")]
     assert (tmp_path / "order.law").read_text() == TIED_RULE
     assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
@@ -4140,8 +4149,9 @@ def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(
     templates it holds no circuit of."""
     rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", FAIL_WARM="1")
     assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
-    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): records_audit.py warm: a template's " \
-           "compose was killed; the audit composes the templates it didn't keep" in lines
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): (no exception, exit 1): {PRIVATE}; " \
+           "the audit composes the templates it didn't keep" in lines, lines
+    assert not [x for x in lines if "compose was killed" in x], lines
     audit = json.loads((tmp_path / "order.audit").read_text())
     assert "--compose-cache" in audit
 
@@ -5915,6 +5925,28 @@ def test_publish_holds_every_file_the_list_does_not_name_and_the_serves_records_
     assert {PF.listed(f"OUT/serve/{n}") for n in ("serve.json", "windows.jsonl", "seals.jsonl")} == {PF.MIRROR}
 
 
+def test_no_launcher_line_quotes_a_tools_stderr():
+    """A tool's stderr is free text from anything the prover runs: no say line of the served launchers quotes an ``.err``
+    file by `tail`, `cut`, `head` or `grep`; `failed` says its class and exit, `said` a passing tool's own last line."""
+    quoted = re.compile(r"\$\((?:tail|cut|head|grep)[^)]*\.err")
+    found = [f"{f.name}:{i}" for f in (Path(S.__file__).parent / n for n in ("served_verdicts.sh", "served_util.sh", "served_stock.sh",
+                                                          "served_composite.sh"))
+             for i, line in enumerate(f.read_text().splitlines(), 1) if quoted.search(line)]
+    assert found == [], found
+
+
+def test_a_pieces_piece_json_leaves_without_the_node_it_ran_on_which_stays_private(tmp_path):
+    """`pieces` writes each piece's `RAN` with the node it ran on, which `record` and the hand-off read in the serve dir;
+    the published copy holds its exit and limit alone, the whole file in the private directory."""
+    out, priv = tmp_path / "out", tmp_path / "private"
+    (out / "pieces" / "pous").mkdir(parents=True)
+    whole = json.dumps({"limit": "60m", "rc": 0, "server": "vy-dc-h200"}, sort_keys=True) + "\n"
+    (out / "pieces" / "pous" / S.RAN).write_text(whole)
+    assert S.publish(out, priv) == [f"pieces/pous/{S.RAN}"]
+    assert json.loads((out / "pieces" / "pous" / S.RAN).read_text()) == {"limit": "60m", "rc": 0}
+    assert (priv / "pieces" / "pous" / S.RAN).read_text() == whole and S.publish(out, priv) == []
+
+
 @pytest.mark.parametrize("extra, line", [
     ({"COMPOSITE": None}, "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and "
      "onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, "
@@ -6386,7 +6418,7 @@ def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3
         "whole command"])
     assert not seen.exists() and not dc.exists()
     assert gate_compose("out", "cpu-6") == (0, [
-        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
+        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6}: exit 0, "
         f"the record accept, 1 files of its $OUT in the run's compose/"])
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "POUW": "h1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
@@ -6504,8 +6536,8 @@ def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_
     gate = tmp_path / "gate-host"
     lines = (out / "verdicts.txt").read_text().splitlines()
     assert run.returncode == 1, (run.stderr, lines)
-    assert lines[0].startswith("HANDOFF ")
-    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 2, the record "
+    assert lines[0].startswith("HANDOFF ") and not [x for x in lines if "remote" in x.split(":", 1)[0]], lines
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]}: exit 2, the record "
                                 "pending, ") and lines[-1].endswith(" files of its $OUT in the run's compose/"), lines
     argv = json.loads((tmp_path / "gate.argv").read_text())
     scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"

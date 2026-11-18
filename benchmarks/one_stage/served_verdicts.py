@@ -731,8 +731,9 @@ def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
     under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
     text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
-    give-up (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
-    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    give-up (`public_doc`), or holds a field `public_files.WITHOUT` keeps private, held in full, under ``private`` at its
+    path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole. Only
+    `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     import public_files as PF
 
     held: list[str] = []
@@ -756,6 +757,10 @@ def publish(out: Path, private: Path) -> list[str]:
             held.append(rel)
             continue
         pub = public_doc(text)
+        if drop := PF.without("OUT/" + rel):
+            with contextlib.suppress(ValueError):
+                if isinstance(doc := json.loads(pub), dict) and set(drop) & doc.keys():
+                    pub = json.dumps({k: v for k, v in doc.items() if k not in drop}, sort_keys=True) + "\n"
         if pub != text:
             dst.write_bytes(data)
             p.write_text(pub)
@@ -2401,7 +2406,8 @@ def auditor_device(host: str, manifest: Path | None, served_node: bool = False) 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at, or, where its scheme's bound is refused
+    (``unbounded``), with that refusal's sentence. Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2412,6 +2418,9 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     no = [d for d, x in entry["at"].items() if not x["holds"]]
     if no and "members" in entry["quantity"]:
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
+    if no and "unbounded" in entry:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: {entry['unbounded']['why']}",
+                *([f"its error reads {error}"] if named else [])]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
@@ -2515,8 +2524,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     except ValueError as e:
         return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
     said = line.get("composed") if isinstance(line, dict) else None
-    where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
-             + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
+    where = f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
                 f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
