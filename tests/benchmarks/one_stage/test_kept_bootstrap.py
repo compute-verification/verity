@@ -49,7 +49,7 @@ def _tree(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     _exe(bin_ / "lease", 'LEASED=leased exec "$@"')
     (bin_ / "python3").symlink_to(sys.executable)
     (tmp_path / "arch").write_text("9.0\n")
-    env = {"PATH": f"{bin_}:{os.environ['PATH']}", "HOME": str(tmp_path), "BOOT_ROOT": str(boot),
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "BOOT_ROOT": str(boot),
            "CUDA_HOME": str(tmp_path / "cuda")}
     return tree, env
 
