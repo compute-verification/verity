@@ -2708,15 +2708,22 @@ class World:
         return out
 
     def goes_first(self, s: Snapshot, acts: list) -> bool:
-        """Whether, with records runs and a Lean PR waiting, a PR with no Lean change that changes a Lean input waits (`pool`)
-        where a batch could take it, main's chain having room, or where the chain holds a Lean change: it holds the Lean
-        batch back, and opens the tick's batches of PRs with no Lean change ahead of rank, so the chain's next room is its."""
+        """Whether, with records runs, a PR with no Lean change that changes a Lean input (`pool`) holds back a Lean batch that
+        would open but for it: one a Lean PR could be admitted to, with none staged and no wide Lean change nor a PR set
+        aside before that changes a Lean input on the chain (`erred`), while a batch could take that PR, main's chain having
+        room, or the chain holds a Lean change.  It opens the tick's batches of PRs with no Lean change ahead of rank, so
+        the chain's next room is its."""
         chain = self.chain(s, acts)
         flown = {**{r.number: r for r in s.ready}, **{r.number: r for r in s.flying}}
         held = any(m in flown and flown[m].lean for c in chain for m in c.members)
         pool = self.pool(s, acts)
-        return s.records and (len(chain) < s.depth or held) and any(r.lean for r in pool) and any(
-            r.lean_input and not r.lean for r in pool)
+        gone = {a.sha for a in acts if isinstance(a, (Drop, Commit))}
+        staged = [c for c in s.candidates if c.waits and c.sha not in gone] + [
+            c for c, a in self.rebuilt(acts).items() if a.records]
+        wide = [m for c in chain for m in c.members if m in flown and flown[m].lean and m in s.wide]
+        admit = [r for r in pool if r.lean and (s.lean or r.number in s.pinned)]
+        return bool(s.records and (len(chain) < s.depth or held) and admit and not staged and not wide
+                    and not self.erred(s, acts) and any(r.lean_input and not r.lean for r in pool))
 
     def takeable(self, s: Snapshot, acts: list, upto: Build | None = None) -> list[Ready]:
         """`pool` without the members of the tick's builds before ``upto``, or of all of them."""

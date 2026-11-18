@@ -83,7 +83,7 @@ ones alone, up to `batch` and under no `lean` limit.  A pin orders a Lean batch 
 into one.  Staged, the batch takes no build from the PRs with no Lean change: the tick that stages it builds theirs beside it.
 It keeps those changing a Lean input out for its whole records run, though, so they go first (`_goes_first`): no Lean
 batch is staged, pinned or not, while one of them that a batch may take waits, whatever its rank, where a batch could
-take it now (main's chain has room) or where the chain holds a Lean change; and while a Lean PR waits for it, it opens the
+take it now (main's chain has room) or where the chain holds a Lean change; and while a Lean batch waits for it, it opens the
 tick's batches ahead of rank, so the chain's next room is its.  On a full chain holding no Lean change no batch could
 take it: the Lean batch is staged, and it waits beside that batch, which, once on the chain, no other follows while it
 waits.  With no records run (`Snapshot.records` off) a
@@ -402,7 +402,7 @@ def decide(s: Snapshot) -> list[Action]:
     (`Snapshot.plain`) or none of them.  The Lean batch is staged with its records run first (`Build.records`), ahead of the batches built
     beside it; it takes no place in the chain, so it is built on the top of a full chain too, and none is staged while a PR
     changing a Lean input that a batch may take waits where a batch could take it now or the chain holds a Lean change: it
-    goes first, ahead of rank in the tick's batches while a Lean PR waits (`_goes_first`).  With no records run
+    goes first, ahead of rank in the tick's batches while a Lean batch waits for it (`_goes_first`).  With no records run
     (`Snapshot.records` off) it takes the chain's last place this tick, on top of the tick's other batches, so long as its members cross
     every move those hold.  While the chain holds a wide member
     (`Snapshot.wide`), no Lean batch opens: built on it, a Lean change would build again what the wide one built; nor while
@@ -554,9 +554,8 @@ def _decide(s: Snapshot, leaves: list[Leave] | None) -> list[Action]:
     pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts) and _crossing(r, moves)]
     lean, why = _next(s, pool, outcomes, chain, built)
     lean = _moves_last(lean, ready)
-    newest = _newest(outcomes, {r.number: r.head for r in pool})
-    first = s.records and any(r.lean and _takes(r, newest) for r in pool) and _goes_first(
-        pool, newest, room, _leans(chain, built))
+    first = s.records and not lean and bool(_next(s, [r for r in pool if not r.lean_input or r.lean], outcomes, chain,
+                                                  built)[0])
     free = min(max(s.depth - len(chain), 0), max(s.fill, 1))
     builds = [Build(lean, base, priority, True, after)] if lean and s.records else []
     plain: tuple[int, ...] = ()
