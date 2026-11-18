@@ -2,7 +2,7 @@
 stage, the interior docket over the replay sample's proof blocks, the second stage on its own coins, one outcome
 binding both dockets and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
-second-stage sessions (`second_stage`), which allows the two-stage form (`second_stage.FORM`, on); its
+second-stage sessions (`second_stage`); its
 refusals; its profile at the footprint; and its replay grain's fan-out."""
 
 from __future__ import annotations
@@ -200,8 +200,7 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     each sampled replay block on the coins after the interior docket; and one outcome holds both audit records, each
     by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior docket
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
-    boundary, each unit at its own row of its replay block's N_RHO, and passes it; the two-stage form being allowed
-    (`second_stage.FORM`), the outcome is an accept, and its profile is at the footprint."""
+    boundary, each unit at its own row of its replay block's N_RHO, and passes it; the outcome is an accept, and its profile is at the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     assert stream.cells == (N_RHO,) and stream.counts == (K,)
@@ -308,14 +307,14 @@ def test_round_two_is_the_twin_held_to_the_lean_and_completeness_is_the_leans(mo
     naming the goal (`verifier.not_written`)."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     assert SS.check(own, [s], []).ok
     for lean in (["second-read"], None):
         v = SS.check(own, [s], lean)
         assert not v.ok and v.codes == (V.DISAGREE,) and v.detail[V.DISAGREE] == {"lean": lean, "python": []}
-    refused = check(True, own, None).codes
+    refused = check(own, None).codes
     assert refused and SS.check(own, None, list(refused)).codes == refused
     assert SS.check(own, None, []).codes == (V.DISAGREE,)
     assert SS.held_to_lean(None, []) == SS.held_to_lean([], None) == [V.DISAGREE]
@@ -708,7 +707,7 @@ def _registered_codes(monkeypatch):
     values itself (``filled``) or the prover registers them."""
     seen = []
     check = SS.check_twin
-    monkeypatch.setattr(SS, "check_twin", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    monkeypatch.setattr(SS, "check_twin", lambda own, ss: seen.append((own, ss)) or check(own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
     entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
@@ -723,7 +722,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(check(True, o, [stmt]).codes)
+        return list(check(o, [stmt]).codes)
     return codes
 
 
@@ -1105,7 +1104,7 @@ def test_the_interior_registration_is_in_the_boundary_registrations_window_or_th
     (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
     (`interior-window`): a root of the prover's choosing, none where the boundary docket has one, and the root
     of another sample or another docket. On the computed root, the second stage's session opened for it, the run
-    of record agrees through both stages, and the outcome is an accept, the form being allowed (`second_stage.FORM`)."""
+    of record agrees through both stages, and the outcome is an accept."""
     stream = _stream()
     reg = stream.register(*_boundary())
     first = stream.select(reg)
@@ -1435,12 +1434,11 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
                                 ([{"value": BX}], (BOUT,))):
         assert SS.returns_ok(own(registered, returns))
-        assert "second-return" not in SS.check_twin(True, own(registered, returns), None).codes
+        assert "second-return" not in SS.check_twin(own(registered, returns), None).codes
     refused = own([{"value": "w"}, {"value": BOUT}])
-    v = SS.check_twin(True, refused, None)
+    v = SS.check_twin(refused, None)
     assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
     assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
-    assert SS.check_twin(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

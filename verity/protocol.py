@@ -165,15 +165,26 @@ type Starter = Callable[[Mapping[str, Any], Mapping[str, Any], Path | None], Sta
 @dataclass(frozen=True)
 class ProtocolDef:
     """A protocol as a run takes it: its manifest, a factory for each of its parties, and a starter for each party a
-    deployment starts on its machine."""
+    deployment starts on its machine. ``choose`` picks, from a run's parameters, the definition the run takes under this
+    protocol's id (`chosen`); without it, this one, whatever the parameters."""
 
     manifest: Manifest
     parties: Mapping[str, Callable[[], Party]]
     starts: Mapping[str, Starter] = field(default_factory=dict)
+    choose: Callable[[Mapping[str, Any]], ProtocolDef] | None = None
 
     def __post_init__(self) -> None:
         if extra := sorted(set(self.starts) - set(self.parties)):
             raise ValueError(f"{self.manifest.protocol} starts {extra}, which it has no factory for")
+
+    def chosen(self, params: Mapping[str, Any]) -> ProtocolDef:
+        """The definition a run of these parameters takes; refuses one under another protocol's id."""
+        if self.choose is None:
+            return self
+        d = self.choose(params)
+        if d.manifest.protocol != self.manifest.protocol:
+            raise ValueError(f"{self.manifest.protocol} chose {d.manifest.protocol}'s definition")
+        return d
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------

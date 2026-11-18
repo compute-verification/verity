@@ -229,9 +229,10 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
-#: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
-#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model computed.
-PROTOCOLS = ("pouw", "pous", "sampled-proofs")
+#: The protocols a run can enable, each with its adapter module in `verity_vllm.protocols`, in install order, innermost
+#: first: PoUW replaces the linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model
+#: computed.
+PROTOCOLS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)

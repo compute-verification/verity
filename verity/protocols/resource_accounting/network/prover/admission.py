@@ -1,6 +1,6 @@
 """The network attester's admission on the served node: its release order (`ReleaseOrder`) and the certified tick
 (`TickGate`, `RuleGate`), the readers of its release headers and its watermark (`release_of`, `Watermark`), and the
-frontends that feed them: serve-openai's (`TickAdmit`) and an OpenAI-style server's middleware (`ReleaseFeed`). The
+frontends that feed them: serve-openai's (`TickAdmit`) and a front in another process than its engine (`FrontFeed`). The
 adapter hands in what is its own: the engine loop's submit and abort, its server's routes and body check, the
 configuration it read, and the exchange of `verity.hooks` events and requests the gate and serve-openai's frontend
 attach to, both built and attached by one entry (`Admitter`). Nothing here imports the adapter or vLLM.
@@ -47,13 +47,12 @@ comes after it was skipped (``late``). A released request that doesn't reach the
 holds the later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that
 breaks, opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. Refused: a
 scheduler policy other than FCFS (the waiting queue must be the admission order) and more than one data-parallel engine.
-Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
-through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
-file, and a vLLM general plugin whose gate in the engine core process reads it). A request the gate drops is its
-frontend's to end, and each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the
-one in the engine with that error and aborts it (`TickAdmit`). vLLM's own server's is given the request's disconnect, on
-which vLLM aborts it as it does on its connection's close, and is then answered by the middleware: 400 where the server
-had begun no response, a stream ended with nothing more of it where its head had gone (`tick_plugin.TickFeed`).
+Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and, where the server's
+front runs in another process than its engine, `FrontFeed` on the front's hooks, which appends the releases and the
+watermark to a feed file that the engine's gate reads (`engine`). A request the gate drops is its frontend's to end, and
+each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the one in the engine with
+that error and aborts it (`TickAdmit`). Elsewhere the refusal goes to the adapter's front (`hooks.RefuseInput`), which
+ends the request in its server.
 """
 from __future__ import annotations
 
@@ -194,8 +193,8 @@ def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[in
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
-    # Imported where a line is read, not with the module, which `tick_plugin` loads in each of vLLM's processes and
-    # which imports only the stdlib and this package.
+    # Imported where a line is read, not with the module, which the adapter's scheme plugin loads in each of vLLM's
+    # processes and which imports only the stdlib and this package.
     from verity.protocols.resource_accounting.network.verifier.release import (
         read_watermark,
     )
@@ -699,8 +698,8 @@ class TickAdmit:
 
 def tick_config(cfg: Any, source: str, *, feed: bool = True) -> dict[str, Any] | None:
     """The certified tick's configuration from ``cfg``, the JSON object the adapter read under ``source``, None for None:
-    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``feed`` (the file
-    `ReleaseFeed` appends to and the gate reads; optional, None without it, where ``feed`` is False), ``log`` (a
+    ``bucket_us``, ``sat_us`` and ``free_us`` (the `Tick`), ``hold_ms`` (5000 by default), ``feed`` (a feed file's
+    path; optional, None without it, where ``feed`` is False), ``log`` (a
     directory for each gate's ``tick.PID.jsonl``, optional), and a rule other than the registered one, ``token_ns`` and
     ``catch_up`` (`RuleGate`; 0 and ``quiet``, the registered rule, by default), with ``arm``, the benchmark arm
     measuring it, where ``catch_up`` is ``open``."""
@@ -828,177 +827,97 @@ class Admitter:
             off()
 
 
-async def _buffered(receive: Callable[[], Any]) -> tuple[bytes, Callable[[], Any]]:
-    """The request's whole body, and a ``receive`` that replays the messages it read before the rest."""
-    msgs: list[dict[str, Any]] = []
-    while True:
-        m = await receive()
-        msgs.append(m)
-        if m.get("type") != "http.request" or not m.get("more_body", False):
-            break
-    body = b"".join(m.get("body", b"") for m in msgs if m.get("type") == "http.request")
-
-    async def replay() -> Any:
-        return msgs.pop(0) if msgs else await receive()
-    return body, replay
+def feed_file(directory: str, name: str | None = None) -> str:
+    """The file in a server's feed directory (`hooks.FRONT`'s ``ctx["feed"]``) that the scheme ``name``'s front appends
+    to and its engine reads."""
+    return os.path.join(directory, f"{name or scheme_name()}.jsonl")
 
 
-async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str) -> None:
-    body = text.encode()
-    await send({"type": "http.response.start", "status": status,
-                "headers": [(b"content-type", b"text/plain"), (b"content-length", b"%d" % len(body))]})
-    await send({"type": "http.response.body", "body": body})
+class FeedReader:
+    """The records appended to a feed file (JSON lines) since the last call; a partial last line waits for its end."""
 
+    def __init__(self, path: str) -> None:
+        self.path, self.fd, self.tail = path, None, b""
 
-class ReleaseFeed:
-    """An OpenAI-style server's side of ``--admit tick`` (an ASGI middleware): with a configuration (`tick_config`), it appends to
-    the feed file the records `TickGate.take` reads: a numbered request's release before the server sees the
-    request (its key the request's X-Request-Id, ``verity-<run>-<N>`` set where the client sent none), that it won't reach
-    the engine (no 200 response began), and the watermark's lines from its ``POST /verity/watermark``, which it answers
-    itself. A malformed or repeated release and a malformed watermark are answered 400, and so is a watermark POST that
-    is a client's (it carries a release) or a run's second, which feeds no line (`open_watermark`).
-
-    It serves an allow-list, matched on the route less the server's ``root_path`` (`route_of`): ``/v1/completions`` and
-    ``/v1/chat/completions`` (`SAMPLED_PATHS`), the watermark's, and ``/health``, ``/ping``, ``/version``, ``/v1/models``,
-    ``/metrics``, ``/tokenize`` and ``/detokenize`` (`OTHER_PATHS`), which don't generate. Any other route
-    (``/v1/responses``, ``/v1/audio/...``, ``/pooling``, ``/invocations``, ...) is answered 400, and a websocket closed,
-    before the engine sees it. So is a completions or chat request sampled without a seed (`unseeded`): serve-openai fills
-    such a request's seed with the public default its registration fixes (`engine.served_seed`); this path has no
-    registered default, so it refuses instead. A refused numbered request is fed as passed. Without the variable it
-    passes everything.
-
-    A request of a release a watermark line names lost is this middleware's to end: the gate keeps it from the
-    scheduler, so vLLM never answers it. One that is in the server when its line comes is given its disconnect, the next
-    message its ``receive`` returns, on which vLLM's server aborts it as it does on its connection's close. Where the
-    server had begun no response, nothing it sends after that goes on, and once its call returns the middleware answers
-    400 with `LOST`. Where a stream's head had gone, nothing more of the stream goes on and the middleware
-    ends it with no body, since a middleware writes no event in the server's stream. A response whose head gave its
-    length is the server's whole answer, which only an open gate lets it have, and is left to finish: a shorter body
-    would break the length it declared. One whose line has come by the time its body is read, so every one that comes
-    after its line, is answered 400 with that sentence, and reaches neither the server nor the feed. A watermark that
-    breaks forgets its run's lost releases: the gate is open then, and adds every request at once. What the middleware
-    keeps for this is its process's own: among several API server processes, a line ends only the requests of the
-    process its stream reached, and only that process refuses the later ones."""
-
-    def __init__(self, app: Any, cfg: Mapping[str, Any] | None, *, sampled: frozenset[str], other: frozenset[str],
-                 route: Callable[[Mapping[str, Any]], str], refuses: Callable[[bytes], str | None]) -> None:
-        self.app, self.sampled, self.other, self.route, self.refuses = app, sampled, other, route, refuses
-        self.fd = None if cfg is None else os.open(cfg["feed"], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
-        self.seen: dict[str, set[int]] = {}
-        self.streams: set[str] = set()              # the runs whose watermark stream has come
-        self.lost: dict[str, set[int]] = {}         # run -> the N its watermark named lost
-        self.served: dict[tuple[str, int], asyncio.Future[None]] = {}   # (run, N) in the server -> done once N is named lost
-
-    def write(self, rec: dict[str, Any]) -> None:
-        os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
-
-    def _record(self, rec: dict[str, Any]) -> None:
-        """One watermark record, to the feed: before it a line's lost releases are marked, so that a request of one that
-        comes later is refused, and after it each request of them that is in the server is given its disconnect."""
-        run = rec["run"]
-        lost = [int(n) for n in rec.get("lost") or ()]
-        if lost:
-            self.lost.setdefault(run, set()).update(lost)
-        if "error" in rec:
-            self.lost.pop(run, None)
-        self.write(rec)
-        for n in lost:
-            gone = self.served.get((run, n))
-            if gone is not None and not gone.done():
-                gone.set_result(None)
-
-    async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        if self.fd is None or scope.get("type") not in ("http", "websocket"):
-            return await self.app(scope, receive, send)
-        if scope["type"] == "websocket":
-            await receive()
-            return await send({"type": "websocket.close", "code": 1008})
-        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
-        route = self.route(scope)
-        try:
-            rel = release_of(headers)
-            if rel is not None and rel[1] in self.seen.setdefault(rel[0], set()):
-                raise ValueError(f"{RELEASE_HEADER}: {rel[1]} came twice in run {rel[0]!r}")
-        except ValueError as e:
-            return await _answer(send, 400, str(e))
-        why = None
-        if route == WATERMARK_PATH:
+    def __call__(self) -> list[dict[str, Any]]:
+        if self.fd is None:
             try:
-                w = open_watermark(headers, self.streams, self._record)
-            except ValueError as e:
-                why = str(e)
-            else:
-                return await self._watermark(w, receive, send)
-        elif route in self.sampled:
-            body, receive = await _buffered(receive)
-            why = self.refuses(body)
-        elif route not in self.other:
-            why = (f"under the certified tick this server serves only {', '.join(sorted(self.sampled | self.other))}, "
-                   f"not {route[:80]!r}")
-        if rel is not None and rel[1] in self.lost.get(rel[0], ()):      # read here: its line may come while its body does
-            return await _answer(send, 400, LOST.format(n=rel[1], run=rel[0]))
-        if why is not None:
-            if rel is not None:
-                self.seen[rel[0]].add(rel[1])
-                self.write({"run": rel[0], "n": rel[1], "passed": True})
-            return await _answer(send, 400, why)
-        if rel is None:
-            return await self.app(scope, receive, send)
-        run, n, bucket = rel
-        self.seen[run].add(n)
-        key = headers.get("x-request-id")
-        if not key:
-            key = f"verity-{run}-{n}"
-            scope = {**scope, "headers": [*scope.get("headers", ()), (b"x-request-id", key.encode())]}
-        self.write({"key": key, "run": run, "n": n, "bucket": bucket})
-        gone = self.served[run, n] = asyncio.get_running_loop().create_future()
-        began = started = sized = ended = False
+                self.fd = os.open(self.path, os.O_RDONLY)
+            except FileNotFoundError:
+                return []
+        data = self.tail
+        while chunk := os.read(self.fd, 1 << 16):
+            data += chunk
+        *lines, self.tail = data.split(b"\n")
+        return [json.loads(x) for x in lines if x.strip()]
 
-        async def heard() -> Any:
-            """The request's next message, or its disconnect once a line has named its release lost."""
-            if gone.done():
-                return {"type": "http.disconnect"}
-            message = asyncio.ensure_future(receive())
-            try:
-                await asyncio.wait({message, gone}, return_when=asyncio.FIRST_COMPLETED)
-                if message.done():
-                    return message.result()
-            finally:
-                message.cancel()
-            return {"type": "http.disconnect"}
 
-        async def watched(message: dict[str, Any]) -> None:
-            nonlocal began, started, sized, ended
-            if gone.done() and not sized:
-                return
-            kind = message.get("type")
-            if kind == "http.response.start":
-                started, began = True, began or message.get("status") == 200
-                sized = any(k.lower() == b"content-length" for k, _ in message.get("headers") or ())
-            elif kind == "http.response.body" and not message.get("more_body", False):
-                ended = True
-            await send(message)
+def _log_to(directory: str | None) -> Callable[[dict[str, Any]], None] | None:
+    if not directory:
+        return None
+    f = open(os.path.join(directory, f"tick.{os.getpid()}.jsonl"), "a", encoding="utf-8")
 
+    def log(rec: dict[str, Any]) -> None:
+        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+        f.flush()
+    return log
+
+
+def engine(settings: Mapping[str, Any], feed: str, name: str | None = None) -> Admitter:
+    """The engine's side (`hooks.ENGINE`): the tick gate (`Admitter` under ``tick`` with ``settings``, `tick_config`'s
+    less ``feed``), reading the records the front appends to its feed file (`feed_file` in ``feed``)."""
+    return Admitter({**settings, "order": "tick"}, source=f"{name or scheme_name()}'s settings",
+                    pull=FeedReader(feed_file(feed, name)), log=_log_to(settings.get("log")))
+
+
+class FrontFeed:
+    """The front's side (`hooks.FRONT`) where the engine runs in another process: `TickAdmit` on the front's hooks,
+    appending its records to the feed file (`feed_file`) the engine's gate reads. Each input that arrives with a release
+    is that release, its key the input; a malformed or repeated one is refused (`hooks.RefuseInput`); one complete at
+    the front at step 0 never reached the engine and is passed; the watermark's route and its lost releases' refusals
+    are `TickAdmit.attach`'s."""
+
+    def __init__(self, feed: str, name: str | None = None) -> None:
+        self.path = feed_file(feed, name)
+        self.admit = TickAdmit(lambda adm: None, lambda key: None, self._append)
+        self.inputs: dict[str, tuple[str, int]] = {}
+
+    def _append(self, rec: dict[str, Any]) -> None:
+        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         try:
-            await self.app(scope, heard, watched)
+            os.write(fd, json.dumps(rec, separators=(",", ":")).encode() + b"\n")
         finally:
-            del self.served[run, n]
-            if not began:
-                self.write({"run": run, "n": n, "passed": True})
-        if gone.done() and not started:
-            await _answer(send, 400, LOST.format(n=n, run=run))
-        elif gone.done() and not sized and not ended:
-            await send({"type": "http.response.body", "body": b""})
+            os.close(fd)
 
-    async def _watermark(self, w: Watermark, receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        while True:
-            message = await receive()
-            if message.get("type") == "http.disconnect":
-                w.close("the connection closed before the watermark's end")
+    def attach(self, exchange: Any, name: str | None = None) -> FrontFeed:
+        name = name or scheme_name()
+        self.admit.attach(exchange, name)
+        exchange.subscribe(name, "steps", self.on)
+        return self
+
+    def on(self, ev: Any) -> None:
+        if isinstance(ev, H.InputArrived):
+            try:
+                k = self.admit.key(ev.headers)
+            except ValueError as e:
+                assert self.admit.refuse is not None
+                self.admit.refuse(ev.input, str(e))
                 return
-            if not w.feed(message.get("body", b"")):
-                break
-            if not message.get("more_body", False):
-                w.close()
-                break
-        await _answer(send, 200 if w.error is None else 400, w.error or "")
+            if k is not None:
+                self.inputs[ev.input] = k
+                self.admit.submit(_Release(k, ev.input))
+        elif isinstance(ev, H.OutputsComplete) and ev.input in self.inputs:
+            k = self.inputs.pop(ev.input)
+            self.admit.submitted.pop(k, None)
+            if ev.step == 0:
+                self.admit.passed(k)
+
+    def summary(self) -> dict[str, Any]:
+        return self.admit.summary()
+
+
+@dataclass(frozen=True)
+class _Release:
+    release: tuple[str, int]
+    engine_id: str
+

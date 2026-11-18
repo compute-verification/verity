@@ -46,7 +46,7 @@ FIXED = ([(4, 2, G2), (4, 2, G2)], [[(0, 0, 4), (1, 0, 4)], [(0, 4, 1), (1, 4, 1
 
 
 def _lowered(tables: Tables | None = TABLES, cls: WindowClass = CLASS):
-    return WC.lower(_registered(), cls, None, GRAIN, wired=False, tables=tables)
+    return WC.lower(_registered(), cls, None, GRAIN, provable=False, tables=tables)
 
 
 def _held_rows(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -105,7 +105,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     assert got == want and len(set(got.values())) == len(got) == 2 * 5 * 7
     doc = json.loads(json.dumps(c.description()))
     assert IF.input_count(doc, **held(c)) == {
-        "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+        "units": 1568, "inputs": 10547104, "wired": 1385248, "registered": 9161856, "ingress": 0, "free": 0}
 
 
 def test_each_tables_readers_are_templates_of_their_own():

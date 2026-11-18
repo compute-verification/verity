@@ -4,10 +4,14 @@ the workspace, and `lake` on the PATH for the in-process challenger's Lean coins
 from __future__ import annotations
 
 import ast
+import re
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 BASH = shutil.which("bash")
@@ -79,6 +83,40 @@ def test_every_first_party_package_the_harness_and_the_adapter_import_is_reachab
     assert {"verity", "verity_vllm", "verity_torch", "verity_config", "research"} <= imported
     unreachable = sorted(n for n in imported if not any((p / n / "__init__.py").is_file() for p in path))
     assert not unreachable, f"verity_vllm and verity_bench import {unreachable}, which env.sh's PYTHONPATH doesn't reach"
+
+
+def test_the_python_is_the_launchs_and_the_toolkit_the_machines_with_no_path_of_a_node_named(tmp_path):
+    """env.sh names no node's directory: VERITY_BENCH_VENV is given or refused, and CUDA_HOME, where none is given, is
+    the toolkit the run's machine's [properties] list first."""
+    script = (ROOT / "benchmarks/harness/env.sh").read_text()
+    assert "/workspace" not in script and "/usr/local" not in script
+    ran = subprocess.run([BASH, "-c", ". benchmarks/harness/env.sh"], cwd=ROOT, env={"PATH": _tools(tmp_path)},
+                         capture_output=True, text=True)
+    assert ran.returncode == 2 and "no Python at VERITY_BENCH_VENV (unset)" in ran.stderr
+    venv = tmp_path / "py"
+    (venv / "bin").mkdir(parents=True)
+    (venv / "bin" / "python").symlink_to(sys.executable)
+    (tmp_path / "inputs").mkdir()
+    machine = (ROOT / "tests/benchmarks/harness/fixtures/machines/one-card.toml").read_text()
+    (tmp_path / "inputs" / "one-card.toml").write_text('machine = "one-card"\n\n[properties]'
+                                                       + machine.split("[properties]", 1)[1])
+    env = {"PATH": _tools(tmp_path), "HOME": str(tmp_path), "VERITY_BENCH_VENV": str(venv),
+           "RESEARCH_MACHINE": "one-card", "RESEARCH_RUN_DIR": str(tmp_path)}
+    ran = subprocess.run([BASH, "-c", '. benchmarks/harness/env.sh && printf "%s\\n" "$CUDA_HOME"'], cwd=ROOT, env=env,
+                         capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == "/usr/local/cuda-13.0"
+
+
+@pytest.mark.parametrize("script", ["benchmarks/harness/overhead_node.sh",
+                                    *sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "benchmarks/harness/setup").glob("*.sh"))])
+def test_a_point_script_names_no_nodes_directory_and_no_card_by_name(script):
+    """The toolkit is the kit's (`machine.py toolkit`), the card's arch its file's (`machine.py arch`), the Python the
+    launch's, and a cache the user's: a script that names one of our nodes' paths, or tells a card by its name, refuses
+    every other machine."""
+    text = (ROOT / script).read_text()
+    assert "/workspace" not in text and "/usr/local/cuda" not in text
+    assert not re.search(r"\*(H100|H200|\"RTX PRO 6000\")\*", text)
 
 
 def test_lake_is_on_the_path_from_elan_when_nothing_else_puts_it_there(tmp_path):

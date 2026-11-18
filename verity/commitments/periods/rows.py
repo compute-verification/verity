@@ -449,6 +449,11 @@ class Binding:
             out.setdefault(m.template, []).append(m)
         return {t: tuple(ms) for t, ms in out.items()}
 
+    @cached_property
+    def starts(self) -> dict[str, np.ndarray]:
+        """Each template's members' first units among its own (`owns`), in order."""
+        return {t: np.array([self.owns[m.key] for m in ms], dtype=np.int64) for t, ms in self.chunks.items()}
+
     def wire(self, m: Member, port: str) -> WI.Wired | None:
         return next((w for w in m.wired if w.port == port), None)
 
@@ -700,8 +705,7 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
 def _gather(window: Binding, writer: str, out: str, at: np.ndarray, get: Callable[[Member, str], np.ndarray]) -> np.ndarray:
     """Leaves ``at`` of the tree of template ``writer``'s output ``out``, read off its members (``get(member, out)``: one
     row a unit)."""
-    ms = window.chunks[writer]
-    starts = np.array([window.owns[m.key] for m in ms], dtype=np.int64)
+    ms, starts = window.chunks[writer], window.starts[writer]
     at = np.asarray(at, dtype=np.int64)
     j = np.searchsorted(starts, at, side="right") - 1
     res = None
@@ -1473,7 +1477,9 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
     """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
     every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
     registration's entries by tree), unit ``m.base + i`` reading the leaf of the tree holding it (`Binding.tree`) the
-    wiring gives in closed form (`Binding.reads`): Lean refuses a statement checked
+    wiring gives in closed form (`Binding.reads`); a wired port is a tree port (``"tree": {"template", "field"}``, its
+    reads empty: the verifier's program gives them, `Flock.Registered.treeReads`), its circuit's row a link row (META
+    ``links``, `Flock.Registered.checkLinked`): Lean refuses a statement checked
     against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
     a member's outputs read opens a root registered before any coin. A member with ports in shared trees
     (`Binding.shared`) gets these reads with no file of its own. The prover's header gives the paths (`own_entries`,
@@ -1495,9 +1501,11 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 raise ValueError(f"{m.key} {p}: the registration holds no root for it")
             if port == m.port(p) and int(e["leaves"]) != m.n:
                 continue
+            wire = w.wire(m, p)
             ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
                         "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
-                        "reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base}
+                        **({"reads": w.reads(m, p).tolist(), registered.READS_FROM: m.base} if wire is None else
+                           {"tree": {"template": wire.writer, "field": wire.out}, "reads": []})}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
 

@@ -14,6 +14,7 @@ message's writers and readers.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
@@ -26,9 +27,11 @@ from verity.protocols.proofs.spot.prover import workload as spot
 from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting import scheme as schemes
 
-__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "read", "write"]
+__all__ = ["Exchange", "append", "body", "build", "close", "current", "line", "lines", "providing", "read", "write"]
 
 type Subscriber = Callable[[Any], None]
+
+_KEYS = itertools.count()
 
 
 class Exchange:
@@ -45,6 +48,30 @@ class Exchange:
         self.readers: Mapping[str, Callable[..., Any]] = {}
         #: the adapter's answer to a refused input (`RefuseInput`), called as it is filed with the input and the reason
         self.refuse: Callable[[str, str], None] | None = None
+        #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
+        self.attached: dict[str, Mapping[str, Any]] = {}
+        #: what each attached scheme's ``attach`` returned, by its name: its `H.Reports` or `H.Commits` for the run's record
+        self.reports: dict[str, Any] = {}
+        #: this build's key, unique in the process: a scheme's ``ctx["build"]``
+        self.key = f"build-{next(_KEYS)}"
+
+    def attach(self, scheme: schemes.Scheme, given: Mapping[str, Any] | None = None, *,
+               gate: Callable[..., Mapping[str, Any]] | None = None, **launcher: Any) -> Any:
+        """Attach ``scheme`` with ``ctx`` (`verity.protocols.resource_accounting.scheme`) ``{"settings": its settings,
+        ``given`` over its defaults; "build": this build's key; "gate": ``gate``; **launcher}``: its ``attach(self, ctx)``,
+        then each of its ``requests(ctx)`` its attach did not file; returns what attach returns.  ``gate`` is the
+        auditor device's challenger gate in its own words, ``gate(*words) -> answer`` (`commit_coins.ChallengerGate.call`),
+        or None where the launcher holds none.  Attached before the build is answered, it is declared (`H.Declared`);
+        after, its requests are refused as `request` refuses them."""
+        ctx = {"settings": schemes.settings(scheme, given or {}), "build": self.key, "gate": gate, **launcher}
+        got = scheme.attach(self, ctx)
+        for r in scheme.requests(ctx):
+            if (scheme.name, r) not in self.requests:
+                self.request(scheme.name, r)
+        self.attached[scheme.name] = ctx["settings"]
+        if got is not None:
+            self.reports[scheme.name] = got
+        return got
 
     @property
     def step(self) -> int:
@@ -182,11 +209,12 @@ class Exchange:
         return out
 
 
-def attester() -> schemes.Scheme:
-    """The network attester's scheme, by its declaration's name, from the one table of schemes."""
-    from verity.protocols.compose import schemes as table
-    from verity.protocols.resource_accounting.network.scheme import NETWORK_ATTESTER
-    return table.get(NETWORK_ATTESTER.name)
+def providing(role: str) -> schemes.Scheme:
+    """The one declared scheme that provides ``role`` (`Scheme.provides`); `LookupError` naming those that do otherwise."""
+    found = [s for s in declarations.load().values() if role in s.provides]
+    if len(found) != 1:
+        raise LookupError(f"one declared scheme provides {role!r}, not {len(found)}: {[s.name for s in found]}")
+    return found[0]
 
 
 _CURRENT: Exchange | None = None
