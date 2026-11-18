@@ -22,7 +22,8 @@ def _toy(name: str = "toy-bandwidth", **kw) -> S.Scheme:
                 S.Order("receipts", "seed", within_ns=1_000_000, assumption="ToyNoCompression")),
         "charges": (S.Charge("on-chip", "on_chip_bits"), S.Charge("rebuilt", "rebuilt_bits")),
         "settings": {"refresh": False}, "requires": {"coins-at-rate": "its own challenger"},
-        "delta_scheme": Fraction(0), **kw})
+        "delta_scheme": Fraction(0), "over": "the session's credited bits, cleared of (1 - γ)",
+        "under": "the tier's reads, in bits", **kw})
 
 
 @pytest.fixture(autouse=True)
@@ -66,7 +67,7 @@ def test_block_cost_and_unit() -> None:
 def test_bound() -> None:
     s = _toy()
     b = S.bound(s, Fraction(1, 100), 65_536, {"on-chip": 10, "rebuilt": 6})
-    assert b.uncredited == 65_552
+    assert b.excess == 65_552
     with pytest.raises(ValueError, match="charges are"):
         S.bound(s, Fraction(1, 100), 0, {"on-chip": 0})
     with pytest.raises(ValueError, match="δ lies"):
@@ -118,6 +119,34 @@ def test_scheme_term_carried() -> None:
     assert S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}).delta_scheme == 0
     with pytest.raises(ValueError, match="δscheme lies"):
         _toy(delta_scheme=Fraction(1))
+
+
+def test_a_said_term_says_both_sides() -> None:
+    assert _toy().over and _toy().under
+    with pytest.raises(ValueError, match="says its two sides"):
+        _toy(under="")
+    assert _toy("silent", delta_scheme=None, over="", under="").over == ""
+
+
+def test_a_named_term_is_evaluated_at_the_parameters_its_caller_gives() -> None:
+    pearl = S.Term("Pouw.PearlC.δPearlC", ("q", "N"), lambda q, N: Fraction(q + N, 2**128))
+    b = S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**64, "N": 4096})
+    assert b.delta_scheme == Fraction(2**64 + 4096, 2**128) and b.term == "Pouw.PearlC.δPearlC"
+    assert b.parameters == {"q": 2**64, "N": 4096}
+    with pytest.raises(ValueError, match=r"δPearlC is evaluated at \['q', 'N'\], and \['q'\] were not given"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"N": 4096})
+    with pytest.raises(ValueError, match="has no parameters"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1, "N": 1, "P": 1})
+    with pytest.raises(ValueError, match="outside"):
+        S.bound(_toy(delta_scheme=pearl), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 2**128, "N": 0})
+    with pytest.raises(ValueError, match="takes no parameters"):
+        S.bound(_toy(), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, {"q": 1})
+    sketch = S.Term("ResourceAccounting.Guarantees.Remote.SketchBoundDeployed", ("Q", "P", "N", "ε"),
+                    lambda Q, P, N, ε: Fraction((Q + P) ** 2, 2**257) + N * ε)
+    four = {"Q": 2**40, "P": 2**10, "N": 64, "ε": Fraction(1, 2**80)}
+    assert S.bound(_toy(delta_scheme=sketch), Fraction(1, 100), 0, {"on-chip": 0, "rebuilt": 0}, four).parameters == four
+    with pytest.raises(ValueError, match="once each"):
+        S.Term("Pouw.PearlC.δPearlC", ("q", "q"), lambda q: Fraction(0))
 
 
 def test_scheme_term_not_said_refuses_a_bound() -> None:
