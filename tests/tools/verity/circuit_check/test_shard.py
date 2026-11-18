@@ -266,6 +266,7 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores"),
                       (["--reached", "main", "--all"], "--reached names"),
                       (["--reached", "main", "--shard", "1/3", "--shard-dir", "d"], "--reached names"),
+                      (["--reached", "main", "--update-pins"], "--update-pins but with --check"),
                       (["--all", "--check"], "--check checks")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)

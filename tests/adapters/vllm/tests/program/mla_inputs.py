@@ -104,6 +104,7 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
 
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import bits as BS
+
     from verity_vllm.definitions.registry import mla as M
 
     G = M.GLM47_FLASH

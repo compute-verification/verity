@@ -118,7 +118,6 @@ class Net:
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.definitions.registry import dsa
         from verity_vllm.definitions.registry.tp_allreduce import settings_of
-
         from verity_vllm.engine.profiles import family_facts as FF
         from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
         from verity_vllm.observe.fold.profiles.generic import (
@@ -210,7 +209,9 @@ class Net:
         FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
         rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
         from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
-        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import MIN_HEADS_FOR_BF16_PREFILL
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import (
+            MIN_HEADS_FOR_BF16_PREFILL,
+        )
         C, G = self.C, FLASHMLA_GLM53
         if self.kv_layout != "fp8_ds_mla":
             return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
@@ -267,10 +268,10 @@ class Net:
         """The selections of a dense-MHA prefill of M rows at pos0.. after `context` history rows (`_Model._dense_prefill`), each
         kind `k(role, **statics)`'s, or the refusal."""
         import numpy as np
+
         from verity_vllm.definitions.numerics import fa3_model
         from verity_vllm.definitions.registry import fa3_split
         from verity_vllm.definitions.registry.merge_attn_states import NEG_INF
-
         from verity_vllm.program.frontend import targets as TG
         C, tp = self.C, self.tp
         R, NOPE, VH, NH = (int(C[k]) for k in ("QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -398,12 +399,12 @@ class _Model(_Calls):
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
         from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
-
         from verity_vllm.program.frontend.rules.vllm_dsa import (
             DECODE_THRESHOLD,
             DECODE_THRESHOLD_DEFAULT,
             FA3_SPARSE_GEOMETRY,
             PAD_SCORE,
+            emit_indexer,
             long_row_blocks,
             long_row_keys,
             pad_words,
@@ -466,33 +467,31 @@ class _Model(_Calls):
             select = self.k("dsa_topk_short_row", TOPK=TOPK)
             self.topk = {}
             blocks = long_row_blocks(keys, TOPK) if self.batched and mqa else []
-            for i, n in enumerate(keys if mqa else ()):
-                if blocks and n > TOPK:
-                    break
-                logits = self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
-                                   logs["iks"].cut(n))
+            def logits(i: int, n: int) -> Coll:
+                return self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
+                                 logs["iks"].cut(n))
+            def alone(i: int, n: int, lg: Coll) -> None:
                 if n <= TOPK:
                     self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
-                    continue
+                    return
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
                 N = long_row_keys(n, TOPK)
-                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else logits.refs
+                scores = concat([lg.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else lg.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
-            for Nb, rows in blocks:
+            def block(Nb: int, rows: list[int], lgs: list[Coll]) -> None:
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                N, lg = long_row_keys(Nb, TOPK), self.k("dsa_mqa_logits", N=Nb, H=IH, D=ID)
-                ik, iks = logs["ik"].cut(Nb), logs["iks"].cut(Nb)
-                logits = [self.call(lg, iq[i][0].refs, iq[i][1].refs, ik, iks).refs for i in rows]
+                N = long_row_keys(Nb, TOPK)
                 counts = [self.pad(32, keys[i], 1, 1) for i in rows]
                 tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if Nb < N else []
                 fm = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK)
                 fs = self.k("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK)
-                masks = [self.call(fm, concat([s, *tail]) if tail else s, c).refs for s, c in zip(logits, counts)]
+                masks = [self.call(fm, concat([s.refs, *tail]) if tail else s.refs, c).refs for s, c in zip(lgs, counts)]
                 for i, m in zip(rows, masks):
                     self.topk[pos0 + i] = self.call(fs, m)
+            emit_indexer(keys if mqa else [], blocks, logits, alone, block)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
         if fp8:
@@ -530,7 +529,10 @@ class _Model(_Calls):
         FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`vllm_dsa_fp8.decode_splits`), so every row shares its SPLITS.  Row i's
         query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
         under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
-        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import FLASHMLA_FP8_GEOMETRY, decode_splits
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import (
+            FLASHMLA_FP8_GEOMETRY,
+            decode_splits,
+        )
         C = self.C
         KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
         G = FLASHMLA_FP8_GEOMETRY[(R, KVL)]
@@ -622,7 +624,6 @@ class _Model(_Calls):
         top-k, its block-FP8 quantization, then per (token, slot) pair p = t * TOPK + k the w13 GEMM, the activation, its quantization
         and the routed w2 GEMM; each row's sum of its TOPK down rows, plus the shared expert's."""
         from verity_vllm.definitions.registry.moe import router_kernel
-
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, M, H, G = self.C, len(x), self.H, self.G

@@ -187,6 +187,7 @@
     "tests/verity/protocols/proofs/flock/prover/fixtures/rec-c3-inner": "a recorded prover session and its private part for the recursion's inner shape at 16 instances, a toy circuit on generated values",
     "tests/verity/protocols/proofs/flock/prover/fixtures/rec-coins": "a recorded recursive session's salts and private part at 64 instances, a toy circuit on generated values"
   },
+  "art:53bf938df143b5a1f9974585020301a567d1f9bdf5cb5dd3d3d379bdea3d233b": "adapters/vllm/workloads/llama32-1b__bf16__h100__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
