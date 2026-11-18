@@ -27,7 +27,7 @@ SURFACE = {
     "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations and frees engine.kv_blocks emits",
     "vllm.v1.core.kv_cache_manager:KVCacheManager": "the KV cache manager, whose allocate_slots names the request "
                                                     "engine.kv_blocks' allocations are for",
-    "vllm.v1.worker.gpu.model_runner:GPUModelRunner": "Model Runner V2, which engine.env.ENGINE selects and engine.handle returns",
+    "vllm.v1.worker.gpu.model_runner:GPUModelRunner": "Model Runner V2, which engine.env.ENGINE selects, engine.handle returns and engine.kv_blocks patches",
     "vllm.v1.executor.multiproc_executor:WorkerProc": "the tensor-parallel worker process, which the TP lease hooks",
     # configuration and the platform
     "vllm.envs": "vLLM's environment switches, which engine.build, the inventory and the served facts read back",

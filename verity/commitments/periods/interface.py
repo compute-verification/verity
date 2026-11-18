@@ -2507,11 +2507,11 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
         check_inputs(lays, cuts, wires, registered, ingress, boundary_reads_of(doc), free_of(doc), ranks_of(doc))
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
-        program, query = wired_population_program(defs, doc)
+        program, query = program_of_record(doc, resolve)
         ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
                       _seg(registered, wires, cuts), order)
     else:
-        program, query = wired_population_program(defs, doc)
+        program, query = program_of_record(doc, resolve)
         ms = _listed_members(doc)
     tables = tuple(CS.RowTable(t["segment"], t["name"], t["template"], t["words"], _frozen(t["keys"]),
                                tuple((k, _frozen(v)) for k, v in t["label"])) for t in doc["row_tables"])
@@ -2527,9 +2527,17 @@ def window_of_record(doc: Mapping[str, Any], sampling_design: Mapping[str, Any],
 
 
 def program_of_record(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> tuple[Any, dict[str, Any]]:
-    """The wired Program and template query a period's ``circuit.json`` registers (`Circuit.program`), each template's
-    Definition by ``resolve``."""
-    return wired_population_program(_templates_of(doc, resolve), doc)
+    """The wired Program and template query a period's ``circuit.json`` registers (`Circuit.program`; a record that lists
+    its members, `listed_program`), each template's Definition by ``resolve``."""
+    defs = _templates_of(doc, resolve)
+    return wired_population_program(defs, doc) if "cap" in doc else listed_program(defs, doc["external"])
+
+
+def listed_program(templates: Sequence[tuple[Any, int]], external: Sequence[str]) -> tuple[Any, dict[str, Any]]:
+    """The wired Program of a record that lists its members (`circuit_record` with no cap) over ``templates`` (``(Definition,
+    units)``): each template one batch and no edge, its members' wiring and reads listed with them."""
+    return wired_population_program(templates, {"templates": [[descriptor_id(t), int(n)] for t, n in templates],
+                                                "external": list(external)})
 
 
 def _templates_of(doc: Mapping[str, Any], resolve: Callable[[str], Any]) -> list[tuple[Any, int]]:

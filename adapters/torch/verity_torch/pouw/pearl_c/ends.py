@@ -16,6 +16,7 @@ from typing import Any, cast
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
+    HM96_SALT,
     Epoch,
     Workload,
     transcript_domain,
@@ -334,7 +335,10 @@ class PassEnds(_RunState):
         d, nb = cast(Path, cur.retain), self.nb
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
-        last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True)), cur.writes)
+        raise NotImplementedError("the tiles' fresh salts kept beside the leaves (`salts_t`, 192 bytes a tile): the leaf "
+                                  "kernel taking its salts as data (hash_h3.cuh's hm_leaves, p2 the salts)")
+        last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True),
+                             (d / "salts_t", self.salts_t[:HM96_SALT * count], True)), cur.writes)
         sizes = {w: self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
                  for w, wt in self.weights.items()}
 
@@ -362,7 +366,7 @@ class PassEnds(_RunState):
                 "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
                 "schedule": copy.deepcopy(self.details["schedule"]),
                 "records_root": None, "commitment": {"root": root.hex(), "count": count},
-                "hm96_salt_key": cast(bytes, self.salt_key).hex(), "leaves": last[0], "tree_t": last[1]}
+                "leaves": last[0], "tree_t": last[1], "salts_t": last[2]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
 
         def complete() -> None:

@@ -60,7 +60,7 @@ HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
-#: the served scheme the arm runs: `verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.SCHEMES`' H100 record, the kernel's
+#: the served scheme the arm runs: the kernel scheme Pearl+ runs on the H100 (`kernel_schemes.resolve`), the kernel's
 SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
@@ -230,9 +230,9 @@ class PearlPlus:
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
         from arm import Work
         from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 
-        s, m = PPD.scheme_of(SERVED), m16(shape.m)
+        s, m = pouw_schemes.get(SERVED), m16(shape.m)
         unit = Unit(m, shape.k, shape.n)
         return Work(tensor_macs={FAMILY: m * shape.k * shape.n}, w_ref=str(s.wref(unit)), credited=str(s.credit_of(unit)),
                     unit=UNIT, hashed_bytes={"a_rows": 4 * m * shape.k, "tile_leaves": 8 * m * shape.n,
@@ -319,16 +319,17 @@ class _Held:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
         from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
-        salt_key = PPD.new_salt_key(SERVED)
+        salt_key = PPD.no_salt_key(SERVED)
         roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
         ch = Challenger(EPOCH, PV.coins)
-        self.run = PPDR.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
+        self.run = PPDR.PearlCDeviceRun(pouw_schemes.get(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
                                        ch.open("salt", weights_root(roots)), capacity=tiles_of(shape.m, shape.n),
                                        flag_rows=m16(shape.m), salt_key=salt_key)
         R, wt = kernel.run, self.run.weights[0]
