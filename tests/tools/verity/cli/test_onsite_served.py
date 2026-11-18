@@ -157,7 +157,20 @@ def test_remote_and_onsite_full_have_the_values_pearl_pluss_tie_takes_and_the_sm
         assert T.variables(cfg, {}).items() >= (TIED_WORKLOAD | TIED_CLASS).items(), name
     for name in set(T.HEADERS) - {"remote", "onsite_full"}:
         cfg = R.load(ROOT / "applications" / f"{name}.toml", REG)
-        assert cfg["workload"]["params"] == T.SERVED.default_params and "pearl-plus" not in cfg["protocols"]
+        assert cfg["workload"]["params"] == {**T.SERVED.default_params, **T.DEMO_VALUES.get(name, {})}, name
+        assert "pearl-plus" not in cfg["protocols"], name
+
+
+def test_the_front_application_is_the_networks_with_the_fronts_load_and_the_split_attester():
+    """`onsite_network_front.toml` is `onsite_network.toml` but for its load: served_verdicts.sh's LOAD=front, the
+    front's group the run's one load and its audited window, with the network attester's piece split around V3c."""
+    front = R.load(ROOT / "applications" / "onsite_network_front.toml", REG)
+    network = R.load(NETWORK, REG)
+    assert front["protocols"] == network["protocols"] and front["params"] == network["params"]
+    assert front["workload"]["params"] == {**network["workload"]["params"], "load": "front"}
+    hooks = T.variables(front, {})
+    assert T.SERVE.variables(front, {})["LOAD"] == "front"
+    assert {"CERTIFIER_FRONT", "CERTIFIER_CHAIN_CMD", "CERTIFIER_PERIOD_CMD"} <= set(hooks) and "CERTIFIER_CMD" not in hooks
 
 
 def test_the_configuration_states_no_host_or_address():
