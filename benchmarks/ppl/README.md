@@ -36,7 +36,8 @@ research run --on NODE --gpus 1 --project verity --source . --cwd source --timeo
 
 `h200.sh` takes an idle H100 or H200 (under `gpu-lease` where the node has it), the venv and HF cache
 `benchmarks/compute/serve.sh` uses (`$WORK/venv312`, bootstrapped as serve.sh does when absent; `$WORK/hf`, where the
-checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`), fetches the
+checkpoint is fetched once, 2.5 GB), builds the sm_90a cubin (`benchmarks/harness/setup/pearl_c_sm90.sh`) and, for
+`pearl-c-linears`, whose salt is the in-process challenger's coin, `pouw-verifier-difftest` with elan's `lake`, fetches the
 C4 shard from the hub into the same cache (its sha256 held to `datasets.json`'s), runs `run.py eval ... pearl-c-linears`
 and then `run.py metrics`. `env GPU=I CORES=A-B` pins its lease to card I and those cores, for which the command drops
 `--gpus 1` (research's own lease would take any card and leave the script none to pin). `SET=wikitext2` measures

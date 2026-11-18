@@ -314,11 +314,18 @@ def checkLinked (c : Circuit) (own : Array Port) : V Unit := do
     if !own.any fun r => r.name == name && r.tree.isSome then
       throw s!"registered reads: link row {name} reads another unit's outputs, and no tree port ({TREE_KEY}) reads it by path in its writer template's output field's tree"
 
+/-- The output field a link row reads in its writer template's tree: the writer's whole output row, as `HmLinks.checkUnit`
+requires of every link, which the class circuits name `out`. -/
+def OUT_FIELD : String := "out"
+
 /-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
 link row of `reg`'s name, the leaf of its writer (`HmLinks.writerOf`) in the writer template's tree (`HmLinks.treeLeaf`),
-the writer's template `reg`'s. Its work is the statement's units, each found from the root body's nodes. -/
+the writer's template `reg`'s; a tree port of another field than `OUT_FIELD` is refused. Its work is the statement's
+units, each found from the root body's nodes. -/
 def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
-  let some (t, _) := reg.tree | return reg
+  let some (t, f) := reg.tree | return reg
+  if f != OUT_FIELD then
+    throw s!"registered reads: tree port {reg.name} reads {t}'s {f} tree, and a link row reads its writer's whole output row, field {OUT_FIELD} (HmLinks.checkUnit)"
   let some (_, lo, _) := (← HmLinks.parse c).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
     | throw s!"registered reads: tree port {reg.name} is no link row of the circuit (META links)"
   let ns := HmLinks.nodes P
