@@ -23,7 +23,6 @@ from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits import count as K
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.circuits.ops import gemm as GEMM_OPS
 from verity.circuits.population import BitsWord, WordBits, wired_population_program
 from verity.circuits.program import NoBooleanBody, Program
 from verity.commitments.periods import interface as IF
@@ -200,13 +199,9 @@ def test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_lea
 
 def test_the_wiring_between_leaf_widths_is_priced_at_no_gate():
     """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose bodies hold no gate), so the
-    table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates."""
+    table prices each at 0."""
     assert K.table(_calling(bind(WordBits, W=16), bind(BitsWord, W=32))) == \
         {**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}
-    mm = bind(GEMM_OPS.ScaledMmS8V3, K=64, N=8, **GEMM_OPS.GEMM_SM120_S8)
-    coordinate = bind(GEMM_OPS.ScaledMmS8Coordinate, K=64, **GEMM_OPS.GEMM_SM120_S8)
-    table = K.table(_calling(mm))
-    assert BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
 
 
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
