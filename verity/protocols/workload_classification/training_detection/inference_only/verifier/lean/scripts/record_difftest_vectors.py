@@ -18,8 +18,11 @@ Case `seed`, for the first `COUNT`, is the first random circuit of the seed's th
 reading some of its parameters' leaves (directly, through a call and through a batch) and now and then passing some
 of a parameter's one-bit leaves on (`PASSES`: itself, through a call, a callee inside a callee, a batch member or a
 scan, some only through its carry or only as its outputs, or handed to a callee that returns none of them), their units laid out by one or two inference entries each with the slot digit anywhere
-among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
-each from an output of the row's bits and its leaves' width, written unit by unit and merged into runs
+among the digits; wires from earlier templates into every cut of a run of a row's units, each from an output of the
+row's bits and its leaves' width, in a form the edges take: units of the writer's at a step of 0, 1 or 2 from any
+first unit, which cross slots as the two layouts fall, the cuts' first units a step of 0 or 1 apart; or, on a row of
+more than one leaf, each unit the writer's unit of its rank in its own slot, or consecutive units wrapping once past
+the writer's last into two runs of unequal length; written unit by unit and merged into runs
 (`verity.commitments.periods.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; row formats (`formats`): 32-bit leaves, of either schema, of
@@ -556,23 +559,30 @@ def random_circuit(rng, seed: int) -> Circuit:
                        if _bits(o) == 16 * row and _leaf(t) == _leaf(o)]
             if opening and p != "tok" or not writers or rng.random() < 0.3:
                 continue
-            wt, out = rng.choice(writers)
             C = rng.choice([1, k]) if k > 1 else 1
-            c0 = rng.randrange(k - C + 1)
             lo = rng.randrange(units[tid]) if rng.random() < 0.3 else 0
             hi = rng.randint(lo + 1, units[tid]) if rng.random() < 0.3 else units[tid]
-            mode, a, b = rng.choice(["inside", "inside", "cross", "mixed"]), rng.choice([0, 1, 1, 2]), rng.randint(0, 3)
-            made = []
-            for u in range(lo, hi):
-                mine = by[wt][slot[tid][u]]
-                rank = by[tid][slot[tid][u]].index(u)
-                inside = mode == "inside" or (mode == "mixed" and rng.random() < 0.8)
-                v = mine[(rank * a + b) % len(mine)] if inside else (u * a + b) % units[wt]
-                d = 0 if inside or C == 1 else rng.choice([0, 1])
-                if v + d * (C - 1) >= units[wt]:
-                    d = 0
-                made.append(IF.Wire(tid, p, wt, out, u, (C,), v, (d,), (c0, C)))
-            c.wires += IF.coalesce(made)
+            n, wt, out = hi - lo, *rng.choice(writers)
+            W, mode = units[wt], rng.choice(["inside", "affine", "affine", "wrap"])
+            if t.leaves // k == 1 or mode == "wrap" and (k > 1 or n > W or 0 < lo and hi < units[tid]) \
+                    or mode == "inside" and any(len(by[wt][s]) < len(by[tid][s]) for s in range(S)):
+                mode = "affine"
+            a = rng.choice([x for x in (0, 1, 1, 2) if x * (n - 1) < W]) if mode == "affine" else 1
+            dc = rng.choice([0, 1]) if C < k and mode == "affine" and k - 1 + a * (n - 1) < W else 0
+            if mode == "wrap":
+                v0 = rng.choice([v for v in range(W) if n > W - v and 2 * (W - v) != n] or [0])
+            else:
+                v0 = rng.randrange(W - a * (n - 1) - (k - 1) * dc)
+            d = rng.choice([0, 1]) if C > 1 and mode == "affine" and v0 + a * (n - 1) + C - 1 < W else 0
+            for c0 in range(0, k, C):
+                made = []
+                for u in range(lo, hi):
+                    if mode == "inside":
+                        v = by[wt][slot[tid][u]][by[tid][slot[tid][u]].index(u)]
+                    else:
+                        v = (v0 + c0 * dc + a * (u - lo)) % W
+                    made.append(IF.Wire(tid, p, wt, out, u, (C,), v, (d,), (c0, C)))
+                c.wires += IF.coalesce(made)
             filled.add((tid, p))
     for j, (tid, params, outs) in enumerate(specs):
         if [p for p, _ in params] == ["tok", "root", "domain", "row", "salt", "path"] and rng.random() < 0.85:
