@@ -243,9 +243,9 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
     assert S.main(["publish", str(out), "--private", str(private)]) == 0
     assert not _window_data(out, 7), _window_data(out, 7)
-    kept = {"predicted.json", "pieces/wipe/served.json"}
+    kept, whole = {"pieces/wipe/served.json"}, {"sampled-proofs/w7/summary.json", "predicted.json", "pieces/pouw/check/check.log"}
     for rel, body in files.items():
-        assert (out / rel).exists() == (rel != "sampled-proofs/w7/summary.json"), rel
+        assert (out / rel).exists() == (rel not in whole), rel
         if rel in kept:
             assert (out / rel).read_text() == body and not (private / rel).exists(), rel
         else:
@@ -324,8 +324,8 @@ def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_a
     IO._write(out / "record" / "inference-only.json", verdict)
     (out / "pieces" / "pearlplus").mkdir(parents=True)
     (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
-    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
-    assert S.publish(out, private) == ["serve/overhead.json"]
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name not in ("overhead.json", "load.json")}
+    assert S.publish(out, private) == ["pieces/pearlplus/load.json", "serve/overhead.json"]
     (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
     assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
     assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
@@ -2138,7 +2138,7 @@ def test_a_published_serve_dir_carries_none_of_the_give_ups_counts(tmp_path, liv
     full = {p.relative_to(out).as_posix(): p.read_text() for p in out.rglob("*") if p.is_file()}
     assert S.publish(out, private) == sorted(full)
     for rel, text in full.items():
-        shown = (out / rel).read_text()
+        shown = (out / rel).read_text() if (out / rel).exists() else ""
         assert (private / rel).read_text() == text and not [v for v in own if v in shown], rel
         assert "a_rows" not in shown and "bad_tiles" not in shown and "credit kept" not in shown, rel
     pub = json.loads((out / "pieces" / "pouw" / "development.json").read_text())
@@ -2556,8 +2556,8 @@ def test_publish_holds_window_steps_under_a_load_and_publishes_the_callers_servi
     assert S.public_line(line) == line and S.public_doc(json.dumps(serving)) == json.dumps(serving)
     said = json.loads(S.public_line(f"POUW-DEV {json.dumps(doc)}").removeprefix("POUW-DEV "))
     assert said == {"run": {**serving, "load": {}}}
-    (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "onsite.json").write_text(json.dumps(serving))
+    (tmp_path / "out" / "record").mkdir(parents=True)
+    (tmp_path / "out" / "record" / "onsite.json").write_text(json.dumps(serving))
     assert S.publish(tmp_path / "out", tmp_path / "private") == []
 
 
@@ -6661,8 +6661,8 @@ def test_copy_to_a_write_only_rsync_sends_the_list_under_the_serve_dirs_name_mak
      "window's witness, and its node is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"),
     ("handed", "compose", "vy-dc-h200.example", {"HOST": "cpu-6"}, 3, "COPY refused: its node is the served "
      "node, which the prover controls: copy the hand-off to COMPOSE_NODE"),
-    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names the served run's "
-     "witness (WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds)"),
+    ("handed+witness", "compose", "vy-auditor-2", {}, 3, "COPY refused: the hand-off's list names a file the "
+     "list doesn't (requests.jsonl: not on the hand-off's list (public_files.PUBLIC))"),
     ("deferred", "compose", "vy-auditor-2", {}, 3, "COPY refused: the serve dir D holds no compose list "
      "(private/compose/inputs.txt and compose.env)"),
     ("handed", "values", "vy-auditor-2", {}, 3, "COPY refused: served_verdicts.sh copy deferred|compose HOST[:DIR], not values"),

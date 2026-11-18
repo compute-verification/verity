@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from served_verdicts import witness  # noqa: E402
 
 #: a directory of this name, anywhere in a path, holds a prover's or a device's private state
 PRIVATE_DIRS = {"private": "a private directory (prover or device state)"}
@@ -63,6 +64,8 @@ PUBLIC = {
     "OUT/pieces/*/coin.json": "a piece's coins",
     "OUT/pieces/*/ledger.jsonl": "a piece's ledger of sessions",
     "OUT/pieces/*/refused.txt": "a piece's refusal",
+    "OUT/pieces/*/pearlplus-*.json": "Pearl+'s answer and its Lean and Python checks, in their public form",
+    "OUT/pieces/*/verify.json": "a piece's verification of its answer",
     "OUT/pieces/*/session/*/out/key.json": "a session's public key",
     "OUT/pieces/certifier/chain/report/report.json": "the network attester's chain report",
     "OUT/record/*": "the final record, without its node",
@@ -123,8 +126,6 @@ def listed(path: str) -> str | None:
 
 def private_why(path: str) -> str | None:
     """Why ``path`` (relative to a work directory) is never copied under a run's output directory, None when it may be."""
-    from served_verdicts import witness
-
     parts = Path(path).parts
     why = next((PRIVATE_DIRS[x] for x in parts if x in PRIVATE_DIRS), None)
     why = why or next((w for x in parts for pat, w in PRIVATE_NAMES.items() if fnmatch.fnmatchcase(x, pat)), None)
