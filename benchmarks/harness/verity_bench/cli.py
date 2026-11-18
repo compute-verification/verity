@@ -92,11 +92,14 @@ def _run(args: Any) -> int:
         raise ValueError("--end bounds a direct point's wait for its GPU slot: it needs --direct NODE")
     if isinstance(plan.spec, steady_spec.SteadySpec):
         return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores, end=args.end)
-    if args.card is not None or args.cores is not None:
-        raise ValueError(f"--card and --cores are a steady-state point's: spec {plan.spec.id!r}'s points lease their own "
-                         "GPUs")
+    if (args.card is not None or args.cores is not None) and args.direct is None:
+        raise ValueError("--card and --cores are a booked card's and its slot's on a GPU node: they need --direct NODE")
+    if args.card is not None and args.cores is None:
+        raise ValueError(f"--card {args.card} needs --cores, the booked slot's cores: the first free slot may be on "
+                         "another NUMA node than the card")
     return jobs.dispatch(plan, args.spec, direct=args.direct,
-                         command=lambda *point: jobs.direct_command(*point, end=args.end))
+                         command=lambda *point: jobs.direct_command(*point, card=args.card, cores=args.cores,
+                                                                    end=args.end))
 
 
 def _point(args: Any) -> int:
@@ -218,7 +221,7 @@ def _overhead_run(args: Any) -> int:
         raise ValueError("--scheme S, or --record RUN")
     return overhead_records.launch_run(_overhead_store(args), jobs.repository_root(), _overhead_node(args), args.card,
                                        args.scheme, args.point, args.points, args.minutes, cubin=args.cubin,
-                                       model=args.model, gpu=args.gpu, cores=args.cores)
+                                       model=args.model, gpu=args.gpu, cores=args.cores, keep_reports=args.keep_reports)
 
 
 def _overhead_table(args: Any) -> int:
@@ -259,6 +262,8 @@ def _overhead_parser(commands: Any) -> None:
     run.add_argument("--points", metavar="ART", help="time at this points art instead of the card's and model's of record")
     run.add_argument("--cubin", metavar="ART", help="the art of the cubin the scheme's arm loads, sent with the run (its "
                                                     "arm reads $VERITY_BENCH_CUBIN); without it the run is development only")
+    run.add_argument("--keep-reports", action="store_true", help="keep the run's Nsight reports in its $OUT/nsys: a "
+                                                                 "profiling pass, never of record")
     run.add_argument("--record", metavar="RUN", help="label RUN a run of record, once it stands as a whole")
     run.set_defaults(run=_overhead_run, command_parser=run)
 
@@ -297,9 +302,10 @@ def _prove(args: Any) -> int:
                               cores=args.cores, local_only=args.local_only)
     if getattr(args, "metrics", None) and settings.is_set("RESEARCH_RUN_DIR"):
         prove_records.record(doc, args.metrics)
-    if args.steady_rows:
+    refused = doc.get("refusal") is not None
+    if args.steady_rows and not refused:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
-    if args.system == "spot":
+    if args.system == "spot" and not refused:
         doc["spot_holes"] = spot_status.status(spot_status.runs_of(doc["inputs"]))
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
@@ -307,7 +313,7 @@ def _prove(args: Any) -> int:
         print(prove_records.render(doc, args.rows), end="")
         if "spot_holes" in doc:
             print("\n" + spot_status.render(doc["spot_holes"]))
-    return 0
+    return 1 if refused else 0
 
 
 def _prove_parser(commands: Any) -> None:
@@ -365,10 +371,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--direct", metavar="NODE", default=None,
                      help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
     run.add_argument("--card", type=int, default=None, metavar="INDEX",
-                     help="a steady-state point's booked card, which its lease is asked of alone (needs --cores)")
+                     help="a booked card, which a direct point's lease is asked of alone (needs --cores)")
     run.add_argument("--cores", default=None, metavar="CPUS",
-                     help="a steady-state point's booked slot, by its cores (34-43): the slot taker runs under "
-                          "`taskset -c CPUS`")
+                     help="a booked slot, by its cores (34-43): the slot taker runs under `taskset -c CPUS`, and a vLLM "
+                          "point's lease declares them")
     run.add_argument("--end", type=_end, default=None, metavar="UTC",
                      help="the booked period's end (2026-11-15T03:30Z), which a direct point's run never passes: it "
                           "waits for its slot until its max_minutes before it, and one that could not finish by then "

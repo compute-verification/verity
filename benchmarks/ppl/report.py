@@ -9,12 +9,13 @@ from pathlib import Path
 
 import methodology
 
-__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "METRICS", "PEARL_C_ARM", "arm_stats", "baseline_check", "baseline_table", "load",
+__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "METRICS", "METRIC_POINT", "PEARL_C_ARM", "arm_stats", "baseline_check", "baseline_table", "load",
            "lock", "metrics", "pct", "point_key", "table"]
 
 METRICS = {"shipped": "compute-accounting/perplexity-shipped", "pearl_c": "compute-accounting/perplexity-pearl-c",
            "cost": "compute-accounting/perplexity-cost-pearl-c"}
 PEARL_C_ARM = "pearl-c-linears"
+METRIC_POINT = ("c4", 2048)
 
 
 def load(paths: Iterable[str | Path]) -> list[dict]:
@@ -175,20 +176,28 @@ def baseline_check(lk: dict, results: list[dict]) -> tuple[str, bool]:
 
 
 def metrics(r: dict, repo: str, revision: str) -> tuple[str, dict, list[dict]]:
+    from verity_bench import kit
+    from verity_bench.overhead import CARD_FILES
+
     if not r.get("passed"):
         raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: its gates failed, so it has no perplexity")
+    if (r.get("set"), r.get("ctx")) != METRIC_POINT:
+        raise ValueError(f"{r.get('model')} {r.get('set')}/{r.get('ctx')}: the metrics are {'/'.join(map(str, METRIC_POINT))}'s "
+                         "(metrics.toml's axis), so this run has its table and no point")
     base, arm = arm_stats(r, "bf16"), arm_stats(r, PEARL_C_ARM)
     if arm is None:
         raise ValueError(f"{r['model']} {r['set']}/{r['ctx']}: no {PEARL_C_ARM} arm (run.py eval ... {PEARL_C_ARM})")
     cost = 100 * (arm["ppl"] / base["ppl"] - 1)
     env = r["env"]
     fields = {"model": repo, "revision": revision, "hardware": env["device"], "set": r["set"], "ctx": r["ctx"]}
+    member = f"{r['model']}-{kit.card_short(env['device'], directory=CARD_FILES)}"
     run = env.get("run") or None
     inputs = [run] if run else []
-    measured = [{"name": METRICS["shipped"], "value": base["ppl"], "unit": "perplexity", "inputs": inputs, "extra": fields},
-                {"name": METRICS["pearl_c"], "value": arm["ppl"], "unit": "perplexity", "inputs": inputs,
+    kw = {"inputs": inputs, "member": member}
+    measured = [{"name": METRICS["shipped"], "value": base["ppl"], "unit": "perplexity", **kw, "extra": fields},
+                {"name": METRICS["pearl_c"], "value": arm["ppl"], "unit": "perplexity", **kw,
                  "extra": fields | {"seeds": arm["seeds"]}},
-                {"name": METRICS["cost"], "value": cost, "unit": "percent", "inputs": inputs, "extra": fields}]
+                {"name": METRICS["cost"], "value": cost, "unit": "percent", **kw, "extra": fields}]
     doc = {"value": cost, "unit": "percent", "commit": env.get("commit") or None, "run": run, **fields,
            "shipped": base["ppl"], "pearl_c": arm["ppl"], "pearl_c_seeds": arm["seeds"]}
     text = "\n".join([f"ppl: {cost:+.3f}% perplexity with Pearl-C linears ({repo} on {env['device']}, "

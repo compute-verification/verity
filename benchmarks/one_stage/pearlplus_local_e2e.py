@@ -319,10 +319,14 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
+            from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
             pkg = TREE / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "verifier" / "lean" / "pearlplus"
-            b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
-            log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
-            exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
+            try:
+                exe = str(V.executable("pouw-pearlplus", pkg))
+                log.append({"step": "lean build", "rc": 0})
+            except V.LeanError as e:
+                exe = "none"
+                log.append({"step": "lean build", "rc": 1, "stderr": str(e)[-3000:]})
         _cli(log, "lean", ["benchmarks/pouw/pearl_c_vllm/served_passes.py", "lean", "--passes", str(served), "--verify",
                            str(piece / "verify.json"), "--exe", exe, "--out", str(piece / S.PEARLPLUS_LEAN)])
         del report["stand_ins"]["lean"]
@@ -335,13 +339,14 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
 
     # 6. the compose
     from verity.protocols.proofs.spot.verifier import service as SV
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
 
     audit = out / "sampled-proofs"
     rule = "stratified-rate:1/1"
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({
         "previous": tie, "registered": [], "population": 1,
-        "law": SV.selection_sampling_design(SV.SamplingDesign(rule), 1, (1,)), "stand_in": True}))
+        DESIGN: SV.selection_sampling_design(SV.SamplingDesign(rule), 1, (1,)), "stand_in": True}))
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "audit": {"accepted": True},
                                                      "sampling_design": rule, "stand_in": True}))
     (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())

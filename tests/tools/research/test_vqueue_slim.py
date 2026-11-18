@@ -27,7 +27,8 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CARRY_ENV, ENV, SUITE_RUNNER, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
-                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
+                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, shards_registered,
+                                  start, step_kind,
                                   step_test, suite_kind, suite_reads, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, MIRRORED, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
@@ -118,7 +119,7 @@ def _down(rid: str, sha: str, why: str, launch: bool = False) -> Verdict:
 
 
 class Plans:
-    """Drive's auto plans (`Driver.plan_shards`, `Driver.planned`) on ``d``: each one asked for gets a job's directory and a
+    """Drive's auto plans (`plan_shards`, `planned`) on ``d``: each one asked for gets a job's directory and a
     plan's (``tmp``'s job-K and plan-K, the plan's file in it), and is being made until ``answers`` holds what its plan's
     directory answers.  An answer is read once, as `drive._job_end` reads a job's end: its job's directory goes, and a job
     with none is gone with no exit."""
@@ -179,6 +180,24 @@ def test_a_detached_launch_is_pending_until_it_prints_its_run_ids_which_judge_pu
     h.run_state["r-1"] = ("running", None, None)
     assert judge(h.d, rec) == Verdict(PENDING)
     assert rec == {"ids": ["r-1"], "tip": sha, "base": base, "at": h.clock, "steps": ["ratchet-gate"], "skip": ["lean-agreement"]}
+
+
+def test_shards_registered_gives_each_still_launching_shard_s_run_ids_once_it_printed_them_whatever_the_others_did(
+        world, monkeypatch, tmp_path):
+    """Of a record whose shards launch, each call gives the run ids each shard printed since the last, its launch dropped
+    from it, one that registered no run giving none and one still launching kept as it is."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    dirs = [str(tmp_path / f"train-{k}") for k in (1, 2, 3)]
+    printed: dict[str, tuple[list[str] | None, str]] = {dirs[0]: ([], "train.sh: refused"), dirs[1]: (["r-2"], ""),
+                                                        dirs[2]: (None, "")}
+    h.d.launched = lambda launch: printed[launch["dir"]]
+    rec = {"ids": [], "tip": sha, "base": base, "at": h.clock, "shards": [{"ids": [], "launch": {"dir": d, "pid": 1}} for d in dirs]}
+    assert shards_registered(h.d, rec) == ["r-2"]
+    assert [("launch" in s, s["ids"]) for s in rec["shards"]] == [(False, []), (False, ["r-2"]), (True, [])]
+    assert shards_registered(h.d, rec) == []
+    printed[dirs[2]] = (["r-3"], "")
+    assert shards_registered(h.d, rec) == ["r-3"] and not any("launch" in s for s in rec["shards"])
+    assert shards_registered(h.d, rec) == []
 
 
 def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
@@ -1003,6 +1022,19 @@ def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_
     assert replaced(lines, [5], now) == {} == replaced([], [2], now)
 
 
+def test_a_rebuild_replaces_the_runs_of_the_candidates_it_rebuilds_whatever_their_age():
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "sha": "c0", "at": stamp(now - 5000), "members": [1], "beside_cancelled": ["r-c0"]},
+             {"action": "drop", "sha": "c1", "at": stamp(now - 600), "members": [2, 3],
+              "beside_cancelled": ["r-c1", "r-kept"], "beside_cancel_failed": {"r-kept": "left running: /data/keep names it"}},
+             {"action": "drop", "sha": "c9", "at": stamp(now - 600), "members": [2], "beside_cancelled": ["r-c9"]},
+             {"action": "drop", "sha": "c1", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
+    assert replaced(lines, [2], now, ["c1", "c0"]) == {"r-c0": now - 5000, "r-c1": now - 600}
+    assert replaced(lines, [2], now) == {} == replaced(lines, [2], now, ["c7"])
+
+
 def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
     """`check.run_packs` finds a run's packs through its attempt, which custody publishes once it ended; a store that can't
     answer, or none, finds none."""
@@ -1552,11 +1584,11 @@ AUDIT {SCRATCH}/Security/Properties: FAIL; built in the sandbox
   lean: proved_in: ../Proofs's build did not pass (its report says why), so its facts are not read
 AUDIT: FAIL ({SCRATCH}/Security/Proofs, {SCRATCH}/Security/Properties); reports in /workspace/research/runs/r-x/lean-audit
 """
-TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/core/devices/certifier/lean: FAIL; built in the sandbox
+TAMPER_LOG = f"""AUDIT {SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean: FAIL; built in the sandbox
   tamper: {SCRATCH}/verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean changed
   build: exit 1
     error: object file verity/core/service/flock/.lake/build/lib/lean/Flock/Canon.olean of module Flock.Canon does not exist
-AUDIT: FAIL ({SCRATCH}/verity/core/devices/certifier/lean); reports in /workspace/research/runs/r-x/lean-audit
+AUDIT: FAIL ({SCRATCH}/verity/protocols/resource_accounting/network/attester/program/lean); reports in /workspace/research/runs/r-x/lean-audit
 """
 
 

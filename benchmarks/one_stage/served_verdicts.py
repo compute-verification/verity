@@ -181,8 +181,10 @@ it, `error_said`); PoUW's development piece reads ``development run, credits not
 window's credit.
 Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
-elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
-is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
+elsewhere, and the reason, whose sampled proofs' clause gives its sample's bound at each δ without its count
+(`bound_said`), which the serve dir's private copy alone holds (`bound_held`). The report and the line say where they
+were composed (``composed_on``: the host, whether it is the record's node, what it read, `COMPOSED_FROM`, or off that
+node `COPIED_FROM`, and whether the host is the auditor's device, `auditor_device`), and with ``--deferred`` what
 the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
 memory, or its compose hand-off), which composes the final record on another host, the record's node still ``--node``,
 and with ``--served-compare`` the served compare's verdict line (``served_compare``, `served_compare_line`).
@@ -242,6 +244,12 @@ WINDOW_VERDICT = {"undecided": "pending"}
 #: ``record``'s exit by the window's verdict, as composite.py's by its Lean's: 0 only for the compiled Lean check's
 #: accept; 1 for a reject (or a refused composite, or a block record its own check refuses), 2 for pending
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
+
+
+def hold_placement(env: Mapping[str, str] | None = None) -> bool:
+    """``VERITY_HOLD_PLACEMENT=1`` in ``env`` (default the process's): the holds that rest only on where coins are
+    flipped or a composite made are restored; unset, empty or anything else, they are lifted."""
+    return (os.environ if env is None else env).get("VERITY_HOLD_PLACEMENT") == "1"
 #: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -807,11 +815,14 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
                  summary: Mapping[str, Any] | None = None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and sampling design), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too. With the audit's ``challenger``, whose coins they
-    were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader takes a development session's
-    run for the auditor's."""
-    row = {k: v for k, v in records.items() if k != "population"}
+    (``leak.advice_bits``) and with how many proof blocks were sampled (``sampled``). Its ``population``, the scope's
+    unpadded member count, counts the execution phase's tokens: the private copy keeps it and the published one cuts it
+    (`public_line`). The scope's ``steps``, the window's engine steps, stay on the node too. With the audit's
+    ``challenger``, whose coins they were (`challenger_coins`), and the row its ``summary``'s ``coin_trees``, so no reader
+    takes a development session's run for the auditor's."""
+    row = dict(records)
+    if isinstance(row.get("draw"), list):
+        row["sampled"] = len(row["draw"])
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
     if summary is not None:
@@ -2018,6 +2029,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     from verity.protocols.resource_accounting.compute.pouw.verifier import credit as CR
     from verity.protocols.proofs.spot.verifier.challenger import remote
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage.verdict_record import DESIGN
     from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
@@ -2086,12 +2098,12 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     if (accepted := (summary.get("audit") or {}).get("accepted")) is not True:
         return None, (f"the window's records audit tied to W didn't accept ({AUDIT_SUMMARY}'s audit.accepted is "
                       f"{accepted!r}), so nothing shows the window SPOT audited reads the roots Pearl+ credits")
-    design, committed, n = summary.get("sampling_design"), reg.get("law"), reg.get("population")
+    design, committed, n = summary.get("sampling_design"), reg.get(DESIGN), reg.get("population")
     rate, strata = D.parse_rate(design), D.parse_strata_rate(design)
     kind = "subset" if rate else None if strata is None else "work" if strata[0] else "stratified"
     k = (None if kind in (None, "stratified") else -1 if type(n) is not int else D.rate_count(*rate, n) if rate
          else D.rate_count(strata[1], strata[2], 1, n))
-    if not (isinstance(committed, Mapping) and kind and committed.get("law") == kind and k in (None, committed.get("k"))):
+    if not (isinstance(committed, Mapping) and kind and committed.get(DESIGN) == kind and k in (None, committed.get("k"))):
         return None, (f"the window's records audit states the rule {design!r}, not the one its registration R commits "
                       f"({committed!r} over {n!r} proof blocks): what Pearl+'s tie covers is read from R's rule")
     try:
@@ -2216,8 +2228,8 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network attester's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
-    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
-    otherwise); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
+    premise rests on (the wipe's never holds: under the key its challenger's host is pinned to, it reads that the key
+    matched the pins this machine was handed, and otherwise rehearsal, either with no bound); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
@@ -2235,7 +2247,77 @@ def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[s
         outside = (profile.get("outside") or {}).get("bytes") or {}
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
-    return out + (error_said(subprotocol) if subprotocol else [])
+    return out + (error_said(subprotocol) + bound_said(subprotocol) if subprotocol else [])
+
+
+#: why the published lines give the sample's bound without its count: with the number of proof blocks sampled, which they
+#: give, the count gives the population's size, which counts the execution phase's tokens
+BOUND_HELD = ("b and ε = b/N in the serve dir's private/verdicts.txt: with the number of proof blocks sampled, b gives N, "
+              "the population's size, which stays private")
+
+
+def _sample_at(entry: Mapping[str, Any]) -> tuple[int, dict[str, Mapping[str, Any]]]:
+    """A sampled-proofs entry's population size N and its certificate at each δ the record recomputes from its sample;
+    none for another subprotocol's entry."""
+    at = {d: x for d, x in (entry.get("at") or {}).items() if isinstance(x, Mapping) and x.get("by") == "draw"}
+    return int((entry.get("quantity") or {}).get("of") or 0), at
+
+
+def bound_said(entry: Mapping[str, Any]) -> list[str]:
+    """What a sampled-proofs entry of the block record says of its sample in the published lines: at each δ it gives, at
+    most b incorrect proof blocks except with probability δ (`BOUND_HELD`: b itself stays in the private copy,
+    `bound_held`), and vacuous where b is the population's size N. Another subprotocol's entry says nothing here."""
+    n, at = _sample_at(entry)
+    vacuous = [d for d, x in at.items() if x["value"] >= n]
+    bounded = [d for d in at if d not in vacuous]
+    return ([f"at most b incorrect proof blocks except with probability δ, at δ = {' and '.join(bounded)} ({BOUND_HELD})"]
+            if bounded else []) + ([f"vacuous at δ = {' and '.join(vacuous)}: every proof block may be incorrect"]
+                                   if vacuous else [])
+
+
+def bound_held(entry: Mapping[str, Any]) -> str | None:
+    """The private copy's line of a sampled-proofs entry's bound: at each δ the record gives, at most b of the N proof
+    blocks incorrect except with probability δ, with ε = b/N, vacuous where b = N; None for another subprotocol's."""
+    n, at = _sample_at(entry)
+    said = [f"at most {x['value']} of the {n} proof blocks incorrect except with probability {d}, ε = {x['epsilon']}"
+            + (" (vacuous)" if x["value"] >= n else "") for d, x in at.items()]
+    return "SAMPLED-PROOFS bound: " + "; ".join(said) if said else None
+
+
+def keep(serve_dir: Path, line: str) -> None:
+    """``line`` in the serve dir's private copy of its verdicts alone (``private/verdicts.txt``), as
+    `served_verdicts.sh`'s ``keep`` writes it."""
+    private = serve_dir / "private"
+    private.mkdir(mode=0o700, exist_ok=True)
+    with open(private / "verdicts.txt", "a") as f:
+        f.write(line + "\n")
+
+
+def auditor_device(host: str, manifest: Path | None, served_node: bool = False) -> str:
+    """Whether the record was composed on the auditor's device: off it on the served node, which is never the auditor's;
+    elsewhere as infra's deploy manifest, where `research` reads the auditor devices (``manifest``:
+    ``tools/research/src/research/pods/nebius/deploy.toml``), says of ``host``: on it where the manifest marks the node
+    ``auditor = true``; off it where it lists the node with neither that nor ``admin = true``, a node the lanes' keys
+    reach; and not known where it marks the node ``admin = true`` alone, which it gives the control host too, lists no
+    such node, can't be read, or none is given."""
+    if served_node:
+        return "composed off the auditor's device: on the served node"
+    if manifest is None:
+        return "not known: no deploy manifest given (record --deploy-manifest)"
+    import tomllib  # here, not at the top: the lines `say` publishes run this file under the node's python3, maybe older
+
+    try:
+        nodes = tomllib.loads(manifest.read_text()).get("nodes") or {}
+    except (OSError, ValueError) as e:
+        return f"not known: the deploy manifest {manifest.name} can't be read ({type(e).__name__})"
+    node = nodes.get(host)
+    if not isinstance(node, Mapping):
+        return f"not known: the deploy manifest lists no node {host}"
+    if node.get("auditor") is True:
+        return "composed on the auditor's device"
+    if node.get("admin") is True:
+        return f"not known: the deploy manifest marks {host} admin = true, which it gives the control host too"
+    return "composed off the auditor's device"
 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
@@ -2470,7 +2552,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
            served_compare: str | None = None, answer: Mapping[str, Any] | None = None,
            lean: str = "no composite was read", inference_only: Mapping[str, Any] | None = None,
-           front_group: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           front_group: bool = False, manifest: Path | None = None
+           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
@@ -2485,7 +2568,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     ``not_combined``, and which neither the combined verdict nor the block record reads: ``reject`` only where the Lean
     verifier gave a verdict, ``error`` where it gave none (`UNDECIDED`). ``front_group``: the network attester's row is
     over its front's group (`FRONT_GROUP`), which its row and the line's ``not_covered`` say, and the block record
-    doesn't read."""
+    doesn't read. ``manifest``: infra's deploy manifest, by which ``composed_on`` says whether this host is the
+    auditor's device (`auditor_device`)."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -2512,7 +2596,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
-             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
+             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM,
+             "auditor_device": auditor_device(host, manifest, host == node), **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
@@ -2678,6 +2763,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--composite", type=Path, help="the composites' public output (served_composite.sh's $OUT/composite): "
                                                   "the product's compiled Lean check's answer there is the record's verdict")
     r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
+    r.add_argument("--deploy-manifest", type=Path, help="infra's deploy manifest, which composed_on's auditor_device reads")
     r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
@@ -2917,12 +3003,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                if a.tree else None,
                                served_compare=None if a.served_compare is None else served_compare_line(a.served_compare),
                                answer=answer, lean=lean, inference_only=io,
-                               front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file())
+                               front_group=(a.serve_run / "private" / FRONT_WINDOW).is_file(), manifest=a.deploy_manifest)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
         (a.out / "block-record.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True) + "\n")
     print("RECORD " + json.dumps(line, sort_keys=True), flush=True)
+    if rec is not None and (held := bound_held(rec["legs"].get("integrity") or {})):
+        keep(a.serve_run, held)
     if refused or (rec is not None and line["check"]):
         return 1
     return RECORD_EXIT.get(line["composed"], 1)

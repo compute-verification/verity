@@ -46,7 +46,6 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 ## PoUW
 
-- `llama31-8b-1gpu-pouw-h1`: H1 with fx1 on the eager exact-int8 engine, against that engine without PoUW.
 - `llama31-8b-1gpu-pouw-protocol-served`: Pearl-C against batch-invariant eager and compiled stock FP8, in one run.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
@@ -55,11 +54,15 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
   (`served_pearlplus.sh`'s step).
 - `llama32-1b-1gpu-pouw-protocol-served-h100`: the same on one H100.
+- `llama32-1b-1gpu-pearl-c-whole-served-h100`: the same with the whole-step arm beside its three arms: the ceiling of the
+  served Pearl-C arm under one CUDA graph a decode step, not the protocol arm.
 
 ## PoUS's bandwidth audit
 
 - `llama31-8b-fp8-1gpu-bandwidth-served-r6`: the bandwidth audit's encoded, receipted stack against its plain stack,
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
+- `llama31-8b-fp8-1gpu-bandwidth-served-h200`: the same on one H200.
+- `llama32-1b-fp8-1gpu-bandwidth-served-h200`: the same on Llama-3.2-1B on one H200.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
 
@@ -67,11 +70,15 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 
 - `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
   two and four provers on one H200 with ten cores, each statement fetched from the store.
-- `glm53-flock-steady-head-block-h200-c24`: the same two forms at four provers on 24 cores, six a prover, so a node
-  whose NUMA nodes hold 24 cores keeps all of a point on the card's node.
 - `glm53-flock-steady-head-block-h200-walk`: the first spec's `FIRST=false` point at one prover with the units' level
   walk on the card (`FC_UNIT_WALK=1`); `benchmarks/kernels/steady_walk.py` reads the two points' runs as kernels'
   metric.
+- `llama32-1b-flock-steady-gemm-h200`: Llama 3.2 1B's `Gemm_v2` block at K 2,048 and N 16 at one prover on one H200
+  with ten cores, the units walked on the host.
+- `llama32-1b-flock-steady-gemm-h200-walk`: the same point with the units' level walk on the card (`FC_UNIT_WALK=1`);
+  with the one above, the same metric's Llama member.
+- `llama32-1b-flock-steady-small-h200`: Llama 3.2 1B's census block types other than its attention, each under its
+  census name, at one prover on one H200 with ten cores: the rates `verity bench prove` reads by `definition_id`.
 
 ## Sweeps
 

@@ -23,6 +23,7 @@ from exfiltration_helpers import (
     rows,
 )
 from verity_bench import exfiltration as E
+from verity_bench import kit
 
 
 def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
@@ -71,6 +72,17 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
     assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 26,392,406 | " in text
     assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text
     assert "Refused" not in text and text.count("\n| datacenter | ") == 6
+
+
+def test_a_labelled_trial_of_the_planners_rows_is_left_out_and_listed_as_a_trial(tmp_path):
+    s = recorded(tmp_path)
+    trial = s.label(s.ran("r20261112-000000-0001", [r | {"bound_bits": 2 * r["bound_bits"]} for r in mine("world year")],
+                          env={kit.TRIAL: "1"}))
+    doc = E.build(store=s.fresh(), root=REPO)
+    why = kit.trial_why(trial, {"params": {"env": {kit.TRIAL: "1"}}})
+    assert doc["value"] == pytest.approx(YEAR_GB) and trial not in doc["runs"]
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {trial: why}
+    assert f"- {trial} (`{E.RECORD}`): {why}" in E.render(doc)
 
 
 def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_path):

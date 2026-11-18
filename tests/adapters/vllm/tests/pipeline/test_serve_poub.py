@@ -7,13 +7,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 from verity_vllm import llm as L
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
+from verity_vllm.pipeline import serve_mirror as sm
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_poub as SR
 from verity_vllm.protocols.poub import remote
@@ -164,6 +164,11 @@ def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root
     assert w._extras_of(com, SimpleNamespace(weight_registration={"root": "ab"})) == ("tree", ["bytes"]) and len(calls) == 1
 
 
-@pytest.mark.parametrize("name", ["remote_session.json", "memory_map.jsonl"])
-def test_the_sessions_records_are_mirrored(name):
-    assert name in sc.MIRRORED
+def test_neither_the_sessions_record_nor_its_memory_map_is_mirrored(tmp_path):
+    out = tmp_path / "serve"
+    out.mkdir()
+    (out / "remote_session.json").write_text("{}")
+    (out / "memory_map.jsonl").write_text('{"step": 0, "freed": [], "written": [[0, 0, "00"]], "withdrawn": []}\n')
+    sm.Mirror(out, tmp_path / "OUT")()
+    assert not any((tmp_path / "OUT").iterdir()) and (out / "memory_map.jsonl").is_file()
+    assert "remote_session.json" not in sm.MIRRORED and "memory_map.jsonl" not in sm.MIRRORED

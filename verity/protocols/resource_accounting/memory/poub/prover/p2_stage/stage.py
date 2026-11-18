@@ -134,19 +134,6 @@ class Segments:
         return out
 
 
-def encode_rows(kernels: Any, payload: Any, first: int) -> Any:
-    """The store's rows for blocks `first ..` carrying `payload` ([n, 2054] uint8 on the device) by the library's encode
-    (`p2v1_encode`, two roots a block): how a development store is made when no encoded store is given."""
-    n = payload.shape[0]
-    m = torch.zeros(n, L.ROW, dtype=torch.uint8, device=payload.device)
-    m[:, L.LEAD:] = payload
-    c = kernels.encode(m, first)
-    f = kernels.raised()
-    if f:
-        raise StoreError(f"p2v1_encode raised flags {f:#x} on blocks [{first}, {first + n})", f)
-    return c
-
-
 def timed(fn: Callable[[], Any], reps: int, device: torch.device, before: Callable[[], Any] | None = None,
           warmup: int = 0) -> list[float]:
     """The seconds of `reps` runs of `fn` on `device`, each timed alone (by CUDA events on a GPU, else the host's clock),

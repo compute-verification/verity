@@ -3,6 +3,7 @@
     research pods register NAME --pod-id ID --project P [--lane L] [--root DIR] [--python PY] [--guard N|true] [--replace] [--any-name]
     research pods register NAME --host ADDR --project P [--lane L] [--port N] [--user U] [--rate USD_PER_HOUR] [--root DIR] [--nebius-instance-id ID] [--replace]
     research pods unregister NAME
+    research pods stopped NAME [--back]                      # mark a machine stopped, so placement leaves it out; --back clears it
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
     research pods create <runpod flags> --register --project P [--guard N]   # create, wait for sshd, register under --name
@@ -11,8 +12,12 @@
 `~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
 The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
 `pod_id`, `project` or `projects`, and optionally `root`, `python`, `guard`, `ramlock`; a Nebius VM's `nebius_instance_id`, and the
-`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `lane`, the lane whose budget line pays for it, infra when
-unset) plus who registered it and when.  Two
+`deadline` fleet.py's sampler copies from its /etc/research/deadline, and its `unreachable_since` while no sample reads it; `stopped_since`,
+which `research pods stopped` writes; `lane`, the lane whose budget line pays for it, infra when
+unset) plus who registered it and when, and last its `[properties]` table, what a job may do there, each with the command that
+read it (`verity_bench.kit.machine_properties`), which a re-registration of the same binding and fleet.py's marks keep.  A machine marked `stopped_since`, or `unreachable_since` for UNREACHABLE_OUT_MIN, is out
+of placement (`left_out`): `research run --on auto` asks it nothing and `research deploy` writes it into no list of machines, and
+it is still reached by name.  Two
 agents registering two pods write two files, so nothing is ever hand-merged; in the notes repo, `research notes sync` carries
 them to every machine.  `<dir>/_families.toml` carries the `[families.<fam>]` VRAM references `pods check-part` reads.
 
@@ -35,6 +40,7 @@ without waiting for a later sync; `RESEARCH_NOTES_SYNC=0` leaves the commit to t
 """
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import json
 import os
@@ -55,8 +61,14 @@ FAMILIES_FILE = "_families.toml"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 POD_ID_RE = re.compile(r"[a-z0-9]{8,32}")
 KNOWN_KEYS = ("provider", "pod_id", "host", "port", "user", "rate_usd_per_hour", "project", "projects", "root", "python", "guard", "ramlock",
-              "nebius_instance_id", "lane", "deadline", "unreachable_since")
-KEPT_KEYS = ("lane", "deadline")   # a re-registration of the same binding that doesn't set them keeps the old file's
+              "nebius_instance_id", "lane", "deadline", "unreachable_since", "stopped_since")
+KEPT_KEYS = ("lane", "deadline", "stopped_since", "properties")   # a re-registration of the same binding that doesn't set them keeps the old file's
+#: the minutes a machine's `unreachable_since` stands before placement leaves it out. The sampler writes that mark on its own
+#: (fleet.py, after UNREACH_S without an answer) and clears it at the next answer, so a machine that is slow for a few samples,
+#: or restarted, keeps its place; `stopped_since` is a person's word and counts at once
+UNREACHABLE_OUT_MIN = 60
+STAMP = "%Y-%m-%dT%H:%M:%SZ"
+STAMP_RE = re.compile(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)Z")
 OWNER_DEFAULT = "infra"            # a machine that names no lane is infra's (fleet.py's idle report rings its lane)
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}")
 OFF = ("", "none", "off", "0")
@@ -112,6 +124,22 @@ def validate(name: str, entry: Any) -> str | None:
     projects = entry.get("projects") or ([entry["project"]] if entry.get("project") else [])
     if not projects or not all(isinstance(p, str) and p for p in projects):
         return "no project (project = \"...\" or projects = [...])"
+    return None
+
+
+def left_out(entry: dict, now: float) -> str | None:
+    """Why placement leaves the machine `entry` out at `now` (an epoch), or None: `stopped since T` once `stopped_since` is set,
+    `no answer since T` once its `unreachable_since` is UNREACHABLE_OUT_MIN old. A mark that isn't a time leaves nothing out."""
+    def at(key: str) -> float | None:
+        m = STAMP_RE.fullmatch(v) if isinstance(v := entry.get(key), str) else None
+        y, mo, d, h, mi, s = map(int, m.groups()) if m else (0,) * 6
+        return calendar.timegm((y, mo, d, h, mi, s)) if y >= 1970 and 1 <= mo <= 12 and 1 <= d <= 31 and h < 24 and mi < 60 and s < 60 \
+            else None
+
+    if at("stopped_since") is not None:
+        return f"stopped since {entry['stopped_since']}"
+    if (t := at("unreachable_since")) is not None and now - t >= UNREACHABLE_OUT_MIN * 60:
+        return f"no answer since {entry['unreachable_since']}"
     return None
 
 
@@ -230,20 +258,105 @@ def _toml_value(v: Any) -> str:
         return repr(v)
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f"{_toml_key(k)} = {_toml_value(x)}" for k, x in v.items()) + " }"
     return json.dumps(str(v), ensure_ascii=True)       # a JSON string with ASCII escapes is a valid TOML basic string
 
 
+def _toml_key(k: str) -> str:
+    return k if re.fullmatch(r"[A-Za-z0-9_-]+", k) else json.dumps(k, ensure_ascii=True)
+
+
 def render_entry(name: str, entry: dict) -> str:
+    """The file of machine `name`: its keys, then each table (`[properties]`), whose keys a TOML file can only hold last."""
     head = f"# machine {name}: written by `research pods register`; one file per machine (research.pods.registry)\n"
-    return head + "".join(f"{k} = {_toml_value(v)}\n" for k, v in entry.items() if v is not None)
+    keys = "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in entry.items() if v is not None and not isinstance(v, dict))
+    tables = "".join(f"\n[{_toml_key(k)}]\n" + "".join(f"{_toml_key(kk)} = {_toml_value(x)}\n" for kk, x in v.items())
+                     for k, v in entry.items() if isinstance(v, dict))
+    return head + keys + tables
+
+
+_HEADER = re.compile(r"\s*\[\[?\s*[A-Za-z0-9_.\"' -]+\]\]?\s*(#.*)?$")
+
+
+def _tables_start(lines: list[str]) -> int:
+    """The index of a record's first table: its first header, less the comments and blank lines just above it, which are the
+    table's."""
+    end = next((i for i, ln in enumerate(lines) if _HEADER.match(ln)), len(lines))
+    while end < len(lines) and end and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+        end -= 1
+    return end
+
+
+def _sets(line: str, key: str) -> bool:
+    return re.match(rf"\s*{re.escape(key)}\s*=", line) is not None
+
+
+def with_key(text: str, key: str, value: Any | None) -> str:
+    """Machine record `text` with top-level `key` set to `value` (None: removed), every other line as it is. The key goes
+    above the first table (`_tables_start`), since a line after a table's header is the table's."""
+    lines = text.splitlines()
+    end = _tables_start(lines)
+    top = [ln for ln in lines[:end] if not _sets(ln, key)]
+    return "\n".join([*top, *([f"{_toml_key(key)} = {_toml_value(value)}"] if value is not None else []), *lines[end:]]) + "\n"
+
+
+def without_table_key(text: str, table: str, key: str) -> tuple[str, bool]:
+    """Record `text` without `key` inside `[table]`, and whether it was there."""
+    out, inside, dropped = [], False, False
+    for ln in text.splitlines():
+        if _HEADER.match(ln):
+            inside = ln.strip().split("#")[0].strip() == f"[{table}]"
+        elif inside and _sets(ln, key):
+            dropped = True
+            continue
+        out.append(ln)
+    return "\n".join(out) + "\n", dropped
+
+
+def _replace(p: Path, text: str) -> None:
+    tmp = p.with_name(f".{p.name}.tmp-{os.getpid()}")
+    tmp.write_text(text)
+    os.replace(tmp, p)
+
+
+def write_key(p: Path, key: str, value: Any | None) -> None:
+    """Set (None: remove) top-level `key` of the machine record at `p` (`with_key`): every writer of one key of a record
+    goes through here, so no mark lands inside a table (tests/test_machine_record_writers.py)."""
+    _replace(p, with_key(p.read_text(), key, value))
+
+
+def _same_tables(text: str, entry: dict) -> bool:
+    try:
+        tables = {k: v for k, v in tomllib.loads(text).items() if isinstance(v, dict)}
+    except tomllib.TOMLDecodeError:
+        return False
+    return tables == {k: v for k, v in entry.items() if isinstance(v, dict)}
+
+
+def properties_copy(name: str, entry: dict) -> str | None:
+    """The file `research run` puts in a run's inputs/ as NAME.toml: the machine's name and its `[properties]` table, and no
+    other field of its record (no address, user, pod id or key); None for a record without the table."""
+    props = entry.get("properties")
+    if not isinstance(props, dict):
+        return None
+    return (f"# machine {name}'s [properties], copied from its record by `research run`\nmachine = {_toml_value(name)}\n\n"
+            "[properties]\n" + "".join(f"{_toml_key(k)} = {_toml_value(v)}\n" for k, v in props.items()))
 
 
 def write_entry(d: Path, name: str, entry: dict) -> Path:
+    """Write machine `name`'s whole record. A table equal to the one the file holds keeps its text (comments and layout):
+    only the keys above the tables are rendered again."""
     d.mkdir(parents=True, exist_ok=True)
     p = d / f"{name}.toml"
-    tmp = d / f".{name}.toml.tmp-{os.getpid()}"
-    tmp.write_text(render_entry(name, entry))
-    os.replace(tmp, p)
+    text = render_entry(name, entry)
+    if p.is_file():
+        old = p.read_text()
+        lines = old.splitlines()
+        if _same_tables(old, entry) and (start := _tables_start(lines)) < len(lines):
+            text = render_entry(name, {k: v for k, v in entry.items() if not isinstance(v, dict)}) + "\n" + \
+                "\n".join(lines[start:]).lstrip("\n") + "\n"
+    _replace(p, text)
     return p
 
 
@@ -362,6 +475,35 @@ def unregister(name: str, machines_toml: Path | None = None, environ: dict | Non
     return p
 
 
+def stopped(name: str, back: bool = False, *, machines_toml: Path | None = None, environ: dict | None = None,
+            now: dt.datetime | None = None) -> tuple[Path, str]:
+    """Write `stopped_since` (now) into machine `name`'s registry file, or with `back` take it out, keeping its other lines as
+    they are. -> (path, what was done). A mark that is there keeps its time. Refused when the registry holds no such machine."""
+    from .. import remote
+
+    p = write_dir(machines_toml or remote.machines_path(), environ) / f"{name}.toml"
+    if not NAME_RE.fullmatch(name) or not p.is_file():
+        raise remote.Refused(f"stopped {name}: no {p}")
+    try:
+        old = tomllib.loads(p.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise remote.Refused(f"stopped {name}: {p} doesn't parse ({e})") from None
+    had = old.get("stopped_since")
+    text, stray = without_table_key(p.read_text(), "properties", "stopped_since")
+    also = "; took out the stopped_since an older `pods stopped` wrote inside [properties]" if stray else ""
+    if back and had is None:
+        if stray:
+            _replace(p, text)
+        return p, f"wasn't marked stopped{also}"
+    if not back and left_out({"stopped_since": had}, 0):
+        if stray:
+            _replace(p, text)
+        return p, f"is marked stopped since {had} already{also}"
+    when = f"{now or dt.datetime.now(dt.UTC):{STAMP}}"
+    _replace(p, with_key(text, "stopped_since", None if back else when))
+    return p, (f"is no longer marked stopped (it was since {had})" if back else f"is marked stopped since {when}") + also
+
+
 def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[dict]:
     """machines.toml entries to copy into the registry: every valid one not there yet whose pod is running (`running` = pod ids;
     None = all).  Each row: name, action (`write` | `skip`), why."""
@@ -432,6 +574,10 @@ def main(argv: list[str]) -> int:
     rg.add_argument("--any-name", action="store_true", help="allow a pod whose RunPod name is not NAME")
     ur = sub.add_parser("unregister", help="remove a machine's registry file (git history keeps it)")
     ur.add_argument("name")
+    st = sub.add_parser("stopped", help="mark a machine stopped (`stopped_since`): `research run --on auto` asks it nothing and the "
+                                        "next `research deploy roll` takes it out of every list of machines. It stops no machine")
+    st.add_argument("name")
+    st.add_argument("--back", action="store_true", help="take the mark out: the machine runs again")
     ls = sub.add_parser("registry", help="every machine run --on accepts, with its source; `import` seeds machines.d from machines.toml")
     ls.add_argument("action", nargs="?", choices=["list", "import"], default="list")
     ls.add_argument("--apply", action="store_true", help="import: write the files (default: show the plan)")
@@ -460,6 +606,12 @@ def main(argv: list[str]) -> int:
                                any_name=ns.any_name, lane=ns.lane)
             print(f"{what.upper()} {ns.name} -> pod {ns.pod_id} ({p})")
             written = [p] if what != "unchanged" else []
+        elif ns.cmd == "stopped":
+            p, what = stopped(ns.name, ns.back)
+            print(f"{ns.name} {what} ({p}). Nothing is stopped or started by this: `research deploy roll /etc/vy/peers --by WHO "
+                  f"{'' if ns.back else '--allow-shrink '}--apply` {'puts it back into' if ns.back else 'takes it out of'} every "
+                  "node's list")
+            written = [p] if "already" not in what and "wasn't" not in what else []
         elif ns.cmd == "unregister":
             p = unregister(ns.name)
             print(f"UNREGISTERED {ns.name} ({p})")

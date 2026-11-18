@@ -10,7 +10,7 @@ machine that reaches the store, with no GPU and no node.
   gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
   given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
   Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
-  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  share that sums it. Without a record it prints the share as `NO_RUN`. With a record SPOT's holes are read at the served run's
   own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
   is printed between the figures and the holes.
 
@@ -87,7 +87,8 @@ part, and the command sums them per scope and monitoring period under each of th
   ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
   the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
   their whole schedules on every other. The runs handed to the reader are every run that carries the record
-  `VERDICTS`, with those of them another run replaces: `stop_verdicts`' own list, the one the print names. With no
+  `VERDICTS` but a trial, with those of them another run replaces: `stop_verdicts`' own list, the one the print
+  names, a trial among its refused (`kit.trial_why`, as every record's). With no
   run carrying the record the reader is not asked, and the rows are the calculator's with no record read. The
   document keeps the answer as the calculator's document states it, with the runs handed (`attester`'s `stop`),
   and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole

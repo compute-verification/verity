@@ -22,6 +22,7 @@ from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS
 from tests.protocols.test_pouw_h1_served import _unit
 from verity import device as S
 from verity.protocols.registration.verifier import registration as G
+from verity.protocols.registration.verifier import site_log as L
 from verity.protocols.resource_accounting.network.verifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
@@ -117,6 +118,7 @@ def test_a_log_that_registers_another_compiler_refuses_this_one_and_no_advice_is
     with pytest.raises(ValueError, match="refuses the item, entry 2: duplicate-information") as e:
         ADV.write(out, compiler=OTHER)
     assert json.dumps(ADV.builder_item(C), sort_keys=True) in str(e.value) and str(tmp_path / "log.json") in str(e.value)
+    assert "a new log (a new DAY_LOG) takes this one" in str(e.value)
     assert (tmp_path / "log.json").read_bytes() == body and not (out / "advice").exists()
     assert _view(tmp_path)[0]["builder"] == ADV.builder_item(C)
 
@@ -166,7 +168,7 @@ def test_a_log_with_site_entries_takes_the_item_under_the_day_params_auditor_and
     assert not (out / "advice").exists() and _view(tmp_path, params)[0]["builder"] is None
     assert ADV.main(ADV.Options(**argv, day_params=str(params))) == 0
     view, log = _view(tmp_path, params)
-    assert view["builder"] == ADV.builder_item(C) and [type(e) for e in log] == [S.Entry, G.Declaration, G.Information]
+    assert view["builder"] == ADV.builder_item(C) and [type(e) for e in log] == [L.Entry, G.Declaration, G.Information]
     assert (out / "advice" / "windows.json").exists()
 
 
