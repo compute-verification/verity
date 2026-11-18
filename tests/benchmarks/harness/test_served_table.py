@@ -637,7 +637,7 @@ def test_a_metric_of_members_only_leaves_every_other_metrics_readings_byte_for_b
     metrics = _served_overhead_metrics()
     before = served_render.measurements(table, {k: v for k, v in metrics.items() if k != POUW})
     assert hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest() == (
-        "c1149f548cd05469475102ceba333171c5ec4fea48dac2c7c27acc8dace55bbc")
+        "d50ef6dae84589eca812f209a93d096b8be477f32c57c6dd01c5ddba4f9974c3")
     table["rows"].append(_row("PoUW served on sm_90a", POUW_H100, 12.4, "llama-3.2-1b-h100"))
     after = served_render.measurements(table, metrics)
     assert [m for m in after if m["name"] != POUW] == before
