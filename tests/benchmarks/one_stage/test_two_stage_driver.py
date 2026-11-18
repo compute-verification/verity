@@ -434,7 +434,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     opening = tuple(IR.Operand(tid, p, f"{key}/{p}", cells, tuple(range(cells)), w) for p, w in member.rows
                     if p not in IR.TABLE)
     links = (*table, *opening)
-    w = IR.interior_window(member, cells, "00", [0], values=IR.link_values(links, Q))
+    w = IR.interior_window(member, cells, "00", [0], links=links)
     rule = TS.Rule(f"rate:{Q}/{N}", K, tuple(v for m in w.members for v in TS.interior_values(m)), 60.0,
                    IR.span_values(links))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))

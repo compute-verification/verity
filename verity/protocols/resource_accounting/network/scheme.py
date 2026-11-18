@@ -4,6 +4,7 @@ the bits that leave beyond what the registered circuit explains."""
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from fractions import Fraction
 from typing import Any
 
 from verity.circuits.defs import bind
@@ -17,6 +18,7 @@ from verity.protocols.resource_accounting.network.verifier.io_request import IoT
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, register
+from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
@@ -118,6 +120,16 @@ NETWORK_ATTESTER = register(Scheme(
     requests=requests,
     attach=attach,
     processes={"id-relay": id_relay.process},
+    parties=NC.MANIFEST.parties,
+    channels=NC.MANIFEST.channels,
+    channel_schemas=NC.MANIFEST.messages,
+    colocated=(("challenger", NC.NETWORK_ATTESTER),),
+    needs=frozenset({"windows", "ingress-relay"}),
+    depends=("sampled-proofs",),
+    record="communication",
+    symbol="K",
+    published=("bits", Fraction(1)),
+    record_owner="network-accounting",
 ))
 
 __all__ = ["DEFINITIONS", "NETWORK_ATTESTER", "SETTINGS", "START_ID_RELAY", "attach", "output_bits", "requests",
