@@ -42,10 +42,11 @@ def test_the_row_table_libraries_build_with_the_configured_toolchain(monkeypatch
     assert RTK.nvcc() == PD.nvcc() == "/opt/toolchain/bin/nvcc"
 
 
-@pytest.mark.parametrize("reader, lib, what", [("compiler", lambda: RTK.host_lib.__wrapped__(), "C\\+\\+ compiler"),
-                                               ("nvcc", lambda: RTK.device_lib.__wrapped__("120"), "nvcc")])
-def test_no_toolchain_builds_no_row_table_library(monkeypatch, reader, lib, what):
-    monkeypatch.setattr(PD, reader, lambda: None)
+@pytest.mark.parametrize("lib, what", [(lambda: RTK.host_lib.__wrapped__(), "C\\+\\+ compiler"),
+                                       (lambda: RTK.device_lib.__wrapped__("120"), "nvcc")])
+def test_no_toolchain_and_no_path_builds_no_row_table_library_and_names_the_missing_tool(monkeypatch, lib, what):
+    monkeypatch.setattr(PD, "TOOLCHAIN", PD.Toolchain())
+    monkeypatch.setattr(PD.shutil, "which", lambda name: None)
     monkeypatch.setattr(RTK, "_build", lambda *a: pytest.fail("built with no toolchain"))
     with pytest.raises(RuntimeError, match=f"no {what} configured or on the path"):
         lib()
