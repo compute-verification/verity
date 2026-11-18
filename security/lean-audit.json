@@ -5735,7 +5735,7 @@
     "Definitions.Slowdown.ServingBlocks",
     "Definitions.Poub.Tag"
    ],
-   "except": [],
+   "except": ["Definitions.ResourceAccounting.Network.AttesterScheme"],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model; the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game; they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer; the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
   "Definitions.ResourceAccounting.Guarantees": {
@@ -5815,6 +5815,17 @@
    "except": [],
    "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof; the premises of the area that are named assumptions of the lock (W, the key's binding, the sketch's hash) are declared in the assumptions home's module for resource accounting, which the modules that list them re-export",
    "sealed": true
+  },
+  "Definitions.ResourceAccounting.Network.AttesterScheme": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.Spot",
+    "Definitions.Certifier.Tap"
+   ],
+   "except": [],
+   "why": "the network attester's scheme at one execution phase is trusted text over core's scheme, partition, challenger and interaction (Definitions.Core), the sampling layer's analysis (Definitions.Spot), the attester's record format and schedules (Definitions.Certifier.Tap) and its trust, trusted-device (Definitions.Core.Assumptions), which `ClientViewReads` takes as a hypothesis; it imports no guarantee or proof"
   },
   "Definitions.Claims": {
    "imports": [
