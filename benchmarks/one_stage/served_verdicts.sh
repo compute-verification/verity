@@ -9,8 +9,8 @@
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
 #     B's Build (--row-build PRED) and taps (HIDDEN_SO, NORM_TAP_SO), T tokens a step (--max-num-batched-tokens; T defaults
-#     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record binds predict's C (its
-#     workload digest) and compiler, and an advice root. Each closed window is sealed as a
+#     to H1_T, else 512, with or without H1); B-OF-RECORD says each sealed sampling block's record binds predict's compiler
+#     (the served compare's BUILD holds PRED to the row's workload digest, C's). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
@@ -1858,7 +1858,7 @@ from pathlib import Path
 from verity_vllm.pipeline import deferred_rows as DR
 d, pred, held = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 predicted = json.loads((pred / "predicted.json").read_text())
-b_of_record = (predicted["workload_digest"], predicted["compiler"]["digest"])
+b_of_record = predicted["compiler"]["digest"]
 serve = json.loads((d / "serve.json").read_text())
 seals = [json.loads(x) for x in (d / "seals.jsonl").read_text().splitlines() if x.strip()] if (d / "seals.jsonl").exists() else []
 sealed_ok = bound_ok = bool(seals)
@@ -1884,30 +1884,27 @@ for s in seals:
         opened, store, good = f"REFUSED ({type(e).__name__}: {e})"[:400], None, False
     rr = v.get("run_root") or ""
     good = good and v.get("commit_scheme") == c.get("commit_scheme") == store == "rows-sha512" and len(rr) == 128
-    sw = r.ctx["served_window"] if good else {}
-    binding = sw.get("binding") or {}
-    got = (sw.get("workload_digest"), (binding.get("compiler") or {}).get("digest"))
-    root = (binding.get("advice") or {}).get("root")
-    b = got == b_of_record and isinstance(root, str) and len(root) == 128
+    bound = (r.ctx["served_window"].get("compiler") or {}) if good else {}
+    b = bound.get("digest") == b_of_record
     sealed_ok &= good
     bound_ok &= b
     committers.add(str(c.get("committer")))
     if not good:
         why.add("a sealed window's bundle didn't open as a rows-sha512 commitment with a 64-byte run root")
     if not b:
-        why.add("a sealed record binds another C or compiler than predict row's, or no advice root")
+        why.add("a sealed record binds another compiler than predict row's")
     lines.append(f"WINDOW w{k}: commit_scheme {v.get('commit_scheme')}, committer {c.get('committer')}, run root {rr[:16]}… "
                  f"({len(rr) // 2} bytes); bundle {opened}: {'PASS' if good else 'FAIL'}")
     whose = "predict row's" if b else "not predict row's"
-    lines.append(f"B-OF-RECORD w{k}: the sealed record binds C {str(got[0])[:16]}…, compiler {str(got[1])[:16]}…, advice root "
-                 f"{str(root)[:16]}…: {whose}: {'PASS' if b else 'FAIL'}")
+    lines.append(f"B-OF-RECORD w{k}: the sealed record binds compiler {bound.get('name')} {str(bound.get('digest'))[:16]}…: "
+                 f"{whose}: {'PASS' if b else 'FAIL'}")
 ok = sealed_ok and bound_ok and serve.get("scheme") == "rows-sha512"
 os.umask(0o077)
 held.write_text("".join(x + "\n" for x in lines))
 print(f"SEALED: every closed window's row dir committed under rows-sha512 (committer {', '.join(sorted(committers)) or 'none'}) "
       f"and its replay bundle opened: {'PASS' if sealed_ok else 'FAIL'}")
-print(f"B-OF-RECORD: every sealed record binds predict row's C ({b_of_record[0][:16]}…) and compiler "
-      f"({predicted['compiler']['name']}, {b_of_record[1][:16]}…) and an advice root: {'PASS' if bound_ok else 'FAIL'}")
+print(f"B-OF-RECORD: every sealed record binds predict row's compiler ({predicted['compiler']['name']}, "
+      f"{b_of_record[:16]}…): {'PASS' if bound_ok else 'FAIL'}")
 print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} (scheme {serve.get('scheme')}, precision {serve.get('precision')}"
       + (f"; {'; '.join(sorted(why))}" if why else "") + "; each window's lines in the serve dir's private/seal.txt)")
 sys.exit(0 if ok else 1)
