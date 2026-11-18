@@ -40,6 +40,9 @@ from tests.verity.protocols.resource_accounting.memory.poub.session_harness impo
     run,
 )
 
+FIGURES_FILE = Path(__file__).resolve().parents[3] / "tests/verity/protocols/resource_accounting/memory/poub/figures.json"
+FIGURES = timing.Figures.of_json(json.loads(FIGURES_FILE.read_text()))
+
 BARE = dataclasses.replace(FIGURES, gpu_chip_bytes=0, host_chip_bytes=0, gpu_squarings_per_s={"p512": 0.0})
 
 
@@ -119,8 +122,8 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     (slow,), _ = run("honest", read_bytes_per_s=1.0)
     (fast,), _ = run("honest", read_bytes_per_s=1e20)
     assert slow["ledger"]["inputs"]["reported_read_bytes_per_s"] == 1.0
-    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
-    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
+    assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == FIGURES.read_bytes_per_s
+    assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == FIGURES.spec_bytes_per_s
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
 
 
@@ -134,11 +137,11 @@ def test_a_node_handed_in_is_the_ledgers_and_a_report_still_only_raises_it(monke
     (same,), _ = run("honest", read_bytes_per_s=1.0, node=ledger.Node.stated(FIGURES))
     assert same["ledger"]["inputs"]["capacities"] == default["ledger"]["inputs"]["capacities"] == (
         ledger.Node.stated(FIGURES).to_json())
-    fast = dataclasses.replace(ledger.Node.stated(FIGURES), spec_bytes_per_s=2 * timing.SPEC_BYTES_PER_S,
-                               read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    fast = dataclasses.replace(ledger.Node.stated(FIGURES), spec_bytes_per_s=2 * FIGURES.spec_bytes_per_s,
+                               read_bytes_per_s=2 * FIGURES.read_bytes_per_s)
     (r,), _ = run("honest", read_bytes_per_s=1.0, node=fast)
-    assert r["ledger"]["measured"]["capacity_bytes_per_s"] == 2 * timing.READ_BYTES_PER_S
-    assert r["ledger"]["spec"]["capacity_bytes_per_s"] == 2 * timing.SPEC_BYTES_PER_S
+    assert r["ledger"]["measured"]["capacity_bytes_per_s"] == 2 * FIGURES.read_bytes_per_s
+    assert r["ledger"]["spec"]["capacity_bytes_per_s"] == 2 * FIGURES.spec_bytes_per_s
     assert ledger.Node.of_json(r["ledger"]["inputs"]["capacities"]) == fast
     kw = {"figures": FIGURES, "source": bytes(32), "windows": 3, "window_ns": 20, "samples": 6, "delta": 2.0 ** -40, "jitter_ns": 10}
     with pytest.raises(ValueError, match="its own disk and link"):
@@ -161,11 +164,11 @@ def test_the_process_hands_its_node_file_to_the_verifier_and_refuses_a_bad_one_b
     def main(node: object, *flags: str) -> None:
         f = tmp_path / "node.json"
         f.write_text(json.dumps(node))
-        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f), *flags],
-                      figures=FIGURES)
+        verifier.main(["--out", str(tmp_path / "out"), "--check-workers", "0", "--node", str(f),
+                       "--figures", str(FIGURES_FILE), *flags])
 
     monkeypatch.setattr(verifier.wire, "listen", refuse)
-    fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    fast = dataclasses.replace(ledger.Node.stated(FIGURES), read_bytes_per_s=2 * FIGURES.read_bytes_per_s)
     one_tier = fast.to_json()
     del one_tier["tiers"]["dram"]
     for node, flags, why in (({"tiers": {}}, (), "a node's capacities are an object of exactly"),
@@ -199,15 +202,15 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
     ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
     certified bytes are the same at either R."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    (r,), _ = run("honest", read_bytes_per_s=timing.GPU_READ_BYTES_PER_S)
+    (r,), _ = run("honest", read_bytes_per_s=FIGURES.gpu_read_bytes_per_s)
     lg = r["ledger"]
-    node_read = timing.GPUS * timing.GPU_READ_BYTES_PER_S + timing.HOST_READ_BYTES_PER_S
-    node_spec = timing.GPUS * timing.GPU_SPEC_BYTES_PER_S + timing.HOST_SPEC_BYTES_PER_S
-    assert lg["inputs"]["reported_read_bytes_per_s"] == timing.GPU_READ_BYTES_PER_S
+    node_read = FIGURES.gpus * FIGURES.gpu_read_bytes_per_s + FIGURES.host_read_bytes_per_s
+    node_spec = FIGURES.gpus * FIGURES.gpu_spec_bytes_per_s + FIGURES.host_spec_bytes_per_s
+    assert lg["inputs"]["reported_read_bytes_per_s"] == FIGURES.gpu_read_bytes_per_s
     assert lg["measured"]["capacity_bytes_per_s"] == lg["inputs"]["measured_read_bytes_per_s"] == node_read
     assert lg["spec"]["capacity_bytes_per_s"] == lg["inputs"]["spec_bytes_per_s"] == node_spec
-    assert lg["inputs"]["chip_bytes"] == timing.GPUS * timing.GPU_CHIP_BYTES + timing.HOST_CHIP_BYTES == 3_105_652_736
-    assert lg["inputs"]["squarings_per_s"] == timing.GPUS * timing.GPU_SQUARINGS_PER_S["p512"]
+    assert lg["inputs"]["chip_bytes"] == FIGURES.gpus * FIGURES.gpu_chip_bytes + FIGURES.host_chip_bytes == 3_105_652_736
+    assert lg["inputs"]["squarings_per_s"] == FIGURES.gpus * FIGURES.gpu_squarings_per_s["p512"]
     assert lg["spec"]["certified_bytes"] == pytest.approx(lg["measured"]["certified_bytes"], rel=1e-9)
 
 
@@ -217,17 +220,17 @@ def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its
     d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
                       "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
-    for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
+    for r in (FIGURES.read_bytes_per_s, FIGURES.spec_bytes_per_s):
         parts = verifier.timing_parts(capacity_bytes_per_s=r, node=ledger.Node.stated(FIGURES), **d101)
         assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
-    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, node=ledger.Node.stated(FIGURES),
+    parts = verifier.timing_parts(capacity_bytes_per_s=FIGURES.read_bytes_per_s, node=ledger.Node.stated(FIGURES),
                                   **d101)
     assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
     assert {k: round(v * 100, 2) for k, v in parts.items()} == {
         "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
         "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
-    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, node=ledger.Node.stated(FIGURES), **d101)
-    assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
+    spec = verifier.timing_parts(capacity_bytes_per_s=FIGURES.spec_bytes_per_s, node=ledger.Node.stated(FIGURES), **d101)
+    assert spec["above_stated_tiers"] == pytest.approx(1 - FIGURES.read_bytes_per_s / FIGURES.spec_bytes_per_s)
 
 
 def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_each_tier(monkeypatch):
@@ -733,7 +736,7 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
                      figures=dataclasses.replace(FIGURES, gpu_squarings_per_s={"p512": 0.0}))
     assert r["accepted"] and p["accepted"]
     (record, plans, regions), kw = seen["args"]
-    assert kw["chip_bytes"] == timing.CHIP_BYTES
+    assert kw["chip_bytes"] == FIGURES.chip_bytes
     B, span = rcodec.BLOCK_BYTES, max(w.span_ns for w in record.windows)
     rate = record.codec.encode_squarings * 1e9 / span / 2
     m = verifier.memory(record, plans, regions, hbm_bytes=kw["hbm_bytes"], rebuild=audit.Rebuild(record.codec, rate),
@@ -949,7 +952,7 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
     old = {k: v for k, v in r.items() if k != "lean_record"}
     assert verifier.lean_record(old) == r["lean_record"]
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=FIGURES.disk_bytes_per_s, link_bytes_per_s=5e10)
     mem = r["ledger"]["memory"]
     windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
     given = line.inputs_json(
@@ -971,8 +974,8 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
 
 
 def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
-    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `timing.CHIP_BYTES` (gate runs 7
-    to 9's 3,045,746,688 B) is deducted at `timing.CHIP_BYTES`, in the line of record's inputs (`recorded_inputs`, which
+    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `FIGURES.chip_bytes` (gate runs 7
+    to 9's 3,045,746,688 B) is deducted at `FIGURES.chip_bytes`, in the line of record's inputs (`recorded_inputs`, which
     the Lean and line.py both read) and in the verifier's diagnostic (`recorded_paced`): every stretch, in both forms
     and both readings, charges the difference in whole blocks more as absent than the record's own S_chip would. A
     record at a larger S_chip keeps its own."""
@@ -982,17 +985,17 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
                   then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     mem = r["ledger"]["memory"]
     b, short = mem["block_bytes"], 3_045_746_688
-    assert mem["chip_bytes"] == timing.CHIP_BYTES > short
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    assert mem["chip_bytes"] == FIGURES.chip_bytes > short
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=FIGURES.disk_bytes_per_s, link_bytes_per_s=5e10)
 
     def at(chip: int) -> dict:
         return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
 
     inputs = verifier.recorded_inputs(at(short), got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
-    assert inputs["chip_bytes"] == timing.CHIP_BYTES
+    assert inputs["chip_bytes"] == FIGURES.chip_bytes
     assert inputs == verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     charged, own = line.record_run_json(inputs), line.record_run_json({**inputs, "chip_bytes": short})
-    more = -(-timing.CHIP_BYTES // b) - -(-short // b)
+    more = -(-FIGURES.chip_bytes // b) - -(-short // b)
     assert more > 0
     for f in line.FORMS:
         assert charged[f]["stretches"] and len(charged[f]["stretches"]) == len(own[f]["stretches"])
@@ -1000,8 +1003,8 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
             for reading in line.READINGS:
                 assert line.number(x[reading]["lost_blocks"]) == line.number(y[reading]["lost_blocks"]) + more
     short_paced = verifier.recorded_paced(at(short), got["reg"], figures=FIGURES, host_bytes=0)
-    assert short_paced["chip_blocks"] == -(-timing.CHIP_BYTES // b)
-    larger = timing.CHIP_BYTES + b
+    assert short_paced["chip_blocks"] == -(-FIGURES.chip_bytes // b)
+    larger = FIGURES.chip_bytes + b
     larger_inputs = verifier.recorded_inputs(at(larger), got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     assert larger_inputs["chip_bytes"] == larger
     larger_paced = verifier.recorded_paced(at(larger), got["reg"], figures=FIGURES, host_bytes=0)
@@ -1088,9 +1091,9 @@ def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_it
     measured rate for the charge up to it, and a link burst once the charge passes the disks (the link-charged
     line)."""
     assert FIGURES.disk_bytes_per_s == 4.311e9
-    assert verifier.ingress_bursts(0.0, FIGURES) == timing.CHIP_BYTES
-    assert verifier.ingress_bursts(4.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9
-    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_BURST_BYTES
+    assert verifier.ingress_bursts(0.0, FIGURES) == FIGURES.chip_bytes
+    assert verifier.ingress_bursts(4.311e9, FIGURES) == FIGURES.chip_bytes + 4.311e9
+    assert verifier.ingress_bursts(54.311e9, FIGURES) == FIGURES.chip_bytes + 4.311e9 + FIGURES.link_burst_bytes
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
@@ -1237,7 +1240,7 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     path = tmp_path / "registry.json"
     verifier.save_registry(path, registry)
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--registry", str(path), "--close", b"test-node".hex()])
-    assert verifier.main(figures=FIGURES) == 0
+    assert verifier.main() == 0
     back = verifier.load_registry(path)
     assert back.live(b"test-node") is None and back.closed == [
         audit.Closed(b"test-node", bytes.fromhex("ab" * 64), ("accepted", audit.UNENDED))]
@@ -1367,9 +1370,9 @@ def test_a_session_sampled_two_windows_a_coin_at_one_window_in_flight_is_refused
     """`--groups-per-coin 2` with a `--paced` session at F = 1: no property covers one window in flight at g > 1, so
     the Lean verifier's `session` request refuses it, and the driver refuses the pair before it listens."""
     monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out"), "--groups-per-coin", "2",
-                                      "--paced", "2:8:12:2", "2:8:12:2:1"])
+                                      "--paced", "2:8:12:2", "2:8:12:2:1", "--figures", str(FIGURES_FILE)])
     with pytest.raises(SystemExit) as e:
-        verifier.main(figures=FIGURES)
+        verifier.main()
     assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
 
@@ -1391,7 +1394,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
                   then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=FIGURES.disk_bytes_per_s, link_bytes_per_s=5e10)
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     want = verifier.line.record_run_json(inputs)
     assert "refused" not in want and inputs["clock"] == "record"
@@ -1443,7 +1446,7 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
     assert r["accepted"] and pr["accepted"] and r["windows"] == 12 and r["record"]["public"]["groups_per_coin"] == 4
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 12 + 3
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=FIGURES.disk_bytes_per_s, link_bytes_per_s=5e10)
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     record = inputs["record"]
     assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12
@@ -1746,6 +1749,16 @@ def test_the_predicted_rate_is_the_samples_chance_to_miss_every_dropped_receipt(
     assert summary.miss(20, 2, 2) == pytest.approx(18 / 20 * 17 / 19)
     U, f, s = 68 << 22, 2.0 ** -14, 2773
     assert summary.miss(U, round(f * U), s) == pytest.approx((1 - f) ** s, rel=1e-4)
+
+
+@pytest.mark.parametrize("module", ["prover", "node"])
+def test_a_session_started_naming_no_node_is_refused_before_it_connects(module, capsys, tmp_path, monkeypatch):
+    """No default names a machine: the node a session registers is the launcher's `--node`, its node file's
+    (`kit.session_node`)."""
+    monkeypatch.setattr(sys, "argv", [f"{module}.py", "--out", str(tmp_path)])
+    with pytest.raises(SystemExit) as e:
+        __import__(module).main()
+    assert e.value.code == 2 and "--node" in capsys.readouterr().err.splitlines()[-1]
 
 
 def test_a_seeds_served_load_does_not_move_with_the_salts():

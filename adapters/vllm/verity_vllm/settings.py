@@ -212,7 +212,9 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_PROTOCOLS", csv, (), VALUE, "the schemes attached by name inside vLLM's own server (`pipeline.scheme_plugin`), "
       "comma-separated, an application's protocols line; unset, none"),
     S("VERITY_PROTOCOLS_CONFIG", json.loads, None, VALUE, "VERITY_PROTOCOLS's JSON object: feed, the directory the server's "
-      "front and its engine share (required with a scheme), and each scheme's settings under its name"),
+      "front and its engine share (required with a scheme); the engine's out, the run output its schemes' reports go "
+      "under, and private, the directory each scheme's own goes under; gate, infra's challenger gate command; and each "
+      "scheme's settings under its name"),
     S("VERITY_QUERY_ID", str, None, VALUE, "the verification query id a row runs"),
     S("VERITY_QWORD_MAX_GATES", str, None, VALUE, "the strict word check's gate bound for the row"),
     S("VERITY_QWORD_MAX_GATES_ALLOWED", str, None, VALUE, "the one raised VERITY_QWORD_MAX_GATES a GO allows"),

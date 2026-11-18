@@ -638,7 +638,7 @@ def _fused_variance(rf: np.ndarray, N: int) -> np.float32:
 class AttentionTwin(Twin):
     twin_id = "attention.fa2.bf16.v3"
     base_id = "Attention_v3"
-    covers = ("Attention_v3{T,NH,KVH,D,BN}: fa2_model.cpp `fa2_rows` (variant 0, AMPERE_BF16 tensor-core step, inv_degenerate 1) per "
+    covers = ("Attention_v3{T,NH,KVH,D,BN}: fa2_model.cpp `fa2_rows` (AMPERE_BF16 tensor-core step, inv_degenerate 1) per "
               "head with KV head h // (NH/KVH), col_limit T, ceil(T/BN) blocks visited last -> first: S = QK^T as D/16 ascending "
               "k16 chain steps from 0; row max; rescale ex2((m_prev - m)*scale_log2); P = ex2(fma(S, scale_log2, -m*scale_log2)); "
               "per-lane sums (lane (c%8)//2, ascending, the block's first add fused with the rescale as one FFMA.FTZ); P -> bf16 "

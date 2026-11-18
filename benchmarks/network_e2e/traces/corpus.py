@@ -36,7 +36,7 @@ egress from the release a, or from the admission s) is the trace's meta.json `ne
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
 the wire.
 
-``--admit tick`` serves every trace of the run under the attested tick (`verity_vllm.pipeline.serve_admit`, its
+``--admit tick`` serves every trace of the run under the attested tick (`verity.protocols.resource_accounting.network.prover.admission`, its
 ``tick``): the server turns the network attester's scheme on by name (`verity_vllm.pipeline.scheme_plugin`), its
 `register` a general plugin beside the tracer, configured by ``VERITY_PROTOCOLS``, and its `Front` the outermost
 middleware, which writes the release headers and the watermark the server gets to its feed (in ``raw/``,
@@ -185,7 +185,7 @@ TICK_BUCKET_MS = 100
 TICK_SAT, TICK_FREE = 0.9, 1.1
 #: how long the gate waits on a released request that hasn't reached the engine, or on a silent watermark, before it goes on
 TICK_HOLD_MS = 5000
-#: `tick_plugin.TickFeed`, the server's side of the release headers and the watermark (the network attester's or
+#: `verity.protocols.resource_accounting.network.prover.admission.FrontFeed`, the server's side of the release headers and the watermark (the network attester's or
 #: `StandIn`'s)
 TICK_MIDDLEWARE = "verity_vllm.pipeline.scheme_plugin.Front"
 CUT_MIDDLEWARE = "verity_vllm.pipeline.cut_plugin.SentFeed"
@@ -310,7 +310,7 @@ def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
 
 class StandIn:
     """The network attester's side of ``--admit tick`` where none is in front of the server: what it sends in the release
-    headers and the watermark (`verity_vllm.pipeline.serve_admit`), from the client's sends. `release` numbers a request
+    headers and the watermark (`verity.protocols.resource_accounting.network.prover.admission`), from the client's sends. `release` numbers a request
     N, in the order of the calls, and puts it in the bucket of `now`, counted from `origin` in buckets of `bucket_s`;
     `close` gives the watermark's next line, ``t n`` with n the releases of buckets up to t, once bucket t has closed
     (`due`). A release after a bucket's line goes to a later bucket whatever `now` says (an event loop may run a timer a
@@ -749,7 +749,7 @@ def rate_of(model: Model, name: str, rate: float | None) -> float | None:
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
-    """``--admit tick``'s constants in microseconds (`serve_admit.Tick`'s fields) and where τ came from: calibrated on a
+    """``--admit tick``'s constants in microseconds (`verity.protocols.resource_accounting.network.prover.admission.Tick`'s fields) and where τ came from: calibrated on a
     trace's directory (`tick_from`), or given as ``SAT,FREE`` in ms."""
     if (trace is None) == (given_ms is None):
         raise SystemExit("--admit tick takes τ_sat and τ_free from one of --tick-from TRACE_DIR and --tick-ms SAT,FREE")
@@ -818,7 +818,9 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     if tick:
         name = tick_modules()[0].scheme_name()
         env["VERITY_PROTOCOLS"] = name
-        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d / "raw"), name: {
+        # the attester's admission keeps nothing across servers: its private directory is the job's scratch
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d / "raw"), "out": str(d / "raw"),
+                                                     "private": tempfile.mkdtemp(prefix="verity-private-"), name: {
             **{k: tick[k] for k in ("bucket_us", "sat_us", "free_us")}, "hold_ms": TICK_HOLD_MS, "log": str(d / "raw")}})
     arr = traffic.arrivals(requests, rate)
     ids = [request_id(r["i"]) for r in requests]

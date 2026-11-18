@@ -8,11 +8,14 @@
 #
 # MODEL the checkpoint (default unsloth/Llama-3.1-8B, bf16), ENGINE_ARGS engine.py's (such as --step-hz 2
 # --concurrency 64; Qwen/Qwen2.5-32B's 61 GiB of weights take --arena-gib 62 --util 0.8), ENGINE_CPUS the engines'
-# cores (run.sh's), NODE_ARGS node.py's (such as --decode-s 60).
+# cores (run.sh's), NODE_ARGS node.py's (such as --decode-s 60), SESSION_NODE the node the session registers (default
+# `machine.py session-node` of the first card: local/<its node file>/serving).
 set -uxo pipefail
 : "${O:?}" "${B:?}" "${RS:?}" "${PY:?}" "${VPY:?}" "${PORT:?}" "${PLAN:?}"
 IFS=, read -ra DEVS <<< "${CUDA_VISIBLE_DEVICES:?}"
 "$PY" $RS/lease.py "${#DEVS[@]}" || exit 3
+SESSION_NODE=${SESSION_NODE:-$("$PY" benchmarks/kernels/machine.py session-node \
+  "$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${DEVS[0]}" | head -1)" serving)} || exit 3
 nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
   --format=csv,noheader -i "${GPU_LEASE_UUID:-$CUDA_VISIBLE_DEVICES}" >> "$O/gpu.txt" 2>&1
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i "${GPU_LEASE_UUID:-$CUDA_VISIBLE_DEVICES}" | head -1)
@@ -50,7 +53,7 @@ if [ "${ROLE:-both}" = both ]; then
 fi
 # shellcheck disable=SC2086
 taskset -c "$PROVER_CPUS" "$PY" $RS/node.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
-  --engines-dir "$B" --engines "${#DEVS[@]}" --lib "$B/session.so" --kv "$B/kv.so" ${NODE_ARGS:-} \
+  --engines-dir "$B" --engines "${#DEVS[@]}" --lib "$B/session.so" --kv "$B/kv.so" --node "$SESSION_NODE" ${NODE_ARGS:-} \
   > "$O/node.log" 2>&1
 P=$?
 if [ -n "$V" ]; then

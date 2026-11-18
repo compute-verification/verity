@@ -50,9 +50,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
-- ``release-order``: requests added in the network attester's release order (`serve_admit.ReleaseOrder` in the engine
+- ``release-order``: requests added in the network attester's release order (`verity.protocols.resource_accounting.network.prover.admission.ReleaseOrder` in the engine
   core, `servetax_plugin.ReleaseGate`), the client standing in for the network attester, which numbers them in send order;
-- ``tick``: the certified tick (`serve_admit.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
+- ``tick``: the certified tick (`verity.protocols.resource_accounting.network.prover.admission.TickGate` under vLLM's server, `verity_vllm.pipeline.scheme_plugin`), τ_sat and
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the network attester (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
@@ -76,7 +76,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`), with
   prefix caching off: a table holds its request's rows from position 0, and a request served from the cache computes
   none before its hit's end (`BoundaryWindows.install` refuses the pair). The line is this arm's data and is stated
-  nowhere else: a job that serves the two-stage audit serves this arm.
+  nowhere else: a job that serves the two-stage audit serves this arm. It serves ``sampled-proofs`` at ``levels`` 2
+  (`Arm.feature`), which is how a profile names it (``--feature sampled-proofs levels=2``).
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
   and the corpus's client serves it, standing in for the network attester.
@@ -217,6 +218,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -235,6 +237,17 @@ TICK_PLUGIN = ROOT / "adapters/vllm/verity_vllm/pipeline/scheme_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 10: 2.228, 20: 2.086,
        30: 2.042}
+
+
+class Feature(NamedTuple):
+    """An application's component by its name (`verity config check`'s components, `served_table.MANIFESTS`) and its
+    settings, each as its ``[params."<id>"]`` states it."""
+
+    name: str
+    settings: tuple[tuple[str, Any], ...] = ()
+
+    def __str__(self) -> str:
+        return " ".join([self.name, *(f"{k}={json.dumps(v)}" for k, v in self.settings)])
 
 
 @dataclass(frozen=True)
@@ -276,8 +289,12 @@ class Arm:
     off: tuple[str, ...] = ()
     #: the tick rule's catch-up forms that only a measurement may take (`tick_rule`) and that this arm measures
     catch_ups: tuple[str, ...] = ()
-    #: the registered useful-work scheme the arm serves, by its name (`feature`): none of the arms here serves one yet
-    scheme: str = ""
+    #: the application's component the arm serves and the settings it serves it at, as ``--feature`` names them
+    #: (`feature_of`): what a profile's job finds the arm by
+    feature: Feature | None = None
+    #: the schemes its server turns on by name inside vLLM's own server (`scheme_plugin.register`), each at the job's
+    #: settings for it (``--scheme-settings``, `scheme_config`)
+    schemes: tuple[str, ...] = ()
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -344,7 +361,8 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment, prefix caching off",
                      ("--no-enable-prefix-caching",),
-                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS,
+                     feature=Feature("sampled-proofs", (("levels", 2),))),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
@@ -370,6 +388,11 @@ ARMS = {
                               plugin=("record", "ids"), env={**TOPK_ENV, "VERITY_DSA_TOPK": "canonical-bisect"},
                               general=TOPK, published=True),
 }
+#: Pearl+ on every linear block inside vLLM's own server, eager, as its scheme requests
+PEARL_PLUS = Feature("pearl-plus", (("tie-uniform", False),))
+ARMS["pearl-plus"] = Arm("compiled", "+ Pearl+ on every linear block, turned on by name inside vLLM's own server, eager",
+                         ("--enforce-eager",), schemes=("pearl-plus",), feature=PEARL_PLUS)
+ARMS["prod-pearl-plus"] = replace(ARMS["pearl-plus"], parent="prod", published=True)
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 ARMS["tick-certifier"] = replace(ARMS["tick"], parent="tick", what="+ the network certifier in front: every request "
                                  "released by it and every answer paced by its schedule, sent by vLLM's client",
@@ -386,6 +409,7 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "the history tables": lambda a: bool(a.rows.get("tables")),
     "the canonical top-k": lambda a: a.env.get("VERITY_DSA_TOPK", "").startswith("canonical"),
     "admission on the certified tick": lambda a: a.tick,
+    "Pearl+ on every linear block": lambda a: "pearl-plus" in a.schemes,
     "the edge snapshot": lambda a: a.edges,
     "the network certifier in front": lambda a: a.attester,
 }
@@ -640,7 +664,7 @@ def entry_points(arm: Arm) -> list[str]:
     it (the tick's scheduler wrapper is then outside the step trace's, so the trace sees a request when the gate adds
     it), then the arm's others (`Arm.general`)."""
     return [*(["verity_serve_tax = servetax_plugin:register"] if arm.plugin or arm.tick else []),
-            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick else []),
+            *(["verity_schemes = verity_vllm.pipeline.scheme_plugin:register"] if arm.tick or arm.schemes else []),
             *(entry for entry, _ in arm.general)]
 
 
@@ -677,9 +701,10 @@ def records(arm: Arm) -> bool:
 
 def keeps_private(arm: Arm) -> bool:
     """Whether an arm keeps files on the node: it records (`records`), it has a boundary commitment, whose classes'
-    directories hold their requests' tokens and their salts, or its environment or its boundary commitment's object
-    names `PRIVATE`."""
-    return records(arm) or "boundary_rows" in arm.plugin or PRIVATE in json.dumps([arm.env, arm.rows])
+    directories hold their requests' tokens and their salts, it turns schemes on by name (the tick), each keeping its
+    own under the private directory, or its environment or its boundary commitment's object names `PRIVATE`."""
+    return (records(arm) or "boundary_rows" in arm.plugin or arm.tick or bool(arm.schemes)
+            or PRIVATE in json.dumps([arm.env, arm.rows]))
 
 
 def private_of(d: Path) -> Path | None:
@@ -806,7 +831,7 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
                edges: dict | None = None, boundary_rows: dict | None = None, check: str | None = None,
-               private: Path | None = None, front: str = PYTHON) -> dict[str, str]:
+               private: Path | None = None, front: str = PYTHON, schemes: dict | None = None) -> dict[str, str]:
     """The server's environment: the job's, with on its path only what the arm's plugins need (`entry_points`): the
     plugin site, this tree for a change of `servetax_plugin`'s or the tick, and each other plugin's directory, so a
     stock arm's processes import nothing of ours; ``VLLM_PLUGINS``, which would let a job's environment drop one of
@@ -815,9 +840,10 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     ``boundary_rows`` gets its object: the arm's (`Arm.rows`), or ``boundary_rows`` in its place, with ``check`` (the
     model's check template) where it names none, at ``window_s``; its classes' directories, which hold values, go
     under ``private`` and never under ``d``. `PRIVATE` in the arm's data is ``private``. An arm on the canonical top-k
-    keeps its counters at each step's end in ``d`` (`topk_steps`)."""
+    keeps its counters at each step's end in ``d`` (`topk_steps`). An arm that turns schemes on by name gets them,
+    the tick's and its own (`Arm.schemes`, at ``schemes``, `scheme_config`), in ``VERITY_PROTOCOLS``."""
     ours = [*([str(site)] if entry_points(arm) else []),
-            *([str(HERE), str(ROOT / "adapters/vllm"), str(ROOT)] if arm.plugin or arm.tick else []),
+            *([str(HERE), str(ROOT / "adapters/vllm"), str(ROOT)] if arm.plugin or arm.tick or arm.schemes else []),
             *(str(ROOT / path) for _, path in arm.general)]
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([*ours, *SHARED.PYTHONPATH]))
@@ -840,14 +866,44 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}),
                                       **({"private": str(private)} if private else {}),
                                       **({"boundary_rows": rows} if rows else {})})
+    names, cfg = list(arm.schemes), {"feed": str(d), "out": str(d), "private": str(private), **scheme_config(arm, schemes)}
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
         from verity.protocols.resource_accounting.network.prover.admission import scheme_name
-        env["VERITY_PROTOCOLS"] = scheme_name()
-        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps({"feed": str(d), scheme_name(): {
-            k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {}) | {"hold_ms": 5000, "log": str(d)}})
+        names.insert(0, scheme_name())
+        cfg[scheme_name()] = ({k: tick[k] for k in ("bucket_us", "sat_us", "free_us")} | tick.get("rule", {})
+                              | {"hold_ms": 5000, "log": str(d)})
+    if names:
+        env["VERITY_PROTOCOLS"] = ",".join(names)
+        env["VERITY_PROTOCOLS_CONFIG"] = json.dumps(cfg)
     return env
+
+
+#: what the job states for each scheme an arm turns on by name, beyond its declared settings' defaults: Pearl+'s kernel
+#: directory and the auditor device's challenger with the session its gate reserved
+SCHEME_NEEDS = {"pearl-plus": ("kernel", "challenger", "session")}
+
+
+def scheme_config(arm: Arm, given: dict | None) -> dict:
+    """The job's ``--scheme-settings`` for the arm's schemes (`Arm.schemes`): ``gate``, infra's challenger gate
+    command, and each scheme's settings under its name, checked by the scheme's own check; refused by name where a
+    scheme lacks what `SCHEME_NEEDS` lists or the gate is missing."""
+    if not arm.schemes:
+        return {}
+    given = dict(given or {})
+    lacking = [f"{n}.{k}" for n in arm.schemes for k in SCHEME_NEEDS.get(n, ()) if not (given.get(n) or {}).get(k)]
+    lacking += [] if given.get("gate") else ["gate"]
+    if lacking:
+        raise SystemExit(f"the arm's schemes need {', '.join(lacking)}: --scheme-settings '{{\"gate\": CMD, "
+                         f"\"pearl-plus\": {{\"kernel\": DIR, \"challenger\": HOST:PORT, \"session\": RESERVED}}}}'")
+    from verity.protocols.compose import schemes
+    from verity.protocols.resource_accounting.scheme import settings
+
+    try:
+        return {"gate": given["gate"], **{n: settings(schemes.get(n), given[n]) for n in arm.schemes}}
+    except ValueError as e:
+        raise SystemExit(f"--scheme-settings: {e}") from None
 
 
 def tick_feed(d: Path) -> Path:
@@ -1984,7 +2040,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
     try:
         env = server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows, model.check, private,
-                         front)
+                         front, getattr(a, "scheme_settings", None))
         check_plugins(env, arm)
     except SystemExit:
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -2124,7 +2180,7 @@ def tail_records(d: Path, pattern: str, at: dict[str, int]) -> list[dict]:
 
 
 def tick_counts(recs: list[dict]) -> dict:
-    """What the certified tick's gate logged over a pass (`serve_admit.TickGate`): the requests it admitted, how many it
+    """What the certified tick's gate logged over a pass (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the requests it admitted, how many it
     deferred by one step or more, how many steps each was held (steps: requests), the steps that admitted any, and its
     events by kind (an ``opened`` gate ordered nothing after it)."""
     held = [k for r in recs if "admitted" in r for k in r.get("held_steps", ())]
@@ -4377,22 +4433,68 @@ def profile_features(stock: str) -> list[str]:
     return [n for n in ARMS if n not in STOCK and stock_of(n) == stock and not same_engine(n, stock)]
 
 
-def feature(name: str, stock: str) -> str:
-    """The arm ``--feature NAME`` serves beside ``stock``: of `profile_features`, the one whose `Arm.scheme` is the
-    registered useful-work scheme ``name``, read from the one table of schemes by name (`verity_bench.schemes`).
-    Refused for a name the table doesn't hold; `NotImplementedError` naming the goal for a scheme no arm over ``stock``
-    serves yet."""
-    kit()
-    from verity_bench import schemes
+#: what a component lacks before an arm here can serve it inside vLLM's server, whose it is to add, in words
+UNSERVED = {
+    "pearl-plus": "compute-accounting: Pearl+'s scheme has an attach, but vLLM's scheme plugin "
+                  "(verity_vllm.pipeline.scheme_plugin) hands it its declared settings alone (scheme.settings: "
+                  "tie-uniform), and its attach (pouw.scheme.Attached) refuses a run without 'coins' or 'challenger' and "
+                  "'kernel' among them; then Attached.keyed raises until vllm keys each linear weight in RegisteredValues; "
+                  "and it requests an eager engine, world 1 and no async steps, more than stock's one change",
+}
 
+
+def components() -> dict:
+    """The components an application names and how each checks its settings: `verity config check`'s
+    (`verity_cli.served_table.MANIFESTS`, each a `verity.config.Component` whose ``params`` checks its
+    ``[params."<id>"]``)."""
+    cli = str(ROOT / "tools/verity/cli")
+    if cli not in sys.path:
+        sys.path.insert(0, cli)
+    from verity_cli.served_table import MANIFESTS
+
+    return MANIFESTS
+
+
+def feature_of(words: Sequence[str]) -> Feature:
+    """``--feature NAME [KEY=VALUE ...]`` as an application states it: NAME one of its components (`components`),
+    each KEY=VALUE a line of that component's ``[params."<id>"]``, VALUE read as TOML (a bare word that isn't TOML is a
+    string), the settings as the component's own check returns them, its defaults filled. Refused by name for a name no
+    component has or a setting the component doesn't declare."""
+    name, *given = words
+    table = components()
+    if name not in table:
+        raise SystemExit(f"--feature {name}: no component of that name; an application's components: "
+                         f"{', '.join(sorted(table))}")
+    params: dict[str, Any] = {}
+    for w in given:
+        key, eq, text = w.partition("=")
+        if not eq or not key:
+            raise SystemExit(f"--feature {name}: {w!r} is no KEY=VALUE")
+        try:
+            params[key] = tomllib.loads(f"v = {text}")["v"]
+        except tomllib.TOMLDecodeError:
+            params[key] = text
     try:
-        registered = schemes.useful_work(name)
-    except ValueError as e:
+        settings = table[name].params(params)
+    except Exception as e:  # noqa: BLE001 - the component's check refuses in its own words (`verity.channel.Refused`)
         raise SystemExit(f"--feature {name}: {e}") from None
-    arms = [n for n in profile_features(stock) if ARMS[n].scheme == registered.name]
-    if not arms:
-        raise NotImplementedError("benchmarks/serving-profiles-first-number: the schemes' table")
-    return arms[0]
+    return Feature(name, tuple(sorted(settings.items())))
+
+
+def feature(words: Sequence[str], stock: str) -> str:
+    """The arm ``--feature NAME [KEY=VALUE ...]`` (`feature_of`) serves beside ``stock``: of `profile_features`, the
+    one whose `Arm.feature` is that component at those settings. `NotImplementedError` naming the goal, and what the
+    component lacks (`UNSERVED`), for one no arm over ``stock`` serves yet."""
+    want = feature_of(words)
+    for n in profile_features(stock):
+        if (f := ARMS[n].feature) is not None and f.name == want.name:
+            try:
+                if feature_of([f.name, *(f"{k}={json.dumps(v)}" for k, v in f.settings)]) == want:
+                    return n
+            except SystemExit:
+                continue
+    raise NotImplementedError(f"benchmarks/serving-profiles-first-number: no arm over {stock} serves {want}"
+                              + (f"; {UNSERVED[want.name]}" if want.name in UNSERVED else ""))
 
 
 def refusals(name: str, rows: dict | None = None) -> list[dict]:
@@ -4469,27 +4571,26 @@ def profile_run(a: argparse.Namespace) -> dict:
             "args": ["--no-enable-prefix-caching"] if "prefix-cache-off" in ours else []}
 
 
-def profile_plan(profile: str, model_id: str, scheme: str | None, find_load: bool) -> dict[str, str]:
-    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the load's rungs
-    (`Load.rungs`, up to the profile's prompts where they are requests in flight) in one lifetime of `FIND_REPS` reps;
-    ``--feature SCHEME``, stock and the arm that serves the scheme (`feature`) at the profile's one load in
+def profile_plan(profile: str, model_id: str, words: Sequence[str] | None, find_load: bool) -> dict[str, str]:
+    """What run.sh serves for ``--profile``, as its variables: ``--find-load``, stock alone over the profile's
+    ladder (`profiles.rungs`) in one lifetime of `FIND_REPS` reps;
+    ``--feature NAME [KEY=VALUE ...]``, stock and the arm that serves that component at those settings (`feature`) at
+    the profile's one load in
     `FEATURE_LIFETIMES` lifetimes of `FEATURE_REPS` reps, the arm with the changes on our side its refusals need
     (``OURS``), and no arm at all where a refusal has none; and the minutes the job plans its passes within, the
     model's (``CAP_MIN``)."""
     P, doc = profile_doc(profile, model_id)
-    if (scheme is None) == (not find_load):
-        raise SystemExit(f"--profile {profile} takes --feature SCHEME or --find-load, one of them")
+    if (words is None) == (not find_load):
+        raise SystemExit(f"--profile {profile} takes --feature NAME [KEY=VALUE ...] or --find-load, one of them")
     if source_commit() is None:
         raise SystemExit(f"--profile {profile}: no commit names this tree: neither RESEARCH_SOURCE_SHA (research run's "
                          "--tree-sha) nor RESEARCH_SOURCE_COMMIT (a payload's commit) is set, and git gives no HEAD here")
     stock, load, card_ = profile_stock(profile, model_id), profile_load(profile, model_id), profile_card(model_id)
     plan = {"STOCK": stock, "OURS": "", "CAP_MIN": str(doc.models[model_id].cap_minutes), "CARD": card_}
     if find_load:
-        prompts = doc.profiles[profile].prompts
-        ladder = tuple(c for c in LOADS[load].rungs if LOADS[load].sessions or c <= prompts)
-        return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, ladder))}", "REPS": str(FIND_REPS),
+        return plan | {"ARMS": stock, "LOADS": f"{load}={'+'.join(map(str, P.rungs(doc, profile)))}", "REPS": str(FIND_REPS),
                        "LIFETIMES": "1"}
-    arm = feature(scheme, stock)
+    arm = feature(words, stock)
     try:
         point = P.load_point(doc, profile, model_id, card_)
     except P.ConfigError:
@@ -4675,7 +4776,7 @@ def profile_measured(r: dict, model_id: str, profile: str, arm: str, stock: str,
     return out
 
 
-def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | None, find_load: bool,
+def profile_result(dirs: list[Path], profile: str, model_id: str, words: Sequence[str] | None, find_load: bool,
                    out: Path | None = None) -> tuple[int, dict, str]:
     """A profile's job's result from its arms' directories: its exit status (1 where the feature cannot run, as run.sh's
     job exits 1 for an arm whose run refuses it, the result written all the same), the result and its text. With
@@ -4694,7 +4795,7 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
         name = "find_load"
         rc = 0
     else:
-        arm = feature(scheme, stock)
+        arm, named = feature(words, stock), " ".join(words)
         point = P.load_point(doc, profile, model_id, card_)
         refused = refusals(arm)
         if refused:
@@ -4715,8 +4816,8 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
             r = three_lines(by.get(stock), by.get(arm), load, point, cap)
             text = lines_text(r, bounds_text(doc, profile))
             rc = 0
-        r |= {"feature": scheme, "arm": arm, "stock": stock, "load": load, "point": point}
-        text += [f"{arm} ({scheme}) beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
+        r |= {"feature": named, "arm": arm, "stock": stock, "load": load, "point": point}
+        text += [f"{arm} ({named}) beside {stock} at {load}, {point} {'users' if LOADS[load].sessions else 'in flight'}, "
                  f"{FEATURE_LIFETIMES} lifetimes of {FEATURE_REPS} reps each"]
         name = "serving_profile"
     r |= profile_tail(P, doc, profile, model_id, [by[a] for a in by]) | {"card": card_}
@@ -4728,7 +4829,7 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
 
         w = bench.writer(out, PROFILE_KIND)
         w.fingerprint(profile=profile, version=r["version"], digest=r["digest"], model=model_id, card=card_,
-                      stock=stock, feature=scheme, arm=r.get("arm"), load=load, point=r.get("point"))
+                      stock=stock, feature=r.get("feature"), arm=r.get("arm"), load=load, point=r.get("point"))
         bench.report(name, "\n".join(text), r, measured, out=out, document=find_load)
         cost = next((m for m in measured if m["name"] == MODELS[model_id].metric and m["value"] is not None), None)
         good = find_load or cost is not None or not measured
@@ -4738,8 +4839,9 @@ def profile_result(dirs: list[Path], profile: str, model_id: str, scheme: str | 
 
 def find_load_result(P: object, doc: object, profile: str, model_id: str, card_: str, ref: dict | None, load: str,
                      cap: str | None) -> tuple[dict, list[str]]:
-    """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising (the
-    rung of the most, `peak`, with a rung served above it): the line of `benchmarks/production.toml` that names it,
+    """``--find-load``'s result: stock's output tokens a second at each rung it served, and where they stop rising:
+    the fewest users or requests in flight whose next rung served rises by less than the profile's ladder's ``gain``.
+    The line of `benchmarks/production.toml` that names it,
     the profile's version raised by one, and the digest the pin test then holds (`profiles.digest` of the file with
     that line), the model's load on ``card_``. Where stock still rises at its highest rung served it cannot tell, and prints no line. It edits no
     file."""
@@ -4751,18 +4853,20 @@ def find_load_result(P: object, doc: object, profile: str, model_id: str, card_:
                                                          for c, v in each.items())]
     if not rungs:
         return r | {"verdict": "cannot tell", "why": cap or "stock served no rung"}, text + ["cannot tell: no rung served"]
-    top = peak(ref, load, 0)[0]
-    if top == max(rungs):
-        why = f"stock still rises at its highest rung served ({top})" + (f"; {cap}" if cap else "")
+    old, served = doc.profiles[profile], sorted(each)
+    gain = old.ladder.gain
+    top = next((c for c, d in zip(served, served[1:]) if each[d] < each[c] * (1 + gain)), None)
+    if top is None:
+        why = f"stock still rises by {gain:.0%} or more at each rung served, up to {served[-1]}" + (f"; {cap}" if cap else "")
         return r | {"verdict": "cannot tell", "why": why}, text + [f"cannot tell: {why}: no line"]
-    old = doc.profiles[profile]
     loads = getattr(old, key)
     new = replace(old, **{key: MappingProxyType({**loads, model_id: MappingProxyType({**loads[model_id], card_: top})})})
     digest = P.digest(replace(doc, profiles=MappingProxyType({**doc.profiles, profile: new})), profile)
     line = f"{model_id}.{card_} = {top}"
     r |= {"verdict": "saturated", "peak": top, "line": line, "table": f"profiles.{profile}.{key}",
           "raise_version": old.version + 1, "pin": [old.version + 1, digest]}
-    return r, text + [f"saturated: output tokens a second stop rising at {top} ({'+'.join(map(str, each))} served)",
+    return r, text + [f"saturated: output tokens a second rise by less than {gain:.0%} past {top} "
+                      f"({'+'.join(map(str, each))} served)",
                       f"in {P.PATH.relative_to(ROOT)}, under [profiles.{profile}.{key}]: {line}",
                       f"and under [profiles.{profile}]: version = {old.version + 1} (from {old.version})",
                       f"in tests/benchmarks/harness/test_profiles.py, PINS: \"{profile}\": ({old.version + 1}, "
@@ -4869,6 +4973,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
+    r.add_argument("--scheme-settings", type=json.loads, metavar="JSON",
+                   help="an arm that turns schemes on by name inside vLLM's server (pearl-plus): gate, infra's challenger "
+                        "gate command, and each scheme's settings under its name (pearl-plus: kernel DIR, challenger "
+                        "HOST:PORT, session, the gate's reserve answer); ignored by the other arms")
     r.add_argument("--tick-rule", metavar="JSON", help="the tick arms: a rule other than the registered one, "
                    "the network attester's token_ns and catch_up")
     r.add_argument("--side", choices=(SERVER, CLIENT),
@@ -4965,8 +5073,10 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("dirs", nargs="*", type=Path)
     pr.add_argument("--profile", required=True, choices=tuple(PROFILE))
     pr.add_argument("--model-id", required=True, choices=sorted(MODELS))
-    pr.add_argument("--feature", metavar="SCHEME", help="a registered useful-work scheme, served beside stock at the "
-                    "profile's load by the arm of ours that serves it (`feature`)")
+    pr.add_argument("--feature", nargs="+", metavar=("NAME", "KEY=VALUE"),
+                    help="an application's component by its name, with its settings as its [params] lines state them "
+                    "(sampled-proofs levels=2), served beside stock at the profile's load by the arm of ours that serves "
+                    "it (`feature`); a name no component has, or a setting it doesn't declare, is refused by name"),
     pr.add_argument("--find-load", action="store_true", help="stock alone over the ladder: where it saturates")
     pr.add_argument("--out", type=Path, help="result: write the run's result there (the kit's report), and "
                     "find_load.json with --find-load")

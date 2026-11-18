@@ -368,6 +368,42 @@ def test_prod_all_on_is_prod_record_with_the_tick_and_the_edge_snapshot_and_says
         S.main(["passes", "--loads", "chat", "--arms", "tick", "--model-id", "glm53"])
 
 
+#: a job's --scheme-settings for the pearl-plus arms
+PEARL_PLUS_JOB = {"gate": "gate-cmd", "pearl-plus": {"kernel": "/kernels/pearl", "challenger": "auditor:7000",
+                                                     "session": {"session": "s1"}}}
+
+
+def test_the_pearl_plus_arms_turn_it_on_by_name_inside_vllms_server_at_the_jobs_kernel_and_session(tmp_path):
+    """``pearl-plus`` and ``prod-pearl-plus`` serve Pearl+ over each stock, eager, through the scheme plugin and no front;
+    the job's kernel directory, challenger, session and gate (``--scheme-settings``) reach the engine checked by Pearl+'s
+    own check, and a run lacking one is refused by name before any server starts."""
+    glm = S.MODELS["glm53"]
+    for arm, stock in (("pearl-plus", "compiled"), ("prod-pearl-plus", "prod")):
+        assert S.stock_of(arm) == stock and S.changes_of(arm) == ["Pearl+ on every linear block"]
+        line = [S.server_argv(S.ARMS[a], glm, Path("/ck"), 8000, max_model_len=glm.published_context) for a in (stock, arm)]
+        assert line[1] == [*line[0], "--enforce-eager"]
+        assert "verity_schemes = verity_vllm.pipeline.scheme_plugin:register" in S.entry_points(S.ARMS[arm])
+    private = tmp_path / "p"
+    with pytest.raises(SystemExit, match=r"^the arm's schemes need pearl-plus\.kernel, pearl-plus\.session, gate: "):
+        S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
+                     schemes={"pearl-plus": {"challenger": "auditor:7000"}})
+    own = PEARL_PLUS_JOB["pearl-plus"]
+    with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: coins and challenger are both set"):
+        S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
+                     schemes={"gate": "gate-cmd", "pearl-plus": {**own, "coins": "in-process"}})
+    env = S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0, private=private,
+                       schemes={"gate": "gate-cmd", "pearl-plus": own})
+    cfg = json.loads(env["VERITY_PROTOCOLS_CONFIG"])
+    assert env["VERITY_PROTOCOLS"] == "pearl-plus" and S.PLUGIN_ENV not in env
+    assert {k: cfg[k] for k in ("feed", "out", "private", "gate")} == {"feed": str(tmp_path), "out": str(tmp_path),
+                                                                        "private": str(private), "gate": "gate-cmd"}
+    from verity.protocols.resource_accounting.compute.pouw.scheme import SETTINGS
+
+    assert cfg["pearl-plus"] == {**SETTINGS, **own}
+    with pytest.raises(SystemExit, match="this arm keeps files on the node, outside its run's directory: --private DIR"):
+        S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, 1.0)
+
+
 def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_registered_one(tmp_path):
     """``prod-tick`` serves the tick of ``prod-all-on`` on ``prod``, recording nothing; a rule named apart from τ reaches
     the gate through the network attester's settings, and none leaves the registered rule's keys out of it."""
@@ -379,10 +415,10 @@ def test_prod_tick_is_prod_all_ons_tick_alone_and_takes_a_rule_other_than_the_re
             for a in ("prod", "prod-tick")]
     assert line[1] == [*line[0], "--middleware", "verity_vllm.pipeline.scheme_plugin.Front"]
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485}
-    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0))
+    plain = tick_settings(S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p"))
     assert "token_ns" not in plain and "catch_up" not in plain
     ruled = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick | {"rule": {"token_ns": 18_500, "catch_up": "marks"}},
-                         1.0, 1.0)
+                         1.0, 1.0, private=tmp_path / "p")
     assert tick_settings(ruled) == plain | {"token_ns": 18_500, "catch_up": "marks"}
 
 
@@ -394,7 +430,7 @@ def test_only_an_arm_that_names_the_open_gate_takes_it_and_its_server_hears_whic
     rule = S.tick_rule("prod-tick", '{"catch_up": "open"}')
     assert rule == {"catch_up": "open", "arm": "prod-tick"}
     tick = {"bucket_us": 100_000, "sat_us": 7_761, "free_us": 9_485, "rule": rule}
-    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0)
+    env = S.server_env(S.ARMS["prod-tick"], tmp_path, tmp_path, tick, 1.0, 1.0, private=tmp_path / "p")
     assert NA.tick_config(tick_settings(env), "the settings", feed=False)["catch_up"] == "open"
 
 
@@ -466,7 +502,8 @@ def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypa
 def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")   # a job's environment doesn't turn it on for the stock arms
     on = {a for a in S.ARMS if S.server_env(S.ARMS[a], tmp_path, tmp_path, {"bucket_us": 1, "sat_us": 1, "free_us": 1},
-                                            600.0, 600.0, boundary_rows={"check": "t"}, private=tmp_path)["VLLM_BATCH_INVARIANT"] == "1"}
+                                            600.0, 600.0, boundary_rows={"check": "t"}, private=tmp_path,
+                                            schemes=PEARL_PLUS_JOB)["VLLM_BATCH_INVARIANT"] == "1"}
     assert on == {"bi-compiled", "bi-eager"}
     assert (S.ARMS["bi-compiled"].parent, S.ARMS["bi-eager"].parent) == ("compiled", "eager")
 
@@ -716,7 +753,8 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
-                                                             "prod-trace", "prod-tick", "prod-all-on", "prod-record-bisect"]
+                                                             "prod-trace", "prod-tick", "prod-all-on", "prod-record-bisect",
+                                                             "prod-pearl-plus"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
@@ -2289,10 +2327,11 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
     monkeypatch.delenv("PYTHONPATH", raising=False)
     rows = {"check": "t"}
     paths = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path / "site", {"bucket_us": 1, "sat_us": 1, "free_us": 1}, 600.0, 600.0,
-                             boundary_rows=rows, private=tmp_path)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
+                             boundary_rows=rows, private=tmp_path, schemes=PEARL_PLUS_JOB)["PYTHONPATH"].split(S.os.pathsep)
+             for a in S.ARMS}
     for a, arm_ in S.ARMS.items():
         tree = [p for p in paths[a] if p in (str(S.HERE), str(S.ROOT), str(S.ROOT / "adapters/vllm"))]
-        assert bool(tree) == bool(arm_.plugin or arm_.tick), a
+        assert bool(tree) == bool(arm_.plugin or arm_.tick or arm_.schemes), a
         assert (str(tmp_path / "site") in paths[a]) == bool(S.entry_points(arm_)), a
         # nothing else of this tree is on it but the directory of each other plugin the arm names
         assert [p for p in paths[a] if p.startswith(str(S.ROOT))] == [*tree, *(str(S.ROOT / d) for _, d in arm_.general)], a
@@ -2367,7 +2406,7 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
-                                    "--target, --json, --profile NAME, --feature SCHEME, --find-load)\n")
+                                    "--target, --json, --profile NAME, --feature NAME [KEY=VALUE ...], --find-load)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
     # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
     for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):
