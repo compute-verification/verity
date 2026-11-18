@@ -1778,6 +1778,9 @@ def resolveStep (P : Prog) : Scope × Ref → V (Nat ⊕ (Scope × Ref))
     | _ => pure (.inr (parent, a.seq.get j))
   | (sc, ⟨false, k, j⟩) => do
     let body := (P.defs[sc.d]!).body
+    if body.recut.any (·.1 == k) then
+      throw (s!"recut-gates: input nodes {(body.recut.map (·.1)).toList} are read in leaves of part of their width, " ++
+        "which the gate layout doesn't lay out")
     let node := body.nodes[k]!
     let o := sc.off + body.offsets[k]!
     let callee := P.defs[node.fn]!
