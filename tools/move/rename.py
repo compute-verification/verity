@@ -72,7 +72,8 @@ PINS = "TRUSTED.sha256"
 PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 MANIFEST = L.MANIFEST
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
-JOBS, CHUNK = 32, 8                                 # at most this many processes rewrite files, this many files a task
+JOBS, CHUNK = 32, 8
+STALE_SHOWN = 50                                    # at most this many words left in excluded files' comments print                                 # at most this many processes rewrite files, this many files a task
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
 # a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
 GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
@@ -82,9 +83,15 @@ def _match(path: str, glob: str) -> bool:
     return fnmatch.fnmatchcase(path, glob) or (glob.startswith("**/") and fnmatch.fnmatchcase(path, glob[3:]))
 
 
+def fixture(path: str) -> bool:
+    """Whether ``path`` is a test's data: below a `fixtures` directory that is below a `tests` one."""
+    parts = path.split("/")[:-1]
+    return "fixtures" in parts and "tests" in parts[:parts.index("fixtures")]
+
+
 def _word(w: str, whole: bool = False) -> str:
     """`w` as it stands as a word or as one part of an identifier, or (``whole``) as a whole word, and a namespace (``X.``)
-    only at the start of a name (the rules at the top of `tests/fixtures/rename_map.toml`)."""
+    only at the start of a name (the rules at the top of `tests/tools/move/fixtures/rename_map.toml`)."""
     if whole:
         left = (r"(?<![\w.])" if w.endswith(".") else r"(?<!\w)") if re.match(r"\w", w[0]) else ""
         right = r"(?!\w)" if re.match(r"\w", w[-1]) else ""
@@ -92,7 +99,7 @@ def _word(w: str, whole: bool = False) -> str:
         if w[0] == "'":
             left = ""
         elif re.search(r"[ ./]", w):
-            left = r"(?<![\w-])"
+            left = r"(?<!\w)(?<!\w-)"               # a hyphen joins a word, a minus (`(-Audit.x`) doesn't
         elif w[0].islower():
             left = r"(?<![A-Za-z0-9])"
         else:
@@ -174,6 +181,19 @@ def regions(path: str, text: str) -> list[tuple[int, int, str]]:
             i = m.end()
         out += [(i, e, PROSE)] if e > i else []
     return out
+
+
+def comment_spans(path: str, text: str) -> list[tuple[int, int]]:
+    """The comments and docstrings of ``text`` (file ``path``) whole, what they quote in backticks included; all of a
+    Markdown file, and nothing of a data file or one its lexer can't read."""
+    lang = language(path, text)
+    if lang in ("markdown", "data"):
+        return [(0, len(text))] if lang == "markdown" and text else []
+    try:
+        spans = {"python": _python, "lean": _lean, "shell": _shell, "c": _c_like}[lang](text)
+    except (SyntaxError, ValueError):
+        return []
+    return [(s, e) for s, e, k in sorted(spans) if k == PROSE]
 
 
 def kind_at(spans: list[tuple[int, int, str]], i: int) -> str:
@@ -419,6 +439,7 @@ class Words:
             if bad := [o for o, n in table.items() if not o or not n or o == n]:
                 raise SystemExit(f"the word map: entries that rename nothing: {bad}")
         self.exclude = data.get("rewrite", {}).get("exclude", [])
+        self.prose_in: list[str] = data.get("rewrite", {}).get("prose_in", [])
         keep = data.get("keep", {})
         self.keep = [re.compile(p) for p in keep.get("patterns", [])]
         self.keep += [re.compile(re.escape(s)) for s in keep.get("strings", [])]
@@ -432,6 +453,11 @@ class Words:
 
     def excluded(self, path: str) -> bool:
         return path == MOVES or any(_match(path, g) for g in self.exclude)
+
+    def prose_only(self, path: str) -> bool:
+        """Whether [rewrite] prose_in names ``path``: its comments and docstrings are renamed, even where the map excludes
+        it, and nothing else of it."""
+        return path != MOVES and any(_match(path, g) for g in self.prose_in)
 
     def rules(self, path: str, text: str) -> tuple[re.Pattern, list[str]]:
         """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words],
@@ -526,6 +552,7 @@ class Words:
         lands later), since it only leaves files as they are."""
         named = [("[[words_in]] files", g) for globs, _ in self.scoped for g in globs]
         named += [(t, g) for t, held in (("[keep_in]", self.keep_in), ("[keep_paths]", self.keep_paths)) for g in held]
+        named += [("[rewrite] prose_in", g) for g in self.prose_in]
         tracked = set(files)
         return [f"{t}: {g}" for t, g in dict.fromkeys(named) if g not in tracked and not any(_match(p, g) for p in files)]
 
@@ -635,6 +662,20 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
+def _first_run(a: list[str], b: list[str]) -> tuple[int, int]:
+    """How many parts of old name ``a`` and of new name ``b`` reach the end of the first run of parts the rename changes:
+    the parts that differ, from the first, where both have as many parts, and else all but the parts both end in."""
+    if len(a) == len(b):
+        i = next(i for i in range(len(a)) if a[i] != b[i])
+        while i + 1 < len(a) and a[i + 1] != b[i + 1]:
+            i += 1
+        return i + 1, i + 1
+    s = 0
+    while s < min(len(a), len(b)) - 1 and a[-1 - s] == b[-1 - s]:
+        s += 1
+    return len(a) - s, len(b) - s
+
+
 def module_files(root: Path, files: list[str]) -> dict[str, list[tuple[str, str | None]]]:
     """Each Lean module's files with their packages ({module: [(path, package directory)]}, one entry unless two packages
     define the module). A module is its file's path below its package's source directory: the nearest `lakefile.toml` at or
@@ -644,11 +685,11 @@ def module_files(root: Path, files: list[str]) -> dict[str, list[tuple[str, str 
     fixture is no package's module."""
     lakes = {posixpath.dirname(p): posixpath.normpath(posixpath.join(posixpath.dirname(p),
                                                                       tomllib.loads((root / p).read_text()).get("srcDir", ".")))
-             for p in files if posixpath.basename(p) == "lakefile.toml" and "/tests/fixtures/" not in f"/{p}"}
+             for p in files if posixpath.basename(p) == "lakefile.toml" and not fixture(p)}
     out: dict[str, list[tuple[str, str | None]]] = {}
     tails: dict[str, list[str]] = {}
     for p in files:
-        if not p.endswith(".lean") or "/tests/fixtures/" in f"/{p}":
+        if not p.endswith(".lean") or fixture(p):
             continue
         pkg = posixpath.dirname(p)
         while pkg not in lakes and pkg:
@@ -667,11 +708,13 @@ def module_files(root: Path, files: list[str]) -> dict[str, list[tuple[str, str 
 
 def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     """The declaration renames the locks' records need: for each guarantee and read definition whose name the words rename
-    where it is declared (a read definition in its module's file, a guarantee in its lock), its first renamed prefix, and
-    the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
+    where it is declared (a read definition in its module's file, a guarantee in its lock), its prefix to the end of the
+    first run of parts the words change (`FlockSoundness.Audit` for `FlockSoundness.Audit.x` to `Spot.Sampling.x`, never
+    `FlockSoundness`), and the full name too when that prefix alone would rename it otherwise; none implied by another,
+    and none renaming a name of the locks that the words leave standing (its names under it are listed in full). A prefix with such a name
     under it is listed as its names in full instead, so that no entry sits under another's new name with its old name
     elsewhere, and every name the map takes comes back to itself, as `check.py --moved` requires of the lock's names and
-    the build's (its `move_errors`, `Facts.lean`'s `moved_conflicts`). A lock under a `tests/fixtures/` directory is a
+    the build's (its `move_errors`, `Facts.lean`'s `moved_conflicts`). A lock below a `fixtures` directory of a `tests` one is a
     test's data, in whatever form its test needs, and no package's record, so it is not read: `check.py --update --moved`
     re-records packages.
 
@@ -679,9 +722,10 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     otherwise every file defining it must rename the definition alike, and a map that renames it apart in them is refused
     before any records run, naming the lock, the definition and each file's rename."""
     want: dict[str, str] = {}
+    stand: set[str] = set()
     where = module_files(root, files)
     for p in files:
-        if posixpath.basename(p) != POLICY or words.excluded(p) or "/tests/fixtures/" in f"/{p}":
+        if posixpath.basename(p) != POLICY or words.excluded(p) or fixture(p):
             continue
         d = json.loads((root / p).read_text())
         own = posixpath.dirname(p)
@@ -697,14 +741,27 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
                                  "and the map renames it apart in their files: "
                                  + "; ".join(f"{f}: {new}" for f, new in sorted(got.items()))
                                  + ". Rename it alike in each, or keep it in each")
-            if (new := got[fs[0]]) != n and want.setdefault(n, new) != new:
+            if (new := got[fs[0]]) == n:
+                stand.add(n)
+            elif want.setdefault(n, new) != new:
                 raise SystemExit(f"{n} is renamed {want[n]} in one lock and {new} in {p}")
     want = dict(sorted(want.items()))
+    stand -= set(want)
     moves: dict[str, str] = {}
     for old, new in want.items():
         a, b = old.split("."), new.split(".")
-        i = next(i for i in range(len(a)) if a[i] != b[i])
-        moves.setdefault(".".join(a[:i + 1]), ".".join(b[:i + 1]))
+        i, j = _first_run(a, b)
+        moves.setdefault(".".join(a[:i]), ".".join(b[:j]))
+
+    def standing() -> None:
+        """Drop each prefix that would rename a name the map leaves standing, listing the names it renames in full."""
+        while bad := next((max((k for k in moves if s == k or s.startswith(k + ".")), key=len) for s in sorted(stand)
+                           if renamed(s, moves) != s), None):
+            if bad in want:
+                raise SystemExit(f"{bad} is renamed {moves[bad]} and a name under it stands: rename them in two moves")
+            del moves[bad]
+            moves.update({o: n for o, n in want.items() if o.startswith(bad + ".")})
+    standing()
     for old, new in want.items():
         if renamed(old, moves) != new:
             moves[old] = new
@@ -715,6 +772,7 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
                              "this map nests no entry under another's new name, so rename them in two moves")
         del moves[nested[0]]
         moves |= {o: n for o, n in want.items() if o.startswith(nested[0] + ".")}
+    standing()
     for old in sorted(moves, key=lambda k: -k.count(".")):
         rest = {k: v for k, v in moves.items() if k != old}
         if renamed(old, rest) == moves[old]:
@@ -812,6 +870,137 @@ def renamed_paths(moves: list[tuple[str, str]], present: list[str] = ()) -> dict
     return dict(sorted(out.items()))
 
 
+def path_tails(moves: list[tuple[str, str]], present: list[str]) -> dict[str, str]:
+    """Each moved path as a file may name it from below a directory its old and new places share ({old: new}; a directory
+    ends in "/"): two parts or more, naming no other path of ``present`` or its directories. A package's script names its
+    files so (`Flock/Soundness/Audit/X.lean` for `security/Proofs/Flock/Soundness/Audit/X.lean`), which a map's words
+    rarely spell, and `move_check.py` reads such a rewrite as the move's."""
+    paths = {"/".join(f.split("/")[:k]) for f in present for k in range(1, f.count("/") + 2)}
+    named = Counter(s for p in paths for s in _suffixes(p))
+    out: dict[str, str] = {}
+    for o, n in renamed_paths(moves, present).items():
+        end = "/" if o.endswith("/") else ""
+        a, b = o.rstrip("/").split("/"), n.rstrip("/").split("/")
+        c = 0
+        while c < min(len(a), len(b)) - 1 and a[c] == b[c]:
+            c += 1
+        for j in range(c + 1):
+            if len(a) - j > 1 and named["/".join(a[j:])] == 1:
+                out.setdefault("/".join(a[j:]) + end, "/".join(b[j:]) + end)
+    return out
+
+
+def tails_pattern(tails: dict[str, str]) -> re.Pattern | None:
+    """`path_tails` as one pattern: each where no path character goes on before it, nor after a file's."""
+    if not tails:
+        return None
+    return re.compile(r"(?<![\w./-])(?:" + "|".join(re.escape(s) + ("" if s.endswith("/") else r"(?![\w/-])")
+                                                    for s in sorted(tails, key=len, reverse=True)) + ")")
+
+
+def stale_prose(words: Words, run: L.Run, present: list[str]) -> list[str]:
+    """`path:line: word` for each word of the map in a comment or docstring of a file the map excludes, which the move
+    leaves as it is: not a test's data, nor a file [rewrite] prose_in names, nor a word [keep_in] holds there."""
+    out = []
+    for p in present:
+        if not words.excluded(p) or p == MOVES or fixture(p) or words.prose_only(p):
+            continue
+        text = run._read(p)
+        if text is None or (pattern := words.rules(p, text)[0]).search(text) is None:
+            continue
+        held = words.held(p)
+        for s, e in comment_spans(p, text):
+            out += [f"{p}:{text.count(chr(10), 0, m.start()) + 1}: {re.sub(GAP, ' ', m.group(0))}"
+                    for m in pattern.finditer(text, s, e) if m.group(0) not in held]
+    return out
+
+
+LEAN_NOISE = re.compile(r'/-.*?-/|--[^\n]*|"(?:\\.|[^"\\\n])*"', re.S)
+LEAN_SCOPE = re.compile(r"^[ \t]*(?:(namespace)[ \t]+(\S+)|(?:noncomputable[ \t]+)?(section)\b|end\b)", re.M)
+LEAN_OPEN = re.compile(r"^[ \t]*open[ \t]+([^\n]+)", re.M)
+#: what goes before a section's name or an `end`'s, which names no declaration (a relative `namespace` line is the one read)
+LEAN_CLOSE = re.compile(r"[ \t]*(?:(?:noncomputable[ \t]+)?section|end)[ \t]+")
+LEAN_DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)?(?:(?:private|protected|noncomputable|partial|unsafe|nonrec|public|scoped)"
+                       r"[ \t]+)*(?:def|theorem|lemma|abbrev|structure|inductive|class|instance|opaque|axiom)[ \t]+([^\s:({\[]+)",
+                       re.M)
+NAMESPACE = re.compile(r"[A-Za-z_][\w']*(?:\.[A-Za-z_][\w']*)+")
+
+
+def _scopes(code: str) -> list[tuple[int, str]]:
+    """(start, namespace) of each stretch of Lean ``code``, as its `namespace`, `section` and `end` lines leave it."""
+    stack: list[str] = []
+    out = [(0, "")]
+    for m in LEAN_SCOPE.finditer(code):
+        if m.group(1):
+            stack.append(m.group(2))
+        elif m.group(3):
+            stack.append("")
+        elif stack:
+            stack.pop()
+        out.append((m.end(), ".".join(s for s in stack if s)))
+    return out
+
+
+def unprepared(root: Path, words: Words, present: list[str], todo: list[str]) -> list[str]:
+    """What the preparation step must change before a move that renames a Lean namespace `P.R`, each `path:line: what`:
+    in the files the move rewrites, each `R` written relative to `P` (inside `namespace P`, or where the file opens `P`),
+    which no word matches; and, where the new name leaves `P`, each file with code inside `P.R` that reads a name of `P`
+    by its short name and doesn't open `P`, which the moved namespace no longer reaches."""
+    spaces = {w: n for w, n in words.words.items() if NAMESPACE.fullmatch(w)}
+    if not spaces:
+        return []
+    firsts = {w.split(".")[0] for w in spaces}
+    lean: dict[str, str] = {}
+    for p in present:
+        if p.endswith(".lean") and not fixture(p) and os.path.isfile(root / p):
+            text = (root / p).read_text(errors="replace")
+            if any(f in text for f in firsts):
+                lean[p] = text
+    codes = {p: LEAN_NOISE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), t) for p, t in lean.items()}
+    scopes = {p: _scopes(c) for p, c in codes.items()}
+    opens = {p: {w for m in LEAN_OPEN.finditer(c) for w in m.group(1).split()} for p, c in codes.items()}
+
+    def ns_at(p: str, i: int) -> str:
+        return scopes[p][bisect.bisect_right(scopes[p], (i, "\U0010ffff")) - 1][1]
+
+    decls = {(f"{ns}." if (ns := ns_at(p, m.start())) and not m.group(1).startswith("_root_.") else "")
+             + m.group(1).removeprefix("_root_.") for p, c in codes.items() for m in LEAN_DECL.finditer(c)}
+    seen = {ns for s in scopes.values() for _, ns in s}
+    out: list[str] = []
+    for space, new in spaces.items():
+        if not any(d.startswith(space + ".") for d in decls | seen) and space not in seen:
+            continue
+        parts = space.split(".")
+        files = [p for p in todo if p in codes and parts[-1] in lean[p]]
+        for k in range(1, len(parts)):
+            parent, rel = ".".join(parts[:k]), ".".join(parts[k:])
+            word = re.compile(rf"(?<![\w.']){re.escape(rel)}(?![\w'])")
+            for p in files:
+                for m in word.finditer(codes[p]):
+                    line = codes[p][codes[p].rfind("\n", 0, m.start()) + 1:m.start()]
+                    if LEAN_CLOSE.fullmatch(line):
+                        continue
+                    if (ns := ns_at(p, m.start())) == parent or ns.startswith(parent + ".") or parent in opens[p]:
+                        out.append(f"{p}:{codes[p].count(chr(10), 0, m.start()) + 1}: `{rel}` is `{space}`, spelled in full")
+            if new == parent or new.startswith(parent + "."):
+                continue
+            members = {d[len(parent) + 1:].split(".")[0] for d in decls if d.startswith(parent + ".")}
+            members = {m for m in members if m != parts[k] and not any(d == f"{space}.{m}" or d.startswith(f"{space}.{m}.")
+                                                                        for d in decls)}
+            if not members:
+                continue
+            used = re.compile(r"(?<![\w.'])(?:" + "|".join(map(re.escape, sorted(members, key=len, reverse=True))) + r")(?![\w'])")
+            for p in files:
+                if parent in opens[p]:
+                    continue
+                spans = [(s, e) for (s, ns), (e, _) in zip(scopes[p], [*scopes[p][1:], (len(codes[p]), "")])
+                         if ns == space or ns.startswith(space + ".")]
+                if hit := next((m for s, e in spans if (m := used.search(codes[p], s, e))), None):
+                    out.append(f"{p}:{codes[p].count(chr(10), 0, hit.start()) + 1}: reads `{hit.group(0)}` of `{parent}` "
+                               f"inside `{space}`: add `open {parent}` after its `namespace`")
+    return sorted(dict.fromkeys(out))
+
+
 def record(root: Path, moves: list[tuple[str, str]], present: list[str] = ()) -> str | None:
     """research's `moves.json` with this move's `renamed_paths` appended, or None when it holds them already or nothing
     moves."""
@@ -826,33 +1015,47 @@ def record(root: Path, moves: list[tuple[str, str]], present: list[str] = ()) ->
     return json.dumps(doc, indent=2) + "\n"
 
 
-#: what the workers `rewrite` forks read: (root, words, run)
+#: what the workers `rewrite` forks read: (root, words, run, path tails)
 _FORKED: tuple = ()
 
 
 def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
     """The new text of each of `files` that the words change, the words renamed (by old and new) and the words left standing
     (by file and word)."""
-    root, words, run = _FORKED
+    root, words, run, tails = _FORKED
+    pattern = tails_pattern(tails)
     texts, counts, kept = {}, Counter(), Counter()
     for p in files:
-        lock = posixpath.basename(p) == POLICY
+        name = posixpath.basename(p)
+        lock = name == POLICY
         text = run._read(p)
         if text is None:
             continue
         here = Counter()
-        new = resorted(text, words.sub(text, p, record_spans(text) if lock else [], counts, here), p)
+        keep = record_spans(text) if lock else []
+        if prose := words.prose_only(p):
+            spans = comment_spans(p, text)
+            keep = [(s, e) for s, e in zip([0] + [e for _, e in spans], [s for s, _ in spans] + [len(text)]) if e > s]
+        new = words.sub(text, p, keep, counts, here)
+        if pattern and not (prose or lock or name in (PINS, posixpath.basename(MANIFEST))):
+
+            def tail(m: re.Match) -> str:
+                counts[m.group(0), tails[m.group(0)]] += 1
+                return tails[m.group(0)]
+            new = pattern.sub(tail, new)
+        new = resorted(text, new, p)
         kept.update({(p, w): n for w, n in here.items()})
         if new != text:
             texts[p] = new
     return texts, counts, kept
 
 
-def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int) -> tuple[dict[str, str], Counter, Counter]:
+def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int,
+            tails: dict[str, str] | None = None) -> tuple[dict[str, str], Counter, Counter]:
     """`_rewrite` of `files`, in `jobs` forked processes when that is more than one, largest files first: a file's new text
-    reads that file and the map alone, so it is what one process writes, in the files' order."""
+    reads that file, the map and the moves' `path_tails` alone, so it is what one process writes, in the files' order."""
     global _FORKED
-    _FORKED = (root, words, run)
+    _FORKED = (root, words, run, tails or {})
     if jobs > 1 and len(files) > CHUNK:
         big = sorted(files, key=lambda p: -os.path.getsize(root / p))
         with concurrent.futures.ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
@@ -869,7 +1072,7 @@ def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int) -
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--map", type=Path, required=True, help="the word map (`tests/fixtures/rename_map.toml` is an example)")
+    ap.add_argument("--map", type=Path, required=True, help="the word map (`tests/tools/move/fixtures/rename_map.toml` is an example)")
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for the Lean check's `--update --moved`")
@@ -905,12 +1108,19 @@ def main(argv: list[str] | None = None) -> int:
     if fold := sorted(n for n in dest.values() if folded[n.lower()] > 1):
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
-    todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    todo = [p for p in present if not ((words.excluded(p) and not words.prose_only(p)) or os.path.islink(root / p)
+                                       or p in fixed)]
     if a.only:
         only = L.only_paths(a.only)
         todo = [p for p in todo if p in only or p in dest]
+    if not words.scope and (prepare := unprepared(root, words, present, todo)):
+        raise SystemExit(f"{a.map}: the map renames a Lean namespace that these places reach by a shorter name, which the "
+                         "move would leave behind. Prepare first, in a commit of its own before the move, then rerun: "
+                         "spell each name in full (where `namespace R` opens inside `namespace P`, end `P` and open "
+                         "`namespace P.R`), and add each `open` after the file's `namespace` line:\n  "
+                         + "\n  ".join(prepare))
     L.refuse_unread({p: os.path.getsize(root / p) for p in todo if L.oversize(root / p)})
-    texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
+    texts, counts, kept = rewrite(root, words, run, todo, a.jobs, path_tails(moves, present))
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
     pins |= repin_json_pins(root, words, texts, set(present))
     recorded = {MOVES: t} if (t := record(root, moves, present)) is not None else {}
@@ -925,6 +1135,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  left standing ([keep], [keep_in] or a lock's records): {sum(kept.values())}")
         for (p, w), n in sorted(kept.items()):
             print(f"    {n:5d}  {w!r} in {p}")
+    if stale := stale_prose(words, run, present):
+        print(f"  in comments and docstrings of files the map excludes, left as they are ([rewrite] prose_in renames them "
+              f"there): {len(stale)}")
+        for line in stale[:STALE_SHOWN]:
+            print(f"    {line}")
+        if len(stale) > STALE_SHOWN:
+            print(f"    and {len(stale) - STALE_SHOWN} more")
     if a.dry_run:
         for o, n in moves:
             print(f"    move {o} -> {n}")
