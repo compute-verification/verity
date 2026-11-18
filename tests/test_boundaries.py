@@ -147,7 +147,7 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py", "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py", "verity/protocols/proofs/flock/prover/python/verity_flock/ir_bench.py",
+        "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
         "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
         "tests/verity/protocols/proofs/flock/prover/test_backend_bench.py", "tests/verity/protocols/proofs/flock/prover/test_class_statement.py",
         "tests/verity/protocols/proofs/flock/prover/test_ir_lowering_bench.py",
