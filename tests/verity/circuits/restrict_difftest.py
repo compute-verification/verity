@@ -1,4 +1,5 @@
-"""`verity.circuits.restrict`'s difftest data: blocks of registered circuits, each `compact (restrict C S)` as Python writes it.
+"""`verity.circuits.restrict`'s difftest data: blocks of registered circuits, each `compact (restrict C S)` unrolled to its
+gates, as a test's reference for a layout function (the gate list and the map are a function's value, not the object).
 
     python tests/verity/circuits/restrict_difftest.py --out DIR
 
