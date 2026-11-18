@@ -80,8 +80,6 @@ from types import MappingProxyType
 from typing import Any, Literal, Protocol
 
 from verity.hooks import HOOKS
-from verity.channel import Schema
-from verity.protocol import Channel, Role
 
 
 def _no_requests(ctx: Any) -> tuple[Any, ...]:
@@ -112,10 +110,6 @@ class Kernels(Protocol):
     ``arch`` is ``arch`` (its caller reads the card file), with registration pinning the weights or not."""
 
     def __call__(self, card: str, *, pinned: bool, arch: str) -> str: ...
-
-
-#: the party every scheme's answer goes to: the auditor's verifier, which combines the schemes' verdicts
-VERIFIER = Role("verifier", "auditor", needs=("audit", "component", "product"))
 
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
@@ -245,6 +239,19 @@ class Term:
 
 
 @dataclass(frozen=True)
+class Launch:
+    """What the served runner launches for one developer-side party of a scheme (its piece), as data: the bindings of
+    the party it reaches that it takes, ``binds`` each required and ``optional`` each taken where bound; ``development``,
+    the one of them whose absence makes it a development run that starts the party it reaches on its own machine; and
+    ``reaches``, that party, said only where no declared channel joins it to one auditor party."""
+
+    binds: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    development: str = ""
+    reaches: str = ""
+
+
+@dataclass(frozen=True)
 class Reading:
     """What a scheme's ``reader`` reads of the row its run left: its certified quantity's ``value``, in the unit it
     publishes (``published``); the ``error`` the run established it except with, and ``error_from``, the key of the
@@ -272,8 +279,9 @@ class Scheme:
 
     What a configuration, a launcher and the combined record read of it, each a `Lacks` (refused by `declared`, with
     the field's name) until the declaration fills it: ``parties`` and ``channels`` (`verity.protocol.Role`, `Channel`;
-    `VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of each message its
-    channels carry that has one, by its type; ``colocated``, the pairs of its parties on one machine; ``needs``, what
+    `verity.protocol.VERIFIER` is the party its answer goes to) and ``channel_schemas``, the `verity.channel.Schema` of
+    each message its channels carry that has one, by its type, which this module types by name only, so it loads
+    neither module; ``colocated``, the pairs of its parties on one machine; ``needs``, what
     the workload provides it (``windows``, ``noise``, ``store``, ``receipts``, ``ingress-relay``: provisions, which
     ``requests`` doesn't state, since it answers only for a serve); ``depends``, the schemes a configuration must run
     beside it (a scheme's names, unlike ``requires``, the proof layer's requirements); ``record``, its row's name in
@@ -294,7 +302,8 @@ class Scheme:
     and the salt epoch's number; and ``kernels``, the kernel scheme it runs on a card (`Kernels`), of the card's short
     name, ``pinned=`` (whether registration pins the weights) and ``arch=`` (its card file's), `LookupError` naming the
     cards and pinnings it runs on otherwise; and ``keeps_weight_copy``, whether it keeps a weight-derived copy resident for the serve's life, checked
-    against the committed root once at build.
+    against the committed root once at build. ``pieces``, by developer-side party, what the served runner launches for
+    it (`Launch`), a `Lacks` where it launches nothing.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -325,14 +334,14 @@ class Scheme:
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     provides: tuple[str, ...] = ()
-    parties: tuple[Role, ...] | Lacks = UNDECLARED
-    channels: tuple[Channel, ...] | Lacks = UNDECLARED
+    parties: tuple[Any, ...] | Lacks = UNDECLARED
+    channels: tuple[Any, ...] | Lacks = UNDECLARED
     colocated: tuple[tuple[str, str], ...] | Lacks = UNDECLARED
     needs: frozenset[str] | Lacks = UNDECLARED
     depends: tuple[str, ...] | Lacks = UNDECLARED
     record: str | Lacks = UNDECLARED
     symbol: str | Lacks = UNDECLARED
-    channel_schemas: tuple[Schema, ...] | Lacks = UNDECLARED
+    channel_schemas: tuple[Any, ...] | Lacks = UNDECLARED
     published: tuple[str, Fraction] | Lacks = UNDECLARED
     check: Callable[..., Mapping[str, Any]] | Lacks = UNDECLARED
     reader: Callable[[Mapping[str, Any]], Reading] | Lacks = UNDECLARED
@@ -344,6 +353,7 @@ class Scheme:
     salt_open_root: Callable[[bytes, int], bytes] | Lacks = UNDECLARED
     kernels: Kernels | Lacks = UNDECLARED
     keeps_weight_copy: bool | Lacks = UNDECLARED
+    pieces: Mapping[str, Launch] | Lacks = UNDECLARED
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -382,6 +392,18 @@ class Scheme:
             if not unit or type(per) is not Fraction or per <= 0:
                 raise ValueError(f"{self.name}: published is (the record's unit, a positive Fraction from its own "
                                  f"unit), not {self.published!r}")
+        if not isinstance(self.pieces, Lacks):
+            principal = {} if isinstance(self.parties, Lacks) else {r.name: r.principal for r in self.parties}
+            for party, p in self.pieces.items():
+                if principal.get(party) != "developer":
+                    raise ValueError(f"{self.name}: its pieces are its declared developer-side parties' "
+                                     f"{sorted(n for n, k in principal.items() if k == 'developer')}, not {party!r}")
+                if p.development and p.development not in (*p.binds, *p.optional):
+                    raise ValueError(f"{self.name}: {party}'s development binding {p.development!r} is one of its "
+                                     "binds or optional")
+                if p.reaches and principal.get(p.reaches) != "auditor":
+                    raise ValueError(f"{self.name}: {party} reaches a declared auditor party, not {p.reaches!r}")
+            object.__setattr__(self, "pieces", MappingProxyType(dict(self.pieces)))
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
 
@@ -599,8 +621,8 @@ def credited(schemes: Sequence[Scheme], strata: Iterable[tuple[str, Sequence[Seq
     return frozenset(out)
 
 
-__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "VERIFIER", "Block", "Bound",
-           "Charge", "Circuits", "Kernels", "Lacks", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
+__all__ = ["CIRCUITS", "PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "UNDECLARED", "Block", "Bound",
+           "Charge", "Circuits", "Kernels", "Lacks", "Launch", "Layout", "Order", "Port", "Reading", "Scheme", "Term", "Unbounded",
            "bound",
            "credited", "declared", "layout", "register", "register_circuits", "register_process", "settings",
            "unbounded"]

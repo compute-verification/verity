@@ -800,8 +800,12 @@ def test_a_scheme_that_isn_t_the_panel_version_s_device_record_publishes_no_gamm
     verify(result(run_dir, variant(tmp_path), lineage=lineage), "--tier", "2b")
     g = records(run_dir)[PREFILL]["meta"]["gamma"]
     assert g["published"] is None and "scheme pearl-c-sm120-v1-h3 isn't pearl-c-sm120/v2-hot's device record" in g["missing"]
-    assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v2") is None
-    assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v1")
+    for unpromoted in ("pearl-c-sm120-unpromoted-v1-h3", "pearl-c-sm120-unpromoted-v1-h0@sm_120"):
+        assert L._scheme_conflict(unpromoted, "pearl-c-sm120/v2") is None
+        assert L._scheme_conflict(unpromoted, "pearl-c-sm120/v1")
+    assert L._family_device("pearl-c-nvfp4-v0") == ("pearl-c4", "")
+    assert L._scheme_conflict("pearl-c-nvfp4-v0", "pearl-c-sm120/v1") is None
+    assert L._scheme_conflict("pearl-c-sm120-v2-hot-h3", "pearl-c-sm120/v1") is None
 
 
 def test_a_harness_poisoned_dump_s_control_is_judged_without_a_declared_one(tmp_path):

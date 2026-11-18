@@ -63,4 +63,4 @@ fi
 
 find "$FLOCK_WORK/scratch" -mindepth 1 -maxdepth 1 -name 'verity-bench-steady-*' -mmin +1440 -exec rm -rf {} + 2> /dev/null || true
 export VERITY_BENCH_STEADY_BIN VERITY_BENCH_STEADY_PY VERITY_BENCH_STEADY_SCRATCH=$FLOCK_WORK/scratch
-export PYTHONPATH=$PWD:$PWD/verity/protocols/proofs/flock/prover/python:$PWD/adapters/vllm:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python
+export PYTHONPATH=$PWD:$PWD/verity/protocols/proofs/flock/prover/python:$PWD/adapters/vllm:$PWD/adapters/torch:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python

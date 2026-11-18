@@ -215,12 +215,12 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
 def tied(run, tmp_path: Path) -> tuple[Path, dict, dict]:
     """`run`'s verdict as ``verify --tie`` leaves it once it held the passes to a window record W: its document's path,
     the document, naming W's file and its digest, and W; with the Lean's agreeing answer written beside it."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+    from verity.commitments import docket_digest as DD
 
     d, _verify, doc = run
     w = {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "window": {"version": 2}, "registered": [], "previous": None}
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
-    held = {**doc, "tie_record": str(wfile), "tie": {"record": REG.digest(w), "tables": 0}}
+    held = {**doc, "tie_record": str(wfile), "tie": {"record": DD.digest(w), "tables": 0}}
     (v := tmp_path / "tied.json").write_text(json.dumps(held))
     assert lean(tmp_path, v, d, stub(tmp_path, printout(doc, tie=held["tie"]), 0))[0] == 0
     return v, held, w
