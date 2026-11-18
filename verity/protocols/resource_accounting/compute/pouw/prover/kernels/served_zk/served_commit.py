@@ -1715,10 +1715,10 @@ def main(argv=None, *, record: Callable[..., OR.Record] = lean_record,
                                   "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
     p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
-                                   "came from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's "
-                                   "challenges before serving); default: fresh from the Lean verifier when this "
-                                   "process starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes "
-                                   "LOG/coins.json")
+                                   "came from (benchmarks/pouw/served_zk/serve.sh's $WORK/coin-state/<run id>, written "
+                                   "from the Lean verifier's challenges before serving); default: fresh from the Lean "
+                                   "verifier when this process starts (pouw.verifier.coins, IO.getRandomBytes), before "
+                                   "it publishes LOG/coins.json")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
