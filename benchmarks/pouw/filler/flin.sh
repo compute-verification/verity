@@ -22,7 +22,8 @@
 # {0,1} tile)
 set -uo pipefail
 export O=${OUT:?}
-export PATH=/usr/local/cuda-13.0/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 4  # the machine's toolkit at 13.0
+export PATH=$CUDA_HOME/bin:$PATH
 D=benchmarks/pouw/filler K=verity/protocols/resource_accounting/compute/pouw/prover/kernels/filler
 export B; B=$(mktemp -d /tmp/flin.XXXXXX); trap 'rm -rf "$B"' EXIT
 export FL_FLIN=${FL_FLIN:-"32:4:2:0 32:8:4:0 32:8:4:1 64:4:2:0 64:4:4:0 64:8:4:0 128:4:2:0 128:4:4:0 128:4:4:1 256:2:2:0 256:2:4:0"}

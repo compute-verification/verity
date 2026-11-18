@@ -39,7 +39,9 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
-export PATH=/usr/local/cuda/bin:$PATH CUDA_MODULE_LOADING=EAGER
+CUDA_HOME=$(python3 "$D/../../benchmarks/kernels/machine.py" toolkit 13.0) \
+  || { echo "tensor_duty: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+export PATH=$CUDA_HOME/bin:$PATH CUDA_MODULE_LOADING=EAGER
 export ARMS=${ARMS:-wg_s8 wg_e4m3 sync_s8} FILLS=${FILLS:-idle alu} SECS=${SECS:-1.2} WARM_S=${WARM_S:-20}
 export WG_S8_CLASSES=${WG_S8_CLASSES:-zero const uniform s2 u2 u4} WG_S8_BURSTS=${WG_S8_BURSTS:-1024 65536 2097152}
 export WG_E4M3_CLASSES=${WG_E4M3_CLASSES:-zero const uniform} WG_E4M3_BURSTS=${WG_E4M3_BURSTS:-4096 65536}

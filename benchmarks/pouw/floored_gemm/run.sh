@@ -6,11 +6,12 @@
 # none). Results in $OUT.
 #
 #   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
-#     --send verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
+#     --send benchmarks/pouw/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES (name:m:n:k:C ..., C the tile config P, Q, W or D); NCU_SHAPES (same).
 set -uo pipefail
 export O=${OUT:?}
-export PATH=${CUDA_HOME:?set CUDA_HOME to a CUDA 13.0 toolkit}/bin:$PATH
+CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || exit 2
+export CUDA_HOME PATH=$CUDA_HOME/bin:$PATH
 export D=verity/protocols/resource_accounting/compute/pouw/prover/kernels/floored_gemm
 export B; B=$(mktemp -d /tmp/floored-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}

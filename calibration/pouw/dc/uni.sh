@@ -23,8 +23,8 @@ OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 export PYTHONDONTWRITEBYTECODE=1
-NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-[ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "uni.sh: no nvcc (CUDA 13.0 has sm_90a and sm_100a)" >&2; exit 2; }
+NVCC=${NVCC:-$(python3 "$HERE/../../../benchmarks/kernels/machine.py" toolkit 13.0)/bin/nvcc} || { echo "uni.sh: no CUDA 13.0 (machine.py, above)" >&2; exit 2; }
+[ -x "$NVCC" ] || { echo "uni.sh: no nvcc at $NVCC" >&2; exit 2; }
 export NVCC PATH="$(dirname "$NVCC"):$PATH"
 CARD=(${DC_SKU:+--sku "$DC_SKU"})
 ARCH=$(python3 "$PROBE" arch "${CARD[@]}") || exit 2
