@@ -2232,6 +2232,13 @@ def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
 
 end HmIn
 
+/-- The root nodes a reference part reads (`n` space; the root has no parameters). -/
+def Registered.partNodes : Program.Part → Array Nat
+  | .affine p i _ _ => if p then #[] else #[i]
+  | .strided p i _ _ _ _ _ => if p then #[] else #[i]
+  | .explicit it => (it.filter (!·.p)).map (·.i)
+  | .grid _ lanes => (lanes.filter (!·.p)).map (·.i)
+
 /-! The holes of the one circuit: what the verifier is to derive from C (the registered Program) and the partition, and
 does not yet. Each refuses by name (`notDerived`) wherever the verifier would read it. -/
 namespace OneCircuit
@@ -2242,9 +2249,42 @@ def notDerived (what : String) : String := s!"one-circuit: not derived yet: {wha
 /-- **in(S)'s layout**: `io : C -> Partition -> Block -> Array (InputRow, [lo, hi))`, each input row of the
 block circuit `c` that carries another block's outputs and the parameter leaves `[lo, hi)` of its unit it holds, from
 C's edges (`P`) and the partition, in O(C's description). Each row it names is read by path in its writer's output
-field's tree, never committed afresh. The code's Core `Partition.io` (the boundary, `Partition.boundary`). -/
-def io (_c : Circuit) (_P : Program.Prog) : V (Array (Nat × Nat × Nat)) :=
-  throw (notDerived "io : C -> Partition -> Block -> Array (InputRow, [lo, hi)) (in(S)'s rows of the block circuit)")
+field's tree, never committed afresh. The code's Core `Partition.io` (the boundary, `Partition.boundary`).
+
+The rows are those of each parameter of `c`'s template (META `program_digests`, `HmRow.queryTemplate`) that an
+argument part of some root node calling it reads from a root node that is no input: the parameter's row `p`, or its
+rows `p#0 … p#(k-1)` where the block circuit cuts it `k` ways, at the parameter's leaves among the template's in
+order. Its work is the root's nodes, arguments and parts and the circuit's ports. A wired parameter with no row in
+`c` is refused, and so is a block circuit that names no template of C. -/
+def io (c : Circuit) (P : Program.Prog) : V (Array (Nat × Nat × Nat)) := do
+  let some (t, _) := HmRow.queryTemplate c
+    | throw (notDerived "io : a block circuit that names no template of C (META program_digests)")
+  let nodes := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+  let wiredNode := fun (k : Nat) => match nodes[k]? >>= fun n => P.defs[n.fn]? with
+    | some f => !(f.prim && Program.isInputId f.key)
+    | none => false
+  let callers := nodes.filter fun n => (P.defs[n.fn]?).any (·.key == t)
+  let some f := callers[0]? >>= fun n => P.defs[n.fn]? | throw s!"io: C's root calls no {t}, the block circuit's template"
+  let nIn := HmOut.nIn c
+  let portAt := fun (name : String) => (List.range nIn).find? fun q => (c.ports.getD q default).name == name
+  let mut rows := #[]
+  let mut lo := 0
+  for i in [0:f.params.size] do
+    let (p, ty) := f.params[i]!
+    let n := ty.leaves
+    if callers.any fun x => (x.args[i]?).any fun a => a.seq.parts.any fun q => (Registered.partNodes q).any wiredNode then
+      match portAt p with
+      | some q => rows := rows.push (q, lo, lo + n)
+      | none =>
+        let k := ((List.range nIn).filter fun q => (c.ports.getD q default).name.startsWith (p ++ "#")).length
+        if k == 0 || n % k != 0 then
+          throw s!"io: C wires {t}'s parameter {p} from another block, and the block circuit has no row of it (port {p}, or {p}#0 … {p}#(k-1) of whole rows)"
+        for j in [0:k] do
+          let some q := portAt s!"{p}#{j}"
+            | throw s!"io: the block circuit cuts {t}'s parameter {p} into {k} rows and has no row {p}#{j}"
+          rows := rows.push (q, lo + j * (n / k), lo + (j + 1) * (n / k))
+    lo := lo + n
+  return rows
 
 end OneCircuit
 
