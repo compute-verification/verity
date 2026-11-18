@@ -38,7 +38,7 @@ keep_subprotocol() {
 trap 'keep_subprotocol; rm -rf "$W"' EXIT
 trap 'exit 143' TERM INT HUP
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/adapters/torch:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/benchmarks/harness
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup

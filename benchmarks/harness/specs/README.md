@@ -5,7 +5,8 @@ other, and the points it sweeps over. `verity-bench` ([`benchmarks/harness`](../
 a spec or a sweep, and this file says what each one is for.
 
 - A **spec** (`verity-bench/vllm-spec/v0`) is one measurement: a preset (the model at a pinned revision or a node-local
-  checkpoint with its digest, its precision, its GPU count, the vLLM pin and the engine settings), the cards it runs on
+  checkpoint with its digest, its precision, its GPU count, the vLLM pin and the engine settings; the vLLM pin, and the
+  revision of a model `benchmarks/production.toml` pins, are that file's unless the spec writes its own), the cards it runs on
   (`cards`, each card's `short`), the arms timed against each other, the sweep it runs over, its reps, and its admission.
   What a card needs in place of the spec's own (its env, setup or admission) is under `[card_settings.SHORT]`, only where
   that card differs; why a spec refuses a card it doesn't list is `[refused]`'s `SHORT = "why"`. Every ratio is over its baseline: `stock-fp8` when it runs, else `stock`, else its first arm.
