@@ -404,6 +404,7 @@ class _Model(_Calls):
             DECODE_THRESHOLD_DEFAULT,
             FA3_SPARSE_GEOMETRY,
             PAD_SCORE,
+            emit_indexer,
             long_row_blocks,
             long_row_keys,
             pad_words,
@@ -466,33 +467,31 @@ class _Model(_Calls):
             select = self.k("dsa_topk_short_row", TOPK=TOPK)
             self.topk = {}
             blocks = long_row_blocks(keys, TOPK) if self.batched and mqa else []
-            for i, n in enumerate(keys if mqa else ()):
-                if blocks and n > TOPK:
-                    break
-                logits = self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
-                                   logs["iks"].cut(n))
+            def logits(i: int, n: int) -> Coll:
+                return self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
+                                 logs["iks"].cut(n))
+            def alone(i: int, n: int, lg: Coll) -> None:
                 if n <= TOPK:
                     self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
-                    continue
+                    return
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
                 N = long_row_keys(n, TOPK)
-                scores = concat([logits.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else logits.refs
+                scores = concat([lg.refs, self.pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else lg.refs
                 mask = self.call(self.k("dsa_topk_mask", N=N, TOPK=TOPK), scores)
                 self.topk[pos0 + i] = self.call(self.k("dsa_butterfly_settings", N=N, TOPK=TOPK), mask.refs)
-            for Nb, rows in blocks:
+            def block(Nb: int, rows: list[int], lgs: list[Coll]) -> None:
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                N, lg = long_row_keys(Nb, TOPK), self.k("dsa_mqa_logits", N=Nb, H=IH, D=ID)
-                ik, iks = logs["ik"].cut(Nb), logs["iks"].cut(Nb)
-                logits = [self.call(lg, iq[i][0].refs, iq[i][1].refs, ik, iks).refs for i in rows]
+                N = long_row_keys(Nb, TOPK)
                 counts = [self.pad(32, keys[i], 1, 1) for i in rows]
                 tail = [self.pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if Nb < N else []
                 fm = self.k("dsa_topk_mask_counted", N=N, TOPK=TOPK)
                 fs = self.k("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK)
-                masks = [self.call(fm, concat([s, *tail]) if tail else s, c).refs for s, c in zip(logits, counts)]
+                masks = [self.call(fm, concat([s.refs, *tail]) if tail else s.refs, c).refs for s, c in zip(lgs, counts)]
                 for i, m in zip(rows, masks):
                     self.topk[pos0 + i] = self.call(fs, m)
+            emit_indexer(keys if mqa else [], blocks, logits, alone, block)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
         if fp8:
