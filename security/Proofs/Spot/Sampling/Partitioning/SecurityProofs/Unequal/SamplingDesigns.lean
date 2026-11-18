@@ -8,10 +8,10 @@ import Proofs.Flock.Soundness.Game
 # Two sampling designs for the free-compute proofs
 
 * `SamplingDesign.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
-  `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
+  `∏_{u ∈ B} (1 − num u / den)` (`bern_missProb_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
   `Verity.SamplingDesign.bernoulli` is its case of one `num` for every unit.
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its missProb of `B` is `L`'s missProb
-  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
+  of `B`'s image (`restrict_missProb`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
 -/
 
 @[expose] public section
@@ -57,7 +57,7 @@ theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
       exact avg_const 1
 
 /-- **The per-unit Bernoulli missProb**: `∏_{u ∈ B} (1 − num u / den)`. -/
-theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
+theorem bern_missProb_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
     (B : Finset (Fin n)) : ((SamplingDesign.bernoulliOf num den).missProb B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
   classical
   have h : (SamplingDesign.bernoulliOf num den).missProb B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
@@ -87,7 +87,7 @@ def restrict (L : SamplingDesign n) (S : Finset (Fin n)) : SamplingDesign S.card
   Ω := L.Ω
   draw ω := univ.filter fun i => S.orderEmbOfFin rfl i ∈ L.draw ω
 
-theorem restrict_escape (L : SamplingDesign n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
+theorem restrict_missProb (L : SamplingDesign n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
     (restrict L S).missProb B = L.missProb (B.map (S.orderEmbOfFin rfl).toEmbedding) := by
   unfold Verity.SamplingDesign.missProb
   refine congrArg prCoin (funext fun ω => propext ?_)
