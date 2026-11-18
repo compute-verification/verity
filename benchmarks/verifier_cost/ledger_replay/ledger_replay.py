@@ -42,7 +42,7 @@ from pathlib import Path
 
 from verity.commitments.crypto import lms
 from verity.protocols.proofs.spot.verifier.challenger import challenger as Ch
-from verity.commitments.domains import POUW_EPOCH_COINS_LIVE
+from verity.commitments.domains import LMS_I, POUW_EPOCH_COINS_LIVE
 
 LANE = "lane-a"
 HOST = "auditor-1"
@@ -91,7 +91,7 @@ def key_of(params: lms.Params, leaves: int, seed: bytes = bytes(64)) -> lms.Priv
         raise SystemExit(f"a key at H = {params.H} has {top} leaves, and the ledger takes {leaves}")
     if leaves == top:
         return lms.keygen(params, seed)
-    I = hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16]
+    I = hashlib.sha512(LMS_I.encode() + seed).digest()[:16]
     tree = [b""] * (2 * top)
     tree[top:top + leaves] = lms._leaves(params, I, seed, 0, leaves)
     lo, hi = top, top + leaves

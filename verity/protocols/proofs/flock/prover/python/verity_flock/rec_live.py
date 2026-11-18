@@ -125,7 +125,7 @@ from verity.commitments import hm96
 
 from .rec_algebra import fast100
 from .record_text import session_text
-from verity.commitments.domains import FLOCK_LIVE_SESSION, HM96_SHA512_NODE_ROW, REC_INNER_TRANSCRIPT
+from verity.commitments.domains import FLOCK_LIVE_SESSION, HM96_SHA512_NODE_ROW, REC_INNER_TRANSCRIPT, ZK_SERVER_COINS
 
 KIND = REC_INNER_TRANSCRIPT
 SESSION_KIND = FLOCK_LIVE_SESSION
@@ -149,7 +149,7 @@ RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_SAMPLE = range
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
 #: `Flock.ZkServer.Contract.COINS_TAG`: the coin message's tag
-COINS_TAG = b"verity/firewall-coins/v0\0"
+COINS_TAG = ZK_SERVER_COINS.encode() + b"\0"
 #: the stream name of the link points' coins (``Commit``'s answer), round 0, in the challenger's commitments and the transcript
 LINK_COINS = "link"
 COINS_KIND = "rec/inner-coins/v0"
