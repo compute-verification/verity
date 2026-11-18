@@ -29,10 +29,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity import hooks as H
-from verity.channel import Int, Json, Schema
 from verity.protocols.resource_accounting.compute.pouw.prover import serving, workload
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import runs_on
-from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.scheme import VERIFIER, Block, Charge, Lacks, Order, Scheme, Term, register
 
 #: the kernel scheme it runs, on every card its row allows
@@ -441,10 +439,6 @@ def attach(exchange: Any, ctx: Any) -> Attached:
     return on
 
 
-#: the challenger's salt coin for salt epoch k, opened after its root (`salt.epoch_open_root`; `coins.CoinOpening`)
-PEARL_SALT = Schema("PearlSalt", 1, "coins", {"epoch": Int(0, (1 << 64) - 1), "opening": Json(1 << 12)})
-
-
 PEARL_PLUS = register(Scheme(
     name="pearl-plus",
     # H1Registration is H1's, not Pearl+'s: vLLM's codec (`verity_vllm.messages.types`) finds a type only on a declared
@@ -472,15 +466,15 @@ PEARL_PLUS = register(Scheme(
               "one-design": "its own tile sampling by ticket weight"},
     requests=requests,
     attach=attach,
-    parties=(Role("challenger", "auditor", needs=("host",)), Role("workers", "developer", needs=("serve",)), VERIFIER),
-    channels=(Channel("challenger", "workers", ("PearlSalt",), carries_coins=True),),
+    parties=(*workload.PEARL_PARTIES, VERIFIER),
+    channels=workload.PEARL_CHANNELS,
     colocated=(),
     needs=frozenset({"windows"}),
     depends=(),
     record="work",
     symbol="V",
     published=("MACs", Fraction(1)),
-    channel_schemas=(PEARL_SALT,),
+    channel_schemas=(workload.PEARL_SALT,),
     check=Lacks("Pearl+'s verifier of record is its owner's to declare"),
     premises=("Verity.Vocab.PouwSound", "Pouw.PearlPlus.Setting.ChargeHolds"),
     reader=Lacks("the record's work row is H1's (W_cert, in work); Pearl+'s reader is its owner's to declare"),
