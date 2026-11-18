@@ -121,13 +121,13 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.config import COMPOSITES
 from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ID = DM.ONE_STAGE_PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
@@ -543,7 +543,7 @@ class Verifier(_Verifier):
     def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
-        digest = R.digest(record)
+        digest = DD.digest(record)
         out = []
         try:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.zk_server))
@@ -643,12 +643,12 @@ class SpotVerifier(_Verifier):
     def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
-        digest = R.digest(record)
+        digest = DD.digest(record)
         args: tuple[Any, ...] = (i, raw, dict(self.challenger), self.samples[i], self.proofs.pop(i))
         interior: dict[str, str] = {}
         if self.TWO:
             body, inner = self.interiors.pop(i)
-            interior = {"interior": R.digest(inner)}
+            interior = {"interior": DD.digest(inner)}
             args = (*args, body, self.seconds[i])
         out = []
         try:

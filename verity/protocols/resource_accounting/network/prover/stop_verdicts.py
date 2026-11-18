@@ -219,10 +219,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.verifier import class_charge as CC
 from verity.protocols.resource_accounting.network.verifier import connection_rows as C
 from verity.protocols.resource_accounting.network.verifier import content_rows as CT
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 #: the record, in the evidence store, of the runs that hold the stop class's verdict records
 RECORD = "exfiltration-glm53-stop-verdicts"
@@ -435,7 +435,7 @@ def digest_of(registration: object) -> str:
     if not isinstance(registration, Mapping):
         raise ValueError(f"a serve's registration doesn't read: it is no object: {registration!r}")
     try:
-        return R.digest(registration)
+        return DD.digest(registration)
     except (TypeError, ValueError) as e:
         raise ValueError(f"a serve's registration doesn't read: {e!r}") from None
 

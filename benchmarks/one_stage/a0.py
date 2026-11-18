@@ -29,6 +29,7 @@ from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
+from verity.commitments import docket_digest as DD
 from verity.circuits import population as PN
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -808,7 +809,7 @@ def main() -> int:
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     if a.bind:
         checks["bindings"] = bindings(st["meta"], header, rec, proof_block_class(a.set, a.m0_pythonpath, out))
-    summary["registration_digest"] = R.digest(rec)
+    summary["registration_digest"] = DD.digest(rec)
     summary["partition_digest"] = rec["partition"]
     summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
     if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
@@ -845,7 +846,7 @@ def main() -> int:
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, RND.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, previous=R.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    v = V.check(dict(rec, previous=DD.digest(rec)), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}

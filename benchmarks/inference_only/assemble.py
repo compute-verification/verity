@@ -60,7 +60,7 @@ class Refused(Exception):
 
 def digest(rec: Mapping[str, Any]) -> str:
     """A registration record's digest, the one each record's ``previous`` names (`docket.digest`)."""
-    from verity.protocols.proofs.spot.verifier.one_stage.docket import digest as of
+    from verity.commitments.docket_digest import digest as of
 
     return of(rec)
 

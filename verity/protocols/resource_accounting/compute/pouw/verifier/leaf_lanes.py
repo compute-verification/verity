@@ -77,11 +77,11 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.commitments import docket_digest as DD
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.resource_accounting.compute.pouw.verifier.weights import chunks
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -354,7 +354,7 @@ def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any
         got = [e for e in produced["produced"] if e.get("value") == value]
         if not got:
             raise ValueError(f"the produced record has no {value}")
-        ent[value] = PR.entry(registration["program"], value, rows, wds, R.digest(registration))
+        ent[value] = PR.entry(registration["program"], value, rows, wds, DD.digest(registration))
         roots[value] = got[0]["root"]
     return ent, roots
 

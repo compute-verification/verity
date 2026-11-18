@@ -63,10 +63,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 
+from verity.commitments import docket_digest as DD
 from verity.protocols.resource_accounting.network.verifier import scan_answer as SA
 from verity.protocols.resource_accounting.network.verifier import relay_check as RC
 from verity.protocols.resource_accounting.network.verifier.network_attester import INTEGER_FIELDS, NetworkAttesterParams
-from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods.interface import CIRCUIT
 
@@ -223,7 +223,7 @@ def main(argv=None) -> int:
                     and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
         reg = commitment["windows"][0]
-        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
+        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": DD.digest(reg)}
         print(f"SCPD {name}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; Lean "
               f"{lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "
               f"{'as expected' if good else 'UNEXPECTED'}", flush=True)

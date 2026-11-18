@@ -17,13 +17,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity import config as K
 from verity.protocol import Channel, Role
 from verity.protocols.resource_accounting.network.verifier import parties as NC
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.workload_classification.training_detection.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 import verity_cli as V
 from verity_cli import run as R
@@ -393,7 +393,7 @@ class StandIn(D.Machine):
 
     def audit(self, i, registration, challenger, zk_server):
         v = self._of("sampled-proofs", i)
-        answer = {"verdict": v, "commitment": RG.digest(json.loads(registration))}
+        answer = {"verdict": v, "commitment": DD.digest(json.loads(registration))}
         write(self.state / "record" / f"w{i}" / "sampled-proofs" / "answer.json", answer)
         return answer, case(v)
 
@@ -435,7 +435,7 @@ def test_every_party_here_accepts(tmp_path, capsys):
     line = lines[0]
     assert line["components"] == dict.fromkeys(ONSITE, "accept")
     assert line["product"] == "verity/onsite/v0" and line["coins"] == "simulated" and line["block"] == 0
-    assert line["registration"] == RG.digest({"period": 0})
+    assert line["registration"] == DD.digest({"period": 0})
     assert any("Faithful" in u for u in line["simulated"]) and any(COMMIT in u for u in line["simulated"])
     assert said(out, "VERDICT") == lines
     assert said(out) == [{"party": "network-certifier", "exit": 0},

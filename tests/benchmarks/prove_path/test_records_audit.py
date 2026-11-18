@@ -47,6 +47,7 @@ import numpy as np
 import pytest
 import settings
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.prover import registered_reads as RR
 from verity.protocols.proofs.spot.verifier.one_stage import caller as C, produced as PR, registered as REG, docket as R
@@ -686,7 +687,7 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     reg = {"params": {values[0]: 4 * K // 2, values[1]: 16}, "tables": [], "reads": [], "roots": [], "openings": []}
     doc = {"registered": {**reg, "values": values}}
     tied, pins = RA.tie_of(doc, w, "h1/")
-    d = R.digest(w)
+    d = DD.digest(w)
     assert tied == {"log": [w], "registered": {values[0]: K // 2, values[1]: 4},
                     "outputs": {values[0]: {"record": d, "value": f"h1/a/{K}@0"}, values[1]: {"record": d, "value": "h1/ids@0"}},
                     "schemas": {v: REG.SCHEMA_V2 for v in values}}
@@ -717,7 +718,7 @@ def test_a_value_w_registers_registered_afresh_by_the_window_is_held_to_w_and_re
     theirs = RV.Registered.commit("w/program", w_name, rows.tolist(), schema=REG.SCHEMA_V2).entry()
     w = {"format": DM.REGISTRATION, "registered": [theirs], "previous": None}
     tied, pins = RA.tie_of(doc, w, prefix, RA.phase_values(rec, [name]))
-    assert tied["outputs"] == {name: {"record": R.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
+    assert tied["outputs"] == {name: {"record": DD.digest(w), "value": w_name}} and pins[name]["root"] == theirs["root"]
     mine, _doc, _sets = RA.verifier_window(got.dir, RND.parse_design(SAMPLING_DESIGN), None)
     v = R.check(rec, mine.program, mine.query, RND.parse_design(SAMPLING_DESIGN), CS.SCHEME, CS.expected_ports(mine), None, log=tied["log"],
                 work_table=mine.work_table, registered=tied["registered"], outputs=tied["outputs"],
@@ -743,7 +744,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
     doc = {"registered": {"params": {v: 2 * r.size for v, r in rows.items()}, "tables": [], "reads": [], "roots": [],
                           "openings": [], "values": list(rows), "formats": {v: seg for v in rows}}}
     tied, pins = RA.tie_of(doc, w, None)
-    d = R.digest(w)
+    d = DD.digest(w)
     assert tied == {"log": [w], "registered": {"pearl-a/0/0": K, "pearl-y/0/0": 2 * K},
                     "outputs": {v: {"record": d, "value": v} for v in rows}, "schemas": {v: REG.SCHEMA_SEG for v in rows}}
     assert pins == {"pearl-a/0/0": a, "pearl-y/0/0": y} and a[RV.WIDTH_KEY] == y[RV.WIDTH_KEY] == 32
@@ -810,9 +811,9 @@ def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
              "registered": [entry], "previous": None}
     h1 = {**pearl, "window": {"kind": "served", "entry": "toy-window", "open_root": "00" * 64, "refused": []}}
     got = RA.tie_row({"log": [pearl], "outputs": outputs})
-    assert got == {"record": R.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
+    assert got == {"record": DD.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
     assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
-    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": R.digest(h1), "values": ["pearl-a/0/0"]}
+    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": DD.digest(h1), "values": ["pearl-a/0/0"]}
 
 
 @dataclass(frozen=True)
@@ -850,7 +851,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=R.digest(w))
+    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=DD.digest(w))
     (d.parent / "w.json").write_text(json.dumps(w))
     return SimpleNamespace(dir=d, w=w, w_file=d.parent / "w.json", name=name, entry=theirs.entry(),
                            rec=json.loads((d / "registration.json").read_text()))
@@ -900,7 +901,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     from verity.protocols.proofs.spot.verifier.challenger import challenger_session as AC
 
     got = _tied(tmp_path / "w")
-    assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
+    assert got.rec["previous"] == DD.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
     seen, owned = {}, []
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
@@ -931,13 +932,13 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     (rule, design), = ruled
     assert rule == _rate(got.dir) and design == RND.parse_design(SAMPLING_DESIGN), \
         "the stream's rule is the rate the audit was given, and the window's design the one that rate names"
-    assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
+    assert tied["outputs"] == {got.name: {"record": DD.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
     assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
                                                  and f["ports"]["wrow"]["domain"] == got.entry["domain"]
                                                  for f in seen["registered"].values())
     summary = json.loads((tmp_path / "out" / "summary.json").read_text())
-    assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
-    named = {**summary["tie"], "previous": R.digest(got.w), "chained": True}
+    assert summary["tie"] == {"record": DD.digest(got.w), "values": [got.name]}
+    named = {**summary["tie"], "previous": DD.digest(got.w), "chained": True}
     assert json.loads((tmp_path / "out" / "tie.json").read_text()) == named, "named before any proof, as the TIE line"
     assert f"TIE {json.dumps(named, sort_keys=True)}" in capsys.readouterr().out
     assert not (tmp_path / "refused" / "tie.json").exists()
@@ -1277,7 +1278,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert p["free"] == 8 * per_unit - 8 * 8 * K and p["steps"] == 0
     assert p["registration"] == rec and p["answer"] == SI.answer(audit, rec) and p["answer"]["verdict"] == "accept"
-    assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == R.digest(rec)
+    assert program_digest(p["program"]) == rec["program"] and p["answer"]["commitment"] == DD.digest(rec)
     ties, untied = RA.window_pins(rec["window"], doc, registration=rec)
     assert ties == {} and untied == {TIED: got.value.entry()} == RA.phase_values(rec, [TIED])
     assert RA.window_pins(rec["window"], doc) == ({}, {})
@@ -1287,9 +1288,9 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     assert RA.main(["period", "--window", str(got.dir), "--audit", str(audit), "--out", str(tmp_path / "p.json"), "--tied", TIED]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
     assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
-        "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
+        "verdict": "accept", "reason": None, "free": p["free"], "commitment": DD.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {}, TIED)["answer"]
-    assert refused["verdict"] == "reject" and refused["commitment"] == R.digest(rec)
+    assert refused["verdict"] == "reject" and refused["commitment"] == DD.digest(rec)
 
     other = _registered(tmp_path / "x")
     unbound = tmp_path / "u"
@@ -1458,7 +1459,7 @@ def test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
-    receipt = {"registration": R.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
+    receipt = {"registration": DD.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
     assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
     assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]

@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -336,7 +337,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
             verdict = check(rec, carry.check)
             assert verdict.ok, (r.name, verdict.codes, verdict.detail)
             seen[r.name] = {k: (check(x, given).codes, code) for k, (x, given, code) in carry.negatives(rec).items()}
-            assert rec["previous"] == (R.digest(found[-1]) if found else None)
+            assert rec["previous"] == (DD.digest(found[-1]) if found else None)
             assert rec["registered"] == [{"value": sz.CARRY, "root": ms["start"].ports["sin"]["root"], "leaves": 1,
                                           "words": sz.IS.state_bits(cls) // 16,
                                           "domain": ms["start"].ports["sin"]["domain"]}]
@@ -345,7 +346,7 @@ def test_a_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another
                 assert (carry.root, carry.domain) == (before["root"], before["domain"])
                 assert carry.check["outputs"] == {sz.CARRY: {"port": sz.CARRY_PORT}} and "pinned" not in carry.check
                 assert carry.check["log"] == found and carry.empty is None
-                explicit = {**carry.check, "outputs": {sz.CARRY: {"record": R.digest(found[-1]), "port": sz.CARRY_PORT}}}
+                explicit = {**carry.check, "outputs": {sz.CARRY: {"record": DD.digest(found[-1]), "port": sz.CARRY_PORT}}}
                 assert check(rec, explicit).ok
                 with pytest.raises(SystemExit, match="isn't the verifier's own"):
                     sz.carry_of(SimpleNamespace(program=program, query=q), cls, found,
@@ -835,7 +836,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     sample = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": sample, "proved_units": list(range(N))}
     a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
-    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == DM.ONE_STAGE_PROTOCOL
+    assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == DD.digest(reg) and a["protocol"] == DM.ONE_STAGE_PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
     whole = SA.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")
@@ -871,7 +872,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
     got = sz.answers(ats, out, results, sz.Fraction(1, 100))
     why = "the scan's audit of execution phase {} refused: check registered: registered"
     doc = json.loads((out / "answers.json").read_text())
-    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w]),
+    assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": DD.digest(regs[w]),
                        "public": doc["windows"][w]["answer"]["public"]} for w in range(G)}
     assert (doc["format"], doc["audits"]) == (sz.ANSWERS, []) and "registration" not in doc
     assert [(x["window"], x["registration"], x["answer"]["reason"]) for x in doc["windows"]] == [

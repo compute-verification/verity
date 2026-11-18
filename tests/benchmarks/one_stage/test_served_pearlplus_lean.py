@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity.commitments import docket_digest as DD
 
 pytest.importorskip("torch")
 
@@ -57,7 +58,6 @@ SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_pass
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
     from verity.protocols.resource_accounting.compute.pouw.verifier import verifier as PV
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
@@ -69,7 +69,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     (d / "served.json").write_text(json.dumps(served))
     wfile, node = tmp_path / "window-record.json", tmp_path / "node"
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 0
-    w = REG.digest(json.loads(wfile.read_text()))
+    w = DD.digest(json.loads(wfile.read_text()))
     assert SP.main(["verify", "--passes", str(d), "--out", str(node / "verify.json"), "--answer",
                     str(node / S.PEARLPLUS_ANSWER), "--jobs", "1", "--draws", "16", "--tie", str(wfile),
                     "--test-instance"]) == 0

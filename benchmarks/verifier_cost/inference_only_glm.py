@@ -58,6 +58,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from run import EXE, _reference, timed
+from verity.commitments import docket_digest as DD
 
 SCHEMA = "verity/nci-glm/v1"
 DESCRIPTOR = "verity-ir/descriptor/v1"
@@ -598,7 +599,6 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
     """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
     registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     desc, ann = load(Path(args.node))
     text, size = described(desc)
@@ -617,7 +617,7 @@ def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
     if args.node_trusted:
         trusted = json.loads(Path(args.node_trusted).read_text())
         provenance = json.loads(Path(args.node_provenance).read_text())
-        digests = [REG.digest(rec) for rec in trusted["log"]]
+        digests = [DD.digest(rec) for rec in trusted["log"]]
         own = trusted["log"][digests.index(trusted["run"])] if trusted["run"] in digests else None
         if own is None:
             wrong.append(f"the trusted input's run {trusted['run'][:16]} is the digest of no record of its log")
