@@ -12,6 +12,7 @@ import numpy as np
 
 from verity.circuits.codec import program_digest
 from verity.circuits.population import cut_wires, wired_population_program
+from verity.circuits.program import is_input
 from verity.circuits.refs import runs
 
 
@@ -64,17 +65,18 @@ def same(a: dict, b: dict) -> bool:
 
 
 def edges(program) -> int:
-    return sum(1 for nd in program.fn.body.nodes for a in nd.args for s, *_ in runs(a.refs) if s == "n")
+    nodes = program.root.body.nodes
+    return sum(1 for nd in nodes for a in nd.args for s, i, *_ in runs(a.refs) if s == "n" and not is_input(nodes[i].fn))
 
 
 name = sys.argv[1]
 t0 = time.perf_counter()
 circuit = build(name)
 t1 = time.perf_counter()
-wired, _ = circuit.program()
+record = {**circuit.description(), "external": list(circuit.external)}
+wired, _ = wired_population_program(list(circuit.templates), record)
 t2 = time.perf_counter()
 r_before = rss_gb()
-record = {**circuit.description(), "external": list(circuit.external)}
 cut, query, positions = cut_wires(wired, record)
 t3 = time.perf_counter()
 r_after = rss_gb()
@@ -88,8 +90,9 @@ print(json.dumps({
     "class": name, "templates": len(circuit.templates), "units": sum(n for _, n in circuit.templates), "wires": len(circuit.wires),
     "wired_digest": program_digest(wired), "cut_digest": program_digest(cut), "no_wires_call_digest": program_digest(want),
     "digest_equal": program_digest(cut) == program_digest(want), "query_equal": query == want_query,
-    "root_nodes": {"wired": len(wired.fn.body.nodes), "cut": len(cut.fn.body.nodes)},
-    "root_params": {"wired": len(wired.fn.body.params), "cut": len(cut.fn.body.params)},
+    "root_nodes": {"wired": sum(not is_input(nd.fn) for nd in wired.root.body.nodes),
+                   "cut": sum(not is_input(nd.fn) for nd in cut.root.body.nodes)},
+    "root_params": {"wired": len(wired.fn.signature()[0]), "cut": len(cut.fn.signature()[0])},
     "edges": {"wired": edges(wired), "cut": edges(cut)},
     "positions_rows": rows, "positions_rows_of_cut_ports": part, "positions_rows_of_whole_ports": rows - part,
     "wire_closed_form_rows": sum(w.units for w in circuit.wires),
