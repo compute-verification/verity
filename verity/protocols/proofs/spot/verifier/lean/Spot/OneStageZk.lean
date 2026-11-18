@@ -1403,8 +1403,8 @@ private def wiringT (wired : Bool) (writer : String := "W") : Spot.Wires.Wiring 
 private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
   let reg := (recordT 4 [("r/z", "bb")]).setObjVal! "fields" (Json.arr #[(rootJ "" "aa").setObjVal! "template"
     (Json.str "W") |>.setObjVal! "field" (Json.str "y")])
-  match rootsOf wiredMs reg with
-  | .ok rs => (memberT "r" #[(2, 4)]).slice reg (fieldRoots W #[("W", 0, 2), ("R", 2, 2)] wiredMs reg rs)
+  match rootsOf wiredMs reg >>= fieldRoots W #[("W", 0, 2), ("R", 2, 2)] wiredMs reg with
+  | .ok rs => (memberT "r" #[(2, 4)]).slice reg rs
   | .error _ => Json.null
 
 #guard refusal (headerHeld (wiredSliceT (wiringT true)) (headerT 2 [("x", "aa"), ("z", "bb")])) == ""
