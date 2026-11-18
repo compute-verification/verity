@@ -75,23 +75,28 @@ def _bits(f: Callable[[Mapping[str, Any]], int]) -> Callable[[Mapping[str, Any]]
     return nbytes
 
 
-#: every function a supplied input may name. A name is versioned: a function whose value changes takes a new name. Each
-#: one's body is the verifier's (§5.4), its arguments fixed in C. A value is short: what is a function of a unit's index
-#: and a short value is computed inside the unit, from the supplied value and the unit's index, a constant of C.
+#: every function a supplied input may name, by name, arguments and value length: the same closed list as the Lean
+#: registry's (`Spot/Supplied.lean` of the proofs' verifier), which holds each function's body and so its definition (§5.4). A name is versioned: a
+#: function whose value changes takes a new name. Its arguments are fixed in C, and no length here is one deployment's. A
+#: value is short: what is a function of a unit's index and a short value is computed inside the unit, or inside one unit
+#: of the block whose rows its other units read by wire.
 FUNCTIONS: dict[str, Function] = {f.name: f for f in (
     # storage session: round j's coin opened against the released session commitment, u32be(j) ‖ u64be(i_j)
     Function("pous.session.round_coin/v1", "supplied", ("coin", "commitment"), ("round",), _fixed(12)),
-    # storage session: the signed header and context, as the session commitment releases them
-    Function("pous.session.header/v1", "supplied", ("commitment",), (), _fixed(756)),
+    # storage session: the signed header and context, as the session commitment releases them; the header's compact form
+    # is `head` bytes, fixed by the registered blocks, k, limit and block bytes, read as whole u16 words
+    Function("pous.session.header/v1", "supplied", ("commitment",), ("head",), _bits(lambda a: 8 * (a["head"] + a["head"] % 2))),
     Function("pous.session.context/v1", "supplied", ("commitment",), (), _fixed(106)),
-    # storage setup: the memory attester's salt, drawn after the weights' commitment and before the store's
+    # storage setup: the memory attester's salt, drawn after the weights' commitment and before the store's; a unit's
+    # prefix is the keys' tag, the framed protocol id, the framed prime's id and this salt framed, zero-padded to 128
+    # bytes, the first three registered constants
     Function("pous.setup.salt/v1", "supplied", ("coin",), (), _fixed(24)),
-    # bandwidth audit: draw `draw`'s public row, its 20 fields in order, reading the pass root the prover released
-    Function("poub.read.pub/v1", "supplied", ("coin", "commitment", "constant"), ("draw", "K", "masked", "N"),
-             _bits(lambda a: 4320 + (2 + a["K"] + a["masked"]) * a["N"])),
-    # bandwidth audit: draw `draw`'s pass's sketch rows' sign bits
-    Function("poub.read.signs/v1", "supplied", ("coin", "constant"), ("draw", "sketch_rows", "bytes"),
-             _bits(lambda a: 8 * a["sketch_rows"] * a["bytes"])),
+    # bandwidth audit: pass `pass`'s seed in window `window`, from the window's live challenge, the pass's number and the
+    # chain over the previous pass's root and the appends' head: the named exception to live coins (seeds inside a
+    # window). The pass's one expanding unit computes the sketch's midstate, the receipt tree's domain and the sign rows
+    Function("poub.read.pass_seed/v1", "supplied", ("coin", "commitment"), ("window", "pass"), _fixed(64)),
+    # bandwidth audit: the pass root the prover released for pass `pass` of window `window`, before the openings' coin
+    Function("poub.read.pass_root/v1", "supplied", ("commitment",), ("window", "pass"), _fixed(64)),
     # useful work: the execution phase's live salt, bound to the verifier's stream and prover and the record's window
     Function("window.salt/v1", "coin", ("coin",), (), _fixed(64)),
     # useful work: the epoch's live salt of Pearl+ (the first 32 bytes of its salt stream)
