@@ -33,7 +33,7 @@ from verity_vllm.pipeline import serving_rows as SRW
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
 K, CAP, RUN = 64, 7, "ab" * 32
 #: the serve-time context (the live coin commitment's root) and the run's row key
-CTX, ROW_KEY = bytes(range(64)), bytes(range(32, 64))
+CTX = bytes(range(64))
 COORD = f"ScaledMmS8Coordinate_v1{{K={K},DOT={DOT}}}"
 DEFN = bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8)
 QKV, UP = "model.layers.0.self_attn.qkv_proj", "model.layers.0.mlp.gate_up_proj"
@@ -116,7 +116,7 @@ def committed(monkeypatch, row_tables: bool = True, sampling_design=None, work_t
     w, s, ms = window(row_tables, sampling_design, work_table)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
+    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), **kw), s, got
 
 
 def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
@@ -156,9 +156,8 @@ def test_the_tables_do_not_depend_on_the_programs_row_order():
 def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_its_chunks_carry_its_strings(monkeypatch):
     c, s, got = committed(monkeypatch)
     w = c.window
-    for step, ks in w.segments:
-        tabs = [w.row_tables[k] for k in ks]
-        assert b"".join(c.salts[t.port] for t in tabs) == CS.segment_salts(ROW_KEY, step, sum(t.n for t in tabs))
+    again = committed(monkeypatch)[0]
+    assert all(c.salts[t.port] != again.salts[t.port] for t in w.row_tables)
     for t, tab in enumerate(w.row_tables):
         units = [row_of(rid, tab.segment, tab.name, tok) for rid, tok, _i in tab.keys]
         salts = c.salts[tab.port]
@@ -175,9 +174,11 @@ def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_
 
 
 def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_and_the_windows_table_is_the_tree_over_them(monkeypatch):
-    c, s, _got = committed(monkeypatch)
+    w, s, _ = window()
+    served = {step: RTB.step_roots(CTX, step, s.outputs(step)) for step, _ in w.segments}
+    ys = {step: sr.salts for step, sr in served.items()}
+    c, s, _got = committed(monkeypatch, table_salts=ys)
     w = c.window
-    served = {step: RTB.step_roots(CTX, step, s.outputs(step), ROW_KEY) for step, _ in w.segments}
     for step, ks in w.segments:
         tabs = [w.row_tables[k] for k in ks]
         assert served[step].tables == tuple((t.name, c.table_roots[t.port]) for t in tabs)
@@ -185,9 +186,9 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         ref = RT.commit_step(CTX, step, [([RT.s8_row(*s.x_of(row_of(rid, step, t.name, tok))) for rid, tok, _i in t.keys],
                                           [c.salts[t.port][i * 192:(i + 1) * 192] for i in range(t.n)]) for t in tabs])
         assert ref.root == served[step].root and len(served[step].root) == 64
-    assert RTB.step_roots(CTX, 1, s.outputs(1), ROW_KEY, workers=2) == served[1]
-    assert RTB.step_roots(bytes(64), 1, s.outputs(1), ROW_KEY).root != served[1].root
-    assert RTB.step_roots(CTX, 1, s.outputs(1), bytes(32)).root != served[1].root
+    assert RTB.step_roots(CTX, 1, s.outputs(1), salts=ys[1], workers=2) == served[1]
+    assert RTB.step_roots(bytes(64), 1, s.outputs(1), salts=ys[1]).root != served[1].root
+    assert RTB.step_roots(CTX, 1, s.outputs(1)).root != served[1].root
     # the window's table: the tree over the step roots, each the step's subtree, nothing committed again
     win = RT.RootTree(w.tables_domain, [served[st].root for st, _ in w.segments])
     assert c.roots[CS.TABLE_PORT] == win.root and c.domains[CS.TABLE_PORT] == w.tables_domain
@@ -196,16 +197,20 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
         assert o.roots == (served[step].root,) and RT.verify_roots(c.roots[CS.TABLE_PORT], w.tables_domain.domain_id, len(w.segments), o)
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
-    assert committed(monkeypatch, segment_roots=recorded)[0].roots == c.roots
+    assert committed(monkeypatch, table_salts=ys, segment_roots=recorded)[0].roots == c.roots
     with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
-        committed(monkeypatch, segment_roots={**recorded, 1: bytes(64)})
+        committed(monkeypatch, table_salts=ys, segment_roots={**recorded, 1: bytes(64)})
+    with pytest.raises(ValueError, match=r"segments \[0, 1\]: the period's segment roots are not the ones recorded"):
+        committed(monkeypatch, table_salts={st: bytes(len(y)) for st, y in ys.items()}, segment_roots=recorded)
     w2, _, _ = window()
-    with pytest.raises(ValueError, match="give row_salt_key"):
+    with pytest.raises(ValueError, match="give table_salts"):
         CS.commit(w2, [g[0] for g in _got], salt_key=bytes(32), segment_roots=recorded)
+    with pytest.raises(ValueError, match="bytes of salts"):
+        RTB.step_roots(CTX, 1, s.outputs(1), salts=ys[1][:-1])
     with pytest.raises(ValueError, match="twice in one step"):
-        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0), ("r0", 0)], np.zeros((2, K), np.int8), np.zeros(2, np.float32))}, ROW_KEY)
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0), ("r0", 0)], np.zeros((2, K), np.int8), np.zeros(2, np.float32))})
     with pytest.raises(ValueError, match="even K"):
-        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0)], np.zeros((1, K + 1), np.int8), np.zeros(1, np.float32))}, ROW_KEY)
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0)], np.zeros((1, K + 1), np.int8), np.zeros(1, np.float32))})
 
 
 def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypatch):
