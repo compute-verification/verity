@@ -261,16 +261,17 @@ theorem rowLeaf_intro {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyV
 /-! ## A parameter that is not passed on -/
 
 /-- **A leaf of a parameter the check holds closed is no leaf its unit returns.** The parameter is none of what the
-unit's Definition passes on. A leaf a unit of a composite returns is a gate of the unit, which no leaf of a
-parameter is, or a leaf of a parameter the Definition passes on, and a gate is one leaf of one parameter of the
-unit at most. A unit of a primitive returns its own gate. -/
+unit's Definition passes on, and the leaf is no leaf of a shared run. A leaf a unit of a composite returns is a gate
+of the unit, which no leaf of a parameter is, or a leaf of a parameter the Definition passes on, and a gate that is
+no leaf of a shared run is one leaf of one parameter of the unit at most. A unit of a primitive returns its own
+gate. -/
 theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityProofs.OwnRuns P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t g : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g)
-    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) {out : String} {l lo up : ℕ}
-    (ho : OutLeaf P sc out l g lo up) : False := by
+    (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) (hsh : ¬ SharedLeaf P g)
+    {out : String} {l lo up : ℕ} (ho : OutLeaf P sc out l g lo up) : False := by
   have hout := unit_param_out hP hO hrs hu hi ht hg
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨-, h1, h2⟩ := returnsOwn_prim hP hrs hu hp ho
@@ -290,10 +291,12 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
     · omega
     · obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB _ hgood
       rw [hprm _ hd hp'] at hi' hj'
-      obtain ⟨-, -, hii, -⟩ := Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
+      rcases Resolve.unit_leaf_inj bytes P hdec hov hbl hO hk hk hnode hnode hform hform hm hm
         (hargs i hi) (hargs i' hi') ht hj'
         ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
-        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres'
+        ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off hg hres' with ⟨-, -, hii, -⟩ | hs
+      swap
+      · exact hsh hs
       subst hii
       apply hn
       unfold passOf at hmem
@@ -378,7 +381,8 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole ts
-      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none) : Aligned P rs W S := by
+      (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S.wires = none)
+    (hSh : SharedUnwired P rs W S) : Aligned P rs W S := by
   intro r l' g' lo' up' hwl
   obtain ⟨wt, wu, out, sc₁, hw, -, hu₁, hout₁⟩ := hwl
   obtain ⟨sc, sc', i, f, hsc, -, hsc', hi, hp, hf, rfl, hrow, hbits, hwhole⟩ := wired_row hP hrs hT hS hts hwh hw
@@ -395,7 +399,9 @@ theorem aligned (hP : ReadProg P) (hO : InferenceOnlyVerifier.Record.SecurityPro
       exact hout₂
     obtain ⟨hl, hres, -, -⟩ := rowLeaf_data (portsNamed hrs hT) hsc hi hp hrl
     rw [inRow_size _ _ _ _ hrow] at hl
-    exact closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot hret
+    refine closed_not_returned hP hO hrs hsc hi (inRow_get _ i _ _ l hrow hl).1 hres hnot (fun hs => ?_) hret
+    rw [hSh r l g lo up hs hrl] at hw
+    cases hw
   · -- each row's leaves are of one width, and the writer's divides the reader's
     obtain ⟨c, rfl⟩ := Nat.dvd_of_mod_eq_zero hdiv
     have hR := inRow_const (P.defs[sc.d]!) i (W.cutsOf r.tid r.port) r.row (o * c) hrow ha
