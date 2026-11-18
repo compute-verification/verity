@@ -473,7 +473,7 @@ class Com:
     def __init__(self):
         self.model = model
 
-    def register_weights(self):
+    def register_weights(self, replay=False):
         return {"root": "w"}
 
 com = Com()
@@ -512,7 +512,7 @@ class Committer:
     def __init__(self, model):
         self.model = model
 
-    def register_weights(self):
+    def register_weights(self, replay=False):
         return {"root": sorted(list(self.model.named_parameters()) + list(self.model.named_buffers()))}
 
 
