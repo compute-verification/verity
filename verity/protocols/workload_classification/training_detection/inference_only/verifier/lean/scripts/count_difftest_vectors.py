@@ -32,7 +32,7 @@ from pathlib import Path
 import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.program import Program, is_input
+from verity.circuits.program import is_input
 from verity.circuits.types import Array, Value
 
 HERE = Path(__file__).resolve().parent
@@ -46,6 +46,7 @@ def _load(name: str):
 
 
 desc = _load("desc_difftest_vectors")
+stand_ins = _load("stand_ins")
 vectors = desc.vectors
 reference = vectors.reference
 
@@ -85,7 +86,7 @@ def hand() -> str:
         return B.call(h, m[0], m[1])
     fn = bind(CompositeDefinition("NciHandCount", 1, (), lambda S: ((("a", Array(2, Value(8))), ("b", Value(4))),
                                                                      Value(8)), body, register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("a",)))).decode()
 
 
 #: `hand()`'s keys: the block composite and the two primitives

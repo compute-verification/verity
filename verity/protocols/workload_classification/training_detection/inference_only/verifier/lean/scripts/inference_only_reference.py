@@ -5,7 +5,7 @@
 `InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into inference blocks of at
 most `Γ` gates, each with `freshInput R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R`
 with a wire into `R` (`security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones
-`InferenceOnlyCheck.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program
+`InferenceOnlyCheck.Check`'s docstring gives: the declaration's circuit is the canonical layout of a descriptor v2 Program
 (`verity.circuits`), gate `g` of width `Value<w>` bits, an input gate when its primitive is an input
 (`program.is_input`, with no operands), reading the gates its operands name; θ is a list of ids of input gates bound at
 registration (`program.is_registered`; one bound per run is refused, `theta-not-registered`); the division is one owner

@@ -1,4 +1,4 @@
-"""The desc fuzzer's data: generated descriptor v1 Programs for `InferenceOnlyCheck/DescFuzzMain.lean`.
+"""The desc fuzzer's data: generated descriptor v2 Programs for `InferenceOnlyCheck/DescFuzzMain.lean`.
 
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
@@ -11,7 +11,7 @@ decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.
 at millions of Programs, runs outside this tree; this is a seeded sample of it at a size the audit runs on every change to
 the package.
 
-`random` writes descriptor v1 JSON directly, not through `verity.circuits`' Builder, so that every reference form the
+`random` writes descriptor v2 JSON directly (each made-up primitive with its stand-in Boolean body, `stand_ins.v2`), not through `verity.circuits`' Builder, so that every reference form the
 decoder reads appears (affine, strided with negative and zero strides, explicit, concat, alias) and so that shapes the
 Builder never emits do too: scans of no iteration and of one, batches mapped over an inner axis or over none, composites
 with no nodes, parameters read by no gate and threaded through returns, returns repeating or reversing gates, nested
@@ -50,7 +50,6 @@ from pathlib import Path
 
 import verity.circuits
 from verity.circuits import codec
-from verity.circuits import program as ir
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Affine, Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
@@ -65,7 +64,8 @@ def _load(name: str):
     return module
 
 
-SCHEMA = "verity-ir/descriptor/v1"
+stand_ins = _load("stand_ins")
+
 WIDTHS = [1, 2, 3, 8, 16, 32, 64]
 WIDE = 2 ** 53 - 1
 
@@ -184,8 +184,8 @@ class Program:
         return key
 
     def text(self, root: str) -> str:
-        d = {"annotations": {}, "callees": self.callees, "definitions": self.defs, "program_fn": root, "root": root,
-             "schema": SCHEMA, "types": self.types}
+        d = {"annotations": {}, "program_fn": root, "root": root,
+             **stand_ins.v2(self.defs, self.callees, self.types)}
         return json.dumps(d, separators=(",", ":"), sort_keys=True)
 
 
@@ -815,7 +815,7 @@ def decl(s: Spec) -> str:
     root += (("x", Array(n, Value(w))),) if s.mapped else ()
     fn = bind(CompositeDefinition(f"NciSharedDecl{tag}", 1, (), lambda S: (root, Value(w)), body, register=False))
     reg = tuple(INPUTS[i] for i in range(k) if s.registered[i])
-    return codec.canonical_json(codec.encode_program(ir.Program(fn, registered=reg))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=reg))).decode()
 
 
 def _run(rng: random.Random, N: int, L: int) -> tuple[int, int]:

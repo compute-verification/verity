@@ -104,7 +104,6 @@ import verity.commitments.periods.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program, wired_population_program
-from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, array_of, as_grid, concat, lane_bounds, record_of, refs_from_json, spell, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.commitments.periods.edges import INPUT_ID
@@ -120,6 +119,7 @@ def _load(name: str):
 
 
 ref = _load("inference_only_record_reference")
+stand_ins = _load("stand_ins")
 reference = ref.reference
 
 COUNT = 600
@@ -337,7 +337,8 @@ class Circuit:
         rec = {"templates": [[t, n] for t, n in self.units.items()], "cuts": self.cuts,
                "wires": [w.doc() for w in self.wires], **({"order": order} if order is not None else {}),
                "registered": {"params": dict(self.params), "values": list(self.values)}}
-        desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
+        with stand_ins.bodies():
+            desc = codec.encode_program(wired_population_program(self.templates, rec)[0])
         units: dict[str, int] = {}
         for x in desc["definitions"][desc["root"]]["body"]["nodes"]:
             t = desc["callees"][x["fn"]]
@@ -1936,8 +1937,9 @@ def _alone(case: dict, c: Circuit, fn) -> None:
 def _unlisted(case: dict, c: Circuit, fn) -> None:
     """The case's Program replaced by `c`'s with one root node more, a unit of the template `fn` over an input of
     its own, which the record does not list; the record naming the Program it then is, its other fields kept."""
-    desc = codec.encode_program(mixed_population_program(
-        [*c.templates, (fn, 1)], values=[(v, c.params[v], 16) for v in c.values]))
+    with stand_ins.bodies():
+        desc = codec.encode_program(mixed_population_program(
+            [*c.templates, (fn, 1)], values=[(v, c.params[v], 16) for v in c.values]))
     case["instance"]["program"] = codec.canonical_json(desc).decode()
     digest = codec.program_digest(desc)
     _commit(case, IF.circuit_bytes({**json.loads(case["instance"]["record"]), "program": digest}).decode(), digest)
@@ -1984,7 +1986,7 @@ class Edged(Circuit):
     def program(self) -> tuple[str, str]:
         sig = (tuple(self.inputs), self.ret)
         root = CompositeDefinition(self.name, 1, (), lambda S: sig, self.body, register=False)
-        desc = codec.encode_program(Program(bind(root)))
+        desc = codec.encode_program(stand_ins.program(bind(root)))
         return codec.canonical_json(desc).decode(), codec.program_digest(desc)
 
 

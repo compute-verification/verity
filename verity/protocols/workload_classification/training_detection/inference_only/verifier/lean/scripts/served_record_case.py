@@ -11,7 +11,7 @@ files as they are and writes the case, ``NAME.case.json`` (a line of the record 
         [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--format P=JSON|P=-]
         [--no-pins] [--case-only]
 
-- ``--program``: the Program's v1 descriptor. ``--record``: the circuit record, the bytes the run's record commits.
+- ``--program``: the Program's v2 descriptor. ``--record``: the circuit record, the bytes the run's record commits.
 - ``--log``: the registration log's records, the first first and the run's own last.
 - ``--limits``: ``{"alpha": [num, den], "gamma": Γ}``, the limits the run fixed; other keys are not read.
 - ``--count``: ``{"table", "c", "k", "n"}``, the count's limits; without it they are empty and the count refuses them.

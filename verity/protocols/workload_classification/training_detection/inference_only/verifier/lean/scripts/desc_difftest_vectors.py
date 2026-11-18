@@ -40,7 +40,6 @@ from pathlib import Path
 import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import Builder, CompositeDefinition, bind
-from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Grid, Strided, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
@@ -55,6 +54,7 @@ def _load(name: str):
 
 
 vectors = _load("difftest_vectors")
+stand_ins = _load("stand_ins")
 reference = vectors.reference
 
 COUNT = 3000
@@ -156,7 +156,7 @@ def transposed(rng, seed: int) -> str:
     out_t = _probe_type(params, body)
     fn = bind(CompositeDefinition(f"NciDecl{seed}", 1, (), lambda S: (params, out_t), body, register=False))
     registered = tuple(n for n, _ in params if rng.random() < 0.3)
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=registered))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=registered))).decode()
 
 
 def _probe_type(params, body) -> "Type":
@@ -180,7 +180,7 @@ def decoy(batch: bool) -> str:
         return B.call(op, d[0], d[1]) if batch else B.call(op, d, x)
     fn = bind(CompositeDefinition(f"NciDecoy{int(batch)}", 1, (), lambda S: ((("x", xt),), Value(w)), body,
                                   register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=()))).decode()
 
 
 def decoys() -> list[dict]:
@@ -211,7 +211,7 @@ def walk(n: int) -> str:
                                    lambda B, S, c: tuple_of(B.scan(Step, c, n=n)[0], tuple_of()), register=False))
     fn = bind(CompositeDefinition(f"NciWalk{n}", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
                                   lambda B, S, x: B.call(op, B.scan(Mid, x, n=n)[0]), register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=()))).decode()
 
 
 WALKS = (3, 2 ** 32)
@@ -251,7 +251,7 @@ def empty(kind: str) -> str:
         return B.call(op, s[0], x) if kind == "read" else B.call(op, x, x)
     fn = bind(CompositeDefinition(f"NciEmpty{kind.capitalize()}", 1, (), lambda S: ((("x", Value(w)),), Value(w)), body,
                                   register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=()))).decode()
 
 
 EMPTIES = ("unread", "passed", "read", "bare")
@@ -300,7 +300,7 @@ def grid_decl(kind: str) -> str:
     out_t = _probe_type(params, body)
     fn = bind(CompositeDefinition(f"NciGrid{kind.capitalize()}", 1, (), lambda S: (params, out_t), body,
                                   register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=()))).decode()
 
 
 GRIDS = ("repeat", "lanes", "node", "mapped", "reversed")
@@ -348,7 +348,7 @@ def shared_decl(reader: str, order: tuple[str, ...]) -> str:
     fn = bind(CompositeDefinition(f"NciSharedDecl{tag}", 1, (), lambda S: ((("y", Value(w)), ("z", Value(w)),
                                                                             ("x", Array(n, Value(w)))), Value(w)),
                                   body, register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("y", "z")))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("y", "z")))).decode()
 
 
 def shared() -> list[dict]:

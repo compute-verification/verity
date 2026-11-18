@@ -10,7 +10,7 @@ the same line's results from
 which pins their SHA-256), and `tests/verity/protocols/resource_accounting/network/verifier/network/test_inference_only_lean_difftest.py` checks that this script
 still writes them.
 
-A declaration is a descriptor v1 Program built with `verity.circuits` in one of five shapes: a random DAG, a chain, a
+A declaration is a descriptor v2 Program built with `verity.circuits` (its made-up primitives given stand-in Boolean bodies, `stand_ins`) in one of five shapes: a random DAG, a chain, a
 reduction tree, a chain of matrix-vector products (the inference-only policy draft's updated multiplications: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
@@ -37,7 +37,6 @@ from pathlib import Path
 import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
@@ -49,6 +48,7 @@ def _load(name: str):
 
 
 reference = _load("inference_only_reference")
+stand_ins = _load("stand_ins")
 
 COUNT = 4000
 WIDTHS = [1, 2, 3, 8, 16, 32]
@@ -244,7 +244,7 @@ def program(rng, seed: int) -> tuple[str, list[str], list[str]]:
     names = [f"p{i}" for i in range(len(body.params))]
     fn = composite(f"NciDecl{seed}", body, ret)
     registered = [n for n in names if rng.random() < 0.3]
-    desc = codec.encode_program(Program(fn, registered=tuple(registered)))
+    desc = codec.encode_program(stand_ins.program(fn, registered=tuple(registered)))
     return codec.canonical_json(desc).decode(), kind, registered
 
 
@@ -399,7 +399,7 @@ def hand() -> str:
         return B.call(f3, d, a)
     fn = bind(CompositeDefinition("HandDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(16))), Value(1)), body,
                                   register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("a",)))).decode()
 
 
 def hand_const() -> str:
@@ -413,7 +413,7 @@ def hand_const() -> str:
         return B.call(g, B.call(f, a, B.call(k)), b)
     fn = bind(CompositeDefinition("HandConstDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(8))), Value(4)), body,
                                   register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+    return codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("a",)))).decode()
 
 
 def pinned() -> list[dict]:

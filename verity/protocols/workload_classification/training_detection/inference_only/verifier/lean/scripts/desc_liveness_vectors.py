@@ -25,10 +25,19 @@ overflowed its stack, ran for a time linear in `n` or ran out of memory, and the
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 
-SCHEMA = "verity-ir/descriptor/v1"
+
+def _load(name: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+stand_ins = _load("stand_ins")
 
 
 def V(w):
@@ -84,8 +93,8 @@ class Program:
         return key
 
     def text(self) -> str:
-        d = {"annotations": {}, "callees": self.callees, "definitions": self.defs, "program_fn": "R_v1", "root": "R_v1",
-             "schema": SCHEMA, "types": self.types}
+        d = {"annotations": {}, "program_fn": "R_v1", "root": "R_v1",
+             **stand_ins.v2(self.defs, self.callees, self.types)}
         return json.dumps(d, separators=(",", ":"), sort_keys=True)
 
 

@@ -38,7 +38,6 @@ from pathlib import Path
 import verity.circuits
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.program import Program
 from verity.circuits.types import Array, Value, type_from_json
 
 HERE = Path(__file__).resolve().parent
@@ -52,6 +51,7 @@ def _load(name: str):
 
 
 vectors = _load("difftest_vectors")
+stand_ins = _load("stand_ins")
 reference = vectors.reference
 
 COUNT = 1200
@@ -72,7 +72,7 @@ def declaration(rng, seed: int) -> tuple[str, list]:
     fn = vectors.composite(f"NciBase{seed}", body, ret)
     names = [n for n, _ in fn.signature()[0]]
     registered = [n for n in names if rng.random() < 0.6] or names[:1]
-    text = codec.canonical_json(codec.encode_program(Program(fn, registered=tuple(registered)))).decode()
+    text = codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=tuple(registered)))).decode()
     return text, [[n, t.to_json()] for n, t in fn.signature()[0]]
 
 
@@ -86,7 +86,7 @@ def hand() -> tuple[str, list]:
         return B.call(f2, d, c[3])
     params = (("a", Value(8)), ("b", Value(16)), ("c", Array(4, Value(32))))
     fn = bind(CompositeDefinition("HandBase", 1, (), lambda S: (params, Value(1)), body, register=False))
-    text = codec.canonical_json(codec.encode_program(Program(fn, registered=("a", "c")))).decode()
+    text = codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("a", "c")))).decode()
     return text, [[n, t.to_json()] for n, t in params]
 
 
@@ -111,7 +111,7 @@ def window(requests: tuple[int, ...], steps: int) -> tuple[str, list]:
         return out
     name = f"Window{'r'.join(map(str, requests))}s{steps}"
     fn = bind(CompositeDefinition(name, 1, (), lambda S: (params, Value(16)), body, register=False))
-    text = codec.canonical_json(codec.encode_program(Program(fn, registered=("w",)))).decode()
+    text = codec.canonical_json(codec.encode_program(stand_ins.program(fn, registered=("w",)))).decode()
     return text, [[n, t.to_json()] for n, t in params]
 
 
