@@ -152,9 +152,10 @@ def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Cod
 
 def params_json(p: audit.Params) -> dict:
     """A session's parameters as the Lean reads them (`Difftest.sessionOf`), naming `groups_per_coin` only above 1
-    and `refresh` only when it is on."""
+    and `refresh`, with its `fresh_slots`, only when it is on."""
     shared = {} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}
-    shared |= {"refresh": True} if getattr(p, "refresh", False) else {}
+    if getattr(p, "refresh", False):
+        shared |= {"refresh": True} | ({"fresh_slots": p.fresh_slots} if getattr(p, "fresh_slots", 0) else {})
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
             "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
             "pace": None if p.pace is None else p.pace.to_json()} | shared

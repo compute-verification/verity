@@ -124,7 +124,7 @@ from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, timing
+from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger, line, rota, timing
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore
 from verity.protocols.resource_accounting.memory.poub.verifier.session import challengers, wire
 from verity.protocols.resource_accounting.memory.poub.verifier.session import lean_verifier as lv
@@ -1194,12 +1194,17 @@ class Verifier:
             self.T if pace is None else round(pace["t_ms"] * 1e6) // pace["groups"], self.deferred)
         # the one setting, named only when on: the parameters, the session's message and its result are today's without it
         refresh = {"refresh": True} if k < len(self.refresh) and self.refresh[k] else {}
-        if refresh and "refresh" not in {f.name for f in dataclasses.fields(audit.Params)}:
+        fields = {f.name for f in dataclasses.fields(audit.Params)}
+        if refresh and "refresh" not in fields:
             raise ValueError(f"session {k} is set to refresh, and this tree's audit.Params has no `refresh`")
+        # F, the fresh slots a window, goes wherever the setting goes and is no setting of its own
+        slots = {"fresh_slots": rota.FRESH_SLOTS} if refresh else {}
         params = audit.Params(reg.blocks, allowance_ns, W, samples, self.delta, window_ns=window_ns, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows, lifetime=life, deferred=self.deferred,
                               pace=None if pace is None else audit.Pace(K, round(pace["t_ms"] * 1e6)),
-                              groups_per_coin=self.groups_per_coin, **refresh)
+                              groups_per_coin=self.groups_per_coin, **refresh,
+                              **(slots if "fresh_slots" in fields else {}))
+        refresh |= slots
         not_before_ns = self.registered_ns if not_before_ns is None else not_before_ns
         one = {} if pace is None or pace.get("in_flight", 2) == 2 else {"in_flight": pace["in_flight"]}
         if one:

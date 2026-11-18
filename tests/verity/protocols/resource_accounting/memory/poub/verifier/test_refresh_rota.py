@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule
+from verity.protocols.resource_accounting.memory.poub.verifier.rota import Schedule
 
 SHAPES = [(n, life, w, f) for n, life, w, f in itertools.product((1, 3, 7, 64), (1, 2, 3, 5), (1, 4, 13), (0, 1, 4))]
 
