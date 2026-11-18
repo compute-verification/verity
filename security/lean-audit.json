@@ -11607,6 +11607,12 @@
   "Flock.SecurityProofs.RecursiveKSEveryDeployed": {
    "owner": "@proofs"
   },
+  "Flock.Guarantees.recursiveKSEveryDeployed_nontrivial": {
+   "owner": "@proofs"
+  },
+  "RecDeploy.HonestHalfFixture.recursiveKSEveryDeployed_honest": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursiveKSEvery : Flock.Guarantees.RecursiveKSEvery"],
