@@ -56,6 +56,7 @@ from tests.program.predict.test_window_rows import (
     _registered,
     _served,
     _weights,
+    unserved_slots,
 )
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
@@ -293,7 +294,7 @@ def filled(low):
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
 
-    slots = [WR.Slot(low.fn, CLASS, row, weights, cut=low.cut) for row, _ in WR.scan_slots(low, STATE)]
+    slots = unserved_slots(low, STATE, weights, cut=low.cut)
     return weights, values, slots, WR.Rows(low, slots, values)
 
 
