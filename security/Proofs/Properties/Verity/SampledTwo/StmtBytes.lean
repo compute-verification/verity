@@ -144,7 +144,7 @@ its step on the statement's member and session (`VStar.Recursive.SampledTwo.acce
 statement is that member's at that session's record's sample (`SessionMsgs.stmtAtCase_some`). -/
 theorem stmtAtCase_lt {k : Case} {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     {c ξ pub prof} (hf : SessionMsgs.formOf k = some (p, e))
-    (hck : VStar.Recursive.SampledTwo.checkBlobsAtWith true p c ξ e k.blobs = .accept pub prof) {t : ℕ} {x : Msg}
+    (hck : VStar.Recursive.SampledTwo.checkBlobsAtInner p c ξ e k.blobs = .accept pub prof) {t : ℕ} {x : Msg}
     (hx : SessionMsgs.stmtAtCase k t = some x) : x.length < 2 ^ 64 := by
   obtain ⟨p', e', m, s, record, circuit, pubB, hf', hm, hs, hrec, hc, hpb, rfl⟩ := SessionMsgs.stmtAtCase_some hx
   rw [hf] at hf'

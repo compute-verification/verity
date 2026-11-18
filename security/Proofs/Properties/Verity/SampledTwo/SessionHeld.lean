@@ -300,7 +300,7 @@ theorem membersNamed (C : CaseOf) (hsz : HeldSize) : MembersNamed C := by
   obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   obtain rfl : p = p' := Except.ok.inj (hp.symm.trans hp')
   obtain rfl : e = e' := Except.ok.inj (he.symm.trans he')
-  obtain ⟨-, c₂', ξ₂', r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨c₂', ξ₂', r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨⟨s', hs', hc₂'⟩, hξ', hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain rfl : s = s' := Except.ok.inj (hs.symm.trans hs')
   obtain rfl : c₂ = c₂' := Except.ok.inj (hc₂.symm.trans hc₂')
@@ -339,7 +339,7 @@ theorem accepted_ran {C : CaseOf} {o : Exchange} (hacc : FormAccepts C o) :
       Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂ ∧ Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧
       Spot.OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements k.blobs = .ok r := by
   obtain ⟨k, hk, p, c, e, pub, prof, ⟨hp, -, he⟩, hck⟩ := hacc
-  obtain ⟨-, c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨⟨s, hs, hc₂⟩, hξ, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   exact ⟨k, p, e, s, c₂, ξ₂, r, hk, hp, he, hs, hc₂, hξ, hrun⟩
 

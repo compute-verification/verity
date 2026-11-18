@@ -45,8 +45,7 @@ verdict's own stream to that class:
   record's, the replay sample's: the interior docket registers every proof block of the sampled spans.
   ``refuse`` unless the second stage held (`two_stage.held`). Then ``accept`` or ``not complete`` as its outcome
   accepted with or without ``complete`` (an outcome that carries no ``complete`` is not complete), and ``withheld``
-  when its outcome did not accept: a second stage that held reaches that only where the verifier's own two-stage
-  form refused it (`two_stage.FORM_REFUSED`).
+  when its outcome did not accept.
 
 ``proved_by`` is null on both: no Lean guarantee covers either command, and ``open`` says what stands between its
 verdict and proved (`Piece.open`).

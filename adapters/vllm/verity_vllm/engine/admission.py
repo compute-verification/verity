@@ -21,8 +21,8 @@ emits, and what it asks:
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
 - ``schedule()``: `StepBegan`, every call one step numbered from 0, with its requests, its tokens less draft tokens (0
   for a step that scheduled none) and the requests left waiting;
-- ``update_from_output``: `OutputReleased` for each new token, refused while a scheme holds its request's release at that
-  step (`HoldRelease`), `OutputsComplete` for each request that finished, then `StepEnded`;
+- ``update_from_output``: `OutputReleased` for each new token, `OutputsComplete` for each request that finished, then
+  `StepEnded`;
 - ``finish_requests``: `OutputsComplete` for each request it ends; where vLLM names none, every gate is opened first.
 """
 from __future__ import annotations
@@ -113,9 +113,6 @@ class Hook(scheduler_step.Part):
             for o in getattr(batch, "outputs", None) or ():
                 rid, k = o.request_id, len(o.new_token_ids or ())
                 input_ = self.live.get(rid) or self.key(rid)
-                if k and self.ex.held(input_, step):
-                    raise NotImplementedError(f"vllm/adapter-names-no-scheme: a scheme holds input {input_}'s release "
-                                              f"at step {step}, and the adapter keeps no released token back yet")
                 index = self.sent.get(rid, 0)
                 self.sent[rid] = index + k
                 if wants:

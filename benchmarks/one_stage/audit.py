@@ -37,7 +37,7 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
 verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
 the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
-alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
+alone), and the outcome accepted, its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
 (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
 ``--out`` holds the params
@@ -175,8 +175,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     """Both: every check before the sample passed and every session's circuit file the one its template's params name
     (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
     negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
-    round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
-    form alone, where `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
+    round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted (`two_stage.held`). ``--altered``: Lean's verify refused both link
     members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}

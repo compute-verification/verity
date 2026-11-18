@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from verity.circuits.codec import descriptor_id, program_digest
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.population import BitsWord, WordBits, mixed_population_program, wired_population_program
 from verity.circuits.program import is_input
-from verity.circuits.refs import Concat, Strided
+from verity.circuits.refs import Concat, Grid, Strided
 from verity.circuits.types import Array, Value
 
 V16 = Value(16)
@@ -105,6 +107,29 @@ def test_a_regular_run_of_edges_is_one_strided_part_whatever_the_units(nb):
     a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2 * nb)]
     b = [evaluate(B, a[2 * u], w[2 * u:2 * u + 2]) for u in range(nb)]
     assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+
+
+def test_a_writer_row_read_twice_then_the_next_is_one_grid_of_two_levels_evaluated_as_its_references():
+    rec = _record(nb=4)
+    rec["wires"][0].update(radix=[2, 2], step=[1, 0])
+    prog = wired_population_program([(A, 2), (B, 4)], rec)[0]
+    nodes, parts = _root(prog)
+    y = nodes[1].args[0].refs
+    assert parts == [1, 1, 1, 1] and isinstance(y, Grid)
+    assert y.to_json() == {"grid": [2, [["n", 3, 0, 1, [[2, 0], [2, 2]]]]]}
+    w, x, k = list(range(8)), [1, 2, 3, 4], [100, 200, 300, 400]
+    a = [evaluate(A, x[2 * u:2 * u + 2], k[2 * u:2 * u + 2]) for u in range(2)]
+    b = [evaluate(B, a[u // 2], w[2 * u:2 * u + 2]) for u in range(4)]
+    assert evaluate(prog.fn, w, x, k) == tuple(v for out in a + b for v in out)
+    assert list(y) == [("n", 3, j) for j in (0, 1, 0, 1, 2, 3, 2, 3)]
+    reg = DefinitionTable()
+    reg.add(Add)
+    reg.add(Mul)
+    desc = json.loads(json.dumps(encode_program(prog)))
+    assert encode_program(decode_program(desc, reg)) == desc
+    text = json.dumps(desc).replace('[["n", 3, 0, 1, [[2, 0], [2, 2]]]]', '[["n", 3, 1, 1, [[2, 0], [2, 2]]]]')
+    with pytest.raises(ValueError, match="grid-overrun"):
+        decode_program(json.loads(text), reg)
 
 
 def test_a_reader_range_is_one_batch_whatever_writer_batches_it_reads():

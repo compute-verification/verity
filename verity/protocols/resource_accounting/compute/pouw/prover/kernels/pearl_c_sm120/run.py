@@ -333,9 +333,11 @@ RS_KERNELS = {"s512_rows": 1, "s512_row_segs": 1, "s512_folds": None}
 RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
 #: their scratch, the segment digests of A's rows, B's and the tiles'
 SEGDIG = ("segdig_a", "segdig_b", "segdig_t")
-#: the hm96 salt nonces (`audit.HM96_WEIGHTS`, `audit.HM96_TRANSCRIPT`; an activation tree's is its unit index) and the widest
-#: level s512_tree_small (64 threads) takes
-HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
+#: an hm96 leaf's salt in bytes (`hm96.SHA512.salt_bytes`, hash_h3.cuh's HM_SALT) and the widest level s512_tree_small (64
+#: threads) takes
+HM_SALT, S512_SMALL = 192, 128
+#: the trees with hm96 leaves, each with its salts in its own buffer ``salts_<tree>``: A's rows, B's rows and the tiles
+SALTED = ("a", "b", "t")
 
 
 #: hash_decode.cuh's launches at decode, the variants pearl_c_sm120.cu builds (its PD_VARIANT_LIST): pd_commit, A's commitment
@@ -413,12 +415,6 @@ def pd_setup(dev) -> None:
     dev.pd_smem, dev.pd_tree_smem = smem["pd_commit"], smem["pd_tree"]
 
 
-def nonce_args(nonce: int) -> tuple[int, int]:
-    """A 64-bit nonce as hm_leaves' i1, i2 (each an int32 slot, its bits)."""
-    lo, hi = nonce & 0xFFFFFFFF, nonce >> 32
-    return tuple(v - (1 << 32) if v >> 31 else v for v in (lo, hi))
-
-
 def pow2(n: int) -> int:
     """A tree's level-0 width over n leaves."""
     return 1 << max(n - 1, 0).bit_length()
@@ -459,20 +455,22 @@ class Pipeline:
     tensor maps in `tma` (ML_MAPS).  gemm_pearlc stores C~, U and y.
 
     The hashing is format -h3, SHA-512 throughout (hash_h3.cuh): `rowdig_<tree>` first, s512_rows' SHA-512 row digest of
-    each row (`pearl_c.row_digest`), then the `audit.HM96` trees (hm_leaves over the row digests under the prover's salt
-    key, s512_frame_leaves, s512_pads, s512_nodes and s512_tree_small; 64-byte nodes), seed_A and each real row's seed with
+    each row (`pearl_c.row_digest`), then the `audit.HM96` trees (hm_leaves over the row digests and their salts,
+    s512_frame_leaves, s512_pads, s512_nodes and s512_tree_small; 64-byte nodes), seed_A and each real row's seed with
     their line keys (s512_seeds; `pearl_c.unit_seed_a`, `pearl_c.row_seed`), E_A's lines (`lines_ea`: row i < m_real's line
     0 under its own line key, `pearl_c.PearlC.encode`'s E_A), and the tile leaves over C~ and U themselves
-    (s512_tile_leaves, `pearl_c.leaf`) in an HM96 tree under the transcript's nonce.  `sha` (default PEARLC_SHA, else
+    (s512_tile_leaves, `pearl_c.leaf`) in an HM96 tree.  `sha` (default PEARLC_SHA, else
     "fast") picks how the row digests and tile leaves run: "fast", hash_fast.cuh's two launches each (a thread a segment over
     every row or tile, then a thread a row or tile for the fold; scratch `segdig_<tree>`), or "ref", s512_rows (a CTA a row)
     and s512_tile_leaves (a CTA a tile).  Both write the same bytes.  A caller that owns the buffers gets the fast kernels
     for the trees whose `segdig_<tree>` it gives (`sizes` has them) and the reference kernels for the rest.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the 64-byte domain ids `dom_a`, `dom_b`, `dom_t`,
-    `unit` (the unit's 104 bytes that s512_seeds reads: salt ‖ root_B's 64 bytes ‖ u64 index), `salt_key` (the prover's hm96
-    salt key) and `hm` (`audit.hm96_kernel_constants`).  `weight` is B's weight index, its tree's salt nonce HM96_WEIGHTS +
-    weight.  E_A's line key is the pipeline's `line_a` buffer, written by `seed_a` (the key of the rows past m_real, the
+    `unit` (the unit's 104 bytes that s512_seeds reads: salt ‖ root_B's 64 bytes ‖ u64 index), and `hm`
+    (`audit.hm96_kernel_constants`).  A tree's hm96 salts are data, never derived: the buffer ``salts_<tree>`` (`SALTED`:
+    `HM_SALT` bytes a leaf, in leaf order, 16-byte aligned), which the caller fills before the launch that reads it and the
+    kernels only read: fresh bytes from the operating system for a call's trees (A's rows, the tiles), a registered row's
+    salt from its registration's file for B's.  E_A's line key is the pipeline's `line_a` buffer, written by `seed_a` (the key of the rows past m_real, the
     kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
@@ -491,7 +489,7 @@ class Pipeline:
     beside = 0
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
-                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
+                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
                  sha: str | None = None, split_a: bool = False, fillers: bool = True):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see (and the 64 x 64 GEMMs skip, LIVE).
@@ -510,7 +508,7 @@ class Pipeline:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
         if why := rs_refusal("s512_rows", (0, k)):
             raise ValueError(why)
-        self.nb, self.weight = NB, weight
+        self.nb = NB
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
         sizes = self.sizes(m, n, k, self.m_real)
@@ -518,6 +516,7 @@ class Pipeline:
         self.owned = bufs is None
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
         self.allocated: list[str] = []
+        self.unsalted = set(SALTED) if self.owned else set()   # the pipeline's own salts buffers hold nothing yet
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
         self.pd = pd_variant(self.m_real, n, k) if self.sha == "fast" and "pd_count" in self.b else None
@@ -561,10 +560,32 @@ class Pipeline:
             "line_a": 32, "seed_a": 32, "seeds_a": 32 * m_real, "lkeys_a": 32 * m_real, "rowdig_a": 64 * m_real, "rowdig_b": 64 * n,
             "leaves": tiles * NB,
             **{f"tree_{t}": NB * (2 * pow2(count) - 1) for t, count in (("a", m_real), ("b", n), ("t", tiles))},
+            **{f"salts_{t}": HM_SALT * count for t, count in (("a", m_real), ("b", n), ("t", tiles))},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
             "segdig_a": 64 * (k // 256) * m_real, "segdig_b": 64 * (k // 256) * n, "segdig_t": 64 * 32 * tiles,
         }
+
+    def salts(self, tag: str) -> int:
+        """The device address of tree `tag`'s hm96 salts, read at each launch: ``salts_<tag>``, `HM_SALT` bytes a leaf in leaf
+        order, which the caller has filled.  A tree whose salts nobody gave is refused: a caller's buffers without
+        ``salts_<tag>``, or the pipeline's own before `put_salts`."""
+        at = self.b.get(f"salts_{tag}")
+        if not at or tag in getattr(self, "unsalted", ()):
+            raise NotImplementedError(
+                f"tree {tag!r}'s hm96 leaves read their salts from the buffer salts_{tag} ({HM_SALT} bytes a leaf, in leaf "
+                "order), and this pipeline's caller gave none.  The kernels derive no salt: the caller hands in fresh "
+                "operating-system bytes for a call's trees and a registered row's salt from its registration's salt file "
+                "(compute-accounting's goal: Pearl+ hands the leaf kernels their salts)")
+        return at
+
+    def put_salts(self, tag: str, salts: bytes) -> None:
+        """`salts` from the host into tree `tag`'s ``salts_<tag>``, whole: a check's or a bench's bytes (a serving caller
+        writes its own buffer on the device)."""
+        if len(salts) != self.size[f"salts_{tag}"]:
+            raise ValueError(f"tree {tag!r} takes {self.size[f'salts_{tag}']} bytes of salts ({HM_SALT} a leaf), not {len(salts)}")
+        self.dev.ck("cuMemcpyHtoD_v2", u64(self.b[f"salts_{tag}"]), C.c_char_p(salts), len(salts))
+        self.unsalted.discard(tag)
 
     def root(self, tag: str) -> int:
         """The device address of a tree's root, its last node."""
@@ -592,13 +613,10 @@ class Pipeline:
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row), the HM96 leaves over them, then
-        its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
+        its levels."""
         b = self.b
-        nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
-        # read at launch: a ring's sets each hold their call's keys, and the lanes point `keys` at the set's before each call
-        block = lambda: self.keys["unit"] + 96 if tag == "a" else 0  # noqa: E731
         return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
-                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block(), nonce)),
+                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
@@ -634,7 +652,7 @@ class Pipeline:
         layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv)."""
         d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
-                 p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
+                 p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], Pipeline.salts(self, "a"),
                     kk["hm"], b["pd_count"], b["seed_a"], b["line_a"], b["ea_codes"], 0), i=(self.m_real, self.k, mode, self.m))
 
     def pd_tree(self) -> None:
@@ -655,17 +673,18 @@ class Pipeline:
         else:
             d.launch(f"pd_tiles_{v}", self.tiles, 32, p=p, i=(mr, n))
 
-    def hm_level0(self, tag: str, x: int, count: int, dom: str, block: int = 0, nonce: tuple[int, int] = (0, 0)) -> None:
-        """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves under the salt key, the nonce read at
-        `block` (A's unit index) or given, then s512_frame_leaves in place."""
+    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None) -> None:
+        """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves over them and their salts, then
+        s512_frame_leaves in place.  The salts are the `count` leaves' at device address `salts` (a tree written into the
+        pipeline's buffer that is not the pipeline's own tree: a call's y), else the tree's own (`Pipeline.salts`)."""
         d, tree, kk = self.dev, self.b[f"tree_{tag}"], self.keys
-        d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, kk["salt_key"], kk["hm"], 0, block), i=(count, *nonce))
+        at = Pipeline.salts(self, tag) if salts is None else salts
+        d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, at, kk["hm"]), i=(count,))
         d.launch("s512_frame_leaves", cdiv(count, 64), 64, p=(tree, kk[dom]), i=(0, count))
 
     def tree_leaves(self, tag: str, values: int, count: int, dom: str) -> None:
-        """A tree's level 0 over `count` 64-byte values at device address `values` (the tile leaves): `hm_level0` under the
-        transcript's nonce."""
-        Pipeline.hm_level0(self, tag, values, count, dom, nonce=nonce_args(HM96_TRANSCRIPT))
+        """A tree's level 0 over `count` 64-byte values at device address `values` (the tile leaves): `hm_level0`."""
+        Pipeline.hm_level0(self, tag, values, count, dom)
 
     def form_alt_launch(self, tag: str, kernel: str) -> None:
         """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
@@ -929,7 +948,7 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     launch, must fail every output."""
     count, res = dev.alloc(16), {}
     make = lambda split: Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],  # noqa: E731
-                                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight,
+                                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D,
                                   split_a=split)
     whole = make(False)
     if whole.pd is None:
@@ -963,7 +982,7 @@ def check_split(dev: Dev, pipe: Pipeline, want) -> dict:
     """`split_a` outside pd (`Pipeline.FUSED_GENERIC`) on `pipe`'s buffers: ``rows_a`` then ``tree_seed_a`` after every
     output of A's commitment (PD_OUTPUTS but the leaves) is poisoned, against the fixture's bytes (``@split``)."""
     split = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b,
-                     m_real=pipe.m_real, bm=BM_D, weight=pipe.weight, split_a=True)
+                     m_real=pipe.m_real, bm=BM_D, split_a=True)
     outs = [x for x in PD_OUTPUTS if x != "leaves"]
     for x in outs:
         dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
@@ -985,7 +1004,9 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         files = man["variants"][variant]["files"]
         want = lambda name: load(variant, files[name]) if name in files else load("", common[name])  # noqa: E731
         xa, xb = dev.put(load("", common["xa"])), dev.put(load("", common["xb"]))
-        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, weight=man["weight"])
+        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb)
+        for tag, f in man["salts"].items():
+            pipe.put_salts(tag, load("", f))
         pipe.run_all()
         res = {}
         for name in [*common, *files]:
@@ -1000,7 +1021,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)
                 res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
-        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D, weight=man["weight"])
+        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
             for grid in grids:
@@ -1036,7 +1057,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
 # ---- the diagnostic timing ----------------------------------------------------------------------------------------
 
 CALL_PHASES = ("commit", "forming", "gemm", "cleanup", "hashing")
-TIMING_KEYS = {"line_b": 32, "dom_a": 64, "dom_b": 64, "dom_t": 64, "unit": 104, "salt_key": 32, "hm": 128 + 192 * 256 * 64}
+TIMING_KEYS = {"line_b": 32, "dom_a": 64, "dom_b": 64, "dom_t": 64, "unit": 104, "hm": 128 + 192 * 256 * 64}
 
 
 def parse_shape(s: str) -> tuple[int, int, int]:
@@ -1053,6 +1074,8 @@ def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: 
     for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
     pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real)
+    for tag in SALTED:   # one buffer a tree for every rep: a serving caller's fresh bytes a call are its own cost, not timed here
+        pipe.put_salts(tag, hashlib.shake_256(f"pearl-c-timing/salts_{tag}".encode()).digest(pipe.size[f"salts_{tag}"]))
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
     pipe.free()

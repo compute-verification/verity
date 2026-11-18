@@ -114,7 +114,7 @@ inputs = [
     "benchmarks/overhead/run.py",
     # a card the door measures on reads its SMs and L2 from its card file through verity.device
     "calibration/hardware/cards",
-    # a compile target's capability is its card's architecture file's (kit.gpu_target)
+    # a card's compute capability is read from its architecture's file (kit.gpu_target)
     "calibration/hardware/architectures",
     # a host core-second's weight is read from its node's file and the cards it names (host_weight)
     "calibration/hardware/nodes",

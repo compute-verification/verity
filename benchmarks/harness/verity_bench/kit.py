@@ -10,7 +10,7 @@
   clock lock, lease and the rest), each with the command that read it, from ``directory/<name>.toml``, checked field by field;
   with neither given, the run's own machine's, which `research run --on` put in ``$RESEARCH_RUN_DIR/inputs/$RESEARCH_MACHINE.toml``.
 - `toolkit(version)`: the CUDA toolkit's directory at that version, ``$CUDA_HOME`` where set and not another, else the run's machine's
-  `[properties]`'; `card_arch(name)`: the `arch` of the card `card_short` finds, and
+  `[properties]`'; `card_sku(name)` and `card_arch(name)`: the `sku` and `arch` of the card `card_short` finds, and
   `machine_arch()` the run's machine's card's.
   `benchmarks/kernels/machine.py` prints both for a shell script.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
@@ -251,6 +251,11 @@ def card_named_short(short: str, *, directory: Path | None = None) -> dict:
         raise SystemExit(f"{len(held)} GPU card files under {directory} have `short` {short!r}: one of "
                          f"{sorted(c['short'] for c in cards if c.get('short'))}")
     return held[0]
+
+
+def card_sku(name: str, *, directory: Path | None = None) -> str:
+    """The ``sku`` of `card_record`'s record for ``name``: its file's name in ``directory``."""
+    return card_record(name, directory=directory)["sku"]
 
 
 def card_arch(name: str, *, directory: Path | None = None) -> str:
