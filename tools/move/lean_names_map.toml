@@ -371,7 +371,7 @@ words = { "ToyTied.window" = "ToyTied.run" }
 
 # proofs
 [[words_in]]
-files = ["security/Proofs/Flock/Soundness/Audit/Pooled.lean"]
+files = ["security/Proofs/Spot/Sampling/Pooled.lean"]
 words = { "Escapes" = "MissProb" }
 
 [[words_in]]
@@ -400,7 +400,7 @@ words = { "Windows" = "Runs" }
 [[words_in]]
 files = [
     "security/Proofs/Flock/Bridge/CircuitOf.lean",
-    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
+    "security/Proofs/Spot/Sampling/Circuit.lean",
 ]
 words = { "card_wrong_le" = "card_incorrect_le" }
 
@@ -408,8 +408,8 @@ words = { "card_wrong_le" = "card_incorrect_le" }
 [[words_in]]
 files = [
     "security/Definitions/Core/Draw.lean",
-    "security/Definitions/Flock/Audit/Harm.lean",
-    "security/Definitions/Flock/Audit/Partitioning.lean",
+    "security/Definitions/Spot/Sampling/Harm.lean",
+    "security/Definitions/Spot/Sampling/Partitioning.lean",
     "security/Definitions/Pouw/Guarantees/Window.lean",
     "security/Definitions/Pouw/Window.lean",
     "security/Proofs/Core/Challenger.lean",
@@ -434,27 +434,27 @@ files = [
     "security/Proofs/Flock/Recursive/Flock.lean",
     "security/Proofs/Flock/SampledGeneric/Flock.lean",
     "security/Proofs/Flock/SampledGeneric/Statements.lean",
-    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
-    "security/Proofs/Flock/Soundness/Audit/Delivered.lean",
-    "security/Proofs/Flock/Soundness/Audit/HarmBound.lean",
-    "security/Proofs/Flock/Soundness/Audit/HarmBudget.lean",
-    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
-    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
-    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Bernoulli.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Exfil/Witnesses.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/FreeCompute.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/TwoStage.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/Bounds.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean",
-    "security/Proofs/Flock/Soundness/Audit/Partitioning/Witness.lean",
-    "security/Proofs/Flock/Soundness/Audit/Pooled.lean",
-    "security/Proofs/Flock/Soundness/Audit/SamplingDesign.lean",
-    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
-    "security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean",
-    "security/Proofs/Flock/Soundness/Audit/Window.lean",
-    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Spot/Sampling/Closure.lean",
+    "security/Proofs/Spot/Sampling/Delivered.lean",
+    "security/Proofs/Spot/Sampling/HarmBound.lean",
+    "security/Proofs/Spot/Sampling/HarmBudget.lean",
+    "security/Proofs/Spot/Sampling/Influence.lean",
+    "security/Proofs/Spot/Sampling/InfluenceWitness.lean",
+    "security/Proofs/Spot/Sampling/OneStage.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/Guarantees.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfil/Bernoulli.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Exfil/Witnesses.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/FreeCompute.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/TwoStage.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Unequal/Bounds.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/SecurityProofs/Unequal/SamplingDesigns.lean",
+    "security/Proofs/Spot/Sampling/Partitioning/Witness.lean",
+    "security/Proofs/Spot/Sampling/Pooled.lean",
+    "security/Proofs/Spot/Sampling/SamplingDesign.lean",
+    "security/Proofs/Spot/Sampling/Stratified.lean",
+    "security/Proofs/Spot/Sampling/StratifiedProj.lean",
+    "security/Proofs/Spot/Sampling/Window.lean",
+    "security/Proofs/Spot/Sampling/Work.lean",
     "security/Proofs/Flock/Soundness/ExecSample.lean",
     "security/Proofs/Flock/Soundness/ExecSampleOS.lean",
     "security/Proofs/Flock/Soundness/ExecStratified.lean",
@@ -469,7 +469,7 @@ files = [
 words = { "escape" = "missProb" }
 
 [[words_in]]
-files = ["security/Proofs/Flock/Soundness/Audit/Circuit.lean"]
+files = ["security/Proofs/Spot/Sampling/Circuit.lean"]
 words = { "exists_wrong_fine" = "exists_incorrect_fine" }
 
 [[words_in]]
@@ -482,13 +482,13 @@ files = [
     "security/Proofs/Flock/EndToEndRegisteredRows/Reduce.lean",
     "security/Proofs/Flock/Recursive/Transfer.lean",
     "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
-    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
-    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
-    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
-    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
+    "security/Proofs/Spot/Sampling/Circuit.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockBatched.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockCompiled.lean",
+    "security/Proofs/Spot/Sampling/Influence.lean",
+    "security/Proofs/Spot/Sampling/InfluenceWitness.lean",
+    "security/Proofs/Spot/Sampling/OneStage.lean",
     "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedAccL.lean",
     "security/Proofs/Flock/Soundness/Discharge/Exec/FlockBatchedL.lean",
     "security/Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean",
@@ -598,23 +598,23 @@ files = [
     "security/Proofs/Flock/Recursive/ZkReg/DrawnRefines.lean",
     "security/Proofs/Flock/Recursive/ZkReg/RegLink.lean",
     "security/Proofs/Flock/Recursive/ZkReg/Vals.lean",
-    "security/Proofs/Flock/Soundness/Audit/Circuit.lean",
-    "security/Proofs/Flock/Soundness/Audit/Closure.lean",
-    "security/Proofs/Flock/Soundness/Audit/Extraction.lean",
-    "security/Proofs/Flock/Soundness/Audit/Flock.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockBatched.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockBatchedAcc.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockCompiled.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockLinked.lean",
-    "security/Proofs/Flock/Soundness/Audit/FlockPublic.lean",
-    "security/Proofs/Flock/Soundness/Audit/HarmBudgetLife.lean",
-    "security/Proofs/Flock/Soundness/Audit/Influence.lean",
-    "security/Proofs/Flock/Soundness/Audit/InfluenceWitness.lean",
-    "security/Proofs/Flock/Soundness/Audit/OneStage.lean",
-    "security/Proofs/Flock/Soundness/Audit/Pooled.lean",
-    "security/Proofs/Flock/Soundness/Audit/Stratified.lean",
-    "security/Proofs/Flock/Soundness/Audit/Window.lean",
-    "security/Proofs/Flock/Soundness/Audit/Work.lean",
+    "security/Proofs/Spot/Sampling/Circuit.lean",
+    "security/Proofs/Spot/Sampling/Closure.lean",
+    "security/Proofs/Spot/Sampling/Extraction.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/Flock.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockBatched.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockBatchedAcc.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockCompiled.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockLinked.lean",
+    "security/Proofs/Flock/SpotFlock/Sampling/FlockPublic.lean",
+    "security/Proofs/Spot/Sampling/HarmBudgetLife.lean",
+    "security/Proofs/Spot/Sampling/Influence.lean",
+    "security/Proofs/Spot/Sampling/InfluenceWitness.lean",
+    "security/Proofs/Spot/Sampling/OneStage.lean",
+    "security/Proofs/Spot/Sampling/Pooled.lean",
+    "security/Proofs/Spot/Sampling/Stratified.lean",
+    "security/Proofs/Spot/Sampling/Window.lean",
+    "security/Proofs/Spot/Sampling/Work.lean",
     "security/Proofs/Flock/Soundness/Binding/E2E.lean",
     "security/Proofs/Flock/Soundness/CROnly/E2E.lean",
     "security/Proofs/Flock/Soundness/CROnly/E2EMore.lean",

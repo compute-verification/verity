@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.SamplingDesign
+public import Proofs.Spot.Sampling.SamplingDesign
 public import Flock.Draw
 import all Init.Data.Array.QSort.Basic
 
@@ -25,15 +25,19 @@ bytes, it returns a sample that misses `B` with probability at most `(SamplingDe
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 /-- The byte stream of `L` bytes `f`, as `Flock.Draw` reads it. -/
 def streamOf {L : ℕ} (f : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun i => UInt8.ofFin (f i)⟩
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 
 
-namespace FlockSoundness.Audit.SampleExec
+namespace Spot.Sampling.SampleExec
+
+open FlockSoundness
 
 private theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
@@ -686,9 +690,11 @@ theorem loopL_le (n k F : ℕ) (B : Finset ℕ) (hB : ∀ u ∈ B, u < n) : ∀ 
       _ = ((n - i - B.card).choose (c + 1) : ℝ≥0∞) / ((n - i).choose (c + 1) : ℝ≥0∞) :=
           choose_step_ratio (n - i) B.card c (by omega)
 
-end FlockSoundness.Audit.SampleExec
+end Spot.Sampling.SampleExec
 
-namespace FlockSoundness.Audit.SamplingDesign
+namespace Spot.Sampling.SamplingDesign
+
+open FlockSoundness
 
 open Game Finset
 open scoped ENNReal
@@ -719,5 +725,5 @@ theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) 
           (fun t ht => absurd ht (Nat.not_lt_zero t)) L
     _ = (subset n k hk).missProb B := by rw [subset_escape, hcard, Nat.sub_zero]
 
-end FlockSoundness.Audit.SamplingDesign
+end Spot.Sampling.SamplingDesign
 

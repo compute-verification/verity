@@ -1197,7 +1197,7 @@
   "Properties.Core",
   "CoreProtocol.Site",
   "RegistrationLog",
-  "Definitions.Flock.Audit",
+  "Definitions.Spot.Sampling",
   "Definitions.Flock.Game",
   "Properties.Flock.Nets",
   "Properties.Challenger",
@@ -2582,9 +2582,9 @@
    "why": "what Rankin's factor's upper bound bounds is stated against its own function (`Spot.FactorUpper`, on Lean core) and the factors Rankin's bound multiplies (`Definitions.Claims.SamplingTwoRankin`), never a proof"
   },
   "Properties.Spot.PlanCheck": {
-   "imports": ["Definitions.Flock.Audit", "Spot"],
+   "imports": ["Definitions.Spot.Sampling", "Spot"],
    "except": [],
-   "why": "what the planner's checker's acceptance means is stated against its own functions (`Spot.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Flock.Audit`), never a proof"
+   "why": "what the planner's checker's acceptance means is stated against its own functions (`Spot.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Spot.Sampling`), never a proof"
   },
   "Properties.Spot.TwoStageCheck": {
    "imports": ["Spot.TwoStageCheck", "Properties.Spot.FactorUpper"],
@@ -2605,11 +2605,6 @@
    "imports": ["Definitions.Spot.Dataflow", "Spot"],
    "except": [],
    "why": "a wiring's dataflow is stated against the wiring check's own types and function (`Spot.Wires`) and the population vocabulary's acyclicity (`Definitions.Spot.Dataflow`), never a proof"
-  },
-  "Properties.Spot.Edges": {
-   "imports": ["Spot.Edges"],
-   "except": [],
-   "why": "the wires the Program's root states are stated against the derivation's own functions (`Spot.Edges`) and the Program's references (`Flock.Program`), never a proof"
   },
   "Properties.Spot.HistoryTable": {
    "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Sha512"],
@@ -2895,6 +2890,11 @@
    "imports": ["Properties.Flock.Circuit.CircuitOf", "Spot.FilePart"],
    "except": [],
    "why": "`Γ`'s unit is stated against the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`, `Properties.Flock.Circuit.CircuitOf`) and the rows SPOT's summary of the parsed file counts (`Spot.FilePart.ofCircuit`), never a proof"
+  },
+  "Properties.Spot.Edges": {
+   "imports": ["Spot.Edges"],
+   "except": [],
+   "why": "the wires the Program's root states are stated against the derivation's own functions (`Spot.Edges`) and the Program's references (`Flock.Program`), never a proof"
   }
  },
  "reads_exempt": {

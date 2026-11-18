@@ -38,7 +38,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.Periods
+import Proofs.Spot.Sampling.Periods
 import Proofs.Flock.Soundness.Game
 import Proofs.Certifier.MonitoringPeriodSum
 import Std.Tactic.BVDecide.Normalize.Prop
@@ -197,7 +197,7 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
     rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
       ← Claims.Sampling.Pr_eq_toReal_prCoin, ← ENNReal.ofReal_pow hr0]
     exact ENNReal.ofReal_le_ofReal (hesc t ω)
-  have key := FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow (Ω := fun _ : Fin m => Ω)
+  have key := Spot.Sampling.Periods.prCoin_forall_sum_le_pow (Ω := fun _ : Fin m => Ω)
     (fun t ω => A t ω (ω t)) f
     (fun t ω ω' h => by
       show A t ω (ω t) = A t ω' (ω' t)

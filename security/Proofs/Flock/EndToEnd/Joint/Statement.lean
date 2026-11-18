@@ -49,7 +49,7 @@ Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, 
 
 namespace Flock.Guarantees
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+open FlockSoundness FlockSoundness.Game Spot.Sampling FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.HiddenDec
 open scoped ENNReal
@@ -166,7 +166,7 @@ noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
 
 /-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
 stratified sample misses with probability at least `δ`. Core's `harm_bound` returns a bound on it
-(`Audit.IsHarmBound`). -/
+(`Spot.Sampling.IsHarmBound`). -/
 noncomputable def maxHarm (h : Fin w.n → ℕ) (δ : ℝ) : ℝ :=
   ⨆ B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B}, ((∑ u ∈ B.1, h u : ℕ) : ℝ)
 
