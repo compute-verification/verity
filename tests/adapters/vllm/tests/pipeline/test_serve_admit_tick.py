@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm import messages

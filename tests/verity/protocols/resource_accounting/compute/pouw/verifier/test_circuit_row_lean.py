@@ -5,7 +5,7 @@ parameter leaves as its input gates. `lean_rows8` restates `RowCircuit.row8A` an
 `test_circuit_pc4_lean`'s, on these helpers); the Lean proofs are about those tables, so this test and the pinned descriptor digests are what tie them to the Programs. Unlike the tile's
 check (`test_circuit_tile_lean.py`) this one reads each gate's operand order and constants from the template's own gates,
 since `CallGraph` keeps neither. Each primitive's semantics is the trusted step: core's are `RowOps`' fields, PoUW's are
-`RowPrims` (held to `verity.protocols.resource_accounting.compute.pouw.prover.circuit.words` by `test_row_prims_lean.py`), the atoms are `p.step` and `nvf4Word`, and
+`RowPrims` (held to `verity.circuits.ops.words` by `test_row_prims_lean.py`), the atoms are `p.step` and `nvf4Word`, and
 `F32Add_v2` is `f32Add`."""
 from __future__ import annotations
 

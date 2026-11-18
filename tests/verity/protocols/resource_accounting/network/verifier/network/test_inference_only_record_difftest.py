@@ -548,7 +548,9 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
     none of its gates. Such a Program is refused with its templates: the record of that one template, which lists
     it, and the accepted record beside a Program whose root has a unit of it more, which the record does not list.
     The key alone decides the first: the same template under a key that is no input id is read past its
-    templates. Unlisted it is refused under either key."""
+    templates, and its record's registered reads still name templates it no longer lists: a declaration naming a
+    template the Program lacks is refused at the first stage that reads a declaration (`inputs`). Unlisted it is
+    refused under either key."""
     held = shaped["2x3 registered"]
     gate = [[("op", 16, [(0, 0)])]]
     for what, name in vectors.KEYED.items():
@@ -567,7 +569,7 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
             assert (tid in listed) == (how == "alone"), what
     plain = vectors.template("Plain7", [("p", vectors.Value(16))], [vectors.Value(16)], gate)
     assert input_id(codec.descriptor_id(plain)) is None
-    for edit, stage in ((vectors._alone, "wires"), (vectors._unlisted, "templates")):
+    for edit, stage in ((vectors._alone, "inputs"), (vectors._unlisted, "templates")):
         case = copy.deepcopy(held["case"])
         edit(case, held["circuit"], plain)
         assert ref.check_detail(case["instance"], case["trusted"]) == {"error": stage}

@@ -38,9 +38,11 @@ untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "te
 # Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
 # directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
-# put on its path, which a test checks is that script of the tree.
+# put on its path, which a test checks is that script of the tree. env.sh takes the workspace's import roots from
+# research's reader of them (research.pythonpath), which a test sources it through.
 inputs = [
     "tools/research/src/research/store/labels_sync.py",
+    "tools/research/src/research/pythonpath.py",
     "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",

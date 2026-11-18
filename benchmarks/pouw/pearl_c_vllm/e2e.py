@@ -78,6 +78,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from verity_config.settings import of
+from verity.protocols.compose import schemes
 
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
@@ -147,7 +148,7 @@ SERVED_RECORD = "served.json"
 #: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
 #: promotion), which has no sm_90a record
 QUALITY = {"pearl_c_sm120": {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"},
-           "pearl_c_sm90": {"pearlc-v1": "pearl-c-h100-v1-h3"}}
+           "pearl_c_sm90": {"pearlc-v1": schemes.get("pearl-plus").option.partition(":")[2]}}
 #: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's execution phases: BOS and 2,047 tokens each, non-overlapping; its batch budget, one execution phase a step
@@ -438,17 +439,12 @@ def whole_retained_check(run, forward, side) -> dict:
     import torch
     keep, dirs = ("transcript_root", "activation_roots", "units", "tiles"), [Path(tempfile.mkdtemp(prefix="whole-kept-")) for _ in "ab"]
 
-    def ended() -> tuple:
-        recs, files, mms = list(run.cur.records), list(run.cur.files), list(run.cur.matmuls)
-        run.cur.retain = None
-        return recs, files, {k: v for k, v in run.end().items() if k in keep}, mms
-
     try:
         run.graphs = False
         run.begin(retain=str(dirs[0]))
         at = run.cur.base
         forward()
-        want = ended()
+        want = retained_end(run, keep)
         run.graphs = True
         run.begin()
         graph = torch.cuda.CUDAGraph()
@@ -465,11 +461,20 @@ def whole_retained_check(run, forward, side) -> dict:
         run.whole_replay(calls)
         graph.replay()
         run.whole_replayed(calls)
-        got = ended()
+        got = retained_end(run, keep)
         return retained_differences(want, got, dirs)
     finally:
         for d in dirs:
             shutil.rmtree(d, ignore_errors=True)
+
+
+def retained_end(run, keep: tuple) -> tuple:
+    """End `run`'s retained pass without its manifest: its records, call files, the commitment's `keep` and its matmuls.
+    Read after `end`, which joins the pass's writes: on the device a call's record is filled in behind it."""
+    cur = run.cur
+    cur.retain = None
+    commitment = {k: v for k, v in run.end().items() if k in keep}
+    return list(cur.records), list(cur.files), commitment, list(cur.matmuls)
 
 
 def retained_differences(want: tuple, got: tuple, dirs: list[Path]) -> dict:

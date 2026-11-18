@@ -135,7 +135,7 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
 
 from ..schemes import pearl_c as C
 from . import hashes as H
-from . import words as W
+from verity.circuits.ops import words as W
 
 U32 = W.U32
 INST = hm96.SHA512
