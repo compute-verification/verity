@@ -108,10 +108,9 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
 
     rel = os.path.relpath(out / record, run_dir)
     (run_dir / kit.RESULT).unlink(missing_ok=True)
-    if measurements:
-        run_dir.mkdir(parents=True, exist_ok=True)
-        _write(run_dir / kit.RESULT, {"schema": kit.RESULT_SCHEMA, "run_id": run_id, "measurements": list(measurements)})
     writer = kit.Writer(run_dir, run_id, kit.host_stamp() if measured else {})
+    if measurements:
+        writer.keep(measurements)
     writer.fingerprint(**fingerprint)
     writer.measurement_file(rel)
     for m in measured:

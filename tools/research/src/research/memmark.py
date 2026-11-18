@@ -19,7 +19,10 @@ lane sizes `--mem-gb` from.
 
 The samples are of the cgroup the runner and its sampler run in. That is the workload's too, unless the run moved its
 workload out: a check slot with `scope=1` (its slot.json's `scope`), `--job-user`'s unit, a GPU lease. Then no sample is
-of the workload, and the mark holds no peak and says where the workload ran (`reason`). For a check in its own scope it
+of the workload, and the mark holds no peak and says where the workload ran (`reason`). Where that cgroup is the
+container's root (a RunPod pod's) or held processes outside the run (`machines`), its reading is the machine's: the peak
+is then the workload's process tree's (RssAnon + RssShmem summed over its processes, from the sampler's process records,
+`held_of`), the machine's is beside it, and no limit is judged (`over_limit` null). For a check in its own scope it
 holds the scope's memory.peak as the check's spans recorded it (`scope_peak_bytes`, to 0.1 GB): that counts the page
 cache, so it bounds what the check held from above and is not the held figure. A figure that can't be computed is null
 with its reason, never zero. A slot.py that writes no `reserves_gib` took the slot before it wrote either key: its run's
@@ -29,7 +32,9 @@ A GB is 10^9 bytes; a slot's booking and a queue job's memory are GiB, 2^30 byte
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
+import json
+import sys
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -98,7 +103,7 @@ def peak(records: Iterable[dict[str, Any]], limit_bytes: int, since: str | None 
     """The most the cgroup records held, when, over how many, in which cgroup, and whether and when first one held more than
     `limit_bytes`. `since` (a UTC time to the second) leaves out the records before it."""
     top = top_utc = over_utc = path = None
-    n = 0
+    n, root = 0, False
     for rec in records:
         t = rec.get("t_utc")
         if since and str(t)[:19] < since[:19]:
@@ -107,20 +112,56 @@ def peak(records: Iterable[dict[str, Any]], limit_bytes: int, since: str | None 
         if h is None:
             continue
         n += 1
+        root = root or rec["cgroup"].get("path") == "/"
         if top is None or h > top:
             top, top_utc, path = h, t, rec["cgroup"].get("path")
         if over_utc is None and h > limit_bytes:
             over_utc = t
     return {"peak_held_bytes": top, "peak_utc": top_utc, "samples": n, "over_limit": over_utc is not None if n else None,
-            "over_limit_utc": over_utc, "cgroup": path}
+            "over_limit_utc": over_utc, "cgroup": path, "root": root}
+
+
+def tree_peak(records: Iterable[dict[str, Any]], since: str | None = None) -> dict[str, Any]:
+    """From the sampler's process records: the most the workload's process tree held (its processes' RssAnon + RssShmem,
+    summed), when, over how many records, and the most processes its cgroup held outside the run (`foreign`, None when no
+    record says)."""
+    top = top_utc = foreign = None
+    n = 0
+    for rec in records:
+        t = rec.get("t_utc")
+        if since and str(t)[:19] < since[:19]:
+            continue
+        if isinstance(f := rec.get("cgroup_foreign_pids"), int):
+            foreign = max(foreign or 0, f)
+        rows = rec.get("processes")
+        if not isinstance(rows, list) or rec.get("truncated"):
+            continue
+        h = sum((r.get("rss_anon_bytes") or 0) + (r.get("rss_shmem_bytes") or 0) for r in rows if isinstance(r, dict))
+        n += 1
+        if top is None or h > top:
+            top, top_utc = h, t
+    return {"peak_held_bytes": top, "peak_utc": top_utc, "samples": n, "foreign": foreign}
+
+
+def machines(path: object, foreign: int | None) -> str | None:
+    """Why the runner's cgroup is not the run's own, so its reading is the machine's: it is the namespace's root, or it held
+    processes outside the run; None when neither is seen."""
+    if path == "/":
+        return "the runner's cgroup is the container's root, which every process on the machine shares"
+    if foreign:
+        return f"the runner's cgroup {path} also held {foreign} process{'' if foreign == 1 else 'es'} outside the run"
+    return None
 
 
 def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], records: Iterable[dict[str, Any]] | None, *,
-         stated: dict[str, Any] | None = None, elsewhere: str | None = None, scope_peak: int | None = None) -> dict[str, Any]:
+         stated: dict[str, Any] | None = None, elsewhere: str | None = None, scope_peak: int | None = None,
+         processes: Iterable[dict[str, Any]] | None = None) -> dict[str, Any]:
     """The run's mark. `request` is its launch request ({} for a local run), `slot` its slot.json ({} without one), `cgroup`
     job.json's `environment.cgroup`, `records` its cgroup records in order (None without a resources.jsonl), `stated` a
-    launch's `{"gb", "by"}`, `elsewhere` where the workload ran when not in the runner's cgroup, and `scope_peak` the bytes a
-    check's own scope peaked at."""
+    launch's `{"gb", "by"}`, `elsewhere` where the workload ran when not in the runner's cgroup, `scope_peak` the bytes a
+    check's own scope peaked at, and `processes` the sampler's process records in order.
+    Where the cgroup's reading is the machine's (`machines`), the peak is the process tree's (`held_of`), the cgroup's own
+    is `machine_peak_held_bytes`, and `over_limit` is None: no limit is judged, nor may one be enforced, from that reading."""
     if slot.get("state") == "held" and "reserves_gib" not in slot:
         return {"reason": OLD_SLOT}
     asked, ask_from = ask(request, slot)
@@ -136,8 +177,16 @@ def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], 
         why = f"the run has no {SAMPLES}: its sampler wrote no sample"
     else:
         got = peak(records, out["limit_bytes"], since=took)
+        tree = tree_peak(processes or (), since=took)
+        root = got.pop("root")
+        if got["samples"] and (wide := machines("/" if root else got["cgroup"], tree["foreign"])):
+            return {**out, "peak_held_bytes": tree["peak_held_bytes"], "peak_utc": tree["peak_utc"], "samples": tree["samples"],
+                    "held_of": "process tree", "machine_peak_held_bytes": got["peak_held_bytes"], "machine_peak_utc": got["peak_utc"],
+                    "over_limit": None, "over_limit_utc": None, "cgroup": got["cgroup"],
+                    "reason": f"{wide}: its reading is the machine's, so the peak is the workload's process tree's RssAnon + RssShmem "
+                              + ("" if tree["samples"] else "(no process record holds it) ") + "and no limit is judged"}
         if got["samples"]:
-            return {**out, **got, "reason": None}
+            return {**out, **got, "held_of": "cgroup", "reason": None}
         why = (f"no cgroup sample in {SAMPLES} holds memory.current and memory.stat's file and shmem"
                + (f" since the run took its slot at {took}" if took else ""))
     out.update(peak_held_bytes=None, peak_utc=None, samples=0, over_limit=None, over_limit_utc=None, cgroup=None, reason=why)
@@ -146,6 +195,19 @@ def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], 
         if scope_peak <= out["limit_bytes"]:
             out["over_limit"] = False
     return out
+
+
+def process_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
+    """The sampler's workload process records among a resources.jsonl's lines; a line a write left unfinished is passed over."""
+    for ln in lines:
+        if '"kind":"process","scope":"process"' not in ln:
+            continue
+        try:
+            rec = json.loads(ln)
+        except ValueError as e:
+            print(f"memmark: a process sample line is not JSON, skipped ({e})", file=sys.stderr, flush=True)
+            continue
+        yield rec
 
 
 def _scope_peak(run_dir: Path) -> int | None:
@@ -166,8 +228,10 @@ def of_run(run_dir: Path, request: dict[str, Any], cgroup: dict[str, Any], *, st
         scope_peak = _scope_peak(run_dir) if slot.get("scope") else None
         if not (run_dir / SAMPLES).is_file():
             return {KEY: mark(request, slot, cgroup, None, stated=stated, scope_peak=scope_peak)}
-        with open(run_dir / SAMPLES, encoding="utf-8", errors="replace") as f:
-            return {KEY: mark(request, slot, cgroup, scopemem.cgroup_records(f), stated=stated, scope_peak=scope_peak)}
+        with open(run_dir / SAMPLES, encoding="utf-8", errors="replace") as f, \
+                open(run_dir / SAMPLES, encoding="utf-8", errors="replace") as g:
+            return {KEY: mark(request, slot, cgroup, scopemem.cgroup_records(f), stated=stated, scope_peak=scope_peak,
+                              processes=process_records(g))}
     except Exception as e:  # noqa: BLE001
         return {KEY: {"reason": f"the mark was not computed: {type(e).__name__}: {e}"[:300]}}
 
@@ -199,6 +263,9 @@ def line(m: object) -> str:
         top = (f"peak held {_gb(m['peak_held_bytes'])} at {_when(m.get('peak_utc'))} ({m.get('samples')} "
                f"sample{'' if m.get('samples') == 1 else 's'})")
     out = f"{top}; {asked}; {lim}"
+    if m.get("machine_peak_held_bytes") is not None:
+        why = "" if m.get("peak_held_bytes") is None else f": {m.get('reason')}"
+        return f"{out}; the machine held {_gb(m['machine_peak_held_bytes'])} at {_when(m.get('machine_peak_utc'))}{why}"
     if m.get("over_limit"):
         return (f"{out}: would have been stopped at its memory limit of {_gb(m['limit_bytes'])} (asked "
                 f"{_gb(m['ask_bytes']) if m.get('ask_bytes') is not None else 'none'}) at {_when(m.get('over_limit_utc'))}")
