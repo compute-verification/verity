@@ -21,8 +21,8 @@ A leaf's salt is data: the caller draws every row's 192 bytes from the operating
 the device derives a salt, and no key for one exists. The salts are the prover's alone, as secret as the rows: it keeps
 them with the step's record to open a unit, never under a run's output directory. ``Plan(..., "host", build=DIR)`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference. On a CUDA device the plan's engine (``Plan.ENGINE``) needs a tensor
-runtime (torch) that verity doesn't import: a subclass of ``Plan`` supplies one whose ``runtime()`` returns it (the
-benchmarks' ``benchmarks/torch_gpu/commit_slots/torch_plan.py``), and the plan's partition and graphs take torch from it.
+runtime (torch) that verity doesn't import: a subclass of ``Plan`` supplies one whose ``runtime()`` returns it,
+and the plan's partition and graphs take torch from it.
 
 The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
 until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it

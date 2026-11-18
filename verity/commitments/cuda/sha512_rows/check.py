@@ -1,11 +1,10 @@
 """The engine against the CPU reference (``verity.commitments``), bit for bit: row digests on random rows at edge sizes
 (every variant), hm96 leaves under the caller's salts (a buffer of its own, and a view of a wider one read in place) and
 fused with their units' frame leaves, frame leaves, unit frame tables, levels (a front child, strided trees), pads and roots, and on a CUDA device a layout group's rows
-(``layout_rows``: the benchmarks pass one layer of commit_slots' frozen H200 layout) on sampled slots. Every salt here is a
+(``layout_rows``: the tests pass one layer of commit_slots' frozen H200 layout) on sampled slots. Every salt here is a
 public test value, drawn from the check's seeded generator and handed to the engine as data, as a prover hands its fresh
-ones. ``report`` runs them all; the benchmarks'
-``benchmarks/torch_gpu/sha512_rows/check_gpu.py`` runs it on a CUDA device and writes check.json, and the tests call the
-same functions on the host twin.
+ones. ``report`` runs them all, and the tests call the same functions on the host twin and, where there is one, on a CUDA
+device.
 """
 from __future__ import annotations
 

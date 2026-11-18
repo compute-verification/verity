@@ -17,9 +17,9 @@ salts = S.fresh_salts(layout, slots)                # (slots, rows, 192) uint8: 
 S.commit(context, layout, step, salts, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, the same signature with a plan in place of (context, layout); on a CUDA device, a Plan subclass whose ENGINE's
-# runtime() is torch (verity imports none; the benchmarks' benchmarks/torch_gpu/commit_slots/torch_plan.Plan)
-plan = G.Plan(context, layout, "cuda", build=DIR)  # once a run; temp_bytes= bounds a step's temporaries
-plan = G.Plan(context, layout, "cuda", sms=32, build=DIR)  # the side stream on a green context of 32 SMs (same bytes)
+# runtime() is torch (verity imports none), built for the target its caller names (arch, the card file's, such as 90a)
+plan = G.Plan(context, layout, "cuda", arch, build=DIR)  # once a run; temp_bytes= bounds a step's temporaries
+plan = G.Plan(context, layout, "cuda", arch, sms=32, build=DIR)  # the side stream on a green context of 32 SMs (same bytes)
 G.commit(plan, step, salts, outputs, slots) -> S.StepCommit(root, slot_roots)   # salts on the plan's device
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -67,12 +67,6 @@ blocks.
 
 - `slots.py`: the reference, the layouts, `load()`, and `python slots.py fixture` (writes the fixture).
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`).
-
-What measures it is in `benchmarks/torch_gpu/commit_slots/`: `check.py`, the GPU's roots against the reference's;
-`bench.py`, the call's throughput at the H200 example's layout, alone and beside the layer's int8 GEMMs; `step.py`, one
-streamed step at a layout file, timed by phase (`time`), and a layout's compressions a row-slot on the host twin
-(`count`); and `gpu.sh`, these with the tests under one GPU lease (`OUT=DIR bash benchmarks/torch_gpu/commit_slots/gpu.sh`
-from the tree's root; its header has the options).
 
 ## Tests
 

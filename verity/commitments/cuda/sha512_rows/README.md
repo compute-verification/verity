@@ -51,8 +51,7 @@ an optional `s` for straight-line rounds (`engine.variant_flags`):
 
 The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in
 `VARIANTS`, and `Engine(..., default=)` sets the other kernels' variant. The engine reads no settings: builds are cached
-under the caller's `build` directory, and the benchmarks read both from their `SHA512_ROWS_BUILD` and `SHA512_ROWS_V`
-(`benchmarks/torch_gpu/settings.py`) and pass them in.
+under the caller's `build` directory, and the caller passes both in.
 
 ## Files
 
@@ -64,17 +63,3 @@ under the caller's `build` directory, and the benchmarks read both from their `S
 - `engine.py`: the call.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
 - `tests/`: the host twin always, every variant on a CUDA device.
-
-What measures it is in `benchmarks/torch_gpu/sha512_rows/`:
-
-- `torch_engine.py`: the engine with the benchmarks' build directory and variant.
-- `check_gpu.py`: `check.py`'s checks on a CUDA device, into check.json.
-- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
-- `sass.py`: opcode counts per variant.
-- `gpu.sh`: one leased GPU run.
-
-From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
-
-```bash
-OUT=DIR bash benchmarks/torch_gpu/sha512_rows/gpu.sh
-```
