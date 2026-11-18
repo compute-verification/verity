@@ -7,9 +7,19 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.definitions.numerics import derived_rows as R
-from verity_vllm.definitions.numerics.fp8_twins import np_e4m3_to_f32, np_f32_to_e4m3_sat
-from verity_vllm.definitions.registry.deepgemm import (F_1EM10, F_448, F_ONE, FI_LANES, UE8M0_KEEP, UE8M0_ROUND,
-                                                   fi_lane_elements)
+from verity_vllm.definitions.numerics.fp8_twins import (
+    np_e4m3_to_f32,
+    np_f32_to_e4m3_sat,
+)
+from verity_vllm.definitions.registry.deepgemm import (
+    F_1EM10,
+    F_448,
+    F_ONE,
+    FI_LANES,
+    UE8M0_KEEP,
+    UE8M0_ROUND,
+    fi_lane_elements,
+)
 from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
 
 #: the f32 ulps of `amax / 448` around a power of two where Triton's `div.full.f32` (within 2 ulps of the quotient) may cross it

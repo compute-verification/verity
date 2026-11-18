@@ -28,12 +28,12 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
+
+from tests.program.test_boolean_dense import SPECIALS, _agree, _bits
 from verity_vllm.definitions.registry import boolean_tanh as BT
 from verity_vllm.definitions.registry import dense as D
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import tables as T
-
-from tests.program.test_boolean_dense import SPECIALS, _agree, _bits
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

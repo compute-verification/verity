@@ -21,6 +21,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench certifier_term` | the network attester's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench attester_timing` | the bits an interval a server moves through when the network attester releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones; `--models llama32-1b --out DIR`, Llama 3.2 1B's layer alone and its point, on a CPU |
+| `verity bench codec_tensor` | the tensor-core wide-word codec on one GPU: `wt.cu`'s libraries gated against `wide.py`, then their read, rates, decodes and GEMMs timed |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -238,11 +239,10 @@ depends on a security parameter and `calibration` where it uses a calibration nu
 them, `parameters` as `{NAME: {value, from, basis}}`, `from` the application it is read from, and `calibration` as
 `[{path, key}]`, `path` under `calibration/`. The kit refuses one naming none, by `kit_report.NEEDS`, held to the rows.
 
-Two parts are not true yet. The site's reader (infra's) doesn't take `version`, `changed` or `was`, and the site refuses
-a metric with a key it doesn't take, so no row may carry any of the three until it does: the registry's test refuses
-one, and `SITE_TAKES_VERSIONS` there flips once it takes them; `SITE_TAKES_STRUCTURE` holds `under`, `kind` and
-`needs` alike. A reading sent from a loop through `research.metrics` carries no version: the sender (infra's) doesn't
-take one.
+The site's reader (infra's) takes `version`, `changed` and `was` on a row and `version` on a measurement
+(`SITE_TAKES_VERSIONS` in the registry's test), and `under`, `kind` and `needs` on a row (`SITE_TAKES_STRUCTURE`). One
+part is not true yet: a reading sent from a loop through `research.metrics` carries no version, since the sender
+(infra's) doesn't take one.
 
 Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
 writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)

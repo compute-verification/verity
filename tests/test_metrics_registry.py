@@ -35,13 +35,13 @@ KIT_AT = "benchmarks/harness/verity_bench/kit.py"
 VERSION_KEYS = ("version", "changed", "was")
 #: whether the site's reader (infra's) takes `VERSION_KEYS`: the site refuses a metric with a key its reader doesn't
 #: take, so until it does no row may carry one; set True once it takes them
-SITE_TAKES_VERSIONS = False
+SITE_TAKES_VERSIONS = True
 STRUCTURE_KEYS = ("under", "kind", "needs")
 KINDS = ("system", "platform")
 #: what a row's `needs` may list (the kit's `kit.NEEDED`)
 NEEDS = ("parameter", "calibration")
 #: whether the site's reader (infra's) takes `STRUCTURE_KEYS`, as `SITE_TAKES_VERSIONS`
-SITE_TAKES_STRUCTURE = False
+SITE_TAKES_STRUCTURE = True
 #: a title's least and most words, and a unit's most, a rate's two sides (either side of " a ") counted apart
 TITLE_WORDS, UNIT_WORDS = (3, 6), 3
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
@@ -353,8 +353,6 @@ ALLOWED = {
     "benchmarks/attester_load/metrics.toml": 3,  # network-accounting
     "benchmarks/dsa_topk/metrics.toml": 1,  # proofs
     "benchmarks/flock_s8_block/metrics.toml": 1,  # proofs
-    "benchmarks/proof_throughput/metrics.toml": 1,  # proofs
-    "benchmarks/replay_ladder/metrics.toml": 1,  # proofs
     "infra/dashboard/metrics.toml": 1,  # console
 }
 
