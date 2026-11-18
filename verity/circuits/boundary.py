@@ -50,7 +50,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Iterator
 
-from .defs import Body, BodyNode, PrimitiveDefinition, SpecializedDefinition
+from .defs import Body, BodyNode, PrimitiveDefinition, SpecializedDefinition, recut_unread
 from .intervals import IntervalLimit, Intervals, contains, full, isect, norm, ref_intervals, total
 from .layout import Scope, resolve_gate
 from .parts import Limits, Part, Unsupported, n_members
@@ -708,6 +708,7 @@ _USED: "weakref.WeakKeyDictionary[SpecializedDefinition, frozenset[tuple[int, in
 
 def consumer_index(spec: SpecializedDefinition) -> ConsumerIndex:
     """The consumer index of `spec` (cached per specialization; the root of a Program costs O(root nodes) once)."""
+    recut_unread(spec, "boundary.consumer_index")
     ix = _INDEX.get(spec)
     if ix is None:
         ix = ConsumerIndex(spec)
@@ -729,6 +730,7 @@ def used_param_intervals(spec: SpecializedDefinition) -> tuple[Intervals, ...]:
     """Per parameter, the leaf intervals read (transitively) by some gate of `spec`'s body — the compact form of
     `used_param_leaves`, O(#runs) even for a weight tensor.  Raises `BoundaryLimit("used_params")` when a cap left
     some parameter's reads inexact (see `ConsumerIndex.used_exact`)."""
+    recut_unread(spec, "boundary.used_param_intervals")
     return _used_params(spec)
 
 
