@@ -12,11 +12,10 @@ SHA-512 (`partition_v2.id_digest`).
 **Gates** are counted as `InferenceOnlyCheck.Count` counts a block Definition's (``boolGates``,
 `verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
-table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
-(`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
-(`definitions.boolean.boolean_version`). A primitive with none, or whose Boolean version reaches a primitive that is no
-gate, is *unpriced*: its activations a block are listed apart and its gates are not guessed. circuit-check pins no per-primitive table, so the table counted by is
-published with the judgment.
+table is each word primitive's body in the session Program's own Boolean map, counted (`verity.circuits.count.table`:
+an n-input And or Xor n - 1 two-input gates, a Not 1, a constant bit or an input 0), and it is published with the judgment.
+A primitive a table lacks is *unpriced*: its activations a block are listed apart and its gates are not guessed; a
+session Program holds a body for every word primitive it reaches (`program.boolean_map`), so its own table lacks none.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
 verifier's pins (`interface.input_count`: θ the weights pinned before the run at the roots the window's registration
@@ -53,7 +52,7 @@ from typing import Any
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
-from verity.circuits.ops.boolean.versions import gate_table
+from verity.circuits import count as K
 from verity.circuits.parts import n_members
 from verity.circuits.population import wired_population_program
 from verity.circuits.program import is_input
@@ -66,8 +65,9 @@ from verity_vllm.records.weights_registration import WeightsRegistration
 
 
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
-    """A window circuit record's session Definition (module docstring), its slots m and steps T. Refused (ValueError) where
-    the record states no inference blocks or its entries don't tile its templates (`interface.Blocks.of`)."""
+    """A window circuit record's session Program, whose function is the session Definition (module docstring), its slots m and
+    steps T. Refused (ValueError) where the record states no inference blocks or its entries don't tile its templates
+    (`interface.Blocks.of`)."""
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
@@ -81,7 +81,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         per[e.template] += e.units // m
     members = [(resolve(t), per[t]) for t, _ in doc["templates"]]
     program, _ = wired_population_program(members, {"templates": [[codec.descriptor_id(fn), n] for fn, n in members]})
-    return program.fn, m, blocks.steps
+    return program, m, blocks.steps
 
 
 def resolve(tid: str) -> Any:
@@ -174,12 +174,13 @@ class Day:
         rec = hashlib.sha512(IF.circuit_bytes(IF.circuit_of(doc))).hexdigest()
         if rec not in self._sessions:
             self._sessions[rec] = session(doc)
-        fn, m, steps = self._sessions[rec]
+        program, m, steps = self._sessions[rec]
         held = (rec, IF.held_params(self.pins, roots))
         if held not in self._fresh:
             self._fresh[held] = fresh(doc, m, self.pins, roots)
-        d = PV2.id_digest(fn)
-        c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
+        d = PV2.id_digest(program.fn)
+        c = self._classes.setdefault(d, {"fn": program.fn, "program": program, "slots": m, "steps": steps, "fresh": 0,
+                                         "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
         self._windows += 1
         return d
@@ -188,7 +189,7 @@ class Day:
         """The public judgment (`records.block_counts`) of the windows added against the declaration ``decl``, and the
         private one: the public one with each class's exact blocks, the day's and its windows."""
         digest, c, k, n = declaration(decl)
-        table, _ = gate_table(x["fn"] for x in self._classes.values())
+        table = {k: v for x in self._classes.values() for k, v in K.table(x["program"]).items()}
         memo: dict = {}
         classes, exact = [], {}
         for d, x in sorted(self._classes.items()):

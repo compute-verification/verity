@@ -4,7 +4,8 @@ gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Py
 and `check_count`, which `inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); the wiring between
-leaf widths prices at no gate; a block reaching an unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
+leaf widths prices at no gate; a primitive with no Boolean body refuses the circuit, and a block reaching one a table lacks
+leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
 (`inference_blocks.budgets`); and the module's import alone loads no registry module, which `resolve` loads on its first
 call."""
 from __future__ import annotations
@@ -20,10 +21,11 @@ from pathlib import Path
 import pytest
 from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import count as K
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.ops import gemm as GEMM_OPS
-from verity.circuits.ops.boolean.versions import gate_table
 from verity.circuits.population import BitsWord, WordBits, wired_population_program
+from verity.circuits.program import NoBooleanBody, Program
 from verity.commitments.periods import interface as IF
 
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
@@ -81,7 +83,8 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     same c, k and n the judgment's."""
     pub, private = BC.judgment(DAY, [(small, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})
     (cls,) = pub.classes
-    fn, m, steps = BC.session(small)
+    session, m, steps = BC.session(small)
+    fn = session.fn
     assert (m, steps, cls.slots, cls.steps, private["total"], private["windows"]) == (2, 3, 2, 3, 2, 1)
     assert cls.definition == PV2.id_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
     key = codec.descriptor_id(fn)
@@ -161,36 +164,49 @@ def test_the_judgment_holds_its_fields_alone(small):
     assert "ab" * 64 not in text and "test/blocks" not in text
 
 
-def test_the_gate_table_prices_bit_at_by_its_boolean_version():
-    """`TokenFeed_v1` reads `BitAtx32_v1`, which the one gate table (`definitions.boolean.gate_table`) prices by
+def _calling(*fns) -> Program:
+    """A circuit calling each of ``fns`` once on parameters of its own."""
+    params = tuple((f"{i}.{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0])
+    ret = fns[0].signature()[1]
+
+    def body(B, S, *a):
+        out, at = None, 0
+        for fn in fns:
+            k = len(fn.signature()[0])
+            got = B.call(fn, *a[at:at + k])
+            out, at = got if out is None else out, at + k
+        return out
+    return Program(bind(CompositeDefinition("BlockCountsCalling", 1, (), lambda S: (params, ret), body, register=False)))
+
+
+def test_the_gate_table_prices_bit_at_by_its_body():
+    """`TokenFeed_v1` reads `BitAtx32_v1`, which the gate table (`count.table`) prices by its body in the circuit,
     `BitAtx32_v2`: 147 gates, every primitive priced, so a feed's gates are its primitives' sum."""
     feed = BC.resolve("TokenFeed_v1{NP=4,FIRST=false}")
-    table, unpriced = gate_table([feed])
-    assert unpriced == [] and table["BitAtx32_v1"] == 147
+    table = K.table(_calling(feed))
+    assert table["BitAtx32_v1"] == 147
     g, miss = BC.gates(feed, table)
     assert not miss and g == sum(table.values()) > 147
 
 
-def test_a_primitive_with_no_boolean_version_is_unpriced():
-    """`F32TanhRn_v1` has no Boolean version: the table leaves it out and a block lists its activations apart, its gates not
-    guessed."""
+def test_a_primitive_with_no_boolean_body_is_refused_and_a_table_lacking_one_leaves_it_unpriced():
+    """`F32TanhRn_v1` has no Boolean body: a circuit reaching it is refused by name, and a block counted by a table that lacks
+    it lists its activations apart, its gates not guessed."""
     tanh = REGISTRY["F32TanhRn_v1"]
-    assert gate_table([tanh]) == ({}, ["F32TanhRn_v1"])
+    with pytest.raises(NoBooleanBody, match="F32TanhRn_v1"):
+        _calling(tanh)
     assert BC.gates(tanh, {}) == (0, {"F32TanhRn_v1": 1})
 
 
 def test_the_wiring_between_leaf_widths_is_priced_at_no_gate():
-    """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose Boolean versions hold no gate), so
-    the table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates; a block reaching
-    them beside `F32TanhRn_v1`, which has no Boolean version, still lists that apart."""
-    wiring = [bind(WordBits, W=16), bind(BitsWord, W=32)]
-    assert gate_table(wiring) == ({**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}, [])
-    table, unpriced = gate_table([*wiring, REGISTRY["F32TanhRn_v1"]])
-    assert unpriced == ["F32TanhRn_v1"] and BC.gates(REGISTRY["F32TanhRn_v1"], table) == (0, {"F32TanhRn_v1": 1})
+    """`WordBits{16}` and `BitsWord{32}` only rename wires (`BitOf{W}x{I}`, `WordOf{W}`, whose bodies hold no gate), so the
+    table prices each at 0 and an int8 product reading its weights as u16 words prices as its coordinates."""
+    assert K.table(_calling(bind(WordBits, W=16), bind(BitsWord, W=32))) == \
+        {**{f"BitOf16x{i}_v1": 0 for i in range(16)}, "WordOf32_v1": 0}
     mm = bind(GEMM_OPS.ScaledMmS8V3, K=64, N=8, **GEMM_OPS.GEMM_SM120_S8)
     coordinate = bind(GEMM_OPS.ScaledMmS8Coordinate, K=64, **GEMM_OPS.GEMM_SM120_S8)
-    table, unpriced = gate_table([mm])
-    assert not unpriced and BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
+    table = K.table(_calling(mm))
+    assert BC.gates(mm, table) == (8 * BC.gates(coordinate, table)[0], {}) and mm.gates > 8 * coordinate.gates
 
 
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
