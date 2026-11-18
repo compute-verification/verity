@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import docket_digest as DD
 from verity.commitments import salt_file as SF
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.periods import interface as IF
@@ -474,7 +475,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
         win.write(win.close(), a.out, {"tie": TIE_TAG, "program": t.program, "model": t.model, "shards": t.shards}, registrar=R)
         rec = json.loads((Path(a.out) / "registration.json").read_text())
         print(json.dumps({"circuit": rec["window"]["circuit"], "run": t.run, "units": t.units(), "members": len(win.window.members),
-                          "mismatched": {k: len(v) for k, v in bad.items()}, "registration": R.digest(rec),
+                          "mismatched": {k: len(v) for k, v in bad.items()}, "registration": DD.digest(rec),
                           "roots": WeightsRegistration.of(registration, a.registration_out).roots}))
         return 0
     record = WW.weights_record(registered, x.checkpoint_dir, manifest, grain=grain)

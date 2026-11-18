@@ -97,6 +97,10 @@ reason = "H1's lowering (`h1unit.py`, `stagers.py`, `live.py`) runs Flock's stag
 directory = "verity/protocols/resource_accounting/compute/pouw/verifier/receipts"
 owner = "compute-accounting"
 
+# One form opens a trusted place's `loaded_by`: a scheme's declaration is the one file that by design names its verifier
+# and states its parties, so a scheme's `scheme.py`, and no other file of that scheme, may load two trusted places: its
+# own verifier's, and the one that holds the parties' types (`verity/protocol.py`).  That is at most two lines a scheme.
+
 # The ties against the order: for a pair of rows, the first listed before the second, each file of the first that loads a
 # file of the second.  It only shrinks: the test refuses a file not listed here (cut the tie instead: move what the
 # loader needs down to its row or an earlier one, or pass it in), a listed file that no longer loads the later row, and
@@ -407,6 +411,16 @@ loads = [
 
 [[place]]
 paths = [
+    "verity/protocols/proofs/spot/prover/served.py",
+]
+loads = [
+    "verity/circuits",
+    "verity/commitments",
+    "verity/protocols/proofs/spot/verifier",
+]
+
+[[place]]
+paths = [
     "verity/protocols/proofs/spot/prover/workload.py",
 ]
 loads = [
@@ -465,11 +479,10 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_live.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_outer.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_residuals.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_session.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_sparse.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstage.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_vstar.py",
     "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
+    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/circuit/h1window.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/lowering/h1unit.py",
@@ -494,9 +507,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/n2_tie_zk.py",
     "verity/protocols/resource_accounting/network/prover/n2_zk.py",
     "verity/protocols/resource_accounting/network/prover/network_attester_zk.py",
-    "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
-    "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
 ]
 
 [[place]]
@@ -541,6 +552,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/produced.py",
+    "verity/protocols/proofs/spot/prover/served.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
@@ -618,7 +630,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/schemes/pearl_kw.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/circuit.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/challenger.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/names.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/coins/requests.py",
@@ -635,7 +646,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
@@ -703,6 +713,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/poub/prover/window.py",
     "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv.py",
     "verity/protocols/resource_accounting/memory/poub/prover/word_codec/kv_bench.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
 ]
 
 [[place]]
@@ -803,6 +814,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_run.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_store.py",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
 ]
 
 [[place]]
@@ -844,7 +856,20 @@ loads = [
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/prover/produced.py",
     "verity/protocols/proofs/spot/verifier",
+    "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/network/verifier",
+    "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/network/scheme.py",
+]
+loads = [
+    "verity/circuits",
+    "verity/protocols/resource_accounting/network/prover",
+    "verity/protocols/resource_accounting/network/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -883,6 +908,7 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
+    "verity/protocols/resource_accounting/network/scheme.py",
 ]
 
 [[place]]
@@ -928,12 +954,16 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/proofs/spot/prover/workload.py",
+    "verity/protocols/proofs/spot/scheme.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/workload.py",
     "verity/protocols/resource_accounting/memory/poub/prover/p2_party_prover.py",
     "verity/protocols/resource_accounting/memory/poub/prover/session_prover.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
     "verity/protocols/resource_accounting/memory/pous/prover/challenger_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/wipe_prover.py",
     "verity/protocols/resource_accounting/memory/pous/prover/workload.py",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
     "verity/protocols/resource_accounting/network/prover/block_attester.py",
     "verity/protocols/resource_accounting/network/prover/workload.py",
+    "verity/protocols/workload_classification/training_detection/inference_only/scheme.py",
 ]

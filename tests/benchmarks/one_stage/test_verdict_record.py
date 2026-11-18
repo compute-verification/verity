@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import docket_digest as DD
 
 HERE = (Path(__file__).resolve().parent)
 sys.path.insert(0, str(HERE))
@@ -46,8 +46,8 @@ def _first(k: int = 2, n: int = 6, stop_k: int = 6, **boundary: object) -> dict:
     """A stop class's first-stage file as far as the writer reads it: the boundary record and the stop record after
     it."""
     b = _record(k, n, **boundary)
-    s = _record(stop_k, n, previous=R.digest(b), population="stop")
-    return {"record": b, "registration": R.digest(b), "stop": {"record": s, "registration": R.digest(s)}}
+    s = _record(stop_k, n, previous=DD.digest(b), population="stop")
+    return {"record": b, "registration": DD.digest(b), "stop": {"record": s, "registration": DD.digest(s)}}
 
 
 def _stop_summary(first: dict, accepted: bool = True, complete: bool = True, **more: object) -> dict:
@@ -63,7 +63,7 @@ def _interior(first: dict, n: int = 8) -> dict:
 
 def _second_summary(first: dict, held: bool = True, interior: dict | None = None, **outcome: object) -> dict:
     """A second stage's summary on ``first``, naming the interior docket ``interior`` where it registered one."""
-    named = {} if interior is None else {"second_stage": {"registration": R.digest(interior)}}
+    named = {} if interior is None else {"second_stage": {"registration": DD.digest(interior)}}
     return {"first_stage": {"registration": first["registration"]}, "held": held, "outcome": outcome, **named}
 
 
@@ -118,7 +118,7 @@ def test_the_second_stages_word_is_its_commands_and_its_rate_the_boundary_record
         assert got["verifier"]["module"] == "benchmarks/one_stage/two_stage.py" and got["proved_by"] is None
         assert got["open"] == "the two-stage form's soundness is not proved"
         assert (got["stream_registration"], got["stream_names_boundary"]) == (
-            (None, None) if name in ("not held, no interior", "no outcome") else (R.digest(interior), True))
+            (None, None) if name in ("not held, no interior", "no outcome") else (DD.digest(interior), True))
 
 
 def test_a_verdicts_own_stream_is_held_to_the_classs_boundary_record():
@@ -172,7 +172,7 @@ def test_a_summary_or_a_record_that_is_not_this_classs_is_refused():
     with pytest.raises(ValueError, match="stop record is not the record whose digest it names"):
         VR.record("stop_record", moved, _stop_summary(first), **NAMES)
     stray = _record(6, 6, previous="5a" * 64)
-    elsewhere = {**first, "stop": {"record": stray, "registration": R.digest(stray)}}
+    elsewhere = {**first, "stop": {"record": stray, "registration": DD.digest(stray)}}
     with pytest.raises(ValueError, match="`previous` is not the class's boundary record"):
         VR.record("stop_record", elsewhere, _stop_summary(elsewhere), **NAMES)
     with pytest.raises(ValueError, match="holds no stop record"):
@@ -217,7 +217,7 @@ def test_the_command_appends_one_line_a_verdict_and_refuses_a_second_on_one_piec
         ("stop_record", None, "not complete", "r-verdict"), ("stop_record", "id", "refuse", "r-verdict"),
         ("second_stage", None, "withheld", "r-verdict")]
     assert {x["registration"] for x in lines} == {first["registration"]} and {x["serve"] for x in lines} == {"r-serve"}
-    assert [x["stream_registration"] for x in lines] == [first["stop"]["registration"]] * 2 + [R.digest(_interior(first))]
+    assert [x["stream_registration"] for x in lines] == [first["stop"]["registration"]] * 2 + [DD.digest(_interior(first))]
     assert all(x["stream_names_boundary"] is True for x in lines)
     capsys.readouterr()
     assert run("stop_record", "stop.json") == 1 and run("stop_record", "forged.json", "--control", "id") == 1
