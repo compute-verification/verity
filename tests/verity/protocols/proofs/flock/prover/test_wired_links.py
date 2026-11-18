@@ -34,6 +34,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.circuits.private_circuits import universal as U
+from verity.circuits.ops.scalar import BF16, I32, BitAnd, BitNot, I32Add, SelectBf16
 from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.commitments import registered_value as RV
 
@@ -67,6 +68,68 @@ TWO_FIELDS = CompositeDefinition(
     "WiredLinksTwoFields", 1, ("G", "N_IN", "N_OUT"),
     lambda S: (U._signature(S)[0], Tuple(Array(1, U.BIT), Array(S.N_OUT - 1, U.BIT))),
     lambda B, S, *colls: (lambda y: tuple_of(y[0:1], y[1:S.N_OUT]))(U._body(B, S, *colls)), register=False)
+
+
+MIX = CompositeDefinition(
+    "WiredLinksMix", 1, (), lambda S: ((("h", BF16), ("w", I32), ("z", Array(2, U.BIT))), Tuple(BF16, I32, Array(2, U.BIT))),
+    lambda B, S, h, w, z: tuple_of(B.call(SelectBf16, z[0], h, h), B.call(I32Add, w, w),
+                                   array_of([B.call(BitAnd, z[0], z[1]), B.call(BitNot, z[1])])), register=False)
+
+
+def _mix_program(field: int):
+    """Two layers of `MIX`, layer 1's unit t reading layer 0's unit t's return field ``field`` and circuit inputs else."""
+    fn = bind(MIX)
+    ret = fn.signature()[1]
+    sig = (("ch", Array(N, BF16)), ("cw", Array(N, I32)), ("cz", Array(N, Array(2, U.BIT))))
+
+    def body(B, S, *cs):
+        u0 = B.batch(fn, *cs, axes=(0, 0, 0), n=N)
+        srcs = list(cs)
+        srcs[field] = array_of([u0[t][field] for t in range(N)])
+        return B.batch(fn, *srcs, axes=(0, 0, 0), n=N)
+
+    return fn, Program(CompositeDefinition(f"WiredLinksMixTest{field}", 1, (), lambda S: (sig, Array(N, ret)), body,
+                                           register=False))
+
+
+def _stage_mix(d: Path, field: int):
+    """`_mix_program`'s writers (layer 0) and honest readers (layer 1), each instance's rows its own."""
+    fn, program = _mix_program(field)
+    query = PO.template_instance_query(fn)
+    units = PU.PartitionUnits(program, query=query)
+    [(shape, cl)] = units.classes().items()
+    tp = PO.TemplatePartition(program, query)
+    rng = random.Random(f"test-wired-links/mix/{field}")
+    inputs = [rng.randrange(1 << 16) for _ in range(N)] + [rng.randrange(1 << 32) for _ in range(N)] + [rng.randrange(2) for _ in range(2 * N)]
+    assert min(g for u in range(tp.population) for g in tp.outputs(u)) >= len(inputs)
+    (d / "partition.json").write_text(json.dumps(PO.build(program, query), sort_keys=True))
+    (d / "program.desc").write_bytes(canonical_json(encode_program(program)))
+    act, uc = units.activation(cl.definition), cl.representative
+    groups = CS.sources(act, uc, CS.owners_of(units, cl.definition.id))
+    value = dict(enumerate(inputs))
+    ins, want, rows = [[] for _ in uc.inputs], [[] for _ in uc.outputs], [[] for _ in groups]
+    for u in range(tp.population):
+        run = PU.evaluate(act, [value[g] for g in tp.inputs(u)])
+        for port, k in zip(ins, uc.inputs):
+            port.append(run[k])
+        for port, j in zip(want, uc.outputs):
+            port.append(run[j])
+        for g, j in zip(tp.outputs(u), uc.outputs):
+            value[g] = run[j]
+        for i, ids in enumerate(rows):
+            ids.append(("x", u, i))
+    honest = (ins, want, rows)
+    template = descriptor_id(fn)
+    tree = RV.Registered.commit(program_digest(program), f"{template}/out",
+                               [[p[u] for p in want] for u in CS.tree_leaves(tp, template)])
+    wiring = CS.Wiring(program, query, list(range(tp.population)))
+    st = {"writers": CS.stage(units, SPEC, shape, cl, _cut(honest, 0, N), d / "writers", packed=True,
+                              wiring=replace(wiring, indices=list(range(N)), tree=tree)),
+          "honest": CS.stage(units, SPEC, shape, cl, _cut(honest, N, tp.population), d / "honest", packed=True,
+                             wiring=replace(wiring, indices=list(range(N, tp.population)), tree=tree))}
+    for name, k in (("writers", "writers"), ("readers", "honest")):
+        (d / f"{name}.reads.json").write_text(json.dumps({"format": RG.READS, "ports": st[k]["registered_reads"]}))
+    return uc
 
 
 def _read(c, us, t: int, p: tuple):
@@ -552,3 +615,23 @@ def test_the_live_verifier_checks_links_against_its_own_file(staged):
     assert "pass the verifier's own links file" in live(d / "honest", n)
     assert "STATEMENT\t" in live(flat / "plain", tp2.population)
     assert "the circuit declares no links" in live(flat / "plain", tp2.population, *links)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("field,at,word", [(1, 1, 1), (2, 2, 3)], ids=["the-32-bit-field", "the-field-behind-it"])
+def test_lean_accepts_a_read_of_one_field_of_a_writer_of_three_widths(field, at, word, tmp_path):
+    """`MIX` returns a 16-bit leaf, a 32-bit leaf and two bits: META ``at`` counts its leaves, its output row's frame words,
+    so the field behind the 32-bit leaf is at leaf 2 and word 3."""
+    CS.cache_slot_circuits()
+    uc = _stage_mix(tmp_path, field)
+    assert list(uc.out_widths) == [16, 32, 1, 1]
+    [link] = _meta(tmp_path / "honest")["links"]
+    assert link.get(FC.LINK_AT, 0) == at and sum(CS._words(w) for w in uc.out_widths[:at]) == word, link
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
+    bound = ["--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program.desc")]
+    for name, reads in (("writers", "writers.reads.json"), ("honest", "readers.reads.json")):
+        ok, out = _lean("--circuit", str(tmp_path / name / "circuit.txt"), "--public", str(tmp_path / name / f"pub-{N}.bin"),
+                        *bound, "--registered", str(tmp_path / reads))
+        print(field, name, out.strip().splitlines()[-1])
+        assert ok is not None, out
+    assert f"Linking checked: {N} cut wire(s)" in ok["partition_check"]["note"], out
