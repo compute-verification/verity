@@ -202,3 +202,30 @@ def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statem
     assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
         RUN.MARGIN * 3 * big / 60, abs=1)
     assert limit("--env", "REC_LINKS=1", "--env", "REC_LINKS=0") == limit()
+
+
+WINDOW = ["--window", "/workspace/kept/serving-rows", "--units", "0-15", "--subcircuit", "rope-head/d64/neox-bf16",
+          "--serves", "llama-3.2-1b-h200"]
+
+
+def test_a_window_run_stages_on_the_machine_that_keeps_the_window_and_sends_nothing(capsys) -> None:
+    """--window is stage.sh over the window where it lies: with --direct a plain run on its calendar row's cores, the
+    job's own work tree (no CPU node's cache), and no file sent with the run."""
+    assert RUN.main(["run", "--dry-run", "--direct", "--on", "window-node", "--cores", "10-41", *WINDOW]) == 0
+    cmd = capsys.readouterr().out.split()
+    head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
+    assert head[:4] == ["research", "run", "--on", "window-node"] and "--queue" not in head and "--send" not in head
+    assert job[:5] == ["taskset", "-c", "10-41", "bash", "benchmarks/recursion_e2e/stage.sh"]
+    assert {"WINDOW=/workspace/kept/serving-rows", "MEMBER=0", "UNITS=0-15", "SUBCIRCUIT=rope-head/d64/neox-bf16",
+            "SERVES=llama-3.2-1b-h200", "GPU=0"} <= set(job) and not any(e.startswith("FLOCK_WORK=") for e in job)
+    with pytest.raises(SystemExit, match="calendar row"):
+        RUN.main(["run", "--dry-run", "--direct", "--on", "window-node", *WINDOW])
+    with pytest.raises(SystemExit, match="never copied"):
+        RUN.main(["run", "--dry-run", *WINDOW])
+    with pytest.raises(SystemExit, match="never copied"):
+        RUN.main(["run", "--dry-run", "--on", "auto", *WINDOW])
+    with pytest.raises(SystemExit, match="CPU prover"):
+        RUN.main(["run", "--dry-run", "--direct", "--on", "window-node", "--cores", "10-41", "--oprove-gpu", "1", *WINDOW])
+    with pytest.raises(SystemExit, match="absolute path"):
+        RUN.main(["run", "--dry-run", "--direct", "--on", "window-node", "--cores", "10-41", "--window", "rows",
+                  *WINDOW[2:]])

@@ -176,7 +176,7 @@ OS_RANDOMNESS = {
                                             "by A5's uniform/python-secrets",
     "protocols/proofs/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
-    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/rows_bench.py": "the bench's hiding salts, no coin",
+    "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/statement.py": "the statement's hiding salts, no coin",
     "protocols/resource_accounting/compute/pouw/prover/kernels/served_zk/served_commit.py": "the commit's hiding salts, and its own pick "
                                                                            "of the calls it measures (recorded as "
                                                                            "``call_draw``), which credits nothing",

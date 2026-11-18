@@ -1,8 +1,8 @@
-"""``--admit tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
+"""Order ``tick`` (`verity.protocols.resource_accounting.network.prover.admission.TickGate`): the certified tick in front of a vLLM-like FCFS scheduler, run in simulated
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; and serve-openai's
-``--admit tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
+order ``tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
 these tests put on the stand-in scheduler."""
 from __future__ import annotations
 
@@ -221,12 +221,12 @@ def test_the_tick_rule_reads_whole_buckets_in_microseconds():
 class Gated:
     """A gate over `Sched` with a hand-turned clock."""
 
-    def __init__(self, hold_s: float = 5.0, rule: dict[str, Any] | None = None) -> None:
+    def __init__(self, hold_s: float = 5.0, token_ns: int = 0) -> None:
         self.now = 0.0
         self.sched = Sched()
         self.log: list[dict] = []
         kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
-        self.gate = na.RuleGate(TICK, **rule, **kw) if rule else na.TickGate(TICK, **kw)
+        self.gate = na.TickGate(TICK, token_ns=token_ns, **kw)
         self.hooks = hooked(self.sched, self.gate)
         self.watermark = na.Watermark(RUN, self.gate.take)
 
@@ -278,63 +278,27 @@ def test_the_engine_waits_for_the_watermark_and_admits_at_the_bucket_close():
     assert [r["held_steps"] for r in g.log] == [[0], [0], [2]]       # r2 came, then r1 stepped twice before its bucket
 
 
-def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_while_nothing_waits():
-    g = Gated(rule={"token_ns": 1_000_000, "catch_up": "marks"})
-    g.release(0, bucket=0)
-    g.arrive("r0", out=10)
-    g.lines(1)
-    assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us + 1_000
-    g.release(1, bucket=3)
-    g.arrive("r1")
-    g.lines(1, 1, 2)
-    assert g.step() and g.sched.added == ["r0", "r1"] and g.sched.steps[-1] == ["r0", "r1"]
-    up = [r for r in g.log if r.get("event") == "catch_up"]
-    assert [(r["T"], r["to"], r["bits"]) for r in up] == [(141_000, TICK.close(3), 2.0)]
-    h = Gated()
-    h.release(0, bucket=0)
-    h.arrive("r0", out=10)
-    h.lines(1)
-    h.step()
-    h.release(1, bucket=3)
-    h.arrive("r1")
-    h.lines(1, 1, 2)
-    assert h.step() and h.sched.added == ["r0"]                     # the registered rule holds r1 till T closes bucket 3
-    o = Gated(rule={"catch_up": "open"})
-    o.release(0, bucket=5)
-    o.arrive("r0")
-    assert o.step() and o.sched.added == ["r0"] and o.gate.opened == "the rule orders nothing"
-
-
-def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
+def test_the_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
     drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
     assert admission.non_draft_tokens(drafted) == (4, 10)
     assert admission.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
-    g = Gated(rule={"token_ns": 600})
+    g = Gated(token_ns=600)
     g.release(0, bucket=0)
     g.arrive("r0", out=10)
     g.lines(1)
     assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
     assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
-    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2}}
+    assert g.gate.summary()["token_ns"] == 600 and "token_ns" not in Gated().gate.summary()
 
 
 SETTINGS = {"bucket_us": 100_000, "sat_us": 30_000, "free_us": 40_000, "hold_ms": 2000}
 
 
-def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know():
-    assert {k: na.tick_config(SETTINGS, "s")[k] for k in ("token_ns", "catch_up")} == {
-        "token_ns": 0, "catch_up": "quiet"}
-    for bad in ({"token_ns": -1}, {"token_ns": 1.5}, {"catch_up": "wall"}):
+def test_the_tick_config_has_no_token_term_by_default_and_refuses_one_that_is_not_whole_nanoseconds():
+    assert na.tick_config(SETTINGS, "s")["token_ns"] == 0
+    for bad in ({"token_ns": -1}, {"token_ns": 1.5}):
         with pytest.raises(ValueError, match="token_ns a non-negative integer"):
             na.tick_config(SETTINGS | bad, "s")
-
-
-def test_the_tick_config_refuses_the_open_gate_unless_a_benchmark_arm_names_it():
-    cfg = SETTINGS | {"catch_up": "open"}
-    for unnamed in (cfg, cfg | {"arm": ""}):
-        with pytest.raises(ValueError, match="catch_up 'open' opens the gate"):
-            na.tick_config(unnamed, "s")
-    assert na.tick_config(cfg | {"arm": "prod-tick"}, "s")["catch_up"] == "open"
 
 
 def test_a_missing_release_no_line_names_lost_holds_the_later_ones_until_its_skip_and_comes_late():
@@ -722,7 +686,7 @@ def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
 
 @contextlib.contextmanager
 def tick_endpoint() -> Iterator[SimpleNamespace]:
-    """serve-openai under ``--admit tick`` over `SchedEngine`, its engine loop and its HTTP server each in a thread, until
+    """serve-openai under order ``tick`` over `SchedEngine`, its engine loop and its HTTP server each in a thread, until
     the block ends: ``address`` is the server's, ``held`` counts the requests that reached the gate and ``lines`` the
     watermark lines the server has read."""
     engine = SchedEngine()
@@ -950,26 +914,26 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
 def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name():
     base = ["--model", "m", "--revision", "r", "--no-commit"]
     name = messages.providing("admission").name
-    times = ["--protocols-config", json.dumps({name: {"sat_us": 27_500, "free_us": 41_000}})]
-    opts = cli.parse("serve-openai", [*base, "--admit", "tick", *times], environ={})
-    assert so.admission_settings(opts) == {"sat_us": 27_500, "free_us": 41_000, "order": "tick"}
+    times = ["--protocols-config", json.dumps({name: {"order": "tick", "sat_us": 27_500, "free_us": 41_000}})]
+    opts = cli.parse("serve-openai", [*base, *times], environ={})
+    assert so.admission_settings(opts) == {"order": "tick", "sat_us": 27_500, "free_us": 41_000}
     so.preflight(opts, which=lambda _: None)
-    with pytest.raises(cli.UsageError, match="--admit tick: --protocols-config: .*a positive integer of microseconds"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick"], environ={}), which=lambda _: None)
+    with pytest.raises(cli.UsageError, match="--protocols-config .*a positive integer of microseconds"):
+        so.preflight(cli.parse("serve-openai", [*base, "--protocols-config", json.dumps({name: {"order": "tick"}})],
+                               environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-requests"):
-        so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", *times, "--window-requests", "4"], environ={}),
-                     which=lambda _: None)
+        so.preflight(cli.parse("serve-openai", [*base, *times, "--window-requests", "4"], environ={}), which=lambda _: None)
 
 
 def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
-    """`build.hooked` installs admission on an in-process scheduler with the install's own key; `--admit tick`'s setup
+    """`build.hooked` installs admission on an in-process scheduler with the install's own key; order ``tick``'s setup
     (`serve_openai.network_admission`) then attaches the attester's gate and frontend, by its scheme, beside that one
     hook, refusing nothing."""
     sched = Sched()
     built = admission.install(sched)
     loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
-    opts = SimpleNamespace(admit="tick", protocols_config=json.dumps(
-        {messages.providing("admission").name: {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
+    opts = SimpleNamespace(protocols_config=json.dumps(
+        {messages.providing("admission").name: {"order": "tick", "bucket_us": 5000, "sat_us": 1000, "free_us": 1000, "hold_ms": 1000}}))
     try:
         hook, order = so.network_admission(loop, sched, opts)
         assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0

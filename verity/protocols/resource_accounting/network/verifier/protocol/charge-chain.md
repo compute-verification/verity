@@ -216,8 +216,7 @@ tick) charges them with `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of `
 ``a_valid``, mt its attested max_tokens ``a_mt`` and olen its attested output length, so no slot is free witness. What
 holds ``cert`` to the attested record is a stand-in, the honest cert row under the network attester's salt, until max_tokens
 is read from the attested body; the circuit bounds max_tokens only from above, so a lower one the output still fits
-passes at a lower charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the
-arrivals the replay loads. A class whose execution phases send order entries or length terms (or a code's that sends hits) does
+passes at a lower charge until then. A class whose execution phases send order entries or length terms (or a code's that sends hits) does
 the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over

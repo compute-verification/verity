@@ -536,12 +536,6 @@ def identity() -> dict:
                                                    "GPU_LEASE_WHO", "VLLM_BATCH_INVARIANT", "FLASHINFER_CUDA_ARCH_LIST")}}
 
 
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
 def wait_ready(server: subprocess.Popen, port: int, deadline: float) -> None:
     while clock() < deadline:
         if server.poll() is not None:
@@ -584,6 +578,8 @@ def local_model(name: str, hf_home: Path) -> str:
 
 
 def run(args: argparse.Namespace) -> int:
+    from verity_bench import kit
+
     start = clock()
     deadline = start + 60 * args.minutes
     if args.mode in OFFLINE and args.model not in ROLES:
@@ -596,7 +592,7 @@ def run(args: argparse.Namespace) -> int:
                          "warmup_s": args.warmup_s, "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS,
                                                              "frame_bytes": FRAME_BYTES}}
     meta["member"] = member(args.model, meta["gpu"]["name"], args.mode)
-    port, served, server, offline = free_port(), "served", None, args.mode in OFFLINE
+    port, served, server, offline = kit.free_port(), "served", None, args.mode in OFFLINE
     model = local_model(args.model, Path(os.environ.get("HF_HOME", Path.home() / ".cache/huggingface")))
     server_argv = [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", model,
                    "--served-model-name", served, "--host", "127.0.0.1", "--port", str(port), "--seed", "0",

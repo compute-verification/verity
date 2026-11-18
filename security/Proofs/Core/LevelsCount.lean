@@ -13,7 +13,8 @@ miss is that of its members among them, and the count runs over those alone.
 `Levels.countAt_le_iff`: the count at `δ` is the least count bound, so at most `K` exactly when every set of more than
 `K` of the last level's blocks is missed with probability below `δ`. `Levels.isCountBound_one_iff`: at one level that
 is the level's own design's count over its blocks. `Levels.countAt_anti` and `Levels.shareAt_anti`: both are
-antitone in `δ`.
+antitone in `δ`. `Levels.miss_le_of_countAt_lt`: a design over units placed as the last level's blocks, which the levels
+miss as the design does, has its count curve `miss K` at most `δ` above the count at `δ`.
 
 Two levels: `Levels.missProb_two_le_prod` bounds the miss by `∏_{X ∈ B₁} (r_X (1 − m_X) + m_X)` when the first design
 misses each set `R` of outer blocks with probability at most `∏_{X ∈ R} r_X` (with equality for independent outer
@@ -155,6 +156,23 @@ theorem countAt_two_le (L : Levels G) {l₁ l₂ : Level G} (hL : L.levels = [l�
   refine hK (fun X => (T.filter (· ⊆ X)).card) ((hδ.trans (L.missProb_two_le_prod hL r h₁ T)).trans ?_)
   refine Finset.prod_le_prod fun X hX => pass_mono (hr X) ?_ (ha X _)
   exact h₂ X hX _ ((Finset.filter_subset _ _).trans hT) fun b hb => (Finset.mem_filter.1 hb).2
+
+/-- **A design's count curve, read through the count at `δ`**: where `blk` places the design's units injectively as the
+last level's blocks and the levels miss each set's blocks with the design's miss, every set of more units than the count
+at `δ` is missed with probability below `δ`, so `miss K ≤ δ` for every `K` above the count. -/
+theorem miss_le_of_countAt_lt (L : Levels G) {U : Type} (D : SamplingDesign U) {blk : U → Finset G}
+    (hblk : Function.Injective blk) (hin : ∀ u, blk u ∈ L.blocks)
+    (hD : ∀ S, L.design.missProb (S.image blk) = D.missProb S) {δ : ℝ≥0∞} {K : ℕ} (h : L.countAt δ < K) :
+    D.miss K ≤ δ := by
+  refine iSup₂_le fun S hS => ?_
+  rw [← hD S]
+  by_contra hlt
+  have hsub : S.image blk ⊆ L.blocks := fun x hx => by
+    obtain ⟨u, -, rfl⟩ := Finset.mem_image.1 hx
+    exact hin u
+  have hc := L.isCountBound_countAt δ _ hsub (not_le.1 hlt).le
+  rw [Finset.card_image_of_injective _ hblk] at hc
+  omega
 
 end Levels
 

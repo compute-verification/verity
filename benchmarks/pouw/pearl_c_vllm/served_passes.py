@@ -18,8 +18,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py arm --out config.json [--spec SPEC] [--arm ARM]
 
 ``arm`` writes the spec's Pearl-C arm's pouw settings (`pearl_c_arm`, each ``"$NAME"`` read from the environment the
-spec's setup exports) as serve-openai's ``--protocols-config`` takes them for the same arm (`serve_pearl.config_of`): the
-keys of `serve_pearl.CONFIG` alone, the server sampling each window's coins and naming its transcript dir itself.
+spec's setup exports) as serve-openai's ``--protocols-config`` takes them for the same arm (`serve_openai.scheme_settings`):
+the scheme's own settings alone, the server setting each epoch's coins and its transcript dir itself.
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
@@ -630,14 +630,15 @@ def verify(args: argparse.Namespace) -> int:
 def arm(args: argparse.Namespace) -> int:
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
-    from verity_vllm.pipeline import serve_pearl as SPL
+    from verity_vllm import messages as M
 
     picked = pearl_c_arm(P.resolve_spec(args.spec), args.arm)
-    if tuple(picked.protocols) != (SPL.ENTRY,):
-        raise SystemExit(f"served_passes.py arm: serve-openai serves {SPL.ENTRY} alone; {picked.id} is {list(picked.protocols)}")
-    # read with no protocol enabled, so no in-process challenger flips coins the server samples per window itself
+    if len(picked.protocols) != 1 or (scheme := M.option(picked.protocols[0])) is None:
+        raise SystemExit(f"served_passes.py arm: serve-openai attaches one declared scheme by its option; {picked.id} is "
+                         f"{list(picked.protocols)}")
+    # read with no protocol enabled, so no in-process challenger flips coins the server samples per epoch itself
     pouw = A.protocols_config(dataclasses.replace(picked, protocols=()), os.environ).get("pouw", {})
-    doc = SPL.config_of(json.dumps({"pouw": {k: v for k, v in pouw.items() if k in SPL.CONFIG}}))
+    doc = {"pouw": {k: v for k, v in pouw.items() if k in scheme.settings}}
     Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
     print(f"arm {picked.id}: --protocols-config {args.out}, pouw {sorted(doc['pouw'])}", flush=True)
     return 0

@@ -54,6 +54,7 @@ import pytest
 
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, docket as R
+from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF, rows as CS
@@ -2000,7 +2001,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
     assert "ingress" not in doc
-    mine = IF.window_of_record(doc, DR.parse_design(LAYER0["law"]), IF.resolve)
+    mine = IF.window_of_record(doc, RND.parse_design(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
@@ -2082,7 +2083,7 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
 
 
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
-    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
+    """`pearl_tie`: with ``--pearl-passes DIR`` (Pearl+'s ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
     window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
     the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
     ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""

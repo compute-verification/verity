@@ -62,6 +62,7 @@ from verity.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
+from verity.commitments import randomness as RND  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
@@ -185,7 +186,7 @@ def plain(a: argparse.Namespace, spec: list[tuple[int, int]], out: Path) -> int:
             sdir.mkdir(parents=True, exist_ok=True)
             after = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             p = a0.challenger_sample(a.lean, ["--program", str(st["program_file"]), "--partition", str(st["partition_file"]),
-                                            "--stratified", str(c)], D.derive(program, query, D.parse_design(f"stratified:{c}")),
+                                            "--stratified", str(c)], D.derive(program, query, RND.parse_design(f"stratified:{c}")),
                                      c, after, sdir / "draw.log")
             line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
             if line is None:
@@ -266,7 +267,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    sampling_design = D.parse_design(f"stratified:{a.k}")
+    sampling_design = RND.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -368,8 +369,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
+    for name, other in (("registration-law-another-k (R1)", RND.parse_design(f"stratified:{a.k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", RND.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]
