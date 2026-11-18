@@ -1,6 +1,3 @@
-"""`DefinitionTable.add_family` and `resolve`: a registered id wins unless a family matches it, a family matching a registered
-id that isn't its own is refused, two families matching one id are refused, a family's Definition has the id asked for, and a
-width is made once."""
 from __future__ import annotations
 
 import re
@@ -18,7 +15,6 @@ def _prim(table: DefinitionTable, name: str, width: int) -> PrimitiveDefinition:
 
 
 def _family(table: DefinitionTable, name: str = "Wx"):
-    """A caching factory of ``{name}{w}_v1``, which registers what it makes, as the catalog's factories do."""
     made: dict[int, PrimitiveDefinition] = {}
 
     def make(w: int) -> PrimitiveDefinition:
@@ -75,3 +71,31 @@ def test_a_width_is_made_once_and_its_own_registration_is_accepted():
     assert T.resolve("Wx4_v1") is early
     first = T.resolve("Wx8_v1")
     assert first.id == "Wx8_v1" and T.resolve("Wx8_v1") is first and T.defs["Wx8_v1"] is first
+
+
+def test_a_width_spelled_other_than_its_decimal_is_refused_making_nothing():
+    T = DefinitionTable()
+    T.add_family(r"Wx(\d+)_v1", _family(T))
+    for fid in ("Wx08_v1", "Wx\u0668_v1"):
+        with pytest.raises(ValueError, match=re.escape(f"{fid}: family") + ".*other than as its decimal"):
+            T.resolve(fid)
+    T.add_family(r"Vx([+\d]+)_v1", _family(T, "Vx"))
+    with pytest.raises(ValueError, match="other than as its decimal"):
+        T.resolve("Vx+8_v1")
+    assert set(T.defs) == set() and not T._made
+
+
+def test_a_width_the_family_cant_make_is_refused_by_family_and_width():
+    W, B = r"Wx(\d+)_v1", r"Bx(\d+)_v1"
+    T = DefinitionTable()
+    T.add_family(W, _family(T))
+    with pytest.raises(ValueError, match=re.escape(f"Wx0_v1: family {W!r} can't make width 0")):
+        T.resolve("Wx0_v1")
+    assert set(T.defs) == set()
+
+    def broken(w: int) -> PrimitiveDefinition:
+        raise TypeError("no such width")
+
+    T.add_family(B, broken)
+    with pytest.raises(ValueError, match=re.escape(f"Bx3_v1: family {B!r} can't make width 3: no such width")):
+        T.resolve("Bx3_v1")

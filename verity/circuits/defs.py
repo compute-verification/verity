@@ -38,8 +38,6 @@ class DefinitionTable:
         self._made: dict[str, "FunctionDefinition"] = {}
 
     def add_family(self, pattern: str, make: Callable[[int], "FunctionDefinition"]) -> None:
-        """Definitions made per width on demand: the id fully matching ``pattern`` (one group, the width) is ``make(width)``.
-        Refuses a pattern added twice, and one matching a registered id that ``make`` doesn't return."""
         pat = re.compile(pattern)
         if pat.groups != 1:
             raise ValueError(f"family {pattern!r}: a family's pattern has exactly one group, the width")
@@ -54,9 +52,6 @@ class DefinitionTable:
             raise
 
     def resolve(self, fid: str) -> "FunctionDefinition | None":
-        """The Definition ``fid``: the registered one, else the one the `add_family` family matching ``fid`` makes, made once;
-        None for neither. Refuses an id two families match, a family making another id, and a registered id a family matches
-        that isn't the family's own Definition."""
         if fid in self._made:
             return self._made[fid]
         fams = [(p, make) for p, make in self.families.values() if p.fullmatch(fid)]
@@ -66,11 +61,17 @@ class DefinitionTable:
             raise ValueError(f"{fid}: families {', '.join(repr(p.pattern) for p, _ in fams)} all match it; patterns of two "
                              "families never match one id")
         pat, make = fams[0]
+        spelled = pat.fullmatch(fid)[1]
+        if not spelled.isdecimal() or str(int(spelled)) != spelled:
+            raise ValueError(f"{fid}: family {pat.pattern!r} spells width {spelled!r} other than as its decimal")
+        width = int(spelled)
+        if width < 1:
+            raise ValueError(f"{fid}: family {pat.pattern!r} can't make width {width}")
         registered = self.defs.get(fid)
         try:
-            made = make(int(pat.fullmatch(fid)[1]))
-        except ValueError as e:
-            raise ValueError(f"{fid}: family {pat.pattern!r} can't make it: {e}") from e
+            made = make(width)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"{fid}: family {pat.pattern!r} can't make width {width}: {e}") from e
         if made.id != fid:
             raise ValueError(f"family {pat.pattern!r} made {made.id} when asked for {fid}")
         if registered is not None and registered is not made:
