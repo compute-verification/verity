@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.pipeline.advice_code import format as I1
+from verity_vllm.compiler import advice_format as I1
 from verity_vllm.program.predict.build import build_program, decoder
 from verity_vllm.program.predict.common import Unexpressible
 from verity_vllm.program.predict.segment import step_of

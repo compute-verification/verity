@@ -10,7 +10,7 @@ import math
 from dataclasses import replace
 
 import pytest
-from verity_vllm.pipeline.advice_code import format as I1
+from verity_vllm.compiler import advice_format as I1
 
 from tests.program.predict.test_steps import GREEDY, _prompt, _registered
 from verity_vllm.pipeline.advice_code import codec as V1

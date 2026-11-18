@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-import verity_vllm.pipeline.advice_code.format as I1
+import verity_vllm.compiler.advice_format as I1
 
 from .build import Unexpressible
 
