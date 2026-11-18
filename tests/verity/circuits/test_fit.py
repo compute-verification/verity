@@ -207,3 +207,17 @@ def test_a_block_with_no_pin_joins_the_block_before_it_where_rows_and_bits_allow
     assert FT.build(program, rows=4) == [[0, 3]]
     assert codes(program, FT.query(rows=4), [[0, 1], [1, 3]]) == {"fit-pin"}
     assert PO.verify(PO.build(program, FT.query(rows=4), [[0, 3]]), program).ok
+
+
+def test_a_partitions_writer_rows_are_measured_once_for_all_its_blocks(monkeypatch):
+    program, c = toy()
+    obj = PO.build(program, FT.query(rows=5), FT.build(program, rows=5))
+    bits = R.Bits(R.program(c))
+    R._WRITERS.clear()
+    passes = []
+    finish = FT.Fit.finish
+    monkeypatch.setattr(FT.Fit, "finish", lambda self, *a: (passes.append(1), finish(self, *a))[1])
+    got = [R.restrict(c, obj, e, bits).descriptor for e in obj["blocks"]]
+    assert len(passes) == len(obj["blocks"]) and len(R._WRITERS) == 1
+    R._WRITERS.clear()
+    assert [R.restrict(c, obj, e, bits).descriptor for e in reversed(obj["blocks"])] == got[::-1]

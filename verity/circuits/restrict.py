@@ -49,6 +49,7 @@ and its gate, all in the block's numbering, one ASCII line each.
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
@@ -62,7 +63,7 @@ from . import program as P
 from .codec import DecodedProgram, decode_program, descriptor_chunks, lookup_primitive
 from .defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
 from .layout import Circuit, Scope, resolve
-from .parts import Part, Unsupported
+from .parts import Part
 from .program import REGISTRATION, RUN, input_id, input_prim
 from .refs import Affine, Coll, concat
 from .types import Array, Tuple, Value, remove_axis, type_from_json
@@ -384,14 +385,38 @@ def unit_gates(D: DecodedProgram, partition: Mapping[str, Any], units: Any) -> l
 def ports(part: Part) -> tuple[list[int], list[int]]:
     """in(S) and out(S) of S, the part's gates of C, each in increasing index, from the descriptor (`boundary`), never by a
     pass over C."""
-    ins, outs = BD.in_gates(part), BD.out_gates(part)
-    for x in (ins, outs):
-        if isinstance(x, Unsupported):
-            raise Refused("E_BOUNDARY", f"{x.reason}: {x.detail}")
-    return sorted(ins), sorted(outs)
+    try:
+        return FT.ports(part)
+    except FT.Unfit as x:
+        raise Refused("E_BOUNDARY", str(x)) from None
 
 
-def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any) -> Any:
+#: each partition object's blocks measured once (`fit.Fit` over all of them), by its digest and C's bytes' SHA-256
+_WRITERS: dict[tuple[str, str], tuple[Any, int, str]] = {}
+_WRITERS_MAX = 4
+
+
+def _writers(D: DecodedProgram, tp: Any, entries: Sequence[Any], key: tuple[str, str]) -> tuple[Any, int, str]:
+    """`fit.Fit` with every block of ``entries`` finished in order, the number finished, and why the rest is not."""
+    if key in _WRITERS:
+        return _WRITERS[key]
+    fit, done, why = FT.Fit(D), 0, ""
+    for e in entries:
+        p = FT.part_of(D, tp, e)
+        try:
+            _ins, outs = FT.ports(p)
+        except FT.Unfit as x:
+            why = str(x)
+            break
+        fit.finish(p, outs, [BD.gate_width(D, g) for g in outs])
+        done += 1
+    if len(_WRITERS) >= _WRITERS_MAX:
+        _WRITERS.pop(next(iter(_WRITERS)))
+    _WRITERS[key] = (fit, done, why)
+    return _WRITERS[key]
+
+
+def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any, c: bytes) -> Any:
     """Under `Q_fit` with the partition's ``blocks``: a gate of in(S) -> its writer row (`fit`'s rows), from the blocks before
     this one; None otherwise. Refused where ``units`` is no block of the partition."""
     entries = partition.get(PO.BLOCKS) if isinstance(tp, FT.FitPartition) else None
@@ -400,18 +425,14 @@ def _rows(D: DecodedProgram, tp: Any, partition: Mapping[str, Any], units: Any) 
     me = dict(units) if isinstance(units, Mapping) else ([list(u) for u in units][0] if len(units) == 1 else None)
     if me not in entries:
         raise Refused("E_UNITS", f"{units!r} is no block of the partition's blocks")
-    fit = FT.Fit(D)
-    for e in entries[:entries.index(me)]:
-        p = FT.part_of(D, tp, e)
-        try:
-            _ins, outs = fit._ports(p)
-        except FT.Unfit as x:
-            raise Refused("E_BOUNDARY", str(x)) from None
-        fit.finish(p, outs, [BD.gate_width(D, g) for g in outs])
+    i = entries.index(me)
+    fit, done, why = _writers(D, tp, entries, (PO.digest(partition), hashlib.sha256(c).hexdigest()))
+    if i > done:
+        raise Refused("E_BOUNDARY", why)
 
     def key(g: int) -> tuple:
         got = fit._input_row(g) or fit.writers.row(g)
-        if got is None:
+        if got is None or (got[0][0] == "w" and got[0][1] >= i):
             raise Refused("E_ORDER", f"gate {g} is in no block before this one and no input")
         return got[0]
     return key
@@ -600,7 +621,7 @@ def restrict(c: bytes, partition: Mapping[str, Any], units: Any, bits: Bits | No
     units = _ranges(tp, units)
     where = _where(bits.D, tp, units)
     ins, outs = ports(where.part)
-    prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units))
+    prog = _build(bits, where, ins, outs, _rows(bits.D, tp, partition, units, c))
     key = dict(units) if isinstance(units, Mapping) else tuple(tuple(u) for u in units)
     return Block(key, tuple(where.part.intervals()), tuple(ins), tuple(outs), prog, b"".join(descriptor_chunks(prog)), bits)
 

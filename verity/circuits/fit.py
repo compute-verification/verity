@@ -284,6 +284,16 @@ class _Writers:
         return ("w", b, r), self.run_bytes[b][r]
 
 
+def ports(part: Part) -> tuple[list[int], list[int]]:
+    """in(S) and out(S) of the part's gates S, each in increasing index of C, from the descriptor (`boundary`), never by a
+    pass over C; refused (``fit-unsupported``) where `boundary` cannot give them exactly."""
+    ins, outs = BD.in_gates(part), BD.out_gates(part)
+    for x in (ins, outs):
+        if isinstance(x, Unsupported):
+            raise Unfit("fit-unsupported", f"{part.scope.spec.id} items {sorted(part.items)[:4]}...: {x.reason} {x.detail}")
+    return sorted(ins), sorted(outs)
+
+
 class Measure(NamedTuple):
     """A block's rows, its Flock block's ``k_log``, its out(S) with their widths, and whether a row holds the pin."""
     rows: int
@@ -306,11 +316,7 @@ class Fit:
         self._input_starts = [body.offsets[k] for k in self._input_nodes]
 
     def _ports(self, part: Part) -> tuple[list[int], list[int]]:
-        ins, outs = BD.in_gates(part), BD.out_gates(part)
-        for x in (ins, outs):
-            if isinstance(x, Unsupported):
-                raise Unfit("fit-unsupported", f"{part.scope.spec.id} items {sorted(part.items)[:4]}...: {x.reason} {x.detail}")
-        return sorted(ins), sorted(outs)
+        return ports(part)
 
     def _width(self, g: int) -> int:
         return BD.gate_width(self.program, g)
@@ -515,4 +521,4 @@ def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int |
 
 __all__ = ["BITS_MAX", "FitPartition", "Fit", "Measure", "K_MAX", "K_MIN", "LAST_BLOCK_BYTES", "MASK_LOG", "MAX_ROWS", "PACK_LOG", "PER_SLOT",
            "Q_FIT", "SLOT_LOG", "Unfit", "blocks_form", "build", "cover", "entry_form", "params_ok", "part_of", "proof_block_k_log",
-           "query", "verify"]
+           "ports", "query", "verify"]
