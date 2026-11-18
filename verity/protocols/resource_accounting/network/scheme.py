@@ -16,10 +16,22 @@ from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBu
 from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay
+from verity.protocols.resource_accounting.network.prover.admission import Admitter
 from verity.protocols.resource_accounting.scheme import register_process
 
 DEFINITIONS = (IngressScanStart, IngressScanBucket, EgressBucket, IoTieRoute, IoTieContent, IoTieBucket, IoTieRequest,
                ResponseTieStop, ResponseTieNoStop, LengthsRow)
+
+
+def attach(exchange: Any, ctx: Mapping[str, Any]) -> Any:
+    """The scheme on a served run's ``exchange``. With ``admit`` in ``ctx``, its admission (`prover.admission.Admitter`,
+    the configuration ``admit`` with ``ctx``'s ``source``, ``submit``, ``abort``, ``take``, ``pull``, ``log`` and
+    ``clock``), installed and returned; without, the id relay beside the workload (`START_ID_RELAY`)."""
+    if "admit" not in ctx:
+        exchange.request(NETWORK_ATTESTER.name, START_ID_RELAY)
+        return None
+    kw = {k: ctx[k] for k in ("source", "submit", "abort", "take", "pull", "log", "clock") if k in ctx}
+    return Admitter(ctx["admit"], **kw).install(exchange, NETWORK_ATTESTER.name)
 
 
 def output_bits(definition: Any) -> Callable[[Mapping[str, int]], int]:
@@ -46,6 +58,7 @@ NETWORK_ATTESTER = register(Scheme(
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
     ports=(Port("scan-state", "input", IngressScanStart.id, "sin"), Port("released", "output", EgressBucket.id, "o1")),
+    attach=attach,
 ))
 
 register_process("id-relay", id_relay.process)

@@ -35,7 +35,7 @@ build)
   mkdir -p "$WORK/bin" "$OUT/sass"
   "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
   for src in "$@"; do
-    python3 "$PROBE" build --arch sm_90a --out "$WORK/bin" "$src" >>"$OUT/build.log" 2>&1 \
+    python3 "$PROBE" build --card "NVIDIA H200" --out "$WORK/bin" "$src" >>"$OUT/build.log" 2>&1 \
       || echo "emp.sh: build failed: $src (build.log)" | tee -a "$OUT/build.log" >&2
   done
   shopt -s nullglob
