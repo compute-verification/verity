@@ -6,6 +6,7 @@ the verifier's own registered roots at the positions its own program reads.
 -/
 module
 
+public import Circuits.Lanes
 public import Flock.Canon
 public import Flock.HmRow
 
@@ -90,6 +91,8 @@ structure Port where
   readsRel : Array (Option Nat)
   schema : String := HmRow.ROW_SCHEMA
   readsFrom : Nat := 0
+  /-- the template parameter it reads (`PARAM_KEY`), empty when it is the port's name -/
+  param : String := ""
   deriving Inhabited
 
 /-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
@@ -140,7 +143,8 @@ def portsOf (j : Json) : V (Array Port) := do
     if !SCHEMAS.contains schema then throw s!"{ctx}: port {name}: {SCHEMA_KEY} is one of {SCHEMAS}, not {schema}"
     if schema != HmRow.ROW_SCHEMA && words.isNone then
       throw s!"{ctx}: port {name}: a {schema} row is a bit row of its words' bits, and the port names no words"
-    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := #[], schema }
+    let param ← if J.has e "param" then J.str e "param" ctx else pure ""
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := #[], schema, param }
 
 /-- The first port of `ps` whose name a later port has. -/
 def dupName? : List Port → Option String
@@ -287,15 +291,92 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
+/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
+def regDef (P : Program.Prog) (fn : Nat) : Bool :=
+  match P.defs[fn]? with
+  | some f => f.prim && f.binding == some Program.REGISTRATION
+  | none => false
+
+/-- The root's nodes of `P`. -/
+def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+
+/-- Root node `k` of `P` is a registered input. -/
+def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
+
+/-- A port's template parameter (`PARAM_KEY`) as its name and, for `name[i]`, row `i` of an array of rows. -/
+def paramRow (param : String) : String × Option Nat :=
+  match param.splitOn "[" with
+  | [p, r] => match r.splitOn "]" with
+    | [d, ""] => match d.toNat? with
+      | some i => (p, some i)
+      | none => (param, none)
+    | _ => (param, none)
+  | _ => (param, none)
+
 end Registered
 
 namespace OneCircuit
 
+open Registered (regNode paramRow)
+
+/-- Member `m` of root node `k` reads its parameter `param` (`paramRow`) at a registered input node's row: the node
+the row (its leaf over the row's leaves) and the row's leaves, from the argument's part holding the member's row (`Program.laneWire`).
+A form with no closed form here (an explicit part, a row across parts or lanes) is refused by name. -/
+def regRow (P : Program.Prog) (k m : Nat) (param : String) : V (Nat × Nat × Nat) := do
+  let ctx := s!"registered reads: parameter {param} of root node {k}"
+  let node := (Registered.rootNodes P)[k]!
+  let f := P.defs[node.fn]!
+  let (p, row) := paramRow param
+  let some i := (List.range f.params.size).find? (f.params[·]!.1 == p) | throw s!"{ctx}: {f.key} has no parameter {p}"
+  let ty := f.params[i]!.2
+  let (t0, len) ← match row, ty with
+    | none, _ => pure (0, ty.leaves)
+    | some r, .array n e => if r < n then pure (r * e.leaves, e.leaves) else throw s!"{ctx}: row {r} of {n}"
+    | some _, _ => throw s!"{ctx}: a row of a parameter that is no array"
+  let a := node.args[i]!
+  let x ← match a.dims with
+    | none => pure t0
+    | some (d, Lb) =>
+      if Lb == 0 || t0 % Lb + len > Lb then throw (notDerived s!"pos : {ctx}: a row across members")
+      pure ((t0 / Lb * d) * Lb + t0 % Lb + m * Lb)
+  let some j := (List.range a.seq.parts.size).find? fun j =>
+      a.seq.starts[j]! ≤ x && x < a.seq.starts[j]! + a.seq.parts[j]!.count
+    | throw s!"{ctx}: argument index {x} is in no part"
+  let q := a.seq.parts[j]!
+  let s0 := a.seq.starts[j]!
+  if x + len > s0 + q.count then throw (notDerived s!"pos : {ctx}: a row across parts")
+  let (run, lanes) := Program.partLanes q
+  let (w, leaf, _, _) ← match Program.laneWire run lanes (x - s0) 0 len 1 with
+    | .ok v => pure v
+    | .error _ => throw (notDerived s!"pos : {ctx}: a row of no lane's run (an explicit part, or across lanes)")
+  if !regNode P w then throw s!"{ctx}: member {m} reads root node {w}, which is no registered input"
+  if len == 0 || leaf % len != 0 then throw s!"{ctx}: member {m} reads leaf {leaf} of node {w}, off its rows of {len}"
+  return (w, leaf / len, len)
+
 /-- **theta's positions**: `pos : C -> Partition -> Block -> Port -> Position`, the row of the registered value
-`reg` each unit of `indices` reads at `reg`'s port, from C's edges into its registered input node (`P`) and the
-partition, in O(C's description). The code's Core `RegisteredCircuit.pos`, restricted to the boundary. -/
-def pos (_P : Program.Prog) (_indices : Array Nat) (reg : Registered.Port) : V Registered.Port :=
-  throw (notDerived s!"pos : C -> Partition -> Block -> Port -> Position (port {reg.name}, value {reg.value})")
+`reg` each unit of `indices` reads at `reg`'s parameter (`regRow`), a function of C (`P`): the registered input node's
+leaf over the row's leaves, the leaf order of its tree. Every unit reads one node, whose rows are `reg.leaves`. Its
+work is the statement's units, each found from the root's nodes and its argument's parts. The code's Core
+`RegisteredCircuit.pos`, restricted to registered values. -/
+def pos (P : Program.Prog) (indices : Array Nat) (reg : Registered.Port) : V Registered.Port := do
+  let ns := HmLinks.nodes P
+  let param := if reg.param.isEmpty then reg.name else reg.param
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  let mut node : Option Nat := none
+  for u in indices do
+    let some (k, m) := HmLinks.unitAt ns u | throw s!"registered reads: port {reg.name}: unit {u} is no unit"
+    let (w, r, len) ← regRow P k m param
+    if node.any (· != w) then
+      throw s!"registered reads: port {reg.name}: units read registered nodes {node.getD 0} and {w}, and a port is one value"
+    if node.isNone then
+      let wn := (Registered.rootNodes P)[w]!
+      let rows := (P.defs[wn.fn]!).outLeaves * wn.members / len
+      if rows != reg.leaves then
+        throw s!"registered reads: port {reg.name}: {reg.value} holds {reg.leaves} rows, and C's registered node {w} {rows}"
+    node := some w
+    rel := rel.set! (u - first) (some r)
+  return { reg with readsRel := rel, readsFrom := first }
 
 end OneCircuit
 
@@ -455,18 +536,6 @@ def PARAM_KEY : String := "param"
 def paramsOf (j : Json) : V (Array String) := do
   let .ok (.obj kvs) := j.getObjVal? "ports" | throw "registered reads: ports is not an object"
   kvs.toArray.mapM fun (name, e) => if J.has e PARAM_KEY then J.str e PARAM_KEY "registered reads" else pure name
-
-/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
-def regDef (P : Program.Prog) (fn : Nat) : Bool :=
-  match P.defs[fn]? with
-  | some f => f.prim && f.binding == some Program.REGISTRATION
-  | none => false
-
-/-- The root's nodes of `P`. -/
-def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
-
-/-- Root node `k` of `P` is a registered input. -/
-def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
 
 /-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
 def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)
