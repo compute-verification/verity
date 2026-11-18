@@ -1233,8 +1233,9 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
         late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
                 for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        said = {n: f", {u}" for n, c in comp.items() if (u := S.declared_unchecked(ACCEPTS.get(c, {}).get("protocol")))}
         assert line["reason"] == "; ".join(
-            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
+            f"{n}: accept{late.get(n, '')}{said.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
@@ -2789,7 +2790,7 @@ def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
-    monkeypatch.setattr(S, "declared_unchecked", lambda p: unchecked if p == S.PEARLPLUS_PROTOCOL else "")
+    monkeypatch.setattr(S, "declared_unchecked", lambda p, said="": unchecked if p == S.PEARLPLUS_PROTOCOL else "")
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
     (tmp_path / "serve").mkdir()
     S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
@@ -2806,6 +2807,24 @@ def test_a_rows_declared_unchecked_ends_its_stated_source_and_its_accept_in_the_
 def test_a_protocol_no_declaration_names_has_nothing_unchecked():
     """`declared_unchecked` reads the declarations by protocol id: an id none declares says nothing."""
     assert S.declared_unchecked("verity/no-such-protocol/v0") == "" and S.declared_unchecked(None) == ""
+
+
+def test_a_declared_mapping_says_its_sentences_alone_nothing_when_empty_and_refuses_an_entry_not_a_sentence(monkeypatch):
+    """`declared_unchecked` prints each sentence alone, never its name; an empty mapping says nothing; an entry that is
+    not a sentence is refused by the scheme's and its name, never printed raw."""
+    import dataclasses
+
+    from verity.protocols.compose import schemes
+
+    pearl, get = schemes.get("pearl-plus"), schemes.get
+    assert S.declared_unchecked(pearl.protocol) == "coins' signatures checked on the served node only; not checked by the auditor"
+    stand_in = dataclasses.replace(pearl, unchecked={})
+    monkeypatch.setattr(schemes, "get", lambda n: stand_in if n == "pearl-plus" else get(n))
+    assert S.declared_unchecked(pearl.protocol) == ""
+    object.__setattr__(stand_in, "unchecked", {"coins-signatures-checked-by-the-auditor": {"not": "a sentence"}})
+    with pytest.raises(ValueError, match="pearl-plus: unchecked entry 'coins-signatures-checked-by-the-auditor' is not a "
+                                         "sentence"):
+        S.declared_unchecked(pearl.protocol)
 
 
 @pytest.mark.parametrize("design", ["stratified-rate:1/977", "rate:1/1000000000", "work-rate:1/977"])

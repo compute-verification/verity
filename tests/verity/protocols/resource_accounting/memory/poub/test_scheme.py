@@ -13,6 +13,7 @@ from verity.protocols.resource_accounting.memory.poub import scheme as poub
 from verity.protocols.resource_accounting.memory.poub.prover import binder
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import registry
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, p2_parties, period
+from verity.protocols.resource_accounting.memory.pous.attester import memory_attester as mc
 
 
 def test_each_is_registered_under_its_one_name() -> None:
@@ -25,6 +26,14 @@ def test_bandwidth_is_the_p2_verifiers_component() -> None:
     assert timed.within_ns == p2_parties.SESSION["deadline_ns"] and timed.direction == "after"
     assert timed.assumption in poub.BANDWIDTH.assumptions
     assert poub.BANDWIDTH.hooks == () and dict(poub.BANDWIDTH.settings) == {}
+
+
+def test_storage_the_wipe_and_the_bandwidth_audit_list_the_memory_attesters_one_table() -> None:
+    """What their rows say on every line is the table their answers' placements carry (`memory_attester.UNCHECKED`)."""
+    assert {c: dict(schemes.get(c).unchecked) for c in ("pous", "wipe", "bandwidth")} == dict.fromkeys(
+        ("pous", "wipe", "bandwidth"), dict(mc.UNCHECKED)) == dict.fromkeys(
+        ("pous", "wipe", "bandwidth"), mc.unchecked()[mc.UNCHECKED_KEY])
+    assert dict(poub.POUB.unchecked) == {}
 
 
 def test_poub_is_the_remote_sessions_and_the_binders_name() -> None:

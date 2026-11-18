@@ -285,6 +285,16 @@ def test_remotes_verifier_reads_the_compose_answers_record_pearl_plus_under_work
     assert T.remote_check(cfg, tmp_path)["verdict"] == "reject"
 
 
+@pytest.mark.parametrize("work, verdict", [("accept", "accept"), ("reject", "reject"), ("missing", "undecided")])
+def test_pearl_plus_row_says_its_coins_signatures_go_unchecked_by_the_auditor_on_every_verdict(tmp_path, work, verdict):
+    cfg = R.load(CONFIG, REG)
+    written(tmp_path / "out" / "compose", {**YES, "composed": {"missing": "pending"}.get(work, work)},
+            {**ACCEPTED, "work": {"verdict": work}, "inference-only": CHECKED})
+    got = T.remote_check(cfg, tmp_path)
+    assert got["verdict"] == verdict and got["answer_from"] == {
+        "pearl-plus": "coins' signatures checked on the served node only; not checked by the auditor"}
+
+
 def test_a_component_that_charges_nothing_reads_why_for_its_figure_and_shows_its_verdict(tmp_path, monkeypatch):
     """A stand-in declaration under inference-only's name whose resource is a `Lacks`: the check's line says why it
     has no figure (``charges_nothing``) and keeps its verdict among the components and in the combined verdict, as

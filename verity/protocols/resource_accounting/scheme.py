@@ -325,7 +325,10 @@ class Scheme:
     that copy beside storage, empty or a `Lacks` where none has. ``pieces``, by developer-side party, what the served runner launches for
     it (`Launch`), a `Lacks` where it launches nothing. ``answers``, the entry (``module:attribute``) of the functions
     that answer its kept session in a process with no exchange (`Answers`, read through `answering`). ``tie``, the
-    parameters an application that ties its workload to this scheme states over its settings' defaults.
+    parameters an application that ties its workload to this scheme states over its settings' defaults. ``unchecked``,
+    what of its run no auditor-side entry checks yet, by name, each with its sentence, which its row's stated source
+    says on every check's line whatever the verdict; empty means nothing is listed for the scheme, not that everything
+    is checked, and the line says nothing for it.
 
     A component that charges nothing (the sampled proofs, the inference-only check) is a `Scheme` whose ``resource``
     and ``blocks`` are each a `Lacks` saying so: it is in the one table with its parties and record; asked of it alone,
@@ -379,6 +382,7 @@ class Scheme:
     copy_beside_storage_ruled: str | Lacks = UNDECLARED
     pieces: Mapping[str, Launch] | Lacks = UNDECLARED
     answers: str | Lacks = UNDECLARED
+    unchecked: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
@@ -440,6 +444,8 @@ class Scheme:
         object.__setattr__(self, "settings", MappingProxyType(dict(self.settings)))
         object.__setattr__(self, "tie", MappingProxyType(dict(self.tie)))
         object.__setattr__(self, "requires", MappingProxyType(dict(self.requires)))
+        object.__setattr__(self, "unchecked", MappingProxyType(dict(self.unchecked)))
+        sentences(self)
 
     @property
     def unit(self) -> str:
@@ -586,6 +592,15 @@ class Answers:
     request: Callable[..., Mapping[str, Any]]
     session: Mapping[str, Any]
     key_of: Callable[..., str | None]
+
+
+def sentences(scheme: Scheme) -> tuple[str, ...]:
+    """What a line prints of ``scheme``'s ``unchecked``: each entry's sentence alone, in order, its name only the key a
+    program reads; nothing for an empty mapping. An entry that is not a sentence is refused by the scheme's and its
+    name."""
+    if bad := [n for n, w in scheme.unchecked.items() if not isinstance(w, str) or not w.strip()]:
+        raise ValueError(f"{scheme.name}: unchecked entry {bad[0]!r} is not a sentence")
+    return tuple(scheme.unchecked.values())
 
 
 def answering(scheme: Scheme) -> Answers:
