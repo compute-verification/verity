@@ -45,7 +45,7 @@ stream (`memory_attester.records_digest`, ``PousRowDigest_v1{92K}``), so m is th
 ok, 1 iff every
 record names its round, its receipt is not before its send and receipt − send ≤ LIMIT (``PousVerdict_v1{K, 0, LIMIT}``
 against the records' own digests); and the records rows as read. The signature's unit reads m and round j's unit its
-records row ⌊j/2⌋ by wire (`window.SessionIntegration`), so the three kinds of proof are linked only by committed rows.
+records row ⌊j/2⌋ by wire, so the three kinds of proof are linked only by committed rows.
 """
 from __future__ import annotations
 
