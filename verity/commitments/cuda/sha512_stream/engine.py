@@ -29,7 +29,8 @@ from typing import Any
 from verity.commitments.cuda import SHA512
 from verity.commitments.randomness import _STREAM, Index, Key, _frames
 
-__all__ = ["HEAD_MAX", "LEAF_BYTES", "LEAVES_MAX", "Refused", "bind", "device_lib", "fill", "head", "host_lib"]
+__all__ = ["HEAD_MAX", "LEAF_BYTES", "LEAVES_MAX", "Refused", "bind", "device_lib", "fill", "head", "host_lib",
+           "message_bytes"]
 
 HERE = Path(__file__).resolve().parent
 DEVICE_SOURCES = (SHA512, HERE / "stream.cuh", HERE / "stream.cu")
@@ -41,10 +42,11 @@ HEAD_MAX = 128 - 8 - 1 - 16
 LEAF_BYTES = 192
 #: stream.cuh's LEAVES_MAX: first + leaves at most this, so the last block's counter is below 2^64
 LEAVES_MAX = ((1 << 64) - 1) // 3
-#: stream.cuh's REFUSED_*, by the status the library returns
+#: stream.cuh's REFUSED_*, by the status the library returns, and the loader's own REFUSED_LENGTH
 REFUSALS = {-1: ("REFUSED_HEAD", f"the head is over {HEAD_MAX} bytes, so a block would take two compressions"),
             -2: ("REFUSED_RANGE", "the last leaf's counter is not below 2^64"),
-            -3: ("REFUSED_CAPTURE", "the stream is capturing a graph, whose replays would write the same counters again")}
+            -3: ("REFUSED_CAPTURE", "the stream is capturing a graph, whose replays would write the same counters again"),
+            -4: ("REFUSED_LENGTH", "the block's message is not the length the caller fixed")}
 
 vp, u32, u64 = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 
@@ -110,8 +112,15 @@ def head(key: Key, index: Index) -> bytes:
     return _STREAM + key.value + _frames(index)
 
 
-def fill(lib: ctypes.CDLL, out: Any, key: Key, index: Index, first: int, *, stream: int = 0) -> Any:
-    """out[i] = the stream's bytes [192 (first + i), 192 (first + i + 1)) at ``index``, for each of out's rows; returns out."""
+def message_bytes(index: Index) -> int:
+    """The bytes SHA-512 hashes for each block at ``index``: the tag, a key's 32 bytes, the index's frames and the counter's
+    8, the same for every block of every key at that index."""
+    return len(_STREAM) + 32 + len(_frames(index)) + 8
+
+
+def fill(lib: ctypes.CDLL, out: Any, key: Key, index: Index, first: int, *, stream: int = 0, length: int | None = None) -> Any:
+    """out[i] = the stream's bytes [192 (first + i), 192 (first + i + 1)) at ``index``, for each of out's rows; returns out.
+    ``length``: the block message's length in bytes the caller fixes, else refused (REFUSED_LENGTH) before anything runs."""
     leaves = int(out.shape[0]) if len(out.shape) == 2 else -1
     if leaves < 0 or int(out.shape[1]) != LEAF_BYTES or str(out.dtype) not in ("uint8", "torch.uint8"):
         raise ValueError(f"out is (leaves, {LEAF_BYTES}) uint8, not {tuple(out.shape)} {out.dtype}")
@@ -126,6 +135,8 @@ def fill(lib: ctypes.CDLL, out: Any, key: Key, index: Index, first: int, *, stre
     if isinstance(first, bool) or not isinstance(first, int) or first < 0:
         raise ValueError("first is a leaf, an int of at least 0")
     h = head(key, index)
+    if length is not None and len(h) + 8 != length:
+        raise Refused(-4)
     rc = lib.sxs_fill(stream, h, len(h), first, leaves, ptr) if first < 1 << 64 else -2
     if rc in REFUSALS:
         raise Refused(rc)

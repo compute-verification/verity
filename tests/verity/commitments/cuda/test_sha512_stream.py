@@ -118,6 +118,20 @@ def test_the_loaders_own_build_agrees(lib, tmp_path):
     assert _fill(own, KEY, ("a", 7), 3, 4) == _fill(lib, KEY, ("a", 7), 3, 4) == _blocks(KEY, ("a", 7), 3, 4)
 
 
+def test_a_one_part_str_index_fixes_every_blocks_message_length(lib):
+    """At ``"s"`` every block hashes tag (28) ‖ key (32) ‖ frames (19) ‖ counter (8) = 87 bytes, whatever the key and the
+    counter; a fill given another length is refused before it writes."""
+    assert E.message_bytes("s") == 87 == len(E.head(KEY, "s")) + 8 == len(E.head(Key(bytes(32)), "s")) + 8
+    assert _fill(lib, KEY, "s", 5, 2) == _blocks(KEY, "s", 5, 2)
+    out = np.full((2, E.LEAF_BYTES), 0xA5, np.uint8)
+    E.fill(lib, out, KEY, "s", 0, length=87)
+    assert out.tobytes() == _blocks(KEY, "s", 0, 2)
+    out[:] = 0xA5
+    with pytest.raises(E.Refused, match="REFUSED_LENGTH"):
+        E.fill(lib, out, KEY, ("s", 0), 0, length=87)
+    assert (out == 0xA5).all()
+
+
 def _torch_cuda():
     try:
         import torch
