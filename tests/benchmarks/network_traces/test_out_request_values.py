@@ -270,7 +270,7 @@ def test_the_chains_endpoint_step_keeps_its_report_and_logs_on_the_private_side(
 
 def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone():
     """The report's endpoint step (chain_record.py's, from the private report) names no request and counts no window's
-    requests: the attested I/O's violations by their count, the advice's binding by its Commit windows'."""
+    requests: the attested I/O's violations by their count, the advice's binding by whether it is bound and rebuilt."""
     sys.path.insert(0, str(HERE))
     import chain_record as cr
 
@@ -280,7 +280,7 @@ def test_the_records_endpoint_step_keeps_its_verdict_and_counts_of_windows_alone
     for io in ({"accepted": True}, {"accepted": False, "violations": [[3, "a request of s0-needle"], [9, "x"]]}):
         step = cr.network_attester_endpoint_step({"warden_run": "r", "io": io, "chain": {"bits": bits}})
         assert step["verdict"] == "refused" and "needle" not in json.dumps(step) and '"requests"' not in json.dumps(step)
-        assert step["advice"] == {"bound": False, "rebuilt": False, "commit_windows": 2, "bound_windows": 1}
+        assert step["advice"] == {"bound": False, "rebuilt": False}
         assert step["io"] == {"accepted": io["accepted"], "violations": len(io.get("violations") or [])}
         e2e = cr.endpoint_step({"chain": {"bits": bits, "tie": {}}})
         assert "needle" not in json.dumps(e2e) and e2e["advice"] == step["advice"]
