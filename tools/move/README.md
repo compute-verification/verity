@@ -56,6 +56,13 @@ Once it lands, each open branch crosses it:
 
     python3 tools/move/restack.py BRANCH --push-to NEWBRANCH --kept
 
+A move commit `main` holds only through the other parents of a merge whose tree is its first parent's (an `-s ours` merge,
+such as a branch's earlier, landed work merged back keeping the tree) changed nothing on `main` by itself. Where `main` also
+holds its move line (script, map and arguments) at a commit it reaches without such a step, neither `restack.py`
+(`moves_on`) nor the queue (`moves_between`) counts it as a move a branch lacks: that commit is the move, counted where
+the branch lacks it. Without one it is still counted, since its change may have reached `main` by a commit with no move
+line, as `restack.py`'s rerun does on its moved merge's first parent.
+
 A commit written by a script with no map has no move line, so `restack.py` merges it as a plain commit and leaves the
 branch's own lines in its old names. The Lean names pass's docket part, `5916146988e4`
 (`tools/move/lean_names_pass.py --apply docket`: eight names of SPOT's run record become `docket`, in code only), is

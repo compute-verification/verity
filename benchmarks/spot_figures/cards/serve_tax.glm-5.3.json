@@ -9,7 +9,8 @@
   "r20261107-155724-3f53",
   "r20261111-162328-f498",
   "r20261116-122320-c688",
-  "r20261116-225304-47b9"
+  "r20261116-225304-47b9",
+  "r20261117-112411-576f"
  ],
  "owner": "@proofs",
  "value": {
@@ -69,14 +70,15 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the cost of the pass that bisects every wrong fast selection by one program, an upper bound for main's pass, which refines it instead: until prod-record-bisect measures it, a run of the same arms on the same workload over 6 lifetime pairs put the refining pass at +2.11 points [0.82, 3.41] over prod-trace and the bisecting one at +8.81 [7.43, 10.20], and prod-record with the refining pass at +2.27% [1.22, 3.32] against stock"
      }
     ],
     "runs": [
      "r20261107-155724-3f53",
      "r20261111-162328-f498",
      "r20261116-122320-c688",
-     "r20261116-225304-47b9"
+     "r20261116-225304-47b9",
+     "r20261117-112411-576f"
     ]
    },
    {
@@ -133,7 +135,7 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the cost of the pass that bisects every wrong fast selection by one program, an upper bound for main's pass, which refines it instead: until prod-record-bisect measures it, a run of the same arms on the same workload over 6 lifetime pairs put the refining pass at +2.11 points [0.82, 3.41] over prod-trace and the bisecting one at +8.81 [7.43, 10.20], and prod-record with the refining pass at +2.27% [1.22, 3.32] against stock"
      },
      {
       "part": "batch-invariant kernels",
@@ -148,7 +150,8 @@
      "r20261107-155724-3f53",
      "r20261111-162328-f498",
      "r20261116-122320-c688",
-     "r20261116-225304-47b9"
+     "r20261116-225304-47b9",
+     "r20261117-112411-576f"
     ]
    },
    {
@@ -189,12 +192,13 @@
       "share": 0.0837,
       "low": 0.0713,
       "high": 0.0961,
-      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the old pass's cost, which bisects every wrong fast selection by one program: right for main today and an upper bound once the new select lands, until prod-record-bisect measures the new one"
+      "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8, measured on the served engine against the same server with it off (prod-record over prod-trace), one engine on eight H200 SXM at a median SM clock of 1,980 MHz with no thermal slowdown, sampled agentic sessions at 4 users whose contexts pass 2,048 keys, the mean over 8 server-lifetime pairs and its 95% interval; the cost of the pass that bisects every wrong fast selection by one program, an upper bound for main's pass, which refines it instead: until prod-record-bisect measures it, a run of the same arms on the same workload over 6 lifetime pairs put the refining pass at +2.11 points [0.82, 3.41] over prod-trace and the bisecting one at +8.81 [7.43, 10.20], and prod-record with the refining pass at +2.27% [1.22, 3.32] against stock"
      }
     ],
     "runs": [
      "r20261116-122320-c688",
-     "r20261116-225304-47b9"
+     "r20261116-225304-47b9",
+     "r20261117-112411-576f"
     ]
    },
    {
