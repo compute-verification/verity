@@ -52,7 +52,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import weights a
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
-from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import names as NM
+from verity.protocols.resource_accounting.compute.pouw.prover.serving.coins import names as NM
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1.words import ids_words
 

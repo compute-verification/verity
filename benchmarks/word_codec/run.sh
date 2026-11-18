@@ -19,8 +19,9 @@ export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 [ -x "$PY" ] || { echo "no torch venv at $PY"; exit 3; }
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0} PATH=/usr/local/cuda-13.0/bin:$(dirname "$PY"):$PATH
-NCU_BIN=${NCU_BIN:-/usr/local/cuda-13.0/bin/ncu}
+C13=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || { echo "no CUDA 13.0 (machine.py, above)"; exit 3; }
+export CUDA_HOME=${CUDA_HOME:-$C13} PATH=$C13/bin:$(dirname "$PY"):$PATH
+NCU_BIN=${NCU_BIN:-$C13/bin/ncu}
 WC=benchmarks/word_codec
 # the venv doesn't install verity; the tests import it (stdlib only) from the source tree
 export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
@@ -53,7 +54,7 @@ print(load_card("rtx-pro-6000-server", directory=Path("calibration/hardware/card
   *) KV=$WC/$KV_SCRIPT ;;
 esac
 if [ "${SANITIZE:-0}" != 0 ]; then
-  SAN=/usr/local/cuda-13.0/bin/compute-sanitizer
+  SAN=$C13/bin/compute-sanitizer
   # shellcheck disable=SC2086
   gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
     rc=0
