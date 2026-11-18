@@ -19,7 +19,7 @@ FLIP = (1, 3, 100)
 
 
 def _planner(t: int, topk: int):
-    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(X.H_Q, s_q=t))
+    metas, ns = T.sched_meta([topk], topk=topk, parts=T.num_sm_parts(X.H_Q, s_q=t, num_sms=X.D.SMS))
     return metas, ns, T.request_splits(metas, ns, 0, topk // X.BN)
 
 
