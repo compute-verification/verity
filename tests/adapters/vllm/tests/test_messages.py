@@ -434,7 +434,7 @@ def _declared(name: str, **declared) -> NS:
 STORE = {"resource": "memory", "needs": frozenset({"store"})}
 
 
-RULED = schemes.Ruled("the ruling's sentence", ("first not shown", "second not shown", "third not shown"))
+RULED = "the ruling's sentence"
 
 
 @pytest.mark.parametrize("order", [("store", "copy"), ("copy", "store")])
@@ -444,25 +444,34 @@ def test_storage_beside_a_keeper_whose_copy_beside_storage_is_not_ruled_is_refus
     assert M.weight_copy_refusals(listed) == [
         "storage is storage (it needs the workload's store) and keeps-copy keeps a weight-derived copy "
         "(keeps_weight_copy), and keeps-copy's declaration does not say that its copy beside storage has been ruled "
-        "(weight_copy_beside_storage is undeclared), so the two are not attached in one process"]
+        "(copy_beside_storage_ruled is undeclared or empty), so the two are not attached in one process"]
     with pytest.raises(Refused, match="storage is storage .* and keeps-copy keeps a weight-derived copy"):
         M.attach_listed(M.Exchange(), [(s, {}) for s in listed])
     assert made["store"].attached == made["copy"].attached == []
 
 
+def test_a_keeper_whose_ruling_is_empty_is_refused_as_one_without_it():
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=" ")
+    assert M.weight_copy([store, copy]) == (M.weight_copy([store, _declared("keeps-copy", keeps_weight_copy=True)])[0], [])
+    assert M.weight_copy_refusals([store, copy])
+
+
 def test_storage_beside_a_keeper_whose_copy_beside_storage_is_ruled_attaches_storage_first_with_the_ruling_noted():
-    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, weight_copy_beside_storage=RULED)
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=RULED)
     ex = M.Exchange()
     M.attach_listed(ex, [(store, {}), (copy, {})])
     assert list(ex.attached) == ["storage", "keeps-copy"] and store.attached == ["storage"] and copy.attached == ["keeps-copy"]
-    assert ex.allowed == [M.WeightCopyNote("storage", "keeps-copy", RULED.ruling, RULED.not_shown)]
-    assert ex.allowed[0].record() == {"storage": "storage", "keeps_weight_copy": "keeps-copy", "weight_copy_beside_storage":
-                                      {"ruling": "the ruling's sentence", "not_shown": list(RULED.not_shown)}}
+    assert ex.allowed == [M.WeightCopyNote("storage", "keeps-copy", RULED, schemes.BESIDE_STORAGE_NOT_SHOWN)]
+    record = ex.allowed[0].record()
+    assert record == {"storage": "storage", "keeps_weight_copy": "keeps-copy", "copy_beside_storage_ruled":
+                      {"ruling": RULED, "not_shown": list(schemes.BESIDE_STORAGE_NOT_SHOWN)}}
+    assert record["copy_beside_storage_ruled"]["not_shown"] and all(
+        isinstance(s, str) and s.strip() for s in record["copy_beside_storage_ruled"]["not_shown"])
 
 
 def test_a_ruled_keeper_listed_before_storage_is_refused_by_the_order_rule_and_installs_nothing():
-    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, weight_copy_beside_storage=RULED)
-    assert M.weight_copy([copy, store]) == ([], [M.WeightCopyNote("storage", "keeps-copy", RULED.ruling, RULED.not_shown)])
+    store, copy = _declared("storage", **STORE), _declared("keeps-copy", keeps_weight_copy=True, copy_beside_storage_ruled=RULED)
+    assert M.weight_copy([copy, store]) == ([], [M.WeightCopyNote("storage", "keeps-copy", RULED, schemes.BESIDE_STORAGE_NOT_SHOWN)])
     ex = M.Exchange()
     with pytest.raises(Refused) as e:
         M.attach_listed(ex, [(copy, {}), (store, {})])
@@ -547,9 +556,9 @@ def test_storage_beside_the_network_attester_is_not_refused_for_a_weight_copy():
 def test_pous_beside_pearl_plus_is_allowed_storage_first_with_pearl_pluss_declared_ruling():
     pous, pearl = M.named("pous"), M.named("pearl-plus")
     ruled = getattr(pearl, schemes.BESIDE_STORAGE)
+    assert isinstance(ruled, str) and ruled.strip()
     assert pearl.keeps_weight_copy is True and M.storage(pous) and not M.storage(M.named("wipe"))
     assert M.weight_copy([pous, pearl]) == M.weight_copy([pearl, pous]) == (
-        [], [M.WeightCopyNote("pous", "pearl-plus", ruled.ruling, ruled.not_shown)])
-    assert ruled.not_shown and all(isinstance(s, str) and s.strip() for s in ruled.not_shown)
+        [], [M.WeightCopyNote("pous", "pearl-plus", ruled, schemes.BESIDE_STORAGE_NOT_SHOWN)])
     assert M.listed_refusals([pous, pearl]) == []
     assert [r.split(":")[0] for r in M.listed_refusals([pearl, pous])] == ["outer"]

@@ -294,8 +294,8 @@ def storage(s: Any) -> bool:
 
 
 class WeightCopyNote(NamedTuple):
-    """Storage ``storage`` attached beside ``keeps``, which declares it keeps a weight-derived copy and that its copy
-    beside storage is ruled: the ruling and what it does not show, as ``keeps``'s declaration states them."""
+    """Storage ``storage`` attached beside ``keeps``, which declares it keeps a weight-derived copy and the ruling of
+    that copy beside storage, with what the ruling does not show."""
 
     storage: str
     keeps: str
@@ -310,8 +310,9 @@ class WeightCopyNote(NamedTuple):
 
 def weight_copy(listed: Sequence[schemes.Scheme]) -> tuple[list[str], list[WeightCopyNote]]:
     """Storage (`storage`) beside a scheme that keeps a weight-derived copy (``keeps_weight_copy``) is refused by name
-    unless that scheme's declaration rules its copy beside storage (`schemes.BESIDE_STORAGE`, a `schemes.Ruled`), and
-    then the pair is allowed and noted with the ruling; beside one that has not declared whether it keeps one, refused.
+    unless that scheme's declaration rules its copy beside storage (`schemes.BESIDE_STORAGE`, a non-empty sentence),
+    and then the pair is allowed and noted with the ruling and what a ruling does not show
+    (`schemes.BESIDE_STORAGE_NOT_SHOWN`); beside one that has not declared whether it keeps one, refused.
     In any order, sorted by name, so the order listed or attached changes neither. A scheme keeps a weight-derived
     copy when, across forwards, it holds or keeps alive resident bytes from which the weights can be had without
     decoding storage's store; whether a product reads them does not enter."""
@@ -320,12 +321,12 @@ def weight_copy(listed: Sequence[schemes.Scheme]) -> tuple[list[str], list[Weigh
         for o in sorted({s.name: s for s in listed if s.name != st.name}.values(), key=lambda s: s.name):
             keeps = getattr(o, "keeps_weight_copy", schemes.UNDECLARED)
             ruled = getattr(o, schemes.BESIDE_STORAGE, schemes.UNDECLARED)
-            if keeps is True and isinstance(ruled, schemes.Ruled):
-                noted.append(WeightCopyNote(st.name, o.name, ruled.ruling, tuple(ruled.not_shown)))
+            if keeps is True and isinstance(ruled, str) and ruled.strip():
+                noted.append(WeightCopyNote(st.name, o.name, ruled, schemes.BESIDE_STORAGE_NOT_SHOWN))
             elif keeps is True:
                 refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name} keeps a weight-derived copy "
                                f"(keeps_weight_copy), and {o.name}'s declaration does not say that its copy beside storage has "
-                               f"been ruled ({schemes.BESIDE_STORAGE} is undeclared), so the two are not attached in one process")
+                               f"been ruled ({schemes.BESIDE_STORAGE} is undeclared or empty), so the two are not attached in one process")
             elif isinstance(keeps, schemes.Lacks):
                 refused.append(f"{st.name} is storage (it needs the workload's store) and {o.name}'s declaration does not say whether it keeps a "
                                f"weight-derived copy (keeps_weight_copy is undeclared), so storage is not attached beside it "
