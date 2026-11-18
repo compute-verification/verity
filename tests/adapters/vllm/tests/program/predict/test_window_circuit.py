@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 from collections import Counter
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -1242,7 +1243,7 @@ def test_every_tiny_class_template_lifts_to_its_block_circuit_from_the_programs_
     table = V.boolean_table(prog)
     assert len(table) == 142
     memo: dict = {}
-    version = lambda f: V.block_circuit(f, table, memo)  # noqa: E731
+    version = partial(V.block_circuit, table=table, memo=memo)
     counts, unpriced = V.gate_table([fn for fn, _ in circuit.templates])
     assert not unpriced
     for fn, _n in circuit.templates:

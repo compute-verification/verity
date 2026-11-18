@@ -2,6 +2,8 @@
 dot, one wire between them."""
 from __future__ import annotations
 
+from functools import partial
+
 import pytest
 
 from verity.circuits import boolean as BL
@@ -11,8 +13,8 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import versions as V
 from verity.circuits.program import Program
-from verity.commitments.periods import interface as I
 from verity.circuits.types import Value
+from verity.commitments.periods import interface as I
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 GID = descriptor_id(GEMM)
@@ -39,7 +41,7 @@ def check_lifted(template, table) -> object:
     assert BL.is_boolean(bits)
     counts, unpriced = V.gate_table([template])
     assert not unpriced and CE.boolean_gates([bits]) == [table_gates(template, counts)]
-    version = lambda f: V.block_circuit(f, table, memo)  # noqa: E731
+    version = partial(V.block_circuit, table=table, memo=memo)
     for word in V._reachable([template]).values():
         if isinstance(word, PrimitiveDefinition) or BL.is_boolean(word):
             continue
