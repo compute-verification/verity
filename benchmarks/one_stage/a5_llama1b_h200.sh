@@ -46,7 +46,8 @@
 # keeps them for a rerun (one copy of the sealed bundle: sealed/ is hard links); the last line says which, where and how
 # large. $OUT, published as the run's record, keeps the row's records that
 # adapters/vllm/tools/served_run/published.sh lists (each with the reason it holds nothing of a request) and verdicts.txt,
-# the window's public files, the audit's out without its private files or the challenger's key ($OUT/a5) and summary.txt,
+# the window's public files, predict row's predicted.json (the Build of record, which proof_layers.sh reads), the
+# audit's out without its private files or the challenger's key ($OUT/a5) and summary.txt,
 # whose A5 line is the audit's verdict, whose REGISTERED line the window's kind, commitment and run root length, and whose
 # COINS line (also summary.json's ``coins``) the coins, the card and which check accepted. No other file of the row is
 # published (with A5_KEEP=1 they stay on the machine): match/spec.json holds the prompts, commit/ the token record, the bundle and
@@ -178,6 +179,10 @@ window_off() {  # the Commit's window from KEPT, the stages' run dir, to WD, its
 }
 stop() { window_off; records; echo "STOPPED at $1" | tee -a "$OUT/summary.txt"; exit "$2"; }
 
+PRED=$KEPT/predicted
+"$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW" --out "$PRED" > "$OUT/predict_row.json" 2> "$KEPT/predict_row.err" \
+  && [ -f "$PRED/predicted.json" ] || { tail -5 "$KEPT/predict_row.err"; stop "predict row" 9; }
+cp "$PRED/predicted.json" "$OUT/"
 jit=$(find "$ROOT/cache" -type f 2>/dev/null | wc -l)
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
 hits=$(grep -rls --include='*.log' '^program cache hit' "$D" | wc -l)
