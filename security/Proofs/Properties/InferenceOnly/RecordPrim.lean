@@ -21,7 +21,7 @@ A leaf of a unit's parameter resolves in those two steps whatever the unit's Def
 `unit_param_ok`): up to the root at a reference of the node's argument, and there to a gate of an input node. So
 what the gate of a unit of a primitive reads are leaves of the unit's own parameters (`prim_unit_operands`): the
 root resolves the batch's member's references to the gates the unit's parameters resolve to. And such a unit has
-one output row of one leaf, its gate (`outLeaf_prim`).
+one output field of one leaf, its gate (`outLeaf_prim`).
 -/
 
 @[expose] public section
@@ -215,10 +215,10 @@ theorem prim_unit_gate {P : Prog} {ts : Array String} {rs : Array TRange} (hP : 
 row of the unit is the unit's one gate. -/
 theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} {out : String} {l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
-    (ho : OutLeaf P sc out l g lo hi) : g = sc.off ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates := by
+    {sc : Scope} {off l g lo hi : ℕ} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true)
+    (ho : OutLeaf P sc off l g lo hi) : g = sc.off ∧ sc.off ≤ g ∧ g < sc.off + (P.defs[sc.d]!).gates := by
   obtain ⟨k, m, -, -, -, -, hbody, hg1, -⟩ := prim_unit hP hrs hu hp
-  obtain ⟨f, -, -, -, hres, -, -⟩ := ho
+  obtain ⟨f, -, -, -, -, hres, -, -⟩ := ho
   rw [Resolve.ret_default P sc _ hbody] at hres
   have hg : sc.off = g := Except.ok.inj hres
   subst hg
@@ -346,14 +346,14 @@ theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (h
   rw [hog]
   exact hg
 
-/-- **A unit of a primitive has one output row of one leaf, its gate**: the row is `o0`, its leaf is the unit's one
-gate, at the bits of the primitive's one value, and the unit has no other leaf of an output row. -/
+/-- **A unit of a primitive has one output field of one leaf, its gate**: the field is at leaf 0, its leaf is the
+unit's one gate, at the bits of the primitive's one value, and the unit has no other leaf of an output field. -/
 theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :
-    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
-      ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
-        out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
+    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc 0 0 sc.off 0 w ∧
+      ∀ off l g lo hi, OutLeaf P sc off l g lo hi →
+        off = 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
   obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
   have hfields : Flock.Program.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
     (congrArg Flock.Program.fieldsOf hw).trans rfl
@@ -364,7 +364,11 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     exact Prod.ext rfl hwidths
   have hres : Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get 0) = .ok sc.off :=
     Resolve.ret_default P sc 0 hbody
-  refine ⟨w, hw, ⟨0, rfl, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  have hw0 : Spot.Edges.fieldOffset (P.defs[sc.d]!).ret 0 = 0 := by
+    simp [Spot.Edges.fieldOffset]
+  refine ⟨w, hw, ⟨0, hw0, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · rw [hfields]
+    exact Nat.zero_lt_one
   · rw [hfields]
     exact Nat.zero_lt_one
   · rw [hrow]
@@ -375,7 +379,7 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     rfl
   · rw [hrow]
     exact (Nat.zero_add w).symm
-  · rintro out l g lo hi ⟨f, rfl, hf, hl, hg, rfl, rfl⟩
+  · rintro off l g lo hi ⟨f, hfw, hf, -, hl, hg, rfl, rfl⟩
     rw [hfields] at hf
     have hf0 : f = 0 := Nat.lt_one_iff.1 hf
     subst hf0
@@ -383,6 +387,6 @@ theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Re
     have hl0 : l = 0 := Nat.lt_one_iff.1 hl
     subst hl0
     rw [Resolve.ret_default P sc _ hbody] at hg
-    exact ⟨rfl, rfl, (Except.ok.inj hg).symm, rfl, Nat.zero_add w⟩
+    exact ⟨hfw.symm.trans hw0, rfl, (Except.ok.inj hg).symm, rfl, Nat.zero_add w⟩
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

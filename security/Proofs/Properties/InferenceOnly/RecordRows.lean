@@ -200,7 +200,7 @@ theorem returnsOwn (hP : ReadProg P)
     have hgood : Resolve.Good P (P.child P.rootScope k m) :=
       Resolve.good_child P (parent := P.rootScope)
         (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hc hm rfl
-    obtain ⟨f, -, hf, hl, hres, -, -⟩ := ho
+    obtain ⟨f, -, hf, -, hl, hres, -, -⟩ := ho
     obtain ⟨-, hcallee, -⟩ := Resolve.decoded_root bytes P hdec k hk
     obtain ⟨hbp, hcount, -⟩ := hcallee.2 hc
     have ht : (outRow (P.defs[(P.child P.rootScope k m).d]!) f).1 + l <
@@ -342,7 +342,7 @@ unit. -/
 theorem ranked (hS : Spot.Wires.check W = .ok S) : ∃ ρ : String × ℤ → ℕ, Ranked S ρ := by
   obtain ⟨ρ, hρ⟩ := Spot.Wires.check_ranked hS
   refine ⟨ρ, ?_⟩
-  intro r wt wu out hw
+  intro r wt wu out off hw
   exact hρ _ _ (Spot.Wires.writerOf_reads hS hw)
 
 end InferenceOnlyVerifier.Properties.Record.SecurityProofs

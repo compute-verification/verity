@@ -5,11 +5,11 @@ public import Proofs.Properties.InferenceOnly.RecordBlocks
 /-!
 # What the record check tests of a wire's two rows
 
-`Record.unwhole` refuses a record with a wire whose writer's output is not the bits of the row it fills, or whose
-two rows' leaves do not line up. This module states what a record it accepts has, of each wire, in the terms of the
-two templates' Definitions (`whole_spec`): the writer's output is whole 16-bit words; and either the reader's
-parameter has leaves of one bit and is none of what its Definition passes on, or each side's leaves are of one width
-and the writer's divides the reader's.
+`Record.unwhole` refuses a record with a wire whose offset is no first leaf of a field of its writer's return of a
+leaf or more, whose field is not the bits of the row it fills, or whose two rows' leaves do not line up. This module
+states what a record it accepts has, of each wire, in the terms of the two templates' Definitions (`whole_spec`): the
+wire's field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none of what
+its Definition passes on, or each side's leaves are of one width and the writer's divides the reader's.
 
 The steps: what `unwhole` tests of one wire (`unwhole_none`), a template's leaves among the leaves of templates with
 distinct ids (`leaves_find`), and a name's entry in a list of named values with distinct names (`lookup_map`).
@@ -60,36 +60,58 @@ theorem lookup_append_of_not_mem {β : Type} : ∀ (l l' : List (String × β)) 
     rw [List.cons_append, List.lookup_cons, show (a == x.1) = false from beq_eq_false_iff_ne.2 h.1]
     exact lookup_append_of_not_mem l l' a h.2
 
-/-- **What `unwhole` tests of one wire**, as its two lookups among the templates and their leaves: the writer's
-output's bits, where both are found, are its words'; and the reader's row is closed, or each side has a leaf width
-and the writer's divides the reader's. -/
-theorem unwhole_none {ts : List Tmpl} {ls : List Leaves} {wires : List Spot.Wires.Wire}
-    (h : unwhole ts ls wires = none) {w : Spot.Wires.Wire} (hw : w ∈ wires) :
-    (∀ b n, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup w.out) = some b →
-        ((ts.find? (·.tid == w.writer)).bind fun t => t.outs.lookup w.out) = some n → b = 16 * n) ∧
+/-- Two leaf widths, each found, the writer's nonzero and dividing the reader's. -/
+theorem widths_divide {a b : Option Nat}
+    (h : (match a, b with
+      | some r, some o => o != 0 && r % o == 0
+      | _, _ => false) = true) :
+    ∃ r o, a = some r ∧ b = some o ∧ o ≠ 0 ∧ r % o = 0 := by
+  match a, b, h with
+  | some r, some o, h =>
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, beq_iff_eq] at h
+    exact ⟨r, o, rfl, rfl, h.1, h.2⟩
+  | none, _, h => simp at h
+  | some _, none, h => simp at h
+
+/-- **What `unwhole` tests of one wire**, with the words `Spot.Wires.check` gives its row: the writer is a template,
+and the wire's offset is the first leaf of a field of its Definition's return of a leaf or more; that field's bits,
+where its leaves are found, are the row's words'; and the reader's row is closed, or each side has a leaf width and
+the writer's divides the reader's. -/
+theorem unwhole_none {P : Prog} {ts : List Tmpl} {ls : List Leaves} {s : Spot.Wires.Summary}
+    (h : unwhole P ts ls s = none) {w : Spot.Wires.Wire} {n : Nat} (hw : (w, n) ∈ s.wires.zip s.rowWords) :
+    ∃ t j, ts.find? (·.tid == w.writer) = some t ∧ j < (fieldsOf (P.defs[t.defn]!).ret).length ∧
+      Spot.Edges.fieldOffset (P.defs[t.defn]!).ret j = w.offset ∧ 0 < ((fieldsOf (P.defs[t.defn]!).ret)[j]!).leaves ∧
+      (∀ b, ((ls.find? (·.tid == w.writer)).bind fun l => l.bits.lookup ("o" ++ toString j)) = some b →
+        b = 16 * n) ∧
       (((ls.find? (·.tid == w.reader)).map fun l => l.closed.contains w.port).getD false = true ∨
         ∃ r o, ((ls.find? (·.tid == w.reader)).bind fun l => l.leaf.lookup w.port).join = some r ∧
-          ((ls.find? (·.tid == w.writer)).bind fun l => l.leaf.lookup w.out).join = some o ∧ o ≠ 0 ∧ r % o = 0) := by
+          ((ls.find? (·.tid == w.writer)).bind fun l => l.leaf.lookup ("o" ++ toString j)).join = some o ∧
+          o ≠ 0 ∧ r % o = 0) := by
   unfold unwhole at h
-  simp only [Option.map_eq_none_iff] at h
-  have hw' := List.find?_eq_none.1 h w hw
-  simp only [Bool.or_eq_true, Bool.not_eq_true', not_or, Bool.not_eq_true, Option.isSome_eq_false_iff,
-    Option.isNone_iff_eq_none, Bool.not_eq_false] at hw'
-  obtain ⟨h1, h2⟩ := hw'
-  refine ⟨fun b n hb hn => ?_, ?_⟩
-  · rw [hb, hn] at h1
-    simp only at h1
-    split at h1
-    · rename_i he
-      exact beq_iff_eq.1 he
-    · cases h1
-  · rcases h2 with h2 | h2
-    · exact Or.inl h2
-    · split at h2
-      · rename_i r o hr ho
-        simp only [Bool.and_eq_true, bne_iff_ne, ne_eq, beq_iff_eq] at h2
-        exact Or.inr ⟨r, o, hr, ho, h2.1, h2.2⟩
-      · cases h2
+  have h0 := List.findSome?_eq_none_iff.1 h (w, n) hw
+  dsimp only at h0
+  split at h0
+  · cases h0
+  · rename_i j hf
+    obtain ⟨t, ht, hj⟩ := Option.bind_eq_some_iff.1 hf
+    obtain ⟨hjp, hjr, -⟩ := List.find?_range_eq_some.1 hj
+    simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hjp
+    refine ⟨t, j, ht, List.mem_range.1 hjr, hjp.1, hjp.2, ?_⟩
+    split at h0
+    · cases h0
+    · rename_i hsh
+      refine ⟨fun b hb => ?_, ?_⟩
+      · rw [hb] at hsh
+        simp only at hsh
+        split at hsh
+        · rename_i he
+          exact beq_iff_eq.1 he
+        · cases hsh
+      · split_ifs at h0 with hwh
+        simp only [Bool.or_eq_true] at hwh
+        rcases hwh with hc | hc
+        · exact Or.inl hc
+        · exact Or.inr (widths_divide hc)
 
 /-- A name among a list's names is looked up in it. -/
 theorem lookup_append_of_some {β : Type} : ∀ (l l' : List (String × β)) (a : String) (b : β), l.lookup a = some b →
@@ -222,32 +244,40 @@ theorem closed_spec (passed : Array (List Nat)) {i : Nat} (hi : i < (P.defs[t.de
 
 end Shaped
 
-/-- **What the record check tests of a wire**, in the terms of its two templates' Definitions: the writer's output
-is whole 16-bit words; and either the reader's parameter has leaves of one bit and is none of what its Definition
-hands on, or each side's leaves are of one width and the writer's divides the reader's. -/
+/-- **What the record check tests of a wire**, in the terms of its two templates' Definitions and the words
+`Spot.Wires.check` gives its row: the wire's offset is the first leaf of a field of the writer's return of a leaf
+or more, and that field is the row's words, whole; and either the reader's parameter has leaves of one bit and is none
+of what its Definition hands on, or each side's leaves are of one width and the writer's divides the reader's. -/
 theorem whole_spec {P : Prog} {passed : Array (List Nat)} {ts : List Tmpl} (hd : (ts.map (·.tid)).Nodup)
-    (hs : ∀ t ∈ ts, Shaped P t) {wires : List Spot.Wires.Wire}
-    (h : unwhole ts (ts.map (leavesOf P passed)) wires = none) {w : Spot.Wires.Wire} (hw : w ∈ wires)
+    (hs : ∀ t ∈ ts, Shaped P t) {s : Spot.Wires.Summary}
+    (h : unwhole P ts (ts.map (leavesOf P passed)) s = none) {w : Spot.Wires.Wire} {n : Nat}
+    (hw : (w, n) ∈ s.wires.zip s.rowWords)
     {tr tw : Tmpl} (htr : tr ∈ ts) (htw : tw ∈ ts) (hr : tr.tid = w.reader) (hwt : tw.tid = w.writer)
-    {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port)
-    {j : Nat} (hj : j < (fieldsOf (P.defs[tw.defn]!).ret).length) (ho : w.out = "o" ++ toString j) :
-    bits (fieldsOf (P.defs[tw.defn]!).ret)[j] = 16 * ((bits (fieldsOf (P.defs[tw.defn]!).ret)[j] + 15) / 16) ∧
+    {i : Nat} (hi : i < (P.defs[tr.defn]!).params.size) (hp : (P.defs[tr.defn]!).params[i].1 = w.port) :
+    ∃ j, j < (fieldsOf (P.defs[tw.defn]!).ret).length ∧ Spot.Edges.fieldOffset (P.defs[tw.defn]!).ret j = w.offset ∧
+      0 < ((fieldsOf (P.defs[tw.defn]!).ret)[j]!).leaves ∧ bits (fieldsOf (P.defs[tw.defn]!).ret)[j]! = 16 * n ∧
       ((Widths.homo (P.defs[tr.defn]!).params[i].2 = some 1 ∧
           i ∉ passed[tr.defn]?.getD (List.range (P.defs[tr.defn]!).params.size)) ∨
         ∃ r o, Widths.homo (P.defs[tr.defn]!).params[i].2 = some r ∧
-          Widths.homo (fieldsOf (P.defs[tw.defn]!).ret)[j] = some o ∧ o ≠ 0 ∧ r % o = 0) := by
-  obtain ⟨h1, h2⟩ := unwhole_none h hw
+          Widths.homo (fieldsOf (P.defs[tw.defn]!).ret)[j]! = some o ∧ o ≠ 0 ∧ r % o = 0) := by
+  obtain ⟨t, j, hft, hj, hfw, hb, h1, h2⟩ := unwhole_none h hw
+  have hfw' := find_of_nodup (·.tid) ts hd tw htw
+  rw [hwt] at hfw'
+  rw [hfw'] at hft
+  obtain rfl := Option.some.inj hft
   have hlw := leaves_find (P := P) (passed := passed) hd htw
   have hlr := leaves_find (P := P) (passed := passed) hd htr
-  have hfw := find_of_nodup (·.tid) ts hd tw htw
-  rw [hwt] at hlw hfw
+  rw [hwt] at hlw
   rw [hr] at hlr
-  rw [hlw, hfw] at h1
+  rw [hlw] at h1
   rw [hlr, hlw] at h2
-  simp only [Option.bind_some, Option.map_some, Option.getD_some, ho, ← hp] at h1 h2
-  rw [(hs tw htw).bits_lookup passed hj, (hs tw htw).outs_lookup hj] at h1
+  simp only [Option.bind_some, Option.map_some, Option.getD_some, ← hp] at h1 h2
+  rw [(hs tw htw).bits_lookup passed hj] at h1
   rw [(hs tr htr).param_leaf passed hi, (hs tw htw).out_leaf passed hj] at h2
-  refine ⟨h1 _ _ rfl rfl, ?_⟩
+  have e : (fieldsOf (P.defs[tw.defn]!).ret)[j] = (fieldsOf (P.defs[tw.defn]!).ret)[j]! :=
+    (getElem!_pos (fieldsOf (P.defs[tw.defn]!).ret) j hj).symm
+  rw [e] at h1 h2
+  refine ⟨j, hj, hfw, hb, h1 _ rfl, ?_⟩
   rcases h2 with h2 | ⟨r, o, hr', ho', h3⟩
   · exact Or.inl ((hs tr htr).closed_spec passed hi h2)
   · exact Or.inr ⟨r, o, by simpa using hr', by simpa using ho', h3⟩

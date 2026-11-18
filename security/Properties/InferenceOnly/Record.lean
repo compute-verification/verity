@@ -166,7 +166,7 @@ def inRow (d : Defn) (i k row : ℕ) : ℕ × Array ℕ :=
   (row * (d.params[i]!.2.leaves / k),
     d.params[i]!.2.widths.extract (row * (d.params[i]!.2.leaves / k)) ((row + 1) * (d.params[i]!.2.leaves / k)))
 
-/-- Output row `o<f>`: its first leaf and its leaves' widths. -/
+/-- Field `f` of the output row: its first leaf in the return and its leaves' widths. -/
 def outRow (d : Defn) (f : ℕ) : ℕ × Array ℕ :=
   (((fieldsOf d.ret).take f).foldl (fun a t => a + t.leaves) 0, (fieldsOf d.ret)[f]!.widths)
 
@@ -178,12 +178,13 @@ def InLeaf (P : Prog) (sc : Scope) (k : ℕ) (port : String) (row l g lo hi : �
     Flock.Program.resolve P sc (⟨true, i, (inRow (P.defs[sc.d]!) i k row).1 + l⟩ : Ref) = .ok g ∧
     lo = bitAt (inRow (P.defs[sc.d]!) i k row).2 l ∧ hi = lo + (inRow (P.defs[sc.d]!) i k row).2[l]!
 
-/-- Leaf `l` of output row `out` of the activation `sc` is Program gate `g`, at bits `[lo, hi)` of the row. An
-activation of a primitive has the default body, whose `ret` resolves to the activation's own gate: the one leaf of its
-one output row `o0` is that gate. -/
-def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
-  ∃ f, out = "o" ++ toString f ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
-    l < (outRow (P.defs[sc.d]!) f).2.size ∧
+/-- Leaf `l` of the field that starts at leaf `off` of the output row of the activation `sc` is Program gate `g`, at
+bits `[lo, hi)` of the field: the field `f`, of a leaf or more, whose first leaf is `off` (`Spot.Edges.fieldOffset`),
+which a wire at offset `off` reads. An activation of a primitive has the default body, whose `ret` resolves to the activation's own gate:
+the one leaf of its one field, at word 0, is that gate. -/
+def OutLeaf (P : Prog) (sc : Scope) (off : ℕ) (l g lo hi : ℕ) : Prop :=
+  ∃ f, Spot.Edges.fieldOffset (P.defs[sc.d]!).ret f = off ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
+    0 < ((fieldsOf (P.defs[sc.d]!).ret)[f]!).leaves ∧ l < (outRow (P.defs[sc.d]!) f).2.size ∧
     Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get ((outRow (P.defs[sc.d]!) f).1 + l)) = .ok g ∧
     lo = bitAt (outRow (P.defs[sc.d]!) f).2 l ∧ hi = lo + (outRow (P.defs[sc.d]!) f).2[l]!
 
@@ -192,17 +193,16 @@ def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l 
   ∃ sc, UnitAt P rs r.tid r.unit sc ∧ InLeaf P sc (W.cutsOf r.tid r.port) r.port r.row l g lo hi
 
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
-`t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
-rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
-words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. It does not ask that a parameter or an
-output has a bit, which `Spot.RecordText.templatesOf` asks of every template it gives. -/
+`t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s one output is the row
+`out`, `d`'s return fields end to end, each its bits rounded up to whole words, never down
+(`Spot.RecordText.Tmpl.wired`): a row wired to `out` lies inside its words (`Spot.Wires.check`). It does not ask that a
+parameter or a field has a bit, which `Spot.RecordText.templatesOf` asks of every template it gives. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
     (∀ (p : String) (q : Spot.Wires.Port), (p, q) ∈ t.rows ↔ ∃ i, i < d.params.size ∧ p = d.params[i]!.1 ∧
       q.words = bitsOf d.params[i]!.2 / 16 ∧ q.outer = outerOf d.params[i]!.2) ∧
-    ∀ (o : String) (n : ℕ), (o, n) ∈ t.outs ↔ ∃ f, f < (fieldsOf d.ret).length ∧ o = "o" ++ toString f ∧
-      n = (bitsOf (fieldsOf d.ret)[f]! + 15) / 16
+    ∀ (o : String) (n : ℕ), (o, n) ∈ t.outs ↔ o = "out" ∧ n = ((fieldsOf d.ret).map fun ty => (bitsOf ty + 15) / 16).sum
 
 /-- **The wiring's templates are the Program's**: a template of the wiring has the units the Program's root has of it,
 and is the template of their Definition. -/
@@ -229,10 +229,11 @@ def OwnRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) : Prop :=
 def Wired (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (g : ℕ) : Prop :=
   ∃ r l lo hi, (S.writerOf r.tid r.unit r.port r.row).isSome ∧ RowLeaf P rs W r l g lo hi
 
-/-- Leaf `l'` of the output row that the reader row `r` is wired to is Program gate `g'`, at bits `[lo', hi')`. -/
+/-- Leaf `l'` of the writer's field that the reader row `r` is wired to, at the wire's offset, is Program gate `g'`,
+at bits `[lo', hi')`. -/
 def WriterLeaf (P : Prog) (rs : Array TRange) (S : Spot.Wires.Summary) (r : Row) (l' g' lo' hi' : ℕ) : Prop :=
-  ∃ wt wu out sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, out) ∧ 0 ≤ wu ∧
-    UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' out l' g' lo' hi'
+  ∃ wt wu o off sc', S.writerOf r.tid r.unit r.port r.row = some (wt, wu, o, off) ∧ 0 ≤ wu ∧
+    UnitAt P rs wt wu.toNat sc' ∧ OutLeaf P sc' off l' g' lo' hi'
 
 /-- **Every unit's rows are input gates or its writers' outputs**: a leaf of a reader row is an input gate or the
 gate of a leaf of the output row it is wired to (an edge of the Program's root, `Spot.Edges.edgesOf`), and no gate is
@@ -246,9 +247,9 @@ def OwnOrEdgeRows (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (S : Sp
       S.writerOf r.tid r.unit r.port r.row = none → S.writerOf r'.tid r'.unit r'.port r'.row = none →
         (r = r' ∧ l = l') ∨ SharedLeaf P g
 
-/-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's output rows. -/
+/-- The unit of the reader row `r` passes Program gate `g` on: `g` is a leaf of one of that unit's return fields. -/
 def PassedOn (P : Prog) (rs : Array TRange) (r : Row) (g : ℕ) : Prop :=
-  ∃ sc out l lo hi, UnitAt P rs r.tid r.unit sc ∧ OutLeaf P sc out l g lo hi
+  ∃ sc off l lo hi, UnitAt P rs r.tid r.unit sc ∧ OutLeaf P sc off l g lo hi
 
 /-- **Every wire lands whole**: each leaf of a writer's output row lies inside one leaf of the row that reads it, or
 the reader's unit passes on no leaf of that row whose bits meet it. -/

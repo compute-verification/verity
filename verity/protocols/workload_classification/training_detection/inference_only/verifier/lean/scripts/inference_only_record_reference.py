@@ -198,10 +198,15 @@ class Template:
                 raise Malformed("templates")
             self.rows.append((name, bits // 16, ty.n if isinstance(ty, Array) else 1))
             self.widths[name] = tuple(ty.leaf_widths())
+        #: each return field's first leaf, a wire's `offset` (`Spot.Edges.fieldOffset`), to the field
+        self.firsts: dict[int, int] = {}
+        at = 0
         for j, ty in enumerate(fields_of(ret)):
             bits = sum(ty.leaf_widths())
             if bits == 0:
                 raise Malformed("templates")
+            self.firsts[at] = j
+            at += len(ty.leaf_widths())
             self.outs.append((f"o{j}", -(-bits // 16)))
             self.widths.setdefault(f"o{j}", tuple(ty.leaf_widths()))
         if len({p for p, *_ in self.rows + self.outs}) != len(self.rows) + len(self.outs):
@@ -562,10 +567,11 @@ def hands_on(program, tid: str, port: str) -> bool:
 
 
 def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dict, form_only: bool = False) -> None:
-    """The Lean's `unwhole` (`leaf-widths`). The rule, restated. Of every wire, the writer's output's bits are its
-    own words', which are the row's (a wire's two rows have the same words). And a wire is taken where the reader's
-    row is closed (`Template.closed`), or where the reader's row and the writer's output each have leaves of one
-    width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
+    """The Lean's `unwhole` (`leaf-widths`). The rule, restated. A wire reads the field of its writer's return
+    whose first leaf is the wire's `offset` (`Template.firsts`); an offset that is no field's first leaf is
+    refused. Of every wire, that field's bits are the row's words' (so the row is that one
+    field, whole). And a wire is taken where the reader's row is closed (`Template.closed`), or where the reader's
+    row and the writer's field each have leaves of one width and the writer's divides the reader's. The first wire that fails either is refused, by name, with its two
     rows' bits or its two widths, and the fix. Then, unless `form_only`, what the rule stands for, leaf by leaf, of
     each row of the reader's port the wire fills, a cut port's row `j` of `k` its leaves `[j·n/k, (j+1)·n/k)`. The
     row's leaves hold exactly the bits the writer's output's leaves do: no bit of the row is past its writer's. Of a
@@ -578,18 +584,26 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
         return f"{ws[0]} bits" if len(set(ws)) == 1 else "more than one width"
 
     for w in wires:
-        row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[w["out"]]
-        wire = f"wire {w['writer']}.{w['out']} -> {w['reader']}.{w['port']}: "
+        offset = w.get("offset", 0)
+        wire = f"wire {w['writer']}.out at word {offset} -> {w['reader']}.{w['port']}: "
+        f = by[w["writer"]].firsts.get(offset)
+        if f is None:
+            raise refused("leaf-widths", (
+                f"{wire}leaf {offset} of the writer's output row is no field's first leaf. A wire reads one whole "
+                "field of its writer's return, from that field's first leaf. Fix the Program, not the record: have "
+                "the root read each writer's field whole, from its first leaf."))
+        row, out = by[w["reader"]].widths[w["port"]], by[w["writer"]].widths[f"o{f}"]
         k, n = int(cuts.get(w["reader"], {}).get(w["port"], 1)), len(row)
         filled = [] if form_only else [row[j * n // k:(j + 1) * n // k] for j in range(w["c0"], w["c0"] + w["C"])]
-        bits, words = sum(out), by[w["writer"]].port(w["out"], outs=True)
+        bits, words = sum(out), by[w["reader"]].port(w["port"]) // k
         if bits != 16 * words:
-            assert all(sum(leaves) == 16 * words > bits for leaves in filled)
+            assert all(sum(leaves) == 16 * words for leaves in filled)
             raise refused("leaf-widths", (
-                f"{wire}the writer's output is {bits} bits and the row it fills {16 * words}. Every bit of a row a "
-                "wire fills is a bit of its writer's output: a row is whole 16-bit words, and a bit of it past its "
-                "writer's output is no gate's. Fix the Definitions, not the record: give the writer's output whole "
-                "16-bit words, each bit a gate of its own."))
+                f"{wire}the writer's field {f} is {bits} bits and the row it fills {16 * words}. Every bit of a row a "
+                "wire fills is a bit of the one writer's field it reads: a row is whole 16-bit words, and a bit of it "
+                "past that field is no gate's, or another field's. Fix the Definitions, not the record: give the "
+                "writer's field whole 16-bit words, each bit a gate of its own, and the reader's row that field's "
+                "words."))
         assert all(sum(leaves) == bits for leaves in filled)
         if w["port"] in by[w["reader"]].closed:
             if not form_only and (w["reader"], w["port"]) not in kept:
@@ -598,13 +612,13 @@ def leaf_widths(program, templates: list[Template], wires: list[dict], cuts: dic
             continue
         if len(set(row)) != 1 or len(set(out)) != 1 or row[0] % out[0]:
             raise refused("leaf-widths", (
-                f"{wire}the writer's leaves are of {name(out)} "
-                f"and the reader's of {name(row)}. Every leaf of a writer's output lies inside one leaf of the row "
+                f"{wire}the writer's field {f} has leaves of {name(out)} "
+                f"and the reader's row of {name(row)}. Every leaf of a writer's field lies inside one leaf of the row "
                 "that reads it, each side's leaves of one width and the writer's dividing the reader's; or the "
                 "reader's row is one-bit leaves and its Definition passes none of them on: its return refers to no "
                 "part of that row, itself or through a call, a batch or a scan. Fix the Definitions, not the "
                 "record: give the reader's row leaves of the writer's width or a multiple of it, or the writer's "
-                "output leaves of a width that divides the reader's, or make the reader's row one-bit leaves and "
+                "field leaves of a width that divides the reader's, or make the reader's row one-bit leaves and "
                 "have its Definition return gates of its own in their place."))
         assert all(lands_whole(leaves, out) for leaves in filled)
 
@@ -649,8 +663,8 @@ def wires_of(templates: list[Template], rec: dict, desc: dict) -> tuple[list[dic
     `verity.commitments.periods.interface.check_wires` refuses them."""
     import verity.commitments.periods.interface as IF
     cuts = rec.get("cuts", {})
-    lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), tuple(t.outs), (), tuple(n for *_, n in t.rows)),
-                    t.units) for t in templates}
+    lays = {t.tid: (IF.RowLayout(tuple((p, w) for p, w, _ in t.rows), (("out", sum(n for _, n in t.outs)),), (),
+                                 tuple(n for *_, n in t.rows)), t.units) for t in templates}
     try:
         wires = tuple(IF.Wire.of(x) for x in program_wires(desc, (t.tid for t in templates), cuts))
         IF.check_wires(lays, wires, IF._cuts(cuts), root_order(desc, [t.tid for t in templates]))
