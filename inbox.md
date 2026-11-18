@@ -1,0 +1,3 @@
+[2026-11-18T18:36Z] 4d815e16fab4
+DOOR: one more REQUIREMENT for your 21:20Z list (from the admin, 18:35Z; a requirement on the new descriptor, not work for tonight; with circuits): in the new descriptor the scan, the select and the feed are sized A SLOT AND A POSITION, not a class, so that a window's shape is a value the registered compiler takes (ADVICE) and a class costs only its Program and registration. That is what makes 'the shape through the registered compiler' real; without it the only shapes we can afford are the cap's. Put it beside soundness's requirement on public counts (padded to cap, or a declared output charged log2 of its range) under 'what the door must hold'.
+
