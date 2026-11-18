@@ -152,10 +152,6 @@ def build_dev(out: Path) -> Path:
     return out / "pearl_c_sm90.cubin"
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def m16(m: int) -> int:
     """The served call's rows: m rounded up to the domain's row granularity, the filler rows zero."""
     return -(-m // 16) * 16
@@ -200,7 +196,9 @@ class PearlPlus:
         if ctx["arch"] != ARCH:
             raise RuntimeError(f"{SCHEME} runs on {ARCH} (an H100 or H200), not {ctx['arch']}: time it with --card h200")
         cubin, source = cubin_of(settings().VERITY_BENCH_CUBIN, Path(ctx["out_dir"]))
-        self.cubin, sha, pin = cubin, sha256(cubin), pinned()
+        with cubin.open("rb") as f:
+            sha = hashlib.file_digest(f, "sha256").hexdigest()
+        self.cubin, pin = cubin, pinned()
         return {"scheme": SCHEME, "served": SERVED, "binaries": [str(cubin)],
                 "cubin": {"path": str(cubin), "sha256": sha, "source": source,
                           "art": pin["art"] if sha == pin["sha256"] else None},
