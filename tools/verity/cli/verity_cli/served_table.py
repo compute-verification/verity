@@ -790,8 +790,9 @@ VERDICTS = {"accept": "accept", "reject": "reject", "pending": "undecided"}
 
 
 def charges_nothing(component: str) -> str | None:
-    """What a check's line reads for a component whose declared scheme names no resource: its `Lacks`'s why ("charges
-    nothing: ..."), in place of a verdict, holding no verdict open; None for any other component, declared or not."""
+    """Why a component whose declared scheme names no resource has no figure: its `Lacks`'s why ("charges nothing:
+    ..."), which a check's line reads where a figure would be (its ``charges_nothing``), never in place of the
+    component's verdict; None for any other component, declared or not."""
     if component not in schemes.DECLARATIONS:
         return None
     resource = schemes.get(component).resource
@@ -808,8 +809,9 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     nothing else: the record (``record/verdicts.json``) of the execution phase ``serve/phase.json`` names, the line's
     ``block`` its seal's SHA-512, in `verity_cli.run`'s verdict form. The serving node composed that record, so each of
     its accepts, each row's and the combined verdict, reads undecided, `AS_WRITTEN` in the reason, whatever a row's
-    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands; a component that charges nothing
-    reads why (`charges_nothing`). Refused (``window``, ``record``) when either file isn't there."""
+    ``answer_from`` (printed, deciding nothing) says; a reject or an error stands. A component that charges nothing
+    keeps its row's verdict like any other; the line's ``charges_nothing`` says why it has no figure. Refused
+    (``window``, ``record``) when either file isn't there."""
     out = state / "out"
     phase, report = out / "serve" / PHASE, out / "record" / "verdicts.json"
     if not phase.is_file():
@@ -820,9 +822,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     doc = json.loads(report.read_text())
     rows = doc["protocols"]
     free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
-    components = {c: free.get(c) or rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
-    answer_from = {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"]
-                   if c not in free and ROWS[c] in rows}
+    components = {c: rows.get(ROWS[c], {}).get("verdict", "absent") for c in cfg["protocols"]}
+    answer_from = {c: rows[ROWS[c]].get("answer_from", AS_WRITTEN) for c in cfg["protocols"] if ROWS[c] in rows}
     absent = sorted(c for c, v in components.items() if v == "absent")
     missing = sorted(c for c, v in components.items() if v == "missing")
     composed = doc.get("composed") or {}
@@ -842,7 +843,7 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     on, developer = coins_on(cfg, bindings_of(state)), {p["machine"] for p in cfg["party"] if p["principal"] == "developer"}
     return {"block": seal, "components": components, "answer_from": answer_from, "product": product, "reason": reason,
             "registration": None, "coins": "simulated" if developer & set(on.values()) else coins_of(cfg),
-            "coins_on": on, "verdict": verdict}
+            "coins_on": on, "verdict": verdict, **({"charges_nothing": free} if free else {})}
 
 
 def _record_line(said: Path) -> dict[str, Any] | None:
@@ -864,8 +865,8 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     report = json.loads(f.read_text())
     rows = report.get("protocols", {}) if composed else {}
     free = {c: why for c in cfg["protocols"] if (why := charges_nothing(c))}
-    components = {c: free.get(c) or rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
-    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept" and c not in free)
+    components = {c: rows.get(ROWS.get(c, c), {}).get("verdict", "absent") for c in cfg["protocols"]}
+    held = sorted(f"{c} {v}" for c, v in components.items() if v != "accept")
     if components.get("inference-only") == "accept" \
             and str(rows[ROWS["inference-only"]].get("answer_from", AS_WRITTEN)).startswith(AS_WRITTEN):
         held.append(f"inference-only {AS_WRITTEN}")
@@ -878,7 +879,8 @@ def remote_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     on, workload = gate_coins_on(cfg, bindings_of(state)), {p["name"]: p["machine"] for p in cfg["party"]}[WORKERS]
     return {"block": report.get("window"), "components": components, "product": REMOTE, "reason": reason,
             "registration": None, "coins": "simulated" if workload in on.values() else coins_of(cfg), "coins_on": on,
-            "verdict": "undecided" if verdict == "accept" and held else verdict}
+            "verdict": "undecided" if verdict == "accept" and held else verdict,
+            **({"charges_nothing": free} if free else {})}
 
 
 def pending(cfg: Mapping[str, Any], state: Path, rc: int) -> str | None:
