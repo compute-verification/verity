@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from verity.hooks import (HoldResident, RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReleaseValue,
-                          ReuseOldestFreed, StepBegan, StepEnded)
+                          ReuseOldestFreed, StepBegan, StepComputed, StepEnded)
 
 from tests import fake_vllm
 from verity_vllm import messages
@@ -20,7 +20,7 @@ from verity_vllm.engine import admission, hooks, kv_blocks
 
 PAGES, SLOTS = 6, 16
 SITES = {"manager": ("allocate_slots",), "pool": ("get_new_blocks", "free_blocks", "touch"),
-         "scheduler": ("schedule",), "runner": ("load_model", "initialize_kv_cache")}
+         "scheduler": ("schedule",), "runner": ("load_model", "initialize_kv_cache", "execute_model")}
 FIRST_RUNNER, RUNNER_V2 = kv_blocks.RUNNERS
 
 
@@ -67,6 +67,10 @@ def kv_classes(fake: fake_vllm.FakeVllm, state: Callable[[], Any] = lambda: None
                 calls.append(("initialize_kv_cache", is_profiling))
                 self.kv_caches = self.binds
                 return "kv"
+
+            def execute_model(self, scheduler_output):
+                calls.append(("execute_model", scheduler_output))
+                return "forward"
 
         return GPUModelRunner
 
@@ -278,29 +282,57 @@ def test_a_block_held_resident_is_freed_at_the_first_step_it_no_longer_is(monkey
 
 
 def test_a_runner_emits_its_registered_values_after_load_and_its_ranges_after_the_real_kv_cache(monkeypatch, subscribe):
-    """After vLLM's own `load_model`, the loaded model's parameters, each by name, a linear layer's weight marked
-    linear; after vLLM's own `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's
-    ranges with each layer's cache a store."""
+    """After vLLM's own `load_model`, the loaded model's parameters, each by name, each linear layer's weight an operand
+    under the name its storage is registered by (a tied one's first) with its site's block key; after vLLM's own
+    `initialize_kv_cache`, unless profiling (its flag by position or by name), the pool's ranges with each layer's cache
+    a store."""
     class LinearBase:
         pass
 
-    class RowLinear(LinearBase):
-        pass
+    def param(ptr: int, data: str) -> SimpleNamespace:
+        return SimpleNamespace(numel=lambda: 4, data_ptr=lambda: ptr, data=data, shape=(2, 2), dtype="torch.bfloat16")
+
+    def linear(weight: SimpleNamespace) -> LinearBase:
+        layer = LinearBase()
+        layer.weight, layer.bias, layer.quant_method = weight, None, SimpleNamespace(apply=lambda *a: None)
+        return layer
 
     caches = [SimpleNamespace(numel=lambda: 2 * PAGES * SLOTS * 64, element_size=lambda: 2)] * 2
-    w = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 1, data="w")
-    pw = SimpleNamespace(numel=lambda: 4, data_ptr=lambda: 2, data="pw")
-    model = SimpleNamespace(named_parameters=lambda: [("w", w), ("proj.weight", pw)],
-                            named_modules=lambda: [("", model), ("proj", RowLinear())])
-    v = kv_classes(fake_vllm.install(monkeypatch), held=lambda: {
+    w, pw, ow = param(1, "w"), param(2, "pw"), param(3, "ow")
+    model = SimpleNamespace(named_parameters=lambda: [("w", w), ("proj.weight", pw), ("tied.weight", w), ("out.weight", ow)],
+                            named_modules=lambda: [("", model), ("proj", linear(pw)), ("tied", linear(w)), ("out", linear(ow))])
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.model_executor.layers.linear:LinearBase", LinearBase)
+    v = kv_classes(fake, held=lambda: {
         "model": model, "kv_caches": caches, "cache_config": SimpleNamespace(block_size=SLOTS),
         "kernel_block_sizes": [SLOTS]})
     heard = subscribe()
     r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
-    assert r.load_model("x") == "loaded" and heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw")), linear=frozenset({"proj.weight"}))]
+    assert r.load_model("x") == "loaded"
+    assert heard == [RegisteredValues((("w", "w"), ("proj.weight", "pw"), ("out.weight", "ow")),
+                                      operands={"proj.weight": 0, "w": 1, "out.weight": 2})]
     assert r.initialize_kv_cache(config, True) == r.initialize_kv_cache(config, is_profiling=True) == "kv"
     assert len(heard) == 1 and r.initialize_kv_cache(config) == "kv"
     assert heard[1:] == [RangesDeclared(PAGES, SLOTS, 2 * 64 * 2, 1, tuple(caches))]
+
+
+def test_a_step_is_computed_when_its_forward_returns_and_an_empty_one_never(monkeypatch, subscribe):
+    """vLLM's ``execute_model`` returning for a scheduled step is that step's `StepComputed`, after the next step began
+    where steps overlap; a step that computes nothing, and a call for no scheduled step, have none."""
+    v = kv_classes(fake_vllm.install(monkeypatch))
+    heard = subscribe()
+    sched, r = admitted(v), v.runners[0]()
+    sched.requests = {"a": SimpleNamespace(num_computed_tokens=0)}
+    sched.stm.req_to_blocks = {"a": []}
+    sched.output = first = output({"a": 0})
+    first.total_num_scheduled_tokens = 1
+    sched.schedule()
+    sched.output = second = output({})
+    sched.schedule()
+    assert r.execute_model(first) == "forward" and r.execute_model(second) == "forward"
+    r.execute_model(output({}))
+    steps = [e for e in heard if isinstance(e, StepBegan | StepComputed | StepEnded)]
+    assert steps == [StepBegan(0, ("a",), 1), StepBegan(1), StepComputed(0)]
 
 
 def test_a_built_engine_has_one_step_emitter(monkeypatch, subscribe):

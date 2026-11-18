@@ -2428,10 +2428,10 @@ def test_a_card_no_record_lists_in_its_driver_is_refused_naming_what_to_add(monk
     S.kit()
     from verity_bench import kit
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "NVIDIA Z9 80GB"})
-    with pytest.raises(SystemExit, match=r"0 card records under .*cards have 'NVIDIA Z9 80GB'.*in `driver`: add "
-                                         r"\{ value = \"NVIDIA Z9 80GB\", source = \.\.\. \} to its one record's `driver` "
-                                         r"and give it a `short`.*<sku>\.toml"):
+    with pytest.raises(SystemExit, match=r"0 GPU card files under .*cards have 'NVIDIA Z9 80GB'.*in `driver`: add "
+                                         r"\{ value = 'NVIDIA Z9 80GB', source = \.\.\. \} to its one card file's `driver`.*"
+                                         r"<sku>\.toml.*give it a `short`"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": ""})
-    with pytest.raises(SystemExit, match="0 card records"):
+    with pytest.raises(SystemExit, match="0 GPU card files"):
         S.member(S.MODELS["llama32-1b"], "record", "compiled")

@@ -2637,28 +2637,45 @@ def trace_records(trace: Path) -> list[dict]:
 STEPS = "steps.{}.jsonl.gz"
 
 
-def public_steps(arm_dir: Path) -> list[Path]:
-    """Each of the arm's step traces (`step_traces`) written to its server/ as its public steps: the speculative
-    tokens a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens,
-    with no request id, emitted count or stop reason. A price reads these off the node."""
+def steps_of_trace(trace: Path, server: Path) -> Path:
+    """The step trace's public steps, written to ``server``/`STEPS` under its engine core's pid: the speculative tokens
+    a decode row runs, and each step's index, tokens, time and rows, each row only its start and its tokens, with no
+    request id, emitted count or stop reason. A price reads these off the node."""
     import gzip
 
-    got = []
-    for trace in step_traces(arm_dir):
-        lines = []
-        for r in trace_records(trace):
-            if r["kind"] == "header":
-                spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
-                lines.append({"kind": "header", "num_speculative_tokens": spec})
-            elif r["kind"] == "step":
-                lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
-                              "rows": [[start, m] for _, start, m in r["rows"]]})
-        f = arm_dir / "server" / STEPS.format(trace.name.split(".")[1])
-        f.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(f, "wt", encoding="utf-8") as g:
-            g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
-        got.append(f)
-    return got
+    lines = []
+    for r in trace_records(trace):
+        if r["kind"] == "header":
+            spec = ((r.get("config") or {}).get("speculative") or {}).get("num_speculative_tokens", 0)
+            lines.append({"kind": "header", "num_speculative_tokens": spec})
+        elif r["kind"] == "step":
+            lines.append({"kind": "step", "step": r.get("step"), "T": r.get("T"), "t": r["t"],
+                          "rows": [[start, m] for _, start, m in r["rows"]]})
+    f = server / STEPS.format(trace.name.split(".")[1])
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(f, "wt", encoding="utf-8") as g:
+        g.write("".join(json.dumps(x, separators=(",", ":")) + "\n" for x in lines))
+    return f
+
+
+def public_steps(arm_dir: Path) -> list[Path]:
+    """Each of the arm's step traces (`step_traces`) as its public steps in its server/ (`steps_of_trace`)."""
+    return [steps_of_trace(trace, arm_dir / "server") for trace in step_traces(arm_dir)]
+
+
+def stored_steps(out: Path, to: Path) -> list[Path]:
+    """The public steps of a run whose output holds its step traces, as a run stored before they were kept private
+    does: each arm's server/step_trace.PID.jsonl(.gz) under ``out`` as that arm's server/ under ``to``, the gzipped
+    one where both are there."""
+    traces: dict[tuple[Path, str], Path] = {}
+    for t in sorted(out.rglob("step_trace.*.jsonl*")):
+        if t.parent.name == "server" and t.suffix in (".jsonl", ".gz"):
+            key = (t.parent.relative_to(out), t.name.split(".")[1])
+            if key not in traces or t.suffix == ".gz":
+                traces[key] = t
+    if not traces:
+        raise SystemExit(f"{out}: no server/step_trace.*.jsonl under it, so no public steps to write")
+    return [steps_of_trace(t, to / rel) for (rel, _), t in sorted(traces.items())]
 
 
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
@@ -4891,6 +4908,10 @@ def main(argv: list[str] | None = None) -> int:
     co.add_argument("--result", action="store_true",
                     help="with --out, under research run: write the run's result.json too, the number as a measurement "
                          "under the model's metric id")
+    st = sub.add_parser("steps-of-trace", help="a stored run's public steps (`stored_steps`) from the step traces its "
+                                               "output holds, for priced: each arm's server/steps.PID.jsonl.gz")
+    st.add_argument("out", type=Path, metavar="RUN_OUT")
+    st.add_argument("--to", type=Path, help="write them under this directory, in RUN_OUT's layout (default RUN_OUT)")
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
@@ -4955,6 +4976,10 @@ def main(argv: list[str] | None = None) -> int:
         ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
         n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
         print(f"[serve-tax] plan: {len(plan_of(Path(a.out), Path(a.c4), ck, n, a.docs, a.seed))} requests in {a.out}")
+        return 0
+    if a.cmd == "steps-of-trace":
+        for f in stored_steps(a.out, a.to or a.out):
+            print(f)
         return 0
     if a.cmd == "tick":
         print(json.dumps(tick_args(a.source, None, a.load)))

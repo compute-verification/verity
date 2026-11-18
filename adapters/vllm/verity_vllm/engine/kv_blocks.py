@@ -1,5 +1,5 @@
 """The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
-emitting to the process's exchange (`messages.current`) its ``memory`` events (`verity.hooks`) in the order vLLM acts,
+emitting to the process's exchange (`messages.current`) its ``memory`` events and `StepComputed` (`verity.hooks`) in the order vLLM acts,
 and taking its schemes' `HoldResident`, `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
 the last detach): a model parameter is a registered value, a KV block a
 range, a request an input.  Each event is at the exchange's step, whose `StepBegan` and `StepEnded` are the admission
@@ -7,7 +7,11 @@ hook's (`engine.admission`): inside ``schedule``, the step being scheduled (`Exc
 begun.  It names no scheme, and builds no event no scheme reads.
 
 ~~~text
-GPUModelRunner.load_model       after: RegisteredValues, each parameter of the loaded model once (tied ones once)
+GPUModelRunner.load_model       after: the linear site attached (`vllm_site`) where a scheme computes blocks; then
+                                RegisteredValues, each parameter of the loaded model once (tied ones once), each
+                                linear layer's weight an operand with its block key
+GPUModelRunner.execute_model    after: StepComputed, for a step that computes; the forward has run, and its outputs
+                                are not yet sampled or read
 GPUModelRunner.initialize_kv_cache
                                 after, unless profiling: RangesDeclared, the pool's blocks as ranges of the manager's
                                 block size in slots, each layer's KV cache a store (refused where a kernel block size
@@ -47,7 +51,8 @@ RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
 #: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
 KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
-LINEAR = ("LinearBase", "Linear")
+#: the scheduler outputs whose step `StepComputed` names, the latest kept: more than the steps vLLM has in flight
+SCHEDULED = 4
 
 
 def attach() -> Callable[[], None]:
@@ -62,18 +67,19 @@ def model_of(runner: Any) -> Any:
     return model
 
 
-def registered_values(runner: Any, step: int = 0) -> H.RegisteredValues:
-    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the ``weight``
-    of a linear layer (vLLM's ``LinearBase`` or torch's ``Linear``) marked linear."""
-    model, seen, out = model_of(runner), set(), []
+def registered_values(runner: Any, step: int = 0, sites: Sequence[tuple[Any, Any]] = ()) -> H.RegisteredValues:
+    """Every parameter of the runner's model once (tied ones once), by its name, as the model holds it; the weight of
+    each of ``sites`` (`vllm_site.discover`'s) an operand, under the name its storage is registered by, with its site's
+    block key."""
+    model, kept, out = model_of(runner), {}, []
     for name, p in model.named_parameters():
-        if p.numel() == 0 or p.data_ptr() in seen:
+        if p.numel() == 0 or p.data_ptr() in kept:
             continue
-        seen.add(p.data_ptr())
+        kept[p.data_ptr()] = name
         out.append((name, p.data))
-    linear = {f"{m}.weight" if m else "weight" for m, mod in model.named_modules()
-              if any(c.__name__ in LINEAR for c in type(mod).__mro__)}
-    return H.RegisteredValues(tuple(out), step, frozenset(n for n, _ in out if n in linear))
+    operands = {kept[layer.weight.data_ptr()]: site.weight_id for site, layer in sites
+                if layer.weight.data_ptr() in kept}
+    return H.RegisteredValues(tuple(out), step, operands)
 
 
 def ranges_declared(runner: Any, kv_cache_config: Any, step: int = 0) -> H.RangesDeclared:
@@ -117,6 +123,7 @@ class _Hook:
         self.request: str | None = None
         self.held: list[tuple[Any, Any, Callable[..., Any]]] = []
         self.released: list[tuple[list[Any], H.ReleaseValue]] = []
+        self.scheduled: list[tuple[Any, int]] = []
 
     def attach(self) -> Callable[[], None]:
         if self.hooks is None:
@@ -187,7 +194,7 @@ class _Hook:
         import importlib.util
 
         h, hook = Hooks(tag=TAG), self
-        self.hooks, self.scheduling, self.request, self.held, self.released = h, False, None, [], []
+        self.hooks, self.scheduling, self.request, self.held, self.released, self.scheduled = h, False, None, [], [], []
 
         def allocate(orig):
             def allocate_slots(manager, request, *a, **kw):
@@ -232,6 +239,7 @@ class _Hook:
                 try:
                     hook.release(ex)
                     so = orig(sched, *a, **kw)
+                    hook.scheduled = [*hook.scheduled[-(SCHEDULED - 1):], (so, ex.next_step)]
                     if ex.wants("memory"):
                         for w in writes(sched, so, ex.next_step):
                             ex.emit(w)
@@ -242,12 +250,28 @@ class _Hook:
 
         def load(orig):
             def load_model(runner, *a, **kw):
+                from verity_vllm.protocols.linear import vllm_site
+
                 r = orig(runner, *a, **kw)
-                if (ex := messages.current()).wants("memory"):
-                    ex.emit(registered_values(runner, ex.step))
+                ex = messages.current()
+                computes = ex.computes() or ex.wants("blocks")
+                sites = vllm_site.discover(model_of(runner)) if computes or ex.wants("memory") else []
+                if computes:
+                    vllm_site.attach(sites, h)
+                if ex.wants("memory"):
+                    ex.emit(registered_values(runner, ex.step, sites))
                 hook.release_values(model_of(runner), ex)
                 return r
             return load_model
+
+        def execute(orig):
+            def execute_model(runner, so, *a, **kw):
+                r = orig(runner, so, *a, **kw)
+                step = next((s for o, s in reversed(hook.scheduled) if o is so), None)
+                if step is not None and so.total_num_scheduled_tokens and (ex := messages.current()).wants("steps"):
+                    ex.emit(H.StepComputed(step))
+                return r
+            return execute_model
 
         def init_kv(orig):
             def initialize_kv_cache(runner, kv_cache_config, *a, **kw):
@@ -262,6 +286,7 @@ class _Hook:
                 cls = importlib.import_module(mod).GPUModelRunner
                 h.wrap(cls, "load_model", load)
                 h.wrap(cls, "initialize_kv_cache", init_kv)
+                h.wrap(cls, "execute_model", execute)
         h.wrap(KVCacheManager, "allocate_slots", allocate)
         h.wrap(BlockPool, "get_new_blocks", get_new)
         h.wrap(BlockPool, "touch", touch)
