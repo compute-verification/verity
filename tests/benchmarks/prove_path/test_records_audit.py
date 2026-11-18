@@ -1579,7 +1579,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
         verdicts = {"lean-verify/m0": {"accepted": False, "why": why, "of_record": True, "digest": "ab" * 64}}
         (out / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
         (out / "registration.json").write_text("{}")
-        (out / "receipt.json").write_text(json.dumps({"registration": RA.R.digest({}), "verifier": A5.CHALLENGER}))
+        (out / "receipt.json").write_text(json.dumps({"registration": DD.digest({}), "verifier": A5.CHALLENGER}))
         return {"draw": [0], "arm": "fw", "checks_before_draw": {"registration": True},
                 "audit": {"accepted": False, "why": {"lean-verify/m0": why}}}, False
 
@@ -1772,7 +1772,7 @@ from pathlib import Path
 sys.path.insert(0, {str(HERE.parents[2] / "benchmarks" / "prove_path")!r})
 import records_audit as RA
 from verity.commitments import randomness as RND
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.commitments import docket_digest as DD
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, RND.parse_design({SAMPLING_DESIGN!r}), None)
@@ -1783,7 +1783,7 @@ held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok
         "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
 assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
-receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
+receipt = {{"registration": DD.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 from verity.circuits.defs import CATALOG_PACKAGES
 

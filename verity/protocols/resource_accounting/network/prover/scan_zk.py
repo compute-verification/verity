@@ -1801,7 +1801,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     stream = None
     if coins is None:
         p = a0.challenger_sample(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
-                                        "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
+                                        "--stratified", str(k)], rec["law"], rec["population"], DD.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:

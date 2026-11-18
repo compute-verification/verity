@@ -56,6 +56,7 @@ from verity.protocols.proofs.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 from verity.commitments import domains as DM
 from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
+from verity.commitments import docket_digest as DD
 
 ROOT = Path(__file__).resolve().parents[6]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/protocols/compose/verifier/onsite", ROOT / "verity/protocols/compose/verifier/remote"
@@ -100,7 +101,7 @@ def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, di
     part = {"program": s.sha512, "query": s.query}
     log = [json.loads(after)] if after else []
     rec = OS.R.record(s.program, s.query, sampling_design, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
-                      OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
+                      OS.WINDOW, leaf_layer=OS.LEAF, previous=DD.digest(log[-1]) if log else None, partition=part)
     ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, sampling_design, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
@@ -792,10 +793,10 @@ def reusing(made: list[dict]):
         rec = OS._json(OS.R.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
                                    [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
                                    registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
-                                   anchors=[], previous=OS.R.digest(w),
+                                   anchors=[], previous=DD.digest(w),
                                    partition={"program": s.sha512, "query": s.query}))
         made.append({"w": w, "record": rec, "setup": s,
-                     "outputs": {n: {"record": OS.R.digest(w), "value": v} for n, v in named}})
+                     "outputs": {n: {"record": DD.digest(w), "value": v} for n, v in named}})
         return CC.Cr._canonical(rec).encode().hex()
     return commit
 
@@ -840,7 +841,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     reused = reusing_audit(made[0])
     audit = as_component(R.SPOT, reused)
     policy = policy_on(audit)
-    record = OS.R.digest(made[0]["record"])
+    record = DD.digest(made[0]["record"])
     assert [x.hex() for x in R.policy_record(policy["root"], policy["evidence"])] == [record]
     assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
     got = R.SPOT.answer({**reused, "blobs": BLOBS})
@@ -922,7 +923,7 @@ def _window_audit(made: tuple[dict, dict, dict], w: dict) -> tuple[dict, dict, b
     policy = policy_on(audit)
     assert policy is not None
     record = R.policy_record(policy["root"], policy["evidence"])[0]
-    assert R.policy_previous(policy["root"], policy["evidence"]) == [bytes.fromhex(OS.R.digest(w))]
+    assert R.policy_previous(policy["root"], policy["evidence"]) == [bytes.fromhex(DD.digest(w))]
     return audit, policy, record
 
 
@@ -968,7 +969,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     d = Path(SERVED)
     w = json.loads((d / "window-record.json").read_bytes())
     coin, verified = json.loads((d / "coin.json").read_bytes()), json.loads((d / "verify.json").read_bytes())
-    assert OS.R.digest(w) == verified["tie"]["record"] == SERVED_W
+    assert DD.digest(w) == verified["tie"]["record"] == SERVED_W
     assert (coin["schema"], coin["draw"]["from"], coin["commitment"], verified["commitment"]) == (
         "verity-pouw/pearl-plus-coin/v2", "challenger", SERVED_RUN, SERVED_RUN)
     assert verified["answer"]["verdict"] == R.ACCEPT, verified["answer"]
@@ -1078,7 +1079,7 @@ def test_remote_v1_and_the_policy_compiled_on_a_small_window(tmp_path, monkeypat
     pearl = {"params": {}, "commitment": run.hex(), "evidence": canonical({"files": []}).encode().hex()}
     monkeypatch.setitem(R.PEARL_PLUS.cases, "small", (pearl, R.P.outcome(R.PEARL_PLUS.id, R.REJECT, PEARL_PLUS_REFUSED)))
     pearl = as_component(R.PEARL_PLUS, pearl)
-    assert R.run_record(run, b"") == [record] and R.run_window(run, b"") == [bytes.fromhex(OS.R.digest(w))]
+    assert R.run_record(run, b"") == [record] and R.run_window(run, b"") == [bytes.fromhex(DD.digest(w))]
 
     v1 = D.build(REMOTE_PACKAGE, "remote-v1")
     alpha = [1, 10 ** 9]
