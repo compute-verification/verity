@@ -15,10 +15,10 @@ import ra_cases as M
 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, ledger
 
-OFF_DIGEST = ("b1cf68970ff5c7bc8b749a63c21b08a91988d4db17041348714f2c1f223e8e6"
-              "76d517bcc7ce9f95d57d0433ff0317cdabddfe76ce7f89786a004b06e45ede73e")
+OFF_DIGEST = ("543a23a0082c8c8855250c645f9faf1a3335afa6462ce9459703f993742a63dc"
+              "fe04996af6026e75ccae86e8ac270fd3fbeb664b44f704adf0fda9ff3a6a6bd1")
 """SHA-512 over every recorded scenario's case, outcome and, accepted, its record's public form, profile and ledger, as
-`off_digest` lists them, on main at c326b5a2b7d, before refresh."""
+`off_digest` lists them, before refresh, under the challenger's coin commitment as it now forms it."""
 
 
 def _ledger(rec: audit.Record, **kw) -> audit.GammaTerms:
