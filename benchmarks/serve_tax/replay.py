@@ -26,8 +26,8 @@ differing requests (each one's lengths and first differing position), the replay
 (first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
 settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`) and its ``--private`` (``private``); there
-replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
-named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
+replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a later replay's with, to tell a replay that differs from serving from one that differs from itself, and replay_steps.jsonl its step records. ``--capture`` takes the
+named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into ``--private``/capture, a
 token-select span each, and replay.json says whether each one's ids are the ones served.
 ``--result RUN_DIR`` writes the run's result.json (`KIND`), passed only where the replay is bit-exact, its fingerprint
 naming under ``minify`` the minify run whose copy served the arm (the arm's meta.json's ``run_id``, else ``--minify``;
@@ -86,7 +86,8 @@ def unapplied(sampling: dict) -> dict:
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     """The load's served window: its requests (engine id, prompt ids, served ids), arrivals by step and steps, with
-    step indices from the window's first. The ids are the plan's and the corpus client's (client.jsonl), or, for a
+    step indices from the window's first. The ids are the plan's and the corpus client's (its records kept whole on the
+    node, `serve_tax.client_kept`), or, for a
     pass whose client kept none, the ones the arm's server kept (`served_ids`). A request served with a sampling field
     the replay does not apply is refused (`unapplied`)."""
     rep_dir = arm_dir / load / f"rep-{rep}"
@@ -94,12 +95,12 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     kept = None if (rep_dir / "client.jsonl").is_file() else served_ids(arm_dir, tag)
     if kept is None:
         named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
-        tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
-        plan_file = next((p for p in tried if p.is_file()), None)
-        if plan_file is None:
-            raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
+        plan_file = Path(named) if named else S.private_of(arm_dir) / "plan.jsonl"
+        if not plan_file.is_file():
+            raise SystemExit(f"no plan at {plan_file}, on the node that served {arm_dir}")
         plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
-        client = {r["id"]: r for r in (json.loads(x) for x in (rep_dir / "client.jsonl").read_text().splitlines() if x.strip())}
+        client = {r["id"]: r for r in (json.loads(x) for x in S.client_kept(arm_dir, rep_dir).read_text().splitlines()
+                                       if x.strip())}
     elif not kept:
         raise SystemExit(f"{rep_dir} has no client.jsonl and {arm_dir}'s server kept no ids of load {load} rep {rep} "
                          f"({tag}): a pass sent by vLLM's client is replayed from an arm whose server keeps each request's "
@@ -395,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="record each sampled token's logprob too, and compare them with --against's, step by step")
     ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
-                                      "OUT/capture, each a span of --capture-template's units")
+                                      "--private/capture, each a span of --capture-template's units")
     ap.add_argument("--capture-template", help="the token select the captured rows are units of (default: the check the "
                                                "served arm committed under, `capture_template`)")
     ap.add_argument("--private", type=Path, required=True,
@@ -433,7 +434,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = S.value_settings()       # the environment the engine and every process it starts are given
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
-    capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
+    capture = (a.capture.split(","), a.private / "capture" / "ranks") if a.capture else None
     template = capture_template(meta, a.capture_template) if capture else None
     line = meta["server_argv"]
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture,
@@ -457,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     if capture:
         from verity_vllm.engine import sampler_capture as SC
         spans = SC.spans(got["takes"], got["steps"])
-        SC.write(a.out / "capture", template, spans)
+        SC.write(a.private / "capture", template, spans)
         served = {r["engine_id"]: r["served"] for r in w["requests"]}
         out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
                           for rid, s in spans.items()}
@@ -468,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     write_tokens(a.private, got["tokens"])
     if a.logprobs:
         write_logprobs(a.private, got["logprobs"])
-    with open(a.out / "replay_steps.jsonl", "w") as f:
+    with open(_kept(a.private, "replay_steps.jsonl"), "w") as f:
         for s in got["steps"]:
             f.write(json.dumps(s, separators=(",", ":")) + "\n")
     if a.result:

@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
@@ -130,7 +131,8 @@ def test_ids_frames_are_the_scans_id_events():
     req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
     assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
     assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
-    assert proto.PROTOCOLS["ids"] is proto.ids and idp.ID_PAYLOAD == 512 - HEADER.size
+    declared = {n: f for s in declarations.load().values() for n, f in s.framings.items()}
+    assert declared["ids"] is idp.IdsProtocol and "ids" in proto.framings() and idp.ID_PAYLOAD == 512 - HEADER.size
     with pytest.raises(ValueError, match="at least 138"):
         idp.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
@@ -854,6 +856,37 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
+def test_each_window_opens_and_closes_as_an_execution_phase_and_its_root_follows_its_close(tmp_path):
+    """Each Commit window is an execution phase on the exchange's ``steps``: `PhaseOpened` before any of its values is
+    committed, `PhaseClosed` with the committer's Program digest before the next opens, then `PhaseCommitted` with its
+    finalize's run root (empty for a window that committed no step)."""
+    from verity import hooks as H
+    from verity_vllm import messages
+
+    messages.close()
+    heard: list = []
+    off = messages.current().subscribe("test", "steps", heard.append)
+    try:
+        with Serving(tmp_path, window_steps=2) as s:
+            assert s.windows is not None
+            s.windows.com.program_digest = b"\x07" * 64
+            assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
+    finally:
+        off()
+        messages.close()
+    phases = [e for e in heard if isinstance(e, H.PhaseOpened | H.PhaseClosed | H.PhaseCommitted)]
+    lines = {w["window"]: w for w in records(tmp_path, "windows.jsonl")}
+    closed = [e.phase for e in phases if isinstance(e, H.PhaseCommitted)]
+    assert closed == sorted(lines) and len(closed) >= 3
+    for k in closed:
+        mine = [e for e in phases if e.phase == k]
+        assert [type(e) for e in mine] == [H.PhaseOpened, H.PhaseClosed, H.PhaseCommitted]
+        assert mine[1].program == b"\x07" * 64
+        assert mine[2].root == (b"" if lines[k].get("empty") else bytes.fromhex(lines[k]["run_root"]))
+    opened = [i for i, e in enumerate(phases) if isinstance(e, H.PhaseOpened)]
+    assert all(isinstance(phases[i - 1], H.PhaseClosed | H.PhaseCommitted) for i in opened[1:])
+
+
 def test_each_busy_period_flips_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
     """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
     ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
@@ -980,7 +1013,7 @@ def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick", "--tick-sat-ms", "30", "--tick-free-ms", "40"))
+    why = so.no_slice(opts("--admit", "tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
     assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
     statics = served_statics()

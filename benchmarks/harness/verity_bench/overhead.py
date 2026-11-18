@@ -56,24 +56,53 @@ POINTS = ("C", "L")
 
 @dataclass(frozen=True)
 class Gpu:
-    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`),
-    its card (`sku`, whose `sm.count` and `store.l2` are `sms` and the L2 the operand sets must pass twice, `l2_bytes`), the
-    harness's build target, host CPU core-seconds' weight in SM-seconds (the
-    node's CPU capacity over its GPUs'), and the scalings and libraries its
-    fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
-    since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `calibration/census/hardware.json`
-    (the H200's is the H100's: the same compute with more HBM)."""
+    """A GPU the door measures on (its `--card`, the card's `short`), by the kind of node it sits in (`node`, a node file
+    under `calibration/hardware/nodes`): the node's GPU card (`sku`), whose file gives its `short` (`gpu`), `name`, `arch`
+    (the harness's build target), `sms` and the L2 the operand sets must pass twice (`l2_bytes`); the node's host CPU
+    core-second's weight in SM-seconds (`verity_bench.host_weight`); and the door's own choices: the scalings and
+    libraries its fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch
+    (`bench.py --bridge`), since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in
+    `calibration/census/hardware.json` (the H200's is the H100's: the same compute with more HBM)."""
 
-    gpu: str
-    name: str
-    capability: str
-    sku: str
-    arch: str
-    cpu_sm_s_per_core_s: float
+    node: str
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
+
+    # imported where read, so the rules load alone by this file's path, with no package beside them
+    @cached_property
+    def sku(self) -> str:
+        from verity.device import load_node
+        from verity_bench import kit
+        from verity_bench.host_weight import NODE_FILES
+
+        return load_node(self.node, directory=NODE_FILES, cards_directory=kit.cards_directory())["device"]["sku"]
+
+    @cached_property
+    def record(self) -> dict[str, Any]:
+        from verity.device import load_card
+        from verity_bench import kit
+
+        return load_card(self.sku, directory=kit.cards_directory())
+
+    @property
+    def gpu(self) -> str:
+        return self.record["short"]
+
+    @property
+    def name(self) -> str:
+        return self.record["name"]
+
+    @property
+    def arch(self) -> str:
+        return self.record["arch"]
+
+    @cached_property
+    def cpu_sm_s_per_core_s(self) -> float:
+        from verity_bench.host_weight import cpu_sm_s_per_core_s
+
+        return float(cpu_sm_s_per_core_s(self.node))
 
     @cached_property
     def sms(self) -> int:
@@ -84,21 +113,24 @@ class Gpu:
         return int(self._figure("store", "l2"))
 
     def _figure(self, table: str, key: str) -> Fraction:
-        # imported here, so the rules above load alone by this file's path, with no package beside them
-        from verity.device import load_card, number
-        from verity_bench import kit
+        from verity.device import number
 
-        return number(load_card(self.sku, directory=kit.cards_directory())[table][key])
+        return number(self.record[table][key])
 
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
-CARDS = {card.gpu: card for card in (
-    Gpu("h200", "H200", "9.0", "h200-sxm-141gb", "sm_90a", 0.48, {"fp8": FP8},
-         ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", "rtx-pro-6000-server", "sm_120a", 1.64,
-         {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
-)}
+#: the GPUs the door measures on, each by its node file
+DOOR = (
+    Gpu("h200-sxm-141gb-x1", {"fp8": FP8}, ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
+    Gpu("rtx-pro-6000-server-x8", {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False,
+        "rtx-pro-6000-server/e4m3"),
+)
+
+
+def cards() -> dict[str, Gpu]:
+    """The door's GPUs by their card's `short`, the `--card` that names one."""
+    return {card.gpu: card for card in DOOR}
 
 #: one layer's linears, (n, k) each: qkv's n is the query width and two KV widths, gate_up's twice the intermediate size
 MODELS = {
@@ -165,9 +197,9 @@ def covers(model: str = KERNEL_MODEL) -> str:
 
 def card(gpu: str) -> Gpu:
     try:
-        return CARDS[gpu]
+        return cards()[gpu]
     except KeyError:
-        raise ValueError(f"no card {gpu!r}: the door measures on {', '.join(CARDS)} (verity_bench.overhead.CARDS)") from None
+        raise ValueError(f"no card {gpu!r}: the door measures on {', '.join(cards())} (verity_bench.overhead.DOOR)") from None
 
 
 #: the libraries a card's bridge serves (`bench.py --bridge`), by the bridge's name for each

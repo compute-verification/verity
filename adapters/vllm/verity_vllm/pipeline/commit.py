@@ -43,6 +43,7 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
 
 from __future__ import annotations
 
+import itertools
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
@@ -91,13 +92,33 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
-def run_bound(run: str, began: bool) -> None:
-    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+def phase_opened(phase: int) -> None:
+    """Execution phase ``phase`` opens on the exchange (`hooks.PhaseOpened`), at the step it begins at: an instrumented
+    run is one phase, its committer installed and nothing of it committed yet."""
     from verity import hooks as H
     from verity_vllm import messages
     ex = messages.current()
     if ex.wants("steps"):
-        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+        ex.emit(H.PhaseOpened(phase, ex.next_step))
+
+
+def phase_closed(phase: int, program: bytes) -> None:
+    """Execution phase ``phase`` closes after its last step (`hooks.PhaseClosed`), under the Program ``program`` (empty
+    where its committer names none)."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseClosed(phase, ex.step, bytes(program)))
+
+
+def phase_committed(phase: int, root: bytes) -> None:
+    """Closed execution phase ``phase``'s root (`hooks.PhaseCommitted`), once its committer finalized it."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.PhaseCommitted(phase, bytes(root)))
 
 
 def _rid_of(order: dict, rid) -> str:
@@ -1277,6 +1298,7 @@ def main(args: Options) -> None:
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
     _RUN0 = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "monotonic_s": round(time.monotonic(), 3)}
+    phases = itertools.count()
     for pair in range(args.pairs):
         if multi:
             shift = pair % len(arms_all)
@@ -1301,14 +1323,15 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            run = None if arm == "control" else f"pair{pair}.{arm}"
-            run is not None and run_bound(run, began=True)
+            phase = None if arm == "control" else next(phases)
+            phase is not None and phase_opened(phase)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
-            run is not None and run_bound(run, began=False)
+            phase is not None and phase_closed(phase, getattr(com, "program_digest", b"") or b"")
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 rc = com.finalize()
+                phase_committed(phase, rc.run_root)
                 t_ready = time.perf_counter()
                 com.uninstall()
                 assert_pristine(eng, base)
@@ -1365,7 +1388,7 @@ def main(args: Options) -> None:
                 if getattr(args, "match_dir", None):
                     oracle_producers = match_record_compare(row, com, rc, components, oracle_producers, args=args, reqs=reqs, sampling=sampling,
                                                             required_manifest=required_manifest, vc_result=vc_result, pair=pair)
-                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
+                _c2 = C2.ReplaySources(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com, replay=True), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
                 _c2_deferred = bool(args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred, started=_rb_started))
                 if _c2_deferred and args.serving_rows:
                     C2.serving_rows(_c2)

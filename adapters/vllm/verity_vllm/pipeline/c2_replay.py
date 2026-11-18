@@ -113,7 +113,8 @@ def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, 
 
 def live_weights_check(register: Callable[[], dict[str, Any]], com: Any, rc: Any) -> dict[str, Any]:
     """[O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now (`register`) and
-    compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)."""
+    compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL).  `register`
+    re-registers under the run's recorded key (`register_weights(replay=True)`)."""
     try:
         _w_saved = getattr(com, "weights", None)
         _w_now = register()     # through what a protocol option released
@@ -402,13 +403,9 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
-        NCP_CIRCUIT_SCHEMES as SCHEMES,
-    )
+    from verity_vllm import protocols as PO
 
-    from verity_vllm.protocols import pouw
-
-    return next((e for e in entries if e.split(":", 1)[0] == pouw.NAME and e.split(":", 1)[1] in SCHEMES), None)
+    return next((e for e in entries if PO.has_circuit(e)), None)
 
 
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
