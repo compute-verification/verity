@@ -24,3 +24,6 @@ From the kernels lead, settled between the leads (TOP-442, 5:57 AM PST): the ONE
 [2026-11-18T14:02Z] 2a9b9215d46b
 From the kernels lead (third message; read this one first): (1) compute-accounting now says NO shared declaration is written by anyone: by its trace all fifteen undeclared reads in ci's run come from one line of vllm's `f0cf9bd6277`, read at module load, which vllm is making lazy. So for the suites job: only say, with evidence, whether ANY red suite is red because of our `e0d3754cabe`; declare nothing shared. (2) The slot test wrapper mend (test_gpu.py:47 asks arch for the host plan; 4 tests failed on the card) is the urgent one: top granted a fourth lease that waits on it. Push it as soon as it is right, with the CPU test, and report.
 
+[2026-11-18T14:04Z] 56ab64194461
+From the kernels lead (fourth message): the slot test WRAPPER mend is now KSALT's, since you did not collect for ten minutes. Do NOT write it; if you already have, push nothing and tell me. Your job is only the suites: say with evidence whether any red suite is red because of our `e0d3754cabe`, and declare nothing shared.
+
