@@ -73,8 +73,6 @@ PRUNED = 3
 NODES = 24
 EMBED = "model.embed_tokens.weight"
 TABLE = WB.table_param(EMBED, 64)
-#: the committer's secret key
-KEY = bytes(range(32))
 
 
 def _bf16(x) -> np.ndarray:
@@ -106,14 +104,14 @@ def _registered(config=S.TINY):
 
 
 def _window(config=S.TINY, grain=GRAIN):
-    """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
+    """The class circuit lowered, its weights, its registered values (each weight's parameter under fresh salts, and the scan
     state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
     fields = _weights(low.fn)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(config), fields, KEY, grain, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
@@ -659,9 +657,8 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
 
 def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
-    (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
-    of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
-    registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
+    (``row-seg``), each committed under salts of its own, 192 a row and no two alike: the table and a weight are core's
+    commits of those rows under the weights record's program and those salts, and the entries name nothing but each value's size, domain and hiding
     root. The scan state is no value of the committer's but the network attester's, a row a bucket of the window. Each
     value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
@@ -672,19 +669,20 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
-    nonces, program = WW.weight_nonces(got), WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
-    assert set(nonces) == set(got) - {SS.SCAN_STATE} and {v.program for p, v in got.items() if p in nonces} == {program}
+    program = WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
+    assert {v.program for p, v in got.items() if p != SS.SCAN_STATE} == {program}
     assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (CLASS.buckets, SS.words(CLASS.scan))
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 1024), fields[EMBED].reshape(-1, 1024), CR.SCHEMA_V2)):
-        salts = [hm96_salt(KEY, nonces[name], j) for j in range(len(rows))]
+        salts = list(got[name].salts)
+        assert len(salts) == len(rows) == len(set(salts)) and {len(x) for x in salts} == {192}
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
     assert down.shape == (8, 1024) and np.array_equal(down.reshape(-1), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
-        WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16), KEY, 0)
+        WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16))
 
 
 def _as_leaves(x: np.ndarray, width: int, leaves: int) -> np.ndarray:
