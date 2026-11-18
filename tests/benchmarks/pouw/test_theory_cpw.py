@@ -1,8 +1,7 @@
-"""theory/{cpw_floor,cpw_sass_count,a2u_sat_count}.py: the DS-120 bound's break line and CP-W's checkpoint floors, and
-the two SASS counters on small listings in cuobjdump's form."""
+"""theory/{cpw_floor,cpw_sass_count}.py: the DS-120 bound's break line and CP-W's checkpoint floors, and
+the SASS counter on small listings in cuobjdump's form."""
 from __future__ import annotations
 
-import a2u_sat_count as a2
 import cpw_floor as cf
 import cpw_sass_count as cs
 
@@ -76,25 +75,3 @@ def test_cpw_sass_count_loop_and_beyond_fold(tmp_path):
     assert r["cpw_none"]["classes_per_set"] == {"IMAD": 2, "ALU": 2, "IMMA": 1, "BRA": 1}
     assert r["cpw_pair2"]["beyond_fold_per_set"] == 2
     assert r["cpw_pair2"]["opcodes"]["REDG.E.XOR.64.STRONG.GPU"] == 1
-
-
-def test_a2u_sat_count_rates(tmp_path):
-    p = tmp_path / "a2u.sass"
-    stream = ["FFMA R3, R3, R2, 1 ;"] * 4
-    p.write_text(_listing({"s_16_0": stream + ["UIADD3 UR4, UPT, UPT, UR4, 0x1, URZ ;"],
-                           "u_16_64_2": stream + ["UIMAD UR4, UR4, -0x61c8864f, UR5 ;",
-                                                  "ULOP3.LUT UR5, UR5, 0x1b6d1c8d, UR4, 0x96, !UPT ;"],
-                           "t_16_2": stream + ["IMMA.16832.S8.S8 R4, R8, R10, R4 ;"]}), encoding="utf-8")
-    counts = a2.count(str(p))["sm_120a"]
-    assert (counts["u_16_64_2"]["body"], counts["u_16_64_2"]["uniform"], counts["u_16_64_2"]["vector"]) == (7, 2, 5)
-    assert counts["t_16_2"]["imma"] == 1 and counts["s_16_0"]["ffma"] == 4
-    dev = tmp_path / "device.txt"
-    dev.write_text("device cc=12.0 sms=188\n"
-                   "a2u s_16_0 w=8 rep=0 smsp_cyc_per_warp_loop=6.1000 err=no error\n"
-                   "a2u s_16_0 w=8 rep=1 smsp_cyc_per_warp_loop=6.0200 err=no error\n"
-                   "a2u u_16_64_2 w=1 rep=0 smsp_cyc_per_warp_loop=5.0000 err=no error\n", encoding="utf-8")
-    arch, rows = a2.device(str(dev))
-    assert arch == "sm_120a"
-    r = a2.rates(counts, rows)
-    assert r["s_16_0@w8"]["total_ipc"] == round(6 / 6.02, 4) and r["s_16_0@w8"]["a2u_holds"]
-    assert r["u_16_64_2@w1"]["total_ipc"] == 1.4 and not r["u_16_64_2@w1"]["a2u_holds"]
