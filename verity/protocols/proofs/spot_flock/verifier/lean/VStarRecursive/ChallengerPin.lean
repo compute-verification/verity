@@ -55,7 +55,10 @@ theorem members_pinned (pin : Pin) (period : Core.BlobProtocol) (cs : List Core.
   by_cases h1 : P.id = Sampled.PROTOCOL
   · left; simp [h1]
   · by_cases h2 : P.id = Spot.ChallengerPin.PERIOD
-    · right; left; simp [h1, h2]
+    · right; left
+      have e1 : (P.id == Sampled.PROTOCOL) = false := by simpa using h1
+      have e2 : (P.id == Spot.ChallengerPin.PERIOD) = true := by simpa using h2
+      simp [e1, e2]
     · right; right; simp [h1, h2, hP]
 
 /-- The command line of the composite `mk` builds over `cs`, its members under the pin `parse` reads ahead of it. -/
