@@ -11,7 +11,10 @@ replay blocks and inference blocks are partitions in three roles, and `Refines` 
 blocks). The committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of another
 unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates `R` (`gates u`), and the
 boundary (`boundary`) is in(S) ∪ out(S) over the units, `committed` less the inputs no gate reads. A boundary
-gate's position (`pos`) is its rank in the leaves' order: by writer, the inputs first, then by index.
+gate's position (`pos`) is a root and a leaf under it (`Root`), read through the circuit's `Layout`: a registered gate
+at its entry's root and its leaf there; any other at the root of the first execution phase that commits it
+(`commitPhase`), at its rank in that phase's window gates (`window`) in the leaves' order: by writer, the inputs first,
+then by index.
 
 Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
@@ -29,6 +32,21 @@ open Finset
 structure Partition (C : Circuit) (n : ℕ) where
   unit : Fin C.N → Option (Fin n)
   input_iff : ∀ g, unit g = none ↔ C.isInput g = true
+
+/-- **A position's root**: entry `i` of the registered values (`reg i`), or execution phase `j`'s window (`phase j`). -/
+inductive Root where
+  | reg (i : ℕ)
+  | phase (j : ℕ)
+  deriving DecidableEq
+
+/-- **Where `C`'s values are committed**: each registered gate's entry and leaf under that entry's root (`reg`, on
+input gates only, no two gates at one), and each gate's execution phase (`phase`), no gate reading a later phase's. -/
+structure Layout (C : Circuit) where
+  reg : Fin C.N → Option (ℕ × ℕ)
+  reg_input : ∀ g, (reg g).isSome → C.isInput g = true
+  reg_inj : ∀ g h, (reg g).isSome → reg g = reg h → g = h
+  phase : Fin C.N → ℕ
+  phase_reads : ∀ g, ∀ a ∈ C.reads g, phase a ≤ phase g
 
 namespace Partition
 
@@ -79,19 +97,41 @@ def writerRank (g : Fin C.N) : ℕ :=
 the writer is the same and its index is smaller. -/
 abbrev Before (g h : Fin C.N) : Prop := P.writerRank g < P.writerRank h ∨ (P.writerRank g = P.writerRank h ∧ g < h)
 
-/-- **A boundary gate's position**: its rank among the boundary's gates in the leaves' order (`Before`), so each
-writer's gates are one run of positions, in index order; `none` off the boundary. -/
-noncomputable def pos (g : Fin C.N) : Option ℕ :=
-  if g ∈ P.boundary then some (P.boundary.filter fun h => P.Before h g).card else none
+/-- Phase `j` commits `g`: its own phase when `g` is an input or an output, or the phase of a gate of another unit
+that reads it. -/
+def CommitsIn (L : Layout C) (g : Fin C.N) (j : ℕ) : Prop :=
+  ((C.isInput g = true ∨ g ∈ C.outputs) ∧ L.phase g = j) ∨ ∃ h, g ∈ C.reads h ∧ P.unit h ≠ P.unit g ∧ L.phase h = j
+
+open Classical in
+/-- **The phase that commits `g`**: the first that does (`0` for a gate none commits). Only the phases up to it are
+read, so a later phase never changes it. -/
+noncomputable def commitPhase (L : Layout C) (g : Fin C.N) : ℕ :=
+  if h : ∃ j, P.CommitsIn L g j then Nat.find h else 0
+
+/-- **Phase `j`'s window gates**: the boundary gates outside the registered values that phase `j` commits first. -/
+noncomputable def window (L : Layout C) (j : ℕ) : Finset (Fin C.N) :=
+  P.boundary.filter fun g => L.reg g = none ∧ P.commitPhase L g = j
+
+/-- **A boundary gate's position**, a root and a leaf: a registered gate's entry and leaf (`L.reg`); any other, the
+phase that commits it and its rank among that phase's window gates in the leaves' order (`Before`); `none` off the
+boundary. -/
+noncomputable def pos (L : Layout C) (g : Fin C.N) : Option (Root × ℕ) :=
+  if g ∈ P.boundary then
+    match L.reg g with
+    | some (i, r) => some (.reg i, r)
+    | none => some (.phase (P.commitPhase L g), ((P.window L (P.commitPhase L g)).filter fun h => P.Before h g).card)
+  else none
 
 /-- **`Rblk`, the base argument's relation for proof block `u`**, with `S` its gates and `C_S = C.restrict S`: the trace
-`X` opens, under the string commitment `Sc` at `c`, at the position `pos g` of each gate of in(S) and out(S), each value
+`X` opens, under the string commitment `Sc` at the root `c r` of each gate's position `pos L g = (r, i)`, at leaf `i`,
+for each gate of in(S) and out(S), each value
 encoded by `enc`, with opening `π g`; and out(S) holds what `C_S` computes with every gate outside `S` held at `X`. It
 constrains openings at in(S) and out(S) only, and reads `X` only on `S` and in(S) (`Partition.rblk_congr`): a gate
 outside `S` that `S` never reads is a free input of `C_S`, which no opening and no bound reads. -/
 def Rblk {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest) (enc : (g : Fin C.N) → BitVec (C.w g) → α)
-    (c : Sc.Com) (u : Fin n) (X : C.Trace) (π : Fin C.N → Sc.Op) : Prop :=
-  (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), ∃ i, P.pos g = some i ∧ Sc.Opens H c i (enc g (X g)) (π g)) ∧
+    (L : Layout C) (c : Root → Sc.Com) (u : Fin n) (X : C.Trace) (π : Fin C.N → Sc.Op) : Prop :=
+  (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u),
+      ∃ p, P.pos L g = some p ∧ Sc.Opens H (c p.1) p.2 (enc g (X g)) (π g)) ∧
     ∀ g ∈ C.exits (P.gates u),
       X g = (C.restrict (P.gates u)).run (fun a => if P.unit a = some u then none else some (X a)) g
 
