@@ -121,8 +121,8 @@ CASES = [
 ]
 
 
-def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int = 4) -> dict:
-    """The piece's input on a root batching a writer (4 members, each `fields` fields of `width` leaves) and a reader
+def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int = 4, writers: int = 4) -> dict:
+    """The piece's input on a root batching a writer (`writers` members, each `fields` fields of `width` leaves) and a reader
     (`readers` members, each one `rparam`) whose argument is `part(w)` over the writer node `w`."""
     col = Array(width, Value(16))
     writer = bind(CompositeDefinition(f"{name}W", 0, (), lambda S: ((("x", col),), Tuple(*[col] * fields)),
@@ -138,8 +138,8 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
     def body(B, S, x, y):
         return tuple_of(B.batch(writer, x, axes=(0,)), B.batch(reader, y, axes=(0,)))
 
-    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(4, col)), ("y", Array(readers, rparam))),
-                                                            Tuple(Array(4, Tuple(*[col] * fields)),
+    defn = bind(CompositeDefinition(name, 0, (), lambda S: ((("x", Array(writers, col)), ("y", Array(readers, rparam))),
+                                                            Tuple(Array(writers, Tuple(*[col] * fields)),
                                                                   Array(readers, rparam))), body, register=False))
     desc = json.loads(D.canonical(codec.encode_program(Program(defn))))
     tw, tr = codec.descriptor_id(writer), codec.descriptor_id(reader)
@@ -148,7 +148,7 @@ def _fields_toy(name: str, fields: int, width: int, rparam, part, readers: int =
     r = next(k for k, x in enumerate(_nodes(desc)) if ids[x["fn"]] == tr)
     _nodes(desc)[r]["args"][0]["refs"] = part(w)
     template = {"units": 4, "rows": {"x": [1, 1]}, "outs": {"out": 1}}
-    return {"program": desc, "ranges": [[w, tw, 0, 4], [r, tr, 4, readers]],
+    return {"program": desc, "ranges": [[w, tw, 0, writers], [r, tr, writers, readers]],
             "wiring": {"templates": {tw: template, tr: template}, "cuts": {}, "wires": []}}
 
 
@@ -275,6 +275,8 @@ def _slots_toy(name: str) -> dict:
 ROPE = _fields_toy("CoreEdgesRoPE", 48, 64, Array(64, Value(16)), lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 8192]},
                    readers=128)
 SLOTS = _slots_toy("CoreEdgesSlots")
+ROPE_WIDE = _fields_toy("CoreEdgesRoPEWide", 48, 64, Array(64, Value(16)),
+                        lambda w: {"strided": ["n", w, 0, 2048, 3072, 1, 2**26]}, readers=2**20, writers=2**15)
 
 #: the served classes' reads, whose field's place in the writer unit steps with a digit (the wire's `ostep`)
 SERVED_CASES = [
@@ -364,6 +366,14 @@ def test_the_served_classes_reads(pieces, name, j, want):
     and in the twin."""
     assert _code(got := reference(j)) == want
     assert pieces.call("edges", j) == ("output", D.canonical(got))
+
+
+def test_the_edges_cost_the_description(pieces):
+    """The rotary read with 2^20 reader members over 2^15 writer units: as many wires as with 128, its digits wider. A
+    piece or twin that walked members or leaves would not return here (2^26 leaves)."""
+    want = {"wires": [{**_wire_of(ROPE_WIDE, [2**15, 32], [1, 0]), "ostep": [0, 64]}]}
+    assert _code(got := reference(ROPE_WIDE)) == want
+    assert pieces.call("edges", ROPE_WIDE) == ("output", D.canonical(got))
 
 
 @pytest.mark.parametrize("name, j, want", WORD_CASES, ids=[c[0] for c in WORD_CASES])
