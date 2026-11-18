@@ -237,8 +237,8 @@ def test_exchange_starts_through_every_gate_and_holds():
             return bool(self.held)
 
     ex, g1, g2, started = M.Exchange(), Gate(), Gate(), []
-    ex.request("a", H.StartOnBoundary(g1))
-    ex.request("b", H.StartOnBoundary(g2))
+    ex.request("a", H.AdmitInput("hold", g1))
+    ex.request("b", H.AdmitInput("hold", g2))
     ex.start("in-0", lambda: started.append("in-0"))
     assert ex.pending() and not started
     g1.held.pop()()
@@ -412,7 +412,7 @@ def test_a_route_has_one_scheme_and_an_input_is_refused_while_serving():
     ex.step = 0
     told: list = []
     ex.refuse = lambda input, why: told.append((input, why))
-    ex.request("network", H.RefuseInput("in-1", "no release stamp"))
+    ex.request("network", H.AdmitInput("refuse", input="in-1", why="no release stamp"))
     assert ex.refused("in-1") == [("network", "no release stamp")] and ex.refused("in-2") == []
     assert told == [("in-1", "no release stamp")]
     assert H.InputArrived("in-1", 3, 0, {"x-release": "4"}, "POST /v1/completions HTTP/1.1").headers["x-release"] == "4"

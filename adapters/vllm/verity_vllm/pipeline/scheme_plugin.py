@@ -9,7 +9,7 @@ and its linear site attaches, the exchange answered with what vLLM's
 configuration declares, the admission hook (`engine.admission.register`, keyed by the client's X-Request-Id) on its
 scheduler, and what each scheme holds released when the engine core shuts down, then each scheme's
 report written under the run output (`write_reports`). A scheme's
-`hooks.RefuseInput` there aborts the input, its reason the client's ``stop_reason`` (`aborts`).
+a refusal there (`hooks.AdmitInput`) aborts the input, its reason the client's ``stop_reason`` (`aborts`).
 
 No committer runs here, so there are no execution phases (no `hooks.PhaseOpened`, `PhaseClosed` or `PhaseCommitted`):
 a scheme's epoch is the server's life, from its attach to its release.
@@ -140,7 +140,7 @@ def write_reports(exchange: messages.Exchange, out: str | Path) -> None:
 
 def aborts(hook: Any, core: Any, log: Callable[[str], Any] = lambda s: print(s, file=sys.stderr, flush=True),
            vllm: Any = None) -> Callable[[str, str], None]:
-    """The engine's answer to a `hooks.RefuseInput`: input ``input``'s requests in ``hook``'s scheduler finished as
+    """The engine's refusal (`hooks.AdmitInput`): input ``input``'s requests in ``hook``'s scheduler finished as
     aborted, and each sent to its client finished with ``finish_reason`` abort and ``why`` as its ``stop_reason``, which
     vLLM's OpenAI server puts in the response's choice; ``why`` logged too. ``vllm`` holds vLLM's ``RequestStatus``,
     ``FinishReason``, ``EngineCoreOutput`` and ``EngineCoreOutputs`` unless given."""
@@ -306,7 +306,7 @@ class Front:
     of its own, given the body as it streams in), and every other request handed to the schemes as an `hooks.InputArrived`
     (its X-Request-Id, set where the client sent none, its first line, headers, body's length and the user its body names) before the server sees
     it. Only `SAMPLED_PATHS` and `OTHER_PATHS` are served, and a sampled request only with its seed (`unseeded`): any
-    other is answered 400, and a websocket closed. A scheme's `hooks.RefuseInput` answers it 400 with the reason too;
+    other is answered 400, and a websocket closed. A scheme's refusal (`hooks.AdmitInput`) answers it 400 with the reason;
     an input refused before the server sees it is complete at the front at step 0 (`hooks.OutputLeft`). Filed while the server has it, the server is given its
     disconnect, and the request is answered 400 where no response began, its stream ended where one did. An input the
     server answered with no 200 never reached the engine, and is complete at the front (`hooks.OutputLeft`).

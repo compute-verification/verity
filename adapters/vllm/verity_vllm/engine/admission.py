@@ -15,7 +15,7 @@ emits, and what it asks:
 
 - ``add_request``: `InputArrived`, with the request's count of prompt ids and the first line, headers and user the
   server gave for it (`Hook.arrive`); the request goes into the scheduler once every
-  gate a scheme filed (`StartOnBoundary`) starts it (`Exchange.start`), and one still held when it is finished from
+  gate a scheme's hold filed (`AdmitInput`) starts it (`Exchange.start`), and one still held when it is finished from
   outside never reaches the scheduler, which is never handed its id;
 - before each step, on each pass of the engine core's input loop: every gate is asked (`Exchange.ready`, with the
   scheduler's running, waiting and finished requests as `StepDue`) and holds the step while one says no;
@@ -172,7 +172,7 @@ def install(sched: Any, exchange: messages.Exchange | None = None, key: Callable
     refused for a scheduler policy other than FCFS, whose waiting queue is the order the gates start requests in, and
     for one of several data-parallel engines."""
     ex = exchange or messages.current()
-    if any(isinstance(r, H.StartOnBoundary) for _, r in ex.requests):
+    if any(isinstance(r, H.AdmitInput) and r.admit == "hold" for _, r in ex.requests):
         policy = getattr(getattr(sched, "scheduler_config", None), "policy", None)
         if policy != "fcfs":
             raise RuntimeError(f"a gate on starting inputs needs the FCFS scheduler, whose waiting queue is the order it "
@@ -197,7 +197,7 @@ def register(attach: Callable[[messages.Exchange], Any], key: Callable[[str], st
     """In an engine core process (a vLLM general plugin's ``register``): for each engine core, ``attach`` files its
     schemes' requests on this process's exchange and subscribes them, and the hook goes on the core's scheduler, held
     through the core's input loop (`core_gate.SEAM`'s gate ``admission``); ``refuse(hook, core)`` answers the exchange's
-    `hooks.RefuseInput` from then on."""
+    refusals (`hooks.AdmitInput`) from then on."""
     from verity_vllm.engine.core_gate import SEAM
 
     def make(core: Any) -> Hook:
@@ -212,7 +212,7 @@ def register(attach: Callable[[messages.Exchange], Any], key: Callable[[str], st
 
 
 class WindowGroups:
-    """A gate (`hooks.Gate`, filed with `hooks.StartOnBoundary`) that starts each group of inputs on a window's boundary,
+    """A gate (`hooks.Gate`, a hold's, `hooks.AdmitInput`) that starts each group of inputs on a window's boundary,
     a window being the steps between two moments the workload holds nothing: the inputs that arrive within ``gather_s``
     of the first into a workload holding nothing are one group, and the step waits for them, so all start at the
     window's first step; one that arrives later waits until the workload holds nothing again, so the current window is

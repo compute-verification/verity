@@ -255,7 +255,7 @@ def front_scheme(monkeypatch):
         def on(e):
             seen["events"].append(e)
             if isinstance(e, H.InputArrived) and "x-bad" in e.headers:
-                exchange.request("stand-in", H.RefuseInput(e.input, "bad"))
+                exchange.request("stand-in", H.AdmitInput("refuse", input=e.input, why="bad"))
         exchange.subscribe("stand-in", "steps", on)
     monkeypatch.setitem(S.SCHEMES, "stand-in", SimpleNamespace(name="stand-in", messages=(), settings={"k": 0}, depends=(), resource=S.Lacks("a stand-in"), check_settings=lambda s: None, attach=attach,
                                                                requests=lambda ctx: ()))

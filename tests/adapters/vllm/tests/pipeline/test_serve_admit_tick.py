@@ -955,7 +955,7 @@ def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed()
         hook, order = so.network_admission(loop, sched, opts)
         assert hook is built is loop.hook and order.take is loop.tick and loop.gate.hold_s == 1.0
         assert loop.gate.record() == {"bucket_us": 5000, "sat_us": 1000, "free_us": 1000}
-        assert [type(r).__name__ for _, r in messages.current().requests] == ["StartOnBoundary", "ServeRoute"]
+        assert [type(r).__name__ for _, r in messages.current().requests] == ["AdmitInput", "ServeRoute"]
     finally:
         built.uninstall()
         messages.close()

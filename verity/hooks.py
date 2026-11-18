@@ -15,10 +15,10 @@ from typing import Any, ClassVar, Protocol
 HOOKS = ("declared", "steps", "values", "blocks", "memory")
 
 #: ``ctx["process"]`` of a scheme's ``attach(exchange, ctx)`` where the workload's front and its engine run in two
-#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, `RefuseInput`),
-#: ENGINE steps it (the gates and every other hook). Without the key one process does both. ``ctx["feed"]`` is then
-#: a directory, one for the two, whose files a scheme's front appends to and its engine reads; ``ctx["settings"]`` are the
-#: scheme's settings (`Declared.settings`).
+#: processes, each with its own exchange: FRONT takes the workload's inputs (`InputArrived`, `ServeRoute`, an
+#: `AdmitInput` that refuses), ENGINE steps it (the gates and every other hook). Without the key one process does both.
+#: ``ctx["feed"]`` is then a directory, one for the two, whose files a scheme's front appends to and its engine reads;
+#: ``ctx["settings"]`` are the scheme's settings (`Declared.settings`).
 FRONT, ENGINE = "front", "engine"
 #: ``ctx["process"]`` of a scheme attached in a process of its own, which the served runner launches for its piece
 #: (`Scheme.pieces`) beside the workload's front and engine, neither of them: the wipe's, at block 0's opening, before
@@ -285,11 +285,27 @@ class Front(Protocol):
     def summary(self) -> Mapping[str, Any]: ...
 
 
-@dataclass(frozen=True)
-class StartOnBoundary:
-    """A scheme's request to start inputs only when ``gate`` starts them (a window's boundary)."""
+#: what an `AdmitInput` says: ``hold`` the inputs until its ``gate`` starts each (a window's boundary), or ``refuse``
+#: its ``input``, answered with ``why``
+ADMITS = ("hold", "refuse")
 
-    gate: Gate
+
+@dataclass(frozen=True)
+class AdmitInput:
+    """A scheme's word on admitting inputs (`ADMITS`). A hold starts an input when its ``gate`` starts it and ends when
+    the gate opens; a refusal is filed at any time, serving included."""
+
+    admit: str
+    gate: Gate | None = None
+    input: str | None = None
+    why: str = ""
+
+    def __post_init__(self) -> None:
+        if self.admit not in ADMITS:
+            raise ValueError(f"AdmitInput admits by one of {ADMITS}, not {self.admit!r}")
+        if (self.admit == "hold") != (self.gate is not None) or (self.admit == "refuse") != (self.input is not None):
+            raise ValueError(f"AdmitInput {self.admit!r}: a hold names a gate and no input, a refusal an input and no "
+                             f"gate (gate {self.gate!r}, input {self.input!r})")
 
 
 class Route(Protocol):
@@ -305,14 +321,6 @@ class ServeRoute:
 
     path: str
     serve: Route
-
-
-@dataclass(frozen=True)
-class RefuseInput:
-    """A scheme's refusal of input ``input``, answered with ``why``; filed at any time, serving included."""
-
-    input: str
-    why: str
 
 
 class Broken(Exception):
@@ -352,12 +360,12 @@ class StartBeside:
     readers: tuple[str, ...] = ()
 
 
-type Request = (RequireProperty | ComputeBlockWith | StartOnBoundary | StartBeside | ReuseOldestFreed | ServeRoute
-                | RefuseInput | FixRanges | ReleaseValue)
+type Request = (RequireProperty | ComputeBlockWith | AdmitInput | StartBeside | ReuseOldestFreed | ServeRoute | FixRanges
+                | ReleaseValue)
 
 
-__all__ = ["CHANGES", "EVENTS", "HOOKS", "BlockDue", "BlockResult", "ComputeBlockWith", "Declared", "Gate", "Handle",
-           "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel", "MemoryChanged", "OutputLeft",
-           "RangesDeclared", "RefuseInput", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
-           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StartOnBoundary", "StepBegan", "StepComputed", "StepDue", "StepEnded",
-           "unmet"]
+__all__ = ["ADMITS", "CHANGES", "EVENTS", "HOOKS", "AdmitInput", "BlockDue", "BlockResult", "ComputeBlockWith", "Declared",
+           "Gate", "Handle", "Broken", "ENGINE", "FRONT", "PIECE", "FixRanges", "Front", "InputArrived", "Kernel",
+           "MemoryChanged", "OutputLeft", "RangesDeclared", "ReleaseValue", "Request", "RequireProperty", "ReuseOldestFreed",
+           "PhaseClosed", "PhaseCommitted", "PhaseOpened", "Route", "ServeRoute", "StartBeside", "StepBegan", "StepComputed",
+           "StepDue", "StepEnded", "unmet"]

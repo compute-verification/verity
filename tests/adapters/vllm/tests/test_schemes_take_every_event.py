@@ -157,7 +157,7 @@ def test_pearl_plus_and_the_attester_in_release_order_take_the_serves_warm_up(se
 
     _through_the_warm_up(serve, ex, attester)
     assert sorted(ex.attached) == ["network-attester", "pearl-plus"]
-    assert not any(isinstance(r, H.StartOnBoundary) for _, r in ex.requests)
+    assert not any(isinstance(r, H.AdmitInput) and r.admit == "hold" for _, r in ex.requests)
 
 
 def _through_the_warm_up(serve, ex, after=None) -> None:

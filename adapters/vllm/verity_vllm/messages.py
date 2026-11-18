@@ -67,7 +67,7 @@ class Exchange:
         self._step: int | None = None
         #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
         self.readers: Mapping[str, Callable[..., Any]] = {}
-        #: the adapter's answer to a refused input (`RefuseInput`), called as it is filed with the input and the reason
+        #: the adapter's answer to a refused input (`AdmitInput`), called as it is filed with the input and the reason
         self.refuse: Callable[[str, str], None] | None = None
         #: the schemes `attach` attached, by name, each with its settings: `Declared.schemes` and `Declared.settings`
         self.attached: dict[str, Mapping[str, Any]] = {}
@@ -168,7 +168,7 @@ class Exchange:
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed earlier run outside later ones."""
         kind = type(request).__name__
-        if isinstance(request, H.RefuseInput):
+        if isinstance(request, H.AdmitInput) and request.admit == "refuse":
             self.requests.append((name, request))
             if self.refuse is not None:
                 self.refuse(request.input, request.why)
@@ -183,6 +183,9 @@ class Exchange:
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:
         return [(n, r) for n, r in self.requests if isinstance(r, kind)]
+
+    def _held(self) -> list[H.AdmitInput]:
+        return [r for _, r in self._filed(H.AdmitInput) if r.admit == "hold"]
 
     def answer(self, declared: H.Declared) -> bool:
         """Answer every request before an engine is built: `Refused` under the first refused scheme's name, with all
@@ -223,7 +226,8 @@ class Exchange:
         subscriber, its inputs start at once and its blocks are the workload's own."""
         subscribers, requests = self.subscribers, self.requests
         self.subscribers = {h: [] for h in H.HOOKS}
-        self.requests = [(n, r) for n, r in requests if not isinstance(r, (H.StartOnBoundary, H.ComputeBlockWith))]
+        held = [r for _, r in self._filed(H.AdmitInput) if r.admit == "hold"]
+        self.requests = [(n, r) for n, r in requests if not isinstance(r, H.ComputeBlockWith) and r not in held]
         try:
             yield
         finally:
@@ -248,22 +252,22 @@ class Exchange:
         return bool(self._filed(H.ComputeBlockWith))
 
     def start(self, input: str, start: Callable[[], None]) -> None:
-        """Start ``input`` once every gate filed by `StartOnBoundary` starts it; with none, now."""
-        for _, r in reversed(self._filed(H.StartOnBoundary)):
+        """Start ``input`` once every gate a hold filed (`AdmitInput`) starts it; with none, now."""
+        for r in reversed(self._held()):
             start = (lambda g, s: lambda: g.add(input, s))(r.gate, start)
         start()
 
     def pending(self) -> bool:
         """Whether a gate holds an input not yet started."""
-        return any(r.gate.pending() for _, r in self._filed(H.StartOnBoundary))
+        return any(r.gate.pending() for r in self._held())
 
     def ready(self, due: H.StepDue) -> bool:
         """Whether step ``due.step`` may run: every gate is asked, and may start inputs."""
-        return all([r.gate.ready(due) for _, r in self._filed(H.StartOnBoundary)])
+        return all([r.gate.ready(due) for r in self._held()])
 
     def open(self, why: str) -> None:
         """Every gate starts what it holds, and every later input at once."""
-        for _, r in self._filed(H.StartOnBoundary):
+        for r in self._held():
             r.gate.open(why)
 
     def route(self, path: str) -> tuple[str, H.Route] | None:
@@ -271,8 +275,8 @@ class Exchange:
         return next(((n, r.serve) for n, r in self._filed(H.ServeRoute) if r.path == path), None)
 
     def refused(self, input: str) -> list[tuple[str, str]]:
-        """Each scheme that refused input ``input`` (`RefuseInput`), with its reason."""
-        return [(n, r.why) for n, r in self._filed(H.RefuseInput) if r.input == input]
+        """Each scheme that refused input ``input`` (`AdmitInput` refuse), with its reason."""
+        return [(n, r.why) for n, r in self._filed(H.AdmitInput) if r.admit == "refuse" and r.input == input]
 
     def oldest_freed_first(self) -> bool:
         """Whether a freed range is handed out again only after every range freed before it (`ReuseOldestFreed`)."""

@@ -520,7 +520,7 @@ class Server:
                 self.abort(adm.engine_id)
 
     def refuse(self, input: str, why: str) -> None:
-        """A scheme refused input ``input`` (`hooks.RefuseInput`): its answer, if it is still going on, ends with ``why``
+        """A scheme refused input ``input`` (`hooks.AdmitInput`): its answer, if it is still going on, ends with ``why``
         and the engine aborts it."""
         adm = self.live.get(input)
         if adm is not None:
