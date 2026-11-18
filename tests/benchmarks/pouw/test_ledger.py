@@ -805,6 +805,7 @@ def test_a_scheme_that_isn_t_the_panel_version_s_device_record_publishes_no_gamm
         assert L._scheme_conflict(unpromoted, "pearl-c-sm120/v1")
     assert L._family_device("pearl-c-nvfp4-v0") == ("pearl-c4", "")
     assert L._scheme_conflict("pearl-c-nvfp4-v0", "pearl-c-sm120/v1") is None
+    assert "is not a Pearl-C scheme name" in L._family_device("pearl-c-sm120-v2-hot-h3")
     assert L._scheme_conflict("pearl-c-sm120-v2-hot-h3", "pearl-c-sm120/v1") is None
 
 

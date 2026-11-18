@@ -15,6 +15,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -237,6 +238,24 @@ def test_a_lean_that_does_not_build_is_no_answer_and_its_own_error_ends_the_piec
     stamps = _stamps(d)
     assert f"{exe} didn't build" in stamps and "the answers' part exit 0" not in stamps
     assert stamps[-1].startswith(("the piece stops: ", "the sessions' part stopped: ")), stamps
+
+
+@pytest.mark.parametrize("create", [1, 2])
+def test_a_file_that_changes_as_the_copy_reads_it_still_builds_the_leans(node, tmp_path, create):
+    """tar's exit 1 on the copy of verity/, a file that changed as it read it (another suite's process writing into the
+    tree), still builds both verifiers and runs the piece; 2, a copy that failed, is no answer (exit 7, saying so)
+    before any build. The stand-in `tar` copies as tar does, then exits so: the piece's outcome never depends on what
+    another process writes into the tree meanwhile."""
+    d = tmp_path / "pieces" / "pous"
+    _exe(tmp_path / "bin" / "tar", f'#!/usr/bin/env bash\n{shlex.quote(shutil.which("tar"))} "$@" || exit\n'
+                                   f'[ "$3" != -c ] || exit {create}\n')
+    r = _piece(node, d)
+    lakes = [line for line in _log(node) if line[0] == "lake"]
+    if create == 1:
+        assert r.returncode == 0 and len(lakes) == 2, r.stdout + r.stderr
+    else:
+        assert r.returncode == 7 and "POUS: no answer: verity/ doesn't copy for the Lean builds" in r.stdout
+        assert not lakes and not (d / "answer.json").exists()
 
 
 def test_a_lean_that_fails_while_the_sessions_run_stops_them_with_its_own_error(node, tmp_path):

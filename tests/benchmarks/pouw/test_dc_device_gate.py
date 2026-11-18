@@ -81,3 +81,18 @@ def test_emp_builds_for_the_sku_it_is_given_and_refuses_without_one(tmp_path):
     assert done.returncode != 0 and "usage: emp.sh build SKU" in done.stderr, (done.stdout, done.stderr)
     done = _start(tmp_path / "sku", "emp.sh", ["build", SKUS["9.0"], f"{DC}/probes/scalar.cu"], None)
     assert done.returncode == 1 and "build failed: " in done.stderr and "nothing built" in done.stderr, done.stderr
+
+
+EMP_RUNS = [(s, cc) for s in ("h32", "emp") for cc in NAMES]
+
+
+@pytest.mark.parametrize("probe_set,cc", EMP_RUNS, ids=[f"emp.sh run {s} {TARGET[cc]}" for s, cc in EMP_RUNS])
+def test_emp_run_builds_its_set_for_the_card_it_has_sources_for_and_refuses_any_other(tmp_path, probe_set, cc):
+    done = _start(tmp_path, "emp.sh", ["run", probe_set], cc)
+    if cc == "9.0":
+        assert done.returncode == 1 and f"build failed: {ROOT}/{DC}/probes/sm90_{probe_set}" in done.stderr, done.stderr
+        assert "the card's target is" not in done.stderr
+    else:
+        assert done.returncode == 2, (done.stdout, done.stderr)
+        assert f"the card's target is {TARGET[cc]}, and " in done.stderr and "nothing built" in done.stderr
+        assert not (tmp_path / "run" / "out" / "build.log").exists()
