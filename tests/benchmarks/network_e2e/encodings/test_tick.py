@@ -1,5 +1,5 @@
 """The attested tick (``--admit tick``) in the replay and in advice v1. The serving side's gate
-(`verity_vllm.pipeline.serve_admit.TickGate`, through its `install`) in front of the replay's vLLM scheduler, served in
+(`verity_vllm.pipeline.serve_admit.TickGate`, a hold of the admission hook, `verity_vllm.engine.admission`) in front of the replay's vLLM scheduler, served in
 simulated physical time with wall-clock jitter, schedules exactly the batches `replay.replay(tick=...)` computes from the
 attested release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
 registered with the tick sends no decision, no order entry and no hit, which the replay's block pool gives, so every
@@ -23,6 +23,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity_vllm import messages
+from verity_vllm.engine import admission
 from verity_vllm.pipeline import serve_admit as sa
 
 HERE = (Path(__file__).resolve().parents[4] / "benchmarks" / "network_e2e" / "encodings")
@@ -77,7 +79,7 @@ def buckets(times: list[float]) -> list[int]:
 
 
 class Scheduler:
-    """The replay's scheduler (`replay.Scheduler`) as `serve_admit.install` and `TickGate` read vLLM's V1 one: its FCFS
+    """The replay's scheduler (`replay.Scheduler`) as the admission hook reads vLLM's V1 one: its FCFS
     queues and finished ids, ``add_request``, and ``schedule``, whose output counts the step's tokens. It keeps the steps
     that ran a row and the step count each request was added at."""
 
@@ -114,6 +116,9 @@ class Scheduler:
             self.steps.append(step)
         return SimpleNamespace(step=step, samples=samples, total_num_scheduled_tokens=sum(n for _, _, n in step.rows))
 
+    def update_from_output(self, scheduler_output, model_runner_output) -> dict:
+        return {}
+
     def finish_requests(self, ids, status) -> None:
         raise AssertionError("the plan aborts nothing")
 
@@ -144,7 +149,9 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     sched = Scheduler(s)
     gate = sa.TickGate(sa.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
     if gated:
-        sa.install(sched, gate, key=lambda rid: rid)
+        ex = messages.Exchange()
+        gate.attach(ex)
+    hook = admission.install(sched, ex, key=lambda rid: rid) if gated else None
     events: list = []
     for i, t in enumerate(times):
         sent = [(t + rng.uniform(0, 0.02), "release"), (t + rng.uniform(0.02, 0.25), "request")]
@@ -174,7 +181,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     def top() -> bool:
         while True:
             deliver()
-            ok = not gated or gate.ready(sched)
+            ok = hook is None or hook.ready()
             if ok and (s.has_requests() or queue):
                 return True
             if not events:

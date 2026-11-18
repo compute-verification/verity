@@ -15,6 +15,7 @@ from verity.circuits.boolean.forms import NOT, mux
 from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import boolean_dsv4_indexer as BI
 from verity_vllm.definitions.registry import dsv4_indices as X
 

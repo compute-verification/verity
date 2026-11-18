@@ -49,7 +49,8 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
     if isinstance(files, CoinError):
         return f"the window's draw session is not one the ledger opens on its draw root: {files}"
     try:
-        trusted, received = Ch.trusted_session_of(lines, {"root": root}, key, pins, main, files, verify)
+        trusted, log = Ch.trusted_session_of(lines, {"root": root}, key, pins, main, files, verify)
+        received = Ch.by_family(trusted, log)
     except CoinError as e:
         return f"the window's draw session is not trusted: {e}"
     if not Ch.withheld_on(lines, root):

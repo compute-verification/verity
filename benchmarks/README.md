@@ -50,7 +50,7 @@ and `uv run verity bench NAME [ARGS]` runs one. These are the directories that h
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench scan_cost` | one scan of the network attester's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads; on Llama 3.2 1B and one H200, `--model llama32-1b --arms 'compiled compiled-again record'` |
-| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify RUN` and `capture RUN` check a stored record and print what it holds, `exact` stores the replay's and circuit-check's verdicts, `price` and `confirm` compute ("The serving cost in five stages") |
+| `verity bench serving_cost` | the serving cost in five stages, each run's record read by the next by its run id: `minify RUN` and `capture RUN` check a stored record and print what it holds, `exact` stores the replay's and circuit-check's verdicts, `price` and `confirm` compute ("The serving cost in five stages"); `profile RUN` checks and prints a serving profile's stored result (`serve_tax/README.md`'s "A serving profile") |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench served_errors` | error terms of the quoted guarantees that had no value, evaluated at the served sizes, each with its formula and premises |
 | `verity bench served_units` | a served model's proof blocks proved one type at a time from synthetic values and verified by the Lean verifier, forgeries included: `fp8-coord:K=6144` at one input unless given other units |
@@ -341,7 +341,7 @@ no slot of ours (its memory limit is Slurm's `--mem`), its node is shared with o
 nothing preserves it while it runs (`research run-preserve` and `research status` from a VM don't reach it). The nodes
 have network, Python 3.12 and no root. The DGX's driver is CUDA 13.0's, which `main`'s torch needs;
 `h100-nvl-1-1-cc`'s is CUDA 12.8's, too old for it, and `h100-nvl-1-0-cc` refuses any GPU request. No node has `nvcc` or `ncu` on
-its PATH. A harness spec's point runs there as the job's command, `verity-bench run SPEC --here`
+its PATH. A harness spec's point runs there as the job's command, `verity-bench run SPEC`
 (`benchmarks/harness/README.md`), with no lease or slot of ours. Use only idle
 capacity: one job at a time, at most 30 minutes, one GPU and 16 CPUs; `vcf-job-run.sh` cancels a job still pending
 after 20 minutes. A job that pends on `Resources` while the DGX's GPUs are idle may find them held by a reservation

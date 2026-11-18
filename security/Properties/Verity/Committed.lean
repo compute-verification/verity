@@ -1,7 +1,6 @@
 module
 
 public import Properties.Verity.Game
-public import Properties.Verity.GateARow
 public import Properties.Spot.Wires
 public import Spot.FilePart
 public import Spot.RecordText
@@ -13,19 +12,19 @@ public import VStarRecursive.Sampled
 
 The game's clause for the inference-only policy (`Verity.Vocab.Holds` at `.inferenceOnly`) is on the Program the
 policy's compiled check judges, and is proved of the case as sent. It says nothing of the committed files until two
-statements hold, each a named `Prop` here, stated and not proved. Remote's soundness (`Verity.RemoteSoundness`) takes
-both as hypotheses.
+statements hold. Remote's soundness (`Verity.RemoteSoundness`) takes the one not proved as a hypothesis.
 
-`GateARow`, `Γ`'s unit: in the game's circuit of a committed file (`Flock.Bridge.circuitOfFile`) every unit has one
-gate for each of its file's rows. The policy's `Γ` counts rows of the committed circuit a block, and PoUW's claim
-counts that circuit's gates (`Verity.Vocab.computed`), so with it the two count one thing.
+`Flock.Bridge.GateARow`, `Γ`'s unit, proved (`Flock.Bridge.gateARow`): in the game's circuit of a committed file
+(`Flock.Bridge.circuitOfFile`) every unit has one gate for each of its file's rows. The policy's `Γ` counts rows of the
+committed circuit a block, and PoUW's claim counts that circuit's gates (`Verity.Vocab.computed`), so with it the two
+count one thing.
 
 `Vocab.WiresSound`, the wires: on an accepted play the wiring the policy's record names is the wiring the committed
 units are held to. The committed circuit's units each commit their own rows, and nothing in it joins a unit's input
 row to the output row the record wires it to. The statement reads the wiring on the commitment:
 
-* **the record's wiring** (`RecordWiring`): the wires of the text whose SHA-512 the record's `window.circuit` is,
-  as SPOT's reader reads them (`Spot.RecordText.wiring`);
+* **the record's wiring** (`RecordWiring`): the wiring of the text whose SHA-512 the record's `window.circuit` is,
+  over the Program the text names by its SHA-512 (`Spot.RecordText.wiring`);
 * **a row's root** (`RecordRoot`, `rowName`): the root the record's `roots` hold for the row's name, a port's own
   name or, of a port cut into several rows, the port's name, `#` and the row;
 * **a unit's leaf under a root** (`Vocab.ReadsLeaf`, `Vocab.WritesLeaf`): the registered position (`Vocab.place`) of
@@ -51,13 +50,13 @@ open ResourceAccounting
 open scoped ENNReal
 
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
-record's, that parses to a document whose cuts and wires SPOT's reader reads as `W`
-(`Spot.RecordText.wiring`: no template and no order, which no wire's rows read). -/
+record's, that parses to a document whose wiring over a Program `P` is `W` (`Spot.RecordText.wiring`: the text's
+cuts and the edges of `P`'s root, of a text that names `P` by its SHA-512). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
-  ∃ (text : String) (doc : Lean.Json),
+  ∃ (text : String) (doc : Lean.Json) (P : Flock.Program.Prog),
     InferenceOnlyVerifier.Theta.strAt (InferenceOnlyVerifier.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
-      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
+      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring P doc = .ok W
 
 /-- **The record names `R` as the root of its row `name`**: one of its `roots` has the port `name` and the root
 `R`, in hex. -/
@@ -83,14 +82,19 @@ def SpotCase (k : Verity.Registration.Composite) (s : Sent) (p : Spot.OneStageZk
       (Core.canonicalJson x.2.1.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
       Spot.OneStage.commitmentOf x.2.2.commitment = .ok c
 
+/-- **A template's unit in its ranges** `rs` (each a first unit and count, in the partition's order): unit `u` is the
+population's unit `first + u` of the first range when `u` is less than its count, else unit `u - count` of the rest;
+none past them. -/
+def popUnitIn : List (ℕ × ℕ) → ℕ → Option ℕ
+  | [], _ => none
+  | (lo, n) :: rest, u => if u < n then some (lo + u) else popUnitIn rest (u - n)
+
 /-- **A template's unit in the population**, at the partition's ranges `rs` (each its template, first unit and
-count): the wiring's unit `u` of the template `t` is the population's unit `first + u` of the one range of `rs` that
-is `t`'s, and none where `rs` holds no range of `t` or several, or `u` is outside its count. It is
-`Spot.OneStageZk.wiresOn`'s reading, which refuses a wiring with a template of no one range (`Spot.OneStageZk.WIRES_TEMPLATE`). -/
+count): the wiring's unit `u` of the template `t` in `t`'s ranges of `rs`, in order (`popUnitIn`), and none where `u`
+is negative or past them. It is `Spot.OneStageZk.wiresOn`'s reading, which refuses a wiring with a template whose
+ranges do not hold exactly its units (`Spot.OneStageZk.WIRES_TEMPLATE`). -/
 def popUnit (rs : Array (String × ℕ × ℕ)) (t : String) (u : ℤ) : Option ℕ :=
-  match (rs.filter (·.1 == t)).toList with
-  | [(_, lo, n)] => if 0 ≤ u ∧ u < (n : ℤ) then some (lo + u.toNat) else none
-  | _ => none
+  if 0 ≤ u then popUnitIn ((rs.filter (·.1 == t)).toList.map (·.2)) u.toNat else none
 
 /-- **A member's row's name** in the registration: the member's name, `/` and the row's name, as each of the
 registration's roots is the member's whose name, then `/`, its port begins with (`Spot.OneStageZk.rootsOf`). -/
@@ -151,8 +155,7 @@ What it does not say:
   and no more. The per-member form's claim, at its own wiring, is `MemberWiresHold`.
 * **That a unit's rows are the Program's gates.** It holds a wired row to its writer's row; that a unit's file
   computes its template is not in it.
-* **That the wiring is well formed.** It reads the wires of the record's text as they stand, without
-  `Spot.Wires.check`, whose templates the text does not hold.
+* **That the wiring is well formed.** It reads the record's wiring as it stands, without `Spot.Wires.check`.
 * **Anything of a composite whose policy check is another one.** The case is the one `InferenceOnlyCheck.Protocol.protocol`
   decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
   claim holds of every play.
@@ -228,7 +231,7 @@ What it does not say:
 * **Anything of parameters that name no members or no wiring.** At the one statement's parameters
   (`Spot.OneStageZk.paramsOfJson_wiring`: their parse names no wiring) or members with no wiring, the claim holds of
   the play and says nothing, not even SPOT's share. The one-statement reading is `WiresHold`'s.
-* **Anything of a template no one range of the partition holds.** Its units are no population unit (`popUnit`), so
+* **Anything of a template's units past its ranges of the partition.** They are no population unit (`popUnit`), so
   they are held to no wire; the compiled check refuses such a wiring (`Spot.OneStageZk.WIRES_TEMPLATE`).
 * **Anything of a committed circuit whose units are not the members' side by side.** It reads the population's unit
   `g` as the committed circuit's unit `g`.

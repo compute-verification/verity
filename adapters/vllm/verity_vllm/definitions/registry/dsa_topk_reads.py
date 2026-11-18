@@ -22,8 +22,8 @@ imports no commitment code.  Root, domain, Opening, Salt and Path are READ's; `R
   each would be K committed rows, which put the served merge's block (8 blocks, 2,048 slots) at 2^31 bits, past Flock's
   proved range.  So a read takes its position in two steps, each index an input so that one template serves every
   instance: ``DsaPositionsChunk_v1{K,W}`` (slots, c) takes chunk c, the merge's slots cW .. cW+W-1 (W = `CHUNK`), and
-  ``DsaPositionsSlot_v1{K=W,N}`` (slots, j) slot j mod W of chunk j // W, 0 where its j >= W or the slot is N or more, so a
-  read's key is below N whatever its inputs;
+  ``DsaPositionsSlot_v2{K=W,N}`` (slots, j) slot j mod W of chunk j // W, 0 where its j >= W or the slot is N or more, so a
+  read's key is below N whatever its inputs, as the 32-bit word a read's tok takes;
 * TOPK reads, read j at slot j's position with opening (row[j], salt[j], path[j]) under the table's root and domain id: kv[j]
   and its verdict ok[j].  The cut stages each chunk, slot and read as its own unit, each reading the whole output of the one
   before it; the body reads the merge's slots directly, the same function, as every slot is below N.
@@ -59,6 +59,7 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.population import BitsWord
 from verity.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
@@ -350,8 +351,8 @@ DsaPositionsChunk = EW.specialized(
 
 
 def _slot(S):
-    """`DsaPositionsSlot_v1{K,N}` (slots: Array<K, I32>, j: I32) -> I32: slots[j] where j < K and slots[j] < N, else 0, so
-    its output is below N whatever its inputs; slots[j] by `_select` over j's low bits.  Served over a chunk: K = W."""
+    """`DsaPositionsSlotBits_v1{K,N}` (slots: Array<K, I32>, j: I32) -> I32: slots[j] where j < K and slots[j] < N, else 0,
+    so its output is below N whatever its inputs; slots[j] by `_select` over j's low bits.  Served over a chunk: K = W."""
     def build(C, *els):
         j = list(els[S.K])
         x = _select(C, [list(e) for e in els[:S.K]], j)
@@ -368,11 +369,21 @@ def _refuse_slot(b: dict) -> str | None:
     return None
 
 
-DsaPositionsSlot = EW.specialized(
-    "DsaPositionsSlot", 1, ["K", "N"], _slot, lambda S: ((("slots", Array(S.K, I32)), ("j", I32)), I32), doc=_slot.__doc__,
-    refuse=_refuse_slot,
+def _slot_sig(S):
+    return (("slots", Array(S.K, I32)), ("j", I32))
+
+
+DsaPositionsSlotBits = EW.specialized(
+    "DsaPositionsSlotBits", 1, ["K", "N"], _slot, lambda S: (_slot_sig(S), I32), doc=_slot.__doc__, refuse=_refuse_slot,
     conformance="exact-model-tested: held to the merge's slot j through its chunk, and to 0 at j >= K or a slot of N or "
                 "more, by the definitions' test_dsa_topk_reads.py")
+
+DsaPositionsSlot = CompositeDefinition(
+    "DsaPositionsSlot", 2, ("K", "N"), lambda S: (_slot_sig(S), Value(32)),
+    lambda B, S, slots, j: B.call(bind(BitsWord, W=32), B.call(bind(DsaPositionsSlotBits, K=S.K, N=S.N), slots, j)),
+    refuse=_refuse_slot, conformance="exact-model-tested: DsaPositionsSlotBits_v1's word, by the definitions' "
+                                     "test_dsa_topk_reads.py",
+    doc="DsaPositionsSlotBits_v1{K,N}'s position as the 32-bit word a read's tok takes, its bits wiring inside")
 
 
 def index_block(N: int, TOPK: int, block: int) -> int:
@@ -457,16 +468,16 @@ DsaTopKReadRows = CompositeDefinition(
         "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of index_block(N, TOPK, BLOCK) keys, "
         "DsaPositionsMerge_v1), ok[j] read j's verdict")
 
-DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlot, DsaTopKReadRows, DsaPositionsKeep,
-                  DsaPositionsShift, DsaPositionsShiftIn, DsaPositionsFirstOffset, DsaPositionsOffset, DsaPositionsMergeV2,
-                  DsaBitAppend, DsaPositionWord, DsaIndexBits, DsaMaskPositionsV2]
+DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlotBits, DsaPositionsSlot,
+                  DsaTopKReadRows, DsaPositionsKeep, DsaPositionsShift, DsaPositionsShiftIn, DsaPositionsFirstOffset,
+                  DsaPositionsOffset, DsaPositionsMergeV2, DsaBitAppend, DsaPositionWord, DsaIndexBits, DsaMaskPositionsV2]
 
 
 def cut(t) -> list[tuple[Any, int]]:
     """The units a binding of `DsaTopKReadRows_v1` is cut into, each Definition bound and how many of it: the mask's own (its
     `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v2{N,TOPK}`), a `DsaMaskPositions_v2` a block of
     `index_block` keys, block b's reading the mask unit of block b, the merge (`DsaPositionsMerge_v2`), ceil(TOPK/CHUNK) of
-    `DsaPositionsChunk_v1{K=TOPK,W=CHUNK}`, chunk c's c its input, TOPK of `DsaPositionsSlot_v1{K=CHUNK,N}`, slot j's
+    `DsaPositionsChunk_v1{K=TOPK,W=CHUNK}`, chunk c's c its input, TOPK of `DsaPositionsSlot_v2{K=CHUNK,N}`, slot j's
     slots chunk j // CHUNK's output and its j the input j mod CHUNK, and TOPK of READ, read j at slot j's output.  The body
     computes the same function with the `_v1` index units and the reads over the merge's slots directly: a slot's output
     is the merge's slot j wherever that is below N, as every one is."""
@@ -507,7 +518,7 @@ def chunk(slots: Sequence[int], c: int, W: int) -> list[int]:
 
 
 def slot(slots: Sequence[int], j: int, N: int) -> int:
-    """`DsaPositionsSlot_v1{K,N}`'s reference, j and the slots as u32 words: slots[j] where j < K and slots[j] < N, else 0."""
+    """`DsaPositionsSlot_v2{K,N}`'s reference, j and the slots as u32 words: slots[j] where j < K and slots[j] < N, else 0."""
     return slots[j] if j < len(slots) and slots[j] < N else 0
 
 

@@ -113,3 +113,17 @@ def test_each_gpu_a_spec_may_name_is_one_card_records_short():
     shorts = [kit.card_short(d["value"]) for sku in skus("gpu", directory=CARD_FILES)
               for d in load_card(sku, directory=CARD_FILES).get("driver", ())]
     assert set(registry()) <= set(shorts), sorted(set(registry()) - set(shorts))
+
+
+def test_a_gpu_target_reads_its_names_from_the_card_file_and_refuses_what_has_none(tmp_path):
+    assert kit.gpu_target("h200-sxm-141gb", directory=CARD_FILES) == {"device_name": "NVIDIA H200", "compute_capability": [9, 0],
+                                                                      "num_sms": 132}
+    assert kit.gpu_target("b200-sxm-180gb", directory=CARD_FILES)["compute_capability"] == [10, 0]
+    with pytest.raises(KeyError, match="no card 'a100-sxm4-80gb'"):
+        kit.gpu_target("a100-sxm4-80gb", directory=CARD_FILES)
+    with pytest.raises(SystemExit, match="^card 'xeon-6776p-2s' .* is no compile target"):
+        kit.gpu_target("xeon-6776p-2s", directory=CARD_FILES)
+    h200 = (CARD_FILES / "h200-sxm-141gb.toml").read_text()
+    (tmp_path / "h200-sxm-141gb.toml").write_text(h200.replace('arch = "sm_90a"', 'arch = "GH100"'))
+    with pytest.raises(SystemExit, match="arch 'GH100'"):
+        kit.gpu_target("h200-sxm-141gb", directory=tmp_path)

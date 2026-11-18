@@ -1,5 +1,5 @@
 """What `predict.steps.compile_steps` costs on a class-G window, with the one part of `Compiled.summary()` that walks every node
-(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on H200, one rank's request Programs, GP-01 over them and the
+(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on the card `--card` names, one rank's request Programs, GP-01 over them and the
 batch rules, by phase, in wall seconds and resident memory.
 
 A window is its requests' (arrival step, prompt length, max_tokens), greedy, scheduled as vLLM V1 schedules them (no preemption,
@@ -8,7 +8,7 @@ no prefix cache) at class G's 2,048 tokens a step and 256-row prefill chunks. A 
 reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
 
     research run --on auto --cwd source --mem-gb 64 --timeout 60m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu &&
-      .venv/bin/python benchmarks/compile_cost/run.py --window long-w0 --out "$OUT" [--guard]'
+      .venv/bin/python benchmarks/compile_cost/run.py --card h200-sxm-141gb --window long-w0 --out "$OUT" [--guard]'
 
 writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
 seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and
@@ -17,8 +17,9 @@ OUT/summary.json, `Compiled.summary()` (what `steps.trace_commands` and `steps.c
 given, also writes those two numbers (`metrics.toml`) into the run's result.
 `--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
 `graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
-measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
-`profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
+measurement: its digests are another model's), `--card SKU` (required) compiles for that card file's device name, compute capability
+and SM count (the record names it), `--profile` writes cProfile's stats (`profile.pstats`, and the top
+functions in `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window, compiled for `PINS_CARD`.
 
 The two numbers are `long-w0`'s wall minutes and peak GiB on one core, against a target of 10 minutes and 16 GiB: a
 serving window (256 sequences, 8,192-token steps, 40k context) is compiled ahead of time from the same code.
@@ -36,19 +37,13 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from verity.device import load_card
-
-CARD_FILES = Path(__file__).resolve().parents[2] / "calibration/hardware/cards"
+PINS_CARD = "h200-sxm-141gb"
 
 MINUTES, PEAK = "circuits/window-compile-minutes", "circuits/window-compile-peak-memory"
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
 LLAMA32_1B = {"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"}
 CLASS_1B = (4, 27, 2)
 MODELS = {"glm-5.3": "GLM-5.3", "llama-3.2-1b": "Llama 3.2 1B"}
-TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb", directory=CARD_FILES)["sm"]["count"]["value"], "batch_invariant": False,
-          "attention_backend": None,
-          "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
-          "moe_backend": "triton"}
 ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
           "enable_prefix_caching": False}
 WINDOWS = {
@@ -61,6 +56,14 @@ PINS: dict[str, list[str]] = {
     "long-w0": ["14dced42c8580e22176ebebe5eb48b20666ef45ecb5e9aaea72b7b32804c319f5b3505d575a2f354232831ef2b076ca63fd51b5450115a607b4733fdca15c41c",
                 "6b3950ebbec98430e28892a0f1626da3a3050f63729da45d43e5a86d2697a81430b3d1c0084d959f3b2defb80a327d528e5a1f90660c9a255559f88a9907975e"],
 }
+
+
+def target(card: str) -> dict:
+    from verity_bench import kit
+    t = kit.gpu_target(card)
+    return {"compute_capability": t["compute_capability"], "num_sms": t["num_sms"], "batch_invariant": False, "attention_backend": None,
+            "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": t["device_name"],
+            "moe_backend": "triton"}
 
 
 def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seqs: int = 256) -> list[list[tuple[int, int, int]]]:
@@ -91,7 +94,7 @@ def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seq
 
 def session(reqs: list[tuple[int, int, int]]):
     """The window's I1 advice and certified bodies: greedy requests `q<i>` to their max_tokens, prompts of token ids below 256."""
-    from verity.protocols.resource_accounting.network.verifier import advice as I1
+    from verity_vllm.pipeline.advice_code import format as I1
     steps = scheduled(reqs, ENGINE["max_num_batched_tokens"], ENGINE["long_prefill_token_threshold"])
     requests = tuple(I1.RequestAdvice(f"q{i}", lp, m, "length") for i, (_, lp, m) in enumerate(reqs))
     advice = I1.Advice(requests, tuple(I1.StepAdvice(tuple(
@@ -102,8 +105,8 @@ def session(reqs: list[tuple[int, int, int]]):
     return advice, ingress
 
 
-def registered(rank: int, layers: int | None, execution: str = "eager"):
-    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on H200 at TP8 `rank`, class G's engine at `execution` (compiled:
+def registered(rank: int, layers: int | None, execution: str = "eager", *, card: str):
+    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on `card` at TP8 `rank`, class G's engine at `execution` (compiled:
     the target compilation class G serves it at, `engine_classes.compilation`), the public seed."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.engine.profiles.engine_classes import compilation
@@ -114,12 +117,12 @@ def registered(rank: int, layers: int | None, execution: str = "eager"):
     if layers is not None:
         hf = {**hf, "num_hidden_layers": layers, **{k: hf[k][:layers] for k in ("indexer_types", "mlp_layer_types")}}
     graphs = compilation("G", execution)
-    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, **({"compilation": graphs} if graphs else {})},
+    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**target(card), **({"compilation": graphs} if graphs else {})},
               execution=execution, tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     return Registered.of(phi, default_seed=DEFAULT_SEED)
 
 
-def class_cost(m: Meter) -> dict:
+def class_cost(m: Meter, card: str) -> dict:
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.program.predict import window_circuit
@@ -127,17 +130,17 @@ def class_cost(m: Meter) -> dict:
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.window_class import WindowClass
     hf = json.loads(pinned_hf_config(LLAMA32_1B["repo"], LLAMA32_1B["revision"]).read_text())
+    tgt = {k: target(card)[k] for k in ("compute_capability", "num_sms")}
     t0 = time.perf_counter()
     with m.phase("Registered.of"):
-        reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"},
-                                target={k: TARGET[k] for k in ("compute_capability", "num_sms")}), default_seed=DEFAULT_SEED)
+        reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target=tgt), default_seed=DEFAULT_SEED)
     with m.phase("lower"):
         low = window_circuit.lower(reg, WindowClass(*CLASS_1B), wired=False)
     wall = time.perf_counter() - t0
     m.stop.set()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     units = [k for _, k in low.circuit.templates]
-    return {"window": "class-" + "-".join(map(str, CLASS_1B)), "execution": reg.phi.execution, "templates": len(units),
+    return {"window": "class-" + "-".join(map(str, CLASS_1B)), "card": card, "execution": reg.phi.execution, "templates": len(units),
             "units": sum(units), "wall_s": round(wall, 3), "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3),
             "phases": m.by_phase()}
 
@@ -240,6 +243,8 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
                     help="llama-3.2-1b: its BF16 class Program at class 4,27,2 lowered unwired, in place of a window")
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None, help="default: long-w0, unless --requests")
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
+    ap.add_argument("--card", required=True, help="the card the target is compiled for, by its card file's name under "
+                    "calibration/hardware/cards (its device name, compute capability and SM count)")
     ap.add_argument("--rank", type=int, default=0)
     ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
                     help="class G's execution: compiled is vLLM's breakable CUDA graphs at their capture sizes")
@@ -251,6 +256,10 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
                     "long_prefill_token_threshold)")
     a = ap.parse_args(argv)
+    try:
+        target(a.card)
+    except (KeyError, SystemExit) as e:
+        ap.error(f"--card: {e.args[0]}")
     if a.window and a.requests:
         ap.error("one of --window and --requests")
     if a.model != "glm-5.3":
@@ -273,16 +282,16 @@ def main() -> int:
     if not a.no_phases:
         instrument(m)
     if a.model != "glm-5.3":
-        rec = class_cost(m)
+        rec = class_cost(m, a.card)
         (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
-        print(f"COMPILE-COST model={a.model} window={rec['window']} execution={rec['execution']} wall_min={rec['wall_min']} "
+        print(f"COMPILE-COST model={a.model} card={a.card} window={rec['window']} execution={rec['execution']} wall_min={rec['wall_min']} "
               f"peak_gib={rec['peak_gib']} templates={rec['templates']} units={rec['units']}", flush=True)
-        record(out, a.model, rec["window"], rec["execution"], rec)
+        record(out, a.model, rec["window"], rec["execution"], rec, card=a.card)
         return 0
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
     from verity_vllm.program.predict.steps import compile_steps
     advice, ingress = session(reqs)
-    reg = registered(a.rank, a.layers, a.execution)
+    reg = registered(a.rank, a.layers, a.execution, card=a.card)
     tp = reg.phi.target_profile()
     graphs = {"compilation": tp.compilation, **({k: tp.COMPILATIONS[tp.compilation][k] for k in ("mode", "cudagraph_mode", "capture_sizes")}
                                                 if tp.compilation else {"cudagraph_mode": None})}
@@ -306,7 +315,7 @@ def main() -> int:
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
     kinds = {d: dict(Counter(f"{n.form} {getattr(n.fn, 'name', None) or n.fn.id.split('{')[0]}" for n in p.fn.body.nodes).most_common())
              for d, p in compiled.programs.items()}
-    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
+    rec = {"window": a.window or a.requests, "card": a.card, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
            "execution": a.execution, "graphs": graphs,
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "root_kinds": kinds,
            "transfer_gates": list(transfer), "wall_s": round(wall, 3),
@@ -325,15 +334,15 @@ def main() -> int:
         (out / "profile.txt").write_text(s.getvalue())
     for p in rec["phases"]:
         print(f"  {'  ' * p['depth']}{p['phase']:<40} calls={p['calls']:<6} wall_s={p['wall_s']:<10} peak_gib={p['peak_gib']}")
-    print(f"COMPILE-COST window={rec['window']} execution={a.execution} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
+    print(f"COMPILE-COST window={rec['window']} card={a.card} execution={a.execution} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
           f"nodes={sorted(nodes.values())} digests={','.join(d[:16] for d in digests)} workload={compiled.workload.digest[:16]}", flush=True)
     if a.guard:
-        want = PINS.get(a.window or "")
+        want = PINS.get(a.window or "") if a.card == PINS_CARD else None
         if a.layers is not None or want is None or digests != want:
             print(f"COMPILE-COST guard FAILED: digests {[d[:16] for d in digests]} against PINS {want}", flush=True)
             return 1
     if a.layers is None and a.window:
-        record(out, a.model, a.window, a.execution, rec)
+        record(out, a.model, a.window, a.execution, rec, card=a.card)
     return 0
 
 
@@ -342,12 +351,14 @@ def machine(card: str) -> str:
     return "cpu" if card == "none" else kit.card_short(card)
 
 
-def record(out: Path, model: str, window: str, execution: str, rec: dict) -> None:
+def record(out: Path, model: str, window: str, execution: str, rec: dict, *, card: str) -> None:
     from verity_bench import kit
+    short = kit.card_short(target(card)["device_name"])
     w = kit.writer(out)
-    fields = {"model": MODELS[model], "window": window, "execution": execution,
+    fields = {"model": MODELS[model], "window": window, "execution": execution, "card": short,
               "machine": machine(w.stamp["card"])}
-    member = f"glm-5.3-{window}-{execution}-{fields['machine']}" if model == "glm-5.3" else f"{model}-h200"
+    member = (f"glm-5.3-{window}-{execution}-{fields['machine']}" + ("" if card == PINS_CARD else f"-for-{short}") if model == "glm-5.3"
+              else f"{model}-{short}")
     for name, value, unit in ((MINUTES, rec["wall_min"], "minutes"), (PEAK, rec["peak_gib"], "GiB")):
         m = w.measurement(name, value, unit, mark="measured", member=member, extra=fields)
         print(json.dumps({k: m[k] for k in ("name", "value", "unit", "member", *fields)}), flush=True)

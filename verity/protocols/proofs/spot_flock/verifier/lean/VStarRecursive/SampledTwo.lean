@@ -4,8 +4,9 @@ registration sampled once on the challenger's coins (the first stage, its replay
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
-refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). `VStar.Recursive.Sampled` reads
+decides last by one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit that
+passes them is accepted where the switch is on, ahead of the form's soundness proof, and refused where it is off
+(`checkBlobsAt_refuses`). `VStar.Recursive.Sampled` reads
 the form and runs this check. The package's root imports it, so the package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
@@ -83,7 +84,7 @@ the form and runs this check. The package's root imports it, so the package's au
      before the message of an earlier round is fixed;
   5. the interior audit's verdict at its coins under the second stage's sampling design (`secondCheck`), which gives
      the public output and the integrity profile;
-  6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
+  6. last, the switch (`finish`): the run must accept, and the form is refused where `FORM` is off.
 
 **The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
 registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
@@ -132,7 +133,7 @@ def TWO_STAGE : String := "two-stage"
 accept, so one change flips both. -/
 def FORM : Bool := SecondStage.FORM
 
-theorem form_off : FORM = false := rfl
+theorem form_on : FORM = true := rfl
 
 /-- The refusal of a boundary population whose replay blocks are not one Definition's. -/
 def ONE_DEFINITION : String :=
@@ -618,9 +619,9 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Docket.digest e.record
-      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
+      let (c, log) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
         k (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
-      if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
+      if interiorShown (Challenger.byFamily c log) label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
 def LEDGER_PREFIX : String :=
@@ -676,7 +677,7 @@ def firstLines (e : Evidence) : V (List String) := do
 window is not the boundary registration's, no line of the first stage's session's release log (`firstLines`) is a
 coin tree's, one the challenger wrote when it sampled a tree or opened a round of one (`FIRST_TREE`). The interior
 audit reads its sessions' coin trees in order from its own session's log's first, and the first stage's coin check
-drops such lines unread (`Challenger.releasedRootsOf`), so nothing else refuses a first session that sampled one. A
+drops such lines unread (`Challenger.releasedLogOf`), so nothing else refuses a first session that sampled one. A
 first stage only samples its sample, so no honest play has such a line. On one window both stages read one session,
 whose log holds the second stage's trees, and this adds nothing. -/
 def firstTreeless (p : Params) (e : Evidence) : V Unit :=

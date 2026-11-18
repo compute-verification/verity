@@ -1,7 +1,7 @@
 /-
 What round 2's statement check says: the theorems of `Spot.SecondStage`'s `check` and its parts, that a pass holds the
 interior record, the statements, the headers, the ports and the values to what the module's docstring says
-(`check_ok` and what follows from it), and that while `FORM` withholds the accept no run passes (`check_refused`).
+(`check_ok` and what follows from it), and that where the form is not allowed no run passes (`check_refused`).
 -/
 module
 

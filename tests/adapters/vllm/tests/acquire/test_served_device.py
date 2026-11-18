@@ -1,7 +1,7 @@
 """The device a served Build vouches for (`acquire.served_device`): cc 9.0 binds FA3 and cc 10.0 and 12.0 FA2, each with its GEMMs' k16
 step and its Triton compile target; a device without one of them is refused with every missing binding by name; a device whose compute
-capability or SM count is not its registered card's is refused naming the field, both values and the card file, and a name registered
-on no card and not excepted is refused; and FA2's launch at vLLM's defaults: a GQA decode launch swapped and split `fa2_num_splits`
+capability or SM count is not its registered card's is refused naming the field, both values and the card file, and a name in no
+card record's `driver` is refused; and FA2's launch at vLLM's defaults: a GQA decode launch swapped and split `fa2_num_splits`
 ways (at a FULL graph's padded batch and max_model_len), the align kernel's kBlockN at one split, and any other launch the split
 kernel's tile unsplit, causal when a sequence has more than one query row.  The split counts here are worked by hand from
 `set_params_splitkv` (vllm-flash-attn 506341a1)."""
@@ -16,8 +16,9 @@ import pytest
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity.errors import InvalidArtifact
+from verity_vllm.config import CARD_FILES
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
-from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.pipeline import served_match
 
 #: a GQA model's attention (query heads, KV heads, head dim) at head dim 64 and the cc 12.0 device's SM count
@@ -64,18 +65,22 @@ def test_a_device_without_a_binding_is_refused_naming_every_one() -> None:
         T.recognize("k", "@triton.jit\ndef k(x):\n    pass\n", cc=(8, 6))
 
 
-def test_every_pinned_device_is_registered_on_a_card_or_excepted() -> None:
-    """The served targets with a device pin are exactly the names `CARD` and `NO_CARD` list, each in one, and every exception
-    says why."""
+#: each pinned device's card record, by the name it reports
+PINNED_CARDS = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server",
+                "NVIDIA B200": "b200-sxm-180gb"}
+
+
+def test_every_pinned_device_is_registered_on_its_card_record() -> None:
+    """Every device with a device pin is held to the card record whose `driver` holds its name, and the H100 to its own."""
     pinned = {json.loads(p.read_text())["device"] for p in BC.DEVICE_PINS.glob("*.json")}
-    assert not set(CARD) & set(NO_CARD) and set(CARD) | set(NO_CARD) == pinned
-    assert all(why.strip() for why in NO_CARD.values())
+    assert pinned == set(PINNED_CARDS)
+    assert {name: SD.card_of(name) for name in pinned} == PINNED_CARDS
+    assert SD.card_of("NVIDIA H100 80GB HBM3") == "h100-sxm-80gb"
 
 
 def test_a_device_with_its_cards_compute_capability_and_sm_count_binds() -> None:
     """Each registered name is a pinned device's, and that pin's compute capability and SM count are its card's."""
-    for name, card in CARD.items():
-        assert SD.card_of(name) == card
+    for name, card in PINNED_CARDS.items():
         pin = BC.device_pin(name)
         assert SD.device_of(pin["compute_capability"], pin["sms"], card=card, max_model_len=4096) == \
             SD.device_of(pin["compute_capability"], pin["sms"], max_model_len=4096)
@@ -95,10 +100,10 @@ def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[in
 
 
 def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(SD, "load_card", lambda sku, directory: {"arch": "hopper", "sm": {"count": {"value": 132}}})
-    with pytest.raises(Unmodelled) as e:
+    monkeypatch.setattr(SD, "load_card", lambda sku, directory: {"kind": "gpu", "sku": sku, "arch": "hopper", "sm": {"count": {"value": 132}}})
+    with pytest.raises(InvalidArtifact) as e:
         SD.check_card((9, 0), 132, "a-card")
-    assert str(e.value) == "calibration/hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
+    assert str(e.value) == "card 'a-card': arch = 'hopper'; a GPU card states sm_<major><minor>[a|f]"
 
 
 def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
@@ -110,25 +115,26 @@ def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
 
 def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
     """`served_match.device_of`, which served-match and the Commit's served mode take the served Build's device from: the engine's
-    reported name picks the card, and the one name `NO_CARD` excepts (the B200) is held to none."""
+    reported name picks the card by its record's `driver`: the B200, which has a card record, is held to it (148 SMs, cc 10.0)."""
     facts = {"device": "NVIDIA H200", "cc": [9, 0], "sms": 132, "attention": [{"backend": "FLASH_ATTN", "fa_version": 3}],
              "max_model_len": 4096}
     assert served_match.device_of(facts).sms == 132
     with pytest.raises(Unmodelled, match=r"cards/h200-sxm-141gb\.toml: SM count 114, the card's 132$"):
         served_match.device_of({**facts, "sms": 114})
     b200 = {**facts, "device": "NVIDIA B200", "cc": [10, 0], "sms": 148, "attention": FA2}
-    assert SD.card_of("NVIDIA B200") is None and served_match.device_of(b200).sms == 148
+    assert SD.card_of("NVIDIA B200") == "b200-sxm-180gb" and served_match.device_of(b200).sms == 148
+    with pytest.raises(Unmodelled, match=r"cards/b200-sxm-180gb\.toml: SM count 132, the card's 148$"):
+        served_match.device_of({**b200, "sms": 132})
 
 
 @pytest.mark.parametrize("name", ["NVIDIA H200 NVL", "NVIDIA RTX PRO 6000 Blackwell Workstation Edition", ""])
 def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -> None:
-    """A name in neither `CARD` nor `NO_CARD` is refused at acquisition, naming the device, both constants and the fix, even when
+    """A name in no card record's `driver` is refused at acquisition, naming the device and the fix, even when
     its compute capability and SM count are a registered card's."""
     facts = {"device": name, "cc": [9, 0], "sms": 132, "attention": [{"backend": "FLASH_ATTN", "fa_version": 3}], "max_model_len": 4096}
     with pytest.raises(Unmodelled) as e:
         served_match.device_of(facts)
-    assert str(e.value) == (f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD "
-                            f"({sorted(NO_CARD)}): add its card under calibration/hardware/cards/ and map it in CARD")
+    assert f"0 GPU card files under {CARD_FILES} have {name!r}, the name the device reports, in `driver`: add " in str(e.value)
 
 
 def full_decode(device: SD.DeviceBindings) -> tuple[list[int], list[list[dict[str, Any]]], dict[str, Any]]:

@@ -90,7 +90,30 @@ structure Integrity where
   delta : Ratio
   /-- Members actually sampled at each level, all passed, in level order. -/
   drawn : Array (String × Nat)
+  /-- The credited blocks, the blocks a scheme credits (`Verity.Scheme.Block`), by their number among the first level's
+  members. Each is a block of the first level and of every later one (`creditedProblem`). -/
+  credited : Array Nat := #[]
   deriving BEq, DecidableEq, Repr
+
+/-- The refusal of a profile whose credited blocks are not each a block of the first level and of every later level
+(`Verity.Levels.CreditedUnsplit`). -/
+def Integrity.CREDITED_UNSPLIT : String := "credited-unsplit"
+
+/-- Why `p`'s credited blocks are not each a block of the first level and of every later level, else none. Each
+member of a level holds `size` members of the next, so a block of the first level is a block of every later level
+exactly when every later level's size is 1. -/
+def Integrity.creditedProblem (p : Integrity) : Option String := Id.run do
+  if p.credited.isEmpty then return none
+  let some first := p.levels[0]? | return some s!"{CREDITED_UNSPLIT}: credited blocks and no level"
+  for c in p.credited do
+    if first.size ≤ c then
+      return some s!"{CREDITED_UNSPLIT}: credited block {c} is not one of level '{first.name}''s {first.size} blocks"
+  if p.credited.toList.eraseDups.length != p.credited.size then
+    return some s!"{CREDITED_UNSPLIT}: a credited block twice"
+  for l in p.levels.extract 1 p.levels.size do
+    if l.size != 1 then
+      return some s!"{CREDITED_UNSPLIT}: level '{l.name}' splits each block of the level above into {l.size}, the credited ones included"
+  return none
 
 private def sorted (xs : Array String) : Json := Json.arr ((xs.qsort (· < ·)).map Json.str)
 
@@ -110,10 +133,11 @@ def Level.toJson (l : Level) : Json :=
     ("size", Json.num l.size), ("draw", match l.draw with | some d => d.toJson | none => Json.null)]
 
 def Integrity.toJson (p : Integrity) : Json :=
-  Json.mkObj [("programs", Json.arr (p.programs.map Json.str)), ("prescribed", sorted p.prescribed),
+  Json.mkObj ([("programs", Json.arr (p.programs.map Json.str)), ("prescribed", sorted p.prescribed),
     ("linked", Json.bool p.linked), ("covered", sorted p.covered), ("levels", Json.arr (p.levels.map Level.toJson)),
     ("delta", Json.str p.delta.toString),
-    ("drawn", Json.mkObj (p.drawn.toList.map fun (n, k) => (n, Json.num k)))]
+    ("drawn", Json.mkObj (p.drawn.toList.map fun (n, k) => (n, Json.num k)))] ++
+    if p.credited.isEmpty then [] else [("credited", Json.arr ((p.credited.qsort (· < ·)).map fun (c : Nat) => Json.num c))])
 
 /-- `a`, when its JSON is `j` written back: the decoders below accept only what `toJson` writes (keys, sorted lists,
 lowest-terms ratios), so every value has one JSON spelling. -/
@@ -154,7 +178,8 @@ def Level.ofJson (j : Json) (ctx : String) : V Level := do
     draw := ← nullOr SamplingDesign.ofJson j "draw" ctx }
   exactly Level.toJson j ctx l
 
-/-- The inverse of `toJson`. `drawn` is read in level order; a count for a level the profile doesn't name is refused. -/
+/-- The inverse of `toJson`. `drawn` is read in level order; a count for a level the profile doesn't name is refused,
+and so are credited blocks that `creditedProblem` refuses. -/
 def Integrity.ofJson (j : Json) (ctx : String := "profile") : V Integrity := do
   let mut levels := #[]
   for l in ← Flock.J.arr j "levels" ctx do
@@ -166,7 +191,11 @@ def Integrity.ofJson (j : Json) (ctx : String := "profile") : V Integrity := do
   let p : Integrity := {
     programs := ← strs j "programs" ctx, prescribed := ← strs j "prescribed" ctx, linked := ← Flock.J.bool j "linked" ctx,
     covered := ← strs j "covered" ctx, levels, delta := ← Ratio.ofString (← Flock.J.str j "delta" ctx) s!"{ctx}.delta",
-    drawn }
+    drawn,
+    credited := ← if Flock.J.has j "credited" then do
+        (← Flock.J.arr j "credited" ctx).mapM (Flock.J.asNat · s!"{ctx}.credited")
+      else pure #[] }
+  if let some why := p.creditedProblem then throw s!"{ctx}: {why}"
   exactly Integrity.toJson j ctx p
 
 private def workExample : SamplingDesign :=
@@ -178,5 +207,25 @@ private def workExample : SamplingDesign :=
 -- A stratum's `k` is read as recorded: stratum `a`'s is 1 here, where sizing it by its work gives 3, and it reads.
 #guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 1, work := 3, floor := 1 }]).toJson "draw").isOk
 #guard (SamplingDesign.ofJson (SamplingDesign.work 3 #[{ name := "a", size := 4, k := 3, work := 0, floor := 3 }]).toJson "draw").isOk == false
+
+private def creditedLevel (last : Nat) (ni : Nat × Nat) : Level :=
+  { name := s!"l{ni.2}", query := none, size := ni.1, draw := if ni.2 == last then some (.subset 1) else none }
+
+private def creditedExample (sizes : List Nat) (credited : Array Nat) : Integrity :=
+  { programs := #[], prescribed := #[], linked := false, covered := #[],
+    levels := (sizes.zipIdx.map (creditedLevel (sizes.length - 1))).toArray, delta := ⟨1, 2⟩, drawn := #[], credited }
+
+-- A credited block at level one, unsplit by a later level of size 1, is accepted and reads back.
+#guard (creditedExample [8] #[0, 7]).creditedProblem == none
+#guard (creditedExample [8, 1] #[3]).creditedProblem == none
+#guard (Integrity.ofJson (creditedExample [8, 1] #[3]).toJson).toOption == some (creditedExample [8, 1] #[3])
+-- A credited block split at level two is refused.
+#guard (creditedExample [8, 2] #[3]).creditedProblem.isSome
+#guard (Integrity.ofJson (creditedExample [8, 2] #[3]).toJson).isOk == false
+-- A credited block absent from level one is refused.
+#guard (creditedExample [8] #[8]).creditedProblem.isSome
+#guard (Integrity.ofJson (creditedExample [8] #[8]).toJson).isOk == false
+-- No credited block: the profile's JSON is as before, with no `credited` key.
+#guard !Flock.J.has (creditedExample [8, 2] #[]).toJson "credited"
 
 end Core

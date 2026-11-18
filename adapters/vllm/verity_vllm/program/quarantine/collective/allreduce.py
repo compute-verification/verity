@@ -38,6 +38,7 @@ from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
 from verity.circuits.types import Array
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16
 

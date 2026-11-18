@@ -241,15 +241,9 @@ MEASURED = {
 
 
 def arch_of(consts: dict, arch: str | None = None) -> str | None:
-    """Declared arch: explicit argument, ``consts['arch']`` or a GPU name in ``consts['gpu'|'gpu_name']``.
-    None when nothing is declared."""
+    """Declared arch: explicit argument or ``consts['arch']``. None when nothing is declared."""
     a = arch or consts.get("arch")
-    if a:
-        return str(a)
-    name = str(consts.get("gpu") or consts.get("gpu_name") or "")
-    if any(t in name for t in ("4090", "4080", "4070", "4060", "RTX 40", "L40", "L4", "6000 Ada")):
-        return "sm_89"
-    return None
+    return str(a) if a else None
 
 
 def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dict, *, arch: str | None = None) -> str | None:
@@ -263,7 +257,7 @@ def coverage(seqlen_q: int, seqlen_k: int, H: int, KVH: int, D: int, consts: dic
     """
     a = arch_of(consts, arch)
     if a is None:
-        return "arch not declared (consts.arch / consts.gpu); measured only on sm_89"
+        return "arch not declared (consts.arch); measured only on sm_89"
     if a not in MEASURED["arch"]:
         return f"arch {a} not measured (measured: {MEASURED['arch']})"
     if D != HEAD_DIM:
