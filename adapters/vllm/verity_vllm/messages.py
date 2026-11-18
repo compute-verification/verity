@@ -106,8 +106,8 @@ class Exchange:
         In an engine's process (``ctx["process"]`` `hooks.ENGINE`) a launcher attaches every scheme before the
         workload's model begins to load, so an attach that returns has run with none of the workload's bytes on the
         device; the exchange refuses an engine's attach once the model's registered values (`hooks.MemoryChanged`
-        ``registered``) have been emitted on it (`RuntimeError`). That catches a late attach, not one during the load: a scheme that needs an empty device
-        checks the device itself (the wipe's idle-card check). An attach that names no engine process may come
+        ``registered``) have been emitted on it (`RuntimeError`). That catches a late attach, not one during the load:
+        a scheme that needs an empty device checks the device itself (the wipe's idle-card check). An attach that names no engine process may come
         after the load (`serve_openai.network_admission` attaches admission to the loaded engine's exchange)."""
         if self.registered and launcher.get("process") == H.ENGINE:
             raise RuntimeError(f"{scheme.name} attached after the model's weights were registered: an attach in the "
