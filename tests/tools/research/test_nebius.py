@@ -30,6 +30,7 @@ from research import remote
 from research.pods import lease as L
 from research.pods import registry
 from research.store import custody as CU
+from research.store import private
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
@@ -1790,7 +1791,7 @@ def test_n2_custody_takes_every_ended_run_home_with_its_run_record_in_bounded_ro
     writable = n2.round_(UNTRUSTED="/n1/src/abc/tools/research/src/research/store")
     assert writable.returncode == 3 and "rsync" not in n2.calls()
     assert "refused: n1.invalid:/n1/src/abc/tools/research/src/research/store could be changed by a uid other than root" in writable.stdout
-    assert "find /n1/src/abc/tools/research /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
+    assert f"find /n1/src/abc/tools/research /n1/src/abc/{private.TREE_NAMES} /workspace/custody/python -path /workspace/custody/python/.lock -prune" in n2.calls()
     unreached = n2.round_(UNREACHABLE="1")
     assert unreached.returncode == 3 and "refused: node 1 not reached (`ssh n1.invalid` exited 255)" in unreached.stdout
 
@@ -2103,6 +2104,8 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
     shutil.copytree(src_root, base / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copy(src_root.parent / "store.pod.toml", base / "src" / "tools" / "research" / "store.pod.toml")
+    (base / "src" / private.TREE_NAMES).parent.mkdir(parents=True)          # as deploy.toml lays it beside the tree: custody's floor
+    shutil.copy(src_root.parents[2] / private.TREE_NAMES, base / "src" / private.TREE_NAMES)
     (base / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (base / "py" / "bin" / "python3").chmod(0o755)
     for p in (base, base / "src", *(base / "src").rglob("*"), base / "py", *(base / "py").rglob("*")):
@@ -2479,7 +2482,8 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     (node.pyhome / ".lock").write_text("")
     (node.pyhome / ".lock").chmod(0o666)
     said = []
-    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
+    names = node.src / private.TREE_NAMES
+    for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757), (names, 0o666)):
         was = p.stat().st_mode
         p.chmod(mode)
         out = node.round_()
@@ -2490,6 +2494,10 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     assert "on this host and in Jobs with the Secret research-r2" in said[0]
     elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
     assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {node.pyhome}" in elsewhere.stdout
+    names.rename(names.with_suffix(".gone"))
+    unlisted = node.round_()
+    names.with_suffix(".gone").rename(names)
+    assert unlisted.returncode == 3 and "no private names beside it" in unlisted.stdout, "a tree without its floor runs nothing"
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr

@@ -339,6 +339,28 @@ def test_the_package_a_lean_try_or_records_run_needs_is_read_from_the_tree_it_sh
     assert auto.lean_package([*changed, "--try", "a/A.lean"], tmp_path / "not-a-checkout") is None
 
 
+def test_a_package_that_fetches_nothing_has_its_dependencies_in_a_kept_tree(tmp_path, monkeypatch, node_2):
+    """A package whose manifest in the kept tree names only packages by path never gets a `.lake/packages`, and is built
+    all the same; one that names a fetched package, or whose manifest is unreadable, has them only with that directory."""
+    code = auto.LeanNeeds("verity/code", "build", 1)
+    records = tmp_path / "check" / auto.LEAN_RECORDS
+    manifests = {"build-0": {"packages": [{"type": "path", "name": "base"}]}, "build-1": {"packages": []},
+                 "build-2": {"packages": [{"type": "path", "name": "base"}, {"type": "git", "name": "mathlib"}]}, "build-3": None}
+    for tree, manifest in manifests.items():
+        lib = records / tree / "verity/code/.lake/build/lib/lean"
+        lib.mkdir(parents=True)
+        (lib / "A.olean").write_text("")
+        if manifest is not None:
+            (records / tree / "verity/code/lake-manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check"))
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "spill", lambda: ())
+    doc = auto.read(tmp_path / "src", 4, reach=lambda name: [sys.executable, "-"], needs=code)[N2]
+    assert {name: t["verity/code"]["deps"] for name, t in doc["lean_built"]["trees"].items()} == {
+        "build-0": True, "build-1": True, "build-2": False, "build-3": False}
+    assert auto._holds(doc, code) == (True, "holds verity/code built in 2 of 4 `build` trees")
+
+
 def test_the_probe_lists_what_each_kept_tree_of_the_pool_holds_of_the_package(tmp_path, monkeypatch, node_2):
     """`lean_built` as a machine's probe gives it, by listing the trees under the check cache of the user it runs as: the
     package's .olean files under `.lake/build/lib` (any depth) and whether its `.lake/packages` is there, for each tree of the
