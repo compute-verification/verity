@@ -209,9 +209,9 @@ def test_the_command_and_the_render(capsys):
     assert "    mma.sync m16n8k32 s8: 128.0 / 84.0\n" in out and "    mma.sync m16n8k4 tf32: 256.0 / 256.0*\n" in out
     assert "ρ₈ / (issue · 128 words) = 8.00 / 8.00" in out and "least adding d 18.29 → 16.90" in out
     assert "IMAD.HI    sheet    38.29 SM-clocks" in out and "L = 8192: sheet 0.02232" in out
-    assert main(["theta", "--check"]) == 0
+    assert main(["--device", "sm_120", "theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
-    assert main(["render", "theta"]) == 0
+    assert main(["--device", "sm_120", "render", "theta"]) == 0
     out = capsys.readouterr().out
     assert "| `tensor.s8.k16` |" in out and "### FP8 atoms" in out and "### SHA-512's ceiling" in out
     with pytest.raises(SystemExit, match="no theta.toml"):
