@@ -39,7 +39,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.device import READINGS, gpu_card_reporting, number, rate
+from verity.device import READINGS, number, rate
 from verity.device import readings as card_readings
 from verity_bench import kit
 
@@ -56,9 +56,9 @@ def found_name(out: Path) -> str:
 
 
 def sheet(out: Path) -> dict:
-    """The card record whose `driver` holds `found_name(out)` (`verity.device.gpu_card_reporting` over
-    `kit.cards_directory()`, which refuses by `KeyError`, naming what to add, unless exactly one record holds it)."""
-    return gpu_card_reporting(found_name(out), directory=kit.cards_directory())
+    """The card record whose `driver` holds `found_name(out)` (`kit.card_record`, which refuses by `SystemExit`, naming
+    what to add, unless exactly one record holds it)."""
+    return kit.card_record(found_name(out))
 
 
 def readings(card: dict) -> tuple[float, float, float]:
@@ -457,8 +457,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         found = {card["sku"]: card for card in map(sheet, a.outs)}
         if len(found) != 1:
-            raise KeyError(f"the OUTs ran on {len(found)} cards' data sheets ({', '.join(sorted(found))}), not one")
-    except KeyError as refused:
+            raise SystemExit(f"the OUTs ran on {len(found)} cards' data sheets ({', '.join(sorted(found))}), not one")
+    except SystemExit as refused:
         print(refused.args[0], file=sys.stderr)
         if a.record:
             record(a.outs[0], pts, why=refused.args[0])
