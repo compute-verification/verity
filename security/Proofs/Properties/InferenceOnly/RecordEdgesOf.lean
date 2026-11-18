@@ -67,14 +67,12 @@ private theorem appended {a : List Spot.Wires.Wire} {wire : Spot.Wires.Wire} {ra
   · rw [List.mem_singleton] at hw
     subst hw
     have h1 : radix.length = steps.length := by
-      by_contra hne
-      apply hg
+      refine Classical.byContradiction fun hne => hg ?_
       simp only [Bool.or_eq_true]
       exact Or.inl (bne_iff_ne.2 hne)
     refine ⟨by rw [hs, hr, List.length_map, h1], fun r hm => ?_⟩
     rw [hr] at hm
-    by_contra h0
-    apply hg
+    refine Classical.byContradiction fun h0 => hg ?_
     simp only [Bool.or_eq_true, List.any_eq_true]
     exact Or.inr ⟨r, hm, beq_iff_eq.2 (by omega)⟩
 
