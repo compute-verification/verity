@@ -165,9 +165,9 @@ def builds(names: list[str], needs: dict[str, list[str]]) -> dict[str, list[str]
 
 
 def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], list[str]]]:
-    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S` and those its own
-    ``needs`` name (by part, not by job: a spec's audit's provers), and their readers, held on one shard (in ``ts``'s order);
-    beside each unit, the cheap builds its parts need from outside it."""
+    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S` and those its
+    ``needs`` name as parts, not jobs (a spec's audit's provers, landing-gates' audits), and their readers, held on one shard
+    (in ``ts``'s order); beside each unit, the cheap builds its parts need from outside it."""
     cost = {t.part: t.seconds for t in ts}
     need = builds(list(cost), needs)
     root = {p: p for p in cost}
@@ -178,7 +178,7 @@ def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], 
         return p
 
     for p, bs in need.items():
-        own = needs.get(p, []) if ":" in p else []
+        own = [n for n in needs.get(p, []) if ":" in n]
         for b in bs:
             if cost[b] > CHEAP_S or b in own:
                 root[find(p)] = find(b)
