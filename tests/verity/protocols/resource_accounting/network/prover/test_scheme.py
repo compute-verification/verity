@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from verity import hooks as H
 from verity.circuits.defs import REGISTRY, CompositeDefinition
 from verity.protocols.resource_accounting import scheme as S
 from verity.protocols.resource_accounting.network import scheme as NS
@@ -14,7 +15,7 @@ def test_registered_and_found_by_name() -> None:
 
 
 def test_hooks_are_a_served_runs() -> None:
-    assert set(NS.NETWORK_ATTESTER.hooks) <= set(S.HOOKS)
+    assert set(NS.NETWORK_ATTESTER.hooks) <= set(H.HOOKS)
 
 
 def test_every_block_is_a_registered_definition() -> None:
