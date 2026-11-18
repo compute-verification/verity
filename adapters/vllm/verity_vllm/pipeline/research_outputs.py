@@ -34,7 +34,7 @@ No entry holds a private file (`private`), wherever it sits, and these stay on t
   served tokens, and opened weights;
 - the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
   (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
-  (`sampled_replay*.json`);
+  (`sampled_replay*.json`), and the diagnostic digests of a Commit's retained tensors (`tensor_digests_pair*.json`);
 - a served run's requests (`requests.jsonl`), its step traces (`step_trace.*`, `advice_trace.jsonl`: each request's prompt
   length, sampling parameters, rows a step and emitted ids), its served ids (`ids.*jsonl*`), its step outputs
   (`outputs.*jsonl*`: sampled ids and logprob bits), a replay's tokens and logprobs (`replay_tokens.jsonl*`,
@@ -84,8 +84,10 @@ KEPT_APART = ("replay_bundle_p", "replay_slim_p")
 #: a Commit's served tokens' digests, a line of each run's (`pipeline.commit`), compared across processes on the node
 #: (`pipeline.compiled_merge`): unsalted, so kept apart from `runs.jsonl`
 TOKENS_DIGESTS = "tokens_digests.jsonl"
+#: `pipeline.commit --tensor-digests`' unsalted digest of every retained tensor a step, compared across pairs on the node
+TENSOR_DIGESTS = "tensor_digests_pair*.json"
 #: nor these files, wherever they sit: request values, where each rank ran and when each process ran
-PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
+PRIVATE = ("tokens.json", "tokens_p*.json", TOKENS_DIGESTS, TENSOR_DIGESTS, "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.*",
            "ids.*jsonl*", "outputs.*jsonl*", "replay_tokens.jsonl*", "replay_logprobs.jsonl*", "alone_tokens.jsonl*",
            "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
