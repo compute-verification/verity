@@ -103,10 +103,3 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
 def key_counts(input_set, lo: int = 0, hi: int | None = None) -> list[int]:
     D = int(input_set.subcircuit.params["D"])
     return [len(k) // D for k in input_set.port("k", lo, hi)]
-
-
-def stage(input_set, lo, hi, out_dir):
-    """The frame-v3 instance file for ids [lo, hi) of a one-T set (``verity_flock.ir_frame.stage``): each pod stages its own."""
-    from verity_flock import ir_frame
-
-    return ir_frame.stage(lowering_for_set(input_set), input_set, lo, hi, out_dir)

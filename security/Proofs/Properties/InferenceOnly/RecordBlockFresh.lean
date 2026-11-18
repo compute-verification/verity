@@ -85,7 +85,8 @@ theorem cut_outer {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Sp
 /-- **A row's reads land on no more bits than the record gives the row.** A row some read lands through is a row of
 a template of the record, inside its port's cut, and the gates its reads land on are together no wider than the row's
 bits in the record: the port's bits over its cut. -/
-theorem landing_bits (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsRuns) {j tr : Json} {c : Case} (h : read j tr = .ok c) {rs : Array TRange} {S : Spot.Wires.Summary}
+theorem landing_bits {j tr : Json} {c : Case} (h : read j tr = .ok c)
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P) {rs : Array TRange} {S : Spot.Wires.Summary}
     {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs)
@@ -99,7 +100,7 @@ theorem landing_bits (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRow
   have hts := front_text hf
   have hP := readProg_of_read h
   obtain ⟨-, -, -, -, hO, -⟩ := program_of_read h
-  have hO := hRuns _ hO
+  have hO := InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hO hNE
   obtain ⟨hnd, hnames⟩ := tmpls_named hts
   obtain ⟨l, o, lo, hi, ⟨sc, hu, i, hi', hp, hrow, -⟩, -⟩ := mem_landing.1 ha
   obtain ⟨t, ht, htid, -, hdefn, r0, hr0⟩ := unit_tmpl hP hts hrs hu
@@ -132,26 +133,26 @@ theorem landing_bits (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRow
 fresh (`FreshRows`). A gate the block reads from outside itself that θ does not hold is one a row of the block's slot
 lands on, a row that is neither wired inside the slot nor held (`reads_land`); the gates one row's reads land on are
 no wider than the row's bits (`landing_bits`); and those rows' bits are within the summary's fresh. -/
-theorem block_fresh (hFR : FreshRows) (hRuns : InferenceOnlyVerifier.Record.SecurityProofs.OwnRowsRuns) (hED : InferenceOnlyVerifier.Record.SecurityProofs.EdgeDigits)
-    {j tr : Json} {c : Case} (h : read j tr = .ok c)
+theorem block_fresh (hFR : FreshRows) {j tr : Json} {c : Case} (h : read j tr = .ok c)
+    (hNE : InferenceOnlyVerifier.Record.SecurityProofs.EdgeFree c.f.P)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) (u : Fin d.n) :
     InferenceOnly.freshInput d (d.𝓘.gates u) ≤ (form.summarize c).fresh := by
   classical
-  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, hOwn, hAl, -, -, hL, hNm, hD⟩ := hd
+  obtain ⟨P, doc, Wt, S, rs, at_, hdec, -, -, -, -, -, -, hS, hrs, hT, -, hAl, -, -, hL, hNm, hD⟩ := hd
   obtain rfl : c.f.P = P := Except.ok.inj ((decode_of_read h).symm.trans hdec)
   obtain rfl : c.wired = S := Except.ok.inj ((wired_of_read h).symm.trans hS)
   have hS : Spot.Wires.check c.W = .ok c.wired := hS
   have hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg c.f.P)
       (c.W.templates.map (·.1)).toArray = .ok rs := hrs
   have hT : Templates c.f.P rs c.W := hT
-  have hOwn : OwnRows c.f.P rs c.W := hOwn
   have hAl : Aligned c.f.P rs c.W c.wired := hAl
   have hL : LaysOut c.f.P rs c.W c.wired d.D at_ := hL
   have hNm : Names c.f.P rs c.W (fun r => (c.heldAt r).isSome) at_ d.θ := hNm
   have hD : Divides c.f.P rs c.slot at_ d.𝓘 := hD
   have hP := readProg_of_read h
   obtain ⟨-, -, -, -, hO, -⟩ := program_of_read h
-  have hO := hRuns _ hO
+  have hO := InferenceOnlyVerifier.Record.SecurityProofs.ownRuns_of_edgeFree hO hNE
+  have hOwn : OwnRows c.f.P rs c.W := ownRows_holds hP hO hrs
   obtain ⟨ρ, hρ⟩ := ranked hS
   obtain ⟨f, pin, hf, hc⟩ := read_front h
   have hland : ∀ a ∈ d.D.into (d.𝓘.gates u) \ d.θ, ∃ r : Row, c.slot r.tid r.unit = some u.val ∧
@@ -162,7 +163,7 @@ theorem block_fresh (hFR : FreshRows) (hRuns : InferenceOnlyVerifier.Record.Secu
       (returnsOwn hP hrs hT hS) (portsNamed hrs hT) hρ
       (fun tid u sc tid' u' sc' g hu hu' h1 h2 h1' h2' => unit_of_gate hP hrs hu hu' h1 h2 h1' h2') hD
       (fun tid u sc hu => (slot_of_unit h hrs hu).imp fun s hs => hs.1) hNm
-      (fun r hr => held_unwired h r hr) (fun r => c.rowKind r = Kind.inside) (fun r hr => inside_writer hED h r hr)
+      (fun r hr => held_unwired h r hr) (fun r => c.rowKind r = Kind.inside) (fun r hr => inside_writer h r hr)
       u a ha1 ha2
     refine ⟨r, hs, hni, fun hk => ?_, hl⟩
     have hth := theta_held hc r hk
@@ -185,7 +186,7 @@ theorem block_fresh (hFR : FreshRows) (hRuns : InferenceOnlyVerifier.Record.Secu
     intro x hx
     obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
     obtain ⟨hs, hni, hnt, hl⟩ := hrow a ha
-    obtain ⟨h1, h2, -⟩ := landing_bits hRuns h hrs hT hOwn hAl hL hS hl
+    obtain ⟨h1, h2, -⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
     exact ⟨h1, h2, hs, hni, hnt⟩)
   refine le_trans ?_ hbound
   show d.D.width (d.D.into (d.𝓘.gates u) \ d.θ) ≤ _
@@ -195,7 +196,7 @@ theorem block_fresh (hFR : FreshRows) (hRuns : InferenceOnlyVerifier.Record.Secu
   refine Finset.sum_le_sum fun x hx => ?_
   obtain ⟨a, ha, rfl⟩ := Finset.mem_image.1 hx
   obtain ⟨-, -, -, hl⟩ := hrow a ha
-  obtain ⟨-, -, hle⟩ := landing_bits hRuns h hrs hT hOwn hAl hL hS hl
+  obtain ⟨-, -, hle⟩ := landing_bits h hNE hrs hT hOwn hAl hL hS hl
   refine le_trans (Finset.sum_le_sum_of_subset ?_) hle
   intro b hb
   obtain ⟨hbA, hbφ⟩ := Finset.mem_filter.1 hb
