@@ -2021,7 +2021,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
                 at = os.path.relpath(SIBLINGS.source(plan, work), tree / pkg / PROBE.COPIES) if checked else rel
                 if rc == 0:
-                    step, (rc, said, text) = f"{step} exit 0, then lean on its copy", PROBE.probe(
+                    step, (rc, said, text) = f"{step} exit 0, then lean", PROBE.probe(
                         tree / pkg, at, (ROOT / file).read_text(),
                         lambda copy, show: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy],
                                                  echo=show), home=os.path.dirname(rel))
