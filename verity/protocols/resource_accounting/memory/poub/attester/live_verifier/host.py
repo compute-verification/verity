@@ -389,8 +389,12 @@ def parse_run(argv: list[str], settings: dict) -> dict:
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities and figures
+    (its `figures`, a file of `timing.Figures.to_json`'s form, refused when the peer names none)."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
+    if "figures" not in node:
+        raise Refused(f"the peer {req['peer']!r} names no figures in /etc/vy/verifier.json (its `figures`, the file "
+                      "`benchmarks/poub_session/sheets.py NODE` writes for its node): the verifier reads them")
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
@@ -399,7 +403,8 @@ def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: st
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main),
+            "--figures", str(node["figures"])]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:

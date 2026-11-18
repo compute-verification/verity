@@ -51,16 +51,10 @@ def test_feature_names_an_applications_component_and_its_settings_as_verity_conf
     assert S.feature_of(["pearl-plus"]) == S.Feature("pearl-plus", (("tie-uniform", False),))
     assert S.feature_of(["pearl-plus", "tie-uniform=true", "class=8,4096,512"]) == S.Feature(
         "pearl-plus", (("class", "8,4096,512"), ("tie-uniform", True)))
-    with pytest.raises(NotImplementedError, match="^benchmarks/serving-profiles-first-number: no arm over prod serves "
-                                                 "pearl-plus tie-uniform=false; compute-accounting: Pearl\\+'s scheme has "
-                                                 "an attach, but vLLM's scheme plugin"):
-        FEATURE(["pearl-plus"], "prod")
-    monkeypatch.setitem(S.ARMS, "prod-record", replace(S.ARMS["prod-record"], feature=S.Feature("pearl-plus")))
-    assert FEATURE(["pearl-plus", "tie-uniform=false"], "prod") == "prod-record"
+    assert FEATURE(["pearl-plus"], "prod") == "prod-pearl-plus" and FEATURE(["pearl-plus"], "compiled") == "pearl-plus"
+    assert FEATURE(["pearl-plus", "tie-uniform=false"], "prod") == "prod-pearl-plus"
     with pytest.raises(NotImplementedError, match="no arm over prod serves pearl-plus tie-uniform=true"):
         FEATURE(["pearl-plus", "tie-uniform=true"], "prod")
-    with pytest.raises(NotImplementedError):
-        FEATURE(["pearl-plus"], "compiled")
 
 
 def test_sampled_proofs_at_two_levels_is_the_two_stage_arm_once_the_component_declares_levels(
