@@ -8342,3 +8342,22 @@ def test_a_failed_sampled_proofs_step_keeps_its_error_log_private(tmp_path):
     assert kept.stat().st_mode & 0o777 == 0o700
     assert not any("resolution failed" in f.read_text() for f in out.rglob("*") if f.is_file())
     assert not list(out.rglob("*.log"))
+
+
+UNCHECKED = {
+    "attester-attended-each-block": "not checked by any auditor-side entry: the grader verifies one signature of the memory attester per session (storage: the session's id, coin root, parameters and round times; the wipe: its header, fill times and batch records; the bandwidth audit: one closing signature over its log), which names no period or block; no served path writes a liveness record, and verify_liveness has no caller",
+    "attester-key-pinned-outside-the-case": "not checked by any auditor-side entry: the grader takes the attester's key from the trusted list the case itself carries, which the developer's node fills, and the pins are compared on the served node: the developer's check, built and not yet in force as the auditor's"}
+
+
+@pytest.mark.parametrize("premise", [None, "unmet: the memory attester ran on vy-auditor-2, not the developer's n"])
+def test_a_placements_unchecked_premises_follow_its_trusted_device_by_name(premise):
+    """Each premise a placement's ``unchecked`` names is a term of its own, its name and then its sentence, after the
+    `trusted-device` premise where the placement has one (storage's and the wipe's) and alone where it has none (the
+    bandwidth audit's)."""
+    place = {"links": [], "unchecked": UNCHECKED, **({"trusted-device": premise} if premise else {})}
+    got = S.terms({"answer": {"profile": {"placement": place}}}, None)
+    assert got[:3 if premise else 2] == [*([f"trusted-device {premise}"] if premise else []),
+                                        f"attester-attended-each-block {UNCHECKED['attester-attended-each-block']}",
+                                        "attester-key-pinned-outside-the-case "
+                                        f"{UNCHECKED['attester-key-pinned-outside-the-case']}"]
+    assert S.terms({"answer": {"profile": {"placement": {"links": []}}}}, None) == []
