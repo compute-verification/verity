@@ -190,7 +190,7 @@ def test_an_ask_told_the_place_the_last_one_found_answers_with_it_while_it_stand
     reads, calls = [], []
     monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: reads.append(kw) or dict(docs))
 
-    def elsewhere(d, home, cpus, mem_gb, lean_pool=None):
+    def elsewhere(d, home, cpus, mem_gb, lean_pool=None, needs=None):
         calls.append(sorted(d))
         return ((C, "research"), "c has the most") if C in d else ((B, "research"), "b") if d.get(B) == "b" else (None, "none")
 
@@ -202,7 +202,18 @@ def test_an_ask_told_the_place_the_last_one_found_answers_with_it_while_it_stand
     del calls[:]
     docs[B] = "gone"
     assert asker.ask(tmp_path, m, {}, B) == ((C, "research"), "c has the most") and calls == [[B], [A, B, C]]
-    assert len(reads) == 3, "one reading of the machines an ask"
+    assert len(reads) == 3 and reads[0]["needs"] is None, "one reading of the machines an ask"
+
+
+def test_an_ask_of_a_lean_try_asks_where_its_package_is_built(tmp_path, monkeypatch):
+    """The package a Lean try needs built is worked out at launch from the tree it ships, which an ask doesn't check out: the
+    launch hands it over, and each ask reads the machines' kept trees for it and moves the run only where it is built."""
+    reads, asked = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: reads.append(kw) or {B: "b"})
+    monkeypatch.setattr(auto, "elsewhere", lambda d, home, cpus, mem_gb, lean_pool=None, needs=None: asked.append(needs) or (None, "none"))
+    needs = auto.LeanNeeds("security/Proofs", "build", 4000)
+    asker.ask(tmp_path, {"cpus": 1, "mem_gb": 0, "lean": "build", "needs": needs._asdict(), "home": A}, {})
+    assert reads[0]["needs"] == needs and reads[0]["lean"] is True and asked == [needs]
 
 
 def test_it_asks_only_while_the_run_waits_and_its_machine_answers(world):

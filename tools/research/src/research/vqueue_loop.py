@@ -150,7 +150,9 @@ The actions.  Build merges its members in order onto its base (`Queue._merge`), 
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`) or named (`vqueue.Build.name`: a tick builds several
 batches, each on the one before), onto what that build pushed (`Tick.rebuilds`), leaving
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
-naming them where it merges onto `main`;
+naming them where it merges onto `main`; beside a staged batch, also one after which that batch's members, merged again onto
+main's chain's top by its `Commit`, no longer merge, its line naming the batch, `staged`, which keeps it out of the batches
+beside that batch at that head, `vqueue.Ready.staged_conflict`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
@@ -187,7 +189,9 @@ Retry enqueues again (graph2 lists a check whose listing failed, reruns what end
 infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a task still runs, or
 one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun runs the keys afresh
 (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without graph2's `rerun` it is
-logged `absent`, and counts as done.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner), once a
+logged `absent`, and counts as done.  A passing rerun of a test no member of several reached is logged (`cured`: the test,
+the candidate, the run ids) and its owner rung to cure or delete it within 24 hours; a second such pass within 24 hours is
+not rerun.  Ring tells whom it names (`to`), else `landing.INFRA` (or its `pr`'s owner, or an unreached test's owner), once a
 candidate and why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads
 infra in the same tick, as in an outage (`Loop._outage`); a base candidates wait on for want of its graph or of graph2's word
 on it is rung to `CI` and `landing.INFRA`, once a base and why: at once when its listing failed or its graph can't be read, and
@@ -338,6 +342,9 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
+#: the drops of one tick that stop their runs at once (`Loop._stop_drops`): a red's cascade drops a dozen, whose cancels one
+#: drop at a time held the rebuilds behind them for minutes
+DROP_JOBS = 8
 #: what `World.ready` judged of each open head on `main`, in the loop's cache, for the next tick's process (`--once`)
 JUDGED_CACHE = "judged.json"
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
@@ -603,6 +610,18 @@ class Past:
 
     def reruns(self, sha: str) -> int:
         return sum(1 for r in self.of("rerun", sha) if r.get("done") or r.get("absent"))
+
+    def cured(self) -> tuple[tuple[str, float], ...]:
+        """Passing reruns of an unreached test (`Loop._ring`): (test id, when), oldest first."""
+        return tuple((r["test"], at) for r in self.of("cured") if isinstance(r.get("test"), str)
+                     and (at := unstamp(r.get("at"))) is not None)
+
+    def reran(self, sha: str, state: str) -> tuple[Failed, ...]:
+        """The failures ``sha``'s newest done rerun covered, once its verdict passed."""
+        if state != PASS:
+            return ()
+        recs = [r for r in self.of("rerun", sha) if r.get("done")]
+        return tuple(_as_failed(f) for f in (recs[-1].get("failed") or ()) if isinstance(f, dict)) if recs else ()
 
     def since(self, sha: str) -> dict[str, int]:
         """How many results each key had when a retry of ``sha``, or a rerun of any candidate's, set them aside: its verdict
@@ -903,14 +922,16 @@ def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
 class Skip:
     """A PR a build left out (`World.build`) and why: ``held`` names what of the build holds its head already (the member
     whose head does, else the candidate it is built on), and ``by`` the members above `main` it conflicts with where it merges
-    onto `main` alone.  A move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or
-    has ``fix``, what its owner is told to do."""
+    onto `main` alone, or, with ``staged``, the staged Lean batch's member it conflicts with (`World._under_staged`).  A
+    move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or has ``fix``, what its
+    owner is told to do."""
     pr: PR
     why: str
     held: str = ""
     by: tuple[int, ...] = ()
     waits: bool = False
     fix: str = ""
+    staged: str = ""
 
 
 class _Seen:
@@ -2026,11 +2047,13 @@ class World:
 
     # -- effects
 
-    def build(self, prs: list[PR], base: str, main: str | None = None) -> tuple[str, list[Member], list[Skip]]:
+    def build(self, prs: list[PR], base: str, main: str | None = None,
+              staged: tuple[str, list[PR]] | None = None) -> tuple[str, list[Member], list[Skip]]:
         """``prs`` merged in order onto ``base`` (`Queue._merge`), which is ``main`` or stands on it (``base`` when not given):
         (the tip, the members merged, each left out).  A skip names what holds its head already (`Skip.held`), and one that
         conflicts with what is merged above ``main`` but merges onto ``main`` names the members it conflicts with
-        (`Skip.by`), not `main`."""
+        (`Skip.by`), not `main`.  With ``staged``, a staged Lean batch and its members' PRs, a member after which they no
+        longer merge, as `Commit` merges them again onto the chain's top, is left out (`_under_staged`)."""
         main = main or base
         tip, merged, left = base, [], []
         self.certified = {}
@@ -2050,11 +2073,33 @@ class World:
                 left.append(Skip(p, f"its head {p.head[:12]} is already in what it merges onto: {held} holds it", held=held))
             elif commit is None:
                 left.append(self._unmerged(p, why, tip, base, main, merged))
+            elif staged and (skip := self._under_staged(p, tip, commit, *staged)) is not None:
+                left.append(skip)
             else:
                 merged.append(Member(p.number, p.head, p.owner or "", commit))
                 tip = commit
         self._keep_moves(main)
         return tip, merged, left
+
+    def _under_staged(self, p: PR, tip: str, commit: str, sha: str, staged: list[PR]) -> Skip | None:
+        """``p``, merged onto ``tip`` as ``commit``, left out when staged batch ``sha``'s members (``staged``) merge in order
+        onto ``tip`` but not onto ``commit``: that batch goes onto main's chain's top above it (`Commit`), and the conflict
+        would be found only then, dropping the candidates built on it.  The skip names the member it conflicts with and the
+        files, and says which batch (`Skip.staged`)."""
+        def onto(at: str) -> tuple[PR, str] | None:
+            for s in staged:
+                got, _ = self.q._merge(at, s, [])
+                if got is None:
+                    return s, at
+                at = got
+            return None
+
+        if (bad := onto(commit)) is None or onto(tip) is not None:
+            return None
+        s, at = bad
+        files = self.q._recorded(at, s.head).get("conflict") or []
+        return Skip(p, f"conflicts with #{s.number}, of the Lean batch staged at {sha[:12]}, which goes onto main's chain's "
+                       f"top above it" + (f", in {', '.join(files)}" if files else ""), by=(s.number,), staged=sha)
 
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
@@ -2137,6 +2182,11 @@ class World:
         """origin's ``ref`` to ``sha`` ("": deleted), with a lease on ``lease`` when given."""
         self.q._remote(self.repo, "push", "-q", *([f"--force-with-lease={ref}:{lease}"] if lease is not None else []), "origin",
                        f"{sha}:{ref}" if sha else f":{ref}")
+
+    def delete(self, refs: dict[str, str]) -> None:
+        """origin's ``refs`` deleted in one atomic push, each with a lease on its sha: all of them, or none."""
+        self.q._remote(self.repo, "push", "-q", "--atomic", *(f"--force-with-lease={r}:{sha}" for r, sha in refs.items()),
+                       "origin", *(f":{r}" for r in refs))
 
     def _forget(self, sha: str) -> None:
         if self.reads is not None:
@@ -2665,6 +2715,11 @@ class Tick:
     fetching: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
     #: whether a detached job of the steps after an advance runs (`Loop._moved`)
     after_running: bool = False
+    #: each drop of this tick that `Loop._stop_drops` stopped ahead of its line, by candidate: what `Loop._drop` logs
+    dropping: dict[str, dict] = field(default_factory=dict)
+    #: the batches staged off main's chain as this tick's actions leave them, {sha: members}: the snapshot's, less those a
+    #: `Drop` or `Commit` took, with those a build or a `Commit` staged (`Loop._staged`)
+    staged: dict[str, list[int]] = field(default_factory=dict)
 
 
 class Loop:
@@ -2799,7 +2854,7 @@ class Loop:
                                              on_main=below[0], again=again)
                     judged[sha] = j
                     cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
-                                           enqueued=p.enqueued(sha),
+                                           enqueued=p.enqueued(sha), reran=p.reran(sha, j.verdict.state),
                                            records=self._records_run(p, n, main, origin, sha, b, wrote, regen),
                                            repairs=b.get("repairs") if isinstance(b.get("repairs"), str) else None,
                                            waits=waits, apart=apart, held=p.held(sha) if waits else None))
@@ -2818,6 +2873,9 @@ class Loop:
         left.update(taken := w.taken({(m, h) for m, h in flying if m not in w.pulled}, main))
         ready = w.crossing(main, ready, {h: p.move for m, h in sorted(at | flying)
                                          if (p := w.open().get(m)) is not None and p.move})
+        staged = {c.sha for c in cands if c.waits}
+        under = {(r.get("number"), h) for r in past.of("skip") if r.get("staged") in staged for h in r.get("heads") or ()}
+        ready = [replace(x, staged_conflict=True) if (x.number, x.head) in under else x for x in ready]
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
@@ -2827,10 +2885,10 @@ class Loop:
                                            move=bool(getattr(w.open().get(m), "move", "")),
                                            scripts=vqueue.meets(f, MOVE_SCRIPTS)) for m, h in sorted(flying)),
                         records=self.records is not None, fill=self.fill,
-                        plain=frozenset(self.plain), apart=self.apart)
+                        plain=frozenset(self.plain), apart=self.apart, cured=past.cured())
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
-                    dict(w.unauthenticated), riding=riding)
+                    dict(w.unauthenticated), riding=riding, staged={c.sha: list(c.members) for c in cands if c.waits})
 
     def _reading(self, past: Past, whole: Past, main: str, mine: set[str], older: set[str]):
         """The tick's reads of the runs its judging reads (`Landing.reading`): every run of a record not yet decided (or a
@@ -3295,22 +3353,17 @@ class Loop:
             return [e]
 
     def _drops(self, run: list[Drop], t: Tick) -> list[list[dict] | Exception]:
-        """The drops of ``run``, their runs cancelled `JOBS` at a time (`_stopped`), then each branch deleted and logged in
-        order; one that fails stops none of the others, whose runs it can't leave cancelled on a live candidate."""
-        cands = {c.sha: c for c in t.snap.candidates}
-        read = {a.sha: self._reread(t, cands[a.sha]) for a in run if a.sha in cands}
-
-        def stop(a: Drop) -> Callable[[], dict]:
-            if a.sha not in cands:
-                raise QueueError(f"{a}: no such candidate")
-            return self._stopped(a, cands[a.sha], t, read[a.sha])
-
-        with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
-            stopping = [pool.submit(stop, a) for a in run]
+        """The drops of ``run`` stopped ahead together (`_stop_drops`: their branches deleted in one push, then their runs
+        cancelled side by side), then each made and logged in order; one that fails stops none of the others, whose
+        branches are gone already.  A refusal while stopping them is the first one's failure, and none of them is made."""
+        try:
+            self._stop_drops(run, t)
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            return [e]
         out: list[list[dict] | Exception] = []
-        for a, f in zip(run, stopping):
+        for a in run:
             try:
-                out.append([f.result()(), *self._reached(a, cands[a.sha], t)])
+                out.append(self.apply(a, t))
             except (QueueError, OSError, subprocess.SubprocessError) as e:
                 out.append(e)
         return out
@@ -3447,6 +3500,8 @@ class Loop:
             raise QueueError(f"{a}: no such candidate")
         if isinstance(a, Advance):
             return [self._advance(c, t)]
+        if isinstance(a, (Drop, Commit)):
+            t.staged.pop(c.sha, None)
         if isinstance(a, Drop):
             return [self._drop(a, c, t), *self._reached(a, c, t)]
         if isinstance(a, Retry):
@@ -3484,7 +3539,9 @@ class Loop:
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
         again = {"replaces": a.replaces} if a.replaces is not None else {}
-        tip, merged, recs = self._merged(t, a.members, base)
+        staged = None if a.records or a.apart else next(
+            ((sha, [w.prs[n] for n in members if n in w.prs]) for sha, members in sorted(t.staged.items())), None)
+        tip, merged, recs = self._merged(t, a.members, base, staged)
         if not merged:
             t.rebuilds.update((k, base) for k in (a.replaces, a.name) if k is not None)
             recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again,
@@ -3519,17 +3576,19 @@ class Loop:
         failed = self.world.cancel_runs(ids, f"vqueue: candidate {old.sha[:12]} was dropped: {vqueue.BASE_DROPPED}")
         return None, {"records_cancelled": ids, **({"records_cancel_failed": failed} if failed else {})}
 
-    def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
-        """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
-        those left out, each owner told once a head and base)."""
+    def _merged(self, t: Tick, members: Iterable[int], base: str, staged: tuple[str, list[PR]] | None = None
+                ) -> tuple[str, list[Member], list[dict]]:
+        """PRs ``members`` merged in order onto ``base`` (`World.build`, beside ``staged``'s batch): (the tip, the members
+        merged, the skip records of those left out, each owner told once a head and base)."""
         w = self.world
         if unknown := [n for n in members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
-        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main)
+        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main, staged)
         recs = []
         for s in left:
             p, key = s.pr, f"{s.pr.head}@{base}"
-            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
+            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number,
+                        **({"staged": s.staged} if s.staged else {}))
             if s.held or s.waits:                           # it reaches `main` with what holds it, or is built once that has
                 recs.append(self.record(t, "skip", **line, why=s.why, **({"held": True} if s.held else {"waits": True}),
                                         done=False))
@@ -3576,6 +3635,7 @@ class Loop:
         started and its check not, so the planner builds nothing on it (`vqueue.decide`).  With ``kept``, the record of the
         records run of the staged batch it rebuilds on another base, every member merged and its Lean inputs that batch's
         (`_restaged`), that run is its own, still running or passed, and none is started."""
+        t.staged[line["sha"]] = list(line["members"])
         if kept is None:
             return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
                     *self._regenerate(t, line)]
@@ -3764,11 +3824,13 @@ class Loop:
         try:
             audit = self._audit_from(d, main, line, below, lent)
             suites = self._suites_from(d, main, line, below, lent)
-            after = {}
+            after, prefer = {}, []
             if self.gate in CHECKS:
                 window = self.now() - self.slim.CARRY_WAIT_S
-                after = {**self.slim.replaced([*older, *Past.read(self.log_path, min(window, since or window)).lines],
-                                              line.get("members") or (), self.now(), of), **dict.fromkeys(carry, self.now())}
+                past = [*older, *Past.read(self.log_path, min(window, since or window)).lines]
+                members = line.get("members") or ()
+                after = {**self.slim.replaced(past, members, self.now(), of), **dict.fromkeys(carry, self.now())}
+                prefer = self.slim.preferred(past, members, self.now())
             with self.steps("launch"):
                 rec, error = self.slim.start(d, line["sha"], line["base"],
                                              **({"shards": self.shards} if self.gate in CHECKS else {}),
@@ -3777,7 +3839,8 @@ class Loop:
                                              **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
                                              **({"after": after} if after else {}),
                                              **({"heavy_on": heavy} if heavy else {}),
-                                             **({"avoid": tuple(avoid)} if avoid else {})), None
+                                             **({"avoid": tuple(avoid)} if avoid else {}),
+                                             **({"prefer": prefer} if prefer else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -3942,23 +4005,41 @@ class Loop:
         """Cancel ``c``'s check, and the run beside it and its records run while they run (they would hold drive's machines for
         nothing), delete its branch and log its outcome.  A run still launching (its shards, of a sharded one) has no run ids
         yet: its record is logged (`beside_launching`, `records_launching`), and `_launched` cancels it once it has them; an
-        auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.  Where the check gates, the
+        auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.  The machines its shards
+        took (``beside_took``) are where its passes are kept, which a rebuild's shards prefer (`vqueue_slim.preferred`).  Where the check gates, the
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
         (`vqueue_slim._passed_early`) leaves them running where it is dropped on `main`, and cancels them otherwise, as
         nothing will land on what they find; its line keeps their record (``off_gate_running``) while it keeps
-        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
-        return self._stopped(a, c, t, self._reread(t, c))()
+        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did.
+        A drop `_stop_drops` stopped ahead (``t.dropping``) only logs what that did."""
+        if (p := t.dropping.pop(c.sha, None)) is None:
+            p = self._dropping(a, c, t)
+            self.world.push("", branch(c.sha), c.sha)
+            self._stop(p)
+        j, shadow, follow, rec, kept, unread, ids, regen, rids, launching = (
+            p[k] for k in ("j", "shadow", "follow", "rec", "kept", "unread", "ids", "regen", "rids", "launching"))
+        cancel, failed, rfailed = p["cancel"], p["failed"], p["rfailed"]
+        early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
+        return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
+                           failed=c.verdict.failed, cancel=cancel, done=True,
+                           **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
+                           **({"follow": follow} if follow is not None else {}),
+                           **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
+                           **({"beside_took": kept["took"]} if kept.get("took") else {}),
+                           **({"beside_launching": launching} if launching else {}),
+                           **({"off_gate_running": kept} if unread else {}),
+                           **({"records_cancelled": rids} if rids else {}),
+                           **({"records_cancel_failed": rfailed} if rfailed else {}),
+                           **({"records_launching": regen} if "launch" in regen else {}),
+                           **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
+                              if early is not None else {}))
 
-    def _stopped(self, a: Drop, c: Candidate, t: Tick, j: Judged | None) -> Callable[[], dict]:
-        """`_drop`'s cancels of ``c``'s runs, ``j`` its judging read again (`_reread`), and what then deletes its branch and
-        logs it."""
-        w = self.world
-        shadow = j.shadow if j is not None else None
-        follow = self._follow(c, t)
-        cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
-        why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
+    def _dropping(self, a: Drop, c: Candidate, t: Tick) -> dict:
+        """What `_drop` of ``c`` reads, stops and logs, but the stopping (`_stop`): its judgement read again, what graph2's
+        shadow follows, the record of the runs to cancel (its auto plan given up) and its records run's."""
+        j = self._reread(t, c)
         rec, kept = _running(j), (j.record if j is not None else None) or {}
         if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
             rec = kept
@@ -3968,31 +4049,53 @@ class Loop:
             "verdict" not in base or base.get("still_running")))
         if "plan" in rec:
             self.slim.abandon(rec)
-        ids = list(rec.get("ids") or ())
-        failed = w.cancel_runs(ids, why) if ids else {}
         regen = (t.records.get(c.sha) or {}) if c.records is not None and c.records.state == PENDING else {}
         if c.sha in t.restaged and "launch" not in regen:
             regen = {}
-        rids = list(regen.get("ids") or ())
-        rfailed = w.cancel_runs(rids, why) if rids else {}
+        ids, rids = list(rec.get("ids") or ()), list(regen.get("ids") or ())
+        if ids or rids:
+            kept_runs(self.world.keep_file)
+        return {"sha": c.sha, "why": f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}", "j": j,
+                "shadow": j.shadow if j is not None else None, "follow": self._follow(c, t), "rec": rec, "kept": kept,
+                "unread": unread, "ids": ids, "regen": regen, "rids": rids, "launching": launching}
 
-        def deleted() -> dict:
-            w.push("", branch(c.sha), c.sha)
-            early = (rec.get("early") or {}).get("at") if rec and a.outcome is not None and j.slim.state == FAIL else None
-            return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why,
-                               outcome=a.outcome, failed=c.verdict.failed, cancel=cancel, done=True,
-                               **({"graph2": _ended(shadow) or PENDING} if shadow is not None else {}),
-                               **({"follow": follow} if follow is not None else {}),
-                               **({"beside_cancelled": ids} if ids else {}),
-                               **({"beside_cancel_failed": failed} if failed else {}),
-                               **({"beside_launching": launching} if launching else {}),
-                               **({"off_gate_running": kept} if unread else {}),
-                               **({"records_cancelled": rids} if rids else {}),
-                               **({"records_cancel_failed": rfailed} if rfailed else {}),
-                               **({"records_launching": regen} if "launch" in regen else {}),
-                               **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
-                                  if early is not None else {}))
-        return deleted
+    def _stop(self, p: dict) -> dict:
+        """The drop `_dropping` made ``p`` of stopped, its branch gone: its graph2 check cancelled unless followed, and its runs
+        and its records run's (`World.cancel_runs`), each kept in ``p`` as `_drop` logs it, a cancel that raised among the
+        failed ones (`_dropping` read ``keep_file`` while the drop could still refuse)."""
+        w = self.world
+
+        def runs(ids: list[str]) -> dict[str, str]:
+            try:
+                return w.cancel_runs(ids, p["why"]) if ids else {}
+            except (QueueError, OSError, subprocess.SubprocessError) as e:
+                return dict.fromkeys(ids, f"cancel raised: {e}"[:300])
+
+        try:
+            p["cancel"] = w.cancel(p["sha"]) if p["follow"] is None else "left running, in shadow"
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            p["cancel"] = f"cancel raised: {e}"[:300]
+        p["failed"], p["rfailed"] = runs(p["ids"]), runs(p["rids"])
+        return p
+
+    def _stop_drops(self, drops: list[Drop], t: Tick) -> None:
+        """The drops of a tick that follow one another, two or more, stopped ahead of their lines and side by side: their
+        branches deleted in one push, then each one's runs cancelled at once (`_stop`, up to `DROP_JOBS` drops, and
+        `landing.CANCEL_JOBS` cancels in all), each kept in ``t.dropping`` for its `_drop` to log, in the tick's order.  A drop
+        of no candidate, or a push that fails, leaves every one of them to its own `_drop`, which deletes its branch before it
+        cancels anything: no candidate left on origin has its runs cancelled."""
+        cs = {c.sha: c for c in t.snap.candidates}
+        if len(drops) < 2 or any(a.sha not in cs for a in drops):
+            return
+        ps = [self._dropping(a, cs[a.sha], t) for a in drops]
+        try:
+            self.world.delete({branch(p["sha"]): p["sha"] for p in ps})
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            self.out(f"research queue vqueue: tick {t.n}: deleting the branches of {len(ps)} drops at once failed, so each "
+                     f"drop deletes its own: {e}"[:400])
+            return
+        with concurrent.futures.ThreadPoolExecutor(min(len(ps), DROP_JOBS)) as pool:
+            t.dropping.update((p["sha"], p) for p in pool.map(self._stop, ps))
 
     def _reread(self, t: Tick, c: Candidate) -> Judged | None:
         """``c`` as this tick judged it, with graph2's reading, in shadow, read again where the snapshot took it from the one
@@ -4148,7 +4251,8 @@ class Loop:
         stop_failed = w.cancel_runs(stopped, f"vqueue: candidate {c.sha[:12]}'s failure is rerun afresh") if stopped else {}
         again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun",
                             carry=(j.record or {}).get("ids") or ()) if set(a.keys) & beside else []
-        return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
+        whose = "the lone member's own failures" if len(c.members) == 1 else "no member's files meet the failures"
+        return [self.record(t, "rerun", **line, why=f"{whose}, afresh: {said or 'the run beside'}",
                             failed=failed, keys=list(a.keys), counts=counts, done=True,
                             **({"beside_cancelled": stopped} if stopped else {}),
                             **({"beside_cancel_failed": stop_failed} if stop_failed else {})), *again]
@@ -4182,11 +4286,13 @@ class Loop:
 
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
-        that flakes is deleted, not rerun.  With --shadow, logged only."""
+        that flakes is deleted, not rerun.  A key this tick records as a passing unreached rerun (`cured`) is that ring's,
+        not this one's.  With --shadow, logged only."""
         w, recs, rung = self.world, [], t.past.flaked()
+        cured = {f.key for c in t.snap.candidates if len(c.members) > 1 and c.verdict.state == PASS for f in c.reran if f.key}
         for c in t.snap.candidates:
             for e in (t.judged[c.sha].theirs or {}).get("flaky") or ():
-                if not isinstance(e, dict) or not isinstance(key := e.get("key"), str) or key in rung:
+                if not isinstance(e, dict) or not isinstance(key := e.get("key"), str) or key in rung or key in cured:
                     continue
                 rung.add(key)
                 task, tests = str(e.get("task")), sorted(w.failing_tests(key))
@@ -4570,9 +4676,41 @@ class Loop:
                        and x.get("at") == at and "verdict" in x), None)
         return None if judged is None else round(judged - at)
 
+    def _cured(self, a: Ring, c: Candidate, t: Tick) -> dict | None:
+        """The decision-log line of a passing rerun of unreached test ``a.test``, once a candidate: the test, the candidate
+        and the run ids.  None when this ring is not that pass, or the line is already there."""
+        if not a.test or not a.passed or any(r.get("test") == a.test and r.get("sha") == c.sha for r in t.past.of("cured")):
+            return None
+        return self.record(t, "cured", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, test=a.test,
+                           runs=self._run_ids(t, c))
+
+    def _run_ids(self, t: Tick, c: Candidate) -> list[str]:
+        """The run ids of ``c``'s check and of the results its rerun covered."""
+        rec = (t.judged[c.sha].record if c.sha in t.judged else None) or {}
+        ids = [i for i in rec.get("ids") or () if isinstance(i, str)]
+        ids += [i for shard in rec.get("shards") or () if isinstance(shard, dict)
+                for i in shard.get("ids") or () if isinstance(i, str)]
+        keys = [f.key for f in c.reran if f.key]
+        for docs in (self.world.tasks.transport.results(keys).values() if keys else ()):
+            for d in docs:
+                if not isinstance(d, dict):
+                    continue
+                run = d.get("run")
+                detail = d.get("detail")
+                if not isinstance(run, str) and isinstance(detail, dict):
+                    run = detail.get("run")
+                if isinstance(run, str):
+                    ids.append(run)
+        return list(dict.fromkeys(ids))
+
+    def _test_owner(self, c: Candidate, test: str) -> tuple[str, ...]:
+        task = next((f.task for f in (*c.reran, *c.verdict.failed) if test in f.tests or test == f.task), "")
+        return self.world.test_owners(c.sha, task, [test]) or (CI,)
+
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
+        cured = self._cured(a, c, t)
         if (c.sha, a.why) in t.past.rung():
-            return []
+            return [cured] if cured is not None else []
         erred = vqueue._erred(c.verdict)
         infra = "; ".join(f"{f.task} (key {f.key})" for f in erred)
         members = " ".join(f"#{n}" for n in c.members)
@@ -4580,16 +4718,18 @@ class Loop:
         text = (f"the verified queue's candidate queue/{c.sha[:12]} ({members}), whose check waits for its records run: {a.why}"
                 if c.waits else f"the verified queue's candidate ready:{c.sha} ({members}) is {state} after "
                 f"{c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
-        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=erred, text=text)
+        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=erred, text=text,
+                    **({"test": a.test} if a.test else {}))
         if a.pr is not None and (held := self._outage(c, t)) is not None:
-            return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
+            return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, done=True, posted=False, held=held)]
         if self.shadow:
-            return [self.record(t, "ring", **line, done=False)]
-        to = a.to or ((INFRA_HANDLE,) if a.pr is None else self.owner(a.pr))
+            return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, done=False)]
+        to = a.to or (self._test_owner(c, a.test) if a.test else (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr))
         if not self._say(t, "ring", text, to, sha=c.sha, why=a.why):
-            return [self.record(t, "ring", **line, done=False, posted=False,
+            return [*(() if cured is None else (cured,)),
+                    self.record(t, "ring", **line, to=list(to), done=False, posted=False,
                                 error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
-        return [self.record(t, "ring", **line, done=True, posted=True)]
+        return [*(() if cured is None else (cured,)), self.record(t, "ring", **line, to=list(to), done=True, posted=True)]
 
     def _outage(self, c: Candidate, t: Tick) -> str | None:
         """Why a ring to the owner of ``c``'s lone member about its check erring is held, logged and not posted: in the same
