@@ -312,7 +312,7 @@ case $COINS in
 import json, sys
 g = json.load(open(sys.argv[1]))
 print(g["gate"], g["peer"], g["lane"], sep="\n")' "$OUT/auditor-gate.json") || fail gate
-    export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE ;;
+    export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER PEARLC_CHALLENGER_LANE PEARLC_PRIVATE=$W/private ;;
   in-process) ;;
   *) echo "COINS is local or in-process, not $COINS" >&2; exit 3 ;;
 esac

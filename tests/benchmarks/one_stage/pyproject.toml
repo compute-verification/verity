@@ -106,6 +106,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "tests/benchmarks/pouw/test_pearl_c_vllm.py", "tests/benchmarks/pouw/test_pearl_c_hash_decode.py",
           "tests/benchmarks/pouw/test_pearl_c_sm90_prefill.py", "benchmarks/pouw/run_result.py",
           "benchmarks/pouw/settings.py", "verity", "calibration/hardware/cards",
+          # inference_only's session reads its H200 card's architecture through the kit (`kit.gpu_target`)
+          "calibration/hardware/architectures/sm_90a.toml",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/compose/verifier/live_challenger",
@@ -139,7 +141,8 @@ inputs = ["tools/config/verity_config", "verity/protocols/resource_accounting/co
           "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/layout.py", "verity/protocols/resource_accounting/memory/poub/prover/p2_stage/stage.py",
           "verity/protocols/resource_accounting/memory/poub/attester/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
           "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
-          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json", "benchmarks/one_stage"]
+          "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
+          "adapters/vllm/manifests/checkpoints-local.json", "benchmarks/one_stage"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

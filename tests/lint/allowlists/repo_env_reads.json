@@ -38,7 +38,6 @@
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 1},
     {"file": "benchmarks/pouw/h1_prove/stage.py", "count": 1},
     {"file": "benchmarks/pouw/harness/ieee_pin.py", "count": 7},
-    {"file": "benchmarks/pouw/hidden_zk/stage.py", "count": 1},
     {"file": "benchmarks/pouw/hidden_zk/summarize.py", "count": 2},
     {"file": "calibration/pouw/opcode_probe/probe.py", "count": 4},
     {"file": "tests/benchmarks/pouw/test_pearl_c_sm120.py", "count": 1},

@@ -551,6 +551,43 @@ def test_the_sessions_are_kept_and_then_answered_with_no_card(served, tmp_path, 
         SP.answers(s.serve, 3, s.out, private=s.private, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
 
 
+class _Lazy(futures.Executor):
+    """An executor that runs a task only when its result is first asked for, logging each submit and each run."""
+
+    def __init__(self):
+        self.log: list[tuple[str, str]] = []
+
+    def submit(self, fn, /, *args, **kw):
+        self.log.append(("submit", fn.__name__))
+        log, done = self.log, []
+
+        class Later:
+            def result(self):
+                if not done:
+                    log.append(("run", fn.__name__))
+                    done.append(fn(*args, **kw))
+                return done[0]
+        return Later()
+
+
+def test_the_three_answers_are_all_started_before_any_is_waited_for(served, tmp_path, monkeypatch):
+    """`answers` hands PoUB-P2's answer and PoUS's by the Python and by the Lean to its executor before it waits for
+    any of them, so none waits for another's end. The bandwidth session held and `held_bandwidth.decide` are
+    stand-ins."""
+    s, pool = served, _Lazy()
+
+    def held_bandwidth():
+        held = json.loads((s.private / SP.HELD).read_text())
+        (s.private / SP.HELD).write_text(json.dumps(held | {"bandwidth": {"session_s": 0.0}}))
+    monkeypatch.setattr(SP.HB, "decide", lambda *a, **kw: {"verdict": "accept"})
+    monkeypatch.setattr(SP.HB, "line", lambda bw: "BANDWIDTH stand-in")
+    answer = _parts(s, tmp_path, monkeypatch, between=held_bandwidth, pool=pool)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert pool.log[:3] == [("submit", "bandwidth_answer"), ("submit", "lean_answer"), ("submit", "python_answer")]
+    assert sorted(pool.log[3:]) == [("run", "bandwidth_answer"), ("run", "lean_answer"), ("run", "python_answer")]
+    assert json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
+
+
 def test_the_pin_is_the_answers_own_never_one_the_sessions_kept(served, tmp_path, monkeypatch):
     """The trusted key is the one `answers` is given: under another pin than the session's key the kept session is
     rejected, and the record says no key was trusted."""
@@ -950,10 +987,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert summary[mc.PREMISE].startswith(f"{mc.MATCHED}: the session is signed under the key configuration {CONF} pins")
     assert case["params"]["trusted"] == [ts.AtLeaf(b"p2-party-at-leaf").public_key.hex()]
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
-    assert _stamps(s.out) == [
-        "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
-        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's answer by the Lean done",
-        "PoUS's case written"]
+    stamps = _stamps(s.out)
+    answers = [f"{a} {e}" for a in ("PoUB's answer", "PoUS's answer by the Python", "PoUS's answer by the Lean")
+               for e in ("start", "done")]
+    assert stamps[:5] == ["the weights loaded", "setup done", "PoUS's session done", "PoUB's session start",
+                          "PoUB's session done"]
+    assert sorted(stamps[5:-1]) == sorted(answers) and stamps[-1] == "PoUS's case written"
+    assert all(stamps.index(start) < stamps.index(done) for start, done in zip(answers[::2], answers[1::2]))
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()

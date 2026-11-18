@@ -33,6 +33,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from verity.circuits.codec import canonical_json
+
 #: the byte every block outside a restored set is filled with: NaN in bf16 (0xFFFF) and in e4m3 (0xFF)
 FILL = 0xFF
 #: bytes of a block's digest
@@ -242,7 +244,7 @@ def rng_state(worker: Any) -> dict[str, Any]:
 
 def rng_digest(rng: Mapping[str, Any]) -> str:
     """SHA-512 of an `rng_state`, canonically serialized."""
-    return hashlib.sha512(json.dumps(rng, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha512(canonical_json(rng)).hexdigest()
 
 
 class SeedHook:

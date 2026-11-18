@@ -793,7 +793,7 @@ class CommitConfig:
                                                   "salts in the salt file beside it; needs SERVING_ROWS")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity.protocols.resource_accounting.memory.poub.prover.commit_session; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
