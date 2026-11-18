@@ -52,12 +52,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.memory.pous.scheme import POUS
 from verity.protocols.resource_accounting.memory.pous.prover import weight_store as ws
 
+from verity import hooks as H
 from verity_vllm.protocols.interface import Context, Option, Target
 
-NAME = "pous"
-DEFAULT_SCHEME = "p2-16448/v4"
+NAME, _, DEFAULT_SCHEME = POUS.option.partition(":")
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
 
@@ -96,8 +97,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     stray = sorted(set(own) - set(SETTINGS))
     if stray:
         out.append(f"unknown pous settings {stray} (known: {', '.join(SETTINGS)})")
-    if not ctx.enforce_eager:
-        out.append("compiled execution: the decode wrappers are not graph-capturable, so pous runs eager")
     if scheme != DEFAULT_SCHEME:
         out.append(f"pous holds C* under {DEFAULT_SCHEME} alone, the codec its period's run protocol checks and the staging "
                    f"decode reads, not {scheme}")
@@ -109,6 +108,11 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if why:
         out.append(why)
     return tuple(out)
+
+
+def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
+    return (H.RequireProperty("eager", True, "compiled execution: the decode wrappers are not graph-capturable, so pous "
+                              "runs eager"),)
 
 
 def linear_types() -> tuple[type, ...]:
@@ -305,5 +309,5 @@ def install(scheme: str, target: Target) -> PousOption:
     return opt
 
 
-__all__ = ["DEFAULT_SCHEME", "NAME", "PousOption", "SETTINGS", "commit_weights", "install", "linear_types", "refusals",
+__all__ = ["DEFAULT_SCHEME", "NAME", "PousOption", "SETTINGS", "commit_weights", "install", "linear_types", "refusals", "requests",
            "schemes"]

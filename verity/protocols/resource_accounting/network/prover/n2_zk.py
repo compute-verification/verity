@@ -36,7 +36,7 @@ the witness lines go to ``n2.log`` beside ``--witness``, and without ``--witness
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
   statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`TransferBlocks.layout`,
   `TransferBlocks.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
-  once, held to the prover's reference and to the IR reference; each statement's salts come from a key of its own, and
+  once, held to the prover's reference and to the IR reference; every row's salt is fresh from the operating system, and
   the verifier's opening of its ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
 * **A round** (`member`), per execution phase in order: register, select, one live `prove --zk` session behind the ZK
   server on the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window:
@@ -61,7 +61,6 @@ import argparse
 import contextlib
 import functools
 import gc
-import hashlib
 import json
 import os
 import socket
@@ -333,14 +332,13 @@ def stager(M, lw: TransferBlocks, out: Path) -> SimpleNamespace:
                            circuit_sha512=M.PF.file_sha512(out / "circuit.txt"))
 
 
-def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: bytes, out: Path) -> dict:
+def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every execution phase's statement on the one circuit, one instance each, proof block 0. The lowering evaluates
     all of their rows at once (`Lowering.evaluate`), which must satisfy every proof block and give the prover's output
     words, held to the IR reference in one batch (`UnitStager.reference_check`); then each statement's files are written
-    as `UnitStager.stage` writes them (`circuit.write`), under salts from a key of the statement's own
-    (`circuit.stage_salts` derives them from the key and the set's content, which every statement shares). The
-    verifier's opening of each staged ``pub`` and ``o0`` row is checked on its public file. Sets each window's
-    ``statement``."""
+    as `UnitStager.stage` writes them (`circuit.write`), every row under fresh salts from the operating system
+    (`circuit.stage_salts` without a key). The verifier's opening of each staged ``pub`` and ``o0`` row is checked on its
+    public file. Sets each window's ``statement``, which keeps the ``pub`` and ``o0`` rows' salts for delivery."""
     np, st = M.np, sg.st
     items = [(name, x) for name, mb in members.items() for x in mb.windows]
     rows = {r: np.stack([np.frombuffer(members[name].lw.row(x.args, r), "<u2") for name, x in items])
@@ -361,10 +359,9 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         lw = members[name].lw
         d = out / name / f"w{x.window:03d}" / "statement"
         iset = SimpleNamespace(**{**vars(st.iset), "name": f"{st.iset.name}-{name}-w{x.window}"})
-        key = hashlib.sha512(secret + f"row salts/{name}/{x.window}".encode()).digest()[:32]
-        salts = M.FC.stage_salts(iset, 0, 1, st.ports, key)
+        salts = M.FC.stage_salts(0, 1, st.ports)
         d.mkdir(parents=True, exist_ok=True)
-        M.FC.write(st.text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin", key,
+        M.FC.write(st.text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin",
                    rows={r: rows[r][k:k + 1] for r in SVC.ROWS}, outs={"o0": o0[k:k + 1]}, salts=salts,
                    public_words={}, digests=(st.pin, st.class_sha512), indices=[0], meta=st.meta)
         (d / "tables").mkdir(exist_ok=True)
@@ -644,7 +641,7 @@ def prove(a) -> int:
                          "ands": sg.st.low.layout.counts["ands"]}
     log(f"stager: {lw0.proof_block.id}, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, pin {sg.st.pin[:16]}")
     wlog(a, f"stager: lowered in {sg.lower_s} s")
-    summary["staging"] = stage(M, sg, members, os.urandom(32), out)
+    summary["staging"] = stage(M, sg, members, out)
     log(f"staged: {summary['staging']['statements']} statements")
     wlog(a, f"staged: {summary['staging']}")
     write(summary)

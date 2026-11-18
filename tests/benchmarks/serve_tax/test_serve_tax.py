@@ -134,9 +134,14 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     alone = S.server_env(S.ARMS["canonical-topk"], tmp_path, tmp_path / "site", None, 600.0, 600.0, private=private)
     assert S.PLUGIN_ENV not in alone and alone["VERITY_DSA_TOPK"] == "canonical"
     assert [S.keeps_private(S.ARMS[a]) for a in ("compiled", "record", "boundary-rows", "canonical-topk", "two-stage")] == [
-        False, False, True, True, True]
-    assert "private" not in json.loads(S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 1.0, 1.0)[S.PLUGIN_ENV])
-    for keeps in (two, rows):                 # no place on the node to keep them: nothing starts
+        False, True, True, True, True]
+    assert [S.records(S.ARMS[a]) for a in ("compiled", "record", "record-ids", "canonical-topk", "prod-record")] == [
+        False, True, True, False, True]
+    resets = S.replace(S.ARMS["record"], plugin=("idle_reset",))
+    assert "private" not in json.loads(S.server_env(resets, tmp_path, tmp_path, None, 1.0, 1.0)[S.PLUGIN_ENV])
+    assert json.loads(S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 1.0, 1.0, private=private)[S.PLUGIN_ENV])[
+        "private"] == str(private)
+    for keeps in (two, rows, S.ARMS["record"]):     # no place on the node to keep them: nothing starts
         with pytest.raises(SystemExit, match="--private DIR"):
             S.server_env(keeps, tmp_path, tmp_path, None, 600.0, 600.0, check=glm.check)
     # the arm's data names its modules by path: each is a file of this tree
@@ -158,22 +163,28 @@ def test_what_an_arm_keeps_on_the_node_is_outside_every_runs_directory(tmp_path:
     assert S.run(NS(out=str(out), private=str(kept), arm="two-stage", client=S.CORPUS)) == 0
     assert seen == [(kept, True)] and kept.stat().st_mode & 0o777 == 0o700
     # none given, under vLLM's client (a cost's run, whose kept files nothing reads afterwards): a fresh directory for an
-    # arm that keeps something, gone when the arm stops; none for the others
+    # arm that keeps something and records nothing, gone when the arm stops; none for the others; an arm that records
+    # (its step trace, served ids, edges' outputs) is refused, since later stages read what it records
     bench = {"out": str(out), "private": None, "client": S.BENCH}
-    assert S.run(NS(arm="two-stage", **bench)) == 0 == S.run(NS(arm="compiled", **bench))
+    assert S.run(NS(arm="canonical-topk", **bench)) == 0 == S.run(NS(arm="compiled", **bench))
+    for records in ("two-stage", "record", "prod-record"):
+        with pytest.raises(SystemExit, match=rf"arm {records} records its step trace.*--private DIR.*PRIVATE"):
+            S.run(NS(arm=records, **bench))
     (fresh, was_there), stock = seen[1], seen[2]
     assert was_there and not fresh.exists() and not fresh.is_relative_to(tmp_path / "run") and stock == (None, True)
     # none given, under the corpus client (a serve, whose later stages read them): refused, so no serve finds its
     # classes gone with a directory it never named; an arm that keeps nothing serves as before
-    for keeps in ("boundary-rows", "two-stage", "canonical-topk"):
-        with pytest.raises(SystemExit, match=r"a serve's later stages read it: --private DIR.*PRIVATE"):
+    with pytest.raises(SystemExit, match=r"a serve's later stages read it: --private DIR.*PRIVATE"):
+        S.run(NS(out=str(out), private=None, arm="canonical-topk", client=S.CORPUS))
+    for keeps in ("boundary-rows", "two-stage", "record"):
+        with pytest.raises(SystemExit, match=r"records its step trace.*--private DIR.*PRIVATE"):
             S.run(NS(out=str(out), private=None, arm=keeps, client=S.CORPUS))
-    assert len(seen) == 3 and S.run(NS(out=str(out), private=None, arm="record", client=S.CORPUS)) == 0
+    assert len(seen) == 3 and S.run(NS(out=str(out), private=None, arm="compiled", client=S.CORPUS)) == 0
 
 
 def test_a_jobs_environment_cannot_drop_an_arms_plugin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VLLM_PLUGINS", "something_else")
-    env = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 600.0, 600.0)
+    env = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 600.0, 600.0, private=tmp_path / "p")
     assert "VLLM_PLUGINS" not in env and "VLLM_PLUGINS" not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 1.0, 1.0)
 
 
@@ -262,13 +273,13 @@ def test_arms_differ_only_by_their_change():
 
 def test_server_env_names_the_changes(tmp_path: Path):
     env = S.server_env(S.ARMS["tokens"], tmp_path, tmp_path, {"bucket_us": 100000, "sat_us": 9000, "free_us": 11000},
-                       600.0, 30.0)
+                       600.0, 30.0, private=tmp_path / "p")
     cfg = json.loads(env[S.PLUGIN_ENV])
     assert cfg["record"] and cfg["tokens"] and not cfg.get("release_order") and cfg["kv_window_s"] == 30.0
     assert json.loads(env["VERITY_TICK"])["sat_us"] == 9000
     assert S.PLUGIN_ENV not in S.server_env(S.ARMS["compiled"], tmp_path, tmp_path, None, 600.0, 600.0)
-    with pytest.raises(SystemExit):
-        S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0)
+    with pytest.raises(SystemExit, match="the tick arms need"):
+        S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0, private=tmp_path / "p")
 
 
 def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_every_finished_request(tmp_path: Path):
@@ -397,7 +408,7 @@ def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_it
                          boundary_rows={"per_output": 2, "tables": {"layers": [3], "private": S.PRIVATE}})
     assert json.loads(given[S.PLUGIN_ENV])["boundary_rows"] == {
         "window_s": 30.0, "check": "the model's", "per_output": 2, "tables": {"layers": [3], "private": str(kept)}}
-    record = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows)
+    record = S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 30.0, 600.0, boundary_rows=rows, private=kept)
     assert "boundary_rows" not in json.loads(record[S.PLUGIN_ENV])
     # each arm of a job keeps its own under the job's private directory
     sh = (S.HERE / "run.sh").read_text()
@@ -406,7 +417,8 @@ def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_it
 
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
     edges = {"edges_s": [180.0, 360.0], "save_kv": [1], "dump": False}
-    cfg = {a: json.loads(S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, edges)[S.PLUGIN_ENV])
+    cfg = {a: json.loads(S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, edges,
+                                      private=tmp_path / "p")[S.PLUGIN_ENV])
            for a in ("restore-base", "restore-pause", "restore")}
     assert "edges_s" not in cfg["restore-base"] and cfg["restore-pause"]["edges_s"] == [180.0, 360.0]
     assert [S.ARMS[a].edge_dump for a in ("restore-pause", "restore")] == [False, True]
@@ -438,7 +450,7 @@ def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypa
     assert lines.index("export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0") < lines.index('if [ "${1:-}" = leased ]; then')
     monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
     for arm in ("compiled", "record"):
-        env = S.server_env(S.ARMS[arm], tmp_path, tmp_path, None, 600.0, 600.0)
+        env = S.server_env(S.ARMS[arm], tmp_path, tmp_path, None, 600.0, 600.0, private=tmp_path / "p")
         assert env["TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"] == "0", arm
 
 
@@ -566,12 +578,15 @@ def test_drive_load_counts_what_the_client_sent_and_the_server_did_not_serve(mon
 def test_step_traces_are_read_plain_or_gzipped(tmp_path: Path):
     import gzip
 
-    (tmp_path / "server").mkdir()
+    arm, private = tmp_path / "record", tmp_path / "private"
+    (private / "server").mkdir(parents=True)
+    arm.mkdir()
+    (arm / "meta.json").write_text(json.dumps({"private": str(private)}))
     lines = "".join(json.dumps(r) + "\n" for r in ({"kind": "header"}, {"kind": "step", "t": 1.0}))
-    (tmp_path / "server" / "step_trace.1.jsonl").write_text(lines)
-    with gzip.open(tmp_path / "server" / "step_trace.2.jsonl.gz", "wt") as f:
+    (private / "server" / "step_trace.1.jsonl").write_text(lines)
+    with gzip.open(private / "server" / "step_trace.2.jsonl.gz", "wt") as f:
         f.write(lines)
-    plain, gz = S.step_traces(tmp_path)
+    plain, gz = S.step_traces(arm)
     assert S.trace_records(plain) == S.trace_records(gz) == [{"kind": "header"}, {"kind": "step", "t": 1.0}]
 
 
@@ -2294,6 +2309,20 @@ def served_order(arms: str, **env: str) -> list[str]:
     return out.split()
 
 
+def test_run_sh_refuses_by_name_an_arm_that_records_or_a_replay_without_private():
+    lines = (S.HERE / "run.sh").read_text().splitlines()
+    first = lines.index('if [ -z "${PRIVATE:-}" ]; then')
+    block = "\n".join(lines[first:lines.index("fi", first) + 1])
+    env = {"PY": S.sys.executable, "here": str(S.HERE), "PYTHONPATH": S.os.environ.get("PYTHONPATH", "")}
+    rc, out = bash(["-c", block], {**env, "ARMS": "compiled record canonical-topk prod-record"})
+    assert (rc, out) == (2, "serve-tax: arms record prod-record record their step traces, served ids or edges' outputs, "
+                            "which hold request values: PRIVATE, a directory outside every run's\n")
+    rc, out = bash(["-c", block], {**env, "ARMS": "compiled", "REPLAY": "agentic@2"})
+    assert rc == 2 and "REPLAY keeps each replay's tokens on the node: PRIVATE" in out
+    assert bash(["-c", block], {**env, "ARMS": "compiled canonical-topk"}) == (0, "")
+    assert bash(["-c", block], {**env, "ARMS": "record", "REPLAY": "agentic@2", "PRIVATE": "/elsewhere"}) == (0, "")
+
+
 def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_or_the_turned_order_first():
     assert served_order("prod prod-record") == ["prod:1", "prod-record:1"]
     assert served_order("prod prod-record", LIFETIMES="3") == ["prod:1", "prod-record:1", "prod-record:2", "prod:2",
@@ -2319,7 +2348,7 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
     assert run_sh("--bogus") == (2, "serve-tax: unknown flag --bogus (--model, --arms, --loads, --dataset NAME=FILE, --reps, "
-                                    "--target, --json, --profile NAME, --feature ARM, --find-load)\n")
+                                    "--target, --json, --profile NAME, --feature SCHEME, --find-load)\n")
     assert run_sh("--model") == (2, "serve-tax: --model takes a value\n")
     # the default arms end in the two-stage serve's launch line, which is the arm's data: the job names no object
     for flags in (("--model", "glm53"), ("--model", "glm53", "--arms", "compiled compiled-again", "--json")):

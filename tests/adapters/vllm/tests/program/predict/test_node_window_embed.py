@@ -2,7 +2,7 @@
 rank 0, beside the frame's and the dense families, at a 32-id prompt, 2 outputs and one decoder layer: per column block of 192
 words one `EmbeddingRead_v2{V=154880, H=192}` unit a member over that block's padded table, the all-reduce's own partial
 read from the blocks' ``o0`` by wire. The tables are one width, declared and never committed by the window, and kept apart
-from the plain weights, whose nonces they don't move.
+from the plain weights.
 """
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import 
 )
 
 from tests.program.predict.test_node_window import LP, glm_request
-from verity_vllm.pipeline import expert_tables as XT
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
@@ -113,42 +112,33 @@ def test_tables_declared(window):
                                                                                               (read, "tok", "o1", 1)}
 
 
-def test_split_keeps_weight_nonces(window, without):
-    """The tables are kept apart from the plain weights: the plain weights' nonces are the same with and without the shard's
-    tables present, handed every name they would not be, `window_weights` refuses a table's name, and the tables' own
-    nonces are the tables' registration's, from `TABLES_NONCE`."""
+def test_split_keeps_the_tables_apart_from_the_weights(window, without):
+    """The tables are kept apart from the plain weights: the plain weights are the same with and without the shard's tables
+    present, `window_weights` refuses a table's name, and the tables are the tables' registration's, one a block."""
     params, before = window[0].registered.params, without[0].registered.params
     plain, tables = NE.split(params)
     assert NE.split(before) == (plain, []) == (WW.weight_params(before), [])
-    assert WW.weight_nonces(plain) == WW.weight_nonces(before)
-    moved = WW.weight_nonces(params)
-    assert any(moved[p] != n for p, n in WW.weight_nonces(before).items())
     assert len(tables) == BLOCKS
     with pytest.raises(ValueError, match="no weight parameter"):
         WW._param(tables[0])
     by = NE.tables_of(params)
     assert list(by) == [LABEL] and [b for b, *_ in by[LABEL]] == list(range(BLOCKS))
-    nonces = XT.nonces(by, [label for label, _f, _n in window[1].b.weights], 0)
-    assert sorted(nonces) == sorted(tables) and len(set(nonces.values())) == BLOCKS
-    assert min(nonces.values()) >= XT.TABLES_NONCE > max(WW.weight_nonces(plain).values())
+    assert sorted(p for _b, p, _w, _n in by[LABEL]) == sorted(tables)
 
 
 @pytest.mark.slow
 def test_split_beside_expert_tables():
     """Over an MoE layer with the sparse families, whose expert blocks' tables and absorbed weights' entries are in the window
-    too, the split keeps all three apart: the plain weights and their nonces are the same with and without the shard's
-    tables, and handed unsplit all but the first would take another nonce."""
+    too, the split keeps all three apart: the plain weights are the same with and without the shard's tables."""
     from verity_vllm.program.predict import node_window_sparse as NS
 
     fn = glm_request(LP, 1, moe=True).program.fn
     base = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
     params, before = (NW.node_window(fn, families=f)[0].registered.params for f in ({**base, **NE.FAMILIES}, base))
     (plain, tables), (plain0, tables0) = NE.split(params), NE.split(before)
-    assert plain == plain0 and WW.weight_nonces(plain) == WW.weight_nonces(plain0)
+    assert plain == plain0
     assert set(tables) - set(tables0) == {NE.shard_param(LABEL, NE.WIDTH, b) for b in range(BLOCKS)}
     assert all(t.endswith(("/table", "/bnk")) for t in tables0) and {t.rsplit("/", 1)[1] for t in tables0} == {"table", "bnk"}
-    moved = WW.weight_nonces(params)
-    assert sum(moved[p] != n for p, n in WW.weight_nonces(plain0).items()) == len(plain0) - 1
 
 
 def test_second_width_refused(program):
@@ -307,11 +297,11 @@ def test_values_tables(window, program):
 
 def test_split_bnk_with_tables(window):
     """The absorption weights' entry (``weights/<label>@<K>/bnk``) lands with the tables, not among the plain weights: the
-    plain weights and their nonces are the same with it and without it, and `tables_of` still gives the ``/vocab`` tables
+    plain weights are the same with it and without it, and `tables_of` still gives the ``/vocab`` tables
     only."""
     params = list(window[0].registered.params)
     bnk = f"{NW.WEIGHTS}/model.layers.0.self_attn.kv_b_proj.weight@512/bnk"
     (plain, tables), (plain1, tables1) = NE.split(params), NE.split([*params, bnk])
-    assert plain1 == plain and WW.weight_nonces(plain1) == WW.weight_nonces(plain)
+    assert plain1 == plain
     assert tables1 == sorted([*tables, bnk])
     assert NE.tables_of([*params, bnk]) == NE.tables_of(params)

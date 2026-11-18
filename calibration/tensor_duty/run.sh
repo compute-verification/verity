@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# The tensor-duty sweep (duty.cu) on one H200. Builds outside the lease, in a scratch directory under the run's own; then,
+# The tensor-duty sweep (duty.cu) on one GPU. Builds outside the lease, in a scratch directory under the run's own; then,
 # under one gpu-lease (the job's own when it already holds one, GPU_LEASE_UUID), sets the leased GPU's power limit to the
 # board's maximum (-pl) and, for each of CLOCKS, locks its SM clock there (nvidia-smi -lgc; `default` resets it, -rgc),
 # warms the card and runs every arm, class, fill, burst and duty. A clock whose lock fails is skipped; the default clock
 # still runs. On exit it resets the clock and puts the power limit back to the board's default. nvidia-smi samples the
-# GPU every SMI_MS ms (200) while the lease is held. Last, summarize.py judges the H200 card's clock.tensor by the
+# GPU every SMI_MS ms (200) while the lease is held. Last, summarize.py judges its data sheet's clock.tensor by the
 # points, and the run exits nonzero unless it passes.
 #
 #   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash calibration/tensor_duty/run.sh [--arms fp32-beside] [--no-lock]
-#   PYTHONPATH=. python3 calibration/tensor_duty/summarize.py ~/.research/runs/RUN/out
+#   PYTHONPATH=.:benchmarks/harness:tools/config python3 calibration/tensor_duty/summarize.py ~/.research/runs/RUN/out
 #
 # --arms fp32-beside: in place of the duty sweep, FP32 adds beside the tensor pipe (duty.cu's arms A to D) at each clock,
 # for each of BESIDE_CLASSES ("zero const uniform"): A, B, C at the add:MAC ratios 1/X for X in RATIOS ("128 32 8"), and D
@@ -18,12 +18,12 @@
 # exits nonzero unless every reading is decided.
 # --no-lock (LOCK=0): no sudo; the clock and power limit stay as found and CLOCKS is `default`.
 #
-# Env: CLOCKS ("1980 default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
+# Env: CLOCKS ("max default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
 # a period): WG_S8_CLASSES ("zero const uniform s2 u2 u4"), WG_S8_BURSTS ("1024 65536 2097152"), WG_E4M3_CLASSES
 # ("zero const uniform"), WG_E4M3_BURSTS ("4096 65536"), SYNC_S8_CLASSES ("zero uniform"), SYNC_S8_BURSTS ("65536");
 # FILLS ("idle alu"); DUTIES (50 to 90 by 5, then 91 to 100, in percent); SECS (1.2, each point's kernel); WARM_S (20:
 # continuous wg_s8 on uniform operands, at each clock first); LEASE_MIN (75); BUILD_ONLY (1: build and list the
-# binary's tensor and FADD instructions, no lease).
+# binary's tensor and FADD instructions, no lease). A clock `max` is the highest SM clock nvidia-smi gives the GPU.
 # Writes $OUT/points.jsonl (beside.jsonl with --arms fp32-beside) and warm.jsonl (duty's lines, each with its clock),
 # smi.csv, found.json, gpu-before.txt, gpu-after.txt, lock.txt, clock-CLOCK-before.txt and -locked.txt (nvidia-smi -q -d
 # CLOCK,PERFORMANCE before and after each clock's lock; -after.txt after its fp32-beside arms), restored.txt, rc.txt,
@@ -43,7 +43,7 @@ export ARMS=${ARMS:-wg_s8 wg_e4m3 sync_s8} FILLS=${FILLS:-idle alu} SECS=${SECS:
 export WG_S8_CLASSES=${WG_S8_CLASSES:-zero const uniform s2 u2 u4} WG_S8_BURSTS=${WG_S8_BURSTS:-1024 65536 2097152}
 export WG_E4M3_CLASSES=${WG_E4M3_CLASSES:-zero const uniform} WG_E4M3_BURSTS=${WG_E4M3_BURSTS:-4096 65536}
 export SYNC_S8_CLASSES=${SYNC_S8_CLASSES:-zero uniform} SYNC_S8_BURSTS=${SYNC_S8_BURSTS:-65536}
-export DUTIES=${DUTIES:-50 55 60 65 70 75 80 85 90 91 92 93 94 95 96 97 98 99 100} CLOCKS=${CLOCKS:-1980 default} O
+export DUTIES=${DUTIES:-50 55 60 65 70 75 80 85 90 91 92 93 94 95 96 97 98 99 100} CLOCKS=${CLOCKS:-max default} O
 export BESIDE_CLASSES=${BESIDE_CLASSES:-zero const uniform} RATIOS=${RATIOS:-128 32 8} PHASES_MS=${PHASES_MS:-1 10 100}
 export LOCK=${LOCK:-1}
 [ "$LOCK" = 1 ] || CLOCKS=default
@@ -56,6 +56,7 @@ if [ "${1:-}" = --leased ]; then
   q() { nvidia-smi -i "$UUID" --query-gpu="$1" --format=csv,noheader,nounits | tr -d ' '; }
   DEF_PL=$(q power.default_limit)
   MAX_PL=$(q power.max_limit)
+  CLOCKS=${CLOCKS/max/$(q clocks.max.sm)}
   printf '{"uuid": "%s", "name": "%s", "max_sm_mhz": "%s", "found_pl_w": "%s", "default_pl_w": "%s", "max_pl_w": "%s", "clocks": "%s", "lock": "%s", "arms": "%s", "tz": "%s"}\n' \
     "$UUID" "$(nvidia-smi -i "$UUID" --query-gpu=name --format=csv,noheader)" "$(q clocks.max.sm)" "$(q power.limit)" \
     "$DEF_PL" "$MAX_PL" "$CLOCKS" "$LOCK" "$ARMS" "$(date +%z)" > "$O/found.json"
@@ -142,9 +143,9 @@ else
   gpu-lease 1 --wait --max-min "${LEASE_MIN:-75}" -- bash "$D/run.sh" --leased "$S/duty"
 fi
 echo "lease rc $?" | tee -a "$O/rc.txt"
+SUMMARIZE=(env "PYTHONPATH=$D/../..:$D/../../benchmarks/harness:$D/../../tools/config" python3 "$D/summarize.py" "$O")
 if [ "$ARMS" = fp32-beside ]; then
-  PYTHONPATH="$D/../.." python3 "$D/summarize.py" "$O" --arms fp32-beside --json "$O/summary.json" | tee "$O/summary.md"
+  "${SUMMARIZE[@]}" --arms fp32-beside --json "$O/summary.json" | tee "$O/summary.md"
 else
-  PYTHONPATH="$D/../..:$D/../../benchmarks/harness:$D/../../tools/config" python3 "$D/summarize.py" "$O" --json "$O/verdict.json" \
-    --record | tee "$O/summary.md"
+  "${SUMMARIZE[@]}" --json "$O/verdict.json" --record | tee "$O/summary.md"
 fi

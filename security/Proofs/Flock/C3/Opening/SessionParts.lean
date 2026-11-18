@@ -99,7 +99,7 @@ theorem residuals_zero_of_cols {S : RecAlgebra.GfS} (hS : S.BitsOk) {sizes : Arr
 
 section Copy
 
-open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
+open FlockSoundness Spot.Sampling FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 

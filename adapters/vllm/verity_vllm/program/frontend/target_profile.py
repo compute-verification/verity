@@ -155,6 +155,9 @@ class TargetProfile:
                            `RMSNormFusedCuda_v4`, `Attention_v10` / `Attention_v11`); a Definition that has no such version keeps
                            its constants.  Under `ir = "boolean"` each is its Boolean version, which reads the same field's bits.
                            Declaring false is refused (declare None).  Omitted from `to_json()` when None.
+    card                -> the SKU of the card file (calibration/hardware/cards) the Build is made for: its `arch` and `sm.count`
+                           must be `compute_capability` and `num_sms`, else refused by name.  None = no card named.  Omitted from
+                           `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.frontend.targets` consumes them): `tensor_core_family` (the registered k16
     tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
@@ -194,6 +197,8 @@ class TargetProfile:
     ir: str | None = None
     #: the Program's values as registered inputs (None = constants; see the doc); declared, never attested
     registered_values: bool | None = None
+    #: the card file the Build is made for (None = none named; see the doc)
+    card: str | None = None
 
     IRS = ("boolean",)
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
@@ -257,6 +262,15 @@ class TargetProfile:
         if int(self.num_sms) < 1:
             raise ValueError(f"num_sms must be positive, got {self.num_sms!r}")
         object.__setattr__(self, "num_sms", int(self.num_sms))
+        if self.card is not None:
+            from verity.device import compute_capability, load_card
+
+            from verity_vllm.config import CARD_FILES
+            record = load_card(self.card, directory=CARD_FILES)
+            facts = (compute_capability(record), int(record["sm"]["count"]["value"]))
+            if facts != (cc, self.num_sms):
+                raise ValueError(f"card {self.card!r} is compute capability {list(facts[0])} with {facts[1]} SMs "
+                                 f"(calibration/hardware/cards/{self.card}.toml); the profile declares {list(cc)} and {self.num_sms}")
         object.__setattr__(self, "batch_invariant", bool(self.batch_invariant))
         if self.flash_attn_version is not None:
             v = int(self.flash_attn_version)
@@ -491,6 +505,8 @@ class TargetProfile:
             d.pop("ir", None)                      # absent = word; every earlier profile digest unchanged
         if d.get("registered_values") is None:
             d.pop("registered_values", None)       # absent = constants; every earlier profile digest unchanged
+        if d.get("card") is None:
+            d.pop("card", None)                    # absent = no card named; every earlier profile digest unchanged
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

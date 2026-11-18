@@ -615,8 +615,10 @@ def released(j: Any) -> Any:
         raise D.Reject("log is not a list of strings")
 
     def go():
-        roots = Ch.released_roots_of(Ch.LiveCommitment.from_json(j["commitment"]), j["log"])
-        return {"chain": Ch.log_chain(j["log"]).hex(), "roots": _roots(roots)}
+        c = Ch.LiveCommitment.from_json(j["commitment"])
+        log = Ch.released_log_of(c, j["log"])
+        return {"chain": Ch.log_chain(j["log"]).hex(), "log": [e.to_json() for e in log],
+                "roots": _roots(Ch.by_family(c, log))}
     return _refusing(go)
 
 
@@ -648,9 +650,9 @@ def session(j: Any) -> Any:
     _request(j, ["key", "ledger", "main", "pins", "session", "window"])
 
     def go():
-        c, roots = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
-                                         j["main"], j["session"], lms_verify)
-        return {"commitment": c.to_json(), "roots": _roots(roots)}
+        c, log = Ch.trusted_session_of(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), j["pins"],
+                                       j["main"], j["session"], lms_verify)
+        return {"commitment": c.to_json(), "roots": _roots(Ch.by_family(c, log))}
     return _refusing(go)
 
 
@@ -1005,7 +1007,7 @@ def _set(lines: list[str], i: int, **changes) -> list[str]:
 
 
 RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after", "index", "label", "label-release",
-                  "event", "tree-event", "time", "time-type", "extra", "non-canonical", "torn", "long", "float",
+                  "event", "tree-event", "time", "early", "time-type", "extra", "non-canonical", "torn", "long", "float",
                   "commitment-form", "request"]
 
 
@@ -1044,6 +1046,8 @@ def released_case(rng: random.Random, name: str) -> Any:
             j["log"] = _set(lines, rng.choice([i, i + 1]), event=rng.choice([Ch.TREE_EVENT, Ch.OPEN_EVENT]))
         case "time":
             j["log"] = _set(lines, rng.choice([i, i + 1]), **{rng.choice(["received_at", "released_at"]): -1})
+        case "early":
+            j["log"] = _set(lines, i + 1, released_at=json.loads(lines[i])["received_at"] - 1)
         case "time-type":
             k = "received_at" if rng.random() < 0.5 else "released_at"
             j["log"] = _set(lines, i if k == "received_at" else i + 1, **{k: rng.choice(["1", None, True, [1]])})
@@ -1713,16 +1717,18 @@ def pinned_case(rng: random.Random, name: str) -> Any:
 # ---- a sample's coins -----------------------------------------------------------------------------------------------------
 
 def read(j: Any) -> Any:
-    _request(j, ["after", "commitment", "read", "roots", "segment"])
+    _request(j, ["after", "commitment", "log", "read", "segment"])
     after, bytes_read = _hex(j["after"]), _hex(j["read"])
-    if j["roots"] is None:
-        roots = None
-    elif type(j["roots"]) is list:
-        roots = [_hex(r) for r in j["roots"]]
-    else:
-        raise D.Reject("roots is not a list")
-    return _refusing(lambda: {"reason": T.read_reason(Ch.LiveCommitment.from_json(j["commitment"]), j["segment"], after,
-                                                      bytes_read, roots)})
+    if j["log"] is not None and type(j["log"]) is not list:
+        raise D.Reject("log is not a list")
+    if j["log"] is not None and any(type(line) is not str for line in j["log"]):
+        raise D.Reject("a log line is not a string")
+
+    def reason() -> Any:
+        c = Ch.LiveCommitment.from_json(j["commitment"])
+        log = None if j["log"] is None else Ch.released_log_of(c, j["log"])
+        return {"reason": T.read_reason(c, j["segment"], after, bytes_read, log)}
+    return _refusing(reason)
 
 
 def draw_coins(j: Any) -> Any:
@@ -1806,9 +1812,6 @@ class Drawn:
         out = f()
         self.s.lines += _pairs(self.records[label].log[n:])
         return out
-
-    def roots(self) -> list[str]:
-        return [r.hex() for r in self.records["draw"].roots]
 
     def evidence(self, segment: dict) -> dict:
         return {"ledger": self.ledger.lines(), "main": self.main, "pins": self.pins, "segment": segment,
@@ -1904,24 +1907,23 @@ def _seeded(rng: random.Random) -> random.Random:
 
 
 def read_case(rng: random.Random, name: str) -> Any:
-    """A read against the challenger's log (`roots`), or, some honest ones, without it: those hold wherever the family's
+    """A read against the challenger's log (`log`), or, some honest ones, without it: those hold wherever the family's
     other coins lie."""
     rng = _seeded(rng)
     logged = name != "honest" or rng.random() < 0.7
     d = _drawn(rng, name) if logged else Drawn(rng, before=rng.random() < 0.5, later=rng.random() < 0.5)
     seg, read_, after = _mutated(rng, d, name)
-    roots = d.roots() if logged else None
-    j = {"after": after.hex(), "commitment": d.s.ch.commitment.to_json(), "read": read_.hex(), "roots": roots,
-         "segment": seg}
+    j = {"after": after.hex(), "commitment": d.s.ch.commitment.to_json(), "log": list(d.s.lines) if logged else None,
+         "read": read_.hex(), "segment": seg}
     match name:
         case "commitment-form":
             j["commitment"] = commitment_case(rng, rng.choice(COMMITMENT_NAMES[1:]))
         case "request":
-            k = rng.choice(["after", "read", "roots", None])
+            k = rng.choice(["after", "read", "log", None])
             if k is None:
                 del j[rng.choice(sorted(j))]
             else:
-                j[k] = rng.choice(["AB", "0", 5]) if k != "roots" else rng.choice(["00", 5, {"draw": []}])
+                j[k] = rng.choice(["AB", "0", 5]) if k != "log" else rng.choice(["00", 5, {"draw": []}, [5]])
     return j
 
 

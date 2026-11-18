@@ -99,6 +99,19 @@ def is_contiguous(v: ViewDesc) -> bool:
     return True
 
 
+def as_words(v: ViewDesc) -> ViewDesc | None:
+    """``v``'s bytes as the u16 words of a contiguous view (its last axis in words, a word's bytes low first), or None where
+    ``v`` isn't contiguous, isn't word aligned or its last axis isn't whole words."""
+    if v.rank == 0 or not is_contiguous(v) or v.byte_offset % 2 or v.shape[-1] * v.itemsize % 2:
+        return None
+    shape = (*v.shape[:-1], v.shape[-1] * v.itemsize // 2)
+    strides, n = [], 1
+    for d in reversed(shape):
+        strides.append(n)
+        n *= d
+    return ViewDesc(v.alloc, v.byte_offset // 2, shape, tuple(reversed(strides)), "uint16", v.device)
+
+
 def element_runs(v: ViewDesc) -> list[tuple[int, int]]:
     _check(v)
     if v.numel == 0:

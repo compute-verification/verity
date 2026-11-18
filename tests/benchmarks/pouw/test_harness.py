@@ -715,20 +715,25 @@ def test_the_card_is_the_one_its_card_file_records_for_its_name():
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
     assert I.check_card("NVIDIA H100 80GB HBM3", "9.0", 132, "580.173.02")["arch"] == "sm_90a"
+    assert I.check_card("NVIDIA B200", "10.0", 148, "570.26")["arch"] == "sm_100a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "575.1"),
-                ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "570.86"),
+                ("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "570.25.99"),
                 ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "12.0", 132, "570.1"),
                 ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
 
-def test_a_card_whose_target_has_no_oldest_driver_is_refused_by_name():
-    with pytest.raises(I.IdentityError, match=r"NVIDIA B200 \(b200-sxm-180gb\) builds for sm_100a, and "
-                                              r"identity.MIN_DRIVER has no oldest driver for sm_100a: add it"):
-        I.check_card("NVIDIA B200", "10.0", 148, "580.1")
-    with pytest.raises(I.IdentityError, match="NVIDIA GeForce RTX 5090.*add"):
+def test_a_card_with_no_card_or_architecture_file_is_refused_by_name(tmp_path, monkeypatch):
+    with pytest.raises(I.IdentityError, match=r"'NVIDIA GeForce RTX 5090'.*add .*the GPU card files: .*rtx-pro-6000-server"):
         I.check_card("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1")
+    (tmp_path / "cards").mkdir()
+    (tmp_path / "architectures").mkdir()
+    (tmp_path / "cards/b200-sxm-180gb.toml").write_text((I.CARD_FILES / "b200-sxm-180gb.toml").read_text())
+    (tmp_path / "architectures/sm_90a.toml").write_text((I.CARD_FILES.parent / "architectures/sm_90a.toml").read_text())
+    monkeypatch.setattr(I, "CARD_FILES", tmp_path / "cards")
+    with pytest.raises(I.IdentityError, match=r"no architecture 'sm_100a': the architectures are \['sm_90a'\]"):
+        I.check_card("NVIDIA B200", "10.0", 148, "580.1")
 
 
 # ---- operands, shapes, sets -----------------------------------------------------------------------------------------------------
@@ -767,13 +772,24 @@ def test_no_ternary_sum_reaches_the_sentinels():
 
 
 def test_every_shapes_operand_sets_pass_twice_the_l2():
+    from verity.device import load_card, number
+
+    l2 = int(number(load_card("rtx-pro-6000-server", directory=I.CARD_FILES)["store"]["l2"]))
     fams = list(B.FAMILIES.values())
     for s in SH.all_shapes():
-        plan = H.shape_plan(s, fams, (), H.L2_SM120)
-        assert plan["sets"] * plan["weight_bytes_min"] >= 2 * H.L2_SM120 or plan["sets"] == S.MAX_SETS
+        plan = H.shape_plan(s, fams, (), l2)
+        assert plan["sets"] * plan["weight_bytes_min"] >= 2 * l2 or plan["sets"] == S.MAX_SETS
         assert plan["burst"] >= max(plan["sets"], S.MIN_BURST)
         assert plan["memory_bytes"] < 60 << 30
-    assert H.shape_plan(SHAPE, [B.FAMILIES["nvfp4"]], (), H.L2_SM120)["sets"] == 8
+    assert H.shape_plan(SHAPE, [B.FAMILIES["nvfp4"]], (), l2)["sets"] == 8
+
+
+def test_the_plan_is_a_cards():
+    """`--plan SKU` reads the card's L2 from its file; no card is assumed."""
+    args = H.parse(["--plan", "rtx-pro-6000-server"])
+    assert args.plan == "rtx-pro-6000-server" and H.print_plan(args) == H.EXIT_OK
+    with pytest.raises(SystemExit, match="^--plan h100: "):
+        H.print_plan(H.parse(["--plan", "h100"]))
 
 
 def test_the_shapes_hold_both_panel_headlines_once():
@@ -1119,6 +1135,20 @@ def test_a_names_file_must_name_configurations_of_the_enumerated_families(tmp_pa
     with pytest.raises(SystemExit):
         H.parse(base + ["--lt-enumerate", "fp8-e4m3"])
     assert "names no configuration" in capsys.readouterr().err
+
+
+def test_an_arm_s_passes_need_a_private_directory_outside_the_run_s(tmp_path, capsys):
+    """A run with arms names `--passes`, and it neither is nor shares `--out`'s directory, where a pass's salts and rows
+    would be uploaded with the run; a run without arms needs none."""
+    run = tmp_path / "run"
+    base = ["--gpu", "0", "--out", str(run / "bench.json"), "--arm", "example_arm:ExampleFp8"]
+    for extra, why in (([], "--passes DIR is required with --arm"), (["--passes", str(run)], "shares it"),
+                       (["--passes", str(run / "passes")], "shares it"), (["--passes", str(tmp_path)], "shares it")):
+        with pytest.raises(SystemExit) as ex:
+            H.parse(base + extra)
+        assert ex.value.code == 2 and why in capsys.readouterr().err
+    assert H.parse(base + ["--passes", str(tmp_path / "scratch" / "passes")]).passes == tmp_path / "scratch" / "passes"
+    assert H.parse(base[:4]).passes is None
 
 
 def test_set_count_bounds():

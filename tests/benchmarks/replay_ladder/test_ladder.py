@@ -222,3 +222,42 @@ def test_summary_reads_a_model_directory(tmp_path):
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
         assert L.model_row(d)["pin"] == arm
+
+
+def test_alone_is_held_to_replay_one_read_from_its_private_directory_and_keeps_its_tokens_in_its_own(tmp_path, monkeypatch):
+    out, private, rp = tmp_path / "qwen3-8b", tmp_path / "private", tmp_path / "private" / "replay-1"
+    reqs = [{"engine_id": f"r{i}", "before_step": 0, "prompt_ids": [i], "served": [7, i]} for i in range(2)]
+    monkeypatch.setattr(L, "register", lambda model: tmp_path)
+    monkeypatch.setattr(L, "sys", SimpleNamespace(flags=SimpleNamespace(hash_randomization=0)))
+    monkeypatch.setattr(L.R, "window", lambda d, load, rep: {"requests": reqs, "header": {}})
+    monkeypatch.setattr(L.R, "params", lambda r: None)
+    for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(k, "")
+
+    class Engine:
+        def __init__(self):
+            self.queued = []
+
+        def reset_prefix_cache(self):
+            return True
+
+        def add_request(self, rid, prompt, params):
+            self.queued.append(rid)
+
+        def has_unfinished_requests(self):
+            return bool(self.queued)
+
+        def step(self):
+            rid = self.queued.pop()
+            return [SimpleNamespace(finished=True, request_id=rid, outputs=[SimpleNamespace(token_ids=[7, 9])])]
+
+    monkeypatch.setattr(L.R, "engine", lambda *a: Engine())
+    (out / "replay-1").mkdir(parents=True)
+    rp.mkdir(parents=True)
+    (out / "replay-1" / "replay.json").write_text(json.dumps({"private": str(rp)}))
+    L.R.write_tokens(rp, {"r0": [7, 0], "r1": [7, 9]})
+    a = SimpleNamespace(model="qwen3-8b", out=str(out), requests=2, private=str(private))
+    assert L.alone(a) == 0
+    res = json.loads((out / "alone" / "alone.json").read_text())
+    assert res["requests_tokens_differing"] == 2 and res["against_replay"]["requests_tokens_differing"] == 1
+    assert (private / "alone" / "alone_tokens.jsonl.gz").is_file() and not list(out.rglob("*tokens*"))

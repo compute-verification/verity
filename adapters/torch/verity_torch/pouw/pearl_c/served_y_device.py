@@ -84,7 +84,7 @@ class DeviceTrees:
             return held[0].data_ptr()
         before, dev.stream = dev.stream, _stream(y.device)
         try:
-            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, self.salts(m, index), words)
+            tree_launches(R, p, tree.data_ptr(), dig.data_ptr(), seg.data_ptr(), m, rows, index, words, self.salts(m, index))
         finally:
             dev.stream = before
         return tree

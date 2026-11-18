@@ -1,11 +1,11 @@
 """Pearl-C's served device path on one H100 or H200 at a model's in-domain linears (``--model``'s ``in_domain``: ``glm53``'s,
 the default, one TP8 rank, or ``llama32_1b``'s, one card): the gate and three retained passes, then the reference replay of each.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--model glm53|llama32_1b] [--cubin C] [--schedule S] [--graphs]  # on the card
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py volunteer --out DIR [--jobs J] [--passes P ...] [--device CUBIN
-                                                                [--device-check N]]  # on CPUs (and the card), before verify
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast] [--draws T]  # on CPUs, after
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --retain PASSES --out DIR [--model glm53|llama32_1b] [--cubin C] [--schedule S] [--graphs]  # on the card
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py volunteer --retain PASSES --out DIR [--jobs J] [--passes P ...] [--device CUBIN
+                                                                                 [--device-check N]]  # on CPUs (and the card), before verify
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --retain PASSES --out DIR [--jobs J] [--fast] [--draws T]  # on CPUs, after
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --retain PASSES --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
 
 ``capture`` installs `pouw_pearl_c_device.PearlCDeviceRun` (``pearl-c-h100-v1-h3`` on the kernel's, the serial
 schedule or ``--schedule``, its decode calls replayed as CUDA graphs with ``--graphs``) on synthetic BF16 weights, one a distinct in-domain (n, k), under an epoch whose salt coin a challenger opened after
@@ -36,6 +36,10 @@ openings and its leaf against C~ and U recomputed from the opened rows on the de
 fixture.py's y is), on `fast_tile`'s batch forms with every ``--cross-check``-th tile on the scalar reference too.  Each
 mode writes its JSON in DIR (``capture.json``, ``volunteer.json``, ``verify.json``, ``full.json``) and exits 0 only when
 everything it checks holds.
+
+Each pass is retained in PASSES/<pass> (``--retain``): its rows, trees, salts and served y are the prover's private values,
+so PASSES is a mode-0700 scratch directory on the node and never under a run's output; DIR gets only what is public (the
+coin commitment, verdicts, counts and roots).
 """
 
 from __future__ import annotations
@@ -69,20 +73,21 @@ def capture(a) -> int:
     import torch
     from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
     from verity_torch.pouw.pearl_c import run_device as PPDR
 
-    out, dev = Path(a.out), torch.device("cuda")
+    out, kept, dev = Path(a.out), Path(a.retain), torch.device("cuda")
     shapes = ([tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes
               else sorted(importlib.import_module(a.model).in_domain(a.scheme)))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(KERNEL), a.cubin)
-    salt_key = PPD.new_salt_key(a.scheme)
+    salt_key = PPD.no_salt_key(a.scheme)
     roots = PPDR.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
     coins = BA._Coins(EPOCH)
     opening = coins.open("salt", weights_root(roots))
     (out / "coins.json").write_text(json.dumps(coins.commitment.to_json()) + "\n")
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(a.scheme), f"pouw:{a.scheme}", kernel, weights, roots, coins.commitment, opening,
                               salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
@@ -93,15 +98,15 @@ def capture(a) -> int:
     xs = {m: {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
           for m in (PREFILL, DECODE)}
     for name, m, omit in (("prefill", PREFILL, ()), ("decode", DECODE, ()), ("control", DECODE, e2e.CONTROL_OMITS)):
-        run.begin(retain=str(out / name), run=settings.RESEARCH_RUN_ID or "glm53-passes")
+        run.begin(retain=str(kept / name), run=settings.RESEARCH_RUN_ID or "glm53-passes")
         run.omit = frozenset(omit)
         rms = {}
         try:
             for i, (w, W) in enumerate(weights.items()):
                 y = run.gemm(w, xs[m][w], W, None)
                 if name in FULL:
-                    (out / name / "y").mkdir(parents=True, exist_ok=True)
-                    (out / name / "y" / f"{i}.bf16").write_bytes(y.contiguous().view(torch.int16).cpu().numpy().tobytes())
+                    (kept / name / "y").mkdir(parents=True, exist_ok=True)
+                    (kept / name / "y" / f"{i}.bf16").write_bytes(y.contiguous().view(torch.int16).cpu().numpy().tobytes())
                 ref = xs[m][w].float() @ W.float().T
                 rms[w] = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
             log["passes"][name] = {"m": m, "omit": sorted(omit), "rel_rms": rms,
@@ -127,7 +132,7 @@ def volunteer(a) -> int:
     check = a.device_check or VP.CROSS_CHECK
     res = {}
     for name in a.passes:
-        got = VP.volunteer(out / name / "manifest.json", coins, a.jobs, device, check)
+        got = VP.volunteer(Path(a.retain) / name / "manifest.json", coins, a.jobs, device, check)
         res[name] = {k: v for k, v in got.items() if k in keep}
         print(f"{name}: {res[name]['line']}", flush=True)
     res["ok"] = bool(a.passes) and all(res[x]["ok"] for x in a.passes)
@@ -145,7 +150,7 @@ def verify(a) -> int:
     names = list(json.loads((out / "capture.json").read_text())["passes"]) if (out / "capture.json").exists() else PASSES
     res = {}
     for name in names:
-        v = VR.verify(out / name / "manifest.json", a.draws or VR.DRAWS, a.jobs, settings.RESEARCH_SOURCE_SHA or "unknown",
+        v = VR.verify(Path(a.retain) / name / "manifest.json", a.draws or VR.DRAWS, a.jobs, settings.RESEARCH_SOURCE_SHA or "unknown",
                       fast=a.fast, cross_check=a.cross_check if a.fast else 0, coins=coins)
         res[name] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         print(f"{name}: {v['line']}", flush=True)
@@ -219,6 +224,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     from clear_audit import Transcript, Verifier
     from verity.commitments import Commitment
     from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PD
+    from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 
     class Seen(CW._TileRuleView):
         """`verify_run`'s view of the scheme, keeping the operands and checked words of the digest it last took."""
@@ -231,7 +237,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     try:
         man = json.loads((d / "manifest.json").read_text())
         PD.manifest_schema(man, False)
-        scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
+        scheme = pouw_schemes.get(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         epoch, _ = PD.manifest_epoch(man, coins, False)
         c = man["commitment"]
         transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
@@ -292,7 +298,7 @@ def full(a) -> int:
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
     res = {}
     for name in a.passes:
-        res[name] = full_pass(out / name, coins, a.jobs, a.cross_check, a.without_y)
+        res[name] = full_pass(Path(a.retain) / name, coins, a.jobs, a.cross_check, a.without_y)
         print(f"{name}: {res[name]['line']}", flush=True)
     res["ok"] = bool(a.passes) and all(res[x]["ok"] for x in a.passes)
     (out / "full.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
@@ -303,7 +309,9 @@ def full(a) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("mode", choices=("capture", "volunteer", "verify", "full"))
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", required=True, help="the public outputs: coins.json and each mode's JSON")
+    p.add_argument("--retain", required=True, help="the passes' directory, private: a 0700 scratch directory, never under "
+                   "a run's output")
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default the kernel's)")
     p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
@@ -321,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
                    "volunteer_pass's CROSS_CHECK)")
     a = p.parse_args(argv)
     Path(a.out).mkdir(parents=True, exist_ok=True)
+    Path(a.retain).mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(a.retain, 0o700)
     return {"capture": capture, "volunteer": volunteer, "verify": verify, "full": full}[a.mode](a)
 
 

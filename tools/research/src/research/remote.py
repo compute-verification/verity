@@ -823,13 +823,14 @@ def knows_job_user(pkg: Path | None, namespaces: bool = False) -> bool:
         return False
 
 
-def knows_gpus(pkg: Path | None) -> bool:
+def knows_gpus(pkg: Path | None, word: str = "def gpu_lease_wrap") -> bool:
     """Whether the research package that will run on the machine takes a direct run's `--gpus N` through gpu-lease (one that
-    predates it would run the workload with every GPU visible and no lease)."""
+    predates it would run the workload with every GPU visible and no lease), and with ``word`` in its remote.py, the request
+    field (`--card`'s, `--timed`'s) its lease reads."""
     if pkg is None:
         return True
     try:
-        return "def gpu_lease_wrap" in (Path(pkg) / "remote.py").read_text()
+        return word in (Path(pkg) / "remote.py").read_text()
     except OSError:
         return False
 
@@ -2079,7 +2080,8 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     elif _lease_owns_every_gpu() and not req.get(QUEUE_WRAP):
         # whatever its --env says: a job that opened CUDA outside the lease takes GPUs the lease then hands to others
         env["CUDA_VISIBLE_DEVICES"] = ""
-        remote["gpus"] = (f"{gpus} through `gpu-lease {gpus} --wait` (CUDA_VISIBLE_DEVICES names them)" if gpus else
+        lease = " ".join(gpu_lease_wrap(req)[:-3])
+        remote["gpus"] = (f"{gpus} through `{lease}` (CUDA_VISIBLE_DEVICES names them)" if gpus else
                           f"none: gpu-lease hands out every GPU here ({GPU_LEASE_HOST_FILE}), so CUDA_VISIBLE_DEVICES=''; declare "
                           f"--gpus N to wait for N of them, or call gpu-lease in the workload")
     elif gpus and not req.get(QUEUE_WRAP):
@@ -2089,11 +2091,14 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
 
 def gpu_lease_wrap(req: dict[str, Any]) -> list[str]:
     """The workload's prefix for a direct run's `--gpus N` on a gpu-lease machine (`_runner_env` refused it anywhere else): it waits
-    first come first served for N GPUs, capped at the run's --mem-gb (uncapped without one, as a run is without --gpus)."""
+    first come first served for N GPUs, capped at the run's --mem-gb (uncapped without one, as a run is without --gpus), of
+    exactly the cards `--card` names (gpu-lease's --on) and timed under `--timed`."""
     gpus = req.get("gpus")
     if not gpus or req.get(QUEUE_WRAP):
         return []
-    return ["gpu-lease", str(int(gpus)), "--wait", "--mem-gb", str(int(req.get("mem_gb") or 0)), "--"]
+    on = ["--on", ",".join(map(str, req["cards"]))] if req.get("cards") else []
+    return ["gpu-lease", str(int(gpus)), "--wait", *on, *(["--timed"] if req.get("timed") else []), "--mem-gb",
+            str(int(req.get("mem_gb") or 0)), "--"]
 
 
 def direct_cpus() -> set[int]:
@@ -2229,13 +2234,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
+           gpus: int | None = None, cards: list[int] | None = None, timed: bool = False, store_read: bool = False,
+           job_namespaces: tuple[str, ...] = (),
            auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None, taken: bool = False) -> dict[str, Any]:
     """`taken`: `local_dir` is this run's, made empty for it (runs.take_run_dir); otherwise it must not exist yet.
     `custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
     against (research.memmark); it limits nothing.
-    `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
+    `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs); `cards`
+    (--card) makes it a lease of exactly those cards, and `timed` (--timed) a timed one.
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
@@ -2314,6 +2321,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if gpus and not knows_gpus(tool_pkg):
             raise Refused(f"--gpus: the research package in {source} predates it, so the machine would run the workload outside the "
                           f"GPU lease.  Rebase onto a main that has it, or wrap the command in `gpu-lease {gpus} --wait --`")
+        for flag, given, word in (("--card", cards, 'req.get("cards")'), ("--timed", timed and gpus, 'req.get("timed")')):
+            if given and not knows_gpus(tool_pkg, word):
+                raise Refused(f"{flag}: the research package in {source} predates it, so the machine's gpu-lease would not "
+                              f"be told.  Merge a tree that has it")
         cwd_clone = clone.sub(flag_value(harness_args, "--cwd")) is not None
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
@@ -2322,6 +2333,13 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
 
         if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
             raise Refused(why)
+        if (named := slot_only.named_slot(command)) is not None:
+            listed = ssh_run(ssh, ["cat", named[0]])
+            if listed.returncode not in (0, 1):
+                raise Refused(f"--slot {named[1]}: {machine_name}'s {named[0]} could not be read to find the slot (exit "
+                              f"{listed.returncode}); launch again")
+            if why := slot_only.slot_refusal(command, listed.stdout.decode(errors="replace") if listed.returncode == 0 else None):
+                raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         if (own := slot_only.node_copy(command)) is not None:
             # a run in a pool's line: by the machine's own slot.py where it has one, so the line's waiters share one copy's rules
@@ -2389,6 +2407,8 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"job_user": job_user} if job_user else {}),
                    **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
+                   **({"cards": list(cards)} if cards else {}),
+                   **({"timed": True} if timed else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    **({"auto": auto} if auto else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",

@@ -38,7 +38,7 @@ from verity.commitments.randomness import uniform_from_words
 
 from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
                          WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
-                         record_many, trusted_session_of, withheld_on)
+                         record_many, trusted_session_of, withheld_on, Entry, released_after)
 from verity.protocols.proofs.spot.verifier.one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -292,14 +292,14 @@ FAMILY_ROOT = ("the challenger's log shows a coin of the draw's family released 
 
 
 def challenger_stream(commitment: LiveCommitment, segment: Any, after: bytes,
-                      roots: Sequence[bytes] | None = None) -> bytes:
+                      log: Sequence[Entry] | None = None) -> bytes:
     """The verifier's replay of a sample's coins from the record (`Segment.to_json`): the concatenation of the openings'
     coins, each checked against the challenger's commitment as the family's coin `start + i`, opened after `after`, the
-    prover's commitment the verifier holds (its docket's digest). With `roots`, the family's roots in order as the
-    challenger's signed release log shows it received them (`remote.trusted_session`), every root is `after`
-    (`FAMILY_ROOT`: a family's coins follow one commitment, so a prover that read a sample and committed again in the
-    family is refused) and the openings are exactly the coins the family released, from its first, so the prover picked
-    none of them and `start` is 0. Raises `CoinError`."""
+    prover's commitment the verifier holds (its docket's digest). With `log`, the challenger's signed release log
+    (`remote.trusted_session`), every root of the family it shows is `after` (`FAMILY_ROOT`: a family's coins follow one
+    commitment, so a prover that read a sample and committed again in the family is refused) and the openings are
+    exactly the coins it shows the family released after it, by index (`released_after`), so the prover dropped none of
+    them. Raises `CoinError`."""
     if not isinstance(segment, Mapping) or sorted(segment) != ["after", "label", "openings", "start"]:
         raise CoinError(SEGMENT_FORM)
     label, start, openings = segment["label"], segment["start"], segment["openings"]
@@ -314,22 +314,21 @@ def challenger_stream(commitment: LiveCommitment, segment: Any, after: bytes,
         if why is not None:
             raise CoinError(f"the draw's {label} coin {start + i}: {why}")
         out += o.coin
-    if roots is not None:
-        if any(r != bytes(after) for r in roots):
+    if log is not None:
+        if any(e.root != bytes(after) for e in log if e.label == label):
             raise CoinError(FAMILY_ROOT)
-        after_it = [i for i, r in enumerate(roots) if r == bytes(after)]
-        if after_it != list(range(start, start + len(openings))):
+        if released_after(log, label, after) != list(range(start, start + len(openings))):
             raise CoinError(f"the draw's {label} coins are not the ones the challenger's log shows released after the "
                             "prover's commitment")
     return bytes(out)
 
 
 def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: bytes,
-                roots: Sequence[bytes] | None = None) -> str | None:
+                log: Sequence[Entry] | None = None) -> str | None:
     """Why `read`, the bytes a sample read (`service.Stream.select`'s, which the Lean's `Select.select` replays), is not
     the start of the sample's coins (`challenger_stream`) using every coin opened; None when it is."""
     try:
-        stream = challenger_stream(commitment, segment, after, roots)
+        stream = challenger_stream(commitment, segment, after, log)
     except CoinError as e:
         return str(e)
     return start_reason(stream, read)
@@ -358,14 +357,14 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     sample's coins through it (`OneStage.coinsOf`). Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
-    commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
-                                           coins["session"], verify)
+    commitment, log = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], coins["main"],
+                                         coins["session"], verify)
     if not withheld_on(coins["ledger"], window):
         raise CoinError(WITHHELD)
     segment = coins["segment"]
     if not (isinstance(segment, Mapping) and segment.get("label") == label):
         raise CoinError(f"the draw's coins are not the challenger's {label} family's")
-    return challenger_stream(commitment, segment, after, roots.get(label, ()))
+    return challenger_stream(commitment, segment, after, log)
 
 
 COINS_MAIN = ("the copy of main's first-parent history a draw's coin evidence carries is not the verifier's own, commit "

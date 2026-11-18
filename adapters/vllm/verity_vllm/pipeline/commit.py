@@ -91,6 +91,15 @@ if TYPE_CHECKING:
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
+def run_bound(run: str, began: bool) -> None:
+    """The instrumented run ``run``'s bound on the exchange: `RunBegan` at the step it begins at, `RunEnded` at its last."""
+    from verity import hooks as H
+    from verity_vllm import messages
+    ex = messages.current()
+    if ex.wants("steps"):
+        ex.emit(H.RunBegan(run, ex.next_step) if began else H.RunEnded(run, ex.step))
+
+
 def _rid_of(order: dict, rid) -> str:
     """The engine's per-step row id -> the workload's `r<i>`: vLLM may suffix the id we passed to add_request with `-<8 hex>`
     (verity_vllm.engine.engine_driver.external_id strips it); an id the workload does not name is returned raw (named downstream)."""
@@ -950,7 +959,7 @@ class Options:
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_node: str | None = option("--remote-node", default=None, metavar="HOST", help="the session's node, the id the verifier registers the store under (against a verifier holding a Site, this machine's host id there); default verity-vllm/<hostname>")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.poub.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity.protocols.resource_accounting.memory.poub.prover.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
@@ -1292,7 +1301,10 @@ def main(args: Options) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
+            run = None if arm == "control" else f"pair{pair}.{arm}"
+            run is not None and run_bound(run, began=True)
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
+            run is not None and run_bound(run, began=False)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":

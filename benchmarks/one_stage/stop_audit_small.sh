@@ -16,6 +16,7 @@
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS="--serve NONCE"
 #   passes stop_audit_small.py serve more; SMALL_AUDIT="--zk-server PATH" passes stop_audit.py more
 set -euo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
@@ -82,13 +83,13 @@ audit unlogged first "$W/unlogged.json" "$CLASS"
 audit unaccepted first "$S1" "$CLASS" --boundary-outcome "$W/unaccepted.json"
 audit incomplete first "$S1" "$CLASS" --boundary-outcome "$W/incomplete.json"
 
-RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name '*-private.bin' ! -name index.json ! -name index-salt.bin
-         ! -name salts.bin ! -path '*/archive/*' ! -path './prover/*' ! -path '*/challenger/*' ! -path '*/challenger-host/*'
+RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name index.json
+         ! -path '*/archive/*' ! -path './prover/*' ! -path '*/challenger/*' ! -path '*/challenger-host/*'
          -size -64M)
 for d in first first-wrong accept length unlogged unaccepted incomplete; do
   [ -d "$W/$d" ] || continue
   mkdir -p "$O/$d"
-  (cd "$W/$d" && find . "${RECORDS[@]}" -print0 | xargs -0 -r -I{} cp --parents {} "$O/$d/")
+  (cd "$W/$d" && find . "${RECORDS[@]}" -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$O/$d/")
 done
 cp "$W/unlogged.json" "$W/unaccepted.json" "$W/incomplete.json" "$O/"
 "${PY[@]}" benchmarks/one_stage/stop_audit_small.py expect "$W" | tee "$O/expect.txt"

@@ -1,5 +1,5 @@
 """The attested tick (``--admit tick``) in the replay and in advice v1. The serving side's gate
-(`verity_vllm.pipeline.serve_admit.TickGate`, through its `install`) in front of the replay's vLLM scheduler, served in
+(`verity_vllm.pipeline.serve_admit.TickGate`, a hold of the admission hook, `verity_vllm.engine.admission`) in front of the replay's vLLM scheduler, served in
 simulated physical time with wall-clock jitter, schedules exactly the batches `replay.replay(tick=...)` computes from the
 attested release buckets alone, under sync and async scheduling, and the same jitter without the gate changes them. v1
 registered with the tick sends no decision, no order entry and no hit, which the replay's block pool gives, so every
@@ -23,7 +23,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.pipeline import serve_admit as sa
+from verity_vllm import messages
+from verity_vllm.engine import admission
+from verity.protocols.resource_accounting.network.prover import admission as na
 
 HERE = (Path(__file__).resolve().parents[4] / "benchmarks" / "network_e2e" / "encodings")
 
@@ -77,7 +79,7 @@ def buckets(times: list[float]) -> list[int]:
 
 
 class Scheduler:
-    """The replay's scheduler (`replay.Scheduler`) as `serve_admit.install` and `TickGate` read vLLM's V1 one: its FCFS
+    """The replay's scheduler (`replay.Scheduler`) as the admission hook reads vLLM's V1 one: its FCFS
     queues and finished ids, ``add_request``, and ``schedule``, whose output counts the step's tokens. It keeps the steps
     that ran a row and the step count each request was added at."""
 
@@ -114,6 +116,9 @@ class Scheduler:
             self.steps.append(step)
         return SimpleNamespace(step=step, samples=samples, total_num_scheduled_tokens=sum(n for _, _, n in step.rows))
 
+    def update_from_output(self, scheduler_output, model_runner_output) -> dict:
+        return {}
+
     def finish_requests(self, ids, status) -> None:
         raise AssertionError("the plan aborts nothing")
 
@@ -142,9 +147,11 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     now = [0.0]
     s = R.Scheduler(e, [ios[i] for i in kept])
     sched = Scheduler(s)
-    gate = sa.TickGate(sa.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
+    gate = na.TickGate(na.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
     if gated:
-        sa.install(sched, gate, key=lambda rid: rid)
+        ex = messages.Exchange()
+        gate.attach(ex)
+    hook = admission.install(sched, ex, key=lambda rid: rid) if gated else None
     events: list = []
     for i, t in enumerate(times):
         sent = [(t + rng.uniform(0, 0.02), "release"), (t + rng.uniform(0.02, 0.25), "request")]
@@ -174,7 +181,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] =
     def top() -> bool:
         while True:
             deliver()
-            ok = not gated or gate.ready(sched)
+            ok = hook is None or hook.ready()
             if ok and (s.has_requests() or queue):
                 return True
             if not events:
@@ -491,14 +498,14 @@ def test_what_the_tick_refuses():
     for bad in (0, -1, 1.5, True):
         with pytest.raises(ValueError, match="positive integer"):
             R.Tick(bad, 1, 1)
-    assert dataclasses.asdict(tk) == sa.Tick(*TICK).record()
-    assert [tk.close(b) for b in range(4)] == [sa.Tick(*TICK).close(b) for b in range(4)]
+    assert dataclasses.asdict(tk) == na.Tick(*TICK).record()
+    assert [tk.close(b) for b in range(4)] == [na.Tick(*TICK).close(b) for b in range(4)]
     for caps in (V.CAPS, *(dataclasses.replace(V.TICK_CAPS, **{c: 1}) for c in ("arrived", "hits", "resumes", "order",
                                                                                    "lag"))):
         with pytest.raises(V.AdviceCodeError, match="arrived, hits, resumes, order and lag are 0"):
             V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(caps))
     with pytest.raises(V.AdviceCodeError, match="replay.Tick"):
-        V.Registered(e, (EOS,), tick=sa.Tick(*TICK))
+        V.Registered(e, (EOS,), tick=na.Tick(*TICK))
     V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.TICK_CAPS))
     _, rec, adv, reg = tick_case(False)
     q0, last = rec.requests[0], max(q.end for q in rec.requests) + 1

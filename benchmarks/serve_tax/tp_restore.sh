@@ -16,7 +16,8 @@
 # if the minutes used so far and the last arm's fit in BUDGET_MIN (OUT/arms.txt says which ran). PERMUTE=1 restores again
 # with the GPUs in reverse order into OUT/ARM/restore-permuted; RESTORE=0 restores nothing. The first DUMP edges' blocks
 # (tens of GB at TP8; NUM_GPU_BLOCKS caps the pool) go to a scratch directory outside the run's, removed at the end
-# unless KEEP=1. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
+# unless KEEP=1. PRIVATE, a directory outside every run's, keeps each arm's step trace and step outputs on the node
+# (PRIVATE/ARM/serve/server/), which hold request values. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
 # (PY and HERE, this directory, set), logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has
 # it, or under `research run --gpus N` by the run's own lease. VENV's vLLM must be d9105ea80, the integration's pin.
 # MODEL_ID=moonlight (8,192 tokens of context: LONG_TOKENS=4096,7680 MAX_MODEL_LEN=8192) is a smoke of the same path
@@ -50,11 +51,11 @@ DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
 export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
-# DeepGEMM and FlashInfer JIT-compile with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one.
+# DeepGEMM and FlashInfer JIT-compile with CUDA_HOME's nvcc.
 # vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH; FLASHINFER=1 (the default, as a serving
 # install with a CUDA toolkit has it) puts the nvcc on PATH: FlashInfer's sampler, autotune and fused all-reduce + RMSNorm.
 # FLASHINFER=0 leaves it off, and its sampler too.
-CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
+CUDA_HOME="${CUDA_HOME:?CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}"
 export CUDA_HOME
 # FlashInfer's JIT finds CUDA_HOME's headers and libraries itself: an inherited CPATH or LIBRARY_PATH could mix toolkits
 unset CPATH LIBRARY_PATH
@@ -107,7 +108,7 @@ if [ "${1:-}" = leased ]; then
       --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" \
       ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} ${KV_CACHE_DTYPE:+--kv-cache-dtype "$KV_CACHE_DTYPE"} \
       ${SAVER:+--saver "$SAVER"} --dump "$DUMP" \
-      ${NUM_GPU_BLOCKS:+--num-gpu-blocks "$NUM_GPU_BLOCKS"} --out "$OUT/$arm/serve" --scratch "$SCRATCH/$arm/serve" \
+      ${NUM_GPU_BLOCKS:+--num-gpu-blocks "$NUM_GPU_BLOCKS"} --private "$PRIVATE/$arm/serve" --out "$OUT/$arm/serve" --scratch "$SCRATCH/$arm/serve" \
       || { echo "== $arm serve failed $(date -u +%FT%TZ)" | tee -a "$OUT/arms.txt"; exit 1; }
     restores=(); [ "$RESTORE" = 1 ] && restores=(restore ${PERMUTE:+restore-permuted})
     for r in "${restores[@]}"; do
@@ -136,6 +137,7 @@ if [ "${1:-}" = leased ]; then
   exit $rc
 fi
 
+[ -n "${PRIVATE:-}" ] || { echo "tp-restore: PRIVATE: a directory outside every run's, where the step trace and the step outputs stay on the node"; exit 2; }
 [ -n "$PLAN_FILE" ] || "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" \
   --rates "load=$RATE" --span-s "$SPAN_S" --docs "$DOCS" --out "$PLAN" || exit 1
 root=/workspace/research/scratch; [ -d "$root" ] || root=${TMPDIR:-/tmp}
@@ -162,7 +164,7 @@ else
     bash "$here/tp_restore.sh" leased; rc=$?
   fi
 fi
-gzip -f "$OUT"/*/serve/server/step_trace.*.jsonl "$OUT"/*/serve/edges/outputs.jsonl 2>/dev/null
+gzip -f "$PRIVATE"/*/serve/server/step_trace.*.jsonl 2>/dev/null
 du -sh "$SCRATCH" 2>/dev/null
 [ "${KEEP:-0}" = 1 ] || rm -rf "$SCRATCH"
 echo "tp-restore: done rc=$rc $(date -u +%FT%TZ); GPU memory used (MiB): $(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | paste -sd,)"

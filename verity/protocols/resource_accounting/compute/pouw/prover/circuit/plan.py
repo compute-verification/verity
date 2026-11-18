@@ -115,7 +115,7 @@ def check_work_strata(strata: Sequence[StratumSpec]) -> None:
 
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
     """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: incorrect proof blocks doing a fraction ε of the work escape the
-    work sampling design's sample with at most (1 − ε)^K (`FlockSoundness.Audit.Work.work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713;
+    work sampling design's sample with at most (1 − ε)^K (`Spot.Sampling.Work.work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713;
     27,712 misses (`record_sizing`, `record_sizing_one_fewer`). That ε at δ is the default point the profile reports at, not a
     policy parameter: PoUW has none."""
     eps, dlt = Fraction(epsilon), Fraction(delta)
@@ -187,7 +187,7 @@ def window_sampling_designs(layouts: Sequence[Layout], k: int = RECORD_K, floors
     and a y-bad wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y,
     not their sum. The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are
     pinned (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
-    `audit_executionPhase_split_of_record` (`security/Proofs/Flock/Soundness/Audit/Window.lean`), which takes each call's work
+    `audit_executionPhase_split_of_record` (`security/Proofs/Spot/Sampling/Window.lean`), which takes each call's work
     in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`). It
     also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution
     phase with either empty is refused here, so none is ever sampled or accepted."""

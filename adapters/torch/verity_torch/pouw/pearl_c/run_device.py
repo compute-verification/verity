@@ -9,7 +9,7 @@ phase, over buffers the caller may own); a unit's keys are the scheme's (`pearl_
 build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on
 torch's current stream, in the device's primary context:
 
-* **The trees** are -h3's (`SCHEMES`): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
+* **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
   over a row's SHA-512 row digest, salted by the prover's hm96 salt key (the install's, `weight_roots`' and the run's
   ``salt_key``, which a retained manifest records for the reference verifier).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
@@ -67,12 +67,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c as C
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import (
     Workload,
     rows_domain,
     weight_binding,
 )
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import names as kernel_names
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.resource_accounting.compute.pouw.verifier.serving import (
     SERIAL,
@@ -92,10 +94,8 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c im
     JOB_STEPS,
     LEAF_CAPACITY,
     ROW_ALIGN,
-    SCHEMES,
     WEIGHT_BUFFERS,
     refusals,
-    scheme_of,
 )
 from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 from verity_torch.pouw.pearl_c.graphs import (
@@ -178,12 +178,12 @@ class _Shape:
         return self.keys if name == "keys" else self.b[name]
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
+def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = kernel_names("pearl-c")[0], salt_key: bytes | None = None) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  The trees' hm96
     salts are the prover's, from `salt_key` (the install's, which its run is given too)."""
     import torch
-    s = scheme_of(scheme)
+    s = pouw_schemes.get(scheme)
     variant, hash = s.device.name, hash_format(s).tree_hash
     R, out = kernel.run, {}
     nb = R.NB

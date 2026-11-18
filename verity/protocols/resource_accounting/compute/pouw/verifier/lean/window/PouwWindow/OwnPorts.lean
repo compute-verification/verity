@@ -68,13 +68,13 @@ def readFull (T : Tile) (k : Option Nat) : Array String :=
 def portEq (p q : Flock.Registered.Port) : Bool :=
   p.name == q.name && p.value == q.value && p.root.data == q.root.data && p.leaves == q.leaves && p.words == q.words &&
     p.wordBits == q.wordBits && p.domain.data == q.domain.data && p.readsRel == q.readsRel && p.schema == q.schema &&
-    p.readsFrom == q.readsFrom
+    p.readsFrom == q.readsFrom && p.tree == q.tree
 
 theorem eq_of_portEq {p q : Flock.Registered.Port} (h : portEq p q = true) : p = q := by
-  obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s, f⟩ := p
-  obtain ⟨n', v', ⟨r'⟩, l', w', b', ⟨d'⟩, rd', s', f'⟩ := q
+  obtain ⟨n, v, ⟨r⟩, l, w, b, ⟨d⟩, rd, s, f, wi⟩ := p
+  obtain ⟨n', v', ⟨r'⟩, l', w', b', ⟨d'⟩, rd', s', f', wi'⟩ := q
   simp only [portEq, Bool.and_eq_true, beq_iff_eq] at h
-  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨rfl, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨rfl, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩, rfl⟩ := h
   rfl
 
 /-- `own` holds the port `p`: its first port of `p`'s name is `p`. -/

@@ -60,7 +60,7 @@ HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[2] / "verity" / "protocols" / "resource_accounting" / "compute" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
-#: the served scheme the arm runs: `verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c.SCHEMES`' H100 record, the kernel's
+#: the served scheme the arm runs: the kernel scheme Pearl+ runs on the H100 (`kernel_schemes.resolve`), the kernel's
 SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
@@ -89,7 +89,8 @@ DELTA = Fraction(1, 100)
 def verifier() -> dict:
     """The build record's ``verifier`` (`arm.check_verifier`): Pearl+'s verdict on each shape's retained pass alone, the
     Lean's. First the Python twin (`served_passes.py verify --manifest`) judges the pass under the coins `dump` writes
-    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record there; its
+    beside it, at `DRAWS` samples on the node's sample, and writes its document and the verifier's coin record into the
+    shape's ``{verdicts}`` (the run's ``verdicts/``; the pass stays in the private passes directory); its
     line names no transcript, so the harness never reads it as a verdict, and a twin that rejects ends the shape's commands
     unaccepted. Then the Lean step (`served_passes.py lean`, PouwCheck.PearlPlus's ``pouw-pearlplus`` built in the tree)
     judges the same pass, coins, samples and coin record, held to the twin's verdict: only its line starts ``ACCEPT`` or
@@ -99,10 +100,10 @@ def verifier() -> dict:
     return {"name": "served_passes.py lean: Pearl+'s verdict in Lean (PouwVerifier.PearlPlus) on a retained Pearl-C pass, "
                     "held to its Python twin", "per": "shape",
             "transcript": "transcripts/{arm}/{shape}/manifest.json", "control": "negative/{arm}/{shape}/manifest.json",
-            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{dir}/coin.json",
-                          "--out", "{dir}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
-                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{dir}/pearlplus-verify.json",
-                          "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]]}
+            "commands": [["{python}", SERVED_PASSES, "verify", *pass_, "--coin-record", "{verdicts}/coin.json",
+                          "--out", "{verdicts}/pearlplus-verify.json", "--draws", str(DRAWS), "--commit", "{commit}"],
+                         ["{python}", SERVED_PASSES, "lean", *pass_, "--verify", "{verdicts}/pearlplus-verify.json",
+                          "--exe", "build", "--out", "{verdicts}/pearlplus-lean.json"]]}
 
 
 def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
@@ -230,9 +231,9 @@ class PearlPlus:
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
         from arm import Work
         from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
 
-        s, m = PPD.scheme_of(SERVED), m16(shape.m)
+        s, m = pouw_schemes.get(SERVED), m16(shape.m)
         unit = Unit(m, shape.k, shape.n)
         return Work(tensor_macs={FAMILY: m * shape.k * shape.n}, w_ref=str(s.wref(unit)), credited=str(s.credit_of(unit)),
                     unit=UNIT, hashed_bytes={"a_rows": 4 * m * shape.k, "tile_leaves": 8 * m * shape.n,
@@ -319,16 +320,17 @@ class _Held:
         from verity.protocols.resource_accounting.compute.pouw.verifier.audit import weights_root
         from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes
         from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
-        salt_key = PPD.new_salt_key(SERVED)
+        salt_key = PPD.no_salt_key(SERVED)
         roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
         ch = Challenger(EPOCH, PV.coins)
-        self.run = PPDR.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
+        self.run = PPDR.PearlCDeviceRun(pouw_schemes.get(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
                                        ch.open("salt", weights_root(roots)), capacity=tiles_of(shape.m, shape.n),
                                        flag_rows=m16(shape.m), salt_key=salt_key)
         R, wt = kernel.run, self.run.weights[0]
@@ -398,7 +400,7 @@ class _YTree:
         def widened(r: int, count: int) -> int:
             R.widen_a(dev, y + 2 * n * r, words, count, count, n, pdl=False)
             return words
-        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.salts, widened)
+        self.launches(R, self.p, tree, dig, seg, self.m, self.rows, self.index, widened, self.salts)
 
 
 class _Call:

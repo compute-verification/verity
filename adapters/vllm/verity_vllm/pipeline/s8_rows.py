@@ -1,5 +1,5 @@
-"""A ``ScaledMmS8Coordinate`` template's chunks (`serving_rows`' ``s8`` layout): coordinate ``c`` of a ``ScaledMmS8_v1`` row
-(token row ``x`` with scale ``sx``, weight rows ``W`` with scales ``sw``) is ``x`` = the codes' bytes then ``sx``'s, ``w`` =
+"""A ``ScaledMmS8Coordinate`` template's chunks (`serving_rows`' ``s8`` layout): coordinate ``c`` of a ``ScaledMmS8_v3`` row
+(token row ``x`` with scale ``sx``, weight rows ``W`` with scales ``sw``, both read as their registered u16 words) is ``x`` = the codes' bytes then ``sx``'s, ``w`` =
 ``W[c]``'s bytes then ``sw[c]``'s (u16 little-endian words, as A6 stages them), ``o0`` = ``y[c]``; units go row by row, then
 coordinate.  A linked chunk (the row-table layout, `serving_rows.with_row_tables`) reads its ``x`` table, the distinct token
 rows its units read, and refs: unit ``i`` reads ``x`` row ``ref`` and its own ``w`` row; `one_table_chunks` cuts a template's
@@ -46,6 +46,15 @@ def _as(a: np.ndarray, itemsize: int, n: int, what: str) -> np.ndarray:
     return a.view(np.dtype(f"<u{itemsize}") if itemsize > 1 else np.uint8)
 
 
+def _bytes(a: np.ndarray, n: int, what: str) -> np.ndarray:
+    """``a``'s elements' little-endian bytes, ``n`` of them."""
+    a = np.ascontiguousarray(np.asarray(a).reshape(-1))
+    b = np.ascontiguousarray(a, a.dtype.newbyteorder("<")).view(np.uint8)
+    if b.size != n:
+        raise ValueError(f"{what}: {a.size} {a.dtype} elements, not {n} bytes")
+    return b
+
+
 def read(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
          operand: Callable) -> list[tuple[dict[str, Any], list[list[Any]]]]:
     """The chunks ``ms`` of one template (module docstring), each argument group read by ``operand`` (`serving_rows._operand`).
@@ -59,9 +68,9 @@ def read(ms: Sequence[CS.Member], rows: list[Row], store: Any, weights: Callable
         sx = _as(operand(pi, store, weights, rid, arrive, r["args"][1]), 4, 1, f"row {r['i']} sx")
         key = json.dumps([r["args"][2], r["args"][3]])
         if key not in wcache:
-            W = _as(operand(pi, store, weights, rid, arrive, r["args"][2]), 1, N * K, f"row {r['i']} w").reshape(N, K)
-            sw = _as(operand(pi, store, weights, rid, arrive, r["args"][3]), 4, N, f"row {r['i']} sw")
-            wcache[key] = np.ascontiguousarray(np.concatenate([W, sw.astype("<u4").view(np.uint8).reshape(N, 4)], axis=1)).view("<u2")
+            W = _bytes(operand(pi, store, weights, rid, arrive, r["args"][2]), N * K, f"row {r['i']} w").reshape(N, K)
+            sw = _bytes(operand(pi, store, weights, rid, arrive, r["args"][3]), 4 * N, f"row {r['i']} sw").reshape(N, 4)
+            wcache[key] = np.ascontiguousarray(np.concatenate([W, sw], axis=1)).view("<u2")
         xrow = np.frombuffer(x.tobytes() + sx.astype("<u4").tobytes(), dtype="<u2")
         (member, width, _dt), = d["members"]
         y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))

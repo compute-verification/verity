@@ -858,11 +858,13 @@ class Pipeline:
         else:
             d.launch(f"pd_tiles_{v}", self.tiles, 32, p=p, i=(mr, n))
 
-    def hm_level0(self, tag: str, x: int, count: int, dom: str) -> None:
-        """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves over them and the tree's salts
-        (`salts`), then s512_frame_leaves in place."""
+    def hm_level0(self, tag: str, x: int, count: int, dom: str, salts: int | None = None) -> None:
+        """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves over them and their salts, then
+        s512_frame_leaves in place.  The salts are the `count` leaves' at device address `salts` (a tree written into the
+        pipeline's buffer that is not the pipeline's own tree: a call's y), else the tree's own (`Pipeline.salts`)."""
         d, tree, kk = self.dev, self.b[f"tree_{tag}"], self.keys
-        d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, Pipeline.salts(self, tag), kk["hm"]), i=(count,))
+        at = Pipeline.salts(self, tag) if salts is None else salts
+        d.launch("hm_leaves", cdiv(count, 64), 64, p=(x, tree, at, kk["hm"]), i=(count,))
         d.launch("s512_frame_leaves", cdiv(count, 64), 64, p=(tree, kk[dom]), i=(0, count))
 
     def tree_leaves(self, tag: str, values: int, count: int, dom: str) -> None:

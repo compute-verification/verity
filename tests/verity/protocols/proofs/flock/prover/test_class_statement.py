@@ -5,7 +5,6 @@ gather's table, broadcast across its Call's members), and, when ``FLOCK_CIRCUIT`
 loopback session accepts each, on the coins ``FC_COINS`` names."""
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import os
@@ -54,7 +53,7 @@ def test_table_free_classes_compose_and_prove(units, tmp_path: Path):
     for i, (s, cl) in enumerate([*picked, gather]):
         lanes = CS.class_lanes(units, cl, key, 8, shared)
         d = tmp_path / s[:16]
-        st = CS.stage(units, "q-word", s, cl, lanes, d, hashlib.sha256(b"test").digest())
+        st = CS.stage(units, "q-word", s, cl, lanes, d)
         text = (d / "circuit.txt").read_text()
         assert st["n"] == 8 and st["k_log"] <= FC.K_MAX and st["circuit_sha512"] == FC.digest(text)
         assert '"rule":"verity/partition/v1"' in text                      # the Q_word partition's own digest, not a provisional cover
@@ -132,7 +131,7 @@ def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(
     assert low.definition.port_words == tuple(CS._pad(sum(w) // 16, CS.BLOCK_WORDS) for w in widths)
 
     ins, want, _ids = CS.class_lanes(units, cl, PU.derive(PU.SOURCE, PU.DOMAIN, {"program": "test", "seed": 0}), 4, CS.broadcast_params(units))
-    st = CS.stage(units, "q-word", s, cl, (ins, want), tmp_path, hashlib.sha256(b"test").digest(), packed=True)
+    st = CS.stage(units, "q-word", s, cl, (ins, want), tmp_path, packed=True)
     assert st["packed"] is True and st["ports"] == list(low.definition.port_words)
     _rows, _outs, per_port = CS.pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, True)
     for i, (g, w) in enumerate(zip(groups, widths)):
@@ -249,13 +248,13 @@ def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_templ
 
     units, s, cl, act, uc, _groups = _fp_class("e4m3", 128)
     assert uc.computing == act.graph.n
-    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
+    lanes = _lanes(units, cl)
     meta = lambda d: json.loads((tmp_path / d / "circuit.txt").read_text().split("\n", 2)[1][5:])  # noqa: E731
-    named = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "named", key)
+    named = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "named")
     assert meta("named")["program_digests"] == {descriptor_id(act.fn): program_digest(Program(act.fn))}
     shims = CS._shims
     monkeypatch.setattr(CS, "_shims", lambda name, content, ports=1, definition=None: shims(name, content, ports))
-    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key)
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own")
     (template,) = meta("own")["program_digests"]
     assert template.startswith("unit-class/") and meta("own")["program_sha512"] == meta("named")["program_sha512"]
     assert own["class_sha512"] == named["class_sha512"] and own["circuit_sha512"] != named["circuit_sha512"]
@@ -266,9 +265,9 @@ def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under
     ``ProvedScope.sharedRowsOk`` covers without registered reads), every instance's rows its own, one per port, so the prover's
     file is the shared one's with every table as long as the instances (a wired class's: `test_wired_links`)."""
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
-    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
-    shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared", key)
-    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", key, share_rows=False)
+    lanes = _lanes(units, cl)
+    shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared")
+    own = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "own", share_rows=False)
     head = lambda d, f: json.loads((tmp_path / d / f"{f}-{own['n']}.bin").read_bytes().split(b"\n", 1)[0])  # noqa: E731
     assert own["circuit_sha512"] == shared["circuit_sha512"] and own["shared_rows"] is None
     assert "shared_rows" in head("shared", "pub") and "shared_rows" in head("shared", "inst")
@@ -303,15 +302,15 @@ def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_
     from verity.commitments.rowleaf import bit_row, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
-    lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
-    st = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "core", key, core_rows=True)
+    lanes = _lanes(units, cl)
+    st = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "core", core_rows=True)
     schemas = [["hm96-sha512/row/v2", 1024]] * 3
     assert st["packed"] is True and st["row_schemas"] == schemas and st["ports"] == [64, 64]
     meta = json.loads((tmp_path / "core" / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert "row_schema" not in meta and meta["row_schemas"] == schemas
     assert [r["prefix"] for r in meta["rows"]] == [sha512_row_v2_prefix(1024).hex()] * 3
     assert [p.bits for p in FC._meta_ports(meta)] == [1024] * 3
-    others = {CS.stage(units, "q-word", s, cl, lanes, tmp_path / fr, key, packed=fr == "packed")["circuit_sha512"] for fr in ("plain", "packed")}
+    others = {CS.stage(units, "q-word", s, cl, lanes, tmp_path / fr, packed=fr == "packed")["circuit_sha512"] for fr in ("plain", "packed")}
     assert len(others) == 2 and st["circuit_sha512"] not in others
 
     inst = hm96.SHA512
@@ -352,13 +351,13 @@ def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_no
     from verity_flock import sha512_circuit as S
 
     units, s, cl, act, uc, groups = _fp_class("nvf4", 256)
-    st = CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k256", b"k" * 32, core_rows=True)
+    st = CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k256", core_rows=True)
     assert st["row_schemas"] == [["hm96-sha512/row/v2", 1152]] * 2 + [["hm96-sha512/row/v2", 1024]] and st["ports"] == [72, 72]
     meta = json.loads((tmp_path / "k256" / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert [c for _p, _w, c in meta["ports"]] == [1, 1, 1]
     assert [r["pad"] for r in meta["rows"]] == [S.pad_tail(128 + 144).hex()] * 2 + [S.pad_tail(128 + 128).hex()]
     units, s, cl, act, uc, groups = _fp_class("nvf4", 128)
-    CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k128", b"k" * 32, core_rows=True)
+    CS.stage(units, "q-word", s, cl, _lanes(units, cl), tmp_path / "k128", core_rows=True)
     meta = json.loads((tmp_path / "k128" / "circuit.txt").read_text().split("\n", 2)[1][5:])
     assert [c for _p, _w, c in meta["ports"]] == [0, 0, 1]
     merged, _joins, bits = CS.element_rows(act, uc, groups)
@@ -383,7 +382,7 @@ def test_core_rows_stage_partial_blocks_and_refuse_tiles_and_sources_that_are_no
         FC._commit_strings([FC._port("p0", 64, 1009)], {"p0": np.full((1, 64), 1 << 1, np.uint16)}, {"p0": [bytes(192)]})
     monkeypatch.setattr(CS, "CORE_ROWS", True)
     with pytest.raises(ValueError, match="FLOCK_CORE_ROWS"):
-        CS.stage_tiled(units, "q-word", s, cl, (), tmp_path, b"", 4, 4, 1)
+        CS.stage_tiled(units, "q-word", s, cl, (), tmp_path, 4, 4, 1)
 
 
 def _frame_prefixes(dtype: str, K: int) -> tuple[dict, list]:

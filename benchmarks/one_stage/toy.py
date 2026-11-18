@@ -12,15 +12,14 @@ proves them (`audit.py`).
   replay block's query, its ``ingress`` and ``o0`` ports a row a span (`BOUNDARY_PORTS`), under fresh salts.
 * **The interior registration** (`interior_window`, `interior`): the replay sample S's Q·n_rho proof blocks, template-major,
   span S[i]'s j-th instance of template t at slot off_t + i·n_t + j (off_t = Q·Σ_{t'<t} n_t'), one member a template, under
-  the interior run (`interior_run`). Each internal edge is a wire (`rows.Member.wired`) with no tree of its own
-  (`Member.wired_trees`): a reader's row is its writer's output value, a leaf of the writer's tree under that row's salt,
-  so the interior commits each value once (`Binding.held`). Each span is replayed from its ingress, the boundary record's
+  the interior run (`interior_run`). Each internal edge is a wire (`rows.Member.wired`), which commits nothing: a reader's
+  row is a leaf of its writer template's output tree (`Binding.tree`), so the interior commits each value once. Each span is replayed from its ingress, the boundary record's
   row at S[i]. Every member is a shared-row member and every port of it a registered read
   (`verity.commitments.periods.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
-  its writer's port of the interior record, its table the writer's output rows (table row r at leaf r, as the header
-  names them) and unit i reading its writer unit's leaf; every other port at the interior record, unit i reading its own
+  its writer's tree in the interior record, its table the leaves its units read (`wiring.table`, as the header names
+  them) and unit i reading its writer unit's leaf; every other port at the interior record, unit i reading its own
   leaf i.
 * **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
 * **The auditor's params** (`references`), fixed before the run: each template's circuit file and its reference
@@ -48,7 +47,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.periods import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS, wiring as WI
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
 H = 1024
@@ -56,8 +55,17 @@ WORD = 16
 #: the toy's boundary run, and the tag the interior's run is taken under
 RUN = hashlib.sha512(b"verity/two-stage/toy/v1").hexdigest()
 RUN_TAG = b"verity/two-stage/toy/interior-run/v1\x00"
-#: the salts' key of each reference statement's stand-in rows, so the params are one file for every run of the design
-REFERENCE_KEY = hashlib.sha512(b"verity/two-stage/toy/reference/v1").digest()
+#: the public tag of each reference statement's stand-in rows' salts, so the params are one file for every run of the design
+REFERENCE_SALTS = b"verity/two-stage/toy/reference-salts/v1\0"
+
+
+def reference_salts(tag: bytes, k: int, st, m, tables: dict) -> dict[str, list[bytes]]:
+    """Member ``k``'s reference statement's salts, public, as its stager ``st`` takes them: one per table row of each port
+    (``m.n`` for a port with no table), SHA-512 of ``tag``, ``k``, the port, the row and ``j < 3``, 192 bytes a row."""
+    def salt(pre: bytes, i: int) -> bytes:
+        return b"".join(hashlib.sha512(pre + i.to_bytes(8, "big") + bytes([j])).digest() for j in range(3))
+    return {p.name: [salt(tag + k.to_bytes(4, "big") + p.name.encode() + b"\0", i)
+                     for i in range(len(tables[p.name]) if p.name in tables else m.n)] for p in st.ports}
 
 
 def _identity_signature(S):
@@ -200,11 +208,12 @@ def links(window: CS.Binding) -> list[dict[str, str]]:
     return [{"template": window.members[t].template, "port": p, "value": names[b]} for t, (p, b) in LINKS.items()]
 
 
-def boundary(u: np.ndarray, q: int, *, salt_key: bytes | None = None) -> CS.Committed:
-    """Serving's commitment of the spans ``u``: each span's ingress and egress under fresh salts (``salt_key``: tests only)."""
+def boundary(u: np.ndarray, q: int, *, salts_of: Mapping[str, bytes] | None = None) -> CS.Committed:
+    """Serving's commitment of the spans ``u``: each span's ingress and egress under fresh salts (``salts_of``: a test's,
+    `rows.commit`)."""
     win = boundary_window(len(u), q)
     return CS.commit(win, [{"rows": {"ingress": np.asarray(u, dtype=np.uint16)}, "outs": {"o0": replay(u)["egress"]}}],
-                     salt_key=salt_key)
+                     salts_of=salts_of)
 
 
 # --- the interior registration ----------------------------------------------------------------------------------------
@@ -220,26 +229,24 @@ def offsets(q: int) -> list[int]:
     return [q * sum(N_T[:t]) for t in range(len(TEMPLATES))]
 
 
-def wires(q: int) -> list[tuple[tuple[str, str, tuple[int, ...]], ...]]:
+def wires(q: int, ids: Sequence[str]) -> list[tuple[WI.Wired, ...]]:
     """Each member's wires for ``q`` spans: REPLAY's edges, each instance of a template in span i reading its writer's
-    (`WRITERS`) output row there."""
-    off = offsets(q)
-    return [() if w is None else ((LAYOUT[t][0][0][0], "o0", tuple(off[w] + i * N_T[w] for i in range(q)
-                                                                    for _ in range(N_T[t]))),)
+    (`WRITERS`) output row there, the writer template's unit ``i · n_w``."""
+    return [() if w is None else (WI.Wired(LAYOUT[t][0][0][0], ids[w], "o0", 0, (q, N_T[t]), 0, (N_T[w], 0)),)
             for t, w in enumerate(WRITERS)]
 
 
 def interior_window(boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None) -> CS.Binding:
     """The interior window of the replay sample ``sample`` after the boundary registration ``boundary_digest``: one member a
-    template, template-major, each wired port its writer's output value with no tree of its own (`rows.Binding.held`), its
-    table the writer's Q·n_w output rows; ``sampling_design`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
+    template, template-major, each wired port reading its writer template's output tree (`rows.Binding.tree`), its table
+    the Q leaves its units read; ``sampling_design`` the interior registration's (default: every unit, ``subset:Q·n_rho``)."""
     q = len(sample)
     program, query = CS.population_program([(t, q * n) for t, n in zip(TEMPLATES, N_T)])
     ids = [tid for tid, _, _ in P.ranges(program, query)]
     members = []
-    for tid, n_t, (rows, outs), wired, base, w in zip(ids, N_T, LAYOUT, wires(q), offsets(q), WRITERS):
-        table = q * (n_t if w is None else N_T[w])
-        members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired, wired_trees=False,
+    for tid, n_t, (rows, outs), wired, base, w in zip(ids, N_T, LAYOUT, wires(q, ids), offsets(q), WRITERS):
+        table = q * (n_t if w is None else 1)
+        members.append(CS.Member(tid, rows=rows, outs=outs, n=q * n_t, base=base, wired=wired,
                                  tables=tuple((p, table) for p, _ in rows), schemas=tuple((p, V2) for p, _ in rows + outs)))
     return CS.Binding(program, query, dict(sampling_design or {"law": "subset", "k": q * N_RHO}), interior_run(boundary_digest, sample),
                       tuple(members))
@@ -262,11 +269,11 @@ class Interior:
 
 
 def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], sampling_design: Mapping | None = None, *,
-             salt_key: bytes | None = None, replayed: np.ndarray | None = None) -> Interior:
+             salts_of: Mapping[str, bytes] | None = None, replayed: np.ndarray | None = None) -> Interior:
     """The proof server's interior of the replay sample ``sample``: each span replayed from its ingress, the boundary record's
     row (``bc``, the boundary's commitment), and committed, each link member's boundary port under the boundary's salts at the
     sample's leaves. ``replayed``: the ingress replayed instead, ``(Q, 2H/16)`` u16: a prover's whose link rows don't open the
-    boundary record (tests and refused runs)."""
+    boundary record (tests and refused runs). ``salts_of``: a test's salts for the rest (`rows.commit`)."""
     at = [int(s) for s in sample]
     win = interior_window(boundary_digest, at, sampling_design)
     names = boundary_ports(bc.window)
@@ -278,15 +285,14 @@ def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], samp
             {"rows": {"x": CS.WIRED}, "outs": {"o0": np.repeat(r["flip_b"], N_T[3], axis=0)}},
             {"rows": {"row": CS.WIRED}, "outs": {"o0": r["egress"]}}]
     for d, m in zip(data, win.members):
-        d["refs"] = np.array([win.held_leaves(m, p) for p, _ in m.rows], dtype=np.int64).T
-    salts_of = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
-    c = CS.commit(win, data, salt_key=salt_key, salts_of=salts_of)
+        d["refs"] = np.array([win.refs(m, p) for p, _ in m.rows], dtype=np.int64).T
+    links = {win.members[t].port(p): ports[win.members[t].key].salts_at(at) for t, (p, _b) in LINKS.items()}
+    c = CS.commit(win, data, salts_of={**(salts_of or {}), **links})
 
-    def whole(value: str) -> dict:
-        port = LK.Port.of(c, value)
-        return port.header(range(port.leaves))
+    def opened(m: CS.Member, p: str) -> dict:
+        return LK.Port.of(c, win.tree(m, p)).header(win.leaves(m, p).tolist())
 
-    registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else whole(win.held(m, p))
+    registered = {m.key: {p: ports[m.key].header(at) if p == link(t) else opened(m, p)
                           for p, _ in m.all_rows} for t, m in enumerate(win.members)}
     return Interior(win, c, ports, registered)
 
@@ -295,14 +301,14 @@ def reads(boundary_record: Mapping, interior_record: Mapping, window: CS.Binding
     """The verifier's own ``--registered`` file of each member (by member key), from the two registration records and the
     replay sample alone: a link port at the root, leaves and domain the boundary record names for its boundary port, unit
     off_t + i reading leaf S[i]; a wired port at its writer's port of the interior record, unit base + i reading its writer
-    unit's leaf; every other port at its own, unit base + i reading its own leaf i (`rows.Binding.held`)."""
+    unit's leaf; every other port at its own, unit base + i reading its own leaf i (`rows.Binding.tree`, `Binding.reads`)."""
     names = boundary_ports(boundary_window(int(boundary_record["population"]), len(sample)))
     out = {}
     for t, m in enumerate(window.members):
         out[m.key] = LK.reads_file({
             p: LK.reads(boundary_record, names[LINKS[t][1]], words, m.schema(p), sample, m.base, registered=REG)
             if p == link(t) else
-            LK.reads(interior_record, window.held(m, p), words, m.schema(p), window.held_leaves(m, p), m.base,
+            LK.reads(interior_record, window.tree(m, p), words, m.schema(p), window.reads(m, p).tolist(), m.base,
                      registered=REG)
             for p, words in m.all_rows}, registered=REG)
     return out
@@ -314,7 +320,7 @@ def references(q: int, out: Path) -> dict:
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks
     (`interior_window`, under a run of its own, whose fields round 2 places or blanks), bound to that window's partition
     and program as the sessions' circuits are, on zero rows at the member's slots, each port's table and refs as
-    `interior` lays them out, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
+    `interior` lays them out, under the public `reference_salts`: its public file is ``out``/m<k>/pub.bin, its ``circuit.txt``
     beside it, and its prover file is deleted. Both files are a function of ``q`` and the design alone, byte for byte.
     Its registered reads are `reads`' file, which names none of the run's fields: each port the value it reads (a link
     port the boundary port it opens, a wired port its writer's output port, any other the member's own), its words and
@@ -326,14 +332,15 @@ def references(q: int, out: Path) -> dict:
     named = []
     for k, (m, defn) in enumerate(zip(window.members, TEMPLATES)):
         d, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
-        member_stager(defn, m, bind).stage(
-            rows, d, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
+        st, tables = member_stager(defn, m, bind), {r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows}
+        st.stage(
+            rows, d, reference_salts(REFERENCE_SALTS, k, st, m, tables),
+            indices=range(m.base, m.base + m.n), tables=tables,
+            refs={r: window.refs(m, r) for r in rows})
         (d / "inst.bin").unlink()
         with open(d / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
-        reads = LK.reads_file({p: {"value": names[LINKS[k][1]] if p == link(k) else window.held(m, p), "words": int(words),
+        reads = LK.reads_file({p: {"value": names[LINKS[k][1]] if p == link(k) else window.tree(m, p), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header,

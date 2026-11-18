@@ -65,7 +65,7 @@ def _staged(tid: str, d: Path, lean: bool = False) -> dict:
     tp = ST.template(tid)
     in_rows, out_rows = CR.unit_rows(tp)
     st = UnitStager(tp.fn, f"unit/{tid}", in_rows, out_rows, circuit=d / "circuit.txt", bind=BIND, **CR.statement(tp))
-    st.stage(_random_rows(in_rows, 2, 11), d, b"k" * 32, indices=[0, 1])
+    st.stage(_random_rows(in_rows, 2, 11), d, indices=[0, 1])
     got = {"why": PF.ks_form_why(d / "circuit.txt", d / "pub.bin"), "k_log": st.meta["k_log"], "regions": len(st.ports)}
     if lean:
         p = subprocess.run([str(VERIFY), "ks-form", "--statement", PF.STATEMENT, "--circuit", str(d / "circuit.txt"), "--public",
@@ -87,7 +87,7 @@ def test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_defin
         assert [(bits, ps) for _nm, _schema, bits, ps in rows] == [(ty.leaves, [nm]) for nm, ty in d.signature()[0]], tid
     assert {spec_base(x) for x in _templates(t)} == {
         "DsaTopKDigitCount_v1", "DsaTopKDigitPick_v2", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2", "DsaPositionsMerge_v2",
-        "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
+        "DsaPositionsChunk_v1", "DsaPositionsSlot_v2"}
     read = descriptor_id(t.bindings["READ"])
     assert ST.template(read).layout == ("history" if ST.history_read(read) else "read")
     assert ST.history_read(descriptor_id(LR.served().bindings["READ"]))
@@ -115,7 +115,7 @@ def test_the_small_units_but_the_pick_stage_in_the_proved_form(tmp_path) -> None
         got = _staged(tid, tmp_path / str(k))
         assert got["why"] is None and got["k_log"] <= FC.K_MAX and got["regions"] <= REGIONS_MAX, (tid, got)
     assert {f for f, _b in seen} == {"DsaTopKDigitCount_v1", "DsaTopKMaskBlock_v2", "DsaMaskPositions_v2",
-                                     "DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1"}
+                                     "DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v2"}
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_LONG_ROW_UNITS"),

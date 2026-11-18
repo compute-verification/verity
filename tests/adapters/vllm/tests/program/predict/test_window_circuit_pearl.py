@@ -8,6 +8,7 @@ position's cut linears are, of each of TINY's 2 layers, q/k/v (K = 64, N = 128),
 """
 from __future__ import annotations
 
+import os
 import re
 
 import numpy as np
@@ -19,7 +20,7 @@ from verity.circuits.population import BitsWord, WordBits
 from verity.circuits.types import Array, Value
 from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import (
     ROW_ALIGN,
 )
@@ -50,7 +51,6 @@ from tests.program.predict.test_window_circuit_int8 import _registered as _int8
 from tests.program.predict.test_window_circuit_tables import FIXED
 from tests.program.predict.test_window_rows import (
     DESIGN,
-    KEY,
     PROGRAM,
     RUN,
     _read,
@@ -111,7 +111,7 @@ def test_pearls_tables_are_named_by_round_and_call_at_the_rows_its_calls_commit(
     of Pearl+'s `ROW_ALIGN` (its m₁₆). Its y is handed on in rows of a positive number of words, and its scheme is one of
     PoUW's."""
     assert (PEARL.a(1, 3), PEARL.y(0, 5)) == ("pearl-a/1/3", "pearl-y/0/5")
-    assert [PEARL.rows(CLASS, s) for s in range(3)] == [8, 2, 2] and PEARL.scheme in SCHEMES
+    assert [PEARL.rows(CLASS, s) for s in range(3)] == [8, 2, 2] and PEARL.scheme in IDENTIFIED
     assert [PEARL.a_rows(cls, 0) for cls in (CLASS, WindowClass(4, 4, 2), WindowClass(2, 9, 2))] == [16, 16, 32] == [
         -(-m // ROW_ALIGN) * ROW_ALIGN for m in (8, 16, 18)]
     with pytest.raises(ValueError, match="a positive number of words, not 0"):
@@ -285,7 +285,7 @@ def filled(low):
     fields = _weights(low.fn)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(_registered(), fields, None, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
@@ -404,7 +404,7 @@ def test_a_cut_linear_prefill_prunes_is_read_at_every_prompt_position(low, fille
 
 @pytest.mark.slow
 def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low, filled):
-    """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under the committer's key, FP32 words
+    """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under fresh salts, FP32 words
     in row-seg rows: `ROW_FORMAT`), each
     `LinearARow_v3` and `LinearOut_v3` unit's output rows are its Definition on the inputs the window commits, x by its
     writers' wires and y by reference from the call's y rows, and the window closes over them. What no cheaper test
@@ -415,7 +415,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
     for i, (name, v) in enumerate(_pearl_values(low, slots).items()):
         schema, bits = IF.value_format(c.registered, name)
         values = {**values, name: CR.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
-                                                       [hm96_salt(KEY, (1 << 61) + i, j) for j in range(len(v))],
+                                                       [os.urandom(192) for _ in range(len(v))],
                                                        word_bits=bits, schema=schema)}
     win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)

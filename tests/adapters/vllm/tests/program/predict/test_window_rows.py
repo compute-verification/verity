@@ -73,8 +73,6 @@ PRUNED = 3
 NODES = 24
 EMBED = "model.embed_tokens.weight"
 TABLE = WB.table_param(EMBED, 64)
-#: the committer's secret key
-KEY = bytes(range(32))
 
 
 def _bf16(x) -> np.ndarray:
@@ -106,14 +104,14 @@ def _registered(config=S.TINY):
 
 
 def _window(config=S.TINY, grain=GRAIN):
-    """The class circuit lowered, its weights, its registered values (each weight's parameter under `KEY`, and the scan
+    """The class circuit lowered, its weights, its registered values (each weight's parameter under fresh salts, and the scan
     state's, `STATE` committed as a stand-in for the network attester's, in ``row/v2`` rows as the scan's units commit
     their state rows, as `Rows` and `Window` take them) and each slot's `Slot` of its lane's row (`scan_slots`)."""
     low = WC.lower(_registered(config), CLASS, None, grain, provable=False)
     fields = _weights(low.fn)
     state = CR.Registered.commit(PROGRAM, SS.SCAN_STATE, STATE, [hm96_salt(bytes(32), 0, j) for j in range(len(STATE))],
                                  schema=CR.SCHEMA_V2)
-    values = {**WW.weight_values(_registered(config), fields, KEY, grain, keep_rows=True), SS.SCAN_STATE: state}
+    values = {**WW.weight_values(_registered(config), fields, None, grain, keep_rows=True), SS.SCAN_STATE: state}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
@@ -230,7 +228,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
 
 
 def test_a_slots_row_is_its_lanes_of_the_scan_state_row_at_its_anchor(window):
-    """Each slot's row and head are its lane's of the scan state row its `ScanSlots_v2` reads, the one at its anchor
+    """Each slot's row and head are its lane's of the scan state row its `ScanSlots_v3` reads, the one at its anchor
     (`scan_slots`; both of TINY's slots at bucket 0, lanes 0 and 1): slots given out of their lanes' order, or no scan
     state's value, are refused by name."""
     low, _f, values, _w, slots = window
@@ -659,9 +657,8 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
 
 def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
-    (``row-seg``), each committed under the committer's key at a nonce of its own: the table and a weight are core's commits
-    of those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
-    registration's roots, `weights_registration`), and the entries name nothing but each value's size, domain and hiding
+    (``row-seg``), each committed under salts of its own, 192 a row and no two alike: the table and a weight are core's
+    commits of those rows under the weights record's program and those salts, and the entries name nothing but each value's size, domain and hiding
     root. The scan state is no value of the committer's but the network attester's, a row a bucket of the window. Each
     value is in its reading ports' rows, which a window's commit refuses otherwise. Another parameter is refused."""
     low, fields, got, *_ = window
@@ -672,24 +669,25 @@ def test_the_registered_values_are_each_weights_rows_and_the_scan_state(window):
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
-    nonces, program = WW.weight_nonces(got), WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
-    assert set(nonces) == set(got) - {SS.SCAN_STATE} and {v.program for p, v in got.items() if p in nonces} == {program}
+    program = WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
+    assert {v.program for p, v in got.items() if p != SS.SCAN_STATE} == {program}
     assert (got[SS.SCAN_STATE].leaves, got[SS.SCAN_STATE].words) == (CLASS.buckets, SS.words(CLASS.scan))
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 1024), fields[EMBED].reshape(-1, 1024), CR.SCHEMA_V2)):
-        salts = [hm96_salt(KEY, nonces[name], j) for j in range(len(rows))]
+        salts = list(got[name].salts)
+        assert len(salts) == len(rows) == len(set(salts)) and {len(x) for x in salts} == {192}
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
     down = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 1024)].rows[:]
     assert down.shape == (8, 1024) and np.array_equal(down.reshape(-1), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
-        WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16), KEY, 0)
+        WW.weight_value(program, "weights/x@3/rows", np.zeros(3, np.uint16))
 
 
 def _as_leaves(x: np.ndarray, width: int, leaves: int) -> np.ndarray:
     """A port's ``width``-bit elements as its Definition's ``leaves``: the elements themselves, or each element's bits, least
-    significant first, where the port's leaves are bits (`ScanSlots_v2`'s state words)."""
+    significant first, where the port's leaves are bits."""
     if x.shape[1] == leaves:
         return x
     return ((x.astype(np.uint64)[:, :, None] >> np.arange(width, dtype=np.uint64)) & 1).reshape(len(x), -1)
@@ -701,15 +699,15 @@ def _packed(bits: np.ndarray, width: int) -> np.ndarray:
 
 
 def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
-    """`_as_leaves` and `_packed` against `ScanSlots_v2` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
-    gives `scan_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
+    """`_packed` against `SlotEntry_v1`'s entry, words of bit leaves, which pack to `entry_reference`'s words; and
+    `ScanSlots_v3`, whose ports are words, on a state row of u16 words gives `scan_reference`'s lanes."""
     scan = SS.bridge(CLASS.scan, CLASS.prompt)
     row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     (_, t), = scan.signature()[0]
-    out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
+    out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(-1).astype(np.uint64)
     b = scan.bindings
     ref = IO.scan_reference(row[0].tolist(), b["NP"], b["IDB"], b["K0"], b["K"], b["OCC"], b["LP"], b["MAX"], b["IDS"])
-    assert scan.name == "ScanSlots" and _packed(out, 32)[0].tolist() == [v for k, s, o, h in ref for v in (k, *s, o, *h)]
+    assert scan.name == "ScanSlots" and out.tolist() == [v for k, s, o, h in ref for v in (k, *s, o, *h)]
     entry = bind(IO.SlotEntry, KO=2, IDB=17, NP=4, STOP=())
     state = [(2 - 4 - 2) & IO.M32, 2, 17, 3]
     bits = np.asarray(evaluate_batch(entry, np.array([[1]], np.uint32), np.array([state], np.uint32), kernel="reference"))

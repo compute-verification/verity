@@ -44,14 +44,14 @@ either fact:
 
 Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/
 def RecordCustodyZKLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Audit.SamplingDesign n) : Prop :=
+    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.ZkLink.RecordsLiveZK I dj wr ∧ ∀ ω, Discharge.ZkLink.SampleOkZK I dj mPts (L.draw ω)
 
 /-- **The record is the live session's, at the live sampling design's samples, under hidden outputs** (`live-verifier`, as
 `RecordCustodyZKLaw`): the record is the live session's (`RecordsLiveZK`), and at every sample of `L` its sample file proves
 the sampled proof blocks and the hidden-output statement sets up at it with `mPts` link points (`SampleOkZKH`). -/
 def RecordCustodyZKHLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Audit.SamplingDesign n) : Prop :=
+    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.ZkLink.RecordsLiveZK I dj wr ∧ ∀ ω, Discharge.ZkHidden.SampleOkZKH I dj mPts (L.draw ω)
 
 /-- **The record is the live session's, at the live sampling design's samples, at `J` tables** (`live-verifier`, as
@@ -62,7 +62,7 @@ and at every sample of `L` each table's sample proves the units it is given and 
 def RecordCustodyZKJLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
-    (L : Audit.SamplingDesign n) : Prop :=
+    (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ ∀ ω, Discharge.Composed.SampleOkZKJ I dj mPts (L.draw ω)
 
 /-- **The record is the live session's, at the live sampling design's samples, at `J` hidden-output tables** (`live-verifier`, as
@@ -70,7 +70,7 @@ def RecordCustodyZKJLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) 
 def RecordCustodyZKHJLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
     (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
-    (L : Audit.SamplingDesign n) : Prop :=
+    (L : Spot.Sampling.SamplingDesign n) : Prop :=
   Discharge.Composed.RecordsLiveZKJ I dj Jf wr ∧ ∀ ω, Discharge.ZkHidden.SampleOkZKHJ I dj mPts (L.draw ω)
 
 /-- **The record is the live session's, at `J` tables** (`live-verifier`'s record half, `RecordCustodyZKHJLaw`'s first
@@ -84,7 +84,7 @@ def RecordsCustodyZKJ {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (d
 /-- **The sample file proves the sampled proof blocks, at the live sampling design's samples, at `J` hidden-output tables** (`live-verifier`'s
 sample half, `RecordCustodyZKHJLaw`'s second conjunct): V*'s sessions carry it as `ZkOuterD.hDraw` and `ZkOuterR.hDraw`. -/
 def DrawCustodyZKHJ {n : ℕ} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
-    (L : Audit.SamplingDesign n) : Prop :=
+    (L : Spot.Sampling.SamplingDesign n) : Prop :=
   ∀ ω, Discharge.ZkHidden.SampleOkZKHJ I dj mPts (L.draw ω)
 
 /-- **The sample file proves the sampled proof blocks at one sample `S`, at `J` tables** (`live-verifier`'s sample half at one sample,

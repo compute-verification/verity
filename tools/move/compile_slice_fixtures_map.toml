@@ -1,0 +1,29 @@
+# The compile slice's fixtures and its served-shape note leave the network package
+# (`python3 tools/move/layout.py --map tools/move/compile_slice_fixtures_map.toml`): the compile slice and the replay are
+# the vLLM adapter's registered compiler (`verity_vllm.compiler`), whose tests read these windows.
+
+[roots]
+old = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+new = { verity = "verity", verity_vllm = "adapters/vllm/verity_vllm" }
+
+[paths]
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_smallkv.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_smallkv.json"
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1.json"
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w1_class.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w1_class.json"
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212.json"
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class.json"
+"tests/verity/protocols/resource_accounting/network/verifier/fixtures/compile_slice_w212_class_async.json" = "tests/adapters/vllm/tests/compiler/fixtures/compile_slice_w212_class_async.json"
+"verity/protocols/resource_accounting/network/verifier/protocol/served-shape.md" = "adapters/vllm/verity_vllm/compiler/served-shape.md"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["**/CHANGELOG.md", "tools/move/**", "tests/tools/move/**", "tests/tools/check/test_move_check.py", "archive/**",
+           "tools/research/src/research/store/moves.json", "**/*.lean", "**/lean-audit.json", "**/lakefile.toml"]
+include = []
+
+[modules]

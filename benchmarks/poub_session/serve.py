@@ -1,5 +1,5 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
+with `verity.protocols.resource_accounting.memory.poub.prover.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
 PoUB's prover's `serving.StoreBackend` (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
@@ -403,13 +403,16 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("one session a process: a NodeMemory serves one session")
     a.out.mkdir(parents=True, exist_ok=True)
 
-    from verity_vllm.protocols.poub.binder import Binder
+    from verity_vllm import messages
+    from verity_vllm.engine.build import hooked
+    from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
 
     serving, NodeMemory = provers()
     store = NodeMemory()
-    binder = Binder(store, passes=False).install()
+    binder = Binder(store, passes=False).install(messages.current())
     with tempfile.TemporaryDirectory() as work:
-        trace = Trace(engine(Path(work)))
+        built, _, detach = hooked(lambda: engine(Path(work)))
+        trace = Trace(built)
         clock = PassClock() if a.local else None
         backend = backend_class(serving)(store, trace, clock=clock)
         result, th = {}, None
@@ -427,6 +430,7 @@ def main(argv: list[str] | None = None) -> int:
             if "error" in result:
                 raise result["error"]
     binder.uninstall()
+    detach()
     out = {"schema": "verity/remote-session/serve/v0", "plan": a.plan, "model": TINY, "pages": PAGES,
            "slots": SLOTS, "budget": BUDGET, "store": binder.stats(), "layout": backend.layout(),
            "trace": {"steps": trace.steps, "requests": trace.requests}, "prover": prover_result,

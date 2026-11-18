@@ -2,8 +2,9 @@
 physical time, so that the batches can be compared across wall-clock jitter and against the rule in logical time alone;
 what isn't certified (unnumbered, late, missing, aborted, a new run, a stalled or broken watermark); the watermark's
 lines, as the network attester's own code writes them (`line`), and the releases they name lost; `tick_plugin` under
-vLLM's own server (`TickFeed`, `FeedReader` and the plugin's engine-core loop); and serve-openai's ``--admit tick`` over
-HTTP."""
+vLLM's own server (`TickFeed`, `FeedReader` and the plugin's hold on the engine core's admission hook); and serve-openai's
+``--admit tick`` over HTTP. The gate is a hold of the adapter's admission hook (`verity_vllm.engine.admission`), which
+these tests put on the stand-in scheduler."""
 from __future__ import annotations
 
 import asyncio
@@ -25,14 +26,16 @@ from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
-from verity_vllm.engine import hooks
+from verity_vllm import messages
+from verity_vllm.engine import admission, core_gate, hooks
 from verity_vllm.pipeline import cli
+from verity.protocols.resource_accounting.network.prover import admission as na
 from verity_vllm.pipeline import serve_admit as sa
 from verity.protocols.resource_accounting.network.prover import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import tick_plugin as tp
 
-TICK = sa.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)
+TICK = na.Tick(bucket_us=100_000, sat_us=30_000, free_us=40_000)
 RUN = "ab"
 
 
@@ -43,6 +46,13 @@ def line(t: int, n: int, lost: Sequence[int] = ()) -> bytes:
     k = int(size.split(b";", 1)[0], 16)
     assert rest[k:] == b"\r\n"
     return rest[:k]
+
+
+def hooked(sched: Any, gate: na.TickGate, key: Any = lambda rid: rid) -> admission.Hook:
+    """The admission hook on ``sched``, over an exchange of its own with ``gate`` attached."""
+    ex = messages.Exchange()
+    gate.attach(ex)
+    return admission.install(sched, ex, key)
 
 
 class Req:
@@ -63,6 +73,7 @@ class Sched:
         self.seqs = seqs
         self.steps: list[list[str]] = []
         self.added: list[str] = []
+        self.handed: list[Any] = []
         self.scheduler_config = SimpleNamespace(policy=policy)
         self.vllm_config = SimpleNamespace(parallel_config=SimpleNamespace(data_parallel_size=dp))
 
@@ -89,7 +100,11 @@ class Sched:
                 self.running.remove(r)
                 self.finished_req_ids.add(r.request_id)
 
+    def update_from_output(self, scheduler_output: Any, model_runner_output: Any) -> dict:
+        return {}
+
     def finish_requests(self, ids: Any, status: Any) -> list[str]:
+        self.handed.append(ids)
         live = {r.request_id for r in (*self.waiting, *self.running)}
         ids = live if ids is None else live & set(ids)
         self.waiting = deque(r for r in self.waiting if r.request_id not in ids)
@@ -116,10 +131,9 @@ def simulate(seed: int, *, gated: bool = True, n: int = 40, lost: Sequence[int] 
     rng = random.Random(seed)
     now = 0.0
     sched = Sched()
-    gate = sa.TickGate(TICK, hold_s=600.0, clock=lambda: now)
-    watermark = sa.Watermark(RUN, gate.take)
-    if gated:
-        sa.install(sched, gate, key=lambda rid: rid)
+    gate = na.TickGate(TICK, hold_s=600.0, clock=lambda: now)
+    watermark = na.Watermark(RUN, gate.take)
+    hook = hooked(sched, gate) if gated else None
     bucket = [int(r * 1e6) // TICK.bucket_us for r in rel]
     events: list[tuple[float, int, str, Any]] = []
     for i in range(n):
@@ -142,8 +156,8 @@ def simulate(seed: int, *, gated: bool = True, n: int = 40, lost: Sequence[int] 
                 assert watermark.feed(line(x, sum(b <= x for b in bucket), [i for i in sorted(lost) if bucket[i] == x]))
             else:
                 assert watermark.close()
-        if gated and not gate.ready(sched):
-            now = events[0][0] if events else now + gate.poll_s
+        if hook is not None and not hook.ready():
+            now = events[0][0] if events else now + hook.poll_s
             continue
         if sched.has_requests():
             sched.schedule()
@@ -203,11 +217,11 @@ def test_the_batches_skip_the_lost_releases_whether_or_not_their_bytes_arrive():
 
 def test_the_tick_rule_reads_whole_buckets_in_microseconds():
     assert (TICK.close(0), TICK.closed(99_999), TICK.closed(100_000), TICK.closed(250_000)) == (100_000, -1, 0, 1)
-    assert sa.Tick.of_ms(100, 27.5, 41) == sa.Tick(100_000, 27_500, 41_000)
+    assert na.Tick.of_ms(100, 27.5, 41) == na.Tick(100_000, 27_500, 41_000)
     assert TICK.step(True) == 30_000 and TICK.step(False) == 40_000
     for bad in ((0, 1, 1), (1, -1, 1), (1.5, 1, 1)):
         with pytest.raises(ValueError, match="positive integer"):
-            sa.Tick(*bad)
+            na.Tick(*bad)
 
 
 class Gated:
@@ -218,9 +232,9 @@ class Gated:
         self.sched = Sched()
         self.log: list[dict] = []
         kw = {"hold_s": hold_s, "clock": lambda: self.now, "log": self.log.append}
-        self.gate = tp.RuleGate(TICK, **rule, **kw) if rule else sa.TickGate(TICK, **kw)
-        self.hooks = sa.install(self.sched, self.gate, key=lambda rid: rid)
-        self.watermark = sa.Watermark(RUN, self.gate.take)
+        self.gate = na.RuleGate(TICK, **rule, **kw) if rule else na.TickGate(TICK, **kw)
+        self.hooks = hooked(self.sched, self.gate)
+        self.watermark = na.Watermark(RUN, self.gate.take)
 
     def release(self, n: int, bucket: int | None = None, run: str = RUN, key: str | None = None) -> None:
         self.gate.take({"key": key or f"r{n}", "run": run, "n": n, "bucket": bucket})
@@ -238,7 +252,7 @@ class Gated:
         self.sched.add_request(Req(rid, out))
 
     def step(self) -> bool:
-        if not self.gate.ready(self.sched):
+        if not self.hooks.ready():
             return False
         if self.sched.has_requests():
             self.sched.schedule()
@@ -299,15 +313,15 @@ def test_a_rule_gate_adds_its_tokens_to_t_and_catches_up_to_the_newest_line_whil
 
 def test_a_rule_gates_token_term_counts_non_draft_tokens_on_a_clock_of_nanoseconds():
     drafted = SimpleNamespace(total_num_scheduled_tokens=14, scheduled_spec_decode_tokens={"a": [3] * 5, "b": [-1] * 5})
-    assert tp.non_draft_tokens(drafted) == (4, 10)
-    assert tp.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
+    assert admission.non_draft_tokens(drafted) == (4, 10)
+    assert admission.non_draft_tokens(SimpleNamespace(total_num_scheduled_tokens=7, scheduled_spec_decode_tokens={})) == (7, 0)
     g = Gated(rule={"token_ns": 600})
     g.release(0, bucket=0)
     g.arrive("r0", out=10)
     g.lines(1)
     assert g.step() and g.gate.T == TICK.close(0) + TICK.free_us
     assert g.step() and g.gate.T == TICK.close(0) + 2 * TICK.free_us + 1
-    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2, "draft": 0}}
+    assert g.gate.summary()["rule"] == {"token_ns": 600, "catch_up": "quiet", "tokens": {"non_draft": 2}}
 
 
 def test_the_tick_config_names_the_registered_rule_by_default_and_refuses_another_it_does_not_know(tmp_path):
@@ -428,10 +442,10 @@ def test_an_open_gate_adds_a_lost_releases_request_at_once_like_any_other():
     assert g.sched.added == ["r0", "r1"] and g.gate.lost == {0, 1} and g.gate.counts["dropped"] == 0
 
 
-def test_a_dropped_requests_abort_stops_at_the_gate():
-    """The gate keeps the id of each request it drops for a lost release, the one it held when the line came and the
-    one that comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is
-    handed no id of a request it never saw, whatever it would do with one. An id is kept only until its abort."""
+def test_a_dropped_requests_abort_stops_at_the_hook():
+    """The hook keeps each request the gate drops for a lost release, the one it held when the line came and the one that
+    comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is handed no
+    id of a request it never saw, whatever it would do with one. A request is kept only until its abort."""
     g = Gated()
     for n in range(4):
         g.release(n, bucket=0)
@@ -441,8 +455,9 @@ def test_a_dropped_requests_abort_stops_at_the_gate():
     g.arrive("r2")                                   # r2 comes after it
     g.arrive("r3")
     assert g.sched.added == [] and sorted(g.gate.held) == [1, 3]
-    assert g.gate.finished(["r0", "probe", "r3", "r2"]) == ["probe"]                  # r3 is held: its abort drops it, as before
-    assert g.gate.dropped_ids == set() and g.gate.finished("r0") == ["r0"]
+    g.sched.finish_requests(["r0", "probe", "r3", "r2"], "aborted")                  # r3 is held: its abort drops it, as before
+    g.sched.finish_requests("r0", "aborted")
+    assert g.sched.handed == [["probe"], ["r0"]]
     assert counts(g) == {"admitted": 0, "lost": 2, "dropped": 2, "aborted": 1, "held_now": 1}
     assert g.step() and g.sched.added == ["r1"]
 
@@ -522,36 +537,36 @@ def test_the_header_bucket_is_checked_against_the_watermark():
 
 def test_install_refuses_what_the_tick_does_not_order_and_comes_off():
     with pytest.raises(RuntimeError, match="FCFS"):
-        sa.install(Sched(policy="priority"), sa.TickGate(TICK, hold_s=1))
+        hooked(Sched(policy="priority"), na.TickGate(TICK, hold_s=1))
     with pytest.raises(RuntimeError, match="data-parallel"):
-        sa.install(Sched(dp=2), sa.TickGate(TICK, hold_s=1))
+        hooked(Sched(dp=2), na.TickGate(TICK, hold_s=1))
     g = Gated()
-    assert {e.name for e in hooks.live("admit-tick")} >= {"add_request", "schedule", "finish_requests", "_verity_tick"}
+    assert {e.name for e in hooks.live("scheduler-step")} >= {"add_request", "schedule", "update_from_output", "finish_requests"}
     g.hooks.uninstall()
-    assert not hasattr(g.sched, "_verity_tick") and "add_request" not in vars(g.sched)
+    assert "add_request" not in vars(g.sched)
 
 
 def test_watermark_lines_as_the_network_attester_sends_them():
-    assert sa.watermark_line(line(0, 0)) == (0, 0, ()) and sa.watermark_line(line(3, 7), (2, 5)) == (3, 7, ())
-    assert sa.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
-    assert sa.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them
-    assert sa.watermark_line(line(0, 2, [0, 1])) == (0, 2, (0, 1))                    # the first line, its bucket all lost
+    assert na.watermark_line(line(0, 0)) == (0, 0, ()) and na.watermark_line(line(3, 7), (2, 5)) == (3, 7, ())
+    assert na.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
+    assert na.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them
+    assert na.watermark_line(line(0, 2, [0, 1])) == (0, 2, (0, 1))                    # the first line, its bucket all lost
     for raw, last in ((line(1, 0), None), (line(3, 4), (2, 5)), (line(0, 1)[:-1], None), (b"0" + line(1, 1), None),
                       (line(0, 1).replace(b" ", b"  "), None)):     # t not 0 first, n below the last, then the form
         with pytest.raises(ValueError):
-            sa.watermark_line(raw, last)
+            na.watermark_line(raw, last)
     got: list[dict] = []
-    w = sa.Watermark("ab", got.append)
+    w = na.Watermark("ab", got.append)
     data = line(0, 0) + line(1, 2, [1]) + line(2, 2) + line(3, 6, [2, 4, 5])
     assert w.feed(data[:7]) and w.feed(data[7:]) and w.close()
     assert got == [{"run": "ab", "t": 0, "n": 0}, {"run": "ab", "t": 1, "n": 2, "lost": [1]}, {"run": "ab", "t": 2, "n": 2},
                    {"run": "ab", "t": 3, "n": 6, "lost": [2, 4, 5]}, {"run": "ab", "end": True}]
     bad: list[dict] = []
-    w = sa.Watermark("ab", bad.append)
+    w = na.Watermark("ab", bad.append)
     assert not w.feed(line(0, 0) + line(2, 0)) and not w.feed(line(3, 0))
     assert bad[-1]["error"].startswith("watermark (2, 0) after (0, 0)")
     cut: list[dict] = []
-    w = sa.Watermark("ab", cut.append)
+    w = na.Watermark("ab", cut.append)
     w.feed(line(0, 0) + line(1, 0)[:1])
     assert not w.close() and "inside a line" in cut[-1]["error"]
 
@@ -561,7 +576,7 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     changed in its bytes where the writer itself refuses to build it: a lost release must be one of the line's own
     bucket (at least 5, below its n), named once, in rising order."""
     last, good = (2, 5), line(3, 9, [6, 8])
-    assert sa.watermark_line(good, last) == (3, 9, (6, 8))
+    assert na.watermark_line(good, last) == (3, 9, (6, 8))
     outside = "watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
     form = "a watermark line is 't n', any lost releases and a newline"
     for bad, why in ((good[:-1] + b" 9\n", outside.format("\\[6, 8, 9\\]")),           # a lost release at n
@@ -575,8 +590,8 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
                      (good[:-1], form)):                                               # no newline
         assert bad != good
         with pytest.raises(ValueError, match=why):
-            sa.watermark_line(bad, last)
-    assert sa.watermark_line(line(0, 9, [4, 6])) == (0, 9, (4, 6))                    # read where no line came before
+            na.watermark_line(bad, last)
+    assert na.watermark_line(line(0, 9, [4, 6])) == (0, 9, (4, 6))                    # read where no line came before
     g = Gated()
     g.release(0, bucket=0)
     g.arrive("r0")
@@ -648,11 +663,11 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     asgi(tp.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [GREEDY])
     plain = asgi(feed, scope_of("/v1/completions", {}), [GREEDY])
     assert plain[0]["status"] == 200
-    wm = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "ab"}), [b"0 1", b"\n1 3\n", b""])
+    wm = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "ab"}), [b"0 1", b"\n1 3\n", b""])
     assert wm[0]["status"] == 200
-    bad = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n5 1\n"])
+    bad = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n5 1\n"])
     assert bad[0]["status"] == 400
-    cut = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "ef"}), [])
+    cut = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "ef"}), [])
     assert cut == []
     assert read() == [{"key": "c0", "run": "ab", "n": 0, "bucket": 0}, {"key": "verity-ab-1", "run": "ab", "n": 1, "bucket": None},
                       {"key": "verity-ab-2", "run": "ab", "n": 2, "bucket": None}, {"run": "ab", "n": 2, "passed": True},
@@ -678,19 +693,19 @@ def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monke
     app = App()
     feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
     own = {"x-verity-release-run": "ab"}
-    assert asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1\n1 3\n"])[0]["status"] == 200
+    assert asgi(feed, scope_of(na.WATERMARK_PATH, own), [b"0 1\n1 3\n"])[0]["status"] == 200
     rows = [{"run": "ab", "t": 0, "n": 1}, {"run": "ab", "t": 1, "n": 3}, {"run": "ab", "end": True}]
     assert read() == rows
-    second = asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1 0\n"])
+    second = asgi(feed, scope_of(na.WATERMARK_PATH, own), [b"0 1 0\n"])
     assert second[0]["status"] == 400 and b"run 'ab' has had its watermark stream, and a run has one" in second[1]["body"]
     assert read() == []
-    clients = asgi(feed, scope_of(sa.WATERMARK_PATH, {**own, "x-verity-release": "3", "x-verity-release-bucket": "2"}), [b"2 4 3\n"])
+    clients = asgi(feed, scope_of(na.WATERMARK_PATH, {**own, "x-verity-release": "3", "x-verity-release-bucket": "2"}), [b"2 4 3\n"])
     assert clients[0]["status"] == 400 and b"a POST that carries x-verity-release is a client's request" in clients[1]["body"]
-    other = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "cd", "x-verity-release": "0"}), [b"0 1 0\n"])
+    other = asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd", "x-verity-release": "0"}), [b"0 1 0\n"])
     assert other[0]["status"] == 400 and read() == [{"run": "ab", "n": 3, "passed": True}, {"run": "cd", "n": 0, "passed": True}]
-    again = asgi(feed, scope_of(sa.WATERMARK_PATH, {**own, "x-verity-release": "3"}), [b"2 4 3\n"])
+    again = asgi(feed, scope_of(na.WATERMARK_PATH, {**own, "x-verity-release": "3"}), [b"2 4 3\n"])
     assert again[0]["status"] == 400 and b"x-verity-release: 3 came twice in run 'ab'" in again[1]["body"]
-    assert asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n"])[0]["status"] == 200
+    assert asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n"])[0]["status"] == 200
     assert read() == [{"run": "cd", "t": 0, "n": 1}, {"run": "cd", "end": True}] and app.seen == []
 
 
@@ -793,7 +808,7 @@ class EngineCoreProc:
         self.running, self.idle_calls = True, 0
 
     def _process_input_queue(self) -> None:
-        raise AssertionError("the gated loop replaces it")
+        raise AssertionError("the seam's input loop replaces it")
 
     def has_work(self) -> bool:
         return self.scheduler.has_requests()
@@ -819,14 +834,24 @@ def plugin(tmp_path, monkeypatch):
         pass
 
     fake = fake_vllm.install(monkeypatch)
-    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
     fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
+    fake.set("vllm.v1.engine.core:EngineCore", type("EngineCore", (), {"step": lambda self: None,
+                                                                         "step_with_batch_queue": lambda self: None}))
     tp.register()
     tp.register()
     try:
         yield Scheduler
     finally:
-        tp._PLUGIN.pop().uninstall()
+        tp._PLUGIN.clear()
+        core_gate.SEAM.uninstall()
+        messages.close()
+
+
+def made(core: EngineCoreProc) -> tuple[admission.Hook, na.TickGate]:
+    """The admission hook the seam makes for ``core``, and the plugin's gate it filed on the exchange."""
+    (hook,) = core_gate.SEAM._state(core).gates
+    ((_, request),) = hook.ex.requests
+    return hook, request.gate
 
 
 def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
@@ -845,15 +870,16 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
 
     feeder = threading.Thread(target=watermark)
     feeder.start()
-    poll = sched._verity_tick.ready
+    _, gate = made(core)
+    poll = gate.ready
 
-    def ready(s: Any) -> bool:
-        ok = poll(s)
+    def due(event: Any) -> bool:
+        ok = poll(event)
         if not ok:
             released.set()
         return ok
 
-    sched._verity_tick.ready = ready
+    gate.ready = due
     core._process_input_queue()
     assert sched.added == ["cmpl-probe-0-0123abcd"]      # the probe at once; c0 waits for bucket 0's line
     sched.schedule()
@@ -865,7 +891,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
     core._process_input_queue()                          # waits until the feeder writes bucket 0's line
     feeder.join()
     assert sched.added == ["cmpl-probe-0-0123abcd", "cmpl-c0-0-0123abcd"]
-    assert sched._verity_tick.summary()["unordered"] == 1 and TICK.close(0) == sched._verity_tick.T
+    assert gate.summary()["unordered"] == 1 and TICK.close(0) == gate.T
     logged = [json.loads(x) for x in next(tmp_path.glob("tick.*.jsonl")).read_text().splitlines()]
     assert logged[0]["event"] == "unordered" and logged[-1]["admitted"] == [0, 1]
     write({"key": "c9", "run": "ab", "n": 1, "bucket": 5})
@@ -873,7 +899,7 @@ def test_the_plugin_gates_the_engine_cores_input_loop(plugin, tmp_path):
     assert sched.added[-1] == "cmpl-c0-0-0123abcd"
     core.running = False
     core._process_input_queue()
-    assert sched._verity_tick.opened == "the engine core is shutting down" and sched.added[-1] == "cmpl-c9-0-0123abcd"
+    assert gate.opened == "the engine core is shutting down" and sched.added[-1] == "cmpl-c9-0-0123abcd"
 
 
 def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(plugin, tmp_path):
@@ -881,7 +907,8 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
     gate. Release 0's request is in the engine core before its line names it lost and release 2's comes after it:
     neither reaches the scheduler, and the abort vLLM sends when such a request's connection closes finds nothing."""
     sched = plugin()
-    gate, feed = sched._verity_tick, tp.TickFeed(App())
+    hook, gate = made(EngineCoreProc(sched))
+    feed = tp.TickFeed(App())
     ids = [f"cmpl-c{n}-0-0123abcd" for n in range(4)]
     for n in range(4):
         asgi(feed, scope_of("/v1/completions", {"x-verity-release": str(n), "x-verity-release-run": RUN, "x-request-id": f"c{n}"}),
@@ -889,18 +916,18 @@ def test_under_vllms_server_the_lost_releases_reach_the_gate_through_the_feed(pl
     sched.add_request(Req(ids[0]))
     sched.add_request(Req(ids[1]))
     data = line(0, 3, [0, 2]) + line(1, 4)
-    assert asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), [data[:5], data[5:], b""])[0]["status"] == 200
+    assert asgi(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), [data[:5], data[5:], b""])[0]["status"] == 200
     assert tp.FeedReader(tmp_path / "feed.jsonl")()[4:] == [{"run": RUN, "t": 0, "n": 3, "lost": [0, 2]}, {"run": RUN, "t": 1, "n": 4},
                                                             {"run": RUN, "end": True}]
-    assert gate.ready(sched) and (sched.added, gate.T) == ([ids[1]], TICK.close(0))
+    assert hook.ready() and (sched.added, gate.T) == ([ids[1]], TICK.close(0))
     sched.add_request(Req(ids[2]))
     sched.add_request(Req(ids[3]))
     assert sched.added == [ids[1]] and sorted(gate.held) == [3]
     sched.schedule()
     sched.update()
-    assert gate.ready(sched)                             # the step that frees release 1 comes first
+    assert hook.ready()                                  # the step that frees release 1 comes first
     sched.schedule()
-    assert gate.ready(sched) and (sched.added, gate.T) == ([ids[1], ids[3]], TICK.close(1))
+    assert hook.ready() and (sched.added, gate.T) == ([ids[1], ids[3]], TICK.close(1))
     assert sched.finish_requests([ids[0], ids[2]], "aborted") == []
     s = gate.summary()
     assert (s["admitted"], s["lost"], s["dropped"], s["aborted"], s["skipped"], s["late"], s["opened"]) == (2, 2, 2, 0, 0, 0, None)
@@ -982,7 +1009,7 @@ def test_under_vllms_server_a_lost_releases_request_is_given_its_disconnect_and_
         call = asyncio.ensure_future(feed(numbered(0), receive, send))
         await turns()
         held = app.waits == 1 and not app.ended and not call.done()
-        mark = await request_of(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), [line(0, 2, [0]), b""])
+        mark = await request_of(feed, scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), [line(0, 2, [0]), b""])
         await turns()
         done = call.done()
         call.cancel()
@@ -1024,7 +1051,7 @@ def test_under_vllms_server_a_request_after_its_lost_line_is_refused_until_the_w
         parts: asyncio.Queue[dict] = asyncio.Queue()
         answer: list[dict] = []
         refused: list[list[dict]] = [[]]
-        stream = asyncio.ensure_future(feed(scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, into(answer)))
+        stream = asyncio.ensure_future(feed(scope_of(na.WATERMARK_PATH, {"x-verity-release-run": RUN}), lines.get, into(answer)))
         slow = asyncio.ensure_future(feed(numbered(1), parts.get, into(refused[0])))
         parts.put_nowait({"type": "http.request", "body": GREEDY[:9], "more_body": True})
         await turns()
@@ -1113,8 +1140,11 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
     """`TickAdmit` alone, the engine loop's queue a list: release 0's request is in the engine when its line names it
     lost, release 1's comes after that line, release 2 no line names; then a line the reader refuses breaks the stream."""
     q: list[Any] = []
-    admit = sa.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
+    admit = na.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
     got: list[sa.Delta] = []
+    ex = messages.Exchange()
+    admit.attach(ex)
+    ex.refuse = lambda input, why: (got.append(sa.Delta([], "", error=why)), admit.abort(input))   # the server's answer
 
     def head(n: int, run: str = RUN) -> dict[str, str]:
         return {"x-verity-release": str(n), "x-verity-release-run": run}
@@ -1143,7 +1173,7 @@ def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
     aborted and the first stream goes on; it is refused after that stream's end too. A POST that carries a release is
     a client's, whatever run it names: it is refused, takes no run's stream, and its release is passed to the gate."""
     q: list[Any] = []
-    admit = sa.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
+    admit = na.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
     got: list[sa.Delta] = []
     own = {"x-verity-release-run": RUN}
     adm = sa.Admission("h0", "e0", [1], None, got.append, {}, release=admit.key({**own, "x-verity-release": "0"}))
@@ -1175,9 +1205,9 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
     the block ends: ``address`` is the server's, ``held`` counts the requests that reached the gate and ``lines`` the
     watermark lines the server has read."""
     engine = SchedEngine()
-    gate = sa.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
-    sa.install(engine.sched, gate, key=lambda rid: rid.rsplit("-", 1)[0])
-    loop = so.EngineLoop(engine, None, gate=gate, sched=engine.sched)
+    gate = na.TickGate(TICK, hold_s=60.0, clock=lambda: 0.0)
+    hook = hooked(engine.sched, gate, key=lambda rid: rid.rsplit("-", 1)[0])
+    loop = so.EngineLoop(engine, None, gate=gate, hook=hook)
     held, lines = threading.Semaphore(0), threading.Semaphore(0)
     add = gate.add
 
@@ -1192,9 +1222,11 @@ def tick_endpoint() -> Iterator[SimpleNamespace]:
             lines.release()
 
     gate.add = counted
-    admit = sa.TickAdmit(loop.submit, loop.abort, take)
+    admit = na.TickAdmit(loop.submit, loop.abort, take)
+    admit.attach(hook.ex)
     server = so.Server(proto=so.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
-                       submit=loop.submit, abort=loop.abort, clock=lambda: 7, order=admit)
+                       submit=loop.submit, abort=loop.abort, clock=lambda: 7, order=admit, exchange=hook.ex,
+                       arrive=hook.arrive)
     http = so.HttpThread(server, "127.0.0.1", 0)
     runner = threading.Thread(target=loop.run, daemon=True)
     runner.start()
@@ -1320,6 +1352,7 @@ def test_serve_openai_takes_for_a_requests_line_what_the_network_attester_does()
         stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
         assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
         assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
+        assert so.request_line(line.decode("latin-1")) == hd.request_line(line), line
 
 
 def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_release_over_http():
@@ -1355,7 +1388,7 @@ def test_serve_openai_refuses_what_the_network_attester_passes_on_without_its_re
         wm.sendall(REL.WATERMARK_END)
         end = read_all(wm)
     assert [a.split(b"\r\n", 1)[0] for a in answers] == [b"HTTP/1.1 400 Bad Request"] * 2
-    assert all(hd.NO_REQUEST_LINE.encode() in a for a in answers)
+    assert all(so.NO_REQUEST_LINE.encode() in a for a in answers)
     assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
     assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
     s = e.gate.summary()
@@ -1390,7 +1423,7 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
         for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
             line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
             assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert sa.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
+            assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times():
@@ -1403,3 +1436,19 @@ def test_the_flag_takes_tick_with_the_engine_class_step_times():
     with pytest.raises(cli.UsageError, match="window-requests"):
         so.preflight(cli.parse("serve-openai", [*base, "--admit", "tick", "--tick-sat-ms", "1", "--tick-free-ms", "1",
                                                 "--window-requests", "4"], environ={}), which=lambda _: None)
+
+
+def test_serve_openais_tick_setup_takes_the_admission_hook_the_build_installed():
+    """`build.hooked` installs admission on an in-process scheduler with the install's own key; `--admit tick`'s setup
+    (`serve_openai.tick_admission`) then attaches its gate and frontend to that one hook, refusing nothing."""
+    sched = Sched()
+    built = admission.install(sched)
+    loop = SimpleNamespace(submit=lambda adm: None, abort=lambda eid: None, tick=lambda rec: None, gate=None, hook=None)
+    opts = SimpleNamespace(tick_bucket_ms=5.0, tick_sat_ms=1.0, tick_free_ms=1.0, admit_hold_ms=1000.0)
+    try:
+        hook, order = so.tick_admission(loop, sched, opts)
+        assert hook is built is loop.hook and isinstance(order, na.TickAdmit) and isinstance(loop.gate, na.TickGate)
+        assert [type(r).__name__ for _, r in messages.current().requests] == ["StartOnBoundary", "ServeRoute"]
+    finally:
+        built.uninstall()
+        messages.close()

@@ -55,13 +55,13 @@ under `key` released after `after`, read from `coins`, in order: the bytes a sam
 one (`withheldOn`). -/
 def sampleCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
-  let (c, roots) ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+  let (c, log) ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
     (getD coins "pins") (getD coins "main") (getD coins "session")
   unless withheldOn (getD coins "ledger") window do throw WITHHELD
   let segment := getD coins "segment"
   unless jsonStrIs (getD segment "label") label do
     throw s!"the draw's coins are not the challenger's {label} family's"
-  challengerStream c segment after (some (((roots.find? (·.1 == label)).map (·.2)).getD []))
+  challengerStream c segment after (some log)
 
 def COINS_MAIN : String :=
   "the copy of main's first-parent history a draw's coin evidence carries is not the verifier's own, commit for " ++

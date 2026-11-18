@@ -3,9 +3,9 @@ module
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
-public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.RegDraw
-public import Proofs.Flock.Soundness.Audit.Window
+public import Proofs.Spot.Sampling.Extraction
+public import Proofs.Spot.Sampling.RegDraw
+public import Proofs.Spot.Sampling.Window
 
 /-!
 # PoUW's work bound at the window audit (trusted)
@@ -82,7 +82,7 @@ import it. `TileWork` and `StraightLineExtraction` are named premises awaiting t
 
 namespace Pouw.WindowWork
 
-open Finset FlockSoundness.Audit
+open Finset Spot.Sampling
 open scoped ENNReal
 
 variable {Q R S : Type}
@@ -381,7 +381,7 @@ $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta
   b = \lceil \varepsilon W / w_{max} \rceil,$$
 `(R, τ)` the play's registration and state. A incorrect set holding `ε·W` of incorrect work holds at least `b` units, and
 the first term is the subset sampling design's own escape of `b` units (`SamplingDesign.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
-`FlockSoundness.Audit.SamplingDesign.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
+`Spot.Sampling.SamplingDesign.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
 main's served levels it is at most `2^-40.6` at `(ε, δ) = (0.1%, 2^-40)` and `2^-128.5` at `(1%, 2^-128)`,
 the recheck's probe 2):
 * where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is sampled and the first term is `0`
@@ -414,7 +414,7 @@ end Pouw.WindowWork
 
 namespace Pouw.Guarantees
 
-open Finset FlockSoundness.Audit
+open Finset Spot.Sampling
 open scoped ENNReal
 
 /-- **PoUW's work bound at the window audit** (statement only, no proof yet), at the window's share `ε`
@@ -434,7 +434,7 @@ $$\mathbb{E}_{H,s}\Pr[\text{accept before the sample coin} \wedge T + T_{ext} < 
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
 The challenger's wall-clock deadline (`Check.registration_deadline`) only refuses more, so the bound holds of what the
 service accepts at any deadline.
-The audit is `FlockSoundness.Audit.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
+The audit is `Spot.Sampling.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
 (`SamplingDesign.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
 (`window.sampling`), so the statement covers each grid main serves, `(0.1%, 2^-40)` and `(1%, 2^-128)`.
 

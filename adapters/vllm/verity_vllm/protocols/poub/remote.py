@@ -1,7 +1,7 @@
 """The Commit's PoUB session on its vLLM engine (`CommitSession`, ``--remote-verifier HOST:PORT``,
 `config.CommitConfig.remote_verifier`): PoUB's prover's serving loop (`verity.protocols.resource_accounting.memory.poub.prover.node_store.serving`:
 `StoreBackend`, `prove`, `Lockstep`, `KvDevice`) attached to the engine by the store binder
-(`verity_vllm.protocols.poub.binder`), the session in lockstep with the Commit's instrumented run.
+(`verity.protocols.resource_accounting.memory.poub.prover.binder`), the session in lockstep with the Commit's instrumented run.
 """
 from __future__ import annotations
 
@@ -27,8 +27,10 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.serving 
 from verity.protocols.resource_accounting.memory.poub.verifier import audit
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec
 
+from verity import hooks as H
+from verity_vllm import messages
 from verity_vllm.engine.handle import core_in_process, engine_of
-from verity_vllm.protocols.poub.binder import Binder
+from verity.protocols.resource_accounting.memory.poub.prover.binder import Binder
 from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
 __all__ = ["CommitSession"]
@@ -38,11 +40,13 @@ class CommitSession:
     """The Commit's PoUB session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
 
     ~~~text
-    engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
-                 pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
-    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner and the
-                 adapter's KV block events, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
+    install      before the build: on the exchange, the session's requests (`requests`: one GPU, synchronous steps, no
+                 prefix caching, the KV pool at ``kv_pages`` ranges, None: the engine's own, at the row's
+                 gpu_memory_utilization), which the build answers or refuses, and
+                 ``binder.Binder(store, passes=False, kv=False)``, subscribed to the
+                 adapter's memory hook (`engine.kv_blocks`, which the build attaches), registering weight tensors up to
+                 ``weight_blocks`` blocks.  The KV pool stays outside
                  the registration (served writes do, and live KV is uncredited for chat),
                  so no step writes a registered block and every pass reads every one
     check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
@@ -91,18 +95,11 @@ class CommitSession:
         self.record: dict[str, Any] | None = None
         self._thread: threading.Thread | None = None
 
-    def engine_args(self, engine_args: dict[str, Any]) -> dict[str, Any]:
-        why = []
-        if int(engine_args.get("tensor_parallel_size") or 1) != 1 or int(engine_args.get("pipeline_parallel_size") or 1) != 1:
-            why.append("parallelism (a store is one GPU's: a TP Commit's session is not wired yet)")
-        if engine_args.get("async_scheduling"):
-            why.append("async scheduling (a pass follows each step's schedule and its output in turn)")
-        if engine_args.get("enable_prefix_caching"):
-            why.append("prefix caching (a prefix hit brings a page back with its KV)")
-        if why:
-            raise SystemExit("--remote-verifier refuses " + "; ".join(why))
-        pool = {} if self.kv_pages is None else {"num_gpu_blocks_override": self.kv_pages}
-        return {**engine_args, "async_scheduling": False, "enable_prefix_caching": False, **pool}
+    def requests(self) -> list[H.Request]:
+        return [H.RequireProperty("world", 1, "a store is one GPU's: a TP Commit's session is not wired yet"),
+                H.RequireProperty("async_steps", False, "a pass follows each step's schedule and its output in turn"),
+                H.RequireProperty("prefix_cache", False, "a prefix hit brings a page back with its KV"),
+                *([] if self.kv_pages is None else [H.FixRanges(self.kv_pages)])]
 
     def target(self, target: Any) -> None:
         """Before the build: the row's target declares synchronous scheduling, so its Program is the one the engine
@@ -113,11 +110,13 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
+        ex = messages.current()
+        for r in self.requests():
+            ex.request("poub-session", r)
+        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install(ex)
 
     def before_build(self, ekw: dict[str, Any]) -> None:
-        """`engine_args`, `target` and `install` on the Commit's engine build arguments (``engine_args``, ``target``)."""
-        ekw["engine_args"] = self.engine_args(ekw["engine_args"])
+        """`target` and `install` before the Commit's engine is built (``target``)."""
         self.target(ekw["target"])
         self.install()
 

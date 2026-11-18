@@ -38,7 +38,7 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 (`locate`), a proof block's coordinates (`coords`) and its registered reads (`reads`). The fixture,
 `tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's docket, is four sampled proof blocks of a W8A8 MLP's window
 (two requests, one step, both linears, width 128: 512 proof blocks, registered `subset:4`), its weights registered as core's
-registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
+registered values and its step committed under test salts, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each proof block's Definition on its input rows. The
 window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is the registered fixture
 `tests/benchmarks/one_stage/fixtures/bundle-window` (its `BUNDLE_WINDOW`).

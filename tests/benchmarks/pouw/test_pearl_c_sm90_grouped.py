@@ -5,6 +5,7 @@ alone, at the unit's offsets; a call is eight launches whatever its experts; and
 and retained records are those of each unit called alone through `PearlCDeviceRun.gemm`, in unit order."""
 from __future__ import annotations
 
+import hashlib
 import json
 import struct
 
@@ -18,6 +19,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier.audit import wei
 from verity.protocols.resource_accounting.compute.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity_torch.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
@@ -265,7 +267,7 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
         pytest.xfail(f"compute-accounting's goal: Pearl+ hands the leaf kernels their salts ({e})")
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))
-    run = PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
+    run = PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, capacity=1 << 12,
                               schedule=schedule, salt_key=SALT_KEY)
     run.begin(retain=retain)
     return run, weights
@@ -425,6 +427,32 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
     rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == ["matmul 1 rows"]
+
+
+def test_grouped_check_keeps_a_pass_s_roots_in_out_and_never_its_manifest(tmp_path, capsys):
+    """What grouped_check puts in --out of a retained pass is its roots, counts and its manifest's sha256: no file the pass
+    keeps (its salts, its rows) is named.  And --passes is refused where it is, holds or sits in --out."""
+    C = load("pearl_c_sm90/grouped_check.py")
+    d = tmp_path / "pass"
+    (d / "y").mkdir(parents=True)
+    for f in ("rows-0.bin", "rows-0.salts", "y/0.salts", "y/0.tree"):
+        (d / f).write_bytes(b"\xa5" * 192)
+    man = d / "manifest.json"
+    man.write_text(json.dumps({"scheme": "pearl-c-h100-v1-h3", "units": 2, "tiles": 4, "transcript_root": "ab" * 64,
+                               "run": "grouped-check", "matmuls": [
+                                   {"index": 0, "rows": {"path": "rows-0.bin"}, "salts": {"path": "rows-0.salts"},
+                                    "y": {"tree": "y/0.tree", "salts": "y/0.salts"}}]}))
+    got = C.public_of(man)
+    assert got["manifest_sha256"] == hashlib.sha256(man.read_bytes()).hexdigest() and got["transcript_root"]
+    assert set(got) <= {"manifest_sha256", *C.PUBLIC}
+    kept = {p.name for p in (tmp_path / "pass").rglob("*") if p.is_file() and p.name != "manifest.json"}
+    assert kept and not any(name in json.dumps(got) for name in kept)
+    out = tmp_path / "run" / "out"
+    for passes in (out, out / "passes", tmp_path / "run" / "out" / ".."):
+        with pytest.raises(SystemExit) as ex:
+            C.main(["--out", str(out), "--passes", str(passes)])
+        assert ex.value.code == 2 and "never go under --out" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_the_vllm_call_runs_unsplit_on_a_cubin_without_pd_tree_g():

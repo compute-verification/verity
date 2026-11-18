@@ -21,8 +21,8 @@ The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "l
 (`service.params_sampling_design`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
-the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
-templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
+the wired Program of a record that lists its members over them (`interface.listed_program`, ``Q_template_instances``) is the
+one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified sampling design it is refused by name, its strata being templates).  ``partition.json`` beside the window
 is the derived file, digest and members included.  ``scope.op_path_prefix`` restricts the population to one module
@@ -60,7 +60,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    ``x`` table (every token's input row), the ``w`` table (every weight row ``W[c, :]``) and ``y``,
                                    the instances referencing them by ``verity/one-stage/gemm-grid/v0`` (`gemm_rows`); the tables
                                    are fixed by the layout, never by the values, so repeated rows stay separate table rows
-  ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v1`` rows of that K, A6's bit rows per instance:
+  ``ScaledMmS8Coordinate_v1{K=..}``  every coordinate of the ``ScaledMmS8_v3`` rows of that K, A6's bit rows per instance:
                                    ``x`` (the token's s8 codes then its f32 scale, row-seg), ``w`` (``W[c, :]`` then ``sw[c]``,
                                    v2) -> ``o0`` (the bf16 output, a v2 row of its one word); with ``row_tables``, shared
                                    rows (`with_row_tables`): the ``x`` table the chunk's distinct token rows, each a row of its
@@ -353,7 +353,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
+    ``ScaledMmS8_v3`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
     then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
     ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
     table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
@@ -422,7 +422,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
     n_of = {t: sum(m.n for m in ms if m.template == t) for t in tmpls}
-    program, query = CS.population_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], several=q == TEMPLATE_QUERIES[1])
+    program, query = IF.listed_program([(fn, n_of[t]) for fn, t in zip(defs, tmpls, strict=True)], ())
     table = work_table_of(sampling_design, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
@@ -743,7 +743,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     domain ids they read by reference (`interface.supplied`), their roots its ``registered_roots`` too.  A window of history
     tables (``"histories": true``) takes the committer's ``histories`` (`commit.history_tables.Histories`, kept across the
     run's windows), its tables' roots among its ``registered_roots`` (`window_values`).  A row-table layout takes the serving
-    loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots": {engine step: root}}``
+    loop's ``row_tables``: ``{"context": <hex>, "step_roots": {engine step: root}, "salts": {engine step: its rows' salts}}``
     (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
     the provenance carries as ``circuit``.  For Programs a registered compiler made from advice, the provenance also carries ``binding``: the
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
@@ -757,7 +757,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     data, entries, roots, salts_of, strings_of, idx, hreg = window_values(window, rows, store, weights, arrivals, weight_values,
                                                                           tables, histories, HR.on(pf))
     t_read = time.perf_counter()
-    c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
+    c = CS.commit(window, data, table_salts=rt.get("salts"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1), salts_of=salts_of, strings_of=strings_of)
     prov = {"commitment": step_rows.NAME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),

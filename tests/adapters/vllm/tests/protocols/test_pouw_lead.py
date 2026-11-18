@@ -31,6 +31,7 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
+from verity_vllm.protocols.interface import BUILD_BOUND
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"
@@ -170,7 +171,7 @@ def _x(m: int, seed: int) -> torch.Tensor:
 def test_the_lead_is_a_scheme_that_executes_and_keeps_its_weights():
     assert PL.SCHEME in pouw.schemes() and PL.SCHEME in pouw.EXECUTED
     assert pouw.executes(PL.SCHEME) == pouw.EXECUTES
-    assert pouw.keeps_weight_copy(PL.SCHEME, _ctx()) and not pouw.requires_build(PL.SCHEME, _ctx())
+    assert pouw.keeps_weight_copy(PL.SCHEME, _ctx()) and BUILD_BOUND not in pouw.requests(PL.SCHEME, _ctx())
 
 
 def test_the_lead_refuses_what_it_cannot_be():

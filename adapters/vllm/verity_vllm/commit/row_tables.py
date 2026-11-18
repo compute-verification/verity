@@ -22,6 +22,7 @@ opening against its table's step root, with the rows and salts in the clear when
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -55,7 +56,7 @@ def layer(op_path: str) -> int | None:
 
 def row_table(engine_step: int, op_path: str, template: str, words: int, rows: Iterable[tuple[str, int, int]]) -> CS.RowTable:
     """One int8 quantize output's row table: the token rows of one linear (``op_path``) at one engine step (the table's
-    segment), as its ``ScaledMmS8_v1`` rows read them (``words`` u16 words: the s8 codes, then the f32 scale), each row keyed
+    segment), as its ``ScaledMmS8_v3`` rows read them (``words`` u16 words: the s8 codes, then the f32 scale), each row keyed
     ``(request, token row, program row)``; its ``window.json`` entry names the step, layer and op_path."""
     return CS.RowTable(int(engine_step), op_path, template, int(words), tuple((str(r), int(t), int(i)) for r, t, i in rows),
                        (("engine_step", int(engine_step)), ("layer", layer(op_path)), ("op_path", op_path), ("columns", COLUMNS)))
@@ -72,23 +73,28 @@ def check_order(tables: Sequence[CS.RowTable]) -> None:
 
 @dataclass(frozen=True)
 class StepRoots:
-    """One engine step's row tables as serving committed them: ``root``, what the loop records before the step's coin, and each
-    table's ``(op_path, root)`` in the step's order."""
+    """One engine step's row tables as serving committed them: ``root``, what the loop records before the step's coin, each
+    table's ``(op_path, root)`` in the step's order, and ``salts``, its rows' (192 bytes each: its tables in order, each table's
+    rows by (request, token row)), which the window's commit takes again (`rows.commit`'s ``table_salts``)."""
     engine_step: int
     root: bytes
     tables: tuple[tuple[str, bytes], ...]
+    salts: bytes
 
 
-def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
-               workers: int = 1) -> StepRoots:
+def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], *,
+               salts: bytes | None = None, workers: int = 1) -> StepRoots:
     """Engine step ``engine_step``'s root, from its int8 quantize outputs once all are written: ``outputs[op_path] = (rows, codes,
     scales)``, ``rows[b]`` batch row ``b``'s ``(request, token row)``, ``codes`` the (B, K) s8 codes and ``scales`` the (B,) f32
     scales (host copies).  Its tables go in ``table_key`` order, each table's rows by (request, token row), under ``context``
-    (64 bytes: the live coin commitment's root) and salted by ``serving_rows.segment_salts`` (the step is the segment) under
-    ``key``, the run's row key (32 bytes), which the window's commit takes again as ``row_salt_key``."""
+    (64 bytes: the live coin commitment's root), each row under 192 fresh bytes from the OS, or ``salts`` where given (the
+    step's rows' salts, as `StepRoots.salts` lays them out)."""
     order = sorted(outputs, key=table_key)
     rows, ys, domains = {}, {}, {}
-    ss = CS.segment_salts(key, engine_step, sum(len(outputs[op][0]) for op in order))
+    n = sum(len(outputs[op][0]) for op in order)
+    ss = os.urandom(n * CS.SALT_BYTES) if salts is None else bytes(salts)
+    if len(ss) != n * CS.SALT_BYTES:
+        raise ValueError(f"step {engine_step}: {len(ss)} bytes of salts for its {n} table rows, not {CS.SALT_BYTES} a row")
     at = 0
     for i, op in enumerate(order):
         ids, codes, scales = outputs[op]
@@ -106,7 +112,7 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
         domains[op] = RT.table_domain(context, engine_step, i, len(keys))
     roots, _bc = CS.commit_ports(domains, rows, {}, ys, workers=workers, schemas=dict.fromkeys(order, CS.TABLE_SCHEMA))
     tables = tuple((op, roots[op]) for op in order)
-    return StepRoots(engine_step, RT.step_tree(context, engine_step, [r for _, r in tables]).root, tables)
+    return StepRoots(engine_step, RT.step_tree(context, engine_step, [r for _, r in tables]).root, tables, ss)
 
 
 @dataclass(frozen=True)

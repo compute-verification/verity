@@ -35,8 +35,11 @@ def test_the_arm_is_the_tick_arm_with_the_attester_in_front(tmp_path: Path, monk
     tau = S.tick_args(None, "220,230", bucket_ms=cells["bucket_ms"])
     assert tau == {"bucket_us": 250000, "sat_us": 220000, "free_us": 230000, "calibrated_from": None}
     assert S.tick_args(None, "220,230")["bucket_us"] == 100000
-    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0)
+    with pytest.raises(SystemExit, match="keeps files on the node"):
+        S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0)
+    env = S.server_env(arm, tmp_path, tmp_path / "site", tau, 600.0, 600.0, private=tmp_path / "private")
     plugin = json.loads(env[S.PLUGIN_ENV])
+    assert plugin["private"] == str(tmp_path / "private")
     assert {k: plugin.get(k) for k in ("record", "to_length", "idle_reset", "release_order")} == {
         "record": True, "to_length": True, "idle_reset": True, "release_order": None}
     assert {k: json.loads(env["VERITY_TICK"])[k] for k in ("bucket_us", "sat_us", "free_us")} == {
@@ -231,7 +234,10 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
         arm=ARM, model_id="glm53", checkpoint="/ck", client="vllm-bench", side="server", loads="chat=96", cells=None,
         front=18750, tick_from=None, tick_ms="220,220", stop_at="1970-01-01T01:25:00Z" if ends == "stop-at" else None,
         num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, lifetime=None,
-        out=str(out))
+        out=str(out), private=None)
+    with pytest.raises(SystemExit, match="records its step trace"):
+        S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
+    a.private = str(tmp_path / "private")
     rc = S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # --stop-at is 100 s off, and the side stops `STOP_S` before it
@@ -243,6 +249,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
                       ("stop", "server", 120.0)]
     rec = json.loads((out / S.SERVER_RECORD).read_text())
     assert (rec["arm"], rec["side"], rec["cells"]["lanes"], rec["tick"]["bucket_us"]) == (ARM, "server", 96, 250000)
+    assert S.private_of(out) == (tmp_path / "private").resolve()
     assert rec["stopped"] == {"certifier": "the network certifier's run ended", "stop-at": "--stop-at",
                               "front": "the id front exited with 1 (server/front.log)"}[ends]
     assert rec["prefix_resets"] == [{"t": 5001.0, "idle_s": None, "reset": True}] and rec["server_stop"] == "exited"

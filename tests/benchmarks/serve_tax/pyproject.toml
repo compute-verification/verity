@@ -40,6 +40,18 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     # a profile's job (tests/test_profile.py): the profiles' reader, and the code whose refusals a profile's result
     # quotes, the boundary commitment's and the modules it imports
     "benchmarks/harness/verity_bench/profiles.py",
+    # --feature's scheme by name (`serve_tax.feature`): the kit's reader of the schemes' table, the table, and the
+    # schemes it registers
+    "benchmarks/harness/verity_bench/schemes.py",
+    "verity/protocols/resource_accounting/scheme.py",
+    "verity/protocols/experimental/__init__.py",
+    "verity/protocols/experimental/dither/__init__.py",
+    "verity/protocols/experimental/dither/scheme.py",
+    "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+    "verity/protocols/resource_accounting/compute/pouw/prover/schemes/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/__init__.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/kernel_schemes.py",
+    "verity/protocols/resource_accounting/compute/pouw/verifier/protocol.py",
     "adapters/vllm/verity_vllm/commit/__init__.py",
     "adapters/vllm/verity_vllm/commit/history_tables.py",
     "adapters/vllm/verity_vllm/engine/sampler_capture.py",
@@ -84,6 +96,17 @@ inputs = ["benchmarks/serve_tax", "benchmarks/production.toml", "verity/errors.p
     "benchmarks/network_e2e/traces/traffic.py",
     # the record of the value settings in force that an arm's meta.json and a replay's replay.json hold
     "adapters/vllm/verity_vllm/settings.py",
+    # every file the writers keep on the node matches research_outputs.PRIVATE (tests/test_private_names.py): the
+    # list, the modules it imports, and the replay ladder's writer
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/log.py",
+    "adapters/vllm/verity_vllm/query/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/__init__.py",
+    "adapters/vllm/verity_vllm/query/manifest/format.py",
+    "benchmarks/replay_ladder/ladder.py",
+    "benchmarks/spot_proved/long_rows.py",
     # a point's member carries its card's record's `short`, the record found by the name nvidia-smi gives the card
     "verity/device.py",
     "calibration/hardware/cards",

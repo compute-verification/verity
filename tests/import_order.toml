@@ -356,6 +356,14 @@ reaches = [
 
 [[place]]
 paths = [
+    "verity/protocols/compose/schemes.py",
+]
+loads = [
+    "verity/protocols/resource_accounting/scheme.py",
+]
+
+[[place]]
+paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true
@@ -502,7 +510,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_period.py",
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py",
 ]
 
 [[place]]
@@ -553,6 +560,7 @@ loads = [
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
+    "verity/protocols/resource_accounting/scheme.py",
     "verity/runtime",
 ]
 
@@ -649,6 +657,16 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/manifest.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/served_y.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/window.py",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
+    "verity/protocols/resource_accounting/memory/pous/scheme.py",
+]
+loads = [
+    "verity/commitments",
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
@@ -874,8 +892,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/network/prover/scan_zk.py",
     "verity/protocols/resource_accounting/network/prover/serve_head.py",
     "verity/protocols/resource_accounting/network/prover/stop_verdicts.py",
-    "verity/protocols/resource_accounting/network/prover/window_chain.py",
-    "verity/protocols/resource_accounting/network/prover/window_charge.py",
 ]
 
 [[place]]

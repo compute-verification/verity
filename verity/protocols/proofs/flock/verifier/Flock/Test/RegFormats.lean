@@ -104,7 +104,7 @@ def seg := HmRow.ROW_SCHEMA_SEG
 #guard !passes v2Port v2 (file (hexOf (root v2)) (some 32) (wordBits := 32) (schema := some v2))
 #guard !passes segPort seg (file (hexOf (root seg)) (some 64) (schema := some seg))
 #guard why v2Port v2 (file (hexOf (root v2)) (some 31) (schema := some v2)) ==
-  "registered reads: port w's rows are 512 bits (32 u16 words), not weights's registered rows of 31 16-bit leaves"
+  "registered reads: port w's rows are 512 bits (32 u16 words), not weights's registered rows of 31 16-bit leaves; a reader of registered leaves at another width (the same bits cut again, low part first) is not read until the Program's Lean defines that cut"
 
 -- the file: a bit row names its words, and `row_schema` is one of the three
 #guard !(Registered.ofJson (file (hexOf (root v2)) none (schema := some v2))).toBool

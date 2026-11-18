@@ -16,11 +16,13 @@ import types
 import numpy as np
 import pytest
 from verity.protocols.resource_accounting.compute.pouw.prover import circuit
-from verity.protocols.resource_accounting.compute.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.prover.schemes import get, pearl_c
+from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import IDENTIFIED
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import h1 as pouw_h1
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import lead as pouw_lead
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import ncp as NCP
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import operands as OPS
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PPK
 from verity.protocols.resource_accounting.compute.pouw.verifier import registration
@@ -108,7 +110,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+    assert pouw.schemes() == tuple(sorted({*IDENTIFIED, *circuit.SCHEMES, *PEARL_C_SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
     assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
@@ -139,7 +141,7 @@ def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
                                       ({"settings": {"pouw": {"salt": "x"}}}, "unknown pouw settings"),
                                       ({"settings": {"pouw": {"weight_operands": "resident"}}}, "unknown pouw settings")])
 def test_a_run_the_adapter_cannot_serve_is_refused(kw, match):
-    assert any(match in r for r in pouw.refusals("ncp-v1", _serve("pouw:ncp-v1", **kw)))
+    assert any(match in r for r in PO.refusals(_serve("pouw:ncp-v1", **kw)))
 
 
 def test_pouw_executes_the_linear_apply_and_only_ncp_v2_is_admitted_beside_spot():
@@ -380,7 +382,7 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
-    s = PPD.scheme_of("pearl-c-sm120-v1-h3")
+    s = pearl_c_scheme("pearl-c-sm120-v1-h3")
     seen: list[tuple] = []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
 

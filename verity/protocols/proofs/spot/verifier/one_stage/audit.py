@@ -43,10 +43,13 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
-def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
-    """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
-    `SamplingDesign.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
-    helps)."""
+def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float,
+            credited: frozenset[int] = frozenset()) -> IntegrityProfile:
+    """The audit's integrity profile under any of the four sampling designs. The work sampling design is the
+    stratified sampling design at its sizes (Lean `SamplingDesign.work`), so its profile is the same `Stratified`
+    one, counting the sampled proof blocks (a closure proves more, and only helps). ``credited`` is the first-level
+    numbers `resource_accounting.scheme.credited` returns; it refuses them unless each is a block of every level
+    (`profile.CREDITED_UNSPLIT`)."""
     if draw["law"] == "subset":
         sampling_design = Subset(draw["k"])
     elif draw["law"] == "bernoulli":
@@ -57,7 +60,7 @@ def profile(docket: Mapping[str, Any], draw: Mapping[str, Any], delta: float) ->
         raise ValueError(f"no profile for a {draw['law']!r} sample")
     return IntegrityProfile(levels=(Level(LEVEL, docket["partition"]),), sizes=(docket["population"],),
                             draws={LEVEL: sampling_design}, delta=delta, programs=(docket["program"],),
-                            drawn={LEVEL: len(draw["units"])})
+                            drawn={LEVEL: len(draw["units"])}, credited=credited)
 
 
 def core_sampling_design(sampling_design: Mapping[str, Any], population: int) -> Stratified | None:

@@ -43,7 +43,10 @@ def build(entry: KernelScheme, **config: Any) -> PoUWScheme:
             raise NotImplementedError(f"{entry.name}: built by {entry.seam}, which registers {entry.family!r} when "
                                       "imported")
         raise KeyError(f"{entry.name} is a {entry.family} scheme, which no PoUWScheme builds")
-    return BUILDERS[entry.family](**entry.parameters, **config)
+    s = BUILDERS[entry.family](**entry.parameters, **config)
+    if s.name != entry.name:
+        raise ValueError(f"the scheme built for {entry.name!r} names itself {s.name!r}")
+    return s
 
 
 def get(name: str, **config: Any) -> PoUWScheme:
@@ -55,7 +58,7 @@ def of(scheme: str, card: str, pinned: bool, **config: Any) -> PoUWScheme:
     """The scheme the resource scheme ``scheme`` runs on the card whose short name is ``card``, with registration
     pinning the weights B or not (`kernel_schemes.resolve`)."""
     entry = resolve(scheme, card, pinned)
-    return build(entry, **config) if entry.card else build(entry, card=card, pinned=pinned, **config)
+    return build(entry, **config) if entry.cards else build(entry, card=card, pinned=pinned, **config)
 
 
 def register(family: str, make: Callable[..., PoUWScheme]) -> None:

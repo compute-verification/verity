@@ -19,7 +19,7 @@
 #                                        # committed under PRIVATE/two-stage/boundary
 #   bash benchmarks/serve_tax/run.sh --model glm53 [--arms "ARM ..."|all] [--loads NAME[=RUNG+RUNG...],...]
 #     [--dataset NAME=FILE] [--reps 6] [--target PERCENT] [--json]   # the serving cost, by vLLM's own client
-#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size --find-load|--feature ARM
+#   bash benchmarks/serve_tax/run.sh --model llama32-1b --profile coding-agent|chat|fixed-size --find-load|--feature SCHEME
 #     # a serving profile of benchmarks/production.toml: where stock saturates, or one arm of ours beside stock
 # The last form is the serving cost (README.md): each flag sets the variable of its name (MODEL_ID, ARMS, LOADS, DATASETS,
 # REPS, TARGET, JSON) and any of them makes vLLM's own client the default (CLIENT=vllm-bench: `vllm bench serve`, no C4
@@ -37,9 +37,10 @@
 # and FIND_LOAD in the environment are refused. --find-load serves stock alone over its load's rungs (serve_tax.LOADS;
 # requests in flight up to the profile's prompts) and prints where its output
 # tokens a second stop rising: the file's line, the version to raise and the pin test's digest
-# (OUT/find_load.{json,txt}); it edits no file. --feature ARM serves stock and ARM in turn at the profile's one load,
-# two lifetimes of three reps each, and writes the result's three lines, the first our extra card time a token
-# (OUT/serving_profile.{json,txt}). Where ARM
+# (OUT/find_load.json); it edits no file. --feature SCHEME names a registered useful-work scheme (serve_tax.feature),
+# whose arm ARM is served with stock in turn at the profile's one load, two lifetimes of three reps each, and writes
+# the run's result through the kit's report: its three lines, the first our extra card time a token under the model's
+# metric id. Where ARM
 # refuses what the profile has on, the result is `cannot run` in the refusal's words and the job exits 1, as for an
 # arm whose run refuses it; where a change on our side alone lets the same prompts through, ARM is served with it
 # (OURS, its label in the result) as the second line, stock unchanged. The passes are planned within the model's
@@ -82,9 +83,11 @@
 # is served whole, under the same lease.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
-# <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
-# A serve's later stages read it, so without it such an arm is refused; in the serving cost's form alone, where nothing
-# reads it afterwards, each such arm gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
+# <arm>/server/boundary.PID.jsonl), the history tables, the top-k's counters, and an arm's step traces, served ids and
+# edges' outputs (PRIVATE/<arm>/server/, each gzipped at the job's end), and each replay's tokens (PRIVATE/replay-<mode>).
+# It is a directory outside every run's. A serve's later stages read it, so without it an arm that records, a replay,
+# or such an arm under the corpus client is refused; in the serving cost's form alone, where nothing reads it
+# afterwards, an arm that records nothing gets a fresh one, removed when it stops. BOUNDARY_ROWS replaces the object of an
 # arm's boundary commitment (a model with no check template of its own needs it).
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
@@ -130,7 +133,7 @@
 # through the card files, never from the machine's name.
 set -uo pipefail
 [ -z "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ] || {
-  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature ARM" \
+  echo "serve-tax: PROFILE, FEATURE and FIND_LOAD are not read from the environment: --profile NAME with --feature SCHEME" \
     "or --find-load"; exit 2; }
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
@@ -145,7 +148,7 @@ while [ $# -gt 0 ] && [ "$1" != leased ]; do
       esac
       shift ;;
     *) echo "serve-tax: unknown flag $flag (--model, --arms, --loads, --dataset NAME=FILE, --reps, --target, --json," \
-         "--profile NAME, --feature ARM, --find-load)"; exit 2 ;;
+         "--profile NAME, --feature SCHEME, --find-load)"; exit 2 ;;
   esac
   CLIENT=${CLIENT:-vllm-bench}
 done
@@ -159,7 +162,7 @@ if [ "${1:-}" != leased ] && [ -n "${PROFILE:-}${FEATURE:-}${FIND_LOAD:-}" ]; th
   [ -n "${PROFILE:-}" ] || { echo "serve-tax: --feature and --find-load are a profile's: --profile NAME"; exit 2; }
   case "${FEATURE:+f}${FIND_LOAD:+l}" in
     f|l) ;;
-    *) echo "serve-tax: --profile $PROFILE takes --feature ARM or --find-load, one of them"; exit 2 ;;
+    *) echo "serve-tax: --profile $PROFILE takes --feature SCHEME or --find-load, one of them"; exit 2 ;;
   esac
   fixes() { echo "serve-tax: --profile $PROFILE fixes $2 (benchmarks/production.toml): drop $1"; exit 2; }
   [ -z "${ARMS:-}" ] || fixes "--arms/ARMS" "the arms: its stock and --feature's arm, or stock alone for --find-load"
@@ -228,23 +231,17 @@ case $MODEL_ID in
   llama8b|qwen3-30b|llama32-1b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
   *) echo "serve-tax: MODEL_ID is moonlight, glm53, glm53-standin, llama8b, qwen3-30b or llama32-1b, not $MODEL_ID"; exit 2 ;;
 esac
-# CUDA_HOME, where unset: the toolkit of torch's own CUDA under /usr/local, which FlashInfer's JIT (vLLM's default
-# sampler) builds with; a newer toolkit can lack its headers (cuRAND)
-if [ -z "${CUDA_HOME:-}" ]; then
-  v=$("$PY" -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
-  [ -n "$v" ] && [ -d "/usr/local/cuda-$v" ] && export CUDA_HOME=/usr/local/cuda-$v
-fi
-# nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
-# /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
-# itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
+# CUDA_HOME: the toolkit of torch's own CUDA, which FlashInfer's JIT (vLLM's default sampler) builds with (a newer
+# toolkit can lack its headers, cuRAND), and whose nvcc the kv and boundary arms build the row-table kernels with; with
+# FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries itself (an inherited
+# CPATH or LIBRARY_PATH could mix toolkits)
+[ -n "${CUDA_HOME:-}" ] || { echo "serve-tax: CUDA_HOME is not set: set it to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)"; exit 2; }
+export CUDA_HOME
 if [ "${FLASHINFER:-0}" = 1 ]; then
-  CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
-  export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH"
+  export PATH="$CUDA_HOME/bin:$PATH"
   unset CPATH LIBRARY_PATH
 else
-  command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
-    [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
-  done
+  command -v nvcc >/dev/null || export PATH="$PATH:$CUDA_HOME/bin"
 fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
@@ -414,6 +411,12 @@ elif [ "${CAPACITY:-0}" != 1 ]; then
   "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
     --span-s "$SPAN_S" ${REQUESTS:+--requests "$REQUESTS"} --docs "$DOCS" --out "$PLAN" || exit 1
 fi
+if [ -z "${PRIVATE:-}" ]; then
+  recording=$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve_tax as S
+print(" ".join(a for a in sys.argv[2:] if S.records(S.ARMS[a])))' "$here" ${ARMS:-}) || exit 2
+  [ -z "$recording" ] || { echo "serve-tax: arms $recording record their step traces, served ids or edges' outputs, which hold request values: PRIVATE, a directory outside every run's"; exit 2; }
+  [ -z "${REPLAY:-}" ] || { echo "serve-tax: REPLAY keeps each replay's tokens on the node: PRIVATE, a directory outside every run's"; exit 2; }
+fi
 fresh_kv=0
 if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
   KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
@@ -447,7 +450,9 @@ else
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+gzip -f "$OUT"/*-replay/*.jsonl 2>/dev/null
+[ -z "${PRIVATE:-}" ] || gzip -f "$PRIVATE"/*/server/step_trace.*.jsonl "$PRIVATE"/*/server/ids.*.jsonl \
+  "$PRIVATE"/*/server/edges/outputs.*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"

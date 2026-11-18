@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 #: the row Definitions whose Calls are cut into template instances (their bodies batch the template), the rest being the row itself
-CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
+CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v3")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
 #: word with the row's quantisation of its own, where its ``PARTS`` quantise the row once; the block-scaled FP8 GEMM,
@@ -212,9 +212,10 @@ class Template:
     ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
-    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template that is a Boolean Definition with no word
-    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits and no words: each port is committed
-    as a bit row, its bits low first (`interface.unit_rows`, which holds each to whole u16 words); else ``"row"``).
+    ``HISTORY`` row's history reads (`history_read`); ``"bits"`` for a row template with a port of bits and no word
+    Definition (DSA's long row's units: the mask's cut and the index), whose ports are bits but a word a read takes (a slot's
+    position): each port is committed as a bit row, its bits low first, or as its words (`interface.unit_rows`, which holds
+    each to whole u16 words); else ``"row"``).
     ``packed``: a row, coordinate, column block, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
@@ -233,7 +234,7 @@ def template(t: str) -> Template:
     """Template ``t`` through its word link: the registered Definition it names, bound to exactly ``t``; the word Definition it computes
     (`trace.word_of` for a Boolean Definition), whose signature is the template's word view; refused by name when ``t`` names no
     Definition or a port of its word view is not 16-bit words (a row or coordinate template's: not whole u16 words of one ``PACKED``
-    width; a Boolean row template with no word Definition is laid out as its bits, ``"bits"``)."""
+    width; a row template with a port of bits and no word Definition is laid out as its bits, ``"bits"``)."""
     hit = _TEMPLATES.get(t)
     if hit is not None:
         return hit
@@ -279,7 +280,7 @@ def template(t: str) -> Template:
               else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
-    if layout == "row" and w is fn and widths == {1}:
+    if layout == "row" and w is fn and 1 in widths:
         layout = "bits"
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused", "history", "bits"):
@@ -538,8 +539,8 @@ def block_rows(N: int, G: int) -> list[int]:
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
 
 
-#: the most u16 words of a row of an embedding shard's tables (`shard_block`).  A key's tables are at the widths this gives,
-#: so another value is another nonce scheme: `expert_tables.NONCES` changes with it, and a key minted for this one is refused
+#: the most u16 words of a row of an embedding shard's tables (`shard_block`): a registration's tables are at the widths this
+#: gives, so another value is another registration
 SHARD_ROW = 256
 
 
@@ -547,8 +548,7 @@ def shard_block(H: int) -> int:
     """The one width, in u16 words, an ``EmbeddingShard_v1`` row of H columns is read at and its tables are registered at: the
     widest H / 2^k of at most `SHARD_ROW` words, a column block of the row a ``READ`` keyed by the token over a table of the
     whole vocabulary (`expert_rows.shard_param`).  It is a function of H alone, so a field has one width and nothing asks for a
-    second: a table's nonce is its field's place and its block (`expert_tables.nonces`), and a second width of the field would
-    sample the first's salts."""
+    second."""
     w = int(H)
     while w > SHARD_ROW and w % 2 == 0:
         w //= 2

@@ -12,11 +12,8 @@ public import Definitions.Flock.Sparse
 public import Definitions.Flock.Merkle
 public import Definitions.Flock.MerklePair
 public import Definitions.Flock.Circuit
-public import Definitions.Flock.Audit.SamplingDesign
 public import Definitions.Flock.Defs
 public import Definitions.Flock.Extract
-public import Definitions.Flock.Audit.Harm
-public import Definitions.Flock.Audit.Partitioning
 public import Definitions.Flock.Recursive.Holo
 public import Definitions.Flock.Lowering
 public import Definitions.Flock.Rewinding

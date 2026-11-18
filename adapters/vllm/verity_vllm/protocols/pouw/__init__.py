@@ -25,7 +25,7 @@ the transcript root with its unit and tile counts.  Pearl-C's also says what it 
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.resource_accounting.compute.pouw.verifier.audit`'s, after the run.  Beside SPOT the composition asks
-`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
+`verity.protocols.resource_accounting.compute.pouw.prover.circuit` (registered as ``pouw``, `scheme.register_circuits`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
 runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
@@ -101,13 +101,15 @@ from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
 )
 
 from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
-from verity_vllm.protocols.interface import Context, Option, Target
+from verity import hooks as H
+from verity_vllm.protocols.interface import BUILD_BOUND, Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals"]
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals",
+           "requests"]
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
@@ -263,10 +265,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     out = []
     if scheme not in EXECUTED:
         out.append(f"{scheme}: this adapter's executor runs {', '.join(EXECUTED)} only")
-    if not ctx.enforce_eager:
-        out.append("compiled execution: the wrapper around each linear layer's apply is not graph-capturable")
-    if ctx.world > 1:
-        out.append(f"TP {ctx.world}: PoUW's units and transcript are per rank, which is not wired")
     try:
         settings = Settings.of(ctx.settings_of(NAME))
     except ValueError as e:
@@ -289,9 +287,13 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
-def requires_build(scheme: str, ctx: Context) -> bool:
-    """The circuit-backed executor is lowered into the row's Build."""
-    return scheme in NCP_CIRCUIT_SCHEMES
+def requests(scheme: str, ctx: Context) -> tuple[H.Request, ...]:
+    """Eager execution and one rank, and for the circuit-backed executor, which is lowered into the row's Build, the
+    profile's kernels."""
+    return (H.RequireProperty("eager", True, "compiled execution: the wrapper around each linear layer's apply is not "
+                              "graph-capturable"),
+            H.RequireProperty("world", 1, "PoUW's units and transcript are per rank, which is not wired"),
+            *((BUILD_BOUND,) if scheme in NCP_CIRCUIT_SCHEMES else ()))
 
 
 def cuts(scheme: str) -> bool:
@@ -318,9 +320,9 @@ def linear_types() -> tuple[type, ...]:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[NcpCircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
-# without it fail its root check). Pearl-C's is sampled afresh by each `commit_weights` (so each install's W, and its salt
-# session, is its own); the others' once a process, one execution phase (`commit_weights`).
+# The prover's hm96 salt key per entry outside Pearl-C, whose install takes none: its weight trees' salts, read by `install`,
+# never in the record (published commitments without it fail its root check), once a process, one execution phase
+# (`commit_weights`).
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -425,9 +427,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PEARL_C_SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        key = _SALT_KEYS[entry] = pearl_c_salt_key(scheme)
         device_roots = pearl_c_weight_roots(PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
-                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -488,7 +489,7 @@ def install(scheme: str, target: Target) -> Option:
         if device:
             run = PearlCDeviceRun(s, entry, PearlCKernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
+                                      schedule=settings.schedule, pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
         else:
             run = (NcpCircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None

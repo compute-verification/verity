@@ -37,9 +37,13 @@ def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_S
 
 /-- The keys a `FORMAT` file holds. -/
 def FILE_KEYS : List String := ["format", "ports"]
+/-- The key of a tree port: `{template, field}`, the one tree of the writer template's output field its link row reads
+by path, its positions its writers' leaves in that tree from the verifier's program (`withTrees`), its `reads` empty. -/
+def TREE_KEY : String := "tree"
 /-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. -/
 def PORT_KEYS : List String :=
-  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param"]
+  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param",
+    TREE_KEY]
 
 /-- Every key of the object `j` is one of `keys`. -/
 def keysIn (j : Json) (keys : List String) : Bool :=
@@ -78,7 +82,9 @@ another template), and its rows' leaf schema. A row is `words` leaves of `wordBi
 neither (`words` none, `wordBits` 16) has rows of 16-bit words, the port's own. A `hm96-sha512/row/v1` row is laid out
 in whole SHA-512 blocks (`rowWords`); a `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1` row is a bit row of exactly
 `words · wordBits` bits, as the circuit's port of that schema is. The reads are `readsRel` from unit `readsFrom` on: unit
-`readsFrom + i` reads `readsRel[i]`, and every other unit reads nothing (`readAt`; `reads`, the population-long array). -/
+`readsFrom + i` reads `readsRel[i]`, and every other unit reads nothing (`readAt`; `reads`, the population-long array).
+A tree port (`tree`, the writer template and output field) states no reads: the verifier's program gives them
+(`withTrees`). -/
 structure Port where
   name : String
   value : String
@@ -90,6 +96,7 @@ structure Port where
   readsRel : Array (Option Nat)
   schema : String := HmRow.ROW_SCHEMA
   readsFrom : Nat := 0
+  tree : Option (String × String) := none
   deriving Inhabited
 
 /-- The position every unit reads, from unit 0: none for each unit below `readsFrom`, then `readsRel`. The verifier
@@ -146,7 +153,13 @@ def portsOf (j : Json) : V (Array Port) := do
     let reads ← (← J.arr e "reads" ctx).mapM fun r => match r with
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
-    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
+    let tree ← if !J.has e TREE_KEY then pure none else do
+      let tj ← J.get e TREE_KEY ctx
+      if !keysIn tj ["template", "field"] || !reads.isEmpty then
+        throw s!"{ctx}: port {name}: a tree port's {TREE_KEY} is {"{"}template, field{"}"} and its reads are empty: the verifier's program gives them"
+      pure (some (← J.str tj "template" ctx, ← J.str tj "field" ctx))
+    return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom,
+             tree }
 
 /-- The first port of `ps` whose name a later port has. -/
 def dupName? : List Port → Option String
@@ -274,7 +287,7 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
   if portSchema c.ports[p]! != reg.schema then
     throw s!"registered reads: port {reg.name} is a {portSchema c.ports[p]!} row, and {reg.value}'s registered rows are {reg.schema} rows"
   if !reg.fits c.ports[p]! then
-    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.bits} bits ({c.ports[p]!.words} u16 words), not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves"
+    throw s!"registered reads: port {reg.name}'s rows are {c.ports[p]!.bits} bits ({c.ports[p]!.words} u16 words), not {reg.value}'s registered rows of {reg.words.getD 0} {reg.wordBits}-bit leaves; a reader of registered leaves at another width (the same bits cut again, low part first) is not read until the Program's Lean defines that cut"
   let (positions, paths) ← entry pub reg
   let rows := t.counts.getD p 0
   if positions.size != rows || paths.size != rows then
@@ -293,10 +306,50 @@ def checkPort (c : Circuit) (pub : Public) (t : Tables) (indices : Array Nat) (r
         throw s!"registered reads: port {reg.name}: unit {u} reads position {positions.getD (ref t np p i) 0}, and the verifier's program reads {want}"
       | _ => throw s!"registered reads: port {reg.name}: the verifier's program reads no row of {reg.value} in unit {u}"
 
+/-- Every link row of the circuit (META `links`, `HmLinks.parse`) is a tree port of `own` (`Port.tree`): a reader's row of
+another unit's outputs is read by path in its writer template's output field's tree, never committed afresh. -/
+def checkLinked (c : Circuit) (own : Array Port) : V Unit := do
+  for (p, _, _) in ← HmLinks.parse c do
+    let name := (c.ports.getD p default).name
+    if !own.any fun r => r.name == name && r.tree.isSome then
+      throw s!"registered reads: link row {name} reads another unit's outputs, and no tree port ({TREE_KEY}) reads it by path in its writer template's output field's tree"
+
+/-- Tree port `reg`'s reads at the statement's units `indices`, from the verifier's program `P`: each unit reads, at the
+link row of `reg`'s name, the leaf of its writer (`HmLinks.writerOf`) in the writer template's tree (`HmLinks.treeLeaf`),
+the writer's template `reg`'s. Its work is the statement's units, each found from the root body's nodes. -/
+def treeReads (c : Circuit) (P : Program.Prog) (indices : Array Nat) (reg : Port) : V Port := do
+  let some (t, _) := reg.tree | return reg
+  let some (_, lo, _) := (← HmLinks.parse c).find? fun (p, _, _) => (c.ports.getD p default).name == reg.name
+    | throw s!"registered reads: tree port {reg.name} is no link row of the circuit (META links)"
+  let ns := HmLinks.nodes P
+  let first := indices.foldl min (indices.getD 0 0)
+  let mut rel : Array (Option Nat) := Array.replicate (indices.foldl max 0 + 1 - first) none
+  for u in indices do
+    let some v ← HmLinks.writerOf P ns u lo
+      | throw s!"registered reads: tree port {reg.name}: unit {u}'s leaf {lo} is no unit's output"
+    let some (t', leaf) := HmLinks.treeLeaf P ns v
+      | throw s!"registered reads: tree port {reg.name}: unit {u}'s writer {v} is outside the program's units"
+    if t' != t then
+      throw s!"registered reads: tree port {reg.name} reads {t}'s tree, and unit {u}'s writer, unit {v}, is {t'}'s"
+    rel := rel.set! (u - first) (some leaf)
+  return { reg with readsRel := rel, readsFrom := first }
+
+/-- The verifier's registered reads `own` with every tree port's reads given (`treeReads`) at the statement's circuit `c`
+and public file `pub`, from the verifier's program `program`; a tree port without the program is refused. -/
+def withTrees (c : Circuit) (pub : Public) (program : Option ByteArray) (own : Option (Array Port)) :
+    V (Option (Array Port)) := do
+  let some own := own | return none
+  if !own.any (·.tree.isSome) then return some own
+  let some b := program | throw "registered reads: a tree port's reads are its writers' leaves, which the verifier's program gives (--program)"
+  let P ← Program.decode b
+  let indices ← unitIndices pub
+  some <$> own.mapM (treeReads c P indices)
+
 /-- The statement's registered reads against the verifier's own `own` (`--registered`). The header's `registered` must
 name exactly `own`'s ports, each a port of the circuit and a table of a shared-row file: every table row's `b ‖ c`, as the
 value's row at its stated position, opens the registered root through its path, and every instance reads, by its ref,
-the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`). Without
+the position the verifier's program reads for its unit (`checkPort`; `FlockProofs.Registered`: `check_ok`); every link row
+is a tree port reading its writer template's output field's tree (`checkLinked`). Without
 `own`, a statement that names registered reads is refused: its rows would be checked against no root. With `own`, the
 units must be `derived`: a unit's position is the verifier's, but which unit an instance is comes from its label, which
 binds nothing unless the verifier derived it. -/
@@ -310,6 +363,7 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
     | throw "registered reads: the statement names no registered rows: a registered value's rows committed afresh open no registered root"
   for (name, _) in kvs.toArray do
     if !own.any (·.name == name) then throw s!"registered reads: the statement names port {name} registered, and the verifier's registered reads do not"
+  checkLinked c own
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)

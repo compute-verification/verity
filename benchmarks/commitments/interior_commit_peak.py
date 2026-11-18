@@ -7,8 +7,8 @@
 
 The interior is ``--spans`` shared-row members of ``--units`` units each, one table row a unit a port, every port's rows
 ``--words`` u16 words under ``hm96-sha512/row/v2``: an input ``x`` and an output ``y`` a member, and every member's
-``x`` but the first's a wired port with no tree of its own, the output rows of the member before (``Member.wired_trees``
-false), as an interior's window lays its templates out. The members are consecutive chunks of one template's units; a
+``x`` but the first's a wired port, which commits nothing: its rows are the leaves of the template's ``y`` tree the
+member before wrote (``Member.wired``), as an interior's window lays its templates out. The members are consecutive chunks of one template's units; a
 row's words are a function of its member, port and index alone, so both arms commit the same rows.
 
 ``whole`` holds every member's rows as arrays and commits them in one call, as an interior is committed today.
@@ -16,7 +16,7 @@ row's words are a function of its member, port and index alone, so both arms com
 writes the members' bodies under ``--scratch`` as it goes. Each arm reports the most its process held (``ru_maxrss``)
 once the window is built and again once the commit returns, the commit's seconds, and a digest of the commitment: every
 root in the registration's order, then the leaf layer. With no ``--arm`` both run, one after the other, and the result
-is valid only where the two digests are equal: both arms take their salts from one key (``commit``'s ``salt_key``),
+is valid only where the two digests are equal: both arms hand the commit the same salts (``commit``'s ``salts_of``),
 where a served commit takes as many bytes from the OS.
 """
 
@@ -43,14 +43,18 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.periods import rows as SR
+from verity.commitments.periods import rows as SR, wiring as WI
 from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"
 ARMS = ("whole", "streamed")
 TEMPLATE = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 RUN = hashlib.sha512(b"interior_commit_peak").hexdigest()
-KEY = hashlib.sha256(b"interior_commit_peak").digest()
+
+
+def salts(w: SR.Binding) -> dict[str, bytes]:
+    """Both arms' salts, the same bytes for each port it takes in full, so their commitments' digests compare."""
+    return {p: hashlib.shake_256(f"{RUN} {p}".encode()).digest(n * SR.SALT_BYTES) for p, n in SR.full_ports(w).items()}
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
@@ -89,8 +93,8 @@ def window(spans: int, units: int, words: int) -> SR.Binding:
     tid = descriptor_id(TEMPLATE)
     return SR.Binding(program, query, {}, RUN, tuple(
         SR.Member(tid, (("x", words),), (("y", words),), units, s * units, tables=(("x", units),), name=f"{tid}/c{s}",
-                  schemas=(("x", V2), ("y", V2)), wired_trees=False,
-                  wired=(("x", "y", tuple(range((s - 1) * units, s * units))),) if s else ())
+                  schemas=(("x", V2), ("y", V2)),
+                  wired=(WI.Wired("x", tid, "y", units, ((spans - 1) * units,), 0, (1,)),) if s else ())
         for s in range(spans)))
 
 
@@ -112,9 +116,9 @@ def arm(name: str, ns: argparse.Namespace, scratch: Path) -> dict[str, Any]:
     w = window(ns.spans, ns.units, ns.words)
     built, t = peak(), time.perf_counter()
     if name == "whole":
-        c = SR.commit(w, list(rows(w, True)), salt_key=KEY, workers=ns.workers)
+        c = SR.commit(w, list(rows(w, True)), salts_of=salts(w), workers=ns.workers)
     else:
-        c = SR.commit(w, rows(w, False), salt_key=KEY, workers=ns.workers, into=scratch / "streamed")
+        c = SR.commit(w, rows(w, False), salts_of=salts(w), workers=ns.workers, into=scratch / "streamed")
     seconds, held = time.perf_counter() - t, peak()
     said = [[p, r.hex()] for p, r in c.roots.items()] + [c.leaf_layer]
     return {"arm": name, "built_rss_bytes": built, "peak_rss_bytes": held, "seconds": seconds, "commit": c.seconds,

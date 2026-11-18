@@ -1455,8 +1455,9 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
         d, c = tree / sid / "out", rec["commitment"]
         ck = PHC.pinned_key(d / remote.KEY, key)
         lines = remote.ledger_lines(out / "ledger.jsonl")
-        trusted, received = Ch.trusted_session_of(lines, {"root": c}, ck, remote.ledger_lines(out / "pins.jsonl"),
-                                                  remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
+        trusted, log = Ch.trusted_session_of(lines, {"root": c}, ck, remote.ledger_lines(out / "pins.jsonl"),
+                                             remote.main_lines(main), remote.session_files(d), PHC.lms_verify)
+        received = Ch.by_family(trusted, log)
         opening = Ch.LiveOpening.from_json(draw.get("opening"))
         if not Ch.withheld_on(lines, c):
             raise ValueError(f"the run's draw session: {Ch.WITHHELD}")
@@ -2360,7 +2361,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     """Each of ``paths`` (relative to a serve dir) that is a served run's witness, with why (`WITNESS_DIRS`,
-    `WITNESS_TOPS`, `WITNESS_NAMES`, and H1's prover state under ``private/h1``)."""
+    `WITNESS_TOPS`, `WITNESS_NAMES`, H1's prover state under ``private/h1``, and a salt file, ``*.salts/``)."""
     out = []
     for p in paths:
         parts = Path(p).parts
@@ -2370,6 +2371,7 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
         why = why or (WITNESS_TOPS.get(parts[0]) if len(parts) > 1 else None)
         why = why or ("H1's prover state (its key)" if parts[:2] == ("private", "h1") else None)
         why = why or next((w for pat, w in WITNESS_NAMES.items() if fnmatch.fnmatchcase(parts[-1], pat)), None)
+        why = why or ("a salt file (prover only)" if any(x.endswith(".salts") for x in parts[:-1]) else None)
         if why:
             out.append((p, why))
     return out

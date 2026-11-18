@@ -24,7 +24,7 @@ some of the commit strings (`isRead`, `wo`):
 
 namespace FlockSoundness.Discharge.ZkLink
 
-open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession
+open Game Model Accounting Extract LinkFinder Spot.Sampling Spot.Sampling.Partition ZkSession
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
