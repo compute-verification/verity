@@ -25,7 +25,9 @@ CUDA_HOME=$(python3 benchmarks/kernels/machine.py toolkit 13.0) || { echo "no CU
 export CUDA_HOME PATH=$CUDA_HOME/bin:$WORK/venv312/bin:$PATH
 VE=benchmarks/vllm_encoded
 B=$(mktemp -d /tmp/vllm-stack.XXXXXX); trap 'rm -rf "$B"' EXIT
-CU=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
+GENCODE=$(python3 benchmarks/kernels/machine.py gencode "$(python3 benchmarks/kernels/machine.py arch)") ||
+  { echo "no build target: the run's machine's record names no card with an architecture file (machine.py, above)"; exit 4; }
+CU=(-O3 -gencode "$GENCODE" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
 F=${KV_FIELD:-1024}
 KVDEFS=(-DKV_FIELD="$F" -DKV_MASK="${KV_MASK:-1}" -DKV_FOLD6="${KV_FOLD6:-1}" -DKV_QHEADS=32)
 WTDEFS=(-DWT_FIELD="$F" -DWT_MASK="${KV_MASK:-1}" -DWT_FOLD6="${WT_FOLD6:-1}" -DWT_RECEIPT=1)
