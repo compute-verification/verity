@@ -59,7 +59,7 @@ namespace FlockComplete.Replay
 
 open Flock FlockDeploy
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The statement the verifier parsed** at a good case: its tables are the case's, and the witness satisfies it. -/
 theorem _root_.FlockComplete.Case.parsed (c : Case H rel) :
@@ -192,7 +192,7 @@ theorem block_lt {m k x j : ℕ} (hk : k ≤ m) (hx : x < 2 ^ m) (hj : j < 2 ^ k
 
 /-- **Each table's trace satisfies the block R1CS** at the deployed relation, from `RelS`: the trace is the witness's
 bits, and `RelS` says every row's AND is its bit. -/
-theorem traceR1CS (H : Claims.Msg → Claims.Msg) : TraceR1CS H Readable.relation := by
+theorem traceR1CS (H : Hash.Msg → Hash.Msg) : TraceR1CS H Readable.relation := by
   intro o i hi x hx
   obtain ⟨st, hsts, hf, hb⟩ := o.holds
   have hi0 : i = 0 := by
@@ -227,13 +227,13 @@ theorem traceR1CS (H : Claims.Msg → Claims.Msg) : TraceR1CS H Readable.relatio
 /-! ## The goals at the deployed relation -/
 
 /-- **The zerocheck goal** at the deployed relation, at every rep the session walk aligns. -/
-theorem zerocheck_goal' (H : Claims.Msg → Claims.Msg)
+theorem zerocheck_goal' (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r) : Zerocheck H Readable.relation :=
   zerocheck_goal H _ (traceR1CS H) hzc
 
 /-- **The lincheck goal** at the deployed relation, at every rep the session walk aligns, given the lincheck's
 algebra. -/
-theorem lincheck_goal' (H : Claims.Msg → Claims.Msg)
+theorem lincheck_goal' (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
     (hal : LcAlgebra H Readable.relation) : Lincheck H Readable.relation :=
@@ -241,7 +241,7 @@ theorem lincheck_goal' (H : Claims.Msg → Claims.Msg)
 
 /-- **The ring-switch goal** at the deployed relation, at every rep the session walk aligns, given the lincheck's and
 the ring switch's algebra. -/
-theorem ringSwitch_goal' (H : Claims.Msg → Claims.Msg)
+theorem ringSwitch_goal' (H : Hash.Msg → Hash.Msg)
     (hzc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r)
     (hal : LcAlgebra H Readable.relation)

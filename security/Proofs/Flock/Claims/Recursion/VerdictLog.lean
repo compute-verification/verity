@@ -57,7 +57,7 @@ theorem hOf_toMsg (h : ByteArray → ByteArray) : Claims.hOf (fun m => Claims.to
   simp [Claims.hOf]
 
 /-- A `LogV` run that simulates an oracle program appends to any log what it appends to the empty one. -/
-theorem go_shift {α : Type} {H : Claims.Msg → Claims.Msg} {x : Claims.OCV α} {y : LogV α} (hR : (Claims.ocLog H).R x y)
+theorem go_shift {α : Type} {H : Hash.Msg → Hash.Msg} {x : Claims.OCV α} {y : LogV α} (hR : (Claims.ocLog H).R x y)
     (l : Array ByteArray) : y.go l = ((y.go #[]).1, l ++ (y.go #[]).2) := by
   obtain ⟨a1, a2⟩ := hR l
   obtain ⟨b1, b2⟩ := hR #[]

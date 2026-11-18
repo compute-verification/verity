@@ -84,10 +84,10 @@ theorem streams_eq_of_flat {β : Type} (g : Round → β) : ∀ {S S' : List (Ar
     obtain ⟨h₁, h₂⟩ := List.append_inj hf hlen
     simp only [List.map_cons, h₁, streams_eq_of_flat g hl.2 h₂]
 
-theorem keys_of_forall₂ : ∀ {rs : List Round} {ms : List (Claims.Msg × Coin)},
+theorem keys_of_forall₂ : ∀ {rs : List Round} {ms : List (Hash.Msg × Coin)},
     List.Forall₂ (fun rd am => rd.bytes = some ⟨am.1.toArray⟩ ∧ rd.coins = am.2.vals rd.n) rs ms →
       rs.map roundKey =
-        List.zipWith (fun n (am : Claims.Msg × Coin) => (n, am.2.vals n, some (⟨am.1.toArray⟩ : ByteArray)))
+        List.zipWith (fun n (am : Hash.Msg × Coin) => (n, am.2.vals n, some (⟨am.1.toArray⟩ : ByteArray)))
           (rs.map Round.n) ms
   | [], [], .nil => rfl
   | rd :: _, am :: _, .cons hab h => by
@@ -99,7 +99,7 @@ theorem keys_of_forall₂ : ∀ {rs : List Round} {ms : List (Claims.Msg × Coin
 bytes, stream by stream**, whatever hashes each verdict ran with. -/
 theorem live_keys_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids : List (Claims.Msg × Coin)}
+    {mids : List (Hash.Msg × Coin)}
     (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithM hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ()) :
@@ -134,7 +134,7 @@ theorem forall₂_left {α β : Type} {R : α → β → Prop} :
 
 /-- Every round of an accepted record's live session retained its bytes. -/
 theorem live_retained {spec : SessionSpec} {lv : Live} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) (q : ℕ) :
+    {mids : List (Hash.Msg × Coin)} (hc : custody spec lv link c₁ mids = .ok ()) (q : ℕ) :
     ∀ rd ∈ (lv.streams[q]!).toList, ∃ B, rd.bytes = some B := by
   intro rd hrd
   have hflat : rd ∈ lv.streams.toList.flatMap (·.toList) := by
@@ -190,7 +190,7 @@ theorem rounds_eq_of_keys {spec : SessionSpec} : ∀ {a b c d : List Round},
 rounds on every rep stream**, all retained. -/
 theorem sess_rounds_eq (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record record' : String}
     {proofs proofs' : Array ByteArray} {lv lv' : Live} {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin}
-    {mids : List (Claims.Msg × Coin)} {sess sess' : RunRecord}
+    {mids : List (Hash.Msg × Coin)} {sess sess' : RunRecord}
     (hv : verifyWithM hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithM hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ())
@@ -267,7 +267,7 @@ theorem rep_levels_checkWith (hs : Hashes Flock.V) {spec : SessionSpec} {st : Se
 
 /-- **Every SHA-512 input of an accepted plain rep's openings is among the calls `L`**, when the rep ran with SHA-512
 answered only within `L`: at every level `ℓ` and query `j`, the inputs of the proof's opening (`levelIns`). -/
-theorem rep_level_logs {L : List Claims.Msg} {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
+theorem rep_level_logs {L : List Hash.Msg} {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule}
     {sess : RunRecord} {i r : ℕ} {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog)
@@ -328,7 +328,7 @@ theorem verifyWithM_rep (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array
 /-- **Two last messages the deployed plain verifier accepts after the same rounds and coins** have the same proof
 files, or two of their openings collide among the two decisions' calls, or two of their proof files at one position
 differ and decode alike. -/
-theorem plain_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.Msg} {cs : List Coin}
+theorem plain_calls_tied {x : Hash.Msg} {ms : List Hash.Msg} {l l' : Hash.Msg} {cs : List Coin}
     (hc : cs.length = ms.length + 1)
     (hacc : ((next false x (ms ++ [l]) cs).eval sha512).1 = .acc)
     (hacc' : ((next false x (ms ++ [l']) cs).eval sha512).1 = .acc) :
@@ -431,7 +431,7 @@ theorem plain_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims.
   have hB : sess.rootB = sess'.rootB := by
     rw [hrB, hrB']
     exact Array.ext' (hlB.trans hlB'.symm)
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Hash.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

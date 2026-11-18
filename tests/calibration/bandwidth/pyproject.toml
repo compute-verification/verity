@@ -1,6 +1,6 @@
 # PoUB's device ceilings. Not a package: the probes (`chip.cu`, `write.cu`, `write_host.c`) run on a GPU node or a host,
-# each by its own script. The runner that hands a name to its script, `run.sh`, and `chip_ur.py`'s rewrite of a cubin
-# are tested here as a suite (`uv run tools/check/suites.py calibration/bandwidth`).
+# each a probe of the one runner, `run.sh` (`verity calibrate bandwidth chip|write_gpu|write_host`). The runner, the
+# probes' results (`result.py`) and `chip_ur.py`'s rewrite of a cubin are tested here as a suite (`uv run tools/check/suites.py calibration/bandwidth`).
 [tool.pytest.ini_options]
 testpaths = ["."]
 pythonpath = ["../../../calibration/bandwidth"]
@@ -9,6 +9,7 @@ pythonpath = ["../../../calibration/bandwidth"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["test_run.py"]
 inputs = ["calibration/bandwidth",
+          "benchmarks/kernels/machine.py",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/kit_report.py", "benchmarks/harness/verity_bench/settings.py",
           "tools/config/verity_config", "verity/__init__.py", "verity/errors.py"]

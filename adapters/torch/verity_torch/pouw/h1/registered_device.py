@@ -1,7 +1,7 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
 frame-v3-sha512 tree, computed by `verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
 rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
-under the domain id the host computes (`registered.domain`).
+under the domain id the host computes (`registered_value.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
@@ -24,7 +24,6 @@ hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Buil
 from __future__ import annotations
 
 import ctypes
-import shutil
 import subprocess
 import warnings
 from collections.abc import Iterator
@@ -157,10 +156,12 @@ _vp, _u64 = ctypes.c_void_p, np.ctypeslib.ndpointer(np.uint64, flags="C_CONTIGUO
 
 @cache
 def host_lib() -> ctypes.CDLL:
-    """`registered_rows_host.cpp` built with the system C++ compiler."""
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`registered_rows_host.cpp` built with `pouw_device.compiler`."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+
+    cxx = pouw_device.compiler()
     if cxx is None:
-        raise RuntimeError("no C++ compiler on the path")
+        raise RuntimeError("no C++ compiler configured or on the path")
     dll = RTD._build(cxx, HOST_SOURCES, RTD.CFLAGS, "libregistered_rows_host.so")
     dll.rr_commit_host.argtypes = [ctypes.POINTER(Table), _u64, _u64, _u64, _u64]
     dll.rr_commit_host.restype = ctypes.c_int
@@ -195,10 +196,12 @@ def _zy_sizes(dll: ctypes.CDLL) -> ctypes.CDLL:
 
 @cache
 def zy_host_lib() -> ctypes.CDLL:
-    """`zy_commit_host.cpp` built with the system C++ compiler."""
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
+    """`zy_commit_host.cpp` built with `pouw_device.compiler`."""
+    from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as pouw_device
+
+    cxx = pouw_device.compiler()
     if cxx is None:
-        raise RuntimeError("no C++ compiler on the path")
+        raise RuntimeError("no C++ compiler configured or on the path")
     dll = _zy_sizes(RTD._build(cxx, ZY_HOST_SOURCES, (*RTD.CFLAGS, *ZY_FLAGS), "libzy_commit_host.so"))
     dll.zy_commit_host.argtypes = [ctypes.POINTER(ZyArgs), ctypes.POINTER(Table), _vp, _vp, _vp, _u64, _u64, _u64]
     dll.zy_commit_host.restype = ctypes.c_int

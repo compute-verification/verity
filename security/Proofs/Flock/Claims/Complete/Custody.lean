@@ -49,8 +49,8 @@ namespace FlockComplete.JsonRT
 open Flock FlockComplete FlockDeploy
 
 /-- **The round messages and their coins**: the sends after the first, the `j`th with coin `1 + j`. -/
-theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
-    {b : Claims.Msg} {bs : List Claims.Msg} (hbs : o.bodies.toList = b :: bs) :
+theorem Run.mids_eq {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation} (o : Run H rel)
+    {b : Hash.Msg} {bs : List Hash.Msg} (hbs : o.bodies.toList = b :: bs) :
     o.mids = bs.zip ((List.range bs.length).map fun j => Claims.coinSeq o.r (1 + j)) := by
   have hn : o.bodies.size = bs.length + 1 := by
     rw [← Array.length_toList, hbs, List.length_cons]
@@ -69,7 +69,7 @@ theorem Run.mids_eq {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → R
   simp [Function.comp_def]
 
 /-- **Custody: the record has one round per round message**: the goal `CustodyCount`. -/
-theorem custodyCount_goal {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem custodyCount_goal {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : ProverOk H rel) : CustodyCount H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, ⟨bs, hbs, hrecs⟩, hrec, hdec, hsess, hlv, hlive⟩ :=

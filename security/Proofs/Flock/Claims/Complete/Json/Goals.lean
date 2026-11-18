@@ -73,14 +73,14 @@ namespace FlockComplete.JsonRT
 open Flock Transcript FlockComplete FlockDeploy
 open Lean (Json JsonNumber)
 
-theorem hOf_size {H : Claims.Msg → Claims.Msg} (h : Claims.Out64 H) (b : ByteArray) : (Claims.hOf H b).size = 64 := by
+theorem hOf_size {H : Hash.Msg → Hash.Msg} (h : Claims.Out64 H) (b : ByteArray) : (Claims.hOf H b).size = 64 := by
   simp only [Claims.hOf, Claims.ofMsg, ByteArray.size, List.size_toArray]
   exact h _
 
 /-- **What the record needs of the prover's pieces**, at every good case's table: the commitment's cap, at the
 schedule's first level, is non-empty and under `2^64` bytes, and each rep, on the table's extra claims at the link's
 points, records a round, each of at most `65536` coins. -/
-def ProverOk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def ProverOk (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ c : Case H rel, ∀ st ∈ c.sts,
     (∀ sch, fast100 (Setup.ofCircuit st).m = some sch → ∀ g salt cm,
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) g
@@ -144,7 +144,7 @@ theorem coinOf_bytes (c : Coin) (i : ℕ) : coinOf c.bytes i = c.at i := by
 theorem ptsOf_coin (spec : SessionSpec) (c : Coin) : ptsOf spec (coinOf c.bytes) = pointsOf spec c := by
   simp only [ptsOf, pointsOf, coinOf_bytes]
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- **The honest run's record**, at one table: it is the printed honest record, `Record.decodeWith` reads it as `sessOf`
 and `liveOf` as its live session, its points the first coin's, the link is its `root_B` and no public words, and the
@@ -392,7 +392,7 @@ theorem repExtras_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
 /-- Rounds that are sends from index `i` on, each answered by its coin's bytes, pass custody's round check against
 those sends and coins. -/
 theorem recs_all {k : ℕ} (r : Fin k → Coin) :
-    ∀ (i : ℕ) (rs : List Round) (bs : List Claims.Msg), Recs (fun j => (Claims.coinSeq r j).bytes) i rs bs →
+    ∀ (i : ℕ) (rs : List Round) (bs : List Hash.Msg), Recs (fun j => (Claims.coinSeq r j).bytes) i rs bs →
       ((rs.map liveRound).zip (bs.zip ((List.range bs.length).map fun j => Claims.coinSeq r (i + j)))).all
         (fun (x, a, c) => x.bytes == some ⟨a.toArray⟩ && x.coins == c.vals x.n) = true
   | _, [], [], _ => rfl

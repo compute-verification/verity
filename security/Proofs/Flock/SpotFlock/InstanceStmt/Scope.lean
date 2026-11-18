@@ -253,7 +253,7 @@ def zkBody (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt) : B
   0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
     sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
 
-theorem zkOk_of {xS : Claims.Msg} {s : FlockDeploy.Ins} {p : _root_.Flock.SessionSpec × Array _root_.Flock.Stmt}
+theorem zkOk_of {xS : Hash.Msg} {s : FlockDeploy.Ins} {p : _root_.Flock.SessionSpec × Array _root_.Flock.Stmt}
     (h : FlockDeploy.setupOf true xS = some (s, p)) (hb : zkBody p.1 p.2 = true) : SpotFlock.zkOk xS = true := by
   unfold SpotFlock.zkOk
   rewrite [h]

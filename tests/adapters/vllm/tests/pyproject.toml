@@ -54,7 +54,6 @@ untraced = [
     "protocols/test_pouw_h1.py",
     "protocols/test_pouw_h1_commit.py",
     "protocols/test_pouw_h1_live.py",
-    "protocols/test_pouw_pearl_c_served.py",
     "protocols/test_rt4_h1_challenger.py",
     "tools/test_ratchet_gate.py",
     "tools/test_suite_parts.py",
@@ -204,7 +203,7 @@ tests = ["commit/test_native_jit_load.py"]
 paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
-tests = ["commit/test_pinned_pool_exact.py", "observe/test_pouw_fold.py"]
+tests = ["commit/test_pinned_pool_exact.py"]
 paths = ["adapters/vllm/verity_vllm", "verity/protocols/resource_accounting/memory/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]

@@ -116,7 +116,7 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
     assert bare.returns == (replace(d.returns[0], held=False),) and bare.links == d.links
     rule = TS.rule_of(_layout(), f"rate:{Q}/{N}", K)
     assert rule.span_values == (("logits", O, (V, 16)),)
-    assert [n for n, _s in rule.interior] == [f"{TID}/logits", f"{TID}/o0"]
+    assert [n for n, _s in rule.interior] == [f"{TID}/o0"]
 
 
 def _words(bits: np.ndarray) -> np.ndarray:

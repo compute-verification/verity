@@ -28,6 +28,7 @@ from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array
 from verity_flock import circuit as FC
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G
+from verity.commitments import registered_value as RV
 
 LEAN = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 VERIFIER = Path(__file__).resolve().parents[6] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
@@ -89,10 +90,10 @@ def stage(d: Path) -> SimpleNamespace:
     reads = G.reads(program, query, {VALUE: 64})
     assert reads == {"cs": {"value": VALUE, "rows": list(POSITIONS)}}
     rng = np.random.default_rng(20261001)
-    reg = G.Registered.commit(P.program_digest(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
+    reg = RV.Registered.commit(P.program_digest(program), VALUE, rng.integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
     x = rng.integers(0, 1 << 16, (8, 64))
-    xreg = G.Registered.commit(P.program_digest(program), "x", x.tolist())
-    out = G.Registered.commit(P.program_digest(program), OUT_VALUE,
+    xreg = RV.Registered.commit(P.program_digest(program), "x", x.tolist())
+    out = RV.Registered.commit(P.program_digest(program), OUT_VALUE,
                               np.random.default_rng(20261003).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     own = G.reads_file(program, query, {VALUE: 64, "x": 64}, {VALUE: reg.root.hex(), "x": xreg.root.hex()})
     own = {**own, "ports": {**own["ports"], "out": {**out.entry(), "word_bits": 16, "reads": list(OUT_POSITIONS)}}}
@@ -213,7 +214,7 @@ def test_a_table_of_two_registrations_rows_opens_no_one_root(staged):
     a true path to its own root) is refused whichever one root the verifier holds: a port is read against one registered
     root, so a prover that builds a chunk over two row tables can't have it verified (`tables.registered_reads`)."""
     positions, _ = G.table(POSITIONS)
-    other = G.Registered.commit(P.program_digest(staged.program), VALUE,
+    other = RV.Registered.commit(P.program_digest(staged.program), VALUE,
                                 np.random.default_rng(20261024).integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
     (rows_a, salts_a, e_a), (rows_b, salts_b, e_b) = staged.reg.statement(positions), other.statement(positions)
     half = len(positions) // 2
@@ -359,7 +360,7 @@ def test_a_v1_files_reads_start_at_its_first_unit(staged):
     cs = staged.own["ports"]["cs"]
     later = staged.dir / "own-v1-later.json"
     later.write_text(json.dumps({**staged.own, "format": G.READS_V1,
-                                 "ports": {**staged.own["ports"], "cs": {**cs, G.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
+                                 "ports": {**staged.own["ports"], "cs": {**cs, RV.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
     code, out = _statement(staged, public, later)
     assert code == 1 and f"reads no row of {VALUE} in unit 0" in out, out
 
@@ -459,7 +460,7 @@ def test_a_sampled_session_samples_every_unit_reading_a_rounds_commitment_in_ful
     has no sample). The full sample passes U4: `rec-top-L0` then meets `checkTopRows` and R's tops `checkPubRows`, since the
     verifier holds no inner transcript to check them against. U4's Lean test (`Flock.Test.Full`) checks the function; this
     checks that `verify` calls it."""
-    c = G.Registered.commit(P.program_digest(staged.program), value,
+    c = RV.Registered.commit(P.program_digest(staged.program), value,
                             np.random.default_rng(20261010).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     rows, salts, e = c.statement(OUT_POSITIONS)
     public = _stage(staged, value, extra={"out": e}, outs=rows, out_salts=salts)
@@ -541,7 +542,7 @@ def test_a_rounds_tops_are_the_live_coin_parts(staged, tmp_path, level):
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
     30 times level 3's circuit."""
     value = f"rec-top-L{level}"
-    c = G.Registered.commit(P.program_digest(staged.program), value,
+    c = RV.Registered.commit(P.program_digest(staged.program), value,
                             np.random.default_rng(20261018).integers(0, 1 << 16, (OUT_ROWS, 64)).tolist())
     rows, salts, e = c.statement(OUT_POSITIONS)
     public = _stage(staged, f"tops-{level}", extra={"out": e}, outs=rows, out_salts=salts)

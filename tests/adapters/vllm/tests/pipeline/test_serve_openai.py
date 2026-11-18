@@ -165,21 +165,43 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
 
 def test_preflight_refuses_a_commit_without_ninja_before_the_model_loads(tmp_path):
     man = predicted.row(tmp_path)
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path)],
+                     environ={})
     with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH, or pass --no-commit$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
-    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={}), which=lambda _: None)
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", "--out", str(tmp_path)], environ={}),
+                 which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-steps"):
         so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
                      which=lambda _: "/v/bin/ninja")
+
+
+def test_an_out_in_the_runs_directory_is_refused_by_name_and_none_names_the_flag(tmp_path):
+    """The serve's directory holds its private records (requests, step traces, salts), which a run uploads with no filter by
+    name: ``--out`` is refused as ``$RESEARCH_RUN_DIR`` or ``$OUT`` or inside either, and has no default."""
+    run = tmp_path / "run"
+    env = {"RESEARCH_RUN_DIR": str(run), "OUT": str(run / "out")}
+
+    def refusal(*out: str) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit", *out], environ={}),
+                         which=lambda _: None, environ=env)
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert refusal().startswith("--out DIR is required")
+    for inside in (run, run / "serve", run / "out"):
+        assert refusal("--out", str(inside)).startswith(f"--out {inside} is $RESEARCH_RUN_DIR ({run}) or inside it"), inside
+    assert refusal("--out", str(tmp_path / "serve")) is None
 
 
 def test_the_served_commit_is_rows_sha512_alone(tmp_path):
     """rows-sha512 is the one served scheme: a committing run is refused before the model loads until it names its bench
     row's manifest, and by the committer before it builds anything; vllm-v1 (SHA-256) is no longer a choice."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
     def refusal(opts: so.Options) -> str | None:
         try:
@@ -203,7 +225,7 @@ def test_the_served_commit_binds_only_the_build_of_record_predict_wrote(tmp_path
     with no record of predict's beside it (a traced Build's), another schema's, or a record naming other bytes is refused
     before the model loads, committing or not, and by the committer; the Build is the manifest's own dir (no --programs-root)."""
     def parse(*more: str) -> so.Options:
-        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp_path), *more], environ={})
 
     def refusal(*more: str) -> str | None:
         try:
@@ -241,7 +263,7 @@ def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512
     values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
     loads, and by the committer before it builds anything."""
     man = predicted.row(tmp_path)
-    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man), "--out", str(tmp_path))
 
     def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
         try:

@@ -121,25 +121,25 @@ theorem Ext.of_grow {p : LigeritoProof} {a b : LigState} (h : Grow a b) (he : Ex
     h.2.2.2.2.trans he.2.2.2.2⟩
 
 /-- The coins of the replies to the sends from the `L`-th on, by transcript position. -/
-def cfOf (resp : ℕ → Claims.Msg) (L : ℕ) : ℕ → ℕ → F128 := fun k => coinOf (resp (L + k))
+def cfOf (resp : ℕ → Hash.Msg) (L : ℕ) : ℕ → ℕ → F128 := fun k => coinOf (resp (L + k))
 
 /-- **The prover's step `y` on the model's**: every run from `L + k` bodies sent (`k` the position) returns a value with
 `Q`, grows the lists and keeps `L + k` bodies sent; once the lists end up `p`'s first and the value has `Xb`, from the
 cursors `c` and the transcript `tm` it ends at `c'` and `tm'`. -/
 def PRuns (p : LigeritoProof) (L : ℕ) {β : Type} (y : LP PS β) (c : Cur) (tm : Transcript) (c' : Cur)
     (tm' : Transcript) (Q Xb : β → Prop) : Prop :=
-  ∀ (st : LigState) (t : Transcript) (l : Array Claims.Msg) (b : β) (st' : LigState) (t' : Transcript)
-    (l' : Array Claims.Msg), l.size = L + t.k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
+  ∀ (st : LigState) (t : Transcript) (l : Array Hash.Msg) (b : β) (st' : LigState) (t' : Transcript)
+    (l' : Array Hash.Msg), l.size = L + t.k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') →
     Q b ∧ Grow st st' ∧ l'.size = L + t'.k ∧ (Ext p st' → Xb b → pcur st = c → t = tm → pcur st' = c' ∧ t' = tm')
 
-theorem ok_inj {β : Type} {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Claims.Msg}
-    (h : ((Except.ok ((b, st), t), l) : Except String ((β × LigState) × Transcript) × Array Claims.Msg) =
+theorem ok_inj {β : Type} {b b' : β} {st st' : LigState} {t t' : Transcript} {l l' : Array Hash.Msg}
+    (h : ((Except.ok ((b, st), t), l) : Except String ((β × LigState) × Transcript) × Array Hash.Msg) =
       (.ok ((b', st'), t'), l')) : b = b' ∧ st = st' ∧ t = t' ∧ l = l' := by
   simp only [Prod.mk.injEq, Except.ok.injEq] at h
   exact ⟨h.1.1.1, h.1.1.2, h.1.2, h.2⟩
 
 theorem lp_bind_ok {α β : Type} {x : LP PS α} {f : α → LP PS β} {st : LigState} {t : Transcript}
-    {l l'' : Array Claims.Msg} {r : (β × LigState) × Transcript}
+    {l l'' : Array Hash.Msg} {r : (β × LigState) × Transcript}
     (h : (((x >>= f).run st).run t).go l = (.ok r, l'')) :
     ∃ a st₁ t₁ l₁, ((x.run st).run t).go l = (.ok ((a, st₁), t₁), l₁) ∧
       (((f a).run st₁).run t₁).go l₁ = (.ok r, l'') := by
@@ -203,7 +203,7 @@ theorem PRuns.ite {cond : Prop} [Decidable cond] {y z : LP PS β} {c c' : Cur} {
 
 /-! ## The prover's steps -/
 
-theorem liftT_go {y : TMW PS α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
+theorem liftT_go {y : TMW PS α} {t t' : Transcript} {l l' : Array Hash.Msg} {a : α}
     (h : (y.run t).go l = (.ok (a, t'), l')) (st : LigState) :
     (((liftT y : LP PS α).run st).run t).go l = (.ok ((a, st), t'), l') := by
   show ((y >>= fun a => Pure.pure (a, st)).run t).go l = _
@@ -237,7 +237,7 @@ theorem PRuns.absorbAll (ws wsM : Array F128) (c : Cur) (tm : Transcript) :
         liftT (liftTM (Transcript.absorbF w))
         Pure.pure (ForInStep.yield PUnit.unit))
       c tm c (ap (fun P => wsM.foldl (fun P w => pF w P) P) tm) (fun _ => True) fun _ => ws = wsM := by
-  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Claims.Msg),
+  have key : ∀ (xs : List F128) (st : LigState) (t : Transcript) (l : Array Hash.Msg),
       (((ForIn.forIn xs PUnit.unit fun w (_ : PUnit) => do
         liftT (liftTM (Transcript.absorbF w))
         Pure.pure (ForInStep.yield PUnit.unit) : LP PS PUnit).run st).run t).go l =
@@ -340,7 +340,7 @@ theorem PRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
   show _ = ap (pN p.claimNonces[st.cbn.size]!) t
   rw [hE.2.2.1.get]
 
-theorem PRuns.sampleVec (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (c : Cur) (tm : Transcript) :
+theorem PRuns.sampleVec (resp : ℕ → Hash.Msg) {n : ℕ} (hn : n ≠ 0) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (sampleVecP (asksS resp) n)) c tm c (afterSq tm 2 n (cfOf resp L tm.k)) (fun _ => True)
       fun _ => True := by
   intro st t l b st' t' l' hl h
@@ -351,7 +351,7 @@ theorem PRuns.sampleVec (resp : ℕ → Claims.Msg) {n : ℕ} (hn : n ≠ 0) (c 
   rw [hl]
   rfl
 
-theorem PRuns.sample (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) :
+theorem PRuns.sample (resp : ℕ → Hash.Msg) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (sampleP (asksS resp))) c tm c (afterSq tm 1 1 (cfOf resp L tm.k)) (fun _ => True)
       fun _ => True := by
   intro st t l b st' t' l' hl h
@@ -362,7 +362,7 @@ theorem PRuns.sample (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) :
   rw [hl]
   rfl
 
-theorem PRuns.sampleK (resp : ℕ → Claims.Msg) (c : Cur) (tm : Transcript) :
+theorem PRuns.sampleK (resp : ℕ → Hash.Msg) (c : Cur) (tm : Transcript) :
     PRuns p L (liftT (sampleKP (asksS resp))) c tm c (afterSq tm 2 2 (cfOf resp L tm.k)) (fun _ => True)
       fun _ => True := by
   intro st t l b st' t' l' hl h
@@ -434,7 +434,7 @@ theorem PRuns.loop (body : ℕ → σ → LP PS (ForInStep σ)) (C : ℕ → Cur
 /-! ## The model's steps -/
 
 /-- **A challenge**, against the model's (`chal`). -/
-theorem PRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState) (tm : Transcript) :
+theorem PRuns.challenge (resp : ℕ → Hash.Msg) (split : Bool) (sm : LState) (tm : Transcript) :
     PRuns p L (challengeP (asksS resp) split) (cur sm) tm (cur (chal p (cfOf resp L) sm tm).2.1)
       (chal p (cfOf resp L) sm tm).2.2 (fun _ => True) fun _ => True := by
   unfold challengeP
@@ -445,7 +445,7 @@ theorem PRuns.challenge (resp : ℕ → Claims.Msg) (split : Bool) (sm : LState)
   all_goals exact (PRuns.get _ _).bind fun _ _ => (PRuns.sendMsg _ _ _).bind fun _ _ => PRuns.pure trivial _ _
 
 /-- **An out-of-domain intro**, against the model's (`ood`), at any level. -/
-theorem PRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
+theorem PRuns.oodIntro (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0)
     (split : ℕ) (sm : LState) (tm : Transcript) :
     PRuns p L (oodIntroP (asksS resp) nonce g dim) (cur sm) tm (cur (ood p (cfOf resp L) dim split sm tm).1)
       (ood p (cfOf resp L) dim split sm tm).2 (fun _ => True) fun _ => True := by
@@ -455,7 +455,7 @@ theorem PRuns.oodIntro (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt
     (PRuns.sample resp _ _).bind fun _ _ => PRuns.modify _ (fun _ => by exact ⟨rfl, rfl, rfl, rfl, rfl⟩) _ _
 
 /-- **A level's query**, against the model's (`query`), on any opened rows and fold. -/
-theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
+theorem PRuns.query (resp : ℕ → Hash.Msg) (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit)
     (hq : lv.q ≠ 0) (rows : Array (Array F128)) (fold : Array F256) (sm : LState) (tm : Transcript) :
     PRuns p L (queryP (asksS resp) nonce ms lv cm) (cur sm) tm (cur (Lg.query p (cfOf resp L) lv rows fold sm tm).2.1)
       (Lg.query p (cfOf resp L) lv rows fold sm tm).2.2 (fun _ => True) fun _ => True := by
@@ -466,7 +466,7 @@ theorem PRuns.query (resp : ℕ → Claims.Msg) (nonce : ℕ → ℕ → UInt64)
 
 /-- **A level's four challenges**, against the model's (`chals`): the last keeps the folded table, then splits it; at
 the last level (`last`) its message is the unsplit table's. -/
-theorem levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm : Transcript) :
+theorem levelChals (resp : ℕ → Hash.Msg) (last : Bool) (sm : LState) (tm : Transcript) :
     PRuns p L (forIn [:4] (#[] : Array F256) fun i (f : Array F256) =>
         if (i + 1 == 4) = true then do
           let r ← liftT (sampleKP (asksS resp))
@@ -500,11 +500,11 @@ theorem levelChals (resp : ℕ → Claims.Msg) (last : Bool) (sm : LState) (tm :
 /-- **The honest prover's Ligerito ends where the model does** on the proof it returns: run from a transcript at which
 `L + k` bodies have been sent, at the replies' coins (`cfOf resp L`), its transcript ends at `out`'s and it keeps
 `L + k` bodies sent; its first cap is the commitment's. -/
-theorem ligeritoP_go (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoP_go (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (tb b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (L : ℕ)
     (hn : sch.n ≠ 0) (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
-    {t : Transcript} {l : Array Claims.Msg} (hl : l.size = L + t.k) {P : LigeritoProof} {t' : Transcript}
-    {l' : Array Claims.Msg}
+    {t : Transcript} {l : Array Hash.Msg} (hl : l.size = L + t.k) {P : LigeritoProof} {t' : Transcript}
+    {l' : Array Hash.Msg}
     (hrun : ((ligeritoP (asksS resp) (Hashes.ofSha512 h) ms sch T cm0 tb b salt nonce).run t).go l =
       (.ok (P, t'), l')) :
     P.initialCap = cm0.cap ∧ t' = (out P (cfOf resp L) sch T cm0.cap t).2.2 ∧ l'.size = L + t'.k := by

@@ -193,8 +193,7 @@ p_python() {
 
 p_pearl_build() {
   [ -n "$CUDA" ] || { no_toolkit; return; }
-  grep -qF -- "-gencode $GENCODE " "$PEARL/build.sh" || { REASON="build.sh does not build for -gencode $GENCODE"; return 1; }
-  CUDA_HOME=$CUDA bash "$PEARL/build.sh" "$SCRATCH/pearl_c" || { REASON="build.sh refused the build (ptxas, the SASS gate or the debit cubin's gates)"; return 1; }
+  CUDA_HOME=$CUDA GENCODE=$GENCODE bash "$PEARL/build.sh" "$SCRATCH/pearl_c" || { REASON="build.sh refused the build (the target, ptxas, the SASS gate or the debit cubin's gates)"; return 1; }
   mkdir -p "$O/pearl_c"
   cp "$SCRATCH/pearl_c"/{sass.json,ptxas.txt,toolchain.txt} "$SCRATCH/pearl_c/debit"/{debit_ptxas.txt,debit_mma.txt} "$O/pearl_c/"
   cp "$PEARL/run.py" "$SCRATCH/pearl_c/"
