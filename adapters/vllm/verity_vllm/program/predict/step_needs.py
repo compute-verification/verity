@@ -211,7 +211,7 @@ class StepNeeds:
                 return [(Need("fused-allreduce-rmsnorm", _id("allreduce-rmsnorm-fused", N=self.H, M=M), "no capture",
                               "at other statics"), n)]
             return [(self.kind("all_reduce_rmsnorm_mnnvl", WORLD=self.W, N=self.H, SHOT=AR.mnnvl_shot(M, self.H, self.W),
-                               CLUSTER=AR.mnnvl_grid(M, self.H)[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
+                               CLUSTER=AR.mnnvl_grid(M, self.H, int(self.tp.num_sms))[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
         return [(self._all_reduce(M, n), 1), (self.kind("rmsnorm_fused", N=self.H, EPS=self.EPS, TARGET=self.tp, M=M), n)]
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
