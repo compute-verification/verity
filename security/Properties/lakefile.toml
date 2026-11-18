@@ -122,7 +122,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
   "Properties.Verity.Committed", "Properties.Verity.GateARow", "Properties.Ties", "Properties.Flock.Nets", "Properties.Remote",
   "Properties.InferenceOnly.Record", "Properties.Pous.WipeSigned", "Properties.Pous.WipeCount", "Properties.Challenger",
-  "Properties.ZkServer", "Properties.Core.Site", "Properties.Core.ProfileCredited",
+  "Properties.ZkServer", "Properties.Core.Site",
   "Properties.Registration.Premises",
   "Properties.Assumptions", "Properties.Verity.ExecutionPhaseFiles", "Properties.InferenceOnly.Opening",
   "Properties.InferenceOnly.PinnedRead", "Properties.InferenceOnly.RecordForm", "Properties.Verity.LedgerPinned"]
