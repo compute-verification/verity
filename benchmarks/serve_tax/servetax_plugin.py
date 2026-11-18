@@ -42,7 +42,7 @@ directory, /edge-K.state.pkl), and the KV pool's bytes at the edges ``save_kv`` 
 step's sampled tokens and their logprobs' bits go to ``private``/server/edges/outputs.PID.jsonl. With a tensor-parallel executor each
 rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
-The tick's plugin (`verity_vllm.pipeline.tick_plugin`) is a separate entry point, loaded after this one, so its gate wraps
+The tick's plugin (`verity_vllm.pipeline.scheme_plugin`) is a separate entry point, loaded after this one, so its gate wraps
 the scheduler outside these.
 """
 from __future__ import annotations
