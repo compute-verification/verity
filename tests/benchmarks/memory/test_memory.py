@@ -1210,6 +1210,44 @@ def test_the_arena_is_most_of_the_cards_memory_from_its_sheet(store, work, card,
     assert env["ENGINE_ARGS"] == f"--step-hz 2 --align-steps --arena-gib {arena} --util 0.88"
 
 
+@pytest.mark.parametrize("name, sheets", [("NVIDIA H200", ("h200-sxm-141gb", "h200-sxm-141gb-x1")),
+                                          ("NVIDIA RTX PRO 6000 Blackwell Server Edition",
+                                           ("rtx-pro-6000-server", "rtx-pro-6000-server-x8")),
+                                          ("NVIDIA H100 80GB HBM3", ("h100-sxm-80gb", None))])
+def test_the_card_is_the_card_file_holding_its_name_and_the_node_the_one_file_carrying_that_card(name, sheets):
+    assert M.sheet_of(name) == sheets
+
+
+def test_a_card_two_node_files_carry_is_named_with_local_node(monkeypatch, tmp_path):
+    for kind in ("h200-sxm-141gb-x1", "h200-sxm-141gb-x2"):
+        text = (M.NODE_FILES / "h200-sxm-141gb-x1.toml").read_text()
+        (tmp_path / f"{kind}.toml").write_text(text.replace('node = "h200-sxm-141gb-x1"', f'node = "{kind}"'))
+    monkeypatch.setattr(M, "NODE_FILES", tmp_path)
+    with pytest.raises(M.CouldNotRun, match="h200-sxm-141gb-x1, h200-sxm-141gb-x2 all carry h200-sxm-141gb, the card "
+                                            "here: name the one this machine is with LOCAL_NODE"):
+        M.sheet_of("NVIDIA H200")
+    monkeypatch.setenv("LOCAL_NODE", "h200-sxm-141gb-x2")
+    assert M.sheet_of("NVIDIA H200") == ("h200-sxm-141gb", "h200-sxm-141gb-x2")
+
+
+@pytest.mark.parametrize("record, why", [
+    (a_local_record(a_session(gamma=0.199), arena=58), "session 0 was accepted by the Lean verifier, and no node file "
+     "of calibration/hardware/nodes/ carries h100-sxm-80gb, so no host of it is on record and no share is printed"),
+    (a_local_record(a_refused_session(), arena=58), "the verifier refused session 0 at pass group 2"),
+], ids=["accepted", "refused"])
+def test_an_h100_runs_the_session_on_the_card_alone_and_prints_no_share(store, capsys, work, record, why):
+    """No node file carries the H100, so no host of it is on record: the session runs on its 80 GiB, with no `--node`
+    for the verifier, and its verdict is printed with no share."""
+    machine = Machine(card="NVIDIA H100 80GB HBM3, 9.0", record=record)
+    assert bench(store, "--local", run=machine) == 1
+    ((_, env),) = machine.runs()
+    assert env["ENGINE_ARGS"] == "--step-hz 2 --align-steps --arena-gib 58 --util 0.88"
+    assert env["VERIFIER_ARGS"] == f"--hbm-bytes {80 * GIB}"
+    assert env["NODE_ARGS"].endswith("--node local/h100-sxm-80gb/serving")
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith(f"memory: no number: {why}") and doc["value"] is None
+
+
 @pytest.mark.parametrize("card, arena, member", [("NVIDIA H200, 9.0", 112, "llama-3.2-1b-h200"),
                                                  ("NVIDIA RTX PRO 6000 Blackwell Server Edition, 12.0", 72,
                                                   "llama-3.2-1b-rtx-pro-6000")])
@@ -1409,8 +1447,9 @@ def test_local_states_the_arena_its_engine_recorded_and_not_its_own_arguments(st
     (Machine(driver=False), "--local serves on an NVIDIA GPU, and there is no nvidia-smi here, so no NVIDIA driver", 3),
     (Machine(smi_rc=9), "--local serves on an NVIDIA GPU, and nvidia-smi names none here (rc 9: NVIDIA-SMI has failed)",
      3),
-    (Machine(card="NVIDIA H100 80GB HBM3, 9.0"), "the tree has no data sheet for NVIDIA H100 80GB HBM3 (calibration/hardware/nodes/ "
-     "has h200-sxm-141gb-x1, rtx-pro-6000-server-x8 for its cards), and the share is of the card's own sheet", 3),
+    (Machine(card="NVIDIA A100-SXM4-80GB, 8.0"), "0 card files of calibration/hardware/cards/ have 'NVIDIA A100-SXM4-80GB', "
+     "the card nvidia-smi names here, in `driver`: add { value = \"NVIDIA A100-SXM4-80GB\", source = ... } to its one "
+     "card file's `driver`, adding its <sku>.toml", 3),
     (Machine(fetch_rc=1), "unsloth/Llama-3.2-1B@9535bd9b1d1d (config.json, generation_config.json, model.safetensors, "
      "special_tokens_map.json, tokenizer.json, tokenizer_config.json) couldn't be fetched into", 3),
     (Machine(rc=5), "the node's session failed (run.sh exited 5)", 3),
