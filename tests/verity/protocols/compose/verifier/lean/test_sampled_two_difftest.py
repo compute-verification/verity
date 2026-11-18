@@ -3,7 +3,7 @@
 word for word, and the decoders it hands its parts to, whose outcomes must agree but for the reason. The parameters are
 the one-stage difftest's two-stage run's (`_two_stage_case`) in the form's shape, both registrations naming one challenger
 key, each case one change to them. The twin decides no case past the interior's template circuits, so the form's
-refusal of every audit while `FORM` is false is its Lean's (`checkBlobs_refuses`), not this test's."""
+verdict on an audit that passes every step is its Lean's, not this test's."""
 
 from __future__ import annotations
 
@@ -150,13 +150,8 @@ def test_two_definitions_are_refused_by_name(server) -> None:
 
 
 def test_the_base_is_refused(server) -> None:
-    """Past the mirror the Lean still refuses: the members are none, and the form accepts nothing while `FORM` is false."""
+    """Past the mirror the Lean still refuses: the members are none."""
     assert PORT.lean(server, case(base()))[0] == "reject"
-
-
-#: what the shipped check's refusal by the switch names: the stream's code for the two-stage form, or the switch's reason
-#: (`SecondStage.FORM`, `SecondStage.FORM_WHY`)
-BY_THE_SWITCH = ("two-stage-form", "a statement form the soundness proof does not cover")
 
 
 #: One honest two-stage play's case, as ``sampled_two_small.sh`` with no arguments keeps it (its ``$OUT/form``:
@@ -174,7 +169,7 @@ AFRESH = ("if an honest play changed, keep one made afresh: `bash benchmarks/one
 def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     """The form accepts some play: one honest two-stage run's case (`CASE`, or the directory
     ``VERITY_SAMPLED_TWO_CASE`` names, a run's own ``$OUT/form``) passes `sampled-two-on`, the check with its switch
-    on, and the shipped `sampled-two` refuses it by the switch alone. It catches a change after which the form accepts
+    on, and the shipped `sampled-two`, whose switch is on too (`SecondStage.FORM`), accepts it alike. It catches a change after which the form accepts
     no play, which every refusal case above passes. The kept case is a play of before that change: where the change
     is to what an honest play is, the case is made afresh (`AFRESH`)."""
     d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
@@ -187,7 +182,7 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     on = subprocess.run([str(exes[0]), "check", *files], capture_output=True, text=True, check=False)
     assert on.returncode == 0, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
     off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
-    assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]
+    assert off.returncode == 0, (off.stdout + off.stderr)[-4000:]
 
 
 #: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)

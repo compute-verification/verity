@@ -15,17 +15,17 @@ from types import SimpleNamespace
 import pytest
 from verity.circuits.codec import canonical_json
 from verity.commitments.periods import interface as IF
+
+from tests.program.predict.test_node_window import glm_request
 from verity_vllm.program.predict import node_window as NW
-from verity_vllm.program.predict import node_window_join as NJ
 from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
+from verity_vllm.program.predict import node_window_join as NJ
 from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_reads as NR
 from verity_vllm.program.predict import node_window_select as NSEL
 from verity_vllm.program.predict import node_window_sparse as NS
 from verity_vllm.program.predict.build import Unexpressible
-
-from tests.program.predict.test_node_window import glm_request
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES, **NSEL.FAMILIES}
 IDS, WORLD = 43, 8

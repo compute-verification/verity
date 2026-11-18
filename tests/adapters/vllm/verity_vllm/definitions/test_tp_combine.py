@@ -17,16 +17,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.circuits.ops.boolean import versions as BB
+from verity.commitments.periods.interface import K_MAX, check_proof_block, layout
+
 from verity_vllm.definitions.registry import b1, b1_tp2, dead_free
 from verity_vllm.definitions.registry import boolean_tp_combine as BC
 from verity_vllm.definitions.registry import tp_allreduce as TA
 from verity_vllm.definitions.registry import tp_allreduce_check as K
 from verity_vllm.definitions.registry import tp_combine as TC
-from verity.commitments.periods.interface import K_MAX, check_proof_block, layout
 
 GLM53_N = 6144
 #: (SHOT, CLUSTER) of the fused calls GLM-5.3 serves at TP8 on H200: one-shot to 10 tokens, then two-shot; 8 CTAs to 16 tokens,

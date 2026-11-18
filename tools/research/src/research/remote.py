@@ -2367,6 +2367,15 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
             harness_args = set_flag(harness_args, "--source-identity", json.dumps(shipped_identity(tree_sha, ready), sort_keys=True))
+        from .pods import registry
+        from .result import ENV_MACHINE
+
+        env = {**env, ENV_MACHINE: machine_name}
+        props = registry.properties_copy(machine_name, m)
+        props_name = f"{machine_name}.toml"
+        if props is not None and any(p.name == props_name for p in sends):
+            raise Refused(f"--send {props_name}: the launch puts {machine_name}'s [properties] in the run's inputs/ under that name "
+                          f"itself (${ENV_MACHINE} names it); drop the --send")
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
@@ -2393,7 +2402,11 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         held = json.dumps(request)
         names = address_names(env, {**registered_addresses(load_machines()), machine_name: tgt["host"]}, command)
         request[HIDDEN_ADDRESSES] = {a: n for a, n in names.items() if a in held}
-        req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
+        with tempfile.TemporaryDirectory(prefix="research-props-") as props_dir:
+            if props is not None:
+                (Path(props_dir) / props_name).write_text(props)
+                sends = [*sends, Path(props_dir) / props_name]
+            req_path = stage_request(ssh, m["root"], run_id, request, sends, private=custody_files or None)
         rec.update(phase="launching", request=req_path, remote_run_dir=f"{m['root']}/runs/{run_id}", tool=tool_dir, source_sha=tree_sha,
                    source_archive_sha256=ready.get("archive_sha256"), rate_usd_per_hour=tgt["cost_per_hr"])
         write_json_atomic(local_dir / "remote.json", rec)

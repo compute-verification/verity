@@ -116,7 +116,7 @@ class _Calls:
             c = AR.covered(setting, N, "fused", M) if setting else None
             if c is None:
                 _refuse(f"a fused all-reduce + norm of {M} x {N} under {s} (no capture covers it: tp_allreduce.covered)")
-            fn = self.k("all_reduce_rmsnorm_mnnvl", WORLD=W, N=N, SHOT=AR.mnnvl_shot(M, N, W), CLUSTER=AR.mnnvl_grid(M, N)[1], EPS=self.EPS,
+            fn = self.k("all_reduce_rmsnorm_mnnvl", WORLD=W, N=N, SHOT=AR.mnnvl_shot(M, N, W), CLUSTER=AR.mnnvl_grid(M, N, int(self.net.tp.num_sms))[1], EPS=self.EPS,
                         FMA=bool(c.statics["FMA"]))
             outs = [self.call(fn, p, r, w.refs) for p, r in zip(self.peers.rows(parts), res)]
         else:
