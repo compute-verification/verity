@@ -135,7 +135,7 @@ def class_cost(m: Meter, card: str) -> dict:
     with m.phase("Registered.of"):
         reg = Registered.of(Phi(model={**LLAMA32_1B, "hf_config": hf, "dtype": "bfloat16"}, target=tgt), default_seed=DEFAULT_SEED)
     with m.phase("lower"):
-        low = window_circuit.lower(reg, WindowClass(*CLASS_1B), wired=False)
+        low = window_circuit.lower(reg, WindowClass(*CLASS_1B))
     wall = time.perf_counter() - t0
     m.stop.set()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
