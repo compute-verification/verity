@@ -60,7 +60,7 @@ class FileStager:
                                     content_digest=hashlib.sha256(content).hexdigest())
         self.outs: dict[str, np.ndarray] | None = None
 
-    def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
+    def stage(self, rows: dict, out_dir: Path, salts: dict, indices: Sequence[int], set_name: str,
               tables: dict, refs: dict, registered: dict) -> dict:
         iset = SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.row_ports[0]])
@@ -68,9 +68,9 @@ class FileStager:
             if not np.array_equal(np.asarray(tables[r], np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], np.uint16)):
                 raise ValueError(f"port {r}'s table rows at the instances' refs are not their rows")
         table_rows = {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **salts}
+        salts = {**FC.stage_salts(0, n, self.ports, table_rows), **salts}
         out_dir.mkdir(parents=True, exist_ok=True)
-        FC.write("", iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write("", iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin",
                  rows={r: np.asarray(rows[r], np.uint16) for r in self.row_ports}, outs=self.outs, salts=salts,
                  public_words={}, digests=(self.pin, self.class_sha512), indices=[int(u) for u in indices],
                  share_rows=True, tables=tables, refs=refs, registered=registered, meta=self.meta)

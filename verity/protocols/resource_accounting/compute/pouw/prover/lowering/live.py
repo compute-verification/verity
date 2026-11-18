@@ -10,7 +10,6 @@ partition query are `program_of`'s, the verifier's ``--registered`` file of a un
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -159,7 +158,7 @@ def stage(stager: UnitStager, z: dict, out: Path, u: int) -> dict:
     """One unit's statement on the prover's rows ``z`` (`window.py open`'s form), instance unit u."""
     st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports])
     out.mkdir(parents=True, exist_ok=True)
-    got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, out, os.urandom(32), salts=st["salts"], indices=[u],
+    got = stager.stage({p: z[f"w_{p}"] for p in stager.row_ports}, out, salts=st["salts"], indices=[u],
                        set_name=f"live-{u}", tables=st["tables"], refs=st["refs"], registered=st["registered"])
     return {"ok": int(got["outs"]["o0"][0][0]), "ands": got["ands"]}
 

@@ -289,7 +289,8 @@ class Scheme:
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from
-#: `circuit.SCHEMES`, whose names the vLLM integration serves as ncp-v2-style traced schemes.
+#: the kernel schemes' ``ncp-v2`` family (`verifier.kernel_schemes`), the names the vLLM integration serves as traced
+#: schemes.
 SCHEMES: dict[str, Scheme] = {}
 #: this package's modules that register its own schemes (`h1tile`: eps1-sm120-h1fx1), imported at the first name not yet in
 #: `SCHEMES`

@@ -463,3 +463,13 @@ def test_moe_construction_is_a_declared_and_bound_static_never_applied_to_the_en
     assert parse_target_arg('{"moe_construction": "padded"}').moe_construction == "padded"
     with pytest.raises(ValueError):
         parse_target_arg('{"moe_constructon": "padded"}')
+
+
+def test_a_profile_s_card_is_its_card_file_s_capability_and_sm_count_and_absent_from_its_json_when_unnamed():
+    named = TargetProfile(compute_capability=(9, 0), num_sms=132, card="h100-sxm-80gb")
+    assert named.to_json()["card"] == "h100-sxm-80gb" and TargetProfile.from_json(named.to_json()) == named
+    assert "card" not in TargetProfile().to_json() and named.digest() != named.with_overrides(card=None).digest()
+    with pytest.raises(ValueError, match=r"card 'h200-sxm-141gb' is compute capability \[9, 0\] with 132 SMs"):
+        TargetProfile(compute_capability=(9, 0), num_sms=128, card="h200-sxm-141gb")
+    with pytest.raises(KeyError, match="no card 'no-such-card'"):
+        TargetProfile(compute_capability=(9, 0), num_sms=132, card="no-such-card")

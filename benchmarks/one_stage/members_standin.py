@@ -57,7 +57,7 @@ def window(d: Path, members: int) -> Path:
         sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         win.record(t, ins, [np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(salt_key=bytes(32)), d, {"label": "standin"}, registrar=R)
+    win.write(win.close(), d, {"label": "standin"}, registrar=R)
     return d
 
 
