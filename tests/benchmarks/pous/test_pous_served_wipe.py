@@ -417,6 +417,20 @@ def test_demo_sh_takes_the_wrappers_options(tmp_path, unknown) -> None:
         r.stdout + r.stderr)
 
 
+def test_demo_sh_takes_its_own_streamer_only_for_a_challenger_here(tmp_path) -> None:
+    """`--wipe-stream` is a streamer for the memory attester on this node: beside `--challenger`, whose host builds its
+    own, it is refused before demo.sh writes or builds anything; alone it is an option demo.sh knows."""
+    r = subprocess.run(["bash", str(DEMO), "--challenger", "c", "--challenger-address", "h:1", "--challenger-command", "x",
+                        "--trusted-sha512", PINNED, "--wipe-stream", "e"],
+                       env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
+    assert r.returncode == 2 and r.stdout.strip() == (
+        "demo.sh: --wipe-stream is the streamer of a challenger here; one on --challenger builds its own"), r.stdout + r.stderr
+    assert not any((tmp_path / "out").iterdir())
+    r = subprocess.run(["bash", str(DEMO), "--wipe-stream", "e", "--bogus"], env=os.environ | {"OUT": str(tmp_path / "o")},
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and r.stdout.strip() == "demo.sh: unknown option --bogus (see the header)"
+
+
 @pytest.mark.parametrize("pin, said", [
     ((), "demo.sh: --challenger takes --trusted-sha512: a challenger on its own host is trusted only under its pinned key"),
     (("--trusted-sha512", "AB" * 64), "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not ABAB")])

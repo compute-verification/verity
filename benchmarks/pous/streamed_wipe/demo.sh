@@ -65,6 +65,9 @@
 #   --limit-ns N         the deadline a read (default 20 ms)
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
 #                        served_verdicts.sh's own Lean builds write meanwhile), in place of building it here
+#   --wipe-stream EXE    the native streamer (wipe_stream.c) built elsewhere, which the memory attester on this node
+#                        gates and runs in place of building one beside its key in this run's scratch, so the scratch
+#                        (TMPDIR) may be on a filesystem that runs no programs (noexec); not with --challenger
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, disk.txt (with --disk: the block devices,
@@ -72,7 +75,7 @@
 # summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
 # connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
 # undeclared tiers, the egress: uncounted, or the evidence writer's count, which certifies no wipe). Scratch (the
-# challenger's key and session log, the built streamer) is a mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
+# challenger's key and session log, the built streamer unless --wipe-stream names one) is a mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
 set -euo pipefail
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)
@@ -85,7 +88,7 @@ if [ "${1:-}" = leased ]; then
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
-  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= TRUSTED=
+  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= WIPE_STREAM= TRUSTED=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -116,6 +119,7 @@ else
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
       --wipe-protocol) WIPE_PROTOCOL=$2; shift ;;
+      --wipe-stream) WIPE_STREAM=$2; shift ;;
       *) echo "demo.sh: unknown option $1 (see the header)"; exit 2 ;;
     esac
     shift
@@ -128,6 +132,8 @@ else
   [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
     echo "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not $TRUSTED"; exit 2; }
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
+  [ -n "$WIPE_STREAM" ] && [ -n "$CH" ] && {
+    echo "demo.sh: --wipe-stream is the streamer of a challenger here; one on --challenger builds its own"; exit 2; }
   command -v ip > /dev/null || {
     echo "demo.sh: this host has no \`ip\` (iproute2), which names the node's links: apt-get install iproute2" >&2; exit 3; }
   read -r CTRL_DEV CTRL_SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
@@ -192,6 +198,10 @@ EOF
     (cd "$L" && lake build wipe-protocol) > "$O/lake-build.log" 2>&1 \
       || { tail -30 "$O/lake-build.log"; echo "REFUSED: wipe-protocol doesn't build"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$ROOT/$L/.lake/build/bin/wipe-protocol\"}"
+  fi
+  if [ -n "$WIPE_STREAM" ]; then
+    [ -x "$WIPE_STREAM" ] || { echo "REFUSED: --wipe-stream $WIPE_STREAM is not an executable"; exit 3; }
+    TOOLS="${TOOLS%\}}, \"wipe-stream\": \"$WIPE_STREAM\"}"
   fi
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \

@@ -26,7 +26,9 @@
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # --run-keys is a development run's: the memory attester is demo.sh's own on this node, under a key it makes for the
 # run in SERVE_DIR/private/run-keys/wipe (0700), removed when the wipe ends, and trusted for this run alone, so
-# served.json says key_pin run and trusted-device reads rehearsal. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
+# served.json says key_pin run and trusted-device reads rehearsal. Its native streamer is built into a mktemp -d of its
+# own (demo.sh --wipe-stream), never under SERVE_DIR, which may be on a filesystem that runs no programs (/dev/shm
+# mounted noexec); a cc that fails exits 7. It is refused beside WIPE_KEY_SHA512, WIPE_ADDRESS,
 # WIPE_CHALLENGER or WIPE_COMMAND. Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
 # this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
@@ -119,11 +121,13 @@ USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$CAR
 unset PYTHONPATH VIRTUAL_ENV
 rc=0
 if [ -n "$RUN_KEYS" ]; then
-  K=$SERVE_DIR/private/run-keys/wipe
+  K=$SERVE_DIR/private/run-keys/wipe X=$(mktemp -d)
   rm -rf "$K" && (umask 077 && mkdir -p "$K")
-  OUT=$DIR TMPDIR=$K bash "$DEMO" --node "$NODE" --reads "$READS" \
+  cc -O3 -pthread "$ROOT/verity/protocols/resource_accounting/memory/pous/attester/wipe_stream.c" -o "$X/wipe_stream" \
+    || { rm -rf "$K" "$X"; echo "WIPE FAILED: wipe_stream doesn't build"; exit 7; }
+  OUT=$DIR TMPDIR=$K bash "$DEMO" --node "$NODE" --reads "$READS" --wipe-stream "$X/wipe_stream" \
     ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} ${DEMO_ARGS[@]+"${DEMO_ARGS[@]}"} || rc=$?
-  rm -rf "$K"
+  rm -rf "$K" "$X"
 else
   OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
     --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} \
