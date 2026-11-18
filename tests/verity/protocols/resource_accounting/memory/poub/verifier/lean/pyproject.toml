@@ -31,6 +31,7 @@ untraced = [
 inputs = ["verity/__init__.py", "verity/errors.py", 
           # PoUB's declaration, which the prover's side reads (`period_prover`), and the interface it is declared in
           "verity/protocols/resource_accounting/memory/poub/scheme.py", "verity/protocols/resource_accounting/scheme.py",
+          "verity/hooks.py",
           "verity/protocols/proofs/spot/verifier/profile.py",
           # the γ terms' ledger and the session verifier that holds the Lean's to it (`test_gamma.py`)
           "verity/protocols/resource_accounting/memory/poub/verifier/ledger.py", "verity/protocols/resource_accounting/memory/poub/verifier/timing.py",
