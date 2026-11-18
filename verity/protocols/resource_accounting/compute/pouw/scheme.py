@@ -51,10 +51,11 @@ def tile_macs(shape: Mapping[str, int]) -> int:
 #: the salt's source, ``coins`` (``in-process``: a challenger held in this
 #: process, crediting nothing) or ``challenger`` (the auditor device's, HOST:PORT), whose sessions the launcher's
 #: ``ctx["gate"]``, the gate in its own words, opens: ``session``, a reserve answer the gate already gave, opened by the
-#: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`); and
-#: ``tie-uniform``
+#: first epoch, and ``lane`` and ``peer``, under which each later epoch reserves its own (`Attached.reserve`);
+#: ``users``, a regular expression a phase's inputs' users must all match in full for its epoch to open (unset: every
+#: phase's); and ``tie-uniform``
 SETTINGS: dict[str, Any] = {"tie-uniform": False, "kernel": "", "cubin": "", "schedule": "serial", "transcript_dir": "",
-                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": ""}
+                            "coins": "", "challenger": "", "session": {}, "lane": "", "peer": "", "users": ""}
 COINS = ("", "in-process")
 
 
@@ -78,6 +79,10 @@ def check_settings(own: Mapping[str, Any]) -> str | None:
         return "a challenger needs a session (the gate's reserve answer) or lane and peer to reserve each epoch's"
     if own["session"] and not isinstance(own["session"].get("session"), str):
         return f"session is the gate's reserve answer, {{'session': SESSION_ID, ...}}, not {own['session']!r}"
+    try:
+        re.compile(own["users"])
+    except re.error as e:
+        return f"users is a regular expression, and {own['users']!r} is not ({e})"
     return None
 
 
@@ -186,6 +191,11 @@ class Attached:
         self.phases: dict[int, dict[str, Any]] = {}
         self.busy: dict[int, int] = {}
         self.computed: set[int] = set()
+        self.users = re.compile(self.own["users"]) if self.own["users"] else None
+        self.user_of: dict[str, str | None] = {}
+        self.held = False
+        self.unopened: set[int] = set()
+        self.life_unopened = False
 
     def declare(self, event: H.Declared) -> None:
         self.declared = event
@@ -210,7 +220,15 @@ class Attached:
         too; with no phase, one epoch for the server's life, opened at the first step with tokens and finished at
         `release`. A pass ends at each `StepComputed`, once the step's blocks are all issued. A step that computed and
         ended without one is refused: under a multiprocess executor the adapter emits no `StepComputed`, and no pass
-        would end."""
+        would end. Under ``users``, an epoch opens instead at its phase's (or the server's life's) first step whose inputs'
+        users all match it, if no step of the phase computed before it; a phase that ran another's inputs first serves
+        no epoch and takes no coins, and a step deciding it with an input that named no user is refused."""
+        if isinstance(event, H.InputArrived):
+            if self.users is not None:
+                self.user_of[event.input] = event.user
+            return
+        if isinstance(event, H.OutputsComplete):
+            self.user_of.pop(event.input, None)
         if isinstance(event, H.PhaseOpened):
             if self.run is not None and not self.phased:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} opens at step {event.step}, after steps outside any "
@@ -221,17 +239,27 @@ class Attached:
             if self.weights is None:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} opens before its linear weights registered")
             self.phased, self.phase, self.first_step = True, event.phase, event.step
-            self.run = self.open(self.weights, self.own)
+            if self.users is None:
+                self.run = self.open(self.weights, self.own)
+            else:
+                self.held = True
             return
         if isinstance(event, H.PhaseClosed):
             if self.phase != event.phase:
                 raise RuntimeError(f"pearl-plus: phase {event.phase} closes, and the open phase is {self.phase}")
+            if self.run is None:
+                self.unopened.add(event.phase)
+                self.held, self.phase = False, None
+                return
             self.phases[event.phase] = {**self.close(event.step - self.first_step + 1), "first_step": self.first_step,
                                         "last_step": event.step,
                                         "program": event.program.hex(), "root": None}
             self.phase = None
             return
         if isinstance(event, H.PhaseCommitted):
+            if event.phase in self.unopened:
+                self.unopened.discard(event.phase)
+                return
             if event.phase not in self.phases:
                 raise RuntimeError(f"pearl-plus: phase {event.phase}'s root comes before the phase closed")
             if self.phases[event.phase]["root"] is not None:
@@ -239,8 +267,16 @@ class Attached:
             self.phases[event.phase]["root"] = event.root.hex()
             return
         if isinstance(event, H.StepBegan) and self.run is None and not self.phased and event.slots \
-                and self.weights is not None:
-            self.run = self.open(self.weights, self.own)
+                and self.weights is not None and not self.life_unopened:
+            if self.users is None or self.tied(event.inputs):
+                self.run = self.open(self.weights, self.own)
+            else:
+                self.life_unopened = True
+        if isinstance(event, H.StepBegan) and self.held:
+            if self.tied(event.inputs):
+                self.held, self.run = False, self.open(self.weights, self.own)
+            elif event.slots:
+                self.held = False
         if self.run is None:
             return
         if isinstance(event, H.StepBegan):
@@ -256,6 +292,16 @@ class Attached:
                 raise RuntimeError(f"pearl-plus: step {event.step} computed and ended with no StepComputed, so its pass "
                                    "never ends (a multiprocess executor emits none); serve with a uniprocess executor")
             self.computed.discard(event.step)
+
+    def tied(self, inputs: tuple[str, ...]) -> bool:
+        """Whether ``inputs`` are some, and every one's user matches ``users`` in full; refused where one arrived naming
+        no user (`InputArrived.user`), since no answer about it is the setting's. A user is matched here only, and never
+        written anywhere."""
+        if missing := [i for i in inputs if self.user_of.get(i) is None]:
+            raise RuntimeError(f"pearl-plus: inputs {missing[:4]} name no user, and its 'users' setting "
+                               f"{self.users.pattern!r} opens an epoch only on a step whose inputs' users all match it: "
+                               "the adapter fills InputArrived.user with each input's user")
+        return bool(inputs) and all(self.users.fullmatch(self.user_of[i]) for i in inputs)
 
     def kernel(self, due: H.BlockDue, original: Callable[[Mapping[str, H.Handle] | None], H.Handle]) -> H.Handle:
         if due.format not in READS:
