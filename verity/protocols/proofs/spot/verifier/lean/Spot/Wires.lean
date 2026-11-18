@@ -278,9 +278,11 @@ def check (c : Wiring) : Except Refusal Summary :=
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
-/-- The writer `(template, unit, out)` of reader row `(tid, u, port, row)`, by the wires alone; none when no wire covers it. -/
-def Summary.writerOf (s : Summary) (tid : String) (u : Nat) (port : String) (row : Nat) : Option (String × Int × String) :=
-  s.wires.findSome? fun w => (w.indexOf tid u port row).map fun i => (w.writer, w.writerAt i, w.out)
+/-- The writer `(template, unit, out, offset)` of reader row `(tid, u, port, row)`, by the wires alone: the reader row is
+that unit's row `out` from its word `offset`; none when no wire covers it. -/
+def Summary.writerOf (s : Summary) (tid : String) (u : Nat) (port : String) (row : Nat) :
+    Option (String × Int × String × Nat) :=
+  s.wires.findSome? fun w => (w.indexOf tid u port row).map fun i => (w.writer, w.writerAt i, w.out, w.offset)
 
 /-- The reader rows wired, multiplied through. -/
 def Summary.wiredRows (s : Summary) : Nat := (s.wires.map Wire.units).sum
@@ -292,12 +294,12 @@ def Summary.wiredBits (s : Summary) : Nat := ((s.wires.zip s.rowWords).map fun (
 
 The verifier never runs it: it is what `check` is held to, by the difftest and the agreement lemmas. -/
 
-/-- A reader row `(template, unit, port, row)` and its writer `(template, unit, out)`. -/
-abbrev Entry := (String × Nat × String × Nat) × (String × Int × String)
+/-- A reader row `(template, unit, port, row)` and its writer `(template, unit, out, offset)`. -/
+abbrev Entry := (String × Nat × String × Nat) × (String × Int × String × Nat)
 
 /-- The bounds entry by entry. -/
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
-  w.entries.all fun ((_, u, _, _), (_, v, _)) => u < rt.units && 0 ≤ v && v < (wt.units : Int)
+  w.entries.all fun ((_, u, _, _), (_, v, _, _)) => u < rt.units && 0 ≤ v && v < (wt.units : Int)
 
 def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
   match shape c w with
@@ -343,7 +345,7 @@ An instance is `{"templates", "cuts", "wires", "queries"}`, and optionally `"ord
 
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per
-query its writer `[tid, unit, out]` or null. -/
+query its writer `[tid, unit, out, offset]` or null. -/
 
 def Template.ofJson (j : Json) : Except String Template := do
   sameKeys j ["units", "rows", "outs"] "a template"
@@ -391,8 +393,8 @@ def queriesOf (j : Json) : Except String (List (String × Nat × String × Nat))
 def refusalJson (r : Refusal) : Json :=
   Json.mkObj [("ok", false), ("code", r.code.name), ("wire", match r.wire with | some i => toJson i | none => Json.null)]
 
-def writerJson : Option (String × Int × String) → Json
-  | some (t, v, o) => Json.arr #[toJson t, toJson v, toJson o]
+def writerJson : Option (String × Int × String × Nat) → Json
+  | some (t, v, o, f) => Json.arr #[toJson t, toJson v, toJson o, toJson f]
   | none => Json.null
 
 def instanceCheck (sameKeysOk : Json → Except String Unit) (j : Json) : Except String (Wiring × List (String × Nat × String × Nat)) := do

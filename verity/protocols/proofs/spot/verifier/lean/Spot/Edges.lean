@@ -21,7 +21,7 @@ root node's outputs is one `Spot.Wires.Wire` per row of the reader's port, in cl
 The rule is by row. A reader row (the port whole, or one of the `k` rows the wiring cuts it into: leaves
 `[j·n/k, (j+1)·n/k)` of a member's `n`) lies in one part of its argument, and reads one contiguous run of one member's
 output, the writer unit's: whole return fields `f … f'` of it, at their bits. The wire reads its writer's one output
-row `out` (the fields' rows end to end, each whole u16 words) from the run's first word (`fieldWords`). A part is a
+row `out` (the fields' rows end to end, each whole u16 words) from the run's first word (`fieldWord`). A part is a
 grid (`partLanes`): a row lies in one lane's run, and across the members a part covers its place moves by the
 argument's member stride, inside that run or by whole periods of the lanes; the writer leaves the members read are then
 a mixed radix of the lane's levels (`laneWire`), and a wire needs the run's place in its unit to stay the same, so each
@@ -91,8 +91,12 @@ def runAt (t : Ty) (o len : Nat) : Option (Nat × Nat) :=
   | some f, some f' => if 0 < len && f ≤ f' then some (f, f') else none
   | _, _ => none
 
-/-- The first word of field `f` in `t`'s output row `out`: the fields before it, each whole u16 words. -/
-def fieldWords (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => (bitsOf ty + 15) / 16).sum
+/-- The first leaf of return field `f` of `t`. -/
+def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves).sum
+
+/-- The first word of return field `f` of `t` in its unit's output row `out`: the fields before it, each zero-padded to
+whole u16 words. -/
+def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => (bitsOf ty + 15) / 16).sum
 
 /-- The members `[lo, lo + n)` of `M` whose row, at argument index `x0 + m·L` and `len` long, lies in the part at
 `[s0, s0 + c)`; `edge-rows` where some member's row meets the part without lying in it. -/
@@ -258,7 +262,7 @@ def partWires (P : Prog) (fu : Std.HashMap Nat (String × Nat)) (W : Spot.Wires.
     let wire : Spot.Wires.Wire :=
       { reader := rt, port := port, writer := wt, out := "out", start := rb + lo, radix := radix,
         base := ((wb + l0 / LW : Nat) : Int), step := steps.map (· / (LW : Int)), cut0 := j, cuts := 1,
-        offset := fieldWords wd.ret f }
+        offset := fieldWord wd.ret f }
     out := out ++ [wire]
   return out
 

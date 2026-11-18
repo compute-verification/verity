@@ -114,7 +114,7 @@ def _run_at(t, o: int, ln: int):
     return (f, f2) if f is not None and f2 is not None and ln > 0 and f <= f2 else None
 
 
-def _field_words(t, f: int) -> int:
+def _field_word(t, f: int) -> int:
     """The first word of field `f` in `t`'s output row ``out``: the fields before it, each whole u16 words."""
     return sum((_bits(ty) + 15) // 16 for ty in _fields(t)[:f])
 
@@ -315,7 +315,7 @@ def _part_wires(R: _Root, fu: dict, templates: Mapping, cuts_of, k: int, i: int,
             raise Refusal("edge-rows")
         out.append({"reader": rt, "port": port, "writer": wt, "out": "out", "at": rb + lo, "radix": radix,
                     "base": wb + l0 // lw, "step": [d // lw for d in steps],
-                    "cut": [j, 1], "offset": _field_words(wn["ret"], run[0])})
+                    "cut": [j, 1], "offset": _field_word(wn["ret"], run[0])})
     return out
 
 

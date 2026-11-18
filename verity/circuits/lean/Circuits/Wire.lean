@@ -124,11 +124,11 @@ def leafAt (w : Wire) (u row : Nat) : Option Nat :=
     let v := w.writerAt i
     if 0 ≤ v then some v.toNat else none
 
-/-- Every reader row the wire covers, `(template, unit, port, row)`, with its writer `(template, unit, out)`, index by
-index. -/
-def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String)) :=
+/-- Every reader row the wire covers, `(template, unit, port, row)`, with its writer `(template, unit, out, offset)`,
+index by index. -/
+def entries (w : Wire) : List ((String × Nat × String × Nat) × (String × Int × String × Nat)) :=
   (List.range w.units).map fun i =>
-    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
+    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out, w.offset))
 
 end Wire
 
