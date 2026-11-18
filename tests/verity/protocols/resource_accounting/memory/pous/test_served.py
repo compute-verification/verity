@@ -17,7 +17,7 @@ torch = pytest.importorskip("torch")
 
 P2 = "p2-16448/v4"
 SOURCE = "a5" * 32
-OWN = {"salt_source": SOURCE, "experimental": True}
+CTX = {"salt_source": SOURCE, "experimental": True}
 SMALL = P2Params(period.W, period.C0, 8)
 
 
@@ -46,19 +46,19 @@ def run(monkeypatch):
     g = torch.Generator().manual_seed(7)
     w = {"a.weight": torch.randint(-128, 128, (6, 40), dtype=torch.int8, generator=g),
          "b.weight": torch.randint(-128, 128, (3, 24), dtype=torch.int8, generator=g)}
-    s, ex = served.Served(P2, POUS.settings), Exchange()
+    s, ex = served.Served(P2, CTX), Exchange()
     s.install(ex)
-    ex.emit(H.Declared("card", {"eager": True}, (POUS.option,), {"pous": OWN}))
+    ex.emit(H.Declared("card", {"eager": True}, (POUS.name,), {"pous": S.settings(POUS, {})}))
     plain = {n: t.clone() for n, t in w.items()}
     values = (("a.weight", w["a.weight"]), ("a.weight_scale", torch.ones(6, 1)), ("b.weight", w["b.weight"]))
-    ex.emit(H.RegisteredValues(values, linear=frozenset(w)))
+    ex.emit(H.RegisteredValues(values, operands={"b.weight": 1, "a.weight": 0}))
     return s, ex, plain
 
 
 def test_the_weights_are_committed_before_the_salt_released_and_restored_from_c_star(run):
     s, ex, plain = run
     _, commitment = ws.commit(P2, plain)
-    assert s.record()["commitment"] == commitment.hex() and s.summary()["weights"] == 2
+    assert s.commitment()["commitment"] == commitment.hex() and s.summary()["weights"] == 2
     released = ex.filed(H.ReleaseValue)
     assert [r.value for r in released] == ["a.weight", "b.weight"]                  # the scale is no linear weight
     for r in released:
@@ -72,25 +72,39 @@ def test_the_kernel_hands_inward_the_weight_decoded_from_c_star_and_leaves_other
     assert torch.equal(kernel(due, lambda given: given["weight"]), plain["b.weight"])
     other = H.BlockDue("lm_head", 2, {"n": 1, "k": 1}, "int8", {"x": None}, weights={"weight": "lm_head.weight"})
     assert kernel(other, lambda given: given) is None
+    s.release()
+    assert s.store.rows is None and s.commitment()["blocks"] > 0
 
 
-def test_its_settings_are_the_declared_builds_and_each_is_checked():
-    assert served.refusals(P2, OWN, POUS.settings) == ()
-    assert any("unknown pous settings ['port']" in r for r in served.refusals(P2, {**OWN, "port": 1}, POUS.settings))
-    assert any("challenges is a positive integer, not 0" in r
-               for r in served.refusals(P2, {**OWN, "challenges": 0}, POUS.settings))
-    assert any("experimental" in r for r in served.refusals(P2, {"salt_source": SOURCE}, POUS.settings))
-    assert any("no salt_source" in r for r in served.refusals(P2, {"experimental": True}, POUS.settings))
-    s = served.Served(P2, POUS.settings)
+def test_its_settings_are_checked_where_every_setting_is_and_its_launchers_values_when_attached():
+    assert S.settings(POUS, {}) == {"challenges": 320}
+    with pytest.raises(ValueError, match="challenges is a positive integer, not 0"):
+        S.settings(POUS, {"challenges": 0})
+    with pytest.raises(ValueError, match="no setting"):
+        S.settings(POUS, {"salt_source": SOURCE})                                   # a coin is the launcher's, never a setting
+    assert served.launcher_refusals(P2, CTX) == ()
+    assert any("experimental" in r for r in served.launcher_refusals(P2, {"salt_source": SOURCE}))
+    assert any("no salt_source" in r for r in served.launcher_refusals(P2, {"experimental": True}))
     with pytest.raises(ValueError, match="no salt_source"):
-        s.declared(H.Declared("card", {}, (POUS.option,), {"pous": {"experimental": True}}))
+        served.Served(P2, {"experimental": True}).install(Exchange())
+    s = served.Served(P2, CTX)
     with pytest.raises(RuntimeError, match="before the run declared its settings"):
-        s.registered(H.RegisteredValues((("a.weight", torch.zeros(1, 1, dtype=torch.int8)),), linear=frozenset({"a.weight"})))
+        s.registered(H.RegisteredValues((("a.weight", torch.zeros(1, 1, dtype=torch.int8)),), operands={"a.weight": 0}))
 
 
-def test_the_scheme_requires_eager_and_its_attach_waits_on_the_linear_site_by_name():
+def test_the_scheme_requires_eager_attaches_through_the_exchange_and_is_refused_a_bound():
     assert POUS.requests(None) == (served.EAGER,)
-    with pytest.raises(NotImplementedError, match=served.GOAL):
-        POUS.attach(Exchange(), None)
+    ex = Exchange()
+    got = POUS.attach(ex, CTX)
+    assert isinstance(got, served.Served) and got.scheme == POUS.option.partition(":")[2]
+    assert [h for h, fns in ex.subscribers.items() if fns] == ["declared", "memory"] and ex.filed(H.ComputeBlockWith)
     with pytest.raises(ValueError, match="help"):
         S.bound(POUS, Fraction(1, 100), 0, {c.name: 0 for c in POUS.charges})
+
+
+def test_a_released_weight_pous_holds_no_name_for_is_refused_by_name(run):
+    s, ex, _ = run
+    [kernel] = [r.kernel for r in ex.filed(H.ComputeBlockWith)]
+    tied = H.BlockDue("c", 3, {"n": 1, "k": 1}, "int8", {"weight": torch.empty(0)}, weights={"weight": "c.weight"})
+    with pytest.raises(RuntimeError, match="c.weight is released, and PoUS holds no weight by that name"):
+        kernel(tied, lambda given: given)

@@ -34,7 +34,7 @@ def test_every_lean_name_cited_is_in_a_lock() -> None:
 
 
 def test_pous_takes_its_challenges_setting() -> None:
-    assert S.settings(POUS, {"challenges": 105})["challenges"] == 105
+    assert S.settings(POUS, {"challenges": 105}) == {"challenges": 105}
 
 
 def test_pous_says_its_own_term_and_is_refused_a_bound_while_its_help_is_unbounded() -> None:

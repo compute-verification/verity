@@ -12,9 +12,10 @@ whole chip and its side channels' capacity over a round are counted in the state
 (`ResourceAccounting.RealizesState`); the help `perfect-isolation` admits is a known charge nothing bounds yet, so
 `bound` refuses PoUS. Its own term is `Pous.Params.εMax` (`POUS_TERM`). Its sides: over is the credited store,
 `⌊ρ·|C|⌋` bits with ρ = 18/19 (`Scheme.stateBound`); under is the bits the device holds. On a served run
-(`prover/served.py`) it reads its settings from the declared build (``declared``), the registered weights once resident
-(``memory``), and computes each linear's block with the weight decoded from `C*` (``blocks``); the vLLM adapter's
-option ``pous:p2-16448/v4`` holds it until that attach is live.
+(`prover/served.py`) it reads its settings from the declared build (``declared``; the auditor's coin source is the
+launcher's, never a setting), the registered weights once resident
+(``memory``), and computes each linear's block with the weight decoded from `C*` (``blocks``), under the codec
+its ``option`` names (``pous:p2-16448/v4``, also the vLLM adapter's protocol option).
 
 **The wipe** is decided by `MemoryChallenger.WipeProtocol.protocol` (`attester/lean/MemoryAttester/WipeProtocol.lean`),
 whose row bounds the foreign bits a server may still hold after an accepted wipe, from above: a device's game with no
@@ -47,9 +48,14 @@ def _pous_requests(ctx: Any) -> Any:
     return served.requests(ctx)
 
 
-def _pous_attach(exchange: Any, ctx: Any) -> None:
+def _pous_check_settings(values: Any) -> str | None:
     from verity.protocols.resource_accounting.memory.pous.prover import served
-    return served.attach(exchange, ctx)
+    return served.check_settings(values)
+
+
+def _pous_attach(exchange: Any, ctx: Any) -> Any:
+    from verity.protocols.resource_accounting.memory.pous.prover import served
+    return served.attach(exchange, ctx, POUS.option.partition(":")[2])
 
 
 POUS = register(Scheme(
@@ -64,7 +70,8 @@ POUS = register(Scheme(
     charges=(Charge("chip", "ResourceAccounting.RealizesState"),
              Charge("side-channels", "ResourceAccounting.RealizesState"),
              Charge("help", HELP_BOUND, bounded=False)),
-    settings={"challenges": 320, "salt_source": "", "p2_lib": "", "experimental": False},
+    settings={"challenges": 320},
+    check_settings=_pous_check_settings,
     option="pous:p2-16448/v4",
     hooks=("declared", "memory", "blocks"),
     requires={
