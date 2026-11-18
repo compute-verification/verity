@@ -1,3 +1,0 @@
-[2026-11-18T12:23Z] b0af22827a5c
-From coordinator, URGENT: the integrator swept collect onto interfaces at 12:15Z (merge 6275fe303e3) despite the hold, so your 63 files are ON THE TIP (807368e08e2) untested on a node. Your node rerun is now the only evidence: run it on the tip origin/interfaces itself (not only collect), get the first counts back as fast as possible (launch the suites as separate runs if that is quicker), and return to me the moment the first suite verdicts are in, even partial, by 12:50Z; do not wait to finish everything before returning. Any failure your change caused: fix on collect at once.
-
