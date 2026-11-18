@@ -47,7 +47,7 @@ import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -132,22 +132,17 @@ def _settings(scheme: Scheme, given: Mapping[str, Any]) -> dict[str, Any]:
 _CLASS = re.compile(r"[1-9][0-9]*,[1-9][0-9]*,[1-9][0-9]*")
 
 
-#: Pearl+'s settings that are the application's parameters, which its hash covers; its other settings are values a
-#: launch gives `attach` (a kernel's path, the challenger's address). Provisional, until the interface says which is which.
-PEARLPLUS_PARAMS = ("tie-uniform",)
-
-
-def _pearlplus_params(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Pearl+'s served piece, under its id ``cid``: its scheme's settings that are the application's (`PEARLPLUS_PARAMS`,
-    checked by `_settings`), and ``class``, the table's own."""
-    own = {k: v for k, v in params.items() if k != "class"}
-    if extra := sorted(set(own) - set(PEARLPLUS_PARAMS)):
-        known = ", ".join(["class", *PEARLPLUS_PARAMS])
-        raise Refused("unknown-key", f"[params.\"{cid}\"]: {', '.join(extra)} (known: {known})")
+def _tied(scheme: Scheme, cid: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """A tied scheme's parameters, under its id ``cid``: what its ``tie`` names and nothing else (its other settings are
+    values a launch gives `attach`), its settings among them checked by `_settings` over their defaults, and a ``class``
+    the served window's, SLOTS,PROMPT,OUTPUTS."""
+    if extra := sorted(set(params) - set(scheme.tie)):
+        raise Refused("unknown-key", f"[params.\"{cid}\"]: {', '.join(extra)} (known: {', '.join(sorted(scheme.tie))})")
     if "class" in params and not (isinstance(params["class"], str) and _CLASS.fullmatch(params["class"])):
         raise Refused("params", f"class is SLOTS,PROMPT,OUTPUTS, three positive integers, not {params['class']!r}")
-    own = _settings(scheme, own)
-    return {**({"class": params["class"]} if "class" in params else {}), **{k: own[k] for k in PEARLPLUS_PARAMS}}
+    own = _settings(scheme, {k: v for k, v in params.items() if k in scheme.settings})
+    return {**{k: v for k, v in params.items() if k not in scheme.settings},
+            **{k: own[k] for k in scheme.tie if k in scheme.settings}}
 
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
@@ -179,18 +174,20 @@ _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 
 
-def _declared(name: str, check: Callable[[Scheme, str, Mapping[str, Any]], dict[str, Any]] | None = None) -> Component:
+def _declared(name: str) -> Component:
     """The `Component` of the scheme ``name`` declares (`schemes.get`): its parties, channels, colocated pairs, needs,
-    and as ``requires`` its ``depends``. Its parameters are its settings (`_settings`, over their defaults), or what
-    ``check`` makes of them, given the scheme and the id. Its id is the one `SP.IDS` gives, the key of its ``[params]``,
-    which may differ from the declared ``protocol``."""
+    and as ``requires`` its ``depends``. Its parameters are its settings (`_settings`, over their defaults), or, for a
+    tied scheme, what its ``tie`` names (`_tied`). Where it declares a ``sampling_design``, the served window's rule is
+    checked (`_design`) and that design is the configuration's where it states none. Its id is the one `SP.IDS` gives,
+    the key of its ``[params]``, which may differ from the declared ``protocol``."""
     s = schemes.get(name)
     cid = SP.IDS.get(name, s.protocol)
-    params = ({"params": partial(check, s, cid)} if check else
+    params = ({"params": partial(_tied, s, cid)} if s.tie else
               {"params": partial(_settings, s), "default_params": dict(s.settings)} if s.settings else {})
+    design = {"sampling_design": _design, "default_sampling_design": s.sampling_design} if s.sampling_design else {}
     return Component(name, cid, parties=declared(s, "parties"), channels=declared(s, "channels"),
                      colocated=declared(s, "colocated"), needs=declared(s, "needs"), requires=declared(s, "depends"),
-                     **params)
+                     **params, **design)
 
 
 #: the components no scheme declares yet, each with its row in the record, which only shrinks
@@ -203,15 +200,10 @@ UNDECLARED: dict[str, tuple[Component, str, Mapping[str, Launch]]] = {c.name: (c
                needs=frozenset({"windows", "noise"}), requires=("sampled-proofs",)), "work",
      {WORKERS: Launch(binds=("gate", "peer", "key-sha512"), optional=("main-file",))}),
 )}
-MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _, _) in UNDECLARED.items()}, **{c.name: c for c in (
-    replace(_declared("sampled-proofs"), sampling_design=_design, default_sampling_design="rate:1/3481648"),
-    _declared("inference-only"),
-    _declared("pearl-plus", _pearlplus_params),
-    _declared("pous"),
-    _declared("bandwidth"),
-    _declared("wipe"),
-    _declared("network-attester"),
-)}}
+#: every component the served window's record has a row for: each undeclared one's, and each declared scheme's whose
+#: ``record`` names its row (a scheme with no row, an experimental one or a session's own, is no component here)
+MANIFESTS: dict[str, Component] = {**{n: c for n, (c, _, _) in UNDECLARED.items()}, **{
+    n: _declared(n) for n in schemes.DECLARATIONS if not isinstance(schemes.get(n).record, Lacks)}}
 #: each component's row in the record, the one its scheme declares (`record`)
 ROWS: dict[str, str] = {n: row for n, (_, row, _) in UNDECLARED.items()} | {
     n: declared(schemes.get(n), "record") for n in MANIFESTS if n not in UNDECLARED}

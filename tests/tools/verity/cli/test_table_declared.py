@@ -7,6 +7,8 @@ import dataclasses
 import json
 import sys
 
+import pytest
+
 from verity_cli import run as R
 
 REG = R.registry()
@@ -44,6 +46,26 @@ def test_a_tied_application_states_each_listed_schemes_declared_tie(monkeypatch)
     assert got[T.MANIFESTS["network-attester"].id] == {"order": "fifo"}
     assert got[T.MANIFESTS["pearl-plus"].id] == {"class": "4,27,2", "tie-uniform": True}
     assert T.MANIFESTS["sampled-proofs"].id not in got
+
+
+def test_the_declared_components_are_the_schemes_whose_record_names_a_row():
+    rowed = {n for n in T.schemes.DECLARATIONS if not isinstance(T.schemes.get(n).record, T.Lacks)}
+    assert set(T.MANIFESTS) == rowed | set(T.UNDECLARED)
+    assert rowed == {"sampled-proofs", "inference-only", "pearl-plus", "pous", "bandwidth", "wipe", "network-attester"}
+
+
+def test_a_declared_sampling_design_is_the_default_and_the_served_windows_rule_is_checked():
+    designs = {n: (c.default_sampling_design, c.sampling_design) for n, c in T.MANIFESTS.items() if c.sampling_design}
+    assert designs == {"sampled-proofs": ("rate:1/3481648", T._design)}
+    assert T.schemes.get("sampled-proofs").sampling_design == "rate:1/3481648"
+
+
+def test_a_tied_schemes_parameters_are_what_its_tie_names_and_nothing_else(monkeypatch):
+    s = dataclasses.replace(T.schemes.get("pearl-plus"), tie={"class": "1,2,3", "tie-uniform": True, "kernel": ""})
+    assert T._tied(s, "x", {"class": "4,27,2", "kernel": "k"}) == {
+        "class": "4,27,2", "tie-uniform": T.schemes.get("pearl-plus").settings["tie-uniform"], "kernel": "k"}
+    with pytest.raises(T.Refused, match=r"lane \(known: class, kernel, tie-uniform\)"):
+        T._tied(s, "x", {"lane": "v"})
 
 
 def test_a_piece_answer_places_the_listed_component_whose_id_it_names(tmp_path, monkeypatch):
