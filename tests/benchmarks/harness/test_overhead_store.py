@@ -160,6 +160,16 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
     text = R.render(table)
     assert "| pearl-plus | h200 | L |" in text and "| pearl-plus | h200 | C | 35.48% | year |" in text
     assert "Refused" not in text
+    # who ran the check a γ of record needs: the node job's own reference verifier, never the auditor
+    assert (by["pearl-plus", "L"]["checked_by"], by["stock", "L"]["checked_by"]) == ("piece", "—")
+    assert "| Reference verifier checked by |" in text and R.REFERENCE_VERIFIER in text
+    assert "the developer's side's word, not an audit" in R.REFERENCE_VERIFIER and "records no coins" in R.REFERENCE_VERIFIER
+    row = next(line for line in text.splitlines() if line.startswith("| pearl-plus | h200 | L |"))
+    assert "| yes | piece |" in row or "| no | piece |" in row
+    # a run that predates the field says so, never a runner read into it
+    old = {**table, "rows": [{k: v for k, v in r.items() if k != "checked_by"} for r in table["rows"]]}
+    row = next(line for line in R.render(old).splitlines() if line.startswith("| pearl-plus | h200 | L |"))
+    assert "| not recorded |" in row
 
     # a labelled run whose points fail the door's rules: shown refused with why, never as a figure
     assert all("fewer than 20" in w for w in R.record_run(s.store, noisy))
