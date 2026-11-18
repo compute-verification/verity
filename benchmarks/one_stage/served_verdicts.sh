@@ -733,7 +733,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
 tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's docket
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.commitments import docket_digest as DD
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -742,7 +742,7 @@ except OSError:
 if not bound:
     sys.exit("H1 bound no record R at the window's close, so V3c has no commit of it (the serve dir's h1/w<k>/window-commit.log)")
 try:
-    r = REG.digest(json.load(open(mine)))
+    r = DD.digest(json.load(open(mine)))
 except (OSError, ValueError):
     sys.exit("H1 bound a record R, and window-commit left no registration beside it")
 if r != bound[-1]:
@@ -756,9 +756,9 @@ pearl_dir() { echo "$D/pearlplus/w$K"; }
 pearl_tied() {  # under PEARLPLUS_TIE: 0 iff Pearl+'s piece wrote W for window K and $VW's docket R is chained right after it
   "$PY" - "$(pearl_dir)/registration.json" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+from verity.commitments import docket_digest as DD
 try:
-    w = REG.digest(json.load(open(sys.argv[1])))
+    w = DD.digest(json.load(open(sys.argv[1])))
 except (OSError, ValueError):
     sys.exit("Pearl+'s piece wrote no window record W (served_pearlplus.sh's retain --window-record), so V3c has no commit tied to it")
 try:
@@ -767,7 +767,7 @@ except (OSError, ValueError):
     sys.exit("Pearl+'s piece wrote W, and window-commit left no registration tied to it (the serve dir's pearlplus/w<k>/window-commit.err)")
 if r.get("previous") != w:
     sys.exit(f"window-commit's registration R is chained after {str(r.get('previous'))[:16]}…, not right after Pearl+'s W {w[:16]}…")
-print(f"W {w[:16]}…, R {REG.digest(r)[:16]}… chained right after it")
+print(f"W {w[:16]}…, R {DD.digest(r)[:16]}… chained right after it")
 EOF
 }
 window_tie() {  # under PEARLPLUS_TIE: R, V3c's audit's summary and, once V3c held R's circuit to it, the window-circuit
