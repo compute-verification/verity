@@ -139,7 +139,7 @@ decoding under the registration's key at index `j` is a payload at leaf `j` of t
 `t ≥ 1` and its decoding under append `t − 1`'s coin is a payload at leaf `j` of that append's tree if the append is
 fresh, or, if it is a re-key, at the origin's leaf `q` (`originLeaf`, which exists: `checkOpening` refuses a re-key
 whose origin slot holds no append) under the origin's root, which the opening names; as `OpeningPasses`
-(`Properties.Poub.Remote`), the origin is the schedule's only by `OriginsOnRota`, not proved. -/
+(`Properties.Poub.Remote`), the origin is the schedule's only by `OriginsOnRota`. -/
 def OpensAtPosition : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (i p : ℕ) (o : Opening),
     checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none →
