@@ -32,6 +32,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import window as
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.resource_accounting.compute.pouw.prover import schemes as pouw_schemes  # noqa: E402
 from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 from verity_torch.pouw.pearl_c import served_y_device as SYD  # noqa: E402
@@ -245,7 +246,7 @@ def test_outside_the_domain_the_arm_says_why(m, k, n, why):
 @pytest.mark.parametrize("m, m16", [(1, 16), (16, 16), (17, 32), (8192, 8192)])
 def test_work_is_the_served_scheme_s_at_the_padded_rows(m, m16):
     n, k = LINEARS["o"]
-    w, s, unit = OA.PearlPlus().work(A.Shape("o", m, k, n)), PPD.scheme_of(OA.SERVED), Unit(m16, k, n)
+    w, s, unit = OA.PearlPlus().work(A.Shape("o", m, k, n)), pouw_schemes.get(OA.SERVED), Unit(m16, k, n)
     assert w.tensor_macs == {"fp8-e4m3-rowwise": m16 * k * n} and w.unit == "fp8-mac"
     assert (w.w_ref, w.credited) == (str(s.wref(unit)), str(s.credit_of(unit)))
     assert w.hashed_bytes == {"a_rows": 4 * m16 * k, "tile_leaves": 8 * m16 * n, "y_rows": 4 * m * n}
@@ -425,7 +426,7 @@ class Recording:
 
 def _trees(dev):
     import torch
-    s, cpu = PPD.scheme_of(OA.SERVED), torch.device("cpu")
+    s, cpu = pouw_schemes.get(OA.SERVED), torch.device("cpu")
     const = PPDR._constants(s, cpu, SALT_KEY)
     run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
                           const_keys=PPDR._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)

@@ -384,20 +384,20 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
 
 
 def test_cli(capsys):
-    assert main(["eps", "--vector", PIN]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN]) == 0
     out = capsys.readouterr().out
     assert out.startswith("dither-1s: ") and "binding JI3e_0" in out and "ε_machine  11.171%" in out
     assert "Dither-1S (also dither-duo, record, adopted): noise linears one-sided" in out
     assert "q* threshold (ε_machine = its floor): none ≤ 64; lanes alone 2.029" in out and "ε_sched    14.121%" in out
     assert "ε core     " in out and "ε_sample" not in out and "ε_luck     0.153%" in out
-    assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--checking", "sampled"]) == 0
     out = capsys.readouterr().out
     assert "ε_adapt 0.350%: proof block whole" in out and "ε_sample   0.350%" in out
-    assert main(["eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
     assert "ε_sample   21.000%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
-        main(["eps", "--adapt", "whole"])
-    assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "floor", "--credit",
+        main(["--device", "sm_120", "eps", "--adapt", "whole"])
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled", "--adapt", "per-stage", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["registry"]["aliases"] == ["dither-two-sided", "A", "adopted-bd-lm"]
@@ -405,37 +405,37 @@ def test_cli(capsys):
     assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.0045
     assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
     assert d["sample"]["eps"] == d["terms"]["adapt"] == 0 and d["luck_budget"]["checks"] == 48000
-    assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--q", "4", "--json"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["operands"] == "free"
     assert d["terms"]["machine"] == pytest.approx(d["floor"]) and d["threshold"] == pytest.approx(2.029, abs=1e-3)
     assert len(d["curve"]) == 32 and d["curve"][0][0] == 0.5 and d["curve"][-1][0] == 16
     assert d["curve_uniform"][7] == pytest.approx([4, d["terms"]["machine"]])   # q*_U = q* = 4
-    assert main(["eps", "--vector", PIN, "--q-uniform", "32", "--json"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--q-uniform", "32", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-1s@qu32"
     assert d["floor"] < d["terms"]["machine"] < E.eps(E.design("dither-1s"), PI, 8).machine_eps
-    assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "honest", "--json"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "honest", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     base = PIU.load(M.base())["JI3e_0"]   # honest's MMA and its other issue a MMA, the fold aside
     assert d["terms"]["machine"] == 0 and d["threshold_lanes"] == pytest.approx(base / 4, abs=1e-5)
     assert d["threshold"] >= d["threshold_lanes"] - 1e-6
-    assert main(["eps", "--vector", PIN, "--uni-issue", "1", "--credit", "floor", "--q", "2.16", "--lookups",
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--uni-issue", "1", "--credit", "floor", "--q", "2.16", "--lookups",
                  "--lookup-q", "1.906", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["lookups"]["q"] == 1.906 and d["cheat"]["words"]["table"] > 0 and "L2" in d["cheat"]["binding"]
     with pytest.raises(SystemExit):
-        main(["eps", "--vector", PIN, "--l2", "1e12"])
-    assert main(["eps", "--vector", PIN, "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
+        main(["--device", "sm_120", "eps", "--vector", PIN, "--l2", "1e12"])
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--credit", "floor", "--uni-issue", "0.92", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == "VF3l-16 (UNI on issue at 0.92)" and d["threshold"] == pytest.approx(2.029, abs=1e-3)
-    assert main(["eps", "--vector", PIN, "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q",
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--table", "dither-duo", "--fold-sweep", "1.5,3", "--operands", "floor", "--q",
                  "2.16"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Π VF3l-16, operands floor")
     assert lines[1].split()[-6:-3] == ["core@2", "core@2.16", "core@8"]
     assert [x.split()[0] for x in lines[2:]] == ["dither-1s@r1.5", "dither-1s@r3"]
-    assert main(["eps", "--vector", PIN, "--table", "dither-c", "dither-2s", "--operands", "floor", "--credit",
+    assert main(["--device", "sm_120", "eps", "--vector", PIN, "--table", "dither-c", "dither-2s", "--operands", "floor", "--credit",
                  "floor", "--checking", "sampled"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert "checking sampled" in lines[0] and "the proof block (each design its own)" in lines[0]
@@ -444,19 +444,19 @@ def test_cli(capsys):
     assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]
     adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-2:])
     assert adapt == sample == 0.35
-    assert main(["designs"]) == 0
+    assert main(["--device", "sm_120", "designs"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert [x.split()[0] for x in lines[1:1 + len(E.designs())]] == E.designs()
-    assert main(["designs", "--json"]) == 0
+    assert main(["--device", "sm_120", "designs", "--json"]) == 0
     reg = {r["name"]: r for r in json.loads(capsys.readouterr().out)}
     assert reg["dither-c"]["noise"] == {"linears": "co32c", "lm_head": "co32c", "qk": "cohalf", "pv": "pv"}
     assert reg["dither-1s"]["ppl"] == "adopted" and reg["dither-c"]["ppl"] == "co32c-pv"
 
 
 def test_devices_follow_the_layout():
-    """DESIGN.md "Devices": sm_120 is data/ and the default; any other device is data/devices/sm_NN/, priced once it has a
-    model.toml, every row of its census some vector's, and every design's honest MMA a class of its census."""
-    assert device() == device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
+    """DESIGN.md "Devices": sm_120, its card's target, is data/; any other device is data/devices/sm_NN/, priced once it
+    has a model.toml, every row of its census some vector's, and every design's honest MMA a class of its census."""
+    assert device("sm_120") == device("sm120") == DATA and devices()[0] == "sm_120"
     assert device("sm90") == device("sm_90") == DEVICES / "sm_90" and "sm_90" in devices()
     for name in devices()[1:]:
         d = device(name)
@@ -777,11 +777,11 @@ def test_eps_with_a_class_per_form(n, eps2, eps3, q0, lookups):
 
 
 def test_cli_names_the_forms(capsys):
-    assert main(["eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2"]) == 0
+    assert main(["--device", "sm_120", "eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2"]) == 0
     out = capsys.readouterr().out
     assert "IMMA.16832.S32.S8.S8 (IMMA16832)" in out and "on any of 14 MMA forms" in out
     assert "tensor on IMMA16832 71.9%" in out
-    assert main(["eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2",
+    assert main(["--device", "sm_120", "eps", "--vector", QPIN, "dither-two-sided", "--credit", "floor", "--operands", "floor", "--q", "2",
                  "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
@@ -819,11 +819,11 @@ def test_a_filler_mix():
 
 
 def test_cli_fill_mix(capsys):
-    assert main(["eps", "--vector", "VF3r-16", "dither-c-peel", "--credit", "floor", "--operands", "floor", "--q",
+    assert main(["--device", "sm_120", "eps", "--vector", "VF3r-16", "dither-c-peel", "--credit", "floor", "--operands", "floor", "--q",
                  "1.22", "--fill", "1", "--fill-mix", "IMAD=1", "--lookups", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["terms"]["machine"] == 0 and d["fillers"][0]["mix"] == {"IMAD": 1.0}
     assert d["baseline"]["binding"] == ["JI3s_0"] and d["honest_form"] == "IMMA16832"
     for bad in (["--fill-mix", "IMAD=1"], ["--fill", "1", "--fill-mix", "IMAD"], ["--fill", "1", "--fill-mix", "IMAD=0"]):
         with pytest.raises(SystemExit, match="--fill-mix"):
-            main(["eps", "--vector", "VF3r-16", *bad])
+            main(["--device", "sm_120", "eps", "--vector", "VF3r-16", *bad])
