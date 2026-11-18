@@ -88,8 +88,9 @@ if [ "$SCHEME" = pearl-plus ]; then
   echo "PEARL+ CONFIG: $(tail -1 "$SR/pearlplus-arm.log")"
   "$PY" - "$SR/pearlplus-config.json" <<'EOF'
 import json, sys
-d = json.load(open(sys.argv[1]))
-json.dump({**d, "network-attester": {**d.get("network-attester", {}), "order": "release-order"}}, open(sys.argv[1], "w"))
+from verity_vllm import messages
+n, d = messages.providing("admission").name, json.load(open(sys.argv[1]))
+json.dump({**d, n: {**d.get(n, {}), "order": "release-order"}}, open(sys.argv[1], "w"))
 EOF
   PP=(--protocols pearl-plus --protocols-config "$SR/pearlplus-config.json")
   [ -z "${PEARLC_CHALLENGER_GATE:-}" ] || PP+=(--challenger-gate "$PEARLC_CHALLENGER_GATE"
