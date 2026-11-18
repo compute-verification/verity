@@ -695,6 +695,38 @@ def test_spot_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, cap
         [(SAMPLED, SUBSET_ONLY)], out
 
 
+def _pinned(sampled_exe: Path, tmp_path: Path, case: dict, retired: list[bytes]) -> dict:
+    keyfile = tmp_path / "challenger-key.json"
+    keyfile.write_text(json.dumps({"retired": [{"pubkey": r.hex()} for r in retired]}))
+    cmd = (*SC.SAMPLED_CMD, "--challenger-key-sha512", hashlib.sha512(bytes(80)).hexdigest(),
+           "--challenger-retired", str(keyfile))
+    return SC.lean_answer(sampled_exe, case, tmp_path / "scratch", cmd)[0]
+
+
+@pytest.mark.parametrize("cheat, reason", [
+    ("forger", "challenger-key-not-pinned"), ("retired", "challenger-key-retired"), ("none", "challenger-key-none")])
+def test_spot_lean_under_the_pin_refuses_a_case_whose_challenger_is_not_the_pinned_key(tmp_path, sampled_exe, cheat,
+                                                                                       reason):
+    """`vstar-recursive sampled --challenger-key-sha512 H --challenger-retired FILE` refuses, by name and at its params,
+    a case whose challenger is a key the forger holds (whatever ledger and session it signs under it), a key FILE
+    retires, or none. The pin is `audit_dir`'s stand-in key's."""
+    case = SC.sampled_case(audit_dir(tmp_path, v1_case(*toy(), design=SUBSET)))
+    forger = bytes(range(80))
+    if cheat == "none":
+        del case["params"]["challenger"]
+    else:
+        case["params"]["challenger"]["key"]["public"] = forger.hex()
+    got = _pinned(sampled_exe, tmp_path, case, [forger] if cheat == "retired" else [])
+    assert got["verdict"] == "reject" and got["reason"].startswith(f"params: {reason}: "), got
+
+
+def test_spot_lean_under_the_pin_answers_the_pinned_keys_case_as_without_it(tmp_path, sampled_exe):
+    """The case under the pinned key passes the pin: its answer is the unpinned check's, word for word."""
+    case = SC.sampled_case(audit_dir(tmp_path, v1_case(*toy(), design=SUBSET)))
+    assert _pinned(sampled_exe, tmp_path, case, [bytes(range(80))]) == \
+        SC.lean_answer(sampled_exe, case, tmp_path / "scratch", SC.SAMPLED_CMD)[0]
+
+
 @pytest.mark.parametrize("change, reason", [
     ("other-program", "the record names another Program than v1's params"),
     ("previous-no-log", "pass the deployment's log (--log)"),
