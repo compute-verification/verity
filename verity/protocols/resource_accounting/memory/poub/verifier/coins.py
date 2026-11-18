@@ -63,6 +63,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
     LiveRecord,
     Verify,
     by_family,
+    layout,
     ledger_head,
     live_reason,
     order_reason,
@@ -71,7 +72,7 @@ from verity.protocols.proofs.spot.verifier.challenger.challenger import (
 )
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
-CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
+CHALLENGE, OPENINGS, APPEND = "poub/challenge", "poub/openings", "poub/append"
 LABELS = (CHALLENGE, OPENINGS, APPEND)
 COIN_BYTES = 32
 APPENDS = 1024
@@ -91,8 +92,8 @@ def families(windows: int, appends: int = APPENDS, per_coin: int = 1) -> tuple[t
     `appends` append coins, with no append family when `appends` is 0.  A session reserves exactly the coins it will
     use, so a challenger that released every coin it committed to (the gate's `complete`) served a session that ran to
     its end."""
-    return (((CHALLENGE, windows), (OPENINGS, openings_coins(windows, per_coin)))
-            + (((APPEND, appends),) if appends != 0 else ()))
+    return layout(((CHALLENGE, windows), (OPENINGS, openings_coins(windows, per_coin)))
+                  + (((APPEND, appends),) if appends != 0 else ()))
 
 
 def window_root(registration: bytes, session: int) -> bytes:

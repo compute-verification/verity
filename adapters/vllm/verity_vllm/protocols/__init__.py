@@ -74,7 +74,7 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
-           "CUT", "circuit_registry", "cuts", "keeps_weight_copy", "traced_as"]
+           "CUT", "circuit_registry", "cuts", "has_circuit", "keeps_weight_copy", "traced_as"]
 
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
@@ -207,7 +207,11 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
-def _has_circuit(name: str, scheme: str) -> bool:
+def has_circuit(entry: str) -> bool:
+    """Whether ``entry`` (``pouw:ncp-v2``) names a scheme its protocol's package registered a circuit for
+    (`circuit_registry`), once its adapter is imported, which registers them; `Refused` for an unknown protocol."""
+    name, _, scheme = entry.partition(":")
+    adapter(name)
     reg = circuit_registry(name)
     return reg is not None and scheme in reg.schemes
 
@@ -245,7 +249,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and sampled and not _has_circuit(name, scheme):
+        if sites and sampled and not has_circuit(entry):
             if not cuts(name, scheme):
                 out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
                            f"so SPOT would trace it as the stock computation (refused until the option names one: "

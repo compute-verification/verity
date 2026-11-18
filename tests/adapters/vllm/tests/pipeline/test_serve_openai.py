@@ -982,7 +982,7 @@ def test_a_window_the_tick_admitted_names_no_slice_and_says_why(tmp_path):
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
 
-    why = so.no_slice(opts("--admit", "tick", "--tick-sat-ms", "30", "--tick-free-ms", "40"))
+    why = so.no_slice(opts("--admit", "tick"))
     assert why == sc.NO_TICK_SLICE and sc.SERVED_SLICE in why
     assert [so.no_slice(o) for o in (opts(), opts("--admit", "arrival"), opts("--admit", "release-order"))] == [None] * 3
     statics = served_statics()
