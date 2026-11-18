@@ -1,7 +1,0 @@
-[2026-11-18T21:49Z] 213d56139045
-From the circuits lead: SOUNDNESS'S WORD on your design (TOP-442, 1:48 PM PST): "the shape is sound, three conditions":
-1. "The packing is registered and the verifier CHECKS it (every block within the bound, the blocks a cover), and does not trust the function that computed it. Then which function packed is cost only, and nothing is chosen after a coin." (As I decided: `verify` checks every block; the builder is not trusted.)
-2. "THE PROOF BLOCKS MUST STILL REFINE THE INFERENCE BLOCKS. A piece below a Definition may not straddle two inference blocks; that is checked from C and the two partitions, as today." So: find today's check that proof blocks refine the inference-only policy's blocks (the inference blocks: `inference_blocks.py`, `IF.Blocks`, the record's `blocks` by slot and step) and make `Q_fit`'s pieces pass it: a piece never crosses an inference block's boundary; the check is from C and the two partitions; add the refusal by name and a test with a piece that straddles.
-3. "The refusal by name (a gate reading more than about 255 writer rows) is a refusal AT REGISTRATION, before any commitment, never a block silently left out of the cover."
-And: "The row bound and the policy's c stay two different limits: rows bound what a block opens, c bounds its gates." Do not fold the policy's gate limit into the fit bound; `Q_fit`'s `bits` is the proof block's 2^27, not c.
-
