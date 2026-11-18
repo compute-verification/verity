@@ -1042,19 +1042,12 @@ def _resource_accounting_importers(texts: dict[str, str]) -> dict[str, list[str]
 #: attaches through `verity_vllm.messages` and `verity.hooks`, and its own code moves to its package.
 RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/acquire/h1_commit.py",
-    "adapters/vllm/verity_vllm/check/replay/pouw_circuit.py",
     "adapters/vllm/verity_vllm/commit/history_tables_device.py",
     "adapters/vllm/verity_vllm/commit/row_tables_device.py",
-    "adapters/vllm/verity_vllm/compiler/compile_slice.py",
-    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
-    "adapters/vllm/verity_vllm/compiler/served_tie.py",
     "adapters/vllm/verity_vllm/definitions/registry/catalog.circuit-check.py",
-    "adapters/vllm/verity_vllm/pipeline/advice_code/window_code.py",
     "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
     "adapters/vllm/verity_vllm/pipeline/expert_rows.py",
     "adapters/vllm/verity_vllm/pipeline/expert_tables.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
-    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
     "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
     "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
     "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
@@ -1069,6 +1062,7 @@ RESOURCE_ACCOUNTING_IMPORTERS = (
     "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pouw_circuit.py",
 )
 
 

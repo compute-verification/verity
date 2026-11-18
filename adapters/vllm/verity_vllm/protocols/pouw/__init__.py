@@ -29,7 +29,7 @@ them) is `verity.protocols.resource_accounting.compute.pouw.verifier.audit`'s, a
 runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
-its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
+its execution phase's key, regenerates them and checks each against its template (`protocols.pouw.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
 (`verity.protocols.resource_accounting.compute.pouw.prover.circuit.compile`), with its seed group's roots and its positions.
@@ -108,7 +108,7 @@ from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 
 
-__all__ = ["PearlCDeviceRun", "Settings", "challenged", "h1_run", "linear_types", "pearl_c_salt_key", "refusals",
+__all__ = ["PearlCDeviceRun", "Settings", "challenged", "cuts", "h1_run", "keeps_weight_copy", "linear_types", "pearl_c_salt_key", "refusals",
            "requests"]
 
 NAME = "pouw"
@@ -146,6 +146,20 @@ def schemes() -> tuple[str, ...]:
     return tuple(sorted({*NCP_SCHEMES, *NCP_CIRCUIT_SCHEMES, *PEARL_C_SCHEMES, H1_SCHEME, LEAD_SCHEME}))
 
 
+def cuts(scheme: str) -> bool:
+    """Whether an execution phase's circuit can be cut at ``scheme``'s sites, reading the tables each executed call
+    commits in place of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
+    return scheme in PEARL_C_SCHEMES
+
+
+def keeps_weight_copy(scheme: str) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`NcpCircuitRun.sides`), and the lead's, which its backend loads once per install
+    (`lead.LeadBackend.load`).  ncp-v1 forms its operands per call from the weight it is handed."""
+    return scheme in {*PEARL_C_SCHEMES, *NCP_CIRCUIT_SCHEMES, LEAD_SCHEME}
+
+
 def executes(scheme: str) -> tuple[str, ...]:
     """The sites where `scheme`'s executor replaces the computation: none under H1, whose arm serves its own y."""
     return () if scheme == H1_SCHEME else EXECUTES
@@ -163,7 +177,7 @@ class Settings:
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
     #: call with its low bit flipped, so whatever the execution phase's fresh sample, a sampled tile is wrong
-    #: (`check.replay.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
+    #: (`protocols.pouw.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
     #: bit flipped
     tamper: str | None = None
     device: str | None = None
@@ -304,7 +318,7 @@ def linear_types() -> tuple[type, ...]:
 
 
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
-#: replay (`check.replay.pouw_circuit.around`) before the composition closes.
+#: replay (`protocols.pouw.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[NcpCircuitRun, dict[str, int]]] = {}
 # The prover's hm96 salt key per entry outside Pearl-C, whose install takes none: its weight trees' salts, read by `install`,
 # never in the record (published commitments without it fail its root check), once a process, one execution phase

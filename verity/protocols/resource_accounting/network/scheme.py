@@ -8,13 +8,14 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.protocols.resource_accounting.network.prover.egress import EgressBucket
+from verity.protocols.resource_accounting.network.prover import ingress_scan as IS
 from verity.protocols.resource_accounting.network.prover.ingress_scan import IngressScanBucket, IngressScanStart
 from verity.protocols.resource_accounting.network.prover.lengths_row import LengthsRow
 from verity.protocols.resource_accounting.network.prover.response_tie import ResponseTieNoStop, ResponseTieStop
 from verity.protocols.resource_accounting.network.verifier.io_request import IoTieRequest
 from verity.protocols.resource_accounting.network.verifier.io_tie import IoTieBucket, IoTieContent, IoTieRoute
 from verity.protocols.resource_accounting import scheme as S
-from verity.protocols.resource_accounting.scheme import Block, Charge, Order, Port, Scheme, register
+from verity.protocols.resource_accounting.scheme import Block, Charge, Layout, Order, Port, Scheme, register
 from verity import hooks as H
 from verity.protocols.resource_accounting.network.prover import id_relay, workload
 from verity.protocols.resource_accounting.network.prover.ids_protocol import IdsProtocol
@@ -82,6 +83,13 @@ def requests(ctx: Mapping[str, Any]) -> tuple[Any, ...]:
     return (START_ID_RELAY,) if settings(ctx.get("settings", {}))["order"] == "arrival" else ()
 
 
+def _scan_state_layout(shape: Mapping[str, int]) -> Layout:
+    """The scan state row's layout at the scan's class (`ingress_scan.Class`, its statics by name): `ingress_scan.layout`'s
+    fields in `state_bits`, with the prompt ids a first cell (``K0``) and a continuation (``K``) hold."""
+    cls = IS.Class(**shape)
+    return Layout(IS.state_bits(cls), IS.layout(cls), {"K0": cls.K0, "K": cls.K})
+
+
 NETWORK_ATTESTER = register(Scheme(
     name="network-attester",
     messages=workload.MESSAGES,
@@ -105,7 +113,7 @@ NETWORK_ATTESTER = register(Scheme(
     hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
-    ports=(Port("scan-state", "input", IngressScanStart.id, "sin"), Port("released", "output", EgressBucket.id, "o1")),
+    ports=(Port("scan-state", "input", IngressScanStart.id, "sin", layout=_scan_state_layout), Port("released", "output", EgressBucket.id, "o1")),
     requests=requests,
     attach=attach,
     processes={"id-relay": id_relay.process},
