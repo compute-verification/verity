@@ -152,7 +152,7 @@ for _ in $(seq 1 300); do
 done
 curl -sf "http://127.0.0.1:$PORT/v1/models" >/dev/null 2>&1 || { kill -INT "$SERVER"; fail serve "not listening after 25 min (log $LOGS/serve.log)"; }
 STEP=request
-(cd "$TREE" && "${LOAD[@]}" --release "$(cat /proc/sys/kernel/random/uuid)") > "$LOGS/request.log" 2>&1
+(cd "$TREE" && "${LOAD[@]}" --release "$(tr -d - < /proc/sys/kernel/random/uuid)") > "$LOGS/request.log" 2>&1
 lrc=$?
 STEP=stop
 kill -INT "$SERVER"

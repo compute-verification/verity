@@ -18,15 +18,11 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.types import Array, Tuple
 
-from verity_vllm.config import card_at
 from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry import boolean_fa2_train_bwd as BX
 from verity_vllm.definitions.registry import fa2_train_bwd as W
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.prims import BF16, F32
-
-#: the SMs of the card at the captures' cc (`cublas_bf16.TRAIN_CC`), the card they ran on
-SMS = int(card_at(TRAIN_CC)["sm"]["count"]["value"])
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fa2_train_bwd_sm120.npz"
 BM, BN = 64, 128
@@ -40,10 +36,10 @@ def _ints(a) -> list[int]:
 def test_train_sdpa_backward_binds_each_captured_shape() -> None:
     """H = 8's 12 buffers are more than a row's 8 parts can fill, so it binds H = 12's circuit."""
     for H, NS in ((8, 8), (12, 8), (16, 6), (24, 4)):
-        assert W.train_sdpa_backward(2, H, 1024, 64, SMS).id == f"Fa2TrainBwdHead_v1{{T=1024,D=64,BM=64,BN=128,NS={NS}}}"
+        assert W.train_sdpa_backward(2, H, 1024, 64, TRAIN_CC).id == f"Fa2TrainBwdHead_v1{{T=1024,D=64,BM=64,BN=128,NS={NS}}}"
     for shape in ((2, 4, 1024, 64), (2, 12, 512, 64), (2, 12, 1024, 128)):
         with pytest.raises(ValueError, match="is not captured"):
-            W.train_sdpa_backward(*shape, SMS)
+            W.train_sdpa_backward(*shape, TRAIN_CC)
     assert "whole key blocks" in W.Fa2TrainBwdHead.refuse({"T": 100, "D": 64, "BM": 64, "BN": 128, "NS": 4})
     assert "a multiple of BM" in W.Fa2TrainBwdHead.refuse({"T": 1024, "D": 64, "BM": 48, "BN": 128, "NS": 4})
     assert "multiple of 32" in W.Fa2TrainBwdPre.refuse({"D": 16})
@@ -196,7 +192,7 @@ def test_the_head_at_a_stand_in_shape_keeps_its_signature_and_builds(monkeypatch
     loop at those statics."""
     T, D, bm = 16, 32, 16
     monkeypatch.setitem(W.TRAIN_SDPA_BWD, (2, 2, T, D), (bm, bm))
-    head = W.train_sdpa_backward(2, 2, T, D, SMS)
+    head = W.train_sdpa_backward(2, 2, T, D, TRAIN_CC)
     assert head.id == bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1).id
     rows = Array(T, Array(D, BF16))
     assert head.signature() == (tuple((n, rows) for n in ("do", "q", "k", "v", "o")) + (("lse", Array(T, F32)),),

@@ -73,7 +73,8 @@ from verity.protocols.resource_accounting.network.verifier.link_frame import DAT
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_DIGITS, id_request
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R, partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.prover import docket as DK
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows: IoTieRequest_v1{B=512,L=2,R=2}, the pinned size class
@@ -447,7 +448,7 @@ def registration(tie: TS.IngressTie, head: WR.CellsHead, previous: str | None = 
     and nothing of the rows. Raises `ValueError` on a head of another link, direction, schedule or session."""
     tie._held(head)
     roots = [{"port": TS.VALUE, "root": head.root.hex(), **tie.ports(head.window)[TS.VALUE]}]
-    return R.record(tie._program, tie.query, {"law": "subset", "k": tie.T}, S.SCHEME, roots,
+    return DK.record(tie._program, tie.query, {"law": "subset", "k": tie.T}, S.SCHEME, roots,
                     tie.provenance(head.window), previous=previous)
 
 

@@ -753,18 +753,14 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock
 #: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
 #: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
-#: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
-HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
-#: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
-#: only, or on written)
+#: drive.toml's `verdict_carry` and `signed_verdicts`: off, shadow (logged only) or on
 MODES = ("off", "shadow", "on")
-#: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
-CLOSE_UNLANDABLE = ("off", "log", "on")
 #: the keys drive.toml's `command_line` may name
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "after_landing_no_cache")
 #: drive.toml keys whose code was deleted: code deployed ahead of `main` still reads them in `main`'s drive.toml, so even a
 #: strict parse ignores them, with a note, rather than refuse every tick
-DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first")
+DELETED_KEYS = ("max_lean_checks", "nonlean_first", "reviewed_first", "executor", "executor_enqueue",
+                "lowrisk_per_tick", "close_unlandable", "bottom_ring", "bottom_wait_min")
 #: what every command says to a `--first`, refusing it: the landing order is the priority file's alone
 FIRST_RETIRED = ("--first is retired: the verified queue's priority file (`research queue vqueue --priority-file`) holds the "
                  "landing order; list the PRs there, first to land first")
@@ -824,8 +820,6 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
-    #: old path: close each open PR nothing will land ("on"; "log", only log each it would close; "off")
-    close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`vqueue_slim.start`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
@@ -833,9 +827,7 @@ class DriveFlags:
     #: the keys a command line may override, of `COMMAND_LINE`
     command_line: tuple[str, ...] = ("on",)
     #: the low-risk lane: the verified queue takes a PR whose change is `lowrisk` on its ready mark alone; off, only on review
-    #: (`lowrisk_per_tick` is the old path's)
     lowrisk_lane: bool = True
-    lowrisk_per_tick: int = 20
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
@@ -845,18 +837,10 @@ class DriveFlags:
     #: the entries of `lowrisk_excludes` the land verdicts gate doesn't read, each written as it is there: what keeps a change
     #: off the low-risk lane only so that a reader sees it, which a land verdict already is (`plain_excludes`)
     verdict_plain: tuple[str, ...] = ()
-    #: the task executor after landing (`research.executor`): "off", "shadow" or "on", which only the old path's drive read
-    executor: str = "off"
-    #: the task executor's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it
-    #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
-    executor_enqueue: tuple[str, ...] = ()
     #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
     #: (`research.carry`): "off"; "shadow", the loop logs what it would carry and writes nothing; "on", it writes the land
     #: verdict at the head as `CI`
     verdict_carry: str = "off"
-    #: old path: who it rang while its `next`'s lowest member waited for a land verdict, and the minutes before each ring
-    bottom_ring: tuple[str, ...] = ("@ci", "@top")
-    bottom_wait_min: int = 30
     #: whether a ready mark or land verdict counts only when its `label_auth` companion authenticates it as its author's, or as
     #: an agent's its name is delegated to (`research.labelauth`, `StoreLabels`), a mode of `MODES` (`signed_mode`): "off"
     #: (written false), none is judged; "shadow", each counts as written and the verified queue's loop logs each it counted
@@ -917,24 +901,14 @@ class DriveFlags:
                 raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
-        for k, modes in (("executor", MODES), ("verdict_carry", MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
-            if k in doc:
-                if doc[k] not in modes:
-                    raise bad(k, f"one of {', '.join(modes)}")
-                got[k] = doc[k]
-        if "executor_enqueue" in doc:
-            v = doc["executor_enqueue"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
-                raise bad("executor_enqueue", "a command as a non-empty list of its words, as [\"python3\", \"enqueue.py\"]")
-            got["executor_enqueue"] = tuple(v)
+        if "verdict_carry" in doc:
+            if doc["verdict_carry"] not in MODES:
+                raise bad("verdict_carry", f"one of {', '.join(MODES)}")
+            got["verdict_carry"] = doc["verdict_carry"]
         if "marked_after" in doc:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        if "lowrisk_per_tick" in doc:
-            if type(doc["lowrisk_per_tick"]) is not int or doc["lowrisk_per_tick"] < 1:
-                raise bad("lowrisk_per_tick", "a whole number, 1 or more (`lowrisk_lane = false` turns the lane off)")
-            got["lowrisk_per_tick"] = doc["lowrisk_per_tick"]
         if "restack_jobs" in doc:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
@@ -957,15 +931,6 @@ class DriveFlags:
             if both := [x for x in plain if x in got.get("verdict_excludes", ())]:
                 raise bad("verdict_plain", f"{', '.join(both)} is also an entry of verdict_excludes, which keeps it on the "
                                            "whole check: remove it from one of the two")
-        if "bottom_ring" in doc:
-            v = doc["bottom_ring"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
-                raise bad("bottom_ring", "a non-empty list of handles, each `@` and its lower-case name, as [\"@ci\"]")
-            got["bottom_ring"] = tuple(v)
-        if "bottom_wait_min" in doc:
-            if type(doc["bottom_wait_min"]) is not int or doc["bottom_wait_min"] < 1:
-                raise bad("bottom_wait_min", "a whole number of minutes, 1 or more")
-            got["bottom_wait_min"] = doc["bottom_wait_min"]
         for k in ("regenerate_locks", "verdict_first", "lowrisk_lane"):
             if k in doc:
                 if not isinstance(doc[k], bool):
