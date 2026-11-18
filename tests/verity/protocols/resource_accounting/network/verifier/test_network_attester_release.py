@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity.protocols.resource_accounting.network.verifier.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END,
-                                                     WATERMARK_PATH, one_request, read_watermark, release_head,
-                                                     release_of, to_watermark, watermark_chunk, watermark_head,
-                                                     with_release)
+from verity.protocols.resource_accounting.network.verifier.release import one_request, to_watermark
+from verity.release import (BUCKET_HEADER, RELEASE_HEADER, RUN_HEADER, WATERMARK_END, WATERMARK_PATH,
+                                    read_watermark, release_head, release_of, watermark_chunk, watermark_head,
+                                    with_release)
 
 BODY = b'{"prompt":"a\\r\\n\\r\\nb","max_tokens":4}'
 REQUEST = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"

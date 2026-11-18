@@ -22,7 +22,7 @@ from verity.protocols.compose import schemes as declarations
 from verity.protocols.resource_accounting.network.prover import ids_protocol as idp
 from verity.protocols.resource_accounting.network.verifier import id_form as IDF
 from verity.protocols.resource_accounting.network.verifier import io_tie as IT
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 from verity.protocols.resource_accounting.network.verifier.link_frame import HEADER
 
 from tests.pipeline import predicted

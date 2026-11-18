@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity.protocols.resource_accounting.network.prover.workload import FRAME_HEADER, id_event, id_request
-from verity.protocols.resource_accounting.network.verifier import release as REL
+from verity import release as REL
 
 #: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
 ID_PAYLOAD = 503
