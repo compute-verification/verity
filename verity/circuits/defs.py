@@ -704,7 +704,7 @@ class _Widths:
             if T is None or h == w:
                 continue
             lo, hi = lane_bounds(p.run, (s, i, b, e, lv))
-            vs.append(_lane_width(T, w, max(lo, 0), max(hi, 0), b, p.run, e, lv, True))
+            vs.append(None if lo < 0 else _lane_width(T, w, lo, max(hi, 0), b, p.run, e, lv, True))
         if False in vs:
             return True
         if None in vs:
