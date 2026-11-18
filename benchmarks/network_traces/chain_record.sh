@@ -42,6 +42,8 @@
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/): the report's --period-answer, whose block says why it
 #      writes no attester entry (chain_record.block_entry)
+#      CR_COIN_PEER (job.json's coin_peer: where a sample on the gate's coins ran, {"name", "served_node"} as JSON;
+#      served_session.py chain sets it)
 #      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
@@ -244,7 +246,7 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
            "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "path": "$CR_PATH",
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
-           "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),
+           "scan_only": bool(os.environ.get("CR_SCAN_ONLY")), "coin_peer": json.loads(os.environ.get("CR_COIN_PEER") or "null"),
            "rc": {"n2": text("n2.rc"), "scan": text("scan.rc"), "tie": text("tie.rc")},
            "why": {"n2": text("n2.why"), "scan": text("scan.why"), "tie": text("tie.why")},
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)

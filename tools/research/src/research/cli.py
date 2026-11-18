@@ -13,7 +13,11 @@
                                                  # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node);
                                                  # a machine that can start no run is passed over, and the launch says which and why;
                                                  # where it went and why is kept with the run: `inspect` prints it on the VM that launched
-                                                 # it, and the machine's request.json holds it (`auto`)
+                                                 # it, and the machine's request.json holds it (`auto`); a Lean records run below its
+                                                 # package's floor is refused at launch with the run to launch instead (auto.below_floor)
+  research run --on MACHINE|auto|--queue [--cold-lean-build REASON] [...] -- CMD...   # a raw `lake build` of an analysis package
+                                                 # (security/) is refused at launch, naming the Lean tools that restore it from a kept
+                                                 # tree; REASON builds it cold on purpose, recorded in job.json (treelock.analysis_build)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--env-host MACHINE ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -174,6 +178,20 @@ def _harness_parser(prog: str) -> argparse.ArgumentParser:
     return ap
 
 
+def _unknown_harness_opts(harness_opts: list[str]) -> list[str]:
+    """What `research run` passes on to its runner that the runner's parser doesn't take. A run sent to a machine is parsed
+    there, after its tree is shipped, so the launch names these before it ships anything."""
+    known = _harness_parser("research run")._option_string_actions
+    unknown, i = [], 0
+    while i < len(harness_opts):
+        o = harness_opts[i]
+        act = known.get(o.split("=", 1)[0]) if o.startswith("-") else None
+        if act is None:
+            unknown.append(o)
+        i += 1 if act is None or act.nargs == 0 or "=" in o else 2
+    return unknown
+
+
 def build_job_from(a: argparse.Namespace, command: list[str]) -> dict:
     """Mirror of the job the harness would build for this namespace (telemetry.run.run), so that pre-writing job.json changes
     nothing the harness records.  Kept in one place; if the harness's call changes upstream, change this."""
@@ -246,6 +264,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
+    ap.add_argument("--of-record", action="store_true",
+                    help="with --on: a run whose shipped tree isn't main's (HEAD not on origin/main, or uncommitted changes) is "
+                         "not made a trial (VERITY_BENCH_TRIAL=1, writing no point): for a point of record taken from a branch")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys, "
@@ -372,6 +393,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
                          "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
                          "(research/pipefail.py)")
+    ap.add_argument("--cold-lean-build", default=None, metavar="REASON",
+                    help="with --on or --queue: run a raw `lake build` of an analysis package (under security/), which is refused "
+                         "otherwise: it builds Mathlib cold, where `verity lean try FILE --on auto` (an edit loop) and "
+                         "`tools/verity/lean/lean_changed.py --records PKG` (records) restore it from a kept tree. REASON says "
+                         "why it builds cold, and is recorded in job.json")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
     if not ns.claimed and remote.flag_value(harness_opts, "--lane") is None and (lane := launching_lane(ns.lane)):
@@ -384,6 +410,13 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 2
+    if (ns.on or ns.queue) and not ns.claimed and not ns.cold_lean_build \
+            and (at := treelock.analysis_build(command, remote.flag_value(harness_opts, "--cwd"))):
+        print(f"research run: refused: the workload runs a raw `lake build` of an analysis package ({at}), which builds it and "
+              "Mathlib cold in the run's tree, where the Lean tools restore them from a kept tree on the node: for an edit loop, "
+              "`verity lean try FILE --on auto`; for records, `python3 tools/verity/lean/lean_changed.py --records PKG --update`. "
+              "A cold build on purpose: --cold-lean-build REASON (recorded in job.json)", file=sys.stderr)
+        return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 
@@ -392,6 +425,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if not ns.claimed and (unknown := _unknown_harness_opts(harness_opts)):
+        print(f"research run: unrecognized arguments: {' '.join(unknown)}: neither `research run` nor the runner it starts takes "
+              "them, here or on a machine (`research run --help`; the runner's are research/telemetry/run.py's add_args)",
+              file=sys.stderr)
+        return 2
     if ns.env_host:
         from .pods import registry
 
@@ -441,6 +479,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
+        from . import auto
+
+        mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+        if why := auto.below_floor(Path(ns.source), command, ns.env, mem):
+            print(f"research run --on auto: refused: {why}", file=sys.stderr)
+            return 2
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
 
@@ -593,7 +637,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
                                            ("--disk-gb", ns.disk_gb is not None))
                   if given]
     if queue_only:
-        print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue", file=sys.stderr)
+        print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue"
+              + ("; without it a run's longest time is --timeout (`--timeout 2h`)" if ns.max_min is not None else ""), file=sys.stderr)
         return 2
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
@@ -716,6 +761,8 @@ def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: lis
         job["run"]["cwd_clone"] = clone_rec
     if tree_lock:
         job["run"]["lean_tree_lock"] = str(tree_lock)
+    if ns.cold_lean_build:
+        job["run"]["cold_lean_build"] = ns.cold_lean_build
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
         from .binprov import snapshot
 
@@ -1422,8 +1469,11 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     `auto.closed`). ``docs`` keeps what it read of the machines (`auto.read`): given them again, it places the job from
     them and asks no machine."""
     from . import auto
+    from .telemetry.run import RAISE_LIMIT
 
     docs = {} if docs is None else docs
+    untimed = ([f"it is stopped {AUTO_MAX_MIN} min after it starts, the default time limit: {RAISE_LIMIT}"]
+              if ns.max_min is None and remote.flag_value(harness_opts, "--timeout") is None else [])
     cpus = ns.cpus or AUTO_CPUS
     budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
     mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
@@ -1457,7 +1507,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             told = f"warning: {told}" + (f". {cut}" if cut else "")
     if target is None:
         ns.placed = {"machine": auto.AUTO_NODE, "pool": None,
-                     "said": [f"queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", *([told] if told else [])]}
+                     "said": [f"queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", *([told] if told else []),
+                              *untimed]}
         for line in ns.placed["said"]:
             print(f"research run --on auto: {line}", file=sys.stderr)
         return harness_opts
@@ -1469,7 +1520,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
-    ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told]}
+    ns.placed = {"machine": machine, "pool": pool, "said": [f"spilled to {machine}'s {pool} pool, from {ns.source} ({why})", told, *untimed]}
     ns.asks = {"cpus": cpus, "mem_gb": mem, "lean": lean}      # what `auto` was asked, for the launch's asker to ask it again
     for line in ns.placed["said"]:
         print(f"research run --on auto: {line}", file=sys.stderr)
@@ -1581,6 +1632,39 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     return urls
 
 
+#: benchmarks' trial switch (`verity_bench.kit`'s TRIAL): a trial's measurements go to a file of their own and write no point
+TRIAL_ENV = "VERITY_BENCH_TRIAL"
+
+
+def branch_trial(source: Path | None, env: dict[str, str], of_record: bool) -> str | None:
+    """The line to print when the tree a run ships isn't `main`'s: its HEAD is no ancestor of the checkout's origin/main, or it has
+    uncommitted changes. Such a run is a trial (`env` gains TRIAL_ENV=1) unless it says otherwise (--of-record, or its own --env
+    TRIAL_ENV). None, `env` untouched, for a run of main's, one that says otherwise, or one that ships no tree; a checkout whose
+    origin/main or git state can't be read gets its line and keeps today's environment, since the launcher won't guess."""
+    from . import launcher
+
+    if source is None or of_record or TRIAL_ENV in env:
+        return None
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(launcher.git(*args), cwd=source, capture_output=True, text=True, env=launcher.git_env())
+
+    status = git("status", "--porcelain", "--untracked-files=all")
+    if status.returncode != 0 or git("rev-parse", "--verify", "-q", "origin/main").returncode != 0:
+        return (f"research run: can't tell whether {source} is main's (no git status or no origin/main there), so the run is not "
+                f"made a trial; pass --env {TRIAL_ENV}=1 if it is one")
+    ancestor = git("merge-base", "--is-ancestor", "HEAD", "origin/main").returncode
+    if ancestor not in (0, 1):
+        return f"research run: can't tell whether {source}'s HEAD is on origin/main, so the run is not made a trial"
+    why = [w for w, yes in (("its HEAD isn't on origin/main", ancestor == 1), ("it has uncommitted changes", bool(status.stdout.strip())))
+           if yes]
+    if not why:
+        return None
+    env[TRIAL_ENV] = "1"
+    return (f"research run: {source} isn't main's ({' and '.join(why)}), so the run is a trial ({TRIAL_ENV}=1: its measurements write "
+            f"no point); --of-record or --env {TRIAL_ENV}=0 takes a point of record from it")
+
+
 def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], command: list[str], queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
@@ -1595,6 +1679,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
     if queue:
         cpus = str(int((queue.get("job") or {}).get("cpus") or 1))
         env = {**dict.fromkeys(THREAD_POOL_VARS, cpus), **env}
+    if said := branch_trial(Path(ns.source).expanduser() if ns.source else None, env, getattr(ns, "of_record", False)):
+        print(said, file=sys.stderr)
     asked_cwd = remote.flag_value(harness_opts, "--cwd")
     if asked_cwd is not None and not os.path.isabs(asked_cwd) and not ns.source:
         print(f"research run --on {ns.on}: --cwd {asked_cwd} is relative to the shipped source tree, and there is none; pass --source GITDIR "
@@ -1623,6 +1709,8 @@ def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], com
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
+    if ns.cold_lean_build:
+        harness_args += ["--cold-lean-build", ns.cold_lean_build]
     run_dir = _take_run_dir(ns, root)
     run_id = run_dir.name
     custody = ns.custody_r2 is not False

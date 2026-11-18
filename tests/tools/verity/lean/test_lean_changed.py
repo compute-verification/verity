@@ -1451,6 +1451,7 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     assert LC.audit_records("pkg", tmp_path / "deps", out=out, log=said.append) == 0
     assert len(calls) == 2, "one audit more, never a third"
     assert "--artifacts" in calls[0][0] and "--artifacts" not in calls[1][0], "nothing is restored for the second audit"
+    assert "--no-artifacts" in calls[1][0], "which check.py would otherwise refuse beside the node's artifact cache"
     gone = [f for f in mine if not f.exists()]
     assert gone == [f for f in mine if f.name.endswith((".trace", ".hash", ".c.o.export"))] and len(gone) == 5, \
         "what tells Lake the module is built goes, and the object compiled from its C"

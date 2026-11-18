@@ -150,6 +150,18 @@ def test_a_re_registration_of_the_same_binding_keeps_the_properties_table(reg):
     assert "properties" not in tomllib.loads(f.read_text())
 
 
+def test_the_run_copy_of_a_record_holds_its_name_and_properties_and_none_of_its_address():
+    """Rule: the copy a run gets is `machine` and `[properties]` only; weakening: the whole record, host and port with it."""
+    props = {"cards": {"value": 1, "read": "nvidia-smi -L | wc -l"},
+             "toolkit": {"value": {"directory": "/usr/local/cuda-13.0", "version": "13.0", "loader": "lib64"}, "read": "nvcc --version"}}
+    record = {"provider": "ssh", "host": "203.0.113.7", "port": 2222, "user": "research", "pod_id": POD["id"],
+              "key": "/dummy/id_ed25519", "project": "verity", "properties": props}
+    text = registry.properties_copy("vy-lane-a", record)
+    assert tomllib.loads(text) == {"machine": "vy-lane-a", "properties": props}
+    assert [v for v in ("203.0.113.7", "2222", POD["id"], "/dummy/id_ed25519", "ssh") if v in text] == []
+    assert registry.properties_copy("vy-lane-a", {k: v for k, v in record.items() if k != "properties"}) is None
+
+
 def test_a_name_the_two_sources_bind_to_different_pods_is_refused_not_guessed(reg, tmp_path):
     (tmp_path / "machines.toml").write_text(
         f'[machines.vy-lane-a]\nprovider = "runpod"\npod_id = "{OTHER["id"]}"\nproject = "verity"\n'
