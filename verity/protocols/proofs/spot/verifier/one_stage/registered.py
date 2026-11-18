@@ -561,7 +561,9 @@ def marked_rows(program: Program, registered: Mapping[str, int], supplied: Mappi
     for f, h in (coins or {}).items():
         if f not in SU.FUNCTIONS:
             raise ValueError(f"coins: {f} is no supplied function")
-        held[f] = _hex_bytes(f, "coin", f, h)
+        if not (isinstance(h, str) and re.fullmatch(r"(?:[0-9a-f]{2})*", h)):
+            raise ValueError(f"coins: {f}'s coin is not hex")
+        held[f] = bytes.fromhex(h)
     params = dict(program.fn.signature()[0])
     out = {}
     for v, m in got.items():
