@@ -523,8 +523,8 @@ def ask_gb(gib: int) -> str:
 
 def slot_wrap(priority: bool = False, twin: str | None = None, after: int = 0) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
-    they take the next slot ahead of unranked priority checks), --twin for one of a check's twins and --twin-after ``after``
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (the verified queue's records run's and its
+    candidates' checks', so they take the next slot ahead of unranked priority checks), --twin for one of a check's twins and --twin-after ``after``
     for a twin off its home that waits that long before joining its line."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
