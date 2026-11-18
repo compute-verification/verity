@@ -1145,9 +1145,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     sleep 2
   done
   if [ "$up" != 1 ]; then
-    tail -40 "$D/serve.log"
-    say "SERVE: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$D/serve.log" | cut -c1-400)"
-    kill -TERM "$srv" 2>/dev/null; wait "$srv"
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"; rc=$?
+    say "SERVE: $("$SAY_PY" "$SV" not-listening "$D/serve.log" "$rc")"
     [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
     pearl_period close
     return 10
