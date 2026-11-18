@@ -81,7 +81,8 @@ REPO = Path(__file__).resolve().parents[5]
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
-    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_ands=a.lower_max_ands,
+    return CK.Options(vectors=a.vectors, seed=a.seed, X=a.X, W=a.W, extras=a.extras, lower_max_gates=a.lower_max_gates,
+                      lower_max_ands=a.lower_max_ands,
                       struct_max_gates=a.struct_max_gates)
 
 
@@ -1551,6 +1552,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-X", type=int, default=CK.Options.X)
     ap.add_argument("-W", type=int, default=CK.Options.W)
     ap.add_argument("--extras", type=int, default=CK.Options.extras)
+    ap.add_argument("--lower-max-gates", type=int, default=CK.Options.lower_max_gates,
+                    help="lower a composite Definition whole when it has at most this many IR gates (else it is left to a "
+                         "template's units); a Boolean one is lowered whole whatever its gates")
     ap.add_argument("--lower-max-ands", type=int, default=CK.Options.lower_max_ands,
                     help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
@@ -1564,6 +1568,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ranges", nargs="*", metavar="FAMILY", default=None,
                     help="also check the spots of each sidecar's RANGES rule for these families (every rule's when none is "
                          "named), as named targets (`ranges`); give the targets before it")
+    ap.add_argument("--model", type=Path, metavar="PHI",
+                    help="the served bindings of the model this φ file registers (`Phi.to_json()`, as a served run states it) at "
+                         "--class: the Definition of each proof block of its class circuit, each a named target "
+                         "(`targets.served_targets`); one that no configuration can check is named and fails the run")
+    ap.add_argument("--class", dest="window_class", metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
+                    help="with --model: the window class its circuit is of")
+    ap.add_argument("--list", action="store_true",
+                    help="with --model: print its served bindings as targets (`definition ID`) and those no configuration can "
+                         "check, and check none")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
@@ -1670,12 +1683,18 @@ def main(argv: list[str] | None = None) -> int:
     if a.accept_task_list and (a.targets or not a.all or a.shard or a.binding or a.records_only or a.bindings):
         ap.error("--accept-task-list writes the whole --all task list's counts: give --all, and no target, --shard, --binding, "
                  "--records-only or --bindings")
+    if a.model is None and (a.window_class is not None or a.list):
+        ap.error("--class and --list name a model's served bindings: give --model PHI")
+    if a.model is not None and (a.window_class is None or a.targets or a.all or a.ranges is not None or a.shard
+                                or a.update_pins):
+        ap.error("--model checks a model's served bindings at a window class: give --class, and no target, --all, --ranges, "
+                 "--shard or --update-pins")
     if a.ranges is not None:
         try:
             a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
         except (LookupError, ValueError) as e:
             ap.error(str(e))
-    if not a.targets and not a.all:
+    if not a.targets and not a.all and a.model is None:
         ap.error("give a target or --all")
     shard = None
     if a.shard:
@@ -1694,7 +1713,7 @@ def main(argv: list[str] | None = None) -> int:
         a.shard_dir.mkdir(parents=True, exist_ok=True)
         progress = a.shard_dir / "progress.jsonl"
         progress.unlink(missing_ok=True)
-    cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
+    cache = None if a.no_cache or a.update_pins or a.list else a.cache or (None if a.all else default_cache())
     if cache:
         if (ex := CC.expire(cache))["gone"] or ex["left"]:
             print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "
@@ -1703,6 +1722,24 @@ def main(argv: list[str] | None = None) -> int:
             print(f"circuit-check: refused: {why}", file=sys.stderr)
             return 2
         CC.trace(REPO)
+    model = None
+    if a.model is not None:
+        t0 = time.time()
+        named, unbound = TG.served_targets(str(a.model), a.window_class)
+        model = {"config": str(a.model), "class": a.window_class, "bindings": sorted([*named, *unbound]),
+                 "not_checkable": unbound}
+        for fid in named if a.list else ():
+            print(f"definition {fid}")
+        for fid, why in unbound.items():
+            print(f"not checkable from a configuration: {fid}: {why}")
+        if a.list or not named:
+            if a.out:
+                a.out.write_text(json.dumps(model, indent=1) + "\n")
+            print(f"circuit-check --model: {len(model['bindings'])} served binding(s) of "
+                  f"{len({fid.partition('{')[0] for fid in model['bindings']})} families at class {a.window_class}, "
+                  f"{len(unbound)} not checkable from a configuration ({time.time() - t0:.1f}s)")
+            return 1 if unbound and not a.list else 0
+        a.targets = named
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
     if a.records_only:
         return _records_main(a, cache, jobs)
@@ -1742,6 +1779,20 @@ def main(argv: list[str] | None = None) -> int:
     _cache_lines(rep)
     if a.update_pins:
         update_pins(rep)
+    if model is not None:
+        by_id = {t.get("definition", t.get("target")): t for t in rep["targets"]}
+        model["compared"] = {fid: CK.compared_by(by_id[fid]) if fid in by_id else
+                             {"by": "none", "realizations": [], "reason": "not-checkable", "why": model["not_checkable"].get(fid, "no result")}
+                             for fid in model["bindings"]}
+        n = collections.Counter(c["by"] for c in model["compared"].values())
+        model["counts"] = {"bindings": len(model["bindings"]), **{by: n[by] for by in CK.COMPARED_BY}}
+        rep["model"] = model
+        rep["summary"]["ok"] = rep["summary"]["ok"] and not model["not_checkable"]
+        return max(verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
+                           what=f"{len(rep['targets'])} of the model's {len(model['bindings'])} served binding(s), "
+                                f"{len(model['not_checkable'])} not checkable from a configuration; compared on random vectors "
+                                + ", ".join(f"{n[by]} by {'nothing' if by == 'none' else by}" for by in CK.COMPARED_BY)),
+                   int(bool(model["not_checkable"])))
     if a.binding is not None:
         return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
                        what=f"binding {a.binding}: {len(rep['targets'])} target(s)")

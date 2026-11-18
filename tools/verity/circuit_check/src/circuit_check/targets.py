@@ -317,6 +317,9 @@ def kind_of(spec: str) -> str:
 ROW_READER = "request_program"
 #: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
 SPLIT_READER = "struct_slots_split"
+#: a model's served bindings from its configuration at a window class (`served_targets`), which the sidecar of the package that
+#: serves it defines
+SERVED_READER = "served_bindings"
 #: what circuit-check reads of the catalog it checks, each a function the one sidecar that defines it at its top level hands
 #: (`_handed`), by its name, with what it returns: circuit-check names no module of the catalog's
 HOOKS = {
@@ -370,13 +373,13 @@ def preload() -> dict[str, Any]:
     return _handed("preload")()
 
 
-def _read_by(reader: str, what: str, path: str) -> Any:
+def _read_by(reader: str, what: str, path: str, *more: str) -> Any:
     """``path`` read by the one binding file that defines ``reader``; refused by name when none or several do."""
     readers = {prefix: ns[reader] for prefix, ns in binding_files() if ns is not globals() and reader in ns}
     if len(readers) != 1:
         raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
                          f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
-    return next(iter(readers.values()))(path)
+    return next(iter(readers.values()))(path, *more)
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
@@ -391,6 +394,24 @@ def struct_slots_split(path: str) -> tuple[Callable[[], Any], str, dict[str, tup
     its reading (which raises on a directory that holds none), the format's name, each slot table's (index width, word width),
     and a slot table's words by its name."""
     return _read_by(SPLIT_READER, "a struct-slots split", path)
+
+
+def served_targets(config: str, cls: str) -> tuple[list[str], dict[str, str]]:
+    """The served bindings of a model (``config``) at a window class (``cls``), as the one binding file that defines
+    `SERVED_READER` builds them from the configuration: the ids `definition` resolves to the same Definition, each a target,
+    and the others, each with why no configuration checks it (a record static no catalog Definition is bound to, `_record`)."""
+    named, unbound = [], {}
+    for fn in _read_by(SERVED_READER, "a model's served bindings", config, cls):
+        try:
+            got = definition(fn.id)
+        except Exception as e:  # noqa: BLE001  (any refusal of the id is why it can't be checked from a configuration)
+            unbound[fn.id] = f"{type(e).__name__}: {str(e)[:300]}"
+            continue
+        if got is not fn and CC.descriptor(got) != CC.descriptor(fn):
+            unbound[fn.id] = "its id names another Definition here than the one the configuration builds"
+        else:
+            named.append(fn.id)
+    return named, unbound
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
