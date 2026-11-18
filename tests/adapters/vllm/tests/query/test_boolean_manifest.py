@@ -25,11 +25,11 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
 from verity.circuits.ops.boolean import versions as BB  # noqa: E402
-from verity_vllm.definitions.registry import b1  # noqa: E402
+from verity_torch.correspondence.runtime import correspondence_digest  # noqa: E402
 
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
-from verity_torch.correspondence.runtime import correspondence_digest  # noqa: E402
+from verity_vllm.definitions.registry import b1  # noqa: E402
 from verity_vllm.pipeline import components, manifest  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
@@ -59,8 +59,9 @@ def _write(d: Path, rep) -> str:
 
 @pytest.fixture(scope="module")
 def row(tmp_path_factory):
-    from verity_vllm.program.frontend import derive_examples as ex
     from verity_torch.frontend.boolean import derived
+
+    from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.vllm_derive import derive_report
 
     with torch.device("meta"):
