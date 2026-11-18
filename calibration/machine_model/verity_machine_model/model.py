@@ -15,18 +15,18 @@ import math
 import re
 import tomllib
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 CARD_FILES = Path(__file__).resolve().parents[3] / "calibration/hardware/cards"
 
 __all__ = ["Attack", "CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
            "Vector", "all_attacks", "attacks", "card", "census", "census_files", "census_lines", "citations", "cites",
-           "device", "device_cards", "device_of", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
+           "data_device", "device", "device_cards", "device_of", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
            "run_lists", "u_of", "vector", "vectors"]
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 DEVICES = DATA / "devices"
-DEVICE = "sm_120"   # data/ itself, the RTX PRO 6000: the default device
 
 Census = dict[str, dict[str, float]]  # instruction class: {row: u one warp instruction holds the row alone}
 STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
@@ -132,12 +132,18 @@ def model(data: Path = DATA) -> Model:
                  uniform_forms=tuple(t["uniform_forms"]) if "uniform_forms" in t else None)
 
 
-def device(name: str = DEVICE) -> Path:
-    """A device's data directory (README "Devices"): `data/` for sm_120, else `data/devices/sm_NN/`, which a command can
-    price once it holds a `model.toml` beside its census."""
+@cache
+def data_device() -> str:
+    """The device `data/` itself holds: its card's target (`arch`, sm_NN without its `a`)."""
+    return card(DATA)["arch"].removesuffix("a")
+
+
+def device(name: str) -> Path:
+    """A device's data directory (DESIGN.md "Devices"): `data/` for its card's device (`data_device`), else
+    `data/devices/sm_NN/`, which a command can price once it holds a `model.toml` beside its census."""
     m = re.fullmatch(r"sm_?(\d+)", name)
     key = f"sm_{m.group(1)}" if m else name
-    if key == DEVICE:
+    if key == data_device():
         return DATA
     p = DEVICES / key
     if not (p / "model.toml").is_file():
@@ -161,8 +167,8 @@ def card(data: Path = DATA, of: str = "card") -> dict:
 
 
 def devices() -> list[str]:
-    """The devices a command can price: sm_120 and each device directory with a `model.toml`."""
-    return [DEVICE, *sorted((p.name for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
+    """The devices a command can price: `data/`'s and each device directory with a `model.toml`."""
+    return [data_device(), *sorted((p.name for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
                             key=lambda n: int(n[3:]))]
 
 

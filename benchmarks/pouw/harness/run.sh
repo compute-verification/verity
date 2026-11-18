@@ -6,7 +6,7 @@
 # the job's own header its arguments and what it writes.
 #
 #   bash benchmarks/pouw/harness/run.sh JOB [ARGS...]
-#   bash benchmarks/pouw/harness/run.sh bench --plan     # each shape's operand sets, bursts and memory, without a GPU
+#   bash benchmarks/pouw/harness/run.sh bench --plan SKU # each shape's operand sets, bursts and memory, without a GPU
 set -uo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 job=${1:-}

@@ -299,7 +299,7 @@ class PearlCArm:
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
             self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
-        salt_key = PPD.new_salt_key(scheme)
+        salt_key = PPD.no_salt_key(scheme)
         roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=salt_key)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
