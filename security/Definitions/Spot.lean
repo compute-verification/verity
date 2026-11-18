@@ -9,6 +9,7 @@ public import Definitions.Spot.Necessity
 public import Definitions.Spot.Exfiltration
 public import Definitions.Spot.SamplePressure
 public import Definitions.Spot.ChiPool
+public import Definitions.Spot.Limits
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
