@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The stock control of served_verdicts.sh: its endpoint, engine and load with no protocol and no Commit, REPS times.
 # Each rep is one `verity-vllm serve-openai --no-commit` lifetime of served_verdicts.sh's model (REPO at REV, --precision PRECISION),
-# the bench row's check (--required-manifest PRED/manifest.json, which here only refuses a row declaring async scheduling;
+# the bench row's check (--row-build PRED, which here only refuses a row declaring async scheduling;
 # PRED is the row's Build of record, which `verity-vllm predict row` writes for ROW's name before the lease, as served_verdicts.sh's),
 # --max-model-len MAX_MODEL_LEN, --max-num-batched-tokens MNBT (default 512, served_verdicts.sh's T), the network attester
 # scheme's order release-order (--protocols-config under its name) and --window-requests SLOTS, and --window-steps
@@ -57,7 +57,7 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   local na=network-attester; "$PY" -m verity.protocols.compose.schemes "$na" settings > /dev/null || return 9
   cd "$TREE/adapters/vllm" || return 9
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --required-manifest "$PRED/manifest.json" \
+    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}-$1" --no-commit --row-build "$PRED" \
     --protocols-config "{\"$na\": {\"order\": \"release-order\"}}" --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --max-num-batched-tokens "$MNBT" "${ws[@]}" \
     > "$D/serve.log" 2>&1 &
   srv=$!
@@ -104,7 +104,7 @@ done
   || { echo "PREFLIGHT: FIXED needs WINDOW_STEPS, each request's max_tokens" | tee -a "$OUT/stock.txt"; exit 3; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; nvidia-smi -L; echo "row $ROW"; } > "$PRIV/machine.txt" 2>&1
 git -C "$TREE" rev-parse HEAD 2>/dev/null | tee "$OUT/machine.txt"
-for f in "$ROW/manifest.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
+for f in "$ROW/build_summary.json" "$PY"; do [ -e "$f" ] || { echo "PREFLIGHT: no $f" | tee -a "$OUT/stock.txt"; exit 3; }; done
 command -v gpu-lease >/dev/null || { echo "PREFLIGHT: no gpu-lease on this node" | tee -a "$OUT/stock.txt"; exit 3; }
 mkdir -p "$ROOT/cache"
 (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli predict row --row "$ROW_ID" --out "$PRED") \
