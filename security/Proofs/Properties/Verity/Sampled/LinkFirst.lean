@@ -234,7 +234,7 @@ theorem reads_interleave (c : LiveCommitment) {h : String} {t t' : List String} 
     (h2 : releasedLogOf c (h :: t') = .ok out') (hc' : out'.any (·.kind == .committed) = false) :
     coinTreesOf (h :: t) = coinTreesOf (h :: t') ∧
       (∀ ℓ, look out ℓ = look out' ℓ) ∧ ∀ ℓ x, releasedAfter out ℓ x = releasedAfter out' ℓ x := by
-  refine ⟨?_, releasedLogOf_congr hrest h1 hc h2 hc'⟩
+  refine ⟨?_, releasedLogOf_congr (l := h :: t) (l' := h :: t') hrest h1 hc h2 hc'⟩
   rw [coinTreesOf_filter (h :: t), coinTreesOf_filter (h :: t'), List.filter_cons, List.filter_cons, htree]
 
 end Verity.Sampled
