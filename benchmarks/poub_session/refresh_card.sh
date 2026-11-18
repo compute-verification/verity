@@ -4,8 +4,10 @@
 # caller's lease of the card, which every stage shares:
 #
 #   research run --on vy-h100-1 --project verity --source TREE --cwd clone -- \
-#     gpu-lease 1 --wait --cores 0-9 --max-min 120 -- env NOT_AFTER=2026-11-19T03:30Z \
+#     gpu-lease 1 --wait --cores 0-9 --max-min 120 -- env BASE_REV=REV NOT_AFTER=2026-11-19T03:30Z \
 #     bash benchmarks/poub_session/refresh_card.sh
+#
+# BASE_REV is the commit this branch left origin/main at (`git merge-base HEAD origin/main` where the clone has it).
 #
 #   base     rows.sh with STEPS=rows: session.cu and kv.cu built for the card, the base's kernels unchanged
 #            (same_sass.py), the sign key, the SASS gate (the 64-row kernels, rs_pass_at's and rs_subtrees_at's among
@@ -47,6 +49,12 @@ B=$(mktemp -d /tmp/refresh-card.XXXXXX); trap 'rm -rf "$B"' EXIT
   "verifier $VERIFIER_CPUS"; nvidia-smi --query-gpu=name,uuid,clocks.max.sm,memory.total --format=csv,noheader
 } > "$O/machine.txt" 2>&1
 STAGES=${STAGES:-base offset session}
+export BASE_REV=${BASE_REV:-$(git -C "$TREE" merge-base HEAD origin/main 2> /dev/null)}
+if [[ " $STAGES " == *" base "* ]] && [ -z "$BASE_REV" ]; then
+  say "refused: base compares the build's kernels with BASE_REV's session.cu, and this clone has no origin/main:" \
+    "give BASE_REV, the commit this branch left origin/main at"
+  exit 3
+fi
 failed=
 stage() {  # stage NAME CMD...: the stage's verdict into out/stages.txt, or `not run` after a failure
   local name=$1 rc; shift
