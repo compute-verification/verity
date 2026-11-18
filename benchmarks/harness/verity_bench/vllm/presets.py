@@ -17,6 +17,9 @@ from verity_bench import profiles
 _PRODUCTION = profiles.load()
 #: the vLLM commit every spec runs: the serving profiles' (`benchmarks/production.toml`'s ``vllm``)
 VLLM_PIN = _PRODUCTION.vllm
+#: each model the serving profiles pin, its repository to its revision (`production.toml`'s ``models``): a spec naming
+#: one of them and no revision runs that revision
+REVISIONS = {m.repository: m.revision for m in _PRODUCTION.models.values()}
 SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
 #: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
@@ -272,6 +275,8 @@ def load_spec(spec: str | Path) -> BenchmarkSpec:
             raise ConfigError(f"{path}: arm_settings {name!r}: precision is one of {', '.join(PRECISIONS)}")
         if arm.control is not None and arm.control != NO_CONTROL and (arm.control not in doc.arms or arm.control == name):
             raise ConfigError(f"{path}: arm_settings {name!r}: control must be another arm in arms, or {NO_CONTROL!r}")
+    if doc.preset.revision is None and doc.preset.model in REVISIONS:
+        doc = replace(doc, preset=replace(doc.preset, revision=REVISIONS[doc.preset.model]))
     return doc
 
 

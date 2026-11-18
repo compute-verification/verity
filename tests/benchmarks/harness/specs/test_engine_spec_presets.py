@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_bench import profiles
 from verity_vllm import EnginePin
 from verity_vllm.engine import spec as ES
 
@@ -14,11 +15,15 @@ SPECS = (Path(__file__).resolve().parents[4] / "benchmarks" / "harness" / "specs
 
 
 def _presets() -> list[dict]:
+    """Each spec's preset with its revision: its own, else the serving profiles' for its model (`presets.load_spec`)."""
+    revisions = {m.repository: m.revision for m in profiles.load().models.values()}
     out = []
     for p in sorted(SPECS.glob("*.toml")):
         doc = tomllib.loads(p.read_text())
-        if doc.get("schema") == "verity-bench/vllm-spec/v0" and doc["preset"].get("revision"):
-            out.append(doc["preset"])
+        if doc.get("schema") != "verity-bench/vllm-spec/v0":
+            continue
+        if revision := doc["preset"].get("revision") or revisions.get(doc["preset"]["model"]):
+            out.append({**doc["preset"], "revision": revision})
     return out
 
 
