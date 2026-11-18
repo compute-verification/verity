@@ -63,5 +63,6 @@ public import Spot.FactorUpper
 public import Spot.TwoStageCheck
 public import Spot.Ranks
 public import Spot.SecondWindow
+public import Spot.BlockFront
 
 @[expose] public section

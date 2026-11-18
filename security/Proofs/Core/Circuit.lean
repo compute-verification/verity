@@ -249,6 +249,53 @@ theorem mem_io_writer {g : Fin C.N} {r w : Fin n} (hr : g ∈ P.io r) (hw : P.un
   · have hb := P.io_subset_boundary r hr
     exact Option.isSome_iff_exists.1 (P.pos_some.2 hb)
 
+/-- A proof block's in(S) and out(S) are its committed inputs and outputs, `io u`, so each has a position. -/
+theorem into_union_exits_eq_io (u : Fin n) : C.into (P.gates u) ∪ C.exits (P.gates u) = P.io u := by
+  classical
+  ext g
+  constructor
+  · intro hg
+    rcases Finset.mem_union.1 hg with h | h
+    · simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and] at h
+      obtain ⟨hgS, k, hk, hgk⟩ := h
+      have hku := P.mem_gates.1 hk
+      simp only [io, Finset.mem_filter]
+      refine ⟨P.mem_committed_of_read hgk fun he => hgS (P.mem_gates.2 (he ▸ hku)), Or.inr ⟨k, hku, hgk⟩⟩
+    · rw [← P.committed_inter_gates u, Finset.mem_inter] at h
+      simp only [io, Finset.mem_filter]
+      exact ⟨h.1, Or.inl (P.mem_gates.1 h.2)⟩
+  · intro hg
+    simp only [io, Finset.mem_filter] at hg
+    obtain ⟨hc, hu | ⟨k, hku, hgk⟩⟩ := hg
+    · rw [Finset.mem_union, ← P.committed_inter_gates u, Finset.mem_inter]
+      exact Or.inr ⟨hc, P.mem_gates.2 hu⟩
+    · by_cases hgS : g ∈ P.gates u
+      · rw [Finset.mem_union, ← P.committed_inter_gates u, Finset.mem_inter]
+        exact Or.inr ⟨hc, hgS⟩
+      · refine Finset.mem_union.2 (Or.inl ?_)
+        simp only [Circuit.into, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact ⟨hgS, k, P.mem_gates.2 hku, hgk⟩
+
+/-- **`C_S`'s run is the block's correctness**: out(S) holds what `C_S` computes exactly when the block is correct. -/
+theorem restrict_run_iff_correct (X : C.Trace) (u : Fin n) :
+    (∀ g ∈ C.exits (P.gates u),
+      X g = (C.restrict (P.gates u)).run (fun a => if P.unit a = some u then none else some (X a)) g) ↔
+      P.Correct X u := by
+  rw [← P.localEval_eq_restrict_run X u, ← P.committed_inter_gates u]
+  simp only [Correct, Finset.mem_inter, mem_gates]
+  constructor
+  · intro h g hc hu
+    exact h g ⟨hc, hu⟩
+  · rintro h g ⟨hc, hu⟩
+    exact h g hc hu
+
+theorem rblk_iff {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
+    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (c : Sc.Com) (u : Fin n) (X : C.Trace) (π : Fin C.N → Sc.Op) :
+    P.Rblk Sc H enc c u X π ↔
+      (∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), ∃ i, P.pos g = some i ∧ Sc.Opens H c i (enc g (X g)) (π g)) ∧
+        P.Correct X u :=
+  and_congr Iff.rfl (P.restrict_run_iff_correct X u)
+
 /-- **How the boundary and the committed wires differ**: exactly by the input gates that no gate reads. -/
 theorem mem_committed_sdiff_boundary {g : Fin C.N} :
     g ∈ P.committed \ P.boundary ↔ C.isInput g = true ∧ ∀ h, g ∉ C.reads h := by
@@ -345,6 +392,18 @@ theorem correct_congr {X Y : C.Trace} {u : Fin n} (hXY : ∀ g ∈ P.io u, X g =
   have hio : g ∈ P.io u := by simp only [io, Finset.mem_filter]; exact ⟨hg, Or.inl hu⟩
   rw [hXY g hio, P.localEval_congr hXY g.val g rfl hu]
   exact hY g hg hu
+
+/-- **The free inputs are free**: `Rblk` reads the trace only at in(S) and out(S), so every other gate, a gate outside
+`S` that `S` never reads among them, takes any value without changing it. -/
+theorem rblk_congr {α : Type} (Sc : Hash.StringCommitment α) (H : Hash.Msg → Digest)
+    (enc : (g : Fin C.N) → BitVec (C.w g) → α) (c : Sc.Com) (u : Fin n) {X X' : C.Trace} (π : Fin C.N → Sc.Op)
+    (hX : ∀ g ∈ C.into (P.gates u) ∪ C.exits (P.gates u), X g = X' g) :
+    P.Rblk Sc H enc c u X π ↔ P.Rblk Sc H enc c u X' π := by
+  have hio : ∀ g ∈ P.io u, X g = X' g := fun g hg => hX g (P.into_union_exits_eq_io u ▸ hg)
+  rw [P.rblk_iff, P.rblk_iff]
+  refine and_congr ?_ ⟨fun h => P.correct_congr (fun g hg => (hio g hg).symm) h, P.correct_congr hio⟩
+  refine forall₂_congr fun g hg => ?_
+  rw [hX g hg]
 
 /-! ## Refinement -/
 
