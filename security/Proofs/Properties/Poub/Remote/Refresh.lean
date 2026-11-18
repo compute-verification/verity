@@ -420,9 +420,9 @@ theorem slot_held {s : State} {count : Nat} {origin : _root_.Poub.Origin} {slot 
 
 theorem prob_push {s : State} (hi : Inv s) (h : Prob s) {count : Nat} {origin : _root_.Poub.Origin}
     {slot : Option Nat} (h2 : ¬(s.params.refresh && !(slot.any fun k => s.slotOk k count origin)) = true)
-    (x : Append) (hx : x.first = s.extent) (hxs : x.slot = slot.getD s.appends.size) (hxo : x.origin = origin) (m : Nat)
+    (x : Append) (hx : x.first = s.extent) (hxs : x.slot = slot.getD s.appends.size) (hxo : x.origin = origin)
     (hd : Option ByteArray) (n : Nat) :
-    Prob { s with appendSampled := m, appends := s.appends.push x, head := hd, extent := n } := by
+    Prob { s with appends := s.appends.push x, head := hd, extent := n } := by
   refine ⟨fun hr k hk => ?_, fun hr => ?_⟩
   · show (s.slotWindow (s.appends.push x)[k].slot).isSome ∧
       ∀ m', (s.appends.push x)[k].origin = .rekey m' → (s.slotWindow m').isSome
@@ -507,7 +507,7 @@ theorem prob_append {s : State} {root : ByteArray} {count : Int} {origin : _root
   all_goals first
     | exact h
     | exact prob_fail h _ _ _
-    | exact prob_push hi h ‹_› _ rfl rfl rfl _ _ _
+    | exact prob_push hi h ‹_› _ rfl rfl rfl _ _
 
 theorem prob_release {s : State} {runs withdrawn : Array (Int × Int)} {r : Result} {s' : State} (h : Prob s)
     (he : release s runs withdrawn = (r, s')) : Prob s' := by

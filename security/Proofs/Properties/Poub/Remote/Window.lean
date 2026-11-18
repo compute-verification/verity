@@ -58,6 +58,8 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
     split at h
     · simp at h
     split at h
+    · simp at h
+    split at h
     · rename_i y hy
       split at h
       · simp at h
@@ -79,6 +81,8 @@ theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : Win
     · simp at h
     rename_i h2
     refine ⟨Decidable.not_not.1 h2, ?_⟩
+    split at h
+    · simp at h
     cases ha : appendOf appends j with
     | none =>
       simp only [ha, Option.bind, Option.map] at h
