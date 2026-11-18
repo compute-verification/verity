@@ -10,7 +10,7 @@ import collections
 import json
 import re
 
-from cpw_sass_count import CC_ARCH, parse
+from cpw_sass_count import arch_of, parse
 
 KERNEL = re.compile(r"^([slu]|o\d|tu?)_(\d+)_(\d+)(?:_(\d+))?$")
 
@@ -40,7 +40,7 @@ def device(path: str) -> tuple[str | None, dict[str, list[float]]]:
     for line in lines:
         m = re.match(r"device cc=(\S+)", line)
         if m:
-            arch = CC_ARCH.get(m.group(1))
+            arch = arch_of(m.group(1))
         m = re.match(r"a2u (\S+) (?:w=(\d+) )?rep=\d+ smsp_cyc_per_warp_loop=([0-9.]+)", line)
         if m:
             rows[(m.group(1), int(m.group(2) or 8))].append(float(m.group(3)))
