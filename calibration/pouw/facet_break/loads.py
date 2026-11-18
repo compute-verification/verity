@@ -43,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 MM = Path(__file__).resolve().parents[2] / "machine_model"
 sys.path.insert(0, str(MM))
 
-from verity_machine_model.model import DEVICE, census, entries, holds, model, vector, vectors  # noqa: E402
+from verity_machine_model.model import census, data_device, entries, holds, model, vector, vectors  # noqa: E402
 from verity_machine_model.model import card as model_card  # noqa: E402
 
 __all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
@@ -449,7 +449,7 @@ def record(out: Path, programs: list[dict], epoch: str | None, failed: str | Non
         return
     if card != (priced := model_card()["short"]):
         w.measurement(METRIC, None, "load", mark="measured", member=card, extra={"epoch": epoch},
-                      why=f"the loads are priced on {DEVICE}'s census, of the {priced}, and the run's card is the {card}")
+                      why=f"the loads are priced on {data_device()}'s census, of the {priced}, and the run's card is the {card}")
         return
     pairs = [(v, r, p) for p in programs for r, v in p["load"].items()]
     if not pairs:
