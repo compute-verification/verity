@@ -42,7 +42,8 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
-  adapter's own framing (``framing(base=..., **settings)``).
+  adapter's own framing (``framing(base=..., **settings)``), and ``provides``, the roles an adapter asks a scheme for
+  by role rather than by name (``admission``: with ``admit`` in its ``ctx``, `attach` installs and returns its gate).
   ``ctx`` is a mapping: ``settings``, the scheme's own (`settings`, the application's over its defaults); ``build``,
   the key of the build it attaches to (one per exchange); and what the launcher passes: ``process``, ``feed``
   (`verity.hooks.FRONT`), and for the network attester ``admit``, ``source``, ``submit``, ``abort``, ``take``, ``pull``,
@@ -211,6 +212,7 @@ class Scheme:
     processes: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
     messages: tuple[Any, ...] = ()
     framings: Mapping[str, Callable[..., Any]] = field(default_factory=dict)
+    provides: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not _NAME.fullmatch(self.name):
