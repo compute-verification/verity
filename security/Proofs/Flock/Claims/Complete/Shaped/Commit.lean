@@ -156,7 +156,7 @@ theorem opsWith_of_lookup {M : Type → Type} [Monad M] [MonadExceptOf String M]
   rw [h]
 
 /-- **Every registered scheme's digests have its width** through `Hashes.ofSha512` at an oracle of 64-byte outputs. -/
-theorem opsWith_sizes {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
+theorem opsWith_sizes {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {ms : MerkleScheme}
     (hms : ms ∈ MerkleScheme.all) :
     (∀ l r v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).node l r = .ok v → v.size = ms.digestLen) ∧
     ∀ row salt v, (ms.opsWith (Hashes.ofSha512 (Claims.hOf H) : Hashes V)).leaf row salt = .ok v →

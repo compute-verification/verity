@@ -54,6 +54,7 @@ from verity.protocols.resource_accounting.compute.pouw.verifier import weights a
 from verity.protocols.resource_accounting.compute.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity_torch.pouw.h1 import registered_device as D
 
 from verity_vllm.engine import hooks
@@ -176,7 +177,7 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     return run, ws, got
 
 
-def _tree(reg: G.Registered, rows: list[bytes], key: bytes, first: int) -> str:
+def _tree(reg: RV.Registered, rows: list[bytes], key: bytes, first: int) -> str:
     """`reg`'s tree recomputed from each row's raw bytes, its bit row's memory, under row j's salt at nonce ``first``."""
     dom, inst = reg.domain, hm96.SHA512
     bcs = [inst.commit_string(inst.default_key, sha512_row_v2_digest(row, 8 * len(row)), hm96_salt(key, first, j))
@@ -229,8 +230,8 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
     for s, k, cs in tables:
         ra = served.registered[HW.table(prog, "a", cs[0], STEPS)]
         assert ra.value == pre + f"a/{k}@{s}" and (ra.leaves, ra.words) == (T * len(cs), k // 2 + 2)
-        assert ra.domain.domain_id.hex() == G.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
-        assert ra.domain.domain_id != G.domain(digest, ra.value, ra.words, ra.leaves).domain_id
+        assert ra.domain.domain_id.hex() == RV.domain(digest, ra.value, ra.words, ra.leaves, window=W1.hex()).domain_id.hex()
+        assert ra.domain.domain_id != RV.domain(digest, ra.value, ra.words, ra.leaves).domain_id
         rows = [row for c in cs for row in _a_rows(*_served_call(got, c, 0, k)[:2], T, k)]
         assert ra.root.hex() == _tree(ra, rows, run._key, SV.nonce(cs[0], "a"))
         assert [c.index for c in run.calls if ra.value in run.tables[c.index]["registered"]] == [cs[-1]]
@@ -283,7 +284,7 @@ def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_
     zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
     order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
     assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
-    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert all(isinstance(r, RV.Registered) for r in run.served.registered.values())
     assert list(run.served.registered) == list(waited.served.registered)
     assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
     assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
@@ -373,7 +374,7 @@ def test_a_calls_statement_reads_its_units_rows_at_its_tables_and_refuses_anothe
         assert {f["ports"][f"a_k{k}_0"]["value"], f["ports"]["zy"]["value"], f["ports"][f"b_k{k}_0"]["value"]} == {
             HW.table(prog, "a", c, STEPS), HW.table(prog, "zy", c), SV.PREFIX + f"b/{k}"}
         at = HW.step_of(prog, c, STEPS)[2]
-        assert f["format"] == G.READS_V1 and all(p[G.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
+        assert f["format"] == G.READS_V1 and all(p[RV.READS_FROM] == u0 and len(p["reads"]) == n for p in f["ports"].values())
         assert f["ports"][f"a_k{k}_0"]["reads"][0] == at and at == T * served.step_calls(c).index(c)
         assert f["ports"][HW.OK_PORT]["value"] == SV.PREFIX + "ok" and SV.PREFIX + "ok" not in served.registered
         for port, p in f["ports"].items():
@@ -569,7 +570,7 @@ def test_card_arch_is_the_cards_h1_record(monkeypatch, capability, arch):
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():
     """Two windows of a period share every name, so a window's call tables are its own only through their domains, which
     bind its open root: window 1's, presented as window 2's, are not under the domains window 2's root gives them
-    (`registered.domain`, as credit's `domain_of` and `h1window.table_reads_file` compute them), and no row of them opens
+    (`registered_value.domain`, as credit's `domain_of` and `h1window.table_reads_file` compute them), and no row of them opens
     under window 2's domain; window 2's statement file names window 2's domains whatever roots it is handed. The
     weights' ``b/<K>`` bind no window and are the period's in both."""
     ws = _weights()
@@ -579,7 +580,7 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
     digest = one.served.program_digest
     for v, r in one.served.registered.items():
         theirs = two.served.registered[v]
-        under_two = G.domain(digest, v, r.words, r.leaves, window=None if CR.is_held(v) else W2.hex())
+        under_two = RV.domain(digest, v, r.words, r.leaves, window=None if CR.is_held(v) else W2.hex())
         assert under_two.domain_id == theirs.domain.domain_id
         if CR.is_held(v):
             assert under_two.domain_id == r.domain.domain_id and theirs.root == r.root
@@ -606,7 +607,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
     assert sorted(period.registered) == list(KS)
     for k, r in period.registered.items():
         assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", Wt.leaf_words(k))
-        assert r.domain.domain_id == G.domain(period.circuit, r.value, r.words, r.leaves).domain_id
+        assert r.domain.domain_id == RV.domain(period.circuit, r.value, r.words, r.leaves).domain_id
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
     assert period.registered[16].root.hex() == _tree(period.registered[16], rows, WKEY, SV.B_NONCE)
     assert period.root() == CR.weights_root({k: r.root for k, r in period.registered.items()})
@@ -763,8 +764,8 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
         assert (rc.leaves, rc.words) == (HW.call_units(prog)[c.index][1], 1) == served.receipt_shape(c.index)
         assert rc.root.hex() == _tree(rc, [w.tobytes() for w in made[c.index].astype("<u2")], run._key,
                                       SV.RECEIPT_NONCE + c.index)
-        assert rc.domain.domain_id == G.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
-        assert rc.domain.domain_id != G.domain(digest, rc.value, rc.words, rc.leaves).domain_id
+        assert rc.domain.domain_id == RV.domain(digest, rc.value, rc.words, rc.leaves, window=W1.hex()).domain_id
+        assert rc.domain.domain_id != RV.domain(digest, rc.value, rc.words, rc.leaves).domain_id
         assert served.root == W1.hex() and rc.window == served.registered[pre + f"zy@{c.index}"].window == W1.hex()
         assert run.tables[last]["registered"][rc.value] == rc.root.hex()
         assert all(rc.value not in run.tables[d]["registered"] for d in range(len(run.calls)) if d != last)

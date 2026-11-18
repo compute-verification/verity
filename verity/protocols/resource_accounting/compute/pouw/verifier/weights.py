@@ -4,7 +4,7 @@ rows of the execution phase Program's linears of that K, and `weights_root`, the
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,
   little-endian (`h1zy.ROW`): `b_words(K)` u16 words, as a ``hm96-sha512/row/v2`` bit row is its bytes.
 * **``<prefix>b/<K>``** is the rows of K's linears, linear after linear in the execution phase's order, committed as
-  `registered.Registered.commit` commits them: under `registered.domain` of the circuit's SHA-512, the name, `b_words(K)`
+  `registered_value.Registered.commit` commits them: under `registered_value.domain` of the circuit's SHA-512, the name, `b_words(K)`
   words and Σn leaves, binding no execution phase (a value held across execution phases), in ``hm96-sha512/row/v2``, row j's salt
   `audit.hm96_salt` of the registration's 32-byte key at `B_NONCE` plus K's place among the Ks, ascending. The auditor
   hands that key to every lane serving the model (`model-key`), so it salts these rows only, never an execution phase's A or z/y:
@@ -40,6 +40,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import fold_roots
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.commitments import registered_value as RV
 from verity.commitments import domains, hm96
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import merkle_depth
@@ -131,7 +132,7 @@ def chunk_bits(width: int, depth: int) -> int:
 
 @functools.lru_cache(maxsize=8)
 def _domain(circuit: str, name: str, words: int, leaves: int):
-    return G.domain(circuit, name, words, leaves)
+    return RV.domain(circuit, name, words, leaves)
 
 
 def _subtree(spec: tuple, ci: int, rows: bytes) -> bytes:
@@ -298,7 +299,7 @@ def entry(circuit: str, prefix: str, k: int, n: int, root: bytes) -> dict[str, A
     """``<prefix>b/<K>``'s registration entry (`Registered.entry`) of Σn = `n` rows with root `root`."""
     v = value(prefix, k)
     return {"value": v, "root": root.hex(), "leaves": n, "words": b_words(k),
-            "domain": G.domain(circuit, v, b_words(k), n).domain_id.hex()}
+            "domain": RV.domain(circuit, v, b_words(k), n).domain_id.hex()}
 
 
 def weights_root(roots: Mapping[int, bytes]) -> bytes:

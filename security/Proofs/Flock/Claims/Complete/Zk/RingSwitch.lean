@@ -187,9 +187,9 @@ theorem lc_coins {lay : Zk.PadLayout} {h : Array F128} {c : CircuitFold} {m : �
 /-! ## The prover's rep -/
 
 /-- **A masked lincheck that returns had its circuit fold return.** -/
-theorem lincheckPZk_fold (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
-    (tr : Trace) (zc : ZcOut) (t : Transcript) (l : Array Claims.Msg) {a : (LincheckProof × LcOut) × Transcript}
-    {l' : Array Claims.Msg} (e : ((lincheckPZk (asksS resp) c m lay h tr zc).run t).go l = (.ok a, l')) :
+theorem lincheckPZk_fold (resp : ℕ → Hash.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
+    (tr : Trace) (zc : ZcOut) (t : Transcript) (l : Array Hash.Msg) {a : (LincheckProof × LcOut) × Transcript}
+    {l' : Array Hash.Msg} (e : ((lincheckPZk (asksS resp) c m lay h tr zc).run t).go l = (.ok a, l')) :
     ∃ full, c.fold (coinOf (resp l.size) 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full := by
   unfold lincheckPZk at e
   rw [bind_go (liftTM_ok (Flock.RecAlgebra.label_eq _ _) _)] at e
@@ -203,7 +203,7 @@ theorem lincheckPZk_fold (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ)
   · exact ⟨full, rfl⟩
 
 /-- A step that only adds rounds. -/
-theorem rec_pre {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (JsonRT.recS resp).R y y) (t : Transcript) :
+theorem rec_pre {resp : ℕ → Hash.Msg} {α : Type} {y : TMW PS α} (hy : (JsonRT.recS resp).R y y) (t : Transcript) :
     Ret (y.run t) fun pt => Prefix t.rounds pt.2.rounds := by
   intro l a l' e
   obtain ⟨rs, bs, hrs, -, -⟩ := JsonRT.Rec.go hy e
@@ -211,7 +211,7 @@ theorem rec_pre {resp : ℕ → Claims.Msg} {α : Type} {y : TMW PS α} (hy : (J
 
 /-- **The rank check, where it returns, keeps the transcript and the sends.** -/
 theorem rankCheckP_go {m kLog : ℕ} {prior : Array (List F128)} {words : List ℕ} {t t' : Transcript}
-    {l l' : Array Claims.Msg} {u : Unit}
+    {l l' : Array Hash.Msg} {u : Unit}
     (h : ((rankCheckP m kLog prior words : TMW PS Unit).run t).go l = (.ok (u, t'), l')) : t' = t ∧ l' = l := by
   unfold rankCheckP at h
   simp only [StateT.run_bind, StateT.run_get, pure_bind] at h
@@ -225,11 +225,11 @@ theorem rankCheckP_go {m kLog : ℕ} {prior : Array (List F128)} {words : List �
 /-- **A masked rep that returns** ran zerocheck, lincheck, the rank check and the ring switch on its claims in closed
 form: its ring switches are the prover's on those claims, and its final rounds begin with the rounds through the ring
 switch. -/
-theorem repPZk_rs (resp : ℕ → Claims.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
+theorem repPZk_rs (resp : ℕ → Hash.Msg) (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim)
     (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (nonce : ℕ → ℕ → UInt64) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (t : Transcript)
-    (l : Array Claims.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Claims.Msg}
+    (l : Array Hash.Msg) {P : Zk.ZkProof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repPZk (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
       nonce prior words).run t).go l = (.ok (P, t'), l')) :
     ∃ full, P.proof.ringSwitches = Rs.proof tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
@@ -407,7 +407,7 @@ namespace FlockComplete
 
 open Flock Transcript FlockComplete.Replay
 
-variable (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+variable (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
 
 /-- **The extra claims' ring-switch algebra**: at every honest masked run, each extra claim's switched vector of the
 table's trace meets its value. -/

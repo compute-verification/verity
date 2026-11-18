@@ -104,7 +104,7 @@ def tEnd (tr : Trace) (claims : Array Claim) (cs : Challenges) (t : Transcript) 
   afterSq (loopT tr claims cs t claims.size) 2 claims.size cs.cg
 
 /-- The coins of the replies to the sends from the `L`-th on, for `n` claims. -/
-def coinsAt (resp : ℕ → Claims.Msg) (L n : ℕ) : Challenges :=
+def coinsAt (resp : ℕ → Hash.Msg) (L n : ℕ) : Challenges :=
   ⟨fun k => coinOf (resp (L + k)), coinOf (resp (L + n))⟩
 
 end Rs
@@ -112,8 +112,8 @@ end Rs
 open Rs
 
 /-- **The prover's ring switch, in closed form**, at the coins of the replies to its sends. -/
-theorem ringSwitchP_go (resp : ℕ → Claims.Msg) (tr : Trace) (claims : Array Claim) (hn : claims.size ≠ 0)
-    (t : Transcript) (l : Array Claims.Msg) :
+theorem ringSwitchP_go (resp : ℕ → Hash.Msg) (tr : Trace) (claims : Array Claim) (hn : claims.size ≠ 0)
+    (t : Transcript) (l : Array Hash.Msg) :
     ∃ l', l'.size = l.size + claims.size + 1 ∧
       ((ringSwitchP (asksS resp) tr claims).run t).go l =
         (.ok ((proof tr claims, T tr claims (coinsAt resp l.size claims.size),
@@ -253,7 +253,7 @@ theorem ringSwitchWith_of (hs : Hashes V) (m : ℕ) (tr : Trace) (claims : Array
 
 /-! ## The goal -/
 
-variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+variable {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
 
 /-- The prover's lincheck output at table `i`'s rep `r`. -/
 def _root_.FlockComplete.Run.lcOut (o : Run H rel) (i r : ℕ) : LcOut :=
@@ -300,7 +300,7 @@ def RsAt (o : Run H rel) (i r : ℕ) : Prop :=
     Agrees (o.stream i r).rounds (Rs.tEnd (o.trace i) (o.claims i r) (o.rsCoins i r) (o.lcEnd i r)).rounds 0
 
 /-- **The ring switch's algebra** at every rep: each claim's switched vector of the trace meets its value. -/
-def RsAlgebra (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+def RsAlgebra (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
   ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ∀ k < (o.claims i r).size,
     dot (FlockSoundness.Refine.wOf (o.claims i r)[k]!) (switchVec (o.trace i) (o.claims i r)[k]!) =
       (o.claims i r)[k]!.value
@@ -310,7 +310,7 @@ theorem _root_.FlockComplete.Run.claims_size_ne (o : Run H rel) (i r : ℕ) : (o
 
 /-- **The ring-switch goal**: the ring switch replays at every honest run, from where lincheck left the transcript, on
 R1CS-valid traces, at every rep the session walk aligns, given the lincheck's and the ring switch's algebra. -/
-theorem ringSwitch_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
+theorem ringSwitch_goal (H : Hash.Msg → Hash.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hR1 : TraceR1CS H rel) (hzc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, ZcAt o i r)
     (hlc : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, LcAt o i r) (hal : LcAlgebra H rel)
     (hrs : ∀ o : Run H rel, ∀ i < o.tabs.size, ∀ r < 2, RsAt o i r) (hra : RsAlgebra H rel) : RingSwitch H rel := by
@@ -323,13 +323,13 @@ theorem ringSwitch_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed �
 
 /-- **A rep that returns** carries the prover's ring switches on its claims, zerocheck's and lincheck's at the replies
 from its first send on, where the statement's circuit fold at the lincheck's `α` returns `full`. -/
-theorem repP_ringSwitch (resp : ℕ → Claims.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_ringSwitch (resp : ℕ → Hash.Msg) (hsP : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {full : Array F128}
+    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (h : ((repP (asksS resp) hsP st sch tr tbl cm0 extras salt nonce).run t).go l = (.ok (p, t'), l')) :
     p.ringSwitches = Rs.proof tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
       (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr)
