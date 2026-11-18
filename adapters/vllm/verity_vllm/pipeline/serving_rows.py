@@ -102,7 +102,7 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
-  ``EmbeddingRead_v1{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
+  ``EmbeddingRead_v2{V=2^17,H=..}``  every history read of a ``DsaHistoryReads_v1`` row where the partition file says
                                    ``"histories": true`` (`history_rows`: its ports, and its writer's row-seg ``o0``); always
                                    chunked, v2 bit rows
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per

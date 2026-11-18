@@ -56,7 +56,7 @@ def _stand_in(tmp_path: Path, body: str) -> Path:
 
 def test_the_read_template_is_the_executables_text_parsed_once_a_shape(tmp_path, monkeypatch, fresh):
     """`read_tmpl.template` runs the executable ``V H`` once a shape and parses its text; `read_tmpl.of` asks it for a bound
-    ``EmbeddingRead_v1`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
+    ``EmbeddingRead_v2`` at its V and H and for nothing else. A refusal is the executable's own words, and a missing
     executable says how to build it."""
     text = T.write(_tmpl())
     (tmp_path / "t.txt").write_text(text)
@@ -164,7 +164,7 @@ def _reads(V: int, H: int) -> list[tuple]:
 
 @pytest.mark.slow
 def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verifiers, tmp_path, monkeypatch, fresh):
-    """A structural ``EmbeddingRead_v1{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
+    """A structural ``EmbeddingRead_v2{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
     template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte its template section, and a
     round of honest reads, a read under another salt and one past V stages on it, each read's row and verdict the IR
     reference's (`gates.embedding.reference`). The verifier's check accepts the statement's circuit file as that read,
