@@ -618,9 +618,9 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Docket.digest e.record
-      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
+      let (c, log) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)])
         k (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
-      if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
+      if interiorShown (Challenger.byFamily c log) label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
 def LEDGER_PREFIX : String :=
@@ -676,7 +676,7 @@ def firstLines (e : Evidence) : V (List String) := do
 window is not the boundary registration's, no line of the first stage's session's release log (`firstLines`) is a
 coin tree's, one the challenger wrote when it sampled a tree or opened a round of one (`FIRST_TREE`). The interior
 audit reads its sessions' coin trees in order from its own session's log's first, and the first stage's coin check
-drops such lines unread (`Challenger.releasedRootsOf`), so nothing else refuses a first session that sampled one. A
+drops such lines unread (`Challenger.releasedLogOf`), so nothing else refuses a first session that sampled one. A
 first stage only samples its sample, so no honest play has such a line. On one window both stages read one session,
 whose log holds the second stage's trees, and this adds nothing. -/
 def firstTreeless (p : Params) (e : Evidence) : V Unit :=

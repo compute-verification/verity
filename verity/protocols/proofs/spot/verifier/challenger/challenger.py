@@ -70,7 +70,8 @@ however it ends, it signs the log at its key's next leaf and writes the close re
 `end` being 0x00 when the client closed the session and 0x01 || ended otherwise, and the record message the record's
 own (`record_message`), which binds the close to the commitment and host.  `session_of` is the verifier's read of a
 session: the record under its key, the close signed under it, the log the one the close signs, line for line, and a
-session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
+session its client closed; then the roots and releases of every family in the log's one order (`released_log_of`).
+A session that ends unclosed is no window's.
 
 **A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
 statement's run, which `verity-verify-proof rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
@@ -177,7 +178,7 @@ records leaves the host, so the signed close covers them:
     round   = {after, coins, event: tree-open, n, round, stream, tree}     tree: its root; coins: `coins_digest`
 
 `after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
-round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
+round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_log_of` reads past
 these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
 ``coin_tree`` a tree the log shows sampled, its link's ``root_b`` keys exactly its session's tables (`LINK_TABLES`), each
 entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before the hash so the hashed message parses one
@@ -299,6 +300,7 @@ NO_CLOSE = ("no challenger close record: a session the challenger didn't close a
             "released its coins in")
 LOG_FORM = "the challenger's release log is a list of its lines"
 LOG_MALFORMED = "the challenger's release log is malformed"
+RELEASED_BEFORE_RECEIVED = "the challenger's release log stamps a coin's release before its root's receipt"
 SESSION_FORM = ("a challenger session is {close, hellos, log, record}: its close record, its refused hellos' lines, its "
                 "release log's lines and its record")
 LOG_FILE = "releases.jsonl"
@@ -772,37 +774,83 @@ def tree_line(line: str) -> bool:
     return isinstance(doc, dict) and doc.get("event") in (TREE_EVENT, OPEN_EVENT)
 
 
-def released_roots_of(commitment: LiveCommitment, log: Sequence[str]) -> dict[str, tuple[bytes, ...]]:
-    """The roots the challenger received, by family in order: its release log's lines `log`, whose head names
-    `commitment`, each root followed by its coin's release, its coin trees' lines aside (`tree_line`).  A malformed log,
-    or another commitment's, raises `CoinError`."""
+@dataclass(frozen=True, slots=True)
+class Entry:
+    """`Challenger.Entry`: a root ``recorded`` or a coin ``released`` at line ``pos`` of the release log (the head is
+    line 0); ``root`` the root recorded or the root the coin is released after, ``time`` its ``received_at`` or
+    ``released_at``."""
+
+    kind: str
+    label: str
+    index: int
+    root: bytes
+    time: int
+    pos: int
+
+    def to_json(self) -> dict[str, Any]:
+        return {"index": self.index, "kind": self.kind, "label": self.label, "pos": self.pos, "root": self.root.hex(),
+                "time": self.time}
+
+
+def before(a: Entry, b: Entry) -> bool:
+    """`Challenger.before`: `a` stands earlier than `b` in the release log."""
+    return a.pos < b.pos
+
+
+def by_family(commitment: LiveCommitment, log: Sequence[Entry]) -> dict[str, tuple[bytes, ...]]:
+    """`Challenger.byFamily`: the roots of `log` recorded in each of `commitment`'s families, in order."""
+    return {label: tuple(e.root for e in log if e.kind == "recorded" and e.label == label)
+            for label, _ in commitment.families}
+
+
+def cut(log: Sequence[Entry], payloads: Sequence[str], keys: Sequence[str]) -> bool:
+    """`Challenger.cut`, lean's cut as a check: every root of a family in `payloads` stands before every release of a
+    family in `keys`."""
+    last = max((e.pos for e in log if e.kind == "recorded" and e.label in payloads), default=None)
+    first = min((e.pos for e in log if e.kind == "released" and e.label in keys), default=None)
+    return last is None or first is None or last < first
+
+
+def released_log_of(commitment: LiveCommitment, log: Sequence[str]) -> tuple[Entry, ...]:
+    """The roots and releases of every family in the one order its release log's lines `log` hold them, its head naming
+    `commitment`, each root followed by its coin's release, released no earlier than its root's receipt, its coin trees'
+    lines aside (`tree_line`).  A malformed log, or another commitment's, raises `CoinError`; a release stamped before
+    its root's receipt raises `RELEASED_BEFORE_RECEIVED`."""
     if not log or log[0] != canonical_json_text({"event": "commitment", "root": commitment.root.hex()}):
         raise CoinError(f"the challenger's release log is not coin commitment {commitment.root.hex()[:16]}'s")
-    roots: dict[str, list[bytes]] = {label: [] for label, _ in commitment.families}
-    pairs = [line for line in log[1:] if not tree_line(line)]
+    counts: dict[str, int] = {label: 0 for label, _ in commitment.families}
+    pairs = [(pos, line) for pos, line in enumerate(log) if pos and not tree_line(line)]
     if len(pairs) % 2:
         raise CoinError("the challenger's release log ends on a root without its release")
-    for i in range(0, len(pairs), 2):
-        root, release = _event(pairs[i]), _event(pairs[i + 1])
+    out: list[Entry] = []
+    for k in range(0, len(pairs), 2):
+        (i, a), (j, b) = pairs[k], pairs[k + 1]
+        root, release = _event(a), _event(b)
         if (not isinstance(root, dict) or not isinstance(release, dict) or sorted(root) != _ROOT_EVENT
                 or sorted(release) != _RELEASE_EVENT or root["event"] != "root" or release["event"] != "release"
-                or type(root["label"]) is not str or root["label"] not in roots or type(root["index"]) is not int
-                or root["index"] != len(roots[root["label"]]) or type(release["index"]) is not int
+                or type(root["label"]) is not str or root["label"] not in counts or type(root["index"]) is not int
+                or root["index"] != counts[root["label"]] or type(release["index"]) is not int
                 or release["label"] != root["label"] or release["index"] != root["index"]
                 or release["after"] != root["root"] or type(root["root"]) is not str
                 or len(root["root"]) != 128 or _hex(root["root"]) is None or not _time(root["received_at"])
                 or not _time(release["released_at"])):
             raise CoinError(LOG_MALFORMED)
-        roots[root["label"]].append(bytes.fromhex(root["root"]))
-    return {label: tuple(r) for label, r in roots.items()}
+        if release["released_at"] < root["received_at"]:
+            raise CoinError(RELEASED_BEFORE_RECEIVED)
+        label, n, r = root["label"], root["index"], bytes.fromhex(root["root"])
+        counts[label] += 1
+        out += [Entry("recorded", label, n, r, root["received_at"], i), Entry("released", label, n, r,
+                                                                              release["released_at"], j)]
+    return tuple(out)
 
 
 def session_of(key: ChallengerKey, record: Any, log: Any, close: Any, verify: Verify
-               ) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]], str]:
-    """The coin commitment the challenger signed under `key`, the roots its release log shows it received, by family in
-    order, and its session id: its record (`record_reason`), its release log's lines `log` and its signed close `close`
-    (each JSON, None when the verifier has none).  Raises `CoinError` naming why when the record or the close is missing,
-    malformed or unsigned, the log isn't the one the close signs, or the client didn't close the session."""
+               ) -> tuple[LiveCommitment, tuple[Entry, ...], str]:
+    """The coin commitment the challenger signed under `key`, the roots and releases its release log shows in its one
+    order (`released_log_of`), and its session id: its record (`record_reason`), its release log's lines `log` and its
+    signed close `close` (each JSON, None when the verifier has none).  Raises `CoinError` naming why when the record or
+    the close is missing, malformed or unsigned, the log isn't the one the close signs, or the client didn't close the
+    session."""
     why = record_reason(key, record, verify)
     if why is not None:
         raise CoinError(why)
@@ -828,7 +876,7 @@ def session_of(key: ChallengerKey, record: Any, log: Any, close: Any, verify: Ve
         raise CoinError("the challenger's release log is not the one its close record signs")
     if c.ended is not None:
         raise CoinError(f"the challenger's session ended without its client closing it: {c.ended}")
-    return r.commitment, released_roots_of(r.commitment, log), c.session
+    return r.commitment, released_log_of(r.commitment, log), c.session
 
 
 def _digest_hex(s: Any, n: int = 128) -> bool:
@@ -897,7 +945,7 @@ def coin_trees_of(log: Sequence[str]) -> dict[str, LoggedTree]:
     `tree_spec_reason` takes, no root or key twice; and its `OPEN_EVENT` lines, ``{after, coins, event, n, round,
     stream, tree}``, each a round of a tree sampled on an earlier line (`tree` its root), of one of its streams, that
     stream's next round, below ``2^rounds_log``, of at most ``block`` coins, `after` and `coins` 64 bytes in lowercase
-    hex.  Every other line is a root's or a release's (`released_roots_of`).  Raises `CoinError` (`LOG_MALFORMED`)
+    hex.  Every other line is a root's or a release's (`released_log_of`).  Raises `CoinError` (`LOG_MALFORMED`)
     otherwise."""
     trees: dict[str, LoggedTree] = {}
     keys: set[str] = set()
@@ -1047,7 +1095,7 @@ def sessions_tree_reason(trees: dict[str, LoggedTree],
 
 
 def _root_names(line: str, label: str, root: bytes) -> bool:
-    """Whether release log line `line` shows family `label` and root `root`, as `released_roots_of` reads a root line
+    """Whether release log line `line` shows family `label` and root `root`, as `released_log_of` reads a root line
     (Lean `Challenger.rootOf line = some (label, root)`); False where the line doesn't parse."""
     try:
         doc = _event(line)
@@ -1074,7 +1122,7 @@ def link_line(line: str) -> bool:
 
 def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
     """**The sample, then the link, then the other rounds**, in the release log's lines `log` after its head (Lean
-    `Challenger.sampleLinkFirst`). Read as `released_roots_of` reads them, a coin tree's line aside (`tree_line`) and
+    `Challenger.sampleLinkFirst`). Read as `released_log_of` reads them, a coin tree's line aside (`tree_line`) and
     the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
     is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
     ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
@@ -1742,15 +1790,15 @@ def log_digest(lines: Sequence[str]) -> str:
 
 
 def session_named(audited: Audited, key: ChallengerKey, session: Any, verify: Verify
-                  ) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+                  ) -> tuple[LiveCommitment, tuple[Entry, ...]]:
     """What the verifier takes from session `audited`'s files `session`, ``{"close", "hellos", "log", "record"}``
-    (`session_of`; ``hellos`` the lines of its refused hellos): the coin commitment the challenger signed and the roots
-    its release log shows it received, when its close names the ledger's session, its record the open's host, the record
-    was signed at the leaf the ledger's end names over the commitment it names, and its release log and refused hellos
+    (`session_of`; ``hellos`` the lines of its refused hellos): the coin commitment the challenger signed and its
+    release log's roots and releases in its one order (`released_log_of`), when its close names the ledger's session,
+    its record the open's host, the record was signed at the leaf the ledger's end names over the commitment it names, and its release log and refused hellos
     are the ones the end sealed, as many hellos as the end counts.  Raises `CoinError` naming why."""
     if not isinstance(session, dict) or sorted(session) != ["close", "hellos", "log", "record"]:
         raise CoinError(SESSION_FORM)
-    commitment, roots, sid = session_of(key, session["record"], session["log"], session["close"], verify)
+    commitment, log, sid = session_of(key, session["record"], session["log"], session["close"], verify)
     if sid != audited.session:
         raise CoinError(f"the challenger's session is {sid}, not {audited.session}, the one the auditor's ledger opens "
                         "for this window")
@@ -1771,15 +1819,15 @@ def session_named(audited: Audited, key: ChallengerKey, session: Any, verify: Ve
     if audited.files.get(HELLOS_FILE) != log_digest(hellos) or len(hellos) != audited.refused_hellos:
         raise CoinError(f"the challenger's refused hellos are not the {audited.refused_hellos} the auditor's ledger sealed "
                         "at its session's end")
-    return commitment, roots
+    return commitment, log
 
 
 def trusted_session_of(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, session: Any, verify: Verify
-                       ) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
+                       ) -> tuple[LiveCommitment, tuple[Entry, ...]]:
     """What the verifier takes from the challenger's session for window `window`: the one session the auditor's ledger
     opens for it under `key`, run from a commit the host's pins log `pins` records and the verifier's copy of main's
     first-parent history `main` holds (`pinned_session`), and that session's files `session` (`session_named`): the coin
-    commitment the challenger signed and the roots its release log shows it received.  Raises `CoinError` naming why, so
+    commitment the challenger signed and its release log in its one order.  Raises `CoinError` naming why, so
     a window whose coins aren't that session's, or whose session ran any other tree, fails closed."""
     return session_named(pinned_session(ledger, window, key, pins, main, verify), key, session, verify)
 
@@ -2194,7 +2242,8 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
-           "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
+           "order_reason", "record_many", "record_message", "record_reason", "released_log_of", "root_of",
+           "Entry", "RELEASED_BEFORE_RECEIVED", "before", "by_family", "cut",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
            "CLOSING_ROUND", "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",

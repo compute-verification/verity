@@ -686,7 +686,8 @@ def _credited(key: Any, ledger: Any, pins: Any, main: Any, salt: Any, calls: Any
     if draw.get("root") != root.hex():
         return None, ("draw", DRAW_ROOT)
     try:
-        c, received = Ch.trusted_session_of(ledger, {"root": root.hex()}, k, pins, main, draw.get("session"), verify)
+        c, log = Ch.trusted_session_of(ledger, {"root": root.hex()}, k, pins, main, draw.get("session"), verify)
+        received = Ch.by_family(c, log)
     except Ch.CoinError as e:
         return None, ("coin", f"the draw's session is not trusted: {e}")
     if not Ch.withheld_on(ledger, root.hex()):
