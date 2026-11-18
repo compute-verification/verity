@@ -14,10 +14,15 @@ public import PouwWindow.Rounds
   opening is that coin opened after the salt epoch's open root (`salt.epoch_open_root` of the fixed operands' root and the
   manifest's ``pass_index``, `challenger.live_reason`); the salt is `audit.salt_of`'s over the fixed operands' root.
 * **The verifier's sample** is the coin record's ``draw``: a challenger sample session's coin ``pouw/draw`` 0, or the node's
-  coins. `drawReason` holds a challenger sample as a reader of the record does (`served_verdicts.pearlplus_live_sample`, less
-  the auditor's ledger, key and period, which the compose checks): its opening is coin ``pouw/draw`` 0 of its commitment
-  opened after the run's commitment C (`challenger.live_reason`), its coin is the record's source S, and its commitment is
-  of a sample session's layout (`window.draw_epoch_reason`).
+  coins. `drawReason` holds a challenger sample as `served_verdicts.pearlplus_live_sample` does, less the auditor's ledger,
+  key and period: its opening is coin ``pouw/draw`` 0 of its commitment opened after the run's commitment C
+  (`challenger.live_reason`), its coin is the record's source S, and its commitment is of a sample session's layout
+  (`window.draw_epoch_reason`).
+* **No challenger key.** This Lean reads no challenger key: an opening is checked only against the commitment it is
+  handed. The sessions' signatures under the pinned key, and the auditor's ledger, are checked only by the served node's
+  Python (`served_verdicts.pearlplus_coins`, `pearlplus_draw`); the compose side reads copies the node hands it, and no
+  composite and no compose-side code verifies a signature. So against a prover that controls the node, nothing here holds
+  the coins to the challenger.
 * **Of record** (`--of-record`), the verdict takes only a challenger sample on live epoch coins: `ofRecordReason` refuses
   the node's sample, a v1 record (which names no sample), no record, a source given on the command line, and an in-process
   challenger's epoch coins. Without it they are read as development runs.
