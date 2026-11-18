@@ -3,10 +3,17 @@ parameters alone."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 REGISTRATION = 0
 """The window a registered block's first key counts as joined: the registration's, before window 0's first root."""
+REKEY_MAX = 512
+"""The most blocks a re-key append holds, so its opening's origin path stays within the opening unit's one proof block;
+a fresh append, which a re-key covers whole, holds at most this many too."""
+
+Origin = tuple[str, int]
+"""A re-key's origin as `audit.AuditRun.append` takes it: `("registered", a)` or `("append", k)`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,7 +22,7 @@ class Rota:
     windows (`audit.Params.lifetime`), read from no coin and no payload.
 
     A chunk is a registered block (base window 0, class `j·L // N`, so a class is one run) or a fresh append's block
-    (base the window the append joined, class its ordinal mod L). Its re-keys join the windows ≡ its class mod L from
+    (base the window the append joined, class its index among the session's appends mod L). Its re-keys join the windows ≡ its class mod L from
     base + 1 on, one in each period of L windows after its base. A plan of window t holds it under its newest key joined
     at or before t: the registration's while t < L for a registered block, else its newest re-key's, joined fewer than
     L windows before t; a fresh block's only from base + L on (probation), never under its own append's key."""
@@ -36,7 +43,7 @@ class Rota:
 
     def append_class(self, k: int) -> int:
         if type(k) is not int or k < 0:
-            raise ValueError(f"a fresh append's ordinal is a nonnegative integer, not {k!r}")
+            raise ValueError(f"an append's index is a nonnegative integer, not {k!r}")
         return k % self.lifetime
 
     def class_runs(self, c: int) -> tuple[int, int]:
@@ -67,17 +74,24 @@ class Rota:
             return REGISTRATION if registered else None
         return t - (t - first) % self.lifetime
 
-    def registered_due(self, r: int) -> tuple[int, int] | None:
-        """The registered run (first, count) whose re-key joins window r, None where none does."""
+    def registered_due(self, r: int) -> tuple[tuple[int, int], ...]:
+        """The registered runs (first, count) whose re-keys join window r: its class's run in pieces of at most
+        `REKEY_MAX` blocks, in index order; none outside windows 1 … W − 1."""
         if not 1 <= r < self.windows:
-            return None
+            return ()
         first, count = self.class_runs(r % self.lifetime)
-        return (first, count) if count else None
+        return tuple((a, min(REKEY_MAX, first + count - a)) for a in range(first, first + count, REKEY_MAX))
 
-    def appends_due(self, r: int, born: list[int] | tuple[int, ...]) -> tuple[int, ...]:
-        """The ordinals of the fresh appends whose re-key joins window r, `born[k]` the window fresh append k joined."""
-        return tuple(k for k, b in enumerate(born)
+    def appends_due(self, r: int, fresh: Mapping[int, int]) -> tuple[int, ...]:
+        """The fresh appends whose re-key joins window r, in order: `fresh` maps each fresh append's index among the
+        session's appends (re-keys counted) to the window it joined."""
+        return tuple(k for k, b in sorted(fresh.items())
                      if b < r < self.windows and (r - self.first(b, self.append_class(k))) % self.lifetime == 0)
 
+    def due(self, r: int, fresh: Mapping[int, int]) -> tuple[Origin, ...]:
+        """Every re-key that joins window r, in the order the prover sends them: the registered runs', then the fresh
+        appends'. Each is `("registered", a)` (its count the run's, `registered_due`) or `("append", k)` (append k's)."""
+        return (*(("registered", a) for a, _ in self.registered_due(r)), *(("append", k) for k in self.appends_due(r, fresh)))
 
-__all__ = ["REGISTRATION", "Rota"]
+
+__all__ = ["REGISTRATION", "REKEY_MAX", "Origin", "Rota"]

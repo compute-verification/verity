@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, Rota
+from verity.protocols.resource_accounting.memory.poub.prover.rota import REGISTRATION, REKEY_MAX, Rota
 
 SHAPES = [(n, life, w) for n, life, w in itertools.product((1, 3, 7, 64), (1, 2, 3, 5), (1, 4, 13))]
 
@@ -54,14 +54,25 @@ def test_a_registered_block_is_plannable_in_every_window_and_a_fresh_one_from_th
 @pytest.mark.parametrize("n, life, w", SHAPES)
 def test_the_due_lists_name_each_rekey_once(n, life, w):
     rota = Rota(n, life, w)
-    born = [k % w for k in range(9)]
+    fresh = {2 * k + 1: k % w for k in range(9)}
     due_reg = {r: rota.registered_due(r) for r in range(w + 2)}
     for j in range(n):
         want = set(rota.rekeys(0, rota.registered_class(j)))
-        assert want == {r for r, run in due_reg.items() if run and run[0] <= j < run[0] + run[1]}
-    for k, b in enumerate(born):
+        assert want == {r for r, runs in due_reg.items() for a, count in runs if a <= j < a + count}
+        assert all(sum(a <= j < a + count for a, count in runs) <= 1 for runs in due_reg.values())
+    for k, b in fresh.items():
         want = set(rota.rekeys(b, rota.append_class(k)))
-        assert want == {r for r in range(w + 2) if k in rota.appends_due(r, born)}
+        assert want == {r for r in range(w + 2) if k in rota.appends_due(r, fresh)}
+    for r in range(w + 2):
+        assert rota.due(r, fresh) == (*(("registered", a) for a, _ in due_reg[r]),
+                                      *(("append", k) for k in rota.appends_due(r, fresh)))
+
+
+def test_a_registered_class_is_rekeyed_in_appends_of_at_most_rekey_max_blocks():
+    rota = Rota(3 * REKEY_MAX + 7, 2, 4)
+    runs = rota.registered_due(2)
+    assert runs == ((0, REKEY_MAX), (REKEY_MAX, 260))
+    assert rota.registered_due(1) == ((772, REKEY_MAX), (772 + REKEY_MAX, 259))
 
 
 @pytest.mark.parametrize("n, life", [(7, 3), (64, 5), (3, 5)])
@@ -76,6 +87,7 @@ def test_the_registered_classes_are_runs_covering_the_store_once(n, life):
 def test_the_rota_reads_public_parameters_alone():
     assert Rota(64, 3, 10) == Rota(64, 3, 10)
     assert [Rota(64, 3, 10).registered_due(r) for r in range(10)] == [
-        None, (22, 21), (43, 21), (0, 22), (22, 21), (43, 21), (0, 22), (22, 21), (43, 21), (0, 22)]
+        (), ((22, 21),), ((43, 21),), ((0, 22),), ((22, 21),), ((43, 21),), ((0, 22),), ((22, 21),), ((43, 21),),
+        ((0, 22),)]
     with pytest.raises(ValueError):
         Rota(64, 0, 10)
