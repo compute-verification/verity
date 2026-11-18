@@ -61,12 +61,14 @@ def test_an_edges_period_counts_a_loads_passes_and_users_as_one_load():
 
 def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
     sched = Scheduler()
-    done = P.install(sched, {"out": str(tmp_path), "record": True, "release_order": True})
+    out, private = tmp_path / "out", tmp_path / "private"
+    done = P.install(sched, {"out": str(out), "private": str(private), "record": True, "release_order": True})
     for n in (2, 0, 3, 1):
         sched.add_request(Request(eid("light1", n), [n]))
     assert sched.order == [eid("light1", n) for n in range(4)]
     done[0].drain()
-    (trace,) = tmp_path.glob("step_trace.*.jsonl")
+    (trace,) = (private / "server").glob("step_trace.*.jsonl")
+    assert not out.exists()
     recs = [json.loads(x) for x in trace.read_text().splitlines()]
     assert [r["request"] for r in recs if r["kind"] == "arrive"] == sched.order
     done[-1].uninstall()
@@ -266,7 +268,7 @@ def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_p
     got: list = []
     monkeypatch.setattr(P, "_lines_behind", lambda path: (got.append(path.name), got.append)[1])
     sched = Serving()
-    done = P.install(sched, {"out": str(tmp_path), "ids": True})
+    done = P.install(sched, {"out": str(tmp_path), "private": str(tmp_path / "p"), "ids": True})
     assert got == [f"ids.{P.os.getpid()}.jsonl"] and not list(tmp_path.iterdir())
     a, b, c = eid("agentic@2-r1-u0", 0), eid("agentic@2-r1-u1", 0), eid("agentic@2-r1-u1", 1)
     for rid, prompt in ((a, [5, 6, 7]), (b, [8]), (c, [9, 9])):
@@ -440,7 +442,7 @@ def test_a_tensor_parallel_engine_takes_an_edge_each_period_of_each_loads_servin
     import boundary as B
 
     sched = Scheduler()
-    sched._verity_servetax = P.install(sched, {"out": str(tmp_path), "record": True})
+    sched._verity_servetax = P.install(sched, {"out": str(tmp_path), "private": str(tmp_path / "p"), "record": True})
     sched.running, sched.waiting = [], []
     sched.kv_cache_manager = NS(block_pool=NS(blocks=[0] * 4))
     recs: list = []

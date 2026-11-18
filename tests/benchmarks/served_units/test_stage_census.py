@@ -77,7 +77,7 @@ class Stager:
         self.pin, self.class_sha512 = "p" * 128, "c" * 128
         Stager.seen.update(definition=d.id, name=name, stmt=stmt, circuit=circuit)
 
-    def stage(self, rows, out, salt_key):
+    def stage(self, rows, out):
         Stager.seen["rows"] = {r: v.shape for r, v in rows.items()}
         for f in ("circuit.txt", "inst.bin", "pub.bin"):
             (out / f).write_bytes(b"xy")
@@ -124,7 +124,7 @@ class BoundStager(Stager):
         circuit.write_bytes(circuit_text(bind))
         self.pin = hashlib.sha512(circuit.read_bytes()).hexdigest()
 
-    def stage(self, rows, out, salt_key, indices):
+    def stage(self, rows, out, indices):
         Stager.seen.update(rows={r: v.shape for r, v in rows.items()}, indices=list(indices))
         (out / "inst.bin").write_bytes(b"xy")
         (out / "pub.bin").write_bytes(json.dumps({"circuit_sha512": self.pin, "units": {"indices": list(indices)}}).encode() + b"\n")

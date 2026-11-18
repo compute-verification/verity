@@ -136,9 +136,10 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
     assert pous.NAME in config.PROTOCOLS and pous.DEFAULT_SCHEME == P2 and P2 in pous.schemes()
     assert PO.adapter("pous") is pous
     assert pous.refusals(P2, _ctx(ENTRY)) == ()
-    got = pous.refusals(P2, _ctx(ENTRY, enforce_eager=False, settings={"pous": {"salt_source": SOURCE, "experimental": True,
-                                                                                 "port": 1}}))
-    assert any("unknown pous settings ['port']" in r for r in got) and any("compiled execution" in r for r in got)
+    compiled = _ctx(ENTRY, enforce_eager=False, settings={"pous": {"salt_source": SOURCE, "experimental": True, "port": 1}})
+    assert any("unknown pous settings ['port']" in r for r in pous.refusals(P2, compiled))
+    assert any(r.startswith(f"{ENTRY}: compiled execution") for r in PO.refusals(compiled))
+    assert not any("compiled execution" in r for r in PO.refusals(_ctx(ENTRY)))
     assert any("experimental" in r for r in pous.refusals(P2, _ctx(ENTRY, settings={"pous": {"salt_source": SOURCE}})))
     assert any("no salt_source" in r for r in pous.refusals(P2, _ctx(ENTRY, settings={"pous": {"experimental": True}})))
     assert any("not hex" in r for r in pous.refusals(P2, _ctx(ENTRY, settings={"pous": {"salt_source": "zz",

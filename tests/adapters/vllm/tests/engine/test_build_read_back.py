@@ -324,6 +324,7 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
             self.llm_engine = NS(vllm_config=config, engine_core=NS(engine_core=NS(model_executor=NS(driver_worker=NS(model_runner=runner)))))
 
     monkeypatch.setattr(prof, "breakable_cudagraph", lambda: False)
+    monkeypatch.setattr(build, "hooked", lambda make: (make(), None, lambda: None))
     fake = fake_vllm.install(monkeypatch)
     fake.set("vllm:LLM", _LLM)
     fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
@@ -335,3 +336,25 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
                                                                                ("VERITY_INT8_FUSED_PRODUCERS", producers)) if record is not None]
     assert [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.engine.build"] == want
     assert capsys.readouterr().out == ""
+
+
+def test_an_engine_vllm_resolved_against_its_declared_async_steps_is_refused_naming_the_schemes() -> None:
+    """vLLM resolves async scheduling only as it builds; an engine whose resolution is not the declared ``async_steps``
+    is refused, naming the schemes that required it, and one whose resolution is unread only where a scheme did."""
+    from verity import hooks as H
+    from verity_vllm import messages
+
+    def llm(v: Any) -> Any:
+        return NS(llm_engine=NS(vllm_config=NS(scheduler_config=NS(async_scheduling=v))))
+
+    ex = messages.Exchange()
+    build.refuse_async(llm(False), False, ex)
+    build.refuse_async(llm(True), None, ex)
+    build.refuse_async(NS(), False, ex)
+    with pytest.raises(RuntimeError, match=r"async_steps False and vLLM resolved async scheduling True"):
+        build.refuse_async(llm(True), False, ex)
+    ex.request("poub-session", H.RequireProperty("async_steps", False, "a pass follows each step"))
+    with pytest.raises(RuntimeError, match=r"async_steps False, as poub-session require, and vLLM resolved async scheduling True"):
+        build.refuse_async(llm(True), False, ex)
+    with pytest.raises(RuntimeError, match="as poub-session require, and vLLM resolved async scheduling None"):
+        build.refuse_async(NS(), False, ex)
