@@ -352,3 +352,17 @@ def test_scan_period_reads_every_file_it_opens_from_the_scans_private_keep(tmp_p
                                          "warden/deployment.json", "warden/groups.json", "warden/outcome.json"]
         assert "17" * 64 not in "".join(p.read_text() for p in (out / run_).rglob("*.json"))
 
+
+def test_each_runner_fails_by_name_when_the_publisher_fails(tmp_path):
+    """The four runners that publish a network attester run stop, by name, when the publisher exits nonzero, rather
+    than going on with an empty outcome.json."""
+    (py := tmp_path / "py").write_text("#!/bin/sh\nexit 3\n")
+    py.chmod(0o755)
+    for script, first in (("capture_loopback.sh", 'mkdir -p "$OUT/run"'), ("n2_zk.sh", 'mkdir -p "$OUT/run"'),
+                          ("network_attester_zk.sh", 'mkdir -p "$OUT/run"'), ("scan_zk.sh", '  mkdir -p "$OUT/warden"')):
+        out = tmp_path / script / "OUT"
+        out.mkdir(parents=True)
+        got = run(block(script, first, first.split("mkdir")[0] + '"$PY" -m') + "echo went on\n",
+                  W=tmp_path / script / "W", RUN=tmp_path / script / "run", OUT=out, PY=py)
+        assert got.returncode == 6 and "went on" not in got.stdout, (script, got.returncode, got.stdout)
+        assert "the publisher (auditor.py publish) exited 3" in (out / "job.log").read_text(), script
