@@ -22,15 +22,20 @@ whole. in(S) and out(S) are `boundary`'s, computed from the descriptor, never by
 **Bits** (`Fit.k_log`). `proof_block_k_log` of the block's input rows' bytes, its output rows' bytes and its ANDs
 (`count`), unpacked: the Flock block one proof block needs.
 
-`verify` refuses a block past ``rows`` rows (`fit-rows`) or whose Flock block is past ``bits`` bits (`fit-bits`), by entry.
-`build` packs C greedily in layout order, descending into a unit, a node or a member only when it alone does not fit, and
-refuses (`Unfit`) a gate that alone does not fit, before anything is committed.
+**The pin** (`Measure.pinned`). Some row of the block, in or out, is past `LAST_BLOCK_BYTES` bytes: otherwise none has a
+compression before its last SHA-512 block and Flock's sha512x3 range, which holds the pin, has no slot
+(`periods.interface.check_proof_block`'s refusal).
+
+`verify` refuses a block past ``rows`` rows (`fit-rows`), whose Flock block is past ``bits`` bits (`fit-bits`), or with no
+pin (`fit-pin`), by entry. `build` packs C greedily in layout order, descending into a unit, a node or a member only when it
+alone does not fit, joins a block with no pin to the one before it where rows and bits allow, and refuses (`Unfit`) a gate
+that alone does not fit, or a block with no pin it cannot join, before anything is committed.
 """
 from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, NamedTuple, Sequence
 
 from . import boundary as BD
 from . import count as K
@@ -92,9 +97,10 @@ def query(rows: int = MAX_ROWS, bits: int = 1 << K_MAX) -> dict[str, Any]:
 
 
 class Unfit(ValueError):
-    """What `Q_fit` refuses at registration, by code: ``fit-gate`` (a gate that alone does not fit), ``fit-form`` (a root node
-    or a node to descend into that the query does not cut), ``fit-unsupported`` (a boundary `boundary` cannot give exactly),
-    ``fit-no-body`` (a word primitive with no Boolean body)."""
+    """What `Q_fit` refuses at registration, by code: ``fit-gate`` (a gate that alone does not fit), ``fit-pin`` (a block
+    with no pin that joins no neighbour), ``fit-form`` (a root node or a node to descend into that the query does not cut),
+    ``fit-unsupported`` (a boundary `boundary` cannot give exactly), ``fit-no-body`` (a word primitive with no Boolean
+    body)."""
 
     def __init__(self, code: str, what: str) -> None:
         super().__init__(f"{code}: {what}")
@@ -240,6 +246,14 @@ class _Writers:
     run_of: list[list[int]] = field(default_factory=list)
     run_bytes: list[list[int]] = field(default_factory=list)
 
+    def pop(self) -> None:
+        b = len(self.outs) - 1
+        keep = [i for i, (_lo, _hi, x) in enumerate(self.ivs) if x != b]
+        self.starts = [self.starts[i] for i in keep]
+        self.ivs = [self.ivs[i] for i in keep]
+        for xs in (self.outs, self.run_of, self.run_bytes):
+            xs.pop()
+
     def add(self, part: Part, outs: list[int], widths: list[int]) -> None:
         b = len(self.outs)
         for lo, hi in part.intervals():
@@ -268,6 +282,15 @@ class _Writers:
             return None
         r = self.run_of[b][i]
         return ("w", b, r), self.run_bytes[b][r]
+
+
+class Measure(NamedTuple):
+    """A block's rows, its Flock block's ``k_log``, its out(S) with their widths, and whether a row holds the pin."""
+    rows: int
+    k: int
+    outs: list[int]
+    widths: list[int]
+    pinned: bool
 
 
 class Fit:
@@ -314,8 +337,8 @@ class Fit:
         body = part.scope.spec.body
         return sum(self._counts[descriptor_id(body.nodes[j].fn)].ands for j, _m in part.items)
 
-    def measure(self, part: Part) -> tuple[int, int, list[int], list[int]]:
-        """``(rows, k_log, out(S), its widths)`` of the part as a block over the finished blocks."""
+    def measure(self, part: Part) -> Measure:
+        """The part as a block over the finished blocks."""
         ins, outs = self._ports(part)
         widths = [self._width(g) for g in outs]
         rows: dict[tuple, int] = {}
@@ -331,7 +354,8 @@ class Fit:
             out_bytes[-1] += w
         out_bytes = [-(-x // 8) for x in out_bytes]
         k = proof_block_k_log(list(rows.values()), out_bytes, self._ands(part), packed=False)
-        return len(rows) + len(out_bytes), k, outs, widths
+        pinned = any(b > LAST_BLOCK_BYTES for b in [*rows.values(), *out_bytes])
+        return Measure(len(rows) + len(out_bytes), k, outs, widths, pinned)
 
     def finish(self, part: Part, outs: list[int], widths: list[int]) -> None:
         self.writers.add(part, outs, widths)
@@ -341,7 +365,7 @@ def verify(program: Any, fp: FitPartition, entries: Sequence[Any], bad: dict[str
            inference: Callable[[int], Any] | None = None) -> None:
     """`partition_object.verify`'s checks of a `Q_fit` object's ``blocks`` (module docstring), into ``bad`` by code: an entry
     naming no gates of C (``fit-entry``), the cover (`cover`), every block within ``rows`` (``fit-rows``) and ``bits``
-    (``fit-bits``), and, given ``inference`` (a unit's inference block), no block of units of two (``fit-straddles``)."""
+    (``fit-bits``) and with a pin (``fit-pin``), and, given ``inference`` (a unit's inference block), no block of units of two (``fit-straddles``)."""
     parts = []
     for i, e in enumerate(entries):
         try:
@@ -362,11 +386,13 @@ def verify(program: Any, fp: FitPartition, entries: Sequence[Any], bad: dict[str
     fit = Fit(program)
     try:
         for i, p in enumerate(parts):
-            rows, k, outs, widths = fit.measure(p)
+            rows, k, outs, widths, pinned = fit.measure(p)
             if rows > fp.rows:
                 bad.setdefault("fit-rows", []).append([i, rows, fp.rows])
             if (1 << k) > fp.bits:
                 bad.setdefault("fit-bits", []).append([i, k, fp.bits])
+            if not pinned:
+                bad.setdefault("fit-pin", []).append([i, LAST_BLOCK_BYTES])
             fit.finish(p, outs, widths)
     except Unfit as x:
         bad.setdefault(x.code, []).append(str(x))
@@ -394,40 +420,53 @@ def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int |
     root = program.circuit.root_scope
 
     def fits(part: Part):
-        r, k, outs, widths = fit.measure(part)
-        return (r <= rows and (1 << k) <= bits), outs, widths
+        m = fit.measure(part)
+        return (m.rows <= rows and (1 << m.k) <= bits), m
 
-    def emit(part: Part, doc: Any, outs, widths) -> None:
-        fit.finish(part, outs, widths)
+    def emit(part: Part, doc: Any, m: Measure) -> None:
+        fit.finish(part, m.outs, m.widths)
         out.append(doc)
 
     def greedy(n: int, make: Callable[[int, int], Part], doc: Callable[[int, int], Any], into: Callable[[int], None],
                limit: int | None = None) -> None:
-        a = 0
+        a, last = 0, None
         while a < n:
             top = n if limit is None else min(n, a + limit)
-            ok, o, w = fits(make(a, a + 1))
+            ok, m = fits(make(a, a + 1))
             if not ok:
                 into(a)
-                a += 1
+                a, last = a + 1, None
                 continue
-            good, gb, bad, step = (o, w), a + 1, None, 1
+            good, gb, bad, step = m, a + 1, None, 1
             while gb < top:
                 b = min(top, gb + step)
-                ok, o, w = fits(make(a, b))
+                ok, m = fits(make(a, b))
                 if not ok:
                     bad = b
                     break
-                good, gb, step = (o, w), b, step * 2
+                good, gb, step = m, b, step * 2
             while bad is not None and bad - gb > 1:
                 mid = (gb + bad) // 2
-                ok, o, w = fits(make(a, mid))
+                ok, m = fits(make(a, mid))
                 if ok:
-                    good, gb = (o, w), mid
+                    good, gb = m, mid
                 else:
                     bad = mid
-            emit(make(a, gb), doc(a, gb), *good)
-            a = gb
+            if not good.pinned:
+                start = a
+                if last is not None and (limit is None or gb - last <= limit):
+                    fit.writers.pop()
+                    out.pop()
+                    ok, m = fits(make(last, gb))
+                    if ok and m.pinned:
+                        start, good = last, m
+                if not good.pinned:
+                    raise Unfit("fit-pin", f"{doc(a, gb)!r}: no row past {LAST_BLOCK_BYTES} B, so Flock's sha512x3 range, "
+                                           "which holds the pin, has no slot, and joining it to the block before it does "
+                                           "not fit or does not give one")
+                a = start
+            emit(make(a, gb), doc(a, gb), good)
+            a, last = gb, a
 
     def body_of(scope: Scope, path: tuple) -> None:
         body = scope.spec.body
@@ -474,6 +513,6 @@ def build(program: Any, rows: int = MAX_ROWS, bits: int = 1 << K_MAX, cap: int |
     return out
 
 
-__all__ = ["BITS_MAX", "FitPartition", "Fit", "K_MAX", "K_MIN", "LAST_BLOCK_BYTES", "MASK_LOG", "MAX_ROWS", "PACK_LOG", "PER_SLOT",
+__all__ = ["BITS_MAX", "FitPartition", "Fit", "Measure", "K_MAX", "K_MIN", "LAST_BLOCK_BYTES", "MASK_LOG", "MAX_ROWS", "PACK_LOG", "PER_SLOT",
            "Q_FIT", "SLOT_LOG", "Unfit", "blocks_form", "build", "cover", "entry_form", "params_ok", "part_of", "proof_block_k_log",
            "query", "verify"]

@@ -823,11 +823,15 @@ trusted.
   runs; past r rows is `fit-rows`.
 - **Bits.** `fit.proof_block_k_log` of the block's input rows' bytes, its output rows' bytes and its ANDs (`count`), unpacked: the
   Flock block one proof block needs. Past b bits is `fit-bits`. b is the proof block's bound, not a policy's.
+- **The pin.** Some row of the block, in or out, is past `LAST_BLOCK_BYTES` (111) bytes, else Flock's sha512x3 range, which
+  holds the pin, has no slot (`periods.interface.check_proof_block`'s refusal): `fit-pin`.
 - **Inference blocks.** Given each unit's inference block, an entry of root units that holds units of two is `fit-straddles`, so
   every proof block refines the inference blocks. A piece lies inside one unit and refines them always.
 - **The builder** packs C greedily in layout order: as many whole root units as fit (at most `cap` a block), else into the unit,
-  packing its body's nodes, then a node's members or its callee's body, depth first. A gate that alone does not fit is refused
-  at registration (`fit-gate`), as is a scan it would have to cut (`fit-form`), so no block is ever left out.
+  packing its body's nodes, then a node's members or its callee's body, depth first. A block with no pin joins the block
+  before it in the same activation where the two fit as one with a pin. A gate that alone does not fit is refused at
+  registration (`fit-gate`), as are a block with no pin that joins none (`fit-pin`) and a scan it would have to cut
+  (`fit-form`), so no block is ever left out.
 - **Restriction.** `restrict` takes an entry as the block, and under `Q_fit` cuts the block's parameters at writer rows too, so
   each parameter run reads one row.
 

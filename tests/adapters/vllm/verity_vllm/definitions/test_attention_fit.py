@@ -66,9 +66,9 @@ def _check(T: int) -> None:
     fp, fit = FT.FitPartition(prog, FT.query()), FT.Fit(prog)
     for e in blocks(T):
         p = FT.part_of(prog, fp, e)
-        rows, k, outs, widths = fit.measure(p)
-        assert rows <= FT.MAX_ROWS and k <= FT.K_MAX
-        fit.finish(p, outs, widths)
+        m = fit.measure(p)
+        assert m.rows <= FT.MAX_ROWS and m.k <= FT.K_MAX and m.pinned
+        fit.finish(p, m.outs, m.widths)
     dot = hopper.HopperBF16WgmmaDot16.id
     for path, es in _key_blocks(T).items():
         scope = prog.circuit.root_scope
