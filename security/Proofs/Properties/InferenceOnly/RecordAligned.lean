@@ -11,6 +11,7 @@ public import Proofs.Properties.InferenceOnly.RecordRows
 public import Proofs.Properties.InferenceOnly.RecordShared
 public import Proofs.Properties.InferenceOnly.RecordTemplates
 public import Proofs.Properties.InferenceOnly.RecordWhole
+public import Proofs.Properties.InferenceOnly.RecordWire
 public import Mathlib.Tactic
 
 /-!
@@ -275,8 +276,7 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : Inferenc
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves)
     (hg : Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g)
     (hn : i ∉ (passedOn P)[sc.d]?.getD (List.range (P.defs[sc.d]!).params.size)) (hsh : ¬ SharedLeaf P g)
-    {off l lo up : ℕ}
-    (ho : OutLeaf P sc off l g lo up) : False := by
+    {off l lo up : ℕ} (ho : OutLeaf P sc off l g lo up) : False := by
   have hout := unit_param_out hP hO hrs hu hi ht hg
   by_cases hp : (P.defs[sc.d]!).prim = true
   · obtain ⟨-, h1, h2⟩ := returnsOwn_prim hP hrs hu hp ho
@@ -372,8 +372,8 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
 /-- **A wired row holds its output** (`OutFits`), of a record whose wires pass the check's `unwhole`: the writer's
 field at the wire's offset is the row's bits (`wired_row`), and a unit, its parameter by name, and a field of a word
 or more by its first word are each one (`unitAt_fun`, `portsNamed`, `fieldWord_inj`). -/
-theorem outFits {tids : Array String} (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) tids = .ok rs)
+theorem outFits (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
     (hts : templatesOf P doc = .ok ts)
     (hwh : unwhole P ts (ts.map (InferenceOnlyVerifier.Record.leavesOf P (passedOn P))) S = none) :

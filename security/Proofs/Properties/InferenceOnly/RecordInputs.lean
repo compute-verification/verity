@@ -282,7 +282,7 @@ theorem inputsOf_wires {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x 
 wires reads part of a leaf; the pins `rolesOf` gives of the declarations; and, as `finish` computes them, the wires
 inside a slot, θ's parameters and the held openings. -/
 theorem finish_case {f : Front} {pin : String → Option String} {c : Case} (h : finish f pin = .ok c) :
-    Spot.Wires.check c.W = .ok c.wired ∧ unwhole f.ts f.leaves c.wired.wires = none ∧
+    Spot.Wires.check c.W = .ok c.wired ∧ unwhole f.P f.ts f.leaves c.wired = none ∧
       rolesOf f.P f.ts pin c.x = .ok c.pins ∧
       c.inside = (c.wired.wires.map fun w => sameSlot c.S (c.gridsAt w.reader) (c.gridsAt w.writer) w).toArray ∧
       c.theta = c.x.params.map (fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)) ∧

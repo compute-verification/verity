@@ -182,12 +182,12 @@ private theorem lands_rank {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring
   | wire o g a hf hl ih =>
     intro r l lo hi hr
     obtain ⟨r₁, l₁, l', lo₁, hi₁, lo', hi', hr₁, hw, -, -⟩ := hf
-    obtain ⟨wt, wu, out, sc', hwr, h0, hu, hout⟩ := hw
+    obtain ⟨wt, wu, on, out, sc', hwr, h0, hu, hout⟩ := hw
     obtain ⟨rfl, -⟩ | hs := hO.2 r l lo hi r₁ l₁ lo₁ hi₁ o hr hr₁
     swap
     · rw [hSh r₁ l₁ o lo₁ hi₁ hs hr₁] at hwr
       cases hwr
-    have hlt := hρ r wt wu out hwr
+    have hlt := hρ r wt wu on out hwr
     have hwu : ((wu.toNat : ℕ) : ℤ) = wu := Int.toNat_of_nonneg h0
     rcases hR wt wu.toNat sc' out l' g lo' hi' hu hout with ⟨h1, h2⟩ | ⟨r', l'', lo'', hi'', ht, hun, hr'⟩
     · have hag := lands_inside hO hU hu h1 h2 hl
