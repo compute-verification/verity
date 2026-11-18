@@ -7,6 +7,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from verity.protocols.resource_accounting.memory.poub.prover.node_store import serving
 from verity.protocols.resource_accounting import scheme
 
