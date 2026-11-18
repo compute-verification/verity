@@ -74,7 +74,7 @@ verifier's check that a served window's coins are that challenger's.
   ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
-  credited. Both verdicts are the Lean's (`PouwCheck.Credit.window`, `Credit.periodCredit`), core's Python their twin
+  credited. Both verdicts are the Lean's (`PouwVerifier.Credit.executionPhase`, `Credit.periodCredit`), core's Python their twin
   and a disagreement a refusal (`verifier.of_record`). The serving process's gate-passed count
   (`pouw_h1.H1Run.credit`) is never credit.
 """
