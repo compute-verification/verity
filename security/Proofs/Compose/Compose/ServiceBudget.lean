@@ -3,6 +3,9 @@ module
 public import Definitions.Compose.Guarantees.Compose
 public import Proofs.Pouw.TS.Stages
 public import Proofs.ResourceAccounting.Lemmas.Compose
+public import Proofs.Core.Draw
+public import Proofs.Core.Game.Tape
+public import Proofs.Spot.Sampling.Work
 
 /-!
 # The service's window budget: proof
@@ -10,9 +13,9 @@ public import Proofs.ResourceAccounting.Lemmas.Compose
 `ResourceAccounting.Guarantees.Compose.ServiceBudget`, step 4 of `Proofs.Compose.Compose`, in three parts.
 
 * **The miss bound** (`miss_le`): a uniform permutation's `K`-subset (`Verity.SamplingDesign.permPrefix`) misses a set `B` of
-  the `N` tiles with probability at most `(1 − |B|/N)^K`. By induction on `K` through `Equiv.Perm.decomposeFin`: the
-  first image is uniform and must miss `B`, and the rest is a uniform permutation of `N − 1` tiles that must miss a
-  set of at least `|B|` of them (`card_le_rest`).
+  the `N` tiles with probability at most `(1 − |B|/N)^K`. The file reads the core: at `K ≤ N` the miss probability is
+  the hypergeometric factor `C(N − |B|, K)/C(N, K)` (`miss_eq`, from `Verity.SamplingDesign.missProb_permPrefix_eq`),
+  at most `(1 − |B|/N)^K` by `Spot.Sampling.SamplingDesign.choose_sub_mul_pow_le'`; at `K > N` the prefix is every tile.
 * **One path of the stages' coins** (`path_le`): with `U` the work folded or whole whose checked values aren't honest,
   `ρ·U ≤ |B|/N` for `B` the tiles not honest (`ρ·N·w_v ≤ 1`), and `exp(d/Λ)·(1 − ρU)^K` is at most the product over
   the stages of `SplitRateAt`'s left side at each stage's work (`factor`), as `1 − ρ(V + U_j) ≤ (1 − ρV)(1 − ρU_j)`.
@@ -36,89 +39,51 @@ theorem forall_mem_permPrefix {N K : ℕ} (π : Equiv.Perm (Fin N)) (P : Fin N �
     (∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, P v) ↔ ∀ i : Fin N, i.val < K → P (π i) := by
   simp [Verity.SamplingDesign.permPrefix]
 
-/-- The tiles of `Fin n` whose image under `decomposeFin.symm (p, ·)`'s tail map lies in `B`. -/
-def rest {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : Finset (Fin n) :=
-  Finset.univ.filter fun z => Equiv.swap 0 p z.succ ∈ B
+/-- **A uniform permutation's `K`-prefix misses `B` with the hypergeometric factor, exactly**: `C(N − |B|, K)/C(N, K)`
+for `K ≤ N`, the core's `Verity.SamplingDesign.missProb_permPrefix_eq` as a real probability. -/
+theorem miss_eq (K N : ℕ) (B : Finset (Fin N)) (hK : K ≤ N) :
+    prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B) =
+      ((N - B.card).choose K : ℝ) / (N.choose K : ℝ) := by
+  have h := Verity.Game.pr_eq_toReal_prCoin
+    (fun π : (Verity.SamplingDesign.permPrefix N K).Ω => Disjoint ((Verity.SamplingDesign.permPrefix N K).draw π) B)
+  rw [show Verity.Game.prCoin (fun π : (Verity.SamplingDesign.permPrefix N K).Ω =>
+        Disjoint ((Verity.SamplingDesign.permPrefix N K).draw π) B) =
+      (Verity.SamplingDesign.permPrefix N K).missProb B from rfl,
+    Verity.SamplingDesign.missProb_permPrefix_eq hK B, ENNReal.toReal_div, ENNReal.toReal_natCast,
+    ENNReal.toReal_natCast,
+    show (fun π : (Verity.SamplingDesign.permPrefix N K).Ω => Disjoint ((Verity.SamplingDesign.permPrefix N K).draw π) B) =
+      fun π => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B from
+      funext fun π => propext Finset.disjoint_left] at h
+  first
+    | exact h
+    | (unfold Claims.Pr at h; convert h using 2)
 
-theorem card_le_rest {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) (hp : p ∉ B) :
-    B.card ≤ (rest B p).card := by
-  have hsub : B ⊆ (rest B p).image fun z => Equiv.swap 0 p z.succ := by
-    intro b hb
-    have h0 : Equiv.swap 0 p b ≠ 0 := by
-      intro h
-      have := congrArg (Equiv.swap 0 p) h
-      rw [Equiv.swap_apply_self, Equiv.swap_apply_left] at this
-      exact hp (this ▸ hb)
-    refine Finset.mem_image.mpr ⟨(Equiv.swap 0 p b).pred h0, ?_, ?_⟩
-    · simp [rest, hb]
-    · simp
-  exact (Finset.card_le_card hsub).trans Finset.card_image_le
-
-theorem prob_mem {n : ℕ} (B : Finset (Fin n)) : prob (fun v : Fin n => v ∈ B) = (B.card : ℝ) / n := by
-  rw [prob_eq_card, Finset.filter_univ_mem, Fintype.card_fin]
-
-/-- **The miss bound**: a uniform permutation's `K`-subset misses `B` with probability at most `(1 − |B|/N)^K`. -/
-theorem miss_le : ∀ (K N : ℕ) (B : Finset (Fin N)),
-    prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B) ≤ (1 - (B.card : ℝ) / N) ^ K
-  | 0, _, _ => by
-    rw [pow_zero]
+/-- **The miss bound**: a uniform permutation's `K`-subset misses `B` with probability at most `(1 − |B|/N)^K`. For
+`K ≤ N` it is `miss_eq`'s factor, which `C(N − |B|, K)·N^K ≤ C(N, K)·(N − |B|)^K` bounds; for `K > N` the prefix is every
+tile, so a nonempty `B` is never missed. -/
+theorem miss_le (K N : ℕ) (B : Finset (Fin N)) :
+    prob (fun π : Equiv.Perm (Fin N) => ∀ v ∈ (Verity.SamplingDesign.permPrefix N K).draw π, v ∉ B) ≤
+      (1 - (B.card : ℝ) / N) ^ K := by
+  rcases B.eq_empty_or_nonempty with rfl | ⟨v, hv⟩
+  · rw [Finset.card_empty, Nat.cast_zero, zero_div, sub_zero, one_pow]
     exact prob_le_one _
-  | K + 1, 0, B => by
-    rw [Finset.eq_empty_of_isEmpty B, Finset.card_empty, Nat.cast_zero, zero_div, sub_zero, one_pow]
-    exact prob_le_one _
-  | K + 1, n + 1, B => by
-    classical
-    set c : ℝ := (1 - (B.card : ℝ) / ((n + 1 : ℕ) : ℝ)) with hc
-    have hBn : (B.card : ℝ) ≤ ((n + 1 : ℕ) : ℝ) := by
-      exact_mod_cast (Finset.card_le_univ B).trans_eq (Fintype.card_fin _)
-    have hc0 : 0 ≤ c := by
-      rw [hc, sub_nonneg]
-      exact div_le_one_of_le₀ hBn (Nat.cast_nonneg _)
-    rw [prob_equiv Equiv.Perm.decomposeFin, prob_prod]
-    have hstep : ∀ p : Fin (n + 1),
-        (prob fun e : Equiv.Perm (Fin n) =>
-          ∀ v ∈ (Verity.SamplingDesign.permPrefix (n + 1) (K + 1)).draw (Equiv.Perm.decomposeFin.symm (p, e)), v ∉ B) ≤
-          c ^ K * (if p ∈ B then 0 else 1) := by
-      intro p
-      by_cases hp : p ∈ B
-      · rw [ite_eq_left hp, mul_zero]
-        refine (prob_mono (q := fun _ : Equiv.Perm (Fin n) => False) fun e he => ?_).trans
-          (le_of_eq (by unfold prob Claims.prUniform; simp))
-        have := (forall_mem_permPrefix _ _).mp he 0 (Nat.succ_pos K)
-        rw [Equiv.Perm.decomposeFin_symm_apply_zero] at this
-        exact this hp
-      rw [ite_eq_right hp, mul_one]
-      have hmiss := miss_le K n (rest B p)
-      have hcard := card_le_rest B p hp
-      have hrest : ((rest B p).card : ℝ) ≤ n := by
-        exact_mod_cast (Finset.card_le_univ _).trans_eq (Fintype.card_fin _)
-      have hBr : (B.card : ℝ) ≤ (rest B p).card := by exact_mod_cast hcard
-      have hle : 1 - ((rest B p).card : ℝ) / n ≤ c := by
-        rw [hc, sub_le_sub_iff_left]
-        rcases Nat.eq_zero_or_pos n with hn | hn
-        · subst hn
-          have : (B.card : ℝ) = 0 := le_antisymm (hBr.trans (by simpa using hrest)) (Nat.cast_nonneg _)
-          rw [this, zero_div]
-          exact div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
-        · have hn' : (0 : ℝ) < n := by exact_mod_cast hn
-          calc (B.card : ℝ) / ((n + 1 : ℕ) : ℝ) ≤ (B.card : ℝ) / n :=
-                div_le_div_of_nonneg_left (Nat.cast_nonneg _) hn' (by push_cast; linarith)
-            _ ≤ ((rest B p).card : ℝ) / n := div_le_div_of_nonneg_right hBr hn'.le
-      have h0 : 0 ≤ 1 - ((rest B p).card : ℝ) / n := sub_nonneg.mpr (div_le_one_of_le₀ hrest (Nat.cast_nonneg _))
-      refine (prob_mono fun e he => ?_).trans (hmiss.trans (pow_le_pow_left₀ h0 hle K))
-      refine (forall_mem_permPrefix _ _).mpr fun i hi => ?_
-      have := (forall_mem_permPrefix _ _).mp he i.succ (by simp; omega)
-      rw [Equiv.Perm.decomposeFin_symm_apply_succ] at this
-      simpa [rest] using this
-    refine (expect_mono hstep).trans ?_
-    rw [expect_mul_left, pow_succ]
-    refine mul_le_mul_of_nonneg_left ?_ (pow_nonneg hc0 K)
-    have hnot : prob (fun p : Fin (n + 1) => ¬p ∈ B) = 1 - (B.card : ℝ) / ((n + 1 : ℕ) : ℝ) := by
-      have := prob_add_not (fun p : Fin (n + 1) => p ∈ B)
-      rw [prob_mem] at this
-      linarith
-    rw [hc, ← hnot, prob_eq_expect]
-    exact le_of_eq (congrArg expect (funext fun p => by by_cases hp : p ∈ B <;> simp [hp]))
+  have hNr : (0 : ℝ) < N := by exact_mod_cast v.pos
+  have hb : B.card ≤ N := (Finset.card_le_univ B).trans_eq (Fintype.card_fin N)
+  have h0 : 0 ≤ 1 - (B.card : ℝ) / N := sub_nonneg.mpr (div_le_one_of_le₀ (by exact_mod_cast hb) hNr.le)
+  rcases le_or_gt K N with hK | hK
+  · rw [miss_eq K N B hK]
+    have hC : (0 : ℝ) < N.choose K := by exact_mod_cast Nat.choose_pos hK
+    have hsub : 1 - (B.card : ℝ) / N = ((N - B.card : ℕ) : ℝ) / N := by
+      rw [Nat.cast_sub hb, sub_div, div_self hNr.ne']
+    have key := Spot.Sampling.SamplingDesign.choose_sub_mul_pow_le' N B.card K
+    rw [hsub, div_pow, div_le_iff₀ hC, div_mul_eq_mul_div, le_div_iff₀ (pow_pos hNr K),
+      mul_comm (((N - B.card : ℕ) : ℝ) ^ K)]
+    exact_mod_cast key
+  · refine (prob_mono (q := fun _ : Equiv.Perm (Fin N) => False) fun π hπ => ?_).trans
+      ((le_of_eq (by unfold prob Claims.prUniform; simp)).trans (pow_nonneg h0 K))
+    have := (forall_mem_permPrefix π _).mp hπ (π.symm v) (by have := (π.symm v).isLt; omega)
+    rw [Equiv.apply_symm_apply] at this
+    exact this hv
 
 /-! ## The stages -/
 
