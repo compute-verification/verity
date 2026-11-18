@@ -5,6 +5,7 @@ registered read of the rank's weights, the prompt's rows a boundary read and, at
 stand in for `served_values`: each unit's rows by the chain's wiring."""
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 
@@ -14,6 +15,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
+from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
@@ -84,7 +86,9 @@ class Values:
 
 
 def weights(r: int) -> dict:
-    return {"w": registered_commit("test/node-window", "w", Values(r).w, bytes(32), r, keep_rows=True)}
+    w = Values(r).w
+    ys = hashlib.shake_256(f"node-window weights {r}".encode()).digest(len(w) * SF.SALT_BYTES)
+    return {"w": registered_commit("test/node-window", "w", w, ys, keep_rows=True)}
 
 
 def commit(r: int, out, **edit):

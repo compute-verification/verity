@@ -3820,7 +3820,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
     assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
         == {"format": "toy", "after": W_OF_7}
     assert (tmp_path / "order.commit").read_text().split() == [
-        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key")]
+        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-prover", str(d / "private" / "h1" / "w7")]
     assert (tmp_path / "order.law").read_text() == TIED_RULE
     assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
