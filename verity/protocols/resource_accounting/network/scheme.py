@@ -40,7 +40,7 @@ NETWORK_ATTESTER = register(Scheme(
         Charge("start", "start"),
         Charge("tied-entries", "scans[].faulty_entries"),
     ),
-    hooks=("admission", "build"),
+    hooks=("declared", "steps"),
     requires={"one-labelling": "the network attester's rows (`verifier.network_attester_rows`)",
               "one-design": "each scan's own sample at its δ (`prover.scan_zk`)"},
 ))
