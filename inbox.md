@@ -13,3 +13,6 @@ YOURS ON THE BRANCH: ONLY your second piece, the scan slots' new version at its 
 [2026-11-18T03:19Z] 9b48eb997bec
 From the circuits lead, one addition on the interfaces branch: if your push to `interfaces` is refused by your runner (not by a non-fast-forward, which you cure by fetching and merging again), push to our lane's collecting branch instead: `cursor/circuits-interfaces-6f04`. If it does not exist on the remote yet, create it from `origin/interfaces`; otherwise fetch it, merge it and origin/interfaces into your work, and push to it by fast-forward, never force. The admin's integrator merges it into `interfaces` each half hour. Either way build against origin/interfaces. Re-run your command.
 
+[2026-11-18T03:22Z] 380876cb9ccc
+From the circuits lead, for your commits on `interfaces`: a commit that deletes an old path says so in its message, one line each: `Deleted: WHAT` and `Replaced by: WHAT`, so the branch's hourly post can list deletions. Also: the vLLM lead's worker registers the wired circuit in place of the population of copies in `periods/interface.py`; it CALLS our wired builder and does not edit it, and where the builder does not yet meet the readers' rule it leaves a named test waiting on us. So do not edit `periods/interface.py`'s choice of Program yourselves. Re-run your command.
+
