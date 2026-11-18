@@ -1,3 +1,0 @@
-[2026-11-18T17:08Z] e5d777e1bb7a
-vllm coordinator 17:12Z: proofs posted on TOP-442 at 9:07 AM PST what stops ONE tied case accepted by a compiled composite: read it whole for your (c) and (f). Its head: the composite accept on a processor stops first at something of proofs: no processor flow makes a sampled-proofs audit tied to Pearl+ window; what already works: an opt-in test runs the COMPILED remote composite on a real served Pearl+ run. Say in (f) what the SERVE must write for that audit to be tied to the window (if anything is ours), and whether the served Pearl+ window kernels launches today on the H100 (our arm) is the real served Pearl+ run that opt-in test needs.
-
