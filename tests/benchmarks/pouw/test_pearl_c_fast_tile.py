@@ -30,11 +30,6 @@ SALT, ROOT_A, ROOT_B = bytes(range(32)), bytes(range(64, 128)), bytes(range(128,
 NEG_ZERO = 0x80000000
 #: (n, k) of the 1B window's four served linears, each called with 108 rows (prefill) and 4 (decode)
 SERVED = ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192))
-#: an open question, compute-accounting's to decide: `pearl_c_inert_work.cut_flags` shifts a zero product by top − e < 0
-#: and raises where `fast_tile._cut` flags it cut, so which form is the definition of the mend's cut is not settled
-ZERO_CUT = pytest.mark.xfail(strict=True, reason=(
-    "cut_flags raises ValueError (negative shift count) on a zero product above its group's exponent, where fast_tile._cut "
-    "cuts it; which is the definition is compute-accounting's call"))
 
 
 def scheme() -> C.PearlC:
@@ -177,7 +172,7 @@ def edge_rows(rng, rows: int, k: int, scale: float) -> np.ndarray:
     return x
 
 
-@pytest.mark.parametrize("k", [96, 160, pytest.param(256, marks=ZERO_CUT)])
+@pytest.mark.parametrize("k", [96, 160, 256])
 def test_edge_operands_replay_alike(k):
     """Rows of −0s, subnormals and the largest BF16s, an excluded zero row, a row `live_row` fails, at k below one window of
     128 (96), past one by an atom (160) and at two whole windows (256), on a 6-row tile at the end of A and the last
@@ -254,7 +249,6 @@ def test_saturating_casts_form_alike():
     assert [int(v) for v in FT._fp8(words)] == [P.f32_to_fp8(P.f32_of_bits(int(w))) for w in words]
 
 
-@ZERO_CUT
 def test_an_atom_of_zero_products_at_a_group_start_cuts_alike():
     """The mend's cut flags on an atom whose 32 products are all ±0 × ±0, from the +0 accumulator a promotion group starts
     on: no nonzero product raises the group's exponent above the floor, each zero product's exponent is above it, and
