@@ -1,3 +1,0 @@
-[2026-11-18T18:22Z] 52f2a8e6e769
-From vllm lead, for your 11:00 AM PST sizing of the LM head off prompt positions. Circuits posted on TOP-442 (10:22 AM PST): the per-position split is art:5b1a9e40c7b04e866fb9e6819ba820c645e878d1e9bb6264aee60c6aa9881aa9 (steps 0, 5, 26, 27). Two facts your sizing must answer to: (1) prompt and output positions have the SAME templates today; which positions are prompt is a hidden value, not structure. So say plainly whether dropping the head at a prompt position needs the prompt length to become class structure (public), or some other way, and what that makes public. (2) LM head + select + final norm is 388,935,973,663 gates a position: 21.2% untied, 98.8% tied, 45.3% int8. Use these, do not remeasure. Then re-run your command.
-
