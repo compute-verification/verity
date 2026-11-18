@@ -39,6 +39,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.commitments import registered_value as RV
+from verity.commitments import hm96
 from verity.commitments.merkle import CommitmentDomain
 
 from . import registered as G
@@ -54,7 +55,7 @@ def _hex64(s: Any) -> bool:
 
 
 def _hex_bc(s: Any) -> bool:
-    return isinstance(s, str) and len(s) == 2 * RV.BC_BYTES and bool(_HEX.fullmatch(s))
+    return isinstance(s, str) and len(s) == 2 * hm96.SHA512.proven_bytes and bool(_HEX.fullmatch(s))
 
 
 def domain(program: str, value: str, words: int, leaves: int, word_bits: int, docket: str) -> CommitmentDomain:

@@ -77,7 +77,7 @@ theorem openStep_switch_sv (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (d
   have e := hF (by simp) (by rw [Array.size_empty, Nat.zero_add]; exact hlen)
   obtain ⟨L', hL, hL'⟩ : ∃ L', ((ringSwitchCut (asksCut (fun j i => (cs.getD j #[])[i]!) a)
       (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run r.1.2).go #[] = (.error "past the openings", L') ∧
-      L'.toList = (#[] : Array Claims.Msg).toList ++ (List.range (a + 1)).map
+      L'.toList = (#[] : Array Hash.Msg).toList ++ (List.range (a + 1)).map
         (rsBody (fun k => switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2.size r.1.2.pending.data.toList) := by
     rcases Nat.lt_or_ge a r.1.1.2.2.size with ha | ha
     · exact ringSwitchCut_at _ a _ r.1.1.2.2 r.1.2 #[] ha (by rw [Array.size_empty, Nat.zero_add])

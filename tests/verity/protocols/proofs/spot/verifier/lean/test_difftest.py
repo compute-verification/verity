@@ -59,6 +59,7 @@ from hypothesis import strategies as st
 import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.verifier import audit as PA
 from verity.protocols.resource_accounting.compute.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum
@@ -837,7 +838,7 @@ def covered_evidence(b: bytes) -> dict:
 
 
 def answer(case) -> dict:
-    return PR.answer(R.PROTOCOL, _json(case), params=covered_params, commitment=decode_commitment,
+    return PR.answer(DM.ONE_STAGE_PROTOCOL, _json(case), params=covered_params, commitment=decode_commitment,
                      evidence=covered_evidence, digest=lambda c: c[1], check=check)
 
 
@@ -2096,7 +2097,7 @@ def _other_setup(a, x):
 #: One change each to the record (R1-R6; R7's are `ENTRIES`), the parameters (decodable or not) and the evidence (the sample, the record's checks,
 #: the verdicts, its decoding); `x` picks among variants.
 RECORD = [
-    _set("record", "format", lambda a, x: [R.FORMAT_V2, "verity/registration/v0"][x % 2]),
+    _set("record", "format", lambda a, x: [DM.REGISTRATION, "verity/registration/v0"][x % 2]),
     _set("record", "protocol", "verity/sampled-proofs/two-stage/v1"),
     _set("record", "law", lambda a, x: {"k": x % 4, "law": "subset"}),
     _set("record", "window", lambda a, x: [{"kind": "guess"}, "served", {}, EARLIER][x % 4]),
@@ -2238,7 +2239,7 @@ ENTRIES = [
     _entry(lambda e, x: {**e, "domain": ["00" * 64, e["domain"].upper(), 5, None][x % 4]}),
     _entry(lambda e, x: {**e, "word_bits": [16, 32, 24, True, "32", None, 0, 64][x % 8]}),
     _entry(lambda e, x: {k: v for k, v in e.items() if k != "word_bits"}),
-    _set("record", "format", lambda a, x: [R.FORMAT, "verity/registration/v3"][x % 2]),
+    _set("record", "format", lambda a, x: [DM.REGISTRATION_V1, "verity/registration/v3"][x % 2]),
     lambda a, x: a["record"].pop("registered"),
     _held,
 ]
@@ -2495,7 +2496,7 @@ def _certify(mine=None, entry=None):
         e = entry(e, x) if entry else e
         if e is not None:
             a["record"]["registered"] = [*a["record"].get("registered", []), e]
-            a["record"]["format"] = R.FORMAT_V2
+            a["record"]["format"] = DM.REGISTRATION
     return change
 
 

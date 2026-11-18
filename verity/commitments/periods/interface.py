@@ -280,6 +280,14 @@ def _width(name: str, ty: Any, out: bool = False) -> int:
     return next(iter(widths))
 
 
+def _leaf_width(fn: Any, port: str, width: int) -> int:
+    """The width ``port`` of ``fn`` reads a registered value's leaves in: one bit for a Boolean-profile port, whose
+    layout `width` is its word view's, else ``width``."""
+    params, ret = fn.signature()
+    ty = dict(params)[port] if port in dict(params) else _fields(ret)[int(port[1:])]
+    return 1 if ty.width_set() == {1} else width
+
+
 @dataclass(frozen=True)
 class RowLayout:
     """A template's bit rows: ``rows`` each parameter's ``(name, words)``, ``outs`` each return field's ``(o<j>, words)``,
@@ -2622,7 +2630,8 @@ class Window:
             v = (self.registered or {}).get(r.param)
             lay = lays[r.reader][0]
             words, bits = dict(lay.rows + lay.outs)[r.port], value_format(self.circuit.registered, r.param)[1]
-            recut(bits, dict(zip((p for p, _ in lay.rows + lay.outs), lay.widths))[r.port])
+            recut(bits, _leaf_width(self.circuit._by_id[r.reader][0], r.port,
+                                    dict(zip((p for p, _ in lay.rows + lay.outs), lay.widths))[r.port]))
             if v is not None and (v.word_bits != bits or CS.value_words(v) != words
                                   or words * v.leaves != params[r.param]):
                 raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} {v.word_bits}-bit leaves, not the "

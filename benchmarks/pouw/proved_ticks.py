@@ -76,7 +76,11 @@ __all__ = [
 SMSPS = 4                          # SMSPs an SM
 def fmax_mhz(family: str) -> int:
     """``family``'s f_max, the sheet's highest SM clock (A1): SPEC's P1, the family's card's `clock.sm` (Lean's
-    `ResourceAccounting.TS.Headline.Sm120.ds120.fmax`)."""
+    `ResourceAccounting.TS.Headline.Sm120.ds120.fmax`). Approved only for the machine model's own family
+    (`data_device`); any other is refused by name."""
+    if family != data_device():
+        raise ValueError(f"no approved data-sheet f_max for {family}: only {data_device()}'s, the machine model's own "
+                         "family, is approved")
     return int(number(card(device(family))["clock"]["sm"]))
 
 

@@ -62,8 +62,8 @@ open Flock
 open Claims.Recursion
 
 /-- **Where `VK keep` answers, the deployed plain verifier answers alike.** -/
-theorem next_msg_of_nextK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} {m : Claims.Msg} (h : ((nextK keep x as cs).eval H).1 = .msg m) :
+theorem next_msg_of_nextK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} {m : Hash.Msg} (h : ((nextK keep x as cs).eval H).1 = .msg m) :
     ((next false x as cs).eval H).1 = .msg m := by
   cases ha : act false x as cs with
   | rej => rw [nextK_rej keep H ha] at h; cases h
@@ -72,16 +72,16 @@ theorem next_msg_of_nextK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg)
     simp only [nextK, ha, outOf, Claims.OC.eval_bind, Claims.OC.eval] at h
     split at h <;> simp at h
 
-theorem refusable_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) : Refusable H (VK keep) := fun x =>
+theorem refusable_VK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) : Refusable H (VK keep) := fun x =>
   ⟨[], fun as cs => by
     show ((nextK keep x (as ++ [[]]) cs).eval H).1 ≠ .acc
     rw [nextK_rej keep H (act_snoc_nil false x as cs)]
     exact fun h => Claims.Out.noConfusion h⟩
 
-theorem coinsShown_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) : CoinsShown H (VK keep) decCoin :=
+theorem coinsShown_VK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) : CoinsShown H (VK keep) decCoin :=
   fun x as cs c m hl h => coinsShown_V H false x as cs c m hl (next_msg_of_nextK (cs := cs ++ [c]) keep H h)
 
-theorem decideFree_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) : DecideFree H (VK keep) := by
+theorem decideFree_VK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) : DecideFree H (VK keep) := by
   intro x as cs c c' hl hacc
   show (nextK keep x as (cs ++ [c'])).eval H = (nextK keep x as (cs ++ [c])).eval H
   change ((nextK keep x as (cs ++ [c])).eval H).1 = .acc at hacc
@@ -107,8 +107,8 @@ theorem decideFree_VK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) : D
 
 /-- **Wherever `VK keep` accepts, the prover sent the rounds of the session the statement sets up against `H`**
 (`nextE_acc_length_setup`'s proof, `streams_size_plainK` at `keep`). -/
-theorem nextK_acc_length_setup (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg}
-    {as : List Claims.Msg} {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextK keep x as cs).eval H).1 = .acc) :
+theorem nextK_acc_length_setup (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg}
+    {as : List Hash.Msg} {cs : List Coin} (hcs : cs.length = as.length) (h : ((nextK keep x as cs).eval H).1 = .acc) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (spec' : SessionSpec) (sts' : Array Flock.Stmt),
       setupOf false x = some (s, spec, sts) ∧ setupWith (Claims.hOf H) s.read = .ok (spec', sts') ∧
         as.length = 2 + rounds false spec' sts' := by
@@ -147,8 +147,8 @@ open Flock
 open Claims (OC OCV)
 
 /-- **An accepted run of `VK keep` decides, within its own verifier log** (`accE_decide`'s proof, at `nextK keep`). -/
-theorem accK_decide (keep : Bool → Bool) {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover Ω}
-    {x : Claims.Msg} {ω : Ω} {r : Fin ((VK keep).k x) → Coin} (h : (Claims.run H P (VK keep) x ω r).out = .acc) :
+theorem accK_decide (keep : Bool → Bool) {H : Hash.Msg → Hash.Msg} {Ω : Type} {P : Claims.Prover Ω}
+    {x : Hash.Msg} {ω : Ω} {r : Fin ((VK keep).k x) → Coin} (h : (Claims.run H P (VK keep) x ω r).out = .acc) :
     ∃ s spec sts link c₁ mids f,
       act false x ((Claims.run H P (VK keep) x ω r).msgs.map Prod.fst)
           ((List.range ((Claims.run H P (VK keep) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
@@ -172,9 +172,9 @@ theorem accK_decide (keep : Bool → Bool) {H : Claims.Msg → Claims.Msg} {Ω :
 
 /-- **A decision read through `keep`, within `L`**, at SHA-512 on a statement that sets up at `(spec, sts)`: the
 verdict read through `keep` within `L`, and the checks (`decisionE_runs`'s proof). -/
-theorem decisionK_runs (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Claims.Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
-    {L : List Claims.Msg} (hs : s.setup = .ok (spec, sts))
+theorem decisionK_runs (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {x : Hash.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Hash.Msg × Coin)} {f : Final}
+    {L : List Hash.Msg} (hs : s.setup = .ok (spec, sts))
     (h : Runs sha512 (decisionK keep s x link c₁ mids f) () L) :
     Runs sha512 (verifyWithMK keep Claims.Hashes.oc spec (tabsOf sts) f.record f.proofs) () L ∧
       checks false s spec x link c₁ mids f = .ok () := by
@@ -191,7 +191,7 @@ theorem decisionK_runs (keep : Bool → Bool) {s : Ins} {spec : SessionSpec} {st
 
 /-- **The verdict read through `keep` within `L` is that verdict with SHA-512 answered only within `L`.** -/
 theorem verdictK_within (keep : Bool → Bool) {spec : SessionSpec} {tabs : Array Setup} {record : String}
-    {proofs : Array ByteArray} {L : List Claims.Msg}
+    {proofs : Array ByteArray} {L : List Hash.Msg}
     (h : Runs sha512 (verifyWithMK keep Claims.Hashes.oc spec tabs record proofs) () L) :
     verifyWithMK keep (hashesIn L) spec tabs record proofs = .ok () :=
   (With.verifyWithMK_sim (within L) (within_hashes L) keep spec tabs record proofs) () h

@@ -78,9 +78,9 @@ open Flock Transcript FlockComplete FlockDeploy
 /-- **The one-table session's two reps**: the table's schedule, its level-0 commitment `cm` and its extra claims `e`
 at the link's points; rep `0` runs from the link's send, rep `1` from where rep `0` stopped; the proof files are their
 proofs' encodings, and the record is the honest record of their rounds. -/
-theorem sessionP_reps (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec} {t : String}
+theorem sessionP_reps (H : Hash.Msg → Hash.Msg) (resp : ℕ → Hash.Msg) {spec : SessionSpec} {t : String}
     (ht : spec.tables = #[t]) (hct : spec.coinTree = none) (st : Setup) (trs : Array Trace) (tape : Tape)
-    {r : String × Array ByteArray} {bodies : Array Claims.Msg}
+    {r : String × Array ByteArray} {bodies : Array Hash.Msg}
     (hrun : (sessionP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec #[st] trs tape).go #[] = (.ok r, bodies)) :
     ∃ sch cm e, fast100 st.m = some sch ∧
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (sch.levels.getD 0 default)
@@ -169,8 +169,8 @@ theorem sessionP_reps (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg
   rfl
 
 /-- Rounds that are sends retain their bytes. -/
-theorem Recs.bytes {resp : ℕ → Claims.Msg} :
-    ∀ {i : ℕ} {rs : List Round} {bs : List Claims.Msg}, Recs resp i rs bs → ∀ r ∈ rs, ∃ c, r.bytes = some c
+theorem Recs.bytes {resp : ℕ → Hash.Msg} :
+    ∀ {i : ℕ} {rs : List Round} {bs : List Hash.Msg}, Recs resp i rs bs → ∀ r ∈ rs, ∃ c, r.bytes = some c
   | _, [], [], _, _, hr => by simp at hr
   | _, _ :: _, _ :: _, h, r, hr => by
     rcases List.mem_cons.1 hr with rfl | hr
@@ -182,9 +182,9 @@ theorem Recs.bytes {resp : ℕ → Claims.Msg} :
 
 /-- **A rep's recorded rounds**, run from its own transcript's start: a round, each of `1 ≤ n ≤ 65536` coins, and each
 round's bytes retained. -/
-theorem repP_rounds (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_rounds (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (d : ByteArray) (l : Array Claims.Msg) {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    (d : ByteArray) (l : Array Hash.Msg) {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hok : Ret ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run
       (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds)
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run
@@ -206,10 +206,10 @@ namespace FlockComplete.Replay
 open Flock Transcript FlockDeploy
 
 /-- **A returning rep's sends**: one per round of its zerocheck, lincheck, ring switch and Ligerito. -/
-theorem repP_count (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_count (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (hf : fast100 st.m = some sch) (d : ByteArray) (l : Array Claims.Msg) {p : Proof}
-    {t' : Transcript} {l' : Array Claims.Msg}
+    (hm : 14 ≤ st.m) (hf : fast100 st.m = some sch) (d : ByteArray) (l : Array Hash.Msg) {p : Proof}
+    {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run
       (Transcript.init #[] d)).go l = (.ok (p, t'), l')) :
     l'.size = l.size + ((3 + (st.m - 6)) + (3 + (st.fold.kLog - 6)) + (2 + extras.size + 1) +
@@ -223,13 +223,13 @@ theorem repP_count (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st
 
 /-- **A returning rep's rounds begin with its ring switch's**: the honest Ligerito only adds rounds
 (`ligeritoP_rec`). -/
-theorem repP_prefix (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_prefix (resp : ℕ → Hash.Msg) (h : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tr : Trace)
     (tbl : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Claims.Msg) {full : Array F128}
+    (hm : 14 ≤ st.m) (t : Transcript) (l : Array Hash.Msg) {full : Array F128}
     (hfold : st.fold.fold (coinOf (resp (l.size + 3 + (st.m - 6))) 0)
       (skipWeights (Zc.out st.m (Zc.coinsAt resp l.size) tr).z)
       ((Zc.out st.m (Zc.coinsAt resp l.size) tr).rho.extract 0 (st.fold.kLog - 6)) = .ok full)
-    {p : Proof} {t' : Transcript} {l' : Array Claims.Msg}
+    {p : Proof} {t' : Transcript} {l' : Array Hash.Msg}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 h) st sch tr tbl cm0 extras salt nonce).run t).go l =
       (.ok (p, t'), l')) :
     Prefix (Rs.tEnd tr (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
@@ -277,11 +277,11 @@ theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Challenges} 
 /-- **The session walk at a run's rep**: rep `r` of the run's one table, run from its first send on and its own
 transcript's start, returns the decoded proof; the recorded stream is its rounds as the decoder reads them back, each
 of its rounds retains its bytes, and the rep's level-0 commitment is a `commitP` of the schedule's level `0`. -/
-theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.walk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {r : ℕ} (hr : r < 2) :
     ∃ (tbl : Array F128) (cm0 : Commit) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-      (l : Array Claims.Msg) (t' : Transcript) (l' : Array Claims.Msg),
+      (l : Array Hash.Msg) (t' : Transcript) (l' : Array Hash.Msg),
       l.size = repStart o.spec o.sts (2 * 0 + r) ∧
       ((repP (asksS o.resp) (Hashes.ofSha512 (Claims.hOf H)) o.tabs[0]! (o.sch 0) (o.trace 0) tbl cm0 (o.extras 0)
         salt nonce).run (Transcript.init #[] (o.spec.domain o.spec.tables[0]! r).toUTF8)).go l =
@@ -388,7 +388,7 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
     · rw [htab0, hsch0, hext0, hp]
       exact hr₁
 
-theorem _root_.FlockComplete.Run.tabs_size_one {H : Claims.Msg → Claims.Msg}
+theorem _root_.FlockComplete.Run.tabs_size_one {H : Hash.Msg → Hash.Msg}
     {rel : Readable.Parsed → Readable.Relation} (o : Run H rel) : o.tabs.size = 1 := by
   obtain ⟨st, hst, -⟩ := o.table
   simp [Run.tabs, tabsOf, hst]
@@ -396,7 +396,7 @@ theorem _root_.FlockComplete.Run.tabs_size_one {H : Claims.Msg → Claims.Msg}
 /-- **The session walk at every rep** (`RepWalk`): table `i`'s rep `r`, on the table's level-0 commitment, run from the
 rep's first send on and its own transcript's start, returns the decoded proof, and the recorded stream carries its
 rounds and holds as many. -/
-theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.repWalk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     RepWalk o i r := by
@@ -413,7 +413,7 @@ theorem _root_.FlockComplete.Run.repWalk {H : Claims.Msg → Claims.Msg} {rel : 
 /-- **The session walk** at table `i`'s rep `r` of a run: the decoded proof's zerocheck, lincheck and ring switches are
 the prover's, the statement's circuit fold returns, and the recorded stream carries the prover's rounds through each
 phase (`ZcAt`, `LcAt`, `RsAt`), and the model's Ligerito rounds, as many as it records (`LgAt`, `LgCount`). -/
-theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Run.walkAt {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (h64 : Claims.Out64 H) (hP : JsonRT.ProverOk H rel) (o : Run H rel)
     {i : ℕ} (hi : i < o.tabs.size) {r : ℕ} (hr : r < 2) :
     ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r := by
@@ -446,7 +446,7 @@ record's error (`δc H`, `Complete.Ready`), from the named premises: the oracle'
 64-byte outputs (`Out64`) and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
 prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
 from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
-theorem complete_plain (H : Claims.Msg → Claims.Msg) (h64 : Claims.Out64 H)
+theorem complete_plain (H : Hash.Msg → Hash.Msg) (h64 : Claims.Out64 H)
     (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := by
   have hP : JsonRT.ProverOk H Readable.relation := proverOk h64

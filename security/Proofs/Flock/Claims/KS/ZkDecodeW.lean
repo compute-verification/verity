@@ -336,7 +336,7 @@ variable [S : ZkSetup]
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the witness-lane verdict at a masked statement in
 scope**: `decodesTable_deploy` at `OkOffWJ` on the outcomes of `AccTxJ` (`decodesTableW_zkTabs` at public outputs,
 `decodesTableHW_zkTabs` at hidden outputs). -/
-theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesTableW_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
@@ -372,7 +372,7 @@ end Gen
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the witness-lane verdict at a masked statement in
 scope**: `decodesTable_deploy` at `OkOffWJ` on the outcomes of `AccTxJ` (`decodesTableW_zkTabs` at public outputs,
 `decodesTableHW_zkTabs` at hidden outputs). -/
-theorem decodesTableW_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
+theorem decodesTableW_deploy {x : Hash.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])

@@ -71,7 +71,7 @@ open Lean (Json)
 
 /-- **The prover's last message at the parsed value**: the statement, the record's parsed value and the proof files. -/
 structure FinalJ where
-  stmt : Claims.Msg
+  stmt : Hash.Msg
   j : Json
   proofs : Array ByteArray
 
@@ -89,8 +89,8 @@ theorem recordSample_of_parse {record : String} {j : Json} (h : Flock.JsonParse.
   rfl
 
 /-- The checks after the verdict at the parsed value: the statement, the sample at `f.j`, custody at `j'`. -/
-def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
+def checksAtJ (s : Ins) (spec : SessionSpec) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
   Record.check (sampleEq (sampleOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
@@ -99,15 +99,15 @@ def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteA
 
 /-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
 value. -/
-def decisionAtJ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalJ) :
+def decisionAtJ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) (f : FinalJ) :
     Claims.OCV Unit := do
   verifyJWithM Claims.Hashes.oc spec (tabsOf sts) (coinSubJ spec c₁ mids f.j) f.proofs
   monadLift (checksAtJ s spec x link c₁ mids f (coinSubJ spec c₁ mids f.j))
 
 /-- The decision at the parsed value: the statement's setup over `OC`, then `decisionAtJ`. -/
-def decisionJF (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalJ) : Claims.OCV Unit := do
+def decisionJF (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) (f : FinalJ) : Claims.OCV Unit := do
   let (spec, sts) ← setupM Claims.Hashes.oc s.read
   decisionAtJ s spec sts x link c₁ mids f
 
@@ -116,11 +116,11 @@ inductive ActJ where
   | rej
   | coin (c : Coin)
   | decide (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-      (mids : List (Claims.Msg × Coin)) (f : FinalJ)
+      (mids : List (Hash.Msg × Coin)) (f : FinalJ)
 
 /-- **`nextJ`'s step**: a coin where the deployed plain verifier answers one; else, at a statement that sets up, decide
 where `rd` reads the last message and the link message reads; anything else, refuse. -/
-def actJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : ActJ :=
+def actJ (rd : Hash.Msg → Option FinalJ) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) : ActJ :=
   match act false x as cs with
   | .coin c => .coin c
   | _ =>
@@ -135,7 +135,7 @@ def actJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.
       | _, _, _ => .rej
 
 /-- **The element-level step at the record's parsed value.** -/
-def nextJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) :
+def nextJ (rd : Hash.Msg → Option FinalJ) (x : Hash.Msg) (as : List Hash.Msg) (cs : List Coin) :
     Claims.OC Claims.Out :=
   match actJ rd x as cs with
   | .rej => .ret .rej
@@ -143,21 +143,21 @@ def nextJ (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (as : List Claims
   | .decide s _ _ link c₁ mids f => outOf (decisionJF s x link c₁ mids f)
 
 /-- **A coin is answered as the plain verifier answers it** (`deploySplit`'s `hcoin`). -/
-theorem nextJ_coin (rd : Claims.Msg → Option FinalJ) (H : Claims.Msg → Claims.Msg) : ∀ (x : Claims.Msg)
-    (as : List Claims.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
+theorem nextJ_coin (rd : Hash.Msg → Option FinalJ) (H : Hash.Msg → Hash.Msg) : ∀ (x : Hash.Msg)
+    (as : List Hash.Msg) (cs : List Coin) (c : Coin), act false x as cs = .coin c →
     ((nextJ rd x as cs).eval H).1 = .msg c.bytes := by
   intro x as cs c h
   simp only [nextJ, actJ, h, Claims.OC.eval]
 
-theorem nextJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+theorem nextJ_decide {rd : Hash.Msg → Option FinalJ} {x : Hash.Msg} {as : List Hash.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalJ} (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
+    {mids : List (Hash.Msg × Coin)} {f : FinalJ} (h : actJ rd x as cs = .decide s spec sts link c₁ mids f) :
     nextJ rd x as cs = outOf (decisionJF s x link c₁ mids f) := by
   simp only [nextJ, h]
 
 /-- **The parsed value's decision at a session is `nextCs`'s** on a record in its canonical text that parses to it. -/
-theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
-    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
+theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Hash.Msg)
+    (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Hash.Msg × Coin)) {f : Final} {j : Json}
     (hj : Flock.JsonParse.parse f.record = .ok j) (hc : RecordText.printT j = f.record) :
     decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCsAt s spec sts x link c₁ mids f := by
   have hs : RecordText.check f.record = pure () := RecordText.check_of hj hc
@@ -166,8 +166,8 @@ theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Cl
     Bool.false_eq_true, ↓reduceIte]
 
 /-- **The parsed value's decision is `nextCs`'s** on a record in its canonical text that parses to it. -/
-theorem decisionJF_eq (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Flock.JsonParse.parse f.record = .ok j)
+theorem decisionJF_eq (s : Ins) (x : Hash.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (mids : List (Hash.Msg × Coin)) {f : Final} {j : Json} (hj : Flock.JsonParse.parse f.record = .ok j)
     (hc : RecordText.printT j = f.record) :
     decisionJF s x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCs s x link c₁ mids f := by
   unfold decisionJF decisionCs
@@ -180,7 +180,7 @@ theorem decisionJF_eq (s : Ins) (x : Claims.Msg) (link : List ByteArray × List 
 
 /-- **The reading at the last step**: `rd` reads the last message and the link message reads (`actJ` decides), and the
 record value's fields custody reads are there with their shapes (`liveOfJ` at the substituted value is `.ok`). -/
-def ReadOk (rd : Claims.Msg → Option FinalJ) (x : Claims.Msg) (ms : List Claims.Msg) (cs : List Coin) : Prop :=
+def ReadOk (rd : Hash.Msg → Option FinalJ) (x : Hash.Msg) (ms : List Hash.Msg) (cs : List Coin) : Prop :=
   match actJ rd x ms cs with
   | .decide _ spec _ _ c₁ mids f => ∃ lv, liveOfJ spec (coinSubJ spec c₁ mids f.j) = .ok lv
   | _ => False

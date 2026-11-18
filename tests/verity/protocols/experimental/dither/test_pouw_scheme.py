@@ -49,12 +49,13 @@ def test_it_is_a_pouw_scheme_at_each_named_pair():
 
 
 @pytest.mark.parametrize(("card", "pinned"), sorted(K))
-def test_the_resource_scheme_on_a_card_resolves_to_it(card, pinned):
-    """PoUW's kernel schemes reach Dither as the resource scheme ``dither`` on a card, as they reach Pearl+'s."""
-    s = schemes.of("dither", card, pinned)
+def test_its_kernel_scheme_builds_at_a_card_and_pinning(card, pinned):
+    """PoUW builds Dither's kernel scheme by its name, at a card's parameters; the resource scheme declares no
+    ``kernels`` while it is experimental, so it is not reached through one."""
+    s = schemes.get("dither", card=card, pinned=pinned)
     assert isinstance(s, DS.Dither) and (s.L, s.lp) == DS.PARAMETERS[card, pinned]
     with pytest.raises(ValueError, match="no parameters on 'h100'"):
-        schemes.of("dither", "h100", pinned)
+        schemes.get("dither", card="h100", pinned=pinned)
 
 
 @pytest.mark.parametrize("parameters", sorted(K))

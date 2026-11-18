@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from verity.commitments import domains as DM
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
@@ -929,7 +930,7 @@ def test_a_windows_registration_registers_its_scan_state_under_the_domain_the_ve
     (e,) = rec["registered"]
     scan = RV.Registered.commit(digest, SS.SCAN_STATE, list(state.rows), list(state.salts), schema=CR.SCHEMA_V2, window=RUN)
     want = CR.registered_entries(program, {SS.SCAN_STATE: words}, {SS.SCAN_STATE: CR.SCHEMA_V2}, RUN)[SS.SCAN_STATE]
-    assert rec["format"] == REG.FORMAT_V2 and e == state.entry() == scan.entry()
+    assert rec["format"] == DM.REGISTRATION and e == state.entry() == scan.entry()
     assert e["value"] == SS.SCAN_STATE and e["root"] == rec["window"]["registered_roots"][SS.SCAN_STATE]
     assert (e["leaves"], e["words"], e["domain"]) == (want["leaves"], want["words"], want["domain"]) == (
         CLASS.buckets, words, RV.domain(digest, SS.SCAN_STATE, words, CLASS.buckets, window=RUN).domain_id.hex())

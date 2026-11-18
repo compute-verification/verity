@@ -23,6 +23,7 @@ from types import SimpleNamespace
 import pytest
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.commitments import registered_value as RV
+from verity.commitments import domains as DM
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import gf2k as G
 from verity.circuits.ops.boolean.gf2k import mul
@@ -554,7 +555,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     IR.bind(again, program, part, [desc.entry()])
     assert _registered_top(again, binds["stacked"], 6) == (registration, bound, reg), "the circuit and the salts alone"
     dom = RV.domain(registration["program"], RL.STACKED, RL.ROW_WORDS, 128)
-    assert registration["format"] == R.FORMAT_V2 and entry == \
+    assert registration["format"] == DM.REGISTRATION and entry == \
         {"value": "stacked", "root": entry["root"], "leaves": 128, "words": 64, "domain": dom.domain_id.hex()}
     assert reg["top"] == [b.hex() for b in RL.commit_top(binds["stacked"], [bytes.fromhex(s) for s in reg["salts"]])]
     assert len(set(reg["salts"])) == 128 and "registered" not in json.dumps(RL.check_schedule(sch))
@@ -585,7 +586,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
                  registered={RL.STACKED: {**reg, "salts": reg["salts"][::-1]}})
     other = RL.register_top(registration["program"], RL.STACKED, binds["stacked"], lambda g=random.Random(8): g.randbytes(192))
     forged = IR.registration_record(program, part, [desc.entry(), other["entry"]])
-    v1 = {**registration, "format": R.FORMAT}
+    v1 = {**registration, "format": DM.REGISTRATION_V1}
     not_meta = "the registration is not the one the statement's META binds"
     for bad, dg, why in [(with_desc, R.digest(with_desc), "the private circuit's registration (verity/registration/v2) names no stacked"),
                          (v1, R.digest(v1), "names no stacked"), (None, bound, not_meta), (registration, None, not_meta),
@@ -855,7 +856,7 @@ def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_sessi
     entry = RL.registered_entry(registration, RL.STACKED)
     assert registration == proxy.registration == IR.bound(stage) and proxy.bound == IR.meta(stage)[IR.REGISTRATION_KEY]
     assert entry == RL.top_entry(registration["program"], RL.STACKED, [bytes.fromhex(b) for b in reg["top"]])
-    assert registration["format"] == R.FORMAT_V2 and (entry["leaves"], entry["words"]) == (128, 64)
+    assert registration["format"] == DM.REGISTRATION and (entry["leaves"], entry["words"]) == (128, 64)
     V.registered(ss.read.public, registration, proxy.bound)
     assert IR.private(stage, RL.STACKED)["salts"] == reg["salts"]
     visible = [stage / "circuit.txt", stage / "pub-1.bin", stage / IR.REGISTRATION, ss.d / "inner" / "public.json",

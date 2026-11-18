@@ -31,10 +31,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.commitments import domains as DM
 from verity.commitments import salt_file as SF
 from verity.commitments.periods import interface as IF
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity.commitments import registered_value as RV
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
     registered_commit,
@@ -367,7 +367,7 @@ def deployment_record(registration: Any) -> dict[str, Any]:
     reg = WeightsRegistration.of(registration, "the weights registration")
     for p in (*reg.values, *reg.unrooted):
         _param(p)
-    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+    return {"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL,
             "deployment": {"kind": DEPLOYMENT, "program": reg.program, "model": {"repo": reg.repo, "revision": reg.revision},
                            "grain": dict(reg.grain), "unrooted": sorted(reg.unrooted)},
             "registered": [dict(reg.values[p]) for p in sorted(reg.values)],

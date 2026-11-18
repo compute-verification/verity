@@ -82,6 +82,3 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
   - `share.py`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
     decode and prefill scenarios, and `--analyse` splits a forward's GPU time into the credited int8 GEMMs, the
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
-
-Outside this directory, `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
-`copies_for`, `nvml`).

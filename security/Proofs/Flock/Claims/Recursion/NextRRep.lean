@@ -70,7 +70,7 @@ structure TableOk (st : Stmt) : Prop where
   scheme : st.merkle ∈ MerkleScheme.all
 
 /-- **A plain case's one table is `TableOk`.** -/
-theorem _root_.FlockComplete.Case.tableOk {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
+theorem _root_.FlockComplete.Case.tableOk {H : Hash.Msg → Hash.Msg} {rel : Readable.Parsed → Readable.Relation}
     (c : Case H rel) : ∃ st, c.sts = #[st] ∧ TableOk st := by
   obtain ⟨st, hst, -, h22, h35, hc, hm, hk⟩ := c.table
   obtain ⟨st', hst', -, hall, -⟩ := c.scheme
@@ -80,8 +80,8 @@ theorem _root_.FlockComplete.Case.tableOk {H : Claims.Msg → Claims.Msg} {rel :
 
 /-- **The honest rep proof fits its shape at any `TableOk` table**: `repShaped` on the table's facts, on any trace,
 with at most 2,048 extra claims. -/
-theorem repShapedOk {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {st : Stmt} (hok : TableOk st)
-    {sch : Schedule} (hsch : fast100 (Setup.ofCircuit st).m = some sch) (resp : ℕ → Claims.Msg) (tr : Trace)
+theorem repShapedOk {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {st : Stmt} (hok : TableOk st)
+    {sch : Schedule} (hsch : fast100 (Setup.ofCircuit st).m = some sch) (resp : ℕ → Hash.Msg) (tr : Trace)
     {salt₀ : ℕ → ByteArray} {cm : Commit}
     (hcm : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit st).merkle
       (sch.levels.getD 0 default) (packed tr (Setup.ofCircuit st).m) salt₀ = .ok cm)
@@ -118,7 +118,7 @@ theorem repShapedOk {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {st :
       (by show 2 + e.size ≤ 2050; omega)), hp⟩
 
 /-- **Ligerito's proof starts at the commitment's cap**: `ligeritoP` returns `cm0.cap` as `initialCap`. -/
-theorem ligeritoP_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
+theorem ligeritoP_initialCap (resp : ℕ → Hash.Msg) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
     (T : F128) (cm0 : Commit) (t b : Array F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t₀ : Transcript) :
     Ret ((ligeritoP (asksS resp) hs ms sch T cm0 t b salt nonce).run t₀) fun r => r.1.initialCap = cm0.cap := by
@@ -132,7 +132,7 @@ theorem ligeritoP_initialCap (resp : ℕ → Claims.Msg) (hs : Hashes PS) (ms : 
 
 /-- **`repP` sets the fields V\* takes unabsorbed**: `params` as `pcsParams`, and the level-0 cap as `initialCap`
 (`ligeritoP_initialCap`). -/
-theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
+theorem repP_unabsorbed (resp : ℕ → Hash.Msg) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
     (t₀ : Transcript) :
     Ret ((repP (asksS resp) hs st sch tr t cm0 extras salt nonce).run t₀) fun pt =>
@@ -148,9 +148,9 @@ theorem repP_unabsorbed (resp : ℕ → Claims.Msg) (hs : Hashes PS) (st : Setup
 /-- **The honest rep's `finalC` is its zerocheck's at its `z`**: `repP`'s zerocheck is the prover's
 (`Replay.repP_zerocheck`), whose `finalC` is `round1c` at the coin of the reply to the rep's third send. What is left
 for `HonestRep.finalC` is that the reader's `z` is that coin. -/
-theorem repP_finalC (resp : ℕ → Claims.Msg) (hs : Hashes PS) {st : Setup} (sch : Schedule) (tr : Trace)
+theorem repP_finalC (resp : ℕ → Hash.Msg) (hs : Hashes PS) {st : Setup} (sch : Schedule) (tr : Trace)
     (t : Array F128) (cm0 : Commit) (extras : Array Claim) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
-    (hm : 14 ≤ st.m) (t₀ : Transcript) {l l' : Array Claims.Msg} {p : Proof} {t' : Transcript}
+    (hm : 14 ≤ st.m) (t₀ : Transcript) {l l' : Array Hash.Msg} {p : Proof} {t' : Transcript}
     (h : ((repP (asksS resp) hs st sch tr t cm0 extras salt nonce).run t₀).go l = (.ok (p, t'), l')) :
     p.zerocheck.finalC = dot (lagrange nodesL den6Inv (coinOf (resp (l.size + 2)) 0)) p.zerocheck.round1c := by
   rw [(Replay.repP_zerocheck resp hs st sch tr t cm0 extras salt nonce hm t₀ l h).1]
@@ -167,14 +167,14 @@ table with its `fast100` schedule and at most 2,048 extra claims at the first co
 returns on any trace, under any salts, is `ProofShaped` (`repShapedOk`), zero nonces included, with V\*'s `params`
 and `initialCap` (`repP_unabsorbed`), so it is an honest rep (`honestRep_of_shaped`) wherever its `finalC` is the
 zerocheck's at the reader's `z` (`hfc`, a hypothesis here). -/
-theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {spec : SessionSpec}
+theorem honestRep_of_repP {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray} {cs : List Coin} {k : ℕ} (hk : k / 2 < sts.size)
     (hok : JsonRT.TableOk sts[k / 2]) {sch : Schedule} (hsch : fast100 sts[k / 2].m = some sch)
     {e : Array Claim} (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok e) (he2 : e.size ≤ 2048)
-    (resp : ℕ → Claims.Msg) (tr : Trace) {salt₀ : ℕ → ByteArray} {cm : Commit}
+    (resp : ℕ → Hash.Msg) (tr : Trace) {salt₀ : ℕ → ByteArray} {cm : Commit}
     (hcm : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes Flock.V) (Setup.ofCircuit sts[k / 2]).merkle
       (sch.levels.getD 0 default) (packed tr (Setup.ofCircuit sts[k / 2]).m) salt₀ = .ok cm)
-    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (d : ByteArray) {l l' : Array Claims.Msg}
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (d : ByteArray) {l l' : Array Hash.Msg}
     {pt : Flock.Proof × Transcript}
     (hrun : ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) (Setup.ofCircuit sts[k / 2]) sch tr
       (packed tr (Setup.ofCircuit sts[k / 2]).m) cm e salt nonce).run (Transcript.init #[] d)).go l = (.ok pt, l'))

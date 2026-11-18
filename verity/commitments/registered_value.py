@@ -36,8 +36,6 @@ PRODUCED_KEY = "produced"
 #: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)
 SESSION_KEY = "session"
 SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
-#: a row's hm96-sha512 commitment string ``b || c``
-BC_BYTES = 128
 _INST = hm96.SHA512
 _HEX = re.compile(r"[0-9a-f]+")
 
@@ -198,6 +196,6 @@ class Registered:
                 {"value": self.value, "positions": [int(p) for p in positions], "paths": [self.path(p).hex() for p in positions]})
 
 
-__all__ = ["BC_BYTES", "BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMAS",
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS_FROM", "REGISTERED_DOMAIN", "Registered", "SCHEMAS",
            "SESSION_KEY", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WORD_BITS", "domain", "known_schema", "leaf",
            "row_digest", "row_words", "supplied_salts", "width_entry", "window_root"]

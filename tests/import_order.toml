@@ -106,9 +106,7 @@ files = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/ir_lower.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/ir_sampling.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/partition_units.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/tail.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/tail_pieces.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/templates/silu_mul_v2.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/topp_word.py",
@@ -128,9 +126,7 @@ loader = "verity/protocols/proofs/flock"
 loaded = "benchmarks"
 files = [
     "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/bench.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/circuit_bench.py",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/instances.py",
     "verity/protocols/proofs/flock/prover/python/verity_flock/register.py",
 ]
 
@@ -629,7 +625,6 @@ loaded_by = [
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/serve_sample.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/served.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/tables.py",
-    "verity/protocols/resource_accounting/compute/pouw/prover/serving/ncp.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/operands.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/__init__.py",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/pearl_c/lanes.py",

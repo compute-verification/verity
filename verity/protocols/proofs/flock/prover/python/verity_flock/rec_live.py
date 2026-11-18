@@ -119,6 +119,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from verity.commitments import domains as DM
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 
@@ -993,9 +994,8 @@ def top_entry(program: str, table: str, top: list[bytes]) -> dict:
 
 def registered_entry(registration: dict | None, table: str) -> dict | None:
     """The private circuit's ``verity/registration/v2`` record's one registered entry named ``table``, or None."""
-    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-    if not isinstance(registration, dict) or registration.get("format") != R.FORMAT_V2:
+    if not isinstance(registration, dict) or registration.get("format") != DM.REGISTRATION:
         return None
     got = [e for e in registration.get("registered") or () if isinstance(e, dict) and e.get("value") == table]
     return got[0] if len(got) == 1 else None

@@ -16,7 +16,7 @@ template's output-leaf order, and work from the inputs and the byte layouts `ncp
 
 `NativeWeight.commit` commits a weight's side once, and `Native.commit` a whole call, both one block of weight rows at a
 time, the blocks on a thread pool, reading those rows from the layer, and keep only each unit's leaf
-(`pouw_circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and `args(u, ...)`
+(`circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and `args(u, ...)`
 gives the unit's template arguments from the inputs and its producers' opened outputs.
 """
 from __future__ import annotations
@@ -218,7 +218,7 @@ class NativeWeight:
                                PC.units_root(blob), self.outputs, read.parts())
 
     def reads(self, block: int | None = None) -> tuple[bytes, bytes, bytes]:
-        """What a call on this weight reads, digested (`pouw_circuit.Read`): its Y, its c₀ and the scales t, regenerated."""
+        """What a call on this weight reads, digested (`circuit.Read`): its Y, its c₀ and the scales t, regenerated."""
         n, rd = self.n, PC.Read(self.n, self.k)
         block = max(D, (block or BLOCK) // D * D)
         for lo in range(0, n, block):

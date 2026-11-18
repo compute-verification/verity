@@ -145,6 +145,7 @@ import re
 import time
 from typing import Any, Iterable, Mapping, Sequence
 
+from verity.commitments import domains as DM
 from verity.commitments import history as HT
 from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits.codec import canonical_json
@@ -154,9 +155,6 @@ from . import draw as D, link_points as LP, partition as P, registered as G
 from verity.commitments import registered_value as RV
 from .verdict import Verdict, _Collect
 
-FORMAT = "verity/registration/v1"
-FORMAT_V2 = "verity/registration/v2"
-PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 RECEIPT = "verity/registration-receipt/v1"
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
@@ -193,7 +191,7 @@ def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[
     `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`registered_value.Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
-    rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
+    rec = {"format": DM.REGISTRATION if registered else DM.REGISTRATION_V1, "protocol": DM.ONE_STAGE_PROTOCOL, "program": part["program"],
            "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
            "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
@@ -212,7 +210,7 @@ def record_digest(tag: str, canon: bytes) -> bytes:
 
 def digest(rec: Mapping[str, Any]) -> str:
     """`SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag."""
-    tag = FORMAT_V2 if rec.get("format") == FORMAT_V2 else FORMAT
+    tag = DM.REGISTRATION if rec.get("format") == DM.REGISTRATION else DM.REGISTRATION_V1
     return record_digest(tag, canonical_json(dict(rec))).hex()
 
 
@@ -371,7 +369,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
         return c.verdict(fanout=fan, rests_on_period_check=through)
     # R1
-    if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
+    if (rec["format"], rec["protocol"]) != (DM.REGISTRATION if v2 else DM.REGISTRATION_V1, DM.ONE_STAGE_PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
         mine = D.derive(program, query, sampling_design, work_table)
@@ -988,7 +986,7 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 
 registered_entries = G.registered_entries
 
-__all__ = ["FORMAT", "FORMAT_V2", "KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "PROTOCOL", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
+__all__ = ["KINDS", "NOT_ONE_MEMBER", "POOL_KEYS", "RECEIPT", "ROW_TABLES", "TABLE_PORT",
            "WINDOW_DOMAIN", "check", "digest", "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused",
            "pool_spent_before", "pool_values", "public_ports", "query_digest", "receipt", "record", "record_digest",
            "refuse_unwindowed", "refused", "registered_entries", "unwindowed", "window_domain"]

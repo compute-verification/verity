@@ -122,6 +122,7 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.network.verifier import content_rows, io_request, scan_ok
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.certificate import (Certificate, CertifiedStart, Direction, LmsKey,
@@ -149,8 +150,8 @@ from verity_vllm.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
-ONE_STAGE = R.PROTOCOL
-FORMATS = (R.FORMAT, R.FORMAT_V2)
+ONE_STAGE = DM.ONE_STAGE_PROTOCOL
+FORMATS = (DM.REGISTRATION_V1, DM.REGISTRATION)
 #: a proof block's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
