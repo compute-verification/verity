@@ -44,12 +44,12 @@ which it removes. Its last lines are `summary.py`'s, one a measurement.
 
 ## Two phases
 
-Per leaf the reference computes x (the row's digest), the salt y (192 bytes, given or y_r = SHA-512(Ks || u64be pos ||
-u64be r)), c = SHA-512(salt_prefix || y), b = x xor M_key y, h = SHA-512(leaf_prefix || b || c), the frame leaf, then the
+Per leaf the reference computes x (the row's digest), the salt y (192 bytes, fresh operating-system bytes the caller
+hands in: a buffer of 192 bytes a leaf in leaf order), c = SHA-512(salt_prefix || y), b = x xor M_key y, h = SHA-512(leaf_prefix || b || c), the frame leaf, then the
 tree. Nothing but x and what follows reads the data, so the committer runs in two phases with the same output bytes:
 
-- the salt phase (`salt_kernel`): y, M_key y and c, 128 bytes a leaf, before the operand exists (5 of e2e's ~13 compressions
-  a leaf, and the M_key y table walk);
+- the salt phase (`salt_kernel`): M_key y and c, 128 bytes a leaf, before the operand exists (c's 2 compressions a leaf and
+  the M_key y table walk);
 - the data phase (`leaf_kernel`, the node kernels): x, b, h, the frame leaf and the tree. Only this is on the critical path.
 
 M_key is Hankel (column j is key bits j .. j+511), so the reference's 192 byte tables are one 64 KB table T, in shared memory.
@@ -57,24 +57,24 @@ The tree's narrow top can run on the CPU (`Committer::host_tail`, the device's n
 
 ## Bit for bit
 
-`reference.py check` runs a build on 126 prepared cases and compares every level, every b || c and the root with the
+`reference.py check` runs a build on 97 prepared cases (`full`: 114), each with its own seeded salts, and compares every level, every b || c and the root with the
 reference's, then opens up to 64 positions a case from the build's levels: the reference's `verify_opening` accepts each,
 refuses it with one flipped bit of the leaf value, and the path equals the reference's (and `MerkleTree.open`'s up to 4096
 leaves). `check` also folds the top six levels on the CPU and requires the GPU's levels. The cases:
 
-- e2e leaves (32 int8 as bf16 words twice, 1024 bits): n = 1, 2, 3, 5, 7, 8, 255, 256, 257, 511, 513, 1000, each with
-  derived and given salts; 4095, 4097, 65537; a fresh key; the o_proj call (2^20 leaves) and 2^20 - 3 leaves;
+- e2e leaves (32 int8 as bf16 words twice, 1024 bits): n = 1, 2, 3, 5, 7, 8, 255, 256, 257, 511, 513, 1000, 4095,
+  4097, 65537; a fresh key; the o_proj call (2^20 leaves) and 2^20 - 3 leaves;
 - `sha512/row/v2` rows of 0, 1, 7, 8, 13, 256, 888, 889, 896, 903, 960, 1016, 1024, 1025, 1913, 8192 and 32768 bits (every
-  padding boundary of a row's last block, ragged last bytes), n = 37 (given salts) and 300 (derived, padded stride); 1025
+  padding boundary of a row's last block, ragged last bytes), n = 37 and 300 (padded stride); 1025
   leaves under a fresh key; 8192 rows of 4096 int8 and 100003 rows of 32;
 - `sha512/row-seg/v1` rows of 0 (no segment), 1, 13, 1016, 1024, 8184, 8191, 8192, 8193, 9095, 16384, 24581, 32768, 65536
-  and 524288 bits (64 segments), the same n and salts; 513 leaves under a fresh key; 8192 rows of 4096 int8, 8189 of 8192;
+  and 524288 bits (64 segments), the same n; 513 leaves under a fresh key; 8192 rows of 4096 int8, 8189 of 8192;
 - tile leaves (below), 27 cases: M x K x R of 130 x 96 x 16, 7 x 32 x 4, 7 x 32 x 3 (a row/v2 leaf whose padding fits its
   last block; R = 4 doesn't), 200 x 64 x 64, 1 x 32 x 1, 1000 x 128 x 128, 256 x 256 x 32, 129 x 64 x 128, and 64 x 32 x 5
   under a fresh key, as row/v2; 31 x 64 x 31, 130 x 96 x 32, 100 x 64 x 33, 130 x 96 x 64, 300 x 32 x 65, 64 x 32 x 2048
   (64 segments, one leaf) and 257 x 32 x 128 under a fresh key, as row-seg/v1; o_proj's operand at 2K (R = 16, 32, 64, 128)
   and 8K (R = 16, 64) tokens and 8191 x 4096 x 128, as row/v2; 2048 x 4096 at R = 64 and 128, 8192 and 2047 x 4096 at
-  R = 128, as row-seg/v1. Ragged M, R not dividing 128 or M, given and derived salts. Each tile case also checks, for 16
+  R = 128, as row-seg/v1. Ragged M, R not dividing 128 or M. Each tile case also checks, for 16
   sampled check tiles, that the tile's leaves hold exactly its values.
 
 Every build timed below passes them (the committer in `commit_gpu.cuh`).
@@ -179,7 +179,7 @@ rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leav
   aligned subtree when 128/R divides ceil(M/R) (M a multiple of 128). At R = 128 the tile is one leaf.
 - **Statement and code.** `reference.permute(A, M, K, R)` is the layout; the reference commits the permuted operand with
   `verity.commitments`, unchanged. The GPU reads A in place (`TileGeom`, `TileSrc`: a leaf's 16-byte loads gathered
-  from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts<…>()` before the operand
+  from its R rows, zero past M): `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)`, `salts(salts, stream)` before the operand
   exists, `tiles(A, M, K, R, seg, stream)`, `nodes(stream)`. `commit_gpu check|bench PARAMS tile|tileseg M K R …` and
   `gpu.sh`'s tile sweep (`TILE_M`, `TILE_R`, `TILESEG_R`) run it.
 
@@ -234,7 +234,8 @@ cost to the stage when the root isn't needed before the GEMM ends.
 ### For a producer's epilogue
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
-`salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
+`salts(salts, stream)`, salts the device buffer of fresh salts (192 bytes a leaf in leaf order, 16-byte aligned). In the
+epilogue, for each whole block a CTA holds
 (R divides its rows, 32 divides its columns): `hash_after_block(C.mid_P, src, 32 * R, x)` with `src` any type whose
 `ld16(off)` returns the block's bytes [off, off + 16) in row-major order (from shared memory, or `TileGeom::block(pos)` from
 global memory), then `leaf_from_digest<0>(cm.dom, pos, x, S, levels + 8 * pos, bc)` (row-seg: the segments' digests, then
@@ -248,7 +249,8 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
 most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
 without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs'.
-- `salts(given, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (y, M_key y, c);
+- `salts(salts, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (M_key y, c) from its
+  own n salts (slot s0 + j's at `salts + 192 n j`);
   with slot 0, the frame leaf's first block per position (`F`: it holds the position but not h, so it compresses ahead;
   r2's precomputed first blocks, applied to this format) and the pads with every 128-leaf subtree that holds only pads.
   M_key y reads T from global memory, and only 31 of its rows: T is linear in the byte, so T_v = T_(v & 15) xor
@@ -257,8 +259,7 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   16 bytes of that chunk), so a warp's lookups of one chunk read two lines where row-major rows took up to 16.
   Node messages start from per-level midstates, as on the default path. A slot's salts can run any time before its
   commitment: layer l+1's behind layer l's commitment, beside the GEMMs; every slot before the window, so the window
-  only reads S (128 bytes a leaf); or S records copied in that host threads made with `host_salt` (the same S on the
-  CPU, about 1.8 us a leaf a core).
+  only reads S (128 bytes a leaf).
 - `tiles(..., slot)`: one launch: each thread its leaf (R/4 + 1 row blocks, h 2, the frame leaf's second block), then
   its CTA's 7 levels. When the tile's mr = ceil(M/R) row blocks divide 128, thread t takes the CTA's leaf
   (t % g) * mr + t / g (g = 128/mr): the leaves of one row block at g adjacent columns sit in adjacent lanes, so a warp's
@@ -268,9 +269,9 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   nothing. A 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
   bought 1.17x on about 5 levels.
 - The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
-  binary while their `Consts` agree (one Ks, key and row size).
+  binary while their `Consts` agree (one key and row size).
 
-`COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
+`COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2, both slots the case's salts), so `reference.py check` holds the small path
 to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`).
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
@@ -285,8 +286,7 @@ at R = 64 holds pairs of adjacent leaves: one level), or a 4-ary tree (a format 
 The slice's operand leaf is now one 32-value row segment as
 a 256-bit `row/v2` row at position i (k/32) + j: commit_gpu's `rows` mode with 256-bit rows at a 32-byte stride (bit for
 bit: the cases of 1025 and 100003 such rows; 1.198 ms for o_proj's 2^20 leaves, the Results table's 32 B row). The `e2e`
-mode here is the slice's earlier bf16 form. Its SHAKE-256 salts go in as given salts (192 bytes a leaf, `salts<false>`),
-or the slice moves to the SHA-512 salts of `reference.prf_salt`.
+mode here is the slice's earlier bf16 form. Its salts go in as data (192 bytes a leaf, `salts`).
 
 Tile leaves for the slice: A (8192 x 4096 int8) at R = 64 is 16384 leaves of 2 KiB, a power of two and one of
 `commit.py`'s 2^14-leaf chunks. Leaf pos is block (pos mod 128, pos div 128); its row is the block's 2048 bytes as a

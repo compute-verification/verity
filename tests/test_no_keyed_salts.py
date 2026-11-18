@@ -4,8 +4,8 @@ handed on as data.
 
 The scan reads tracked Python, Lean, CUDA, C and Rust sources for the keyed derivations found by reading the tree, by
 name or by the domain label each hashes under (`NAMES`): the hm96 salt function and the ChaCha20 block it is built on,
-keyed salt tables, Flock's keyed staging salts, the ZK server's value salts, the SHA-512 salt PRF of `commit_gpu` and
-its twins, PoUB's store salts, and a salt key under any spelling. A file that names one fails unless `ALLOWED` lists it
+keyed salt tables, Flock's keyed staging salts, the ZK server's value salts, the SHA-512 salt PRF (`prf_salt`,
+`salt_prf`), PoUB's store salts, and a salt key under any spelling. A file that names one fails unless `ALLOWED` lists it
 with the lane that owns its switch. `ALLOWED` only shrinks: an entry whose file names none any more is stale, and its
 line goes.
 
@@ -23,7 +23,7 @@ SCOPES = ("verity/", "integrations/", "adapters/")
 SUFFIXES = (".py", ".lean", ".cu", ".cuh", ".c", ".cc", ".cpp", ".h", ".hpp", ".rs")
 #: a salt key in any spelling (`salt_key`, `saltKey`, `hm96_salt_key`, `--salt-key`, `FC_ZK_SERVER_SALT_KEY`), not a salt
 #: object's keys; the hm96 salt function and the ChaCha20 block it is built on; keyed salt tables; `stage_salts`' keyed
-#: branch and the ZK server's `saltOf` by their domain labels; `commit_gpu`'s SHA-512 salt PRF and its twins; PoUB's
+#: branch and the ZK server's `saltOf` by their domain labels; the SHA-512 salt PRF (`prf_salt`, `salt_prf`); PoUB's
 #: `store_salt` under a key; and the vllm committer's `salt(ks, pos)`
 NAMES = re.compile(r"(?i:salt[_-]?key)(?![sS])|\bhm96_salt\b|\bhm96Salt\b|\bkeyed_salts\b|\bchacha20_block\b|\bchacha20Block\b"
                    r"|flock-circuit/stage-salt/v1|zk-server/value-salt|\bprf_salt\b|\bsalt_prf\b|\bstore_salt\(\s*key\b"
@@ -44,8 +44,6 @@ ALLOWED: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/step_rows.py": "@vllm",
     "adapters/vllm/verity_vllm/protocols/pouw/__init__.py": "@vllm",
     "verity/commitments/crypto/chacha20.py": "@proofs",
-    "verity/commitments/cuda/commit_gpu/commit_gpu.cuh": "@kernels",
-    "verity/commitments/cuda/commit_gpu/reference.py": "@kernels",
     "verity/commitments/hm96/batch.py": "@proofs",
     "verity/protocols/experimental/dither/prover/dither.py": "@compute-accounting",
     "verity/protocols/proofs/flock/prover/live/src/bin/flock-circuit.rs": "@proofs",
