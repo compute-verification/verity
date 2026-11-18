@@ -3,7 +3,8 @@
 In one process, through its one `Exchange` (`current`): the adapter's hooks emit the events of `verity.hooks` to the
 subscribers of their hooks, and a scheme, attached by its name before the engine is built, files its requests, each
 answered yes or refused by the scheme's name before serving starts.  A subscriber only reads, so it may attach at any
-time; a request changes what is served, so none is filed after the first answer.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
+time; a request changes what is served: one on what the workload declares (a property, a process beside it) is filed
+before the build's answer, and any other before serving begins, at the first step.  The exchange names no scheme; the adapter's hooks translate vLLM's engine,
 requests, tokens and KV blocks into the circuit's words.
 
 On disk, by their protocols' declarations (each protocol's `prover/workload.py`): a body is checked against its declared
@@ -40,9 +41,18 @@ class Exchange:
         self.requests: list[tuple[str, H.Request]] = []
         self.declared: H.Declared | None = None
         self.fixed = False
-        self.step = 0
+        self._step: int | None = None
         #: the workload's readers a launcher offers a process beside it, by what they do; none: no launcher
         self.readers: Mapping[str, Callable[..., Any]] = {}
+
+    @property
+    def step(self) -> int:
+        """The workload's step: 0 before serving begins."""
+        return 0 if self._step is None else self._step
+
+    @step.setter
+    def step(self, value: int) -> None:
+        self._step = value
 
     def subscribe(self, name: str, hook: str, fn: Subscriber) -> Callable[[], None]:
         """``name`` receives every event of ``hook`` from now on, in the order the adapter emits them; returns its
@@ -55,9 +65,11 @@ class Exchange:
 
     def request(self, name: str, request: H.Request) -> None:
         """File scheme ``name``'s request; kernels and gates filed later run outside earlier ones."""
-        if self.declared is not None:
-            raise Refused(name, f"files {type(request).__name__} after the requests were answered; attach before the "
-                                "engine is built")
+        kind = type(request).__name__
+        if self.declared is not None and isinstance(request, (H.RequireProperty, H.RefuseProperty, H.StartBeside)):
+            raise Refused(name, f"files {kind} after the build was answered; file it before the engine is built")
+        if self._step is not None:
+            raise Refused(name, f"files {kind} after serving began (step {self._step}); file it before the first step")
         self.requests.append((name, request))
 
     def _filed[R](self, kind: type[R]) -> list[tuple[str, R]]:

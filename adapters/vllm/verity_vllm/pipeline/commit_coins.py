@@ -265,7 +265,8 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
         lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         audited = Ch.pinned_session(lines, window, key, pins_head(pins), None if main is None else list(main),
                                     verify)
-        trusted, received = remote.trusted_session(directory, heads, window, key, verify)
+        trusted, log = remote.trusted_session(directory, heads, window, key, verify)
+        received = Ch.by_family(trusted, log)
     except CoinError as e:
         return f"the Commit's challenger session is not trusted: {e}"
     for i, run in enumerate(runs):

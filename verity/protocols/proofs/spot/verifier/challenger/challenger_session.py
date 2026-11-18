@@ -779,7 +779,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             directory, ledger, pins_log, key = session.finish(dest)
             if key != session.key:
                 raise Ch.CoinError("the session finished under another key than the one its challenger had when it started")
-            commitment_, roots = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
+            commitment_, log_ = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
+            roots = Ch.by_family(commitment_, log_)
             if ended is None and released["commitment"] != commitment_.root.hex():
                 raise Ch.CoinError(f"the challenger released commitment {str(released['commitment'])[:16]}… at the close, "
                                    f"not the {commitment_.root.hex()[:16]}… its record signs")
