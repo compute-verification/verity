@@ -816,7 +816,8 @@ class Entry:
 
 
 def before(a: Entry, b: Entry) -> bool:
-    """`Challenger.before`: `a` stands earlier than `b` in the release log."""
+    """`Challenger.before`: `a` stands earlier than `b` in the release log, the order `Verity.Challenger.Log.RecordedBefore`
+    and `Verity.Challenger.Log.ReleasedBefore` read."""
     return a.pos < b.pos
 
 
@@ -833,8 +834,8 @@ def released_after(log: Sequence[Entry], label: str, after: bytes) -> list[int]:
 
 
 def cut(log: Sequence[Entry], payloads: Sequence[str], keys: Sequence[str]) -> bool:
-    """`Challenger.cut`, lean's cut as a check: every root, recorded or committed, of a family in `payloads` stands
-    before every release of a family in `keys`."""
+    """`Challenger.cut`, `Verity.Challenger.Log.Cut` as a check over the log's entries: every root, recorded or
+    committed, of a family in `payloads` stands before every release of a family in `keys`."""
     last = max((e.pos for e in log if e.kind != "released" and e.label in payloads), default=None)
     first = min((e.pos for e in log if e.kind == "released" and e.label in keys), default=None)
     return last is None or first is None or last < first

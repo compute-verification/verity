@@ -256,8 +256,8 @@ structure Entry where
 /-- The roots and releases of every family, in the one order the release log holds them. -/
 abbrev Log := List Entry
 
-/-- `before`: entry `a` stands earlier than entry `b` in the release log, the order `Verity.Challenger.Log.before`
-reads. -/
+/-- `before`: entry `a` stands earlier than entry `b` in the release log, the order `Verity.Challenger.Log.RecordedBefore`
+and `Verity.Challenger.Log.ReleasedBefore` read. -/
 def before (a b : Entry) : Bool := a.pos < b.pos
 
 /-- The roots the challenger received, by family in order. -/
@@ -271,8 +271,8 @@ def byFamily (c : LiveCommitment) (log : Log) : Roots :=
 def releasedAfter (log : Log) (label : String) (after : ByteArray) : List Nat :=
   (log.filter fun e => e.kind == .released && e.label == label && e.root == after).map (·.index)
 
-/-- `cut`, lean's cut as a check: every root, recorded or committed, of a family in `payloads` stands before every
-release of a family in `keys`. -/
+/-- `cut`, `Verity.Challenger.Log.Cut` as a check over the log's entries: every root, recorded or committed, of a family
+in `payloads` stands before every release of a family in `keys`. -/
 def cut (log : Log) (payloads keys : List String) : Bool :=
   let last := ((log.filter fun e => e.kind != .released && payloads.contains e.label).map (·.pos)).max?
   let first := ((log.filter fun e => e.kind == .released && keys.contains e.label).map (·.pos)).min?
