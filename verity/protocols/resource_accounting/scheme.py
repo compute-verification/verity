@@ -36,8 +36,9 @@ is a line of `verity.protocols.compose.schemes.DECLARATIONS`, from which every r
   ``settings`` (typed defaults, the application's ``[params]`` over them through `settings`, which is the one place
   they are checked, with ``check_settings``; `verity.hooks.Declared.settings` carries them into the served run), ``hooks``, ``ports``,
   ``option``, ``requires``, and what it does on a served run: ``requests(ctx)``, the requests it makes of the run
-  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels, returning what the adapter
-  reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`), and
+  (`verity.hooks`), ``attach(exchange, ctx)``, which subscribes to the run's exchange and installs its kernels (``ctx``'s keys:
+  `verity.hooks.FRONT`), returning what the adapter reads of it (a `verity.hooks.Front`, a `verity.hooks.Gate`, a
+  `verity.hooks.Releases`), and
   ``processes``, what it starts beside the workload by name (`verity.hooks.StartBeside`, entered in `PROCESSES`), and
   ``messages``, the message types its workload writes and reads on disk (`verity.channel.Schema`s), which an adapter's
   codec reads by the scheme's name, and ``framings``, the completion framings it serves by name, each built over the
@@ -79,7 +80,8 @@ def _no_settings_check(values: Mapping[str, Any]) -> str | None:
     return None
 
 
-#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
+#: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`); a row may publish its amount in
+#: another measure (`Account.Measure`: PoUB P2's ``q_bytes`` in bytes, 8 bits each), which the row converts to this one
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
                                                  "egress": "bits"})
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
@@ -107,12 +109,13 @@ class Order:
     """A condition on the verifier's log (`Verity.Scheme.logOK`): ``committed`` is logged ``direction`` (``before`` or
     ``after``) ``coin``, a coin drawn or another logged event, and, where ``within_ns`` is set, within that many
     nanoseconds of it: a deadline, which no guarantee of the proof layer reads, so it names the scheme's ``assumption``
-    that does (a bound on the prover's speed, say)."""
+    that does (a bound on the prover's speed, say). A deadline set per session is the name of the public parameter,
+    logged before the coin, that carries it in nanoseconds (PoUB's ``deadline_ns``); no value of it is declared."""
 
     committed: str
     coin: str
     direction: Literal["before", "after"] = "before"
-    within_ns: int | None = None
+    within_ns: int | str | None = None
     assumption: str | None = None
 
     def __post_init__(self) -> None:
@@ -121,7 +124,10 @@ class Order:
         if (self.within_ns is None) != (self.assumption is None):
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a time is read only by an assumption, "
                              "and names it")
-        if self.within_ns is not None and self.within_ns <= 0:
+        if isinstance(self.within_ns, str) and not _NAME.fullmatch(self.within_ns.replace("_", "-")):
+            raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline set per session names its "
+                             f"logged parameter, not {self.within_ns!r}")
+        if isinstance(self.within_ns, int) and self.within_ns <= 0:
             raise ValueError(f"{self.committed} {self.direction} {self.coin}: a deadline is a positive time")
 
 

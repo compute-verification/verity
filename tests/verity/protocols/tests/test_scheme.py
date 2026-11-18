@@ -108,6 +108,10 @@ def test_time_only_through_an_assumption() -> None:
         S.Order("value roots", "seeds", "after", assumption="SAKMatmul")
     with pytest.raises(ValueError, match="positive time"):
         S.Order("value roots", "seeds", "after", within_ns=0, assumption="SAKMatmul")
+    per_session = S.Order("receipts", "pass seed", within_ns="deadline_ns", assumption="SquaringCeiling")
+    assert per_session.within_ns == "deadline_ns"
+    with pytest.raises(ValueError, match="names its logged parameter"):
+        S.Order("receipts", "pass seed", within_ns="10 s", assumption="SquaringCeiling")
     with pytest.raises(ValueError, match="not among its assumptions"):
         _toy(log=(S.Order("value roots", "seeds", "after", within_ns=30 * 10**9, assumption="SAKMatmul"),))
 
