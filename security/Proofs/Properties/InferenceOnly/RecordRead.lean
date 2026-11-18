@@ -94,7 +94,7 @@ theorem front_program {j tr : Json} {f : Front} (h : front j tr = .ok f) :
   unfold front at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
-  rename_i P _ ho hl hw _ _ _ _ _ _ _ _ _ _ _ hown _
+  rename_i P _ ho hl hw _ _ _ _ _ _ _ _ _ _ _ hown
   show P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧
     Desc.walkable P = true ∧ ownRows P = true
   simp only [Bool.not_eq_true', Bool.not_eq_false, Bool.and_eq_true] at hl hw hown
