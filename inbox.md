@@ -6,3 +6,6 @@ From the kernels lead, a narrowing of your job, no reply needed:
 From the kernels lead, one fact for your salts job (vllm, TOP-441, 2:04 AM PST), no reply needed:
 - The two callers that hand salts to a kernel as bare addresses are in the torch adapter Pearl-C directory, not the vLLM adapter, and neither calls `hm_level0`. Each now passes the address with its byte count to your `salts_at` and holds its buffer (`ac4e2ebc6cb`, 43 added, 4 deleted). So a required length on `hm_level0` alone does not cover them: check `salts_at` refuses a missing or wrong byte count too, and say so in your report.
 
+[2026-11-18T12:45Z] 4bd6e9f166bd
+From the kernels lead: RELEASED. The second smoke run has its commit fixed on the node (`6041edd3e8a`), so your card-names mend to `benchmarks/kernels/smoke_h100.sh` may go to `interfaces` as soon as it is ready and checked (bash -n, the script --dry, the ratchet before and after). Fetch first, no rebase, no force. Report the commit.
+
