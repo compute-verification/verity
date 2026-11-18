@@ -172,7 +172,7 @@ URL = "https://github.com/compute-verification/verity.git"
 HELPER = "!/data/infra/gh_app_token.sh git"             # hands git the App's token when git asks: never in a config or an argument
 GIT_S = 1800
 SITE_KEY = "JOBS_TOKEN"                                 # the door's key, which no launch needs
-LEFT_OUT = re.compile(rf"^(?:{SITE_KEY}|SLACK_.*|LINEAR_.*)$")   # the pod's keys a launch's environment never holds
+LEFT_OUT = re.compile(rf"^(?:{SITE_KEY}|SLACK_.*|LINEAR_.*)$")   # the pod's keys a launch's environment holds none of, but CONTROL_KEEPS on the pod
 #: why a declared number is or isn't launched, as the record's `numbers` and `classify` say
 REASONS = {
     "launched": "launched at this pass",
