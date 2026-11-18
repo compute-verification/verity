@@ -2837,7 +2837,7 @@ def test_the_pearlplus_piece_holds_the_verifiers_sample_to_its_sample_session(tm
         seen.append((window, key.public, pins, main))
         if case == "untrusted":
             raise Ch.CoinError("the auditor's ledger opens no challenger session for this window")
-        return Ch.LiveCommitment.from_json(signed), {Wd.DRAW: (root,)}
+        return Ch.LiveCommitment.from_json(signed), (Ch.Entry("recorded", Wd.DRAW, 0, root, 0, 1),)
     monkeypatch.setattr(Ch, "trusted_session_of", trusted)
 
     def withheld_on(ledger, window):
