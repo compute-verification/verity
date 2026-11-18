@@ -244,7 +244,7 @@ def signed(tmp_path_factory):
     issuer = Issuer(signers.signer(tmp_path_factory.mktemp("signer")), signers.SESSION)
     out = {}
     for window, strides in dict(network_attester.lengths).items():
-        opened, cert = CR.attest(issuer, LINK, window, strides, LEN, None)
+        opened, cert = signers.attest_connection_rows(issuer, LINK, window, strides, LEN, None)
         head, domains = CR.check_registration(CR.registration(opened.head, cert, LEN), issuer.signer.public_key(),
                                               signers.SESSION, LEN, LINK, window)
         requests = [[Request(1, r.order, PROMPTS[r.order], OUTPUTS[r.order]) for r in stride] for stride in strides]
