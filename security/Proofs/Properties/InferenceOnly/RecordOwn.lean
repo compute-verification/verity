@@ -322,7 +322,7 @@ private theorem pairwise_back {R : (Nat × Nat × Nat) × Bool → (Nat × Nat �
     (hsym : ∀ a b, R a b → R b a) {P : Prog} {parts : List Part} (h : (sortedOf P parts).Pairwise R) :
     parts.Pairwise fun q q' => ∀ a, partRun P q = some a → ∀ b, partRun P q' = some b → 0 < a.1.2.2 →
       0 < b.1.2.2 → R a b := by
-  have hperm := (List.Perm.pairwise_iff (fun _ _ => hsym _ _) (sortedOf_perm P parts)).1 h
+  have hperm := (List.Perm.pairwise_iff (fun h => hsym _ _ h) (sortedOf_perm P parts)).1 h
   rw [List.pairwise_filter, List.pairwise_filterMap] at hperm
   exact hperm.imp fun {q q'} hqq a ha b hb hp hp' => hqq a ha b hb (by simpa using hp) (by simpa using hp')
 
