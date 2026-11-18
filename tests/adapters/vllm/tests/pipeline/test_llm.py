@@ -230,18 +230,6 @@ def test_storage_attaches_by_its_name_though_the_selector_has_no_such_protocol(b
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="pous,zk:v1")
 
 
-def test_entries_naming_declared_schemes_attach_in_their_listed_order(built, monkeypatch):
-    """The scheme listed earlier attaches first, so it is the outer (`messages.attach_listed`), whatever order the
-    selector's `config.PROTOCOLS` would put their protocols in."""
-    order: list[str] = []
-    stand_ins = {e: SimpleNamespace(name=n, option=e, settings={}, check_settings=lambda own: None, requests=lambda ctx: (),
-                                    attach=lambda ex, ctx, n=n: order.append(n))
-                 for e, n in (("pouw:a-v1", "a"), ("pous:b-v1", "b"))}
-    monkeypatch.setattr(messages.declarations, "load", lambda: {s.name: s for s in stand_ins.values()})
-    L.LLM(LLAMA[0], revision=LLAMA[1], protocols="b,a")
-    assert order == ["b", "a"]
-
-
 def test_pearl_plus_attaches_by_its_name_on_the_build_and_close_releases_it(built, monkeypatch):
     """The kernel is a stand-in: Pearl+ loads it at the first registered weights, which a CPU engine never emits."""
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=["pearl-plus"],

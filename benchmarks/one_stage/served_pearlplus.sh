@@ -228,7 +228,7 @@ period() {  # open|close: the lane's Pearl-C period from the retained serve to t
   if [ "$1" = open ]; then
     "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus-period open "$P" --gate "$PEARLC_CHALLENGER_GATE" \
       --name "${PEARLPLUS_PERIOD:-pearlplus-${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}" \
-      --scheme "${PEARLC_SCHEME:-pearl-c-h100-v1-h3}" ${PEARLC_CUBIN:+--cubin "$PEARLC_CUBIN"} > "$Q/period.log" 2>&1 \
+      ${PEARLC_SCHEME:+--scheme "$PEARLC_SCHEME"} ${PEARLC_CUBIN:+--cubin "$PEARLC_CUBIN"} > "$Q/period.log" 2>&1 \
       && PERIOD_OPEN=1
   else
     [ -n "$PERIOD_OPEN" ] || return 0
