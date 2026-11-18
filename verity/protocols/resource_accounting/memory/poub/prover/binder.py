@@ -49,13 +49,13 @@ from verity.protocols.resource_accounting.memory.poub.prover.node_store.registry
     NodeMemory,
     PoubReceipt,
 )
-from verity.hooks import (RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, ReuseOldestFreed,
-                          StepBegan, StepEnded)
+from verity.protocols.resource_accounting.memory.poub.scheme import POUB, REUSE_OLDEST_FREED
+from verity.hooks import RangeAllocated, RangeFreed, RangesDeclared, RangeWritten, RegisteredValues, StepBegan, StepEnded
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 
-#: the binder's name on the exchange
-NAME = "poub"
+#: the binder's name on the exchange: its scheme's (`poub.scheme.POUB`)
+NAME = POUB.name
 
 
 
@@ -386,8 +386,8 @@ class Binder:
         if self._off:
             raise RuntimeError("the binder is installed")
         if self.fifo:
-            exchange.request(NAME, ReuseOldestFreed())
-        self._off = [exchange.subscribe(NAME, hook, self.on_event) for hook in ("memory", "steps")]
+            exchange.request(NAME, REUSE_OLDEST_FREED)
+        self._off = [exchange.subscribe(NAME, hook, self.on_event) for hook in POUB.hooks]
         return self
 
     def uninstall(self) -> None:

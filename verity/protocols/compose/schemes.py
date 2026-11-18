@@ -19,6 +19,7 @@ from verity.protocols.resource_accounting.scheme import SCHEMES, Scheme
 DECLARATIONS = (
     "verity.protocols.experimental.dither.scheme",
     "verity.protocols.resource_accounting.compute.pouw.scheme",
+    "verity.protocols.resource_accounting.memory.poub.scheme",
     "verity.protocols.resource_accounting.network.scheme",
 )
 

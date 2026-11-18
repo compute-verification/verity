@@ -361,6 +361,7 @@ paths = [
 loads = [
     "verity/protocols/experimental",
     "verity/protocols/resource_accounting/compute/pouw/scheme.py",
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
     "verity/protocols/resource_accounting/network/scheme.py",
     "verity/protocols/resource_accounting/scheme.py",
 ]
@@ -565,6 +566,15 @@ loads = [
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/protocols/resource_accounting/compute/pouw/verifier",
     "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/resource_accounting/memory/poub/scheme.py",
+]
+loads = [
+    "verity/commitments",
+    "verity/protocols/resource_accounting/scheme.py",
 ]
 
 [[place]]
