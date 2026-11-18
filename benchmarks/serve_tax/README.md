@@ -519,8 +519,9 @@ refused if given too, each refusal naming the flag to drop. `--profile`, `--feat
 
 On this branch the profiles stand beside the free-form path; they do not replace it yet. The dashboard's serving-cost
 line (`vllm/serving-cost-glm53`) still runs on the free-form path: `two-stage` against `compiled` over `chat,long`.
-Three things make it one path: a `--feature` naming the sampled proofs' scheme with its one-stage or two-stage setting,
-found loads for chat and fixed-size on the H200, and the free-form `long` load going when the free-form path goes.
+Three things make it one path: `--feature sampled-proofs levels=2` resolving on GLM-5.3's stock (`verity config
+check`'s `sampled-proofs` declaring `levels`, and an arm over `prod` that serves it), found loads for chat and
+fixed-size on the H200, and the free-form `long` load going when the free-form path goes.
 
 A model's stock launch is the same on each of its cards, and a profile's load is the model's on one card
 (`llama32-1b.h100`). The card is the card file whose driver name nvidia-smi gives this host's cards (`profile_card`),
@@ -538,11 +539,14 @@ no `.git` needed. A tree that none of these names is refused before anything is 
   file. A profile whose load is still `not found yet` refuses `--feature` until that line is in: every load is, GLM-5.3's
   coding-agent load on the H200 among them. The production run `r20261117-112411-576f` stays a point at 4 users: its
   +2.11 points over prod-trace (+2.27% against stock) are the cost at 4 users, a load no ladder found.
-- `--feature SCHEME` names a registered useful-work scheme (`pearl-plus`, `dither`), read from the one table of schemes
-  by name (`verity_bench.schemes`); the job serves the arm of ours whose `scheme` it is (`serve_tax.feature`). A name
-  the table doesn't hold is refused, and a scheme no arm over the model's stock serves yet raises
-  `NotImplementedError`, naming the goal and what it waits on: vllm's plugin entry that loads a named scheme inside
-  vLLM's server (no arm here serves one yet). It serves stock and that arm in turn at the profile's one load:
+- `--feature NAME [KEY=VALUE ...]` names an application's component and its settings as the application's
+  `protocols` and `[params."<id>"]` lines state them (`--feature pearl-plus`, `--feature sampled-proofs levels=2`):
+  the name one of `verity config check`'s components, each setting checked by that component's own check. A name no
+  component has, or a setting it doesn't declare, is refused by name. The job serves the arm of ours whose `feature`
+  is that component at those settings (`serve_tax.feature`); `two-stage` serves `sampled-proofs` at `levels` 2, which
+  the config check refuses until its `sampled-proofs` declares `levels`. A component that no arm over the model's
+  stock serves yet raises `NotImplementedError`, naming the goal and what it lacks (Pearl+: the settings its attach
+  needs under vLLM's scheme plugin). It serves stock and that arm in turn at the profile's one load:
   two server lifetimes each, three reps a lifetime, which makes six paired reps. Its result is the run's result (kind `serve-tax-profile/v1`), written
   through the kit's report: the cost under the model's metric id (`vllm/serving-cost-glm53`), its member the arm over
   stock and the profile (`glm-5.3-h200-prod-record-over-prod-coding-agent`), with its interval, and each side's latencies
@@ -572,7 +576,7 @@ short makes the first line `cannot tell`.
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
   --profile coding-agent --find-load
 research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model llama32-1b \
-  --profile coding-agent --feature pearl-plus
+  --profile chat --feature sampled-proofs levels=2
 ~~~
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
