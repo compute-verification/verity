@@ -15,8 +15,8 @@ import pytest
 from verity.circuits.partition import Level
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
-AUDIT = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Flock" / "Soundness" / "Audit"
-SUBSET_MISS = "(subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
+AUDIT = Path(__file__).resolve().parents[6] / "security" / "Proofs" / "Spot" / "Sampling"
+SUBSET_MISS = "(Verity.SamplingDesign.subset n k hk).miss K = ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞)"
 AUDIT_COUNT = "L.miss K + εks + εbind"
 
 #: The one-stage audits: n units, k sampled, delta, the most incorrect proof blocks admitted.
