@@ -32,15 +32,13 @@ from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from typing import TYPE_CHECKING
 
-from verity.protocols.resource_accounting.compute.pouw.scheme import KERNEL
-
 if TYPE_CHECKING:
     from verity.protocols.resource_accounting.compute.pouw.prover.schemes.pearl_c import PearlC
 
 __all__ = ["CONFIG", "DECODE_M", "DEEPGEMM", "FADD_READINGS", "Linear", "PREFILL_M", "SCHEME", "TP", "expert_rows", "gamma",
            "in_domain", "linears", "scheme", "table"]
 
-SCHEME = KERNEL
+SCHEME = "pearl-c-h100-v1-h3"
 #: the checkpoint's config.json, the fields the linears read
 CONFIG = {"H": 6144, "NH": 64, "QL": 2048, "KVL": 512, "DN": 192, "DR": 64, "DV": 256, "IH": 32, "ID": 128, "E": 256, "K": 8,
           "MI": 2048, "NS": 1, "I": 12288, "L": 78, "FD": 3}

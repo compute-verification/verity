@@ -78,7 +78,6 @@ from pathlib import Path
 from typing import ClassVar
 
 from verity_config.settings import of
-from verity.protocols.resource_accounting.compute.pouw.scheme import KERNEL
 
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
@@ -148,7 +147,7 @@ SERVED_RECORD = "served.json"
 #: the quality run's schemes by kernel directory, each in an arm engine of its own: Pearl-C v1 (G = 4), and on sm_120 v2 (no
 #: promotion), which has no sm_90a record
 QUALITY = {"pearl_c_sm120": {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"},
-           "pearl_c_sm90": {"pearlc-v1": KERNEL}}
+           "pearl_c_sm90": {"pearlc-v1": "pearl-c-h100-v1-h3"}}
 #: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's execution phases: BOS and 2,047 tokens each, non-overlapping; its batch budget, one execution phase a step
