@@ -2286,7 +2286,7 @@ NAMES = ("cases", "python")
 def total() -> int:
     """How many cases the audit's data has: the random ones, `shaped()`'s and `edged()`'s."""
     return (len(EDGED) + COUNT + 32 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
-            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED) + 1 + len(GATHERED))
+            + len(ROW_ROLE) + 1 + len(SPLITS) + len(SHARED) + 1 + len(GATHERED) + len(SHARED_TABLE))
 
 
 def results(case: dict) -> dict:
