@@ -10,7 +10,7 @@ def test_storage_beside_the_remote_session_is_refused_for_the_copy_it_declares()
     assert M.storage(pous) and not M.storage(poub) and poub.keeps_weight_copy is True
     for listed in ([pous, poub], [poub, pous]):
         (refusal,) = M.weight_copy_refusals(listed)
-        assert "pous" in refusal and "poub keeps a weight-derived copy" in refusal and "undeclared" not in refusal
+        assert "pous" in refusal and "poub keeps a weight-derived copy" in refusal and "keeps_weight_copy is undeclared" not in refusal
 
 
 def test_storage_beside_the_bandwidth_audit_is_not_refused_for_a_weight_copy() -> None:
