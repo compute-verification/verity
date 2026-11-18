@@ -10,7 +10,7 @@ arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --e
            tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler, the host
            tier one region of it (`store_layout.regions`). With --model-dir each arena is first held to the checkpoint's
            (`held_to_checkpoint`)
-register   the payload tree over the plain weights as served, salted under a payload key the backend draws itself
+register   the payload tree over the plain weights as served, salted under a payload key the backend samples itself
            from fresh randomness (`GpuBackend`; the verifier sends none); at the registration the engines pause (ctl.json's
            pause), the device gates run, the arenas are encoded in place at the key, and the engines get the key and
            their arena's first block, check that decoding gives back their plain bytes and probe (`engine.py`), and

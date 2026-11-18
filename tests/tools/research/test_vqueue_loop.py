@@ -3706,6 +3706,25 @@ def _checks(env: Env) -> list[str]:
     return [e["check"] for e in env.graph2.enqueued()]
 
 
+def test_a_plain_pr_that_conflicts_with_the_staged_batch_s_members_is_left_out_of_the_batch_beside_it_its_owner_told(env):
+    """#1, a Lean change, is staged; #2 merges onto `main` but not under #1, which `Commit` merges again onto main's chain's
+    top above the batch built beside it: the build leaves #2 out, naming #1 and the file, and tells its owner, and builds #3.
+    The next tick takes #2 into no batch while that batch stays staged and #2's head is the same, saying why."""
+    loop, records, sha, one, first = _records_loop(env, files={**LEAN, "shared.txt": "one\n"}, left_out=vqueue.left_out)
+    two = env.put(2, {"shared.txt": "two\n"})
+    env.put(3, {"c.txt": "3\n"})
+    skip, built = [r for r in loop.tick() if r["action"] != "leave"]
+    assert (skip["action"], skip["number"], skip["heads"], skip["by"], skip["staged"], skip["done"]) == (
+        "skip", 2, [two], [1], sha, True), skip
+    assert skip["why"] == (f"conflicts with #1, of the Lean batch staged at {sha[:12]}, which goes onto main's chain's top "
+                           "above it, in shared.txt"), skip
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [3], True), built
+    (post,) = env.posts
+    assert "#2 at" in post and "once #1 is on it" in post, post
+    assert [(r["action"], r["number"], r["cause"]) for r in loop.tick()] == [("leave", 2, "conflicts with staged batch")]
+    assert len(env.posts) == 1
+
+
 def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_records_commit_when_it_regenerated_some(env):
     """Its build starts its records run on its tree, and not its check: nothing is enqueued on it, and the next batch is built
     on its base beside it, not on it.  Once the run passed having regenerated records, it goes onto main's chain's top: its
@@ -4189,7 +4208,7 @@ def test_a_staged_batch_none_of_whose_members_merges_onto_the_chain_s_top_is_dro
     env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
     records.verdicts["regen-1"] = RecordsRun(PASS)
-    loop.world.build = lambda prs, base, main=None: (base, [], [])       # #1 merges onto main's chain's top no more
+    loop.world.build = lambda prs, base, main=None, staged=None: (base, [], [])       # #1 merges onto main's chain's top no more
     judged, drop = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"]) == (
         "drop", sha, f"no member of it merges onto {two['sha'][:12]}, main's chain's top: its members are built again")
