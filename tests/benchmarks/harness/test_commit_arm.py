@@ -72,7 +72,7 @@ def test_the_served_spec_times_both_commits_against_their_own_stock_engines():
 
 
 def test_the_width_spec_times_only_the_served_commit_against_served_stock_in_blocks():
-    served, width = resolve_spec("llama31-8b-fp8-1gpu-commit-served"), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    served, width = resolve_spec("llama31-8b-fp8-1gpu-commit-served"), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width@rtx-pro-6000")
     arms = resolve_arms(width.arms, width.arm_modules, width.arm_settings)
     assert [(a.id, a.control, a.execution) for a in arms] == [
         ("stock-fp8@compiled", None, "compiled"), ("commit@compiled", "stock-fp8@compiled", "compiled")]

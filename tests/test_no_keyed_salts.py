@@ -64,7 +64,6 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pearl_c_sm90/run.py": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/registered_rows.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/row_table.cuh": "@kernels",
-    "verity/protocols/resource_accounting/compute/pouw/prover/kernels/pouw_cuda/zy_commit.cuh": "@kernels",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/__init__.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/prover.py": "@compute-accounting",
     "verity/protocols/resource_accounting/compute/pouw/prover/serving/h1/registered.py": "@compute-accounting",
