@@ -2,6 +2,8 @@ module
 
 public import Spot.Wires
 meta import Spot.Wires
+public import Spot.RecordText
+meta import Spot.RecordText
 
 /-!
 `pairwiseDisjoint`'s compiled code, `pairwiseDisjointFast`, held to the pairwise test on random and adversarial lists
@@ -14,7 +16,9 @@ binary search (`orderedWireBin`) held to `orderedWire` on random orders that `or
 `orderOk`, compiled with their maps (`check_eq_fast`, `orderOk_eq_fast`), held to their bodies as written (`checkOld`,
 `orderOkOld`) on random wirings that reach every refusal, with stated orders and repeated ids; and the whole check on
 700k wires of the served shape, its order's comparisons counted (`orderWork`: each wire's search of its reader's ranges,
-and of its writer's in each reader range it meets), a small multiple of log₂ of a template's ranges.
+and of its writer's in each reader range it meets), a small multiple of log₂ of a template's ranges. The record text's
+`orderOf` held to its body as written (`orderOfRef`) on random ranges and run on 137,000; `inputsOf` on the served shape,
+its overlap sweep's comparisons counted; `fillAtIx` and `slotInAt` held to `fillAt` and `slotIn`.
 -/
 
 @[expose] public section
@@ -314,5 +318,51 @@ def big : Wiring := servedWiring 100 137
 #guard (check big).toBool
 #guard orderWork big ≤ 4 * (Nat.log2 137 + 3) * big.wires.length
 #guard !(check { big with wires := { big.wires.headD (wire "" "" 0 0 0 1) with start := 3 } :: big.wires }).toBool
+
+
+/-! ## The record text at the served shape -/
+
+/-- `RecordText.orderOf` as written, kept out of `@[csimp]`'s reach as the reference. -/
+def orderOfRef (rs : Array Flock.TemplateQuery.TRange) : List (String × Nat × Nat) :=
+  (rs.foldl (fun (acc : List (String × Nat) × List (String × Nat × Nat)) r =>
+    let b := (acc.1.lookup r.template).getD 0
+    ((r.template, b + r.count) :: acc.1.filter (·.1 != r.template), acc.2 ++ [(r.template, b, r.count)]))
+    ([], [])).2
+
+/-- `n` ranges from seed `x` over `nt` templates, counts below 5. -/
+def randomRanges (x n nt : Nat) : Array Flock.TemplateQuery.TRange :=
+  ((List.range n).foldl (fun (acc, x) i => let x := lcg x
+    (acc.push { node := i, template := s!"t{x / 2 ^ 40 % nt}", first := 0, count := x / 2 ^ 50 % 5 }, x)) (#[], x)).1
+
+#guard (List.range 200).all fun i => let rs := randomRanges i (i % 40) (1 + i % 6)
+  Spot.RecordText.orderOf rs == orderOfRef rs
+
+/-- The served shape's ranges at ten times its 13,700: 1,000 templates of 137 layers, in layer order. -/
+def servedRanges : Array Flock.TemplateQuery.TRange :=
+  ((List.range 137).flatMap fun l => (List.range 1000).map fun j =>
+    ({ node := l * 1000 + j, template := s!"t{1000000 + j}", first := 0, count := 2 } : Flock.TemplateQuery.TRange)).toArray
+
+#guard let o := Spot.RecordText.orderOf servedRanges
+  o.length == 137000 && o.getLast? == some ("t1000999", 272, 2)
+
+/-- The served shape's templates as the record text reads them. -/
+def bigTmpls : List Spot.RecordText.Tmpl :=
+  big.templates.map fun (tid, t) => { tid, defn := 0, units := t.units, rows := t.rows.map (fun (p, q) => (p, q.words, q.outer)),
+    outs := t.outs }
+
+#guard match Spot.RecordText.inputsOf bigTmpls big (Lean.Json.mkObj []) with
+  | .ok x => x.decls.length == big.wires.length && x.decls.all (·.bits == 64) &&
+    sweepWork [] ((x.decls.map (·.w)).mergeSort before) 0 ≤ 4 * big.wires.length
+  | .error _ => false
+
+/-- Declarations of `randomWires`' wires, each filling a wire. -/
+def randomDecls (x n : Nat) : List Spot.RecordText.Decl :=
+  (randomWires x n 6 3).zipIdx.map fun (w, i) => { w, bits := 16, fill := .wire i }
+
+#guard (List.range 60).all fun i => let ds := randomDecls i (i % 30)
+  (List.range 40).all fun k => let r : Spot.RecordText.Row :=
+    { tid := toString (k % 2), unit := k % 7, port := toString (k / 2 % 2), row := k % 3 }
+    let i : Option Spot.RecordText.Fill → Option Nat := fun f => f.map fun | .wire i => i | _ => 0
+    i (Spot.RecordText.fillAtIx (Spot.RecordText.declIndex ds) r) == i (Spot.RecordText.fillAt ds r)
 
 end Spot.Test.WiresDisjoint
