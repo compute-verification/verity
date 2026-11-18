@@ -7688,11 +7688,11 @@ def _naming_window_values(reason: str) -> str:
     return head + ", ".join(sorted({*reason.removeprefix(head).split(", "), "window_values"}))
 
 
-def _same(port, got, unnamed, ok) -> None:
-    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it read: then it refuses them
-    with `window_values` among them."""
+def _same(port, got, unnamed, ok, changed: bool) -> None:
+    """`unnamed`'s outcome is `got`'s, byte for byte, but where naming no window value `changed` the input and `got`
+    refused the keys it read: then it refuses them with `window_values` among them."""
     reason = _reason(port, got)
-    if got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+    if changed and got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
         want = _naming_window_values(reason)
         if port is ONE_STAGE and got[0] != "error":
             assert unnamed[0] == got[0] and json.loads(unnamed[1]) == {**json.loads(got[1]), "reason": want}, (
@@ -7729,13 +7729,14 @@ def test_naming_no_window_value_changes_no_outcome(server, pieces):
         assert ONE_STAGE.python(case) == base and RECORD_PORT.python(j) == base_j
         lean = ONE_STAGE.lean(server, case)
         seen.add(lean[0])
-        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case)
-        _same(ONE_STAGE, base, ONE_STAGE.python(named), case)
+        changed = named != case
+        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case, changed)
+        _same(ONE_STAGE, base, ONE_STAGE.python(named), case, changed)
         _same_keys_refusal(ONE_STAGE, lean, base, case)
         lean_j = RECORD_PORT.lean(pieces, j)
         _same_keys_refusal(RECORD_PORT, lean_j, base_j, j)
-        _same(RECORD_PORT, lean_j, RECORD_PORT.lean(pieces, _unnamed(j)), j)
-        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j)
+        _same(RECORD_PORT, lean_j, RECORD_PORT.lean(pieces, _unnamed(j)), j, _unnamed(j) != j)
+        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j, _unnamed(j) != j)
         seen.add(f"record {base_j[0]}")
 
     same()
