@@ -102,6 +102,7 @@ def test_a_records_runs_parts_are_each_its_longest_packages_from_its_reports_eac
     assert p["build"] == pytest.approx((20.6 + 96.3 + 2.2 + 998.9 + 32.2) / 60), "Proofs' setup, stage and Lake, not a lock's"
     assert p["sampled"] == pytest.approx(87.7 / 60) and p["replay"] == 0.0, "a records run replays nothing"
     assert p["facts"] == pytest.approx((11.6 + 30.9) / 60), "security's facts and unread facts, the longest"
+    assert p["checks"] == pytest.approx(435.0 / 60), "security's proved-in check, not its wait for Proofs' build"
     assert p["wait"] == t["wait_min"], "a records run's wait, the wall outside its check.py runs"
     assert (t["compiled"], t["compiled_chain"], t["group"]) == (598, 598, "chain")
     assert L.reports(list(files), _read(files)) == [SECURITY, PROOFS], "the requirer's repeat of Proofs' report once"
@@ -115,7 +116,8 @@ def test_a_lean_audit_steps_parts_are_its_audited_packages_and_its_wait_the_rest
             "reuse": {"steps": {"lean-audit": {"reran": ["security/Proofs"]}}}}
     got, other = L.check_tasks("r20261028-100000-cccc", _doc(CHECK_ARGV), meta, [restored, reused])
     assert got["parts"] == pytest.approx({"build": 151.4 / 60, "replay": 345.7 / 60, "sampled": 584.1 / 60, "facts": 123.5 / 60,
-                                          "wait": (1185.1 - 809.5) / 60}), "a reused package's old report counts for nothing"
+                                          "checks": 0.0, "wait": (1185.1 - 809.5) / 60}), \
+        "a reused package's old report counts for nothing"
     assert (got["compiled"], got["group"]) == (0, "none") and "parts" not in other, "a part with no report of its package"
 
 
@@ -273,7 +275,7 @@ def test_lean_times_reads_the_remotes_attempts_of_the_window(remote, capsys):
     assert out["tasks"][0]["parts"]["wait"] == 0.0, "never below 0, where the step is shorter than its package's total"
     assert out["tasks"][0]["parts"]["facts"] == pytest.approx(42.5 / 60) and out["by_part"]["lean-audit"] == {
         "none": {"n": 1, **{f"{p}_{q}_min": v for p, v in (("build", 0.3), ("replay", 0.0), ("sampled", 0.1), ("facts", 0.7),
-                                                            ("wait", 0.0)) for q in ("p50", "p95")}}}
+                                                            ("checks", 7.2), ("wait", 0.0)) for q in ("p50", "p95")}}}
     assert not [p for p in (tmp / "reader" / "objects").rglob("*") if p.is_file()], "the run records' blobs are read, not kept"
 
 

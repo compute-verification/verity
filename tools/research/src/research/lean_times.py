@@ -26,7 +26,8 @@ A task is one of:
 
 A records run and a `lean-audit` step also have parts, in minutes, from the package reports check.py wrote into its run record
 (`lean-audit/**/audit.json`, each report once; a step's, those of the packages it reran): of each part in `PARTS` (build: setup,
-stage and Lake; replay; sampled: the sampled recompile; facts: the facts and the unread facts) the most any of its packages took,
+stage and Lake; replay; sampled: the sampled recompile; facts: the facts and the unread facts; checks: the proved-in, dependency
+and upstream checks and the runs) the most any of its packages took,
 and its wait: a records run's as above, a step's its seconds outside its longest package's audit (its Lean audit slot's wait among
 them). The sampled recompile runs beside the replay and one check.py audits its packages at once, so the parts overlap and don't
 add up to the wall. Its group is `chain` where it compiled modules of `CHAIN` (keyed, not restored: its report's `staged`),
@@ -73,7 +74,7 @@ NONE = "-"
 AUDIT_JSON = re.compile(r"^lean-audit/(?:.+/)?audit\.json$")
 #: a part of a Lean task: the keys of a package report's `seconds` (check.py's) it sums
 PARTS = {"build": ("setup", "stage", "build-plugins", "build", "build-roots"), "replay": ("replay",), "sampled": ("sampled",),
-         "facts": ("facts", "unread")}
+         "facts": ("facts", "unread"), "checks": ("proved-in", "dependency-sources", "dependencies", "upstream", "runs")}
 #: the package whose import chain a proof change compiles
 CHAIN = "security/Proofs"
 GROUPS = ("chain", "elsewhere", "none", "no report")
