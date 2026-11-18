@@ -80,8 +80,8 @@ def runAt (t : Ty) (o len : Nat) : Option Nat :=
 def fieldOffset (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Ty.leaves).sum
 
 /-- The first u16 word of return field `f` of `t` in its unit's output row `out`: the row is the fields in order, each
-its bits in `⌈bits/16⌉` words (`interface.layout`'s `o<j>`: two 8-bit leaves share a word). -/
-def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map fun ty => (bitsOf ty + 15) / 16).sum
+its words (`Spot.Bits.wordsOf`, `interface.layout`'s `o<j>`: two 8-bit leaves share a word). -/
+def fieldWord (t : Ty) (f : Nat) : Nat := (((fieldsOf t).take f).map Spot.Bits.wordsOf).sum
 
 /-- Return field `f` of `t` at leaf `p` of its unit, of `len` leaves and `bits` bits; none otherwise. -/
 def fieldAt (t : Ty) (len bits : Nat) (p : Int) : Option Nat :=
