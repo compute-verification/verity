@@ -12,13 +12,9 @@ open Verity
 
 variable {n : ℕ}
 
-theorem missProb_ofLevels {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G) (idx : Fin n → Finset G)
-    (B : Finset (Fin n)) : (ofLevels Lv idx).missProb B = Lv.design.missProb (B.image idx) := by
-  show Game.prCoin (fun ω : Lv.design.Ω => Disjoint ((ofLevels Lv idx).draw ω) B) =
-    Game.prCoin fun ω => Disjoint (Lv.design.draw ω) (B.image idx)
-  congr 1
-  funext ω
-  apply propext
+theorem disjoint_ofLevels {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G) (idx : Fin n → Finset G)
+    (ω : (ofLevels Lv idx).Ω) (B : Finset (Fin n)) :
+    Disjoint ((ofLevels Lv idx).draw ω) B ↔ Disjoint (Lv.design.draw ω) (B.image idx) := by
   rw [Finset.disjoint_left, Finset.disjoint_left]
   constructor
   · intro h b hb hbB
@@ -26,6 +22,20 @@ theorem missProb_ofLevels {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G)
     exact h (Finset.mem_filter.2 ⟨Finset.mem_univ _, hb⟩) hu
   · intro h u hu huB
     exact h (Finset.mem_filter.1 hu).2 (Finset.mem_image_of_mem idx huB)
+
+theorem missProb_ofLevels {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G) (idx : Fin n → Finset G)
+    (B : Finset (Fin n)) : (ofLevels Lv idx).missProb B = Lv.design.missProb (B.image idx) :=
+  congrArg Game.prCoin (funext fun ω => propext (disjoint_ofLevels Lv idx ω B))
+
+theorem miss_ofLevels {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G) (idx : Fin n → Finset G) (K : ℕ) :
+    (ofLevels Lv idx).miss K = ⨆ (B : Finset (Fin n)) (_ : K ≤ B.card), Lv.design.missProb (B.image idx) := by
+  simp only [Verity.SamplingDesign.miss, missProb_ofLevels]
+
+theorem miss_ofLevels_le {G : Type} [Fintype G] [DecidableEq G] (Lv : Levels G) {idx : Fin n → Finset G}
+    (hidx : Function.Injective idx) (K : ℕ) : (ofLevels Lv idx).miss K ≤ Lv.design.miss K := by
+  rw [miss_ofLevels]
+  exact iSup₂_le fun B hB => le_iSup₂_of_le (f := fun (B : Finset (Finset G)) (_ : K ≤ B.card) =>
+    Lv.design.missProb B) (B.image idx) (by rwa [Finset.card_image_of_injective _ hidx]) le_rfl
 
 /-- `L` as one level of singleton blocks. -/
 def toLevels (L : SamplingDesign n) : Levels (Fin n) where

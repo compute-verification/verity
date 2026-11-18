@@ -17,7 +17,8 @@ sampling design's alone, at the analysis the extractor defines (`Extractor.analy
   `2·E[cost]/2^256 + 1/(eM)` (`LinkFinder.link_mass_le`, with the finder's output from two openings,
   `LinkFinder.outOf_spec`);
 * `Trials.link_le_bindErr`: so the binding error at the committed trace is at most `ε_bind` (`Trials.Transfers`);
-* `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`.
+* `GenericSampledKS`, `GenericSampledKSPa`, `GenericSampledKSEscape`, `GenericSampledKSCount`, and each over levels
+  (`SamplingDesign.disjoint_ofLevels`).
 -/
 
 @[expose] public section
@@ -164,3 +165,34 @@ theorem Flock.SecurityProofs.GenericSampledKSCount : Flock.Guarantees.GenericSam
   by_cases hB : K ≤ (incorrect B Correct (reg σ) (Xc (reg σ) (cont σ))).card
   · exact (prCoin_mono fun ω h => h.2).trans (L.escape_le_miss hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => absurd h.1 hB).trans (prCoin_false.le.trans zero_le)
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+/-- **`GenericSampledKS` over levels** (`Flock.Guarantees.GenericSampledKSLevels`): `GenericSampledKS` at
+`SamplingDesign.ofLevels`, whose sample misses `F` exactly when the levels' sample misses its blocks. -/
+theorem Flock.SecurityProofs.GenericSampledKSLevels : Flock.Guarantees.GenericSampledKSLevels := by
+  intro n Reg Dh Hc G _ _ Lv idx PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ E hCR
+  refine (Flock.SecurityProofs.GenericSampledKS n Reg Dh Hc _ PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ E
+    hCR).trans_eq ?_
+  simp only [SamplingDesign.disjoint_ofLevels]
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+/-- **`GenericSampledKSPa` over levels** (`Flock.Guarantees.GenericSampledKSPaLevels`). -/
+theorem Flock.SecurityProofs.GenericSampledKSPaLevels : Flock.Guarantees.GenericSampledKSPaLevels := by
+  intro n Reg Dh Hc G _ _ Lv idx PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ hCR
+  rw [← SamplingDesign.missProb_ofLevels]
+  exact Flock.SecurityProofs.GenericSampledKSPa n Reg Dh Hc _ PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM σ hCR
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+/-- **`GenericSampledKSEscape` over levels** (`Flock.Guarantees.GenericSampledKSEscapeLevels`). -/
+theorem Flock.SecurityProofs.GenericSampledKSEscapeLevels : Flock.Guarantees.GenericSampledKSEscapeLevels := by
+  intro n Reg Dh Hc G _ _ Lv idx PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM W σ hCR
+  rw [← SamplingDesign.missProb_ofLevels]
+  exact Flock.SecurityProofs.GenericSampledKSEscape n Reg Dh Hc _ PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM W σ
+    hCR
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in
+/-- **`GenericSampledKSCount` over levels** (`Flock.Guarantees.GenericSampledKSCountLevels`). -/
+theorem Flock.SecurityProofs.GenericSampledKSCountLevels : Flock.Guarantees.GenericSampledKSCountLevels := by
+  intro n Reg Dh Hc G _ _ Lv idx PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
+  rw [← SamplingDesign.miss_ofLevels]
+  exact Flock.SecurityProofs.GenericSampledKSCount n Reg Dh Hc _ PS B Correct Ex Tr Xc M hcov hop hwf hT hX hM K σ hCR
