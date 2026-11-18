@@ -7,14 +7,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from test_stop_rule import GLM_EOS, _args, _edges, _seeded
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.circuits.types import Array, Value
 from verity.circuits.ops.boolean import versions as SW
+from verity.circuits.types import Array, Value
+
 from verity_vllm.definitions.registry import stop_rule as X
 from verity_vllm.definitions.registry.boolean_stop_rule import StopRule16V2
 

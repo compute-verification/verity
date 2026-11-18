@@ -24,7 +24,7 @@ token_s = 0.08
 repository = "zai-org/GLM-5.3"
 revision = "aca966e4e02791568aa6a4ced368624b3d897f42"
 served = "glm-5.3"
-card = "H200"
+cards = ["h200"]
 gpus = 8
 context = 262144
 max_model_len = 262144
@@ -38,7 +38,7 @@ serve = ["--tensor-parallel-size", "8", "--kv-cache-dtype", "fp8", "--speculativ
 repository = "unsloth/Llama-3.2-1B"
 revision = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
 served = "llama-3.2-1b"
-card = "H200"
+cards = ["h200", "h100"]
 gpus = 1
 context = 131072
 quick_check = true
@@ -63,8 +63,9 @@ turns = 24
 cut = "ours: each session up to its first request that does not fit 131,072 tokens with its output"
 
 [profiles.coding-agent.users]
-glm53 = 4
-llama32-1b = "not found yet"
+glm53.h200 = 4
+llama32-1b.h200 = "not found yet"
+llama32-1b.h100 = "not found yet"
 
 [profiles.coding-agent.datasets.agentx]
 repository = "semianalysisai/cc-traces-weka-062126"
@@ -90,8 +91,9 @@ prompts = 200
 within = ["first_token", "token"]
 
 [profiles.chat.in_flight]
-glm53 = "not found yet"
-llama32-1b = "not found yet"
+glm53.h200 = "not found yet"
+llama32-1b.h200 = "not found yet"
+llama32-1b.h100 = "not found yet"
 
 [profiles.chat.dataset]
 repository = "anon8231489123/ShareGPT_Vicuna_unfiltered"
@@ -111,8 +113,9 @@ prompts = 24
 within = ["token"]
 
 [profiles.fixed-size.in_flight]
-glm53 = "not found yet"
-llama32-1b = "not found yet"
+glm53.h200 = "not found yet"
+llama32-1b.h200 = "not found yet"
+llama32-1b.h100 = "not found yet"
 
 [[differences]]
 command = "the Rust front end, tokenizer mode glm5_next"

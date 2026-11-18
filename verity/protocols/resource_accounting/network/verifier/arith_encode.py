@@ -143,7 +143,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import sha512 as SG
-from verity.protocols.resource_accounting.network.verifier.head_check import BIT, _part
+from verity.commitments.gates.bits import BIT
+from verity.circuits.boolean.trace import part as _part
 
 PREC = 32
 TOP = (1 << PREC) - 1

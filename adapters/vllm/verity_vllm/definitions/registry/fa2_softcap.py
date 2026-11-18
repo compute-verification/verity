@@ -18,13 +18,25 @@ target its words are the target's only where the capture's tanh probe measured t
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.circuits.ops.prims import ZERO32, const
+from verity.circuits.refs import (
+    Affine,
+    Explicit,
+    array_of,
+    concat,
+    strided_view,
+    tuple_of,
+)
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.types import Array, Tuple
+
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.b1 import ZERO16, _lane
-from verity_vllm.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
+from verity_vllm.definitions.registry.dense import (
+    softcap_mul_bits,
+    softcap_scale_log2_bits,
+)
 from verity_vllm.definitions.registry.prims import A16, BF16, F32
 
 

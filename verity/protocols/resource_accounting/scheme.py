@@ -14,10 +14,8 @@ the log (`Order`), its other charges (`Charge`) and its settings. It gets back a
 yet provide one of its four things uniformly, a scheme states what it requires (`REQUIREMENTS`) and the stand-in it runs
 on today (`Scheme.requires`).
 
-A served run offers every scheme the same five hooks (`HOOKS`), and a scheme names those it attaches through
-(`Scheme.hooks`): values at block boundaries (`Value`), a wrap of a linear's call (`LinearCall`, `LinearWrap`), KV block
-events (`Loaded`, `KvPool`, `KvBlocks`, `Step`), admission and release events (`Admission`, `Gate`), and the engine's
-build options (`Build`, `Builds`). The adapter hands them over and names no scheme.
+A served run offers every scheme the same five hooks (`verity.hooks.HOOKS`), and a scheme names those it attaches
+through (`Scheme.hooks`).
 
 A scheme's `name` is the name a configuration lists (`protocols = [...]` in `applications/NAME.toml`, which
 `verity.config.Component.name` declares), so changing schemes is changing that name. Its `protocol` is the id of the
@@ -32,141 +30,16 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
 from types import MappingProxyType
-from typing import Any, Literal, Protocol
+from typing import Any
+
+from verity.hooks import HOOKS
 
 #: `Core.Account.Part`'s names, each with the unit its rows are in (`Account.Part.unit`)
 RESOURCES: Mapping[str, str] = MappingProxyType({"compute": "MACs", "memory": "bits", "read": "bits",
                                                  "egress": "bits"})
 #: what a scheme needs of the proof layer that the layer doesn't provide every scheme the same way yet
 REQUIREMENTS = ("one-labelling", "log-order", "log-times", "coins-at-rate", "one-design")
-#: the hooks a served run offers every scheme alike: values at block boundaries, a wrap of a linear's call, KV block
-#: events, admission and release events, and the engine's build options
-HOOKS = ("values", "linear", "kv", "admission", "build")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
-
-type Handle = object
-"""A device buffer as the serving system holds it: opaque here, read only by the scheme's own prover code."""
-
-
-# --- the hooks ---------------------------------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Value:
-    """``values``: one value as the workload produces it at a block boundary, at the site ``(module, kind, slot)``."""
-
-    module: str
-    kind: str
-    slot: int | str
-    value: Handle
-
-
-@dataclass(frozen=True)
-class LinearCall:
-    """``linear``: one call of a linear layer on one rank: the layer (``weight_id`` stable across ranks, ``n`` and ``k``
-    this rank's), its input, weight and bias."""
-
-    weight_id: int
-    qualname: str
-    n: int
-    k: int
-    weight_format: str
-    x: Handle
-    weight: Handle
-    bias: Handle | None = None
-
-
-class LinearWrap(Protocol):
-    """A scheme's wrap of a linear's call: it returns the call's output, computing it itself or through ``original``,
-    the serving system's own call, given a weight in place of the layer's or None for the layer's."""
-
-    def __call__(self, call: LinearCall, original: Callable[[Handle | None], Handle]) -> Handle: ...
-
-
-@dataclass(frozen=True)
-class Loaded:
-    """``kv``: the model's weights once loaded, by name."""
-
-    weights: tuple[tuple[str, Handle], ...]
-
-
-@dataclass(frozen=True)
-class KvPool:
-    """``kv``: the KV pool once allocated: ``pages`` pages of ``slots`` slots, each slot ``slot_bytes`` bytes in each of
-    ``planes`` planes, one storage a layer."""
-
-    pages: int
-    slots: int
-    slot_bytes: int
-    planes: int
-    layers: tuple[Handle, ...]
-
-
-@dataclass(frozen=True)
-class KvBlocks:
-    """``kv``: pages the pool handed out (``allocated``), returned with no reader left (``freed``), or handed out again
-    to a new reader (``touched``)."""
-
-    event: Literal["allocated", "freed", "touched"]
-    blocks: tuple[int, ...]
-
-
-@dataclass(frozen=True)
-class KvWrite:
-    """``count`` slots from ``offset`` of page ``block``, written in one step."""
-
-    block: int
-    offset: int
-    count: int
-
-
-@dataclass(frozen=True)
-class Step:
-    """``kv``: scheduler step ``index`` begins (``writes``, the slots it writes) or ends (``ended``)."""
-
-    index: int
-    writes: tuple[KvWrite, ...] = ()
-    ended: bool = False
-
-
-@dataclass(frozen=True)
-class Admission:
-    """``admission``: requests by their release key, ``added`` to the engine, ``scheduled`` at a step, or ``finished``."""
-
-    event: Literal["added", "scheduled", "finished"]
-    keys: tuple[str, ...]
-    step: int | None = None
-
-
-class Gate(Protocol):
-    """A scheme's hold on admission: ``add`` admits a request when the scheme calls ``admit``, and ``pending`` says
-    whether it holds any not yet admitted."""
-
-    def add(self, key: str, admit: Callable[[], None]) -> None: ...
-
-    def pending(self) -> bool: ...
-
-
-@dataclass(frozen=True)
-class Build:
-    """``build``: what a scheme's refusals read before the engine is built: the stage (``serve``, ``capture`` or
-    ``commit``), the schemes enabled with it as ``name:scheme``, the ranks, whether the engine runs eagerly, and each
-    scheme's own settings."""
-
-    stage: Literal["serve", "capture", "commit"]
-    enabled: tuple[str, ...]
-    world: int = 1
-    enforce_eager: bool = True
-    settings: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
-
-
-class Builds(Protocol):
-    """A scheme's say on the engine's build: why this run cannot enable it (empty: it can), and whether its computation
-    fixes the build's kernels so serving may not override them."""
-
-    def refusals(self, build: Build) -> tuple[str, ...]: ...
-
-    def requires_build(self, build: Build) -> bool: ...
 
 
 @dataclass(frozen=True)
@@ -291,6 +164,18 @@ def register(scheme: Scheme) -> Scheme:
     return scheme
 
 
+#: the processes schemes start beside a workload, by name (`verity.hooks.StartBeside`): each called with the readers
+#: its request names
+PROCESSES: dict[str, Callable[..., Any]] = {}
+
+
+def register_process(name: str, start: Callable[..., Any]) -> Callable[..., Any]:
+    if name in PROCESSES:
+        raise KeyError(f"a process named {name!r} is registered already")
+    PROCESSES[name] = start
+    return start
+
+
 def get(name: str) -> Scheme:
     """The scheme registered under ``name``; `KeyError` names the registered ones."""
     try:
@@ -299,6 +184,5 @@ def get(name: str) -> Scheme:
         raise KeyError(f"no scheme {name!r}; registered: {', '.join(sorted(SCHEMES)) or 'none'}") from None
 
 
-__all__ = ["HOOKS", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Admission", "Block", "Bound", "Build", "Builds", "Charge",
-           "Gate", "Handle", "KvBlocks", "KvPool", "KvWrite", "LinearCall", "LinearWrap", "Loaded", "Order", "Scheme",
-           "Step", "Value", "bound", "get", "register", "settings"]
+__all__ = ["PROCESSES", "REQUIREMENTS", "RESOURCES", "SCHEMES", "Block", "Bound", "Charge", "Order", "Scheme", "bound",
+           "get", "register", "register_process", "settings"]

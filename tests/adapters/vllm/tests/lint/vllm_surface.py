@@ -22,9 +22,11 @@ SURFACE = {
     "vllm.v1.engine.llm_engine:LLMEngine": "the in-process engine, which engine.handle walks to its scheduler and runner",
     "vllm.v1.engine.core:EngineCore": "the engine core, whose two steps engine.core_gate wraps for its edges",
     "vllm.v1.engine.core:EngineCoreProc": "the engine core process, whose input loop and has_work a gate holds",
-    "vllm.v1.core.sched.scheduler:Scheduler": "the V1 scheduler, which engine.handle returns and the tick's gate and PoUB's "
-                                              "binder hook",
-    "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations PoUB's binder records",
+    "vllm.v1.core.sched.scheduler:Scheduler": "the V1 scheduler, which engine.handle returns and the tick's gate and "
+                                              "engine.kv_blocks hook",
+    "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations and frees engine.kv_blocks emits",
+    "vllm.v1.core.kv_cache_manager:KVCacheManager": "the KV cache manager, whose allocate_slots names the request "
+                                                    "engine.kv_blocks' allocations are for",
     "vllm.v1.worker.gpu.model_runner:GPUModelRunner": "Model Runner V2, which engine.env.ENGINE selects and engine.handle returns",
     "vllm.v1.executor.multiproc_executor:WorkerProc": "the tensor-parallel worker process, which the TP lease hooks",
     # configuration and the platform

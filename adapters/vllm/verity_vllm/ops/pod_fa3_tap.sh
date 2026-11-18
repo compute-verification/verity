@@ -10,14 +10,13 @@
 # $FA2/trees/fa3tap and patched by fa3_tap_src/apply_fa3_tap.py; (3) built by fa3_tap_src/build_fa3_ext.py into $FA2/build/fa3_matReq;
 # (4) verified: loads, exposes fwd + verity_set_tap_v9 / verity_tap_hdims, mode 3 / src 59 / layout 9, hdims mask covers the request.
 # Exactness is a separate step: tests/properties/fa_tap_exactness_gpu.py (needs the GPU).  Env: VENV (/workspace/venv-cu129), CUDA_HOME
-# (first of /usr/local/cuda-12.9, /usr/local/cuda), FA2 (/workspace/cp/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1,
+# (required), CARD_SKU (required: the card file the tap compiles for), FA2 (/workspace/cp/fa2), FA3_TAP_HDIMS (64,128), MAX_JOBS (32), TREE_ONLY=1,
 # FA3_TAP_ROW_GUARD=1 (the guarded-max build `verity_fa3_matReqG.so` in $FA2/build/fa3_matReqG: the same tree with VERITY_ROW_GUARD=1,
 # ROW word 3 = GuardNegInfZero(row_max) after a row's first key block, and VERITY_MAT_SRC=123, the MS class = each block's max * scale; neither in the default build).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
-if [ -z "${CUDA_HOME:-}" ]; then for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done; fi
-export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
+export CUDA_HOME=${CUDA_HOME:?set CUDA_HOME to the CUDA toolkit of torch's CUDA version (a node's placement entry names it)}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export MAX_JOBS=${MAX_JOBS:-32}
 FA2=${FA2:-/workspace/cp/fa2}; HDIMS=${FA3_TAP_HDIMS:-64,128}
 FA_SRC=${FA_SRC:-$(dirname "$FA2")/vllm-flash-attn}   # the pinned upstream tree, beside $FA2
@@ -63,7 +62,7 @@ if [ -n "$WHY" ]; then
   log "REBUILD $BUILD hdims=$HDIMS (nvcc $NVCC_VER) MAX_JOBS=$MAX_JOBS -- $WHY; source-set ${SRC_SHA:0:16}"
   NEW="$OUT.build-$$"; rm -rf "$NEW"; mkdir -p "$NEW"          # build beside the live .so, swap when done (see pod_fa2_tap.sh)
   BLOG=$FA2/logs/build_$BUILD.log
-  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa3-tap-build --tree "$TREE" --name "$NAME" --build-dir "$NEW" --hdims "$HDIMS" \
+  PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}" verity-vllm fa3-tap-build --card "${CARD_SKU:?set CARD_SKU to the SKU of the card file the tap compiles for (calibration/hardware/cards)}" --tree "$TREE" --name "$NAME" --build-dir "$NEW" --hdims "$HDIMS" \
       --tree-commit "$PIN+fa3tap" $(for d in ${DEFS//,/ }; do printf -- '--define %s ' "$d"; done) > "$BLOG" 2>&1 \
       || { rm -rf "$NEW"; fail "build (see $BLOG: $(grep -a -m1 -i 'error' "$BLOG" | cut -c1-300))"; }
   echo "$SRC_SHA" > "$NEW/source_set.sha256"

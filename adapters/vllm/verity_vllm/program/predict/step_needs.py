@@ -157,8 +157,9 @@ class StepNeeds:
         return self.kind("flashinfer_fp8_linear" if M < 32 else "deepgemm_fp8_linear", K=K, N=N)
 
     def _cublas(self, M: int, w: object, f32: bool = False) -> Need:
-        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
-
+        from verity_vllm.definitions.registry.bf16_gemm_check import (
+            default_cublas_route,
+        )
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
             _f32out_phase,
         )
@@ -187,7 +188,6 @@ class StepNeeds:
 
     def _all_reduce(self, M: int, n: int) -> Need:
         from verity_vllm.definitions.registry import tp_allreduce as AR
-
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
             _ROUTE_KINDS,
         )
@@ -211,12 +211,11 @@ class StepNeeds:
                 return [(Need("fused-allreduce-rmsnorm", _id("allreduce-rmsnorm-fused", N=self.H, M=M), "no capture",
                               "at other statics"), n)]
             return [(self.kind("all_reduce_rmsnorm_mnnvl", WORLD=self.W, N=self.H, SHOT=AR.mnnvl_shot(M, self.H, self.W),
-                               CLUSTER=AR.mnnvl_grid(M, self.H)[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
+                               CLUSTER=AR.mnnvl_grid(M, self.H, int(self.tp.num_sms))[1], EPS=self.EPS, FMA=bool(c.statics["FMA"])), n)]
         return [(self._all_reduce(M, n), 1), (self.kind("rmsnorm_fused", N=self.H, EPS=self.EPS, TARGET=self.tp, M=M), n)]
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
         from verity_vllm.definitions.registry.moe import router_kernel
-
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
         E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])

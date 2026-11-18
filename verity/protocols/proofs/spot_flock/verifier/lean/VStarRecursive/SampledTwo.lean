@@ -4,8 +4,9 @@ registration sampled once on the challenger's coins (the first stage, its replay
 over the sampled replay blocks' proof blocks sampled once more on a challenger session of its own (the second stage),
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
-refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). `VStar.Recursive.Sampled` reads
+decides last by one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit that
+passes them is accepted where the switch is on, ahead of the form's soundness proof, and refused where it is off
+(`checkBlobsAt_refuses`). `VStar.Recursive.Sampled` reads
 the form and runs this check. The package's root imports it, so the package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
@@ -83,7 +84,7 @@ the form and runs this check. The package's root imports it, so the package's au
      before the message of an earlier round is fixed;
   5. the interior audit's verdict at its coins under the second stage's sampling design (`secondCheck`), which gives
      the public output and the integrity profile;
-  6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
+  6. last, the switch (`finish`): the run must accept, and the form is refused where `FORM` is off.
 
 **The last step** (`secondCheck`, step 5) is the form's own variant of `OneStage.checkAt`, since the interior
 registration is sampled under two sampling designs: its record's, a subset of all its `m` proof blocks (`subsetDesign`), which R1
@@ -132,7 +133,7 @@ def TWO_STAGE : String := "two-stage"
 accept, so one change flips both. -/
 def FORM : Bool := SecondStage.FORM
 
-theorem form_off : FORM = false := rfl
+theorem form_on : FORM = true := rfl
 
 /-- The refusal of a boundary population whose replay blocks are not one Definition's. -/
 def ONE_DEFINITION : String :=

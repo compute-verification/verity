@@ -77,14 +77,14 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.protocols.resource_accounting.network.verifier import connection_rows as CR
-from verity.protocols.resource_accounting.network.verifier import head_check as HC
+from verity.commitments.gates import bits as GB
 from verity.protocols.resource_accounting.network.verifier import io_request as Q
 from verity.protocols.resource_accounting.network.verifier import network_attester_rows as WR
 from verity.protocols.resource_accounting.network.verifier.id_form import ID_FIELD_BYTES
 from verity.protocols.resource_accounting.network.verifier.connection_rows import Rows, Table
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 
-BIT = HC.BIT
+BIT = GB.BIT
 U16 = Array(16, BIT)
 WORD_BITS = 16
 #: o0 of a row whose fails row is of its form against its request row
@@ -259,20 +259,20 @@ def outputs(sh: Shape, requests: Sequence[Request], fails: bytes) -> tuple[int, 
 def request_row(sh: Shape, requests: Sequence[Request]) -> list[int]:
     """The request row's bits (the module docstring's layout)."""
     slots = _slots(sh, requests)
-    bits = [x for i, w in enumerate((1, sh.IW, sh.LW, sh.LW)) for r in slots for x in HC._int_bits(r[i], w)]
+    bits = [x for i, w in enumerate((1, sh.IW, sh.LW, sh.LW)) for r in slots for x in GB._int_bits(r[i], w)]
     return bits + [0] * (sh.request_bits - len(bits))
 
 
 def arguments(sh: Shape, requests: Sequence[Request], fails: bytes) -> list[list[int]]:
     """`LengthsRow`'s arguments in its signature's order, each its leaves' bits."""
     _cells(sh, fails)
-    return [request_row(sh, requests), HC._bytes_bits(fails)]
+    return [request_row(sh, requests), GB._bytes_bits(fails)]
 
 
 def output_bits(sh: Shape, requests: Sequence[Request], fails: bytes) -> list[int]:
     """`LengthsRow`'s outputs as its leaves' bits: o0's 16, o1's 16, then the row's, bit 8b + i bit i of byte b."""
     verdict, failures, row = outputs(sh, requests, fails)
-    return HC._int_bits(verdict, 16) + HC._int_bits(failures, 16) + HC._bytes_bits(row)
+    return GB._int_bits(verdict, 16) + GB._int_bits(failures, 16) + GB._bytes_bits(row)
 
 
 def block(sh: Shape):
