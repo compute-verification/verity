@@ -188,3 +188,22 @@ def test_records_copies_only_listed_files_and_names_the_ones_it_leaves(tmp_path)
     assert "4096" not in left.split(": ", 1)[1], "a number in a left file's name is masked: a row dir's names carry lengths"
     assert PLANTED not in got.stdout + got.stderr
     assert (kept / "sizes.txt").is_file() and not (out / "sizes.txt").exists()
+
+
+def test_predict_puts_predict_rows_record_in_out_and_refuses_a_run_that_writes_none(tmp_path):
+    """The layers reader reads the build from $OUT/predicted.json, so `predict` copies predict row's record there; a predict
+    row that exits 0 and writes no record fails the step."""
+    for writes in (True, False):
+        tmp = tmp_path / str(writes)
+        out, kept = tmp / "out", tmp / "kept"
+        out.mkdir(parents=True), kept.mkdir()
+        py = tmp / "python"
+        py.write_text('#!/bin/sh\nwhile [ "$1" != --out ]; do shift; done\nmkdir -p "$2"\n'
+                      + ('echo \'{"schema": "verity-vllm/predicted-row/v2"}\' > "$2/predicted.json"\n' if writes else "") + "echo {}\n")
+        py.chmod(0o755)
+        code = f"PY={shlex.quote(str(py))} ROW={ROW} KEPT={shlex.quote(str(kept))} OUT={shlex.quote(str(out))}\n{function(A5_SH, 'predict')}predict"
+        got = subprocess.run(["bash", "-uc", code], env={"PATH": os.defpath}, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        assert (got.returncode == 0) is writes, got.stderr
+        assert (out / "predicted.json").is_file() is writes
+        if writes:
+            assert json.loads((out / "predicted.json").read_text())["schema"] == "verity-vllm/predicted-row/v2"
