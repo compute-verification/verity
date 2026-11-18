@@ -75,9 +75,8 @@ class Gpu:
     def sku(self) -> str:
         from verity.device import load_node
         from verity_bench import kit
-        from verity_bench.host_weight import NODE_FILES
 
-        return load_node(self.node, directory=NODE_FILES, cards_directory=kit.cards_directory())["device"]["sku"]
+        return load_node(self.node, directory=kit.nodes_directory(), cards_directory=kit.cards_directory())["device"]["sku"]
 
     @cached_property
     def record(self) -> dict[str, Any]:

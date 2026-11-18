@@ -66,7 +66,9 @@ def test_provenance_binds_every_stored_tensor_to_its_recorder_row(tmp_path):
     assert p["pass"] is True and p["collectives_checked"] == 6 and p["n_mismatches"] == 0
     assert p["tensors_digested"] == 4 * 6 and p["n_digest_mismatches"] == 0
     cap = tmp_path / "pos" / "capture"
-    assert p["recorder_sha256"] == {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
+    kept = json.loads((tmp_path / "pos" / "recorder_sha256.json").read_text())
+    assert kept == {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
+    assert "recorder_sha256" not in p
     assert doc["pass"] is True
 
 

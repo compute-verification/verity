@@ -1,6 +1,6 @@
 """The memory hook: vLLM's model runner, KV cache manager, block pool and scheduler patched once, through `hooks`,
 emitting to the process's exchange (`messages.current`) its ``memory`` events and `StepComputed` (`verity.hooks`) in the order vLLM acts,
-and taking its schemes' `HoldResident`, `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
+and taking its schemes' `ReuseOldestFreed` and `ReleaseValue` (after vLLM's ``load_model``, restored at
 the last detach): a model parameter is a registered value, a KV block a
 range, a request an input.  Each event is at the exchange's step, whose `StepBegan` and `StepEnded` are the admission
 hook's (`engine.admission`): inside ``schedule``, the step being scheduled (`Exchange.next_step`), else the last one
@@ -20,13 +20,10 @@ KVCacheManager.allocate_slots   around: the request the pool's allocations insid
 BlockPool.get_new_blocks        after: RangeAllocated, at the step being scheduled, for that request
 BlockPool.touch                 before: RangeAllocated reused, the blocks it takes back off the free queue (a
                                 prefix-cache hit)
-BlockPool.free_blocks           around: a block a scheme holds resident at this step is kept from vLLM's own, which
-                                frees it at the first step it no longer is; then RangeFreed, the blocks left with no
-                                reader, under ReuseOldestFreed first moved to the back of the free queue (vLLM puts a
-                                freed block with no hash at its front)
-Scheduler.schedule              around: the held blocks no longer resident at the step being scheduled freed, before
-                                vLLM's own (its allocations are at that step); then a RangeWritten for each run of slots
-                                a scheduled request writes in the step
+BlockPool.free_blocks           after: RangeFreed, the blocks left with no reader, under ReuseOldestFreed first moved
+                                to the back of the free queue (vLLM puts a freed block with no hash at its front)
+Scheduler.schedule              around: the step being scheduled is the one its allocations are at; then a RangeWritten
+                                for each run of slots a scheduled request writes in the step
 ~~~
 
 The admission hook is on the scheduler instance, around these class patches, so a step's RangeWritten come before its
@@ -121,7 +118,6 @@ class _Hook:
         self.hooks: Hooks | None = None
         self.scheduling = False
         self.request: str | None = None
-        self.held: list[tuple[Any, Any, Callable[..., Any]]] = []
         self.released: list[tuple[list[Any], H.ReleaseValue]] = []
         self.scheduled: list[tuple[Any, int]] = []
 
@@ -177,14 +173,6 @@ class _Hook:
         if ex.wants("memory"):
             ex.emit(H.RangeFreed(tuple(b.block_id for b in freed), step=self.at(ex)))
 
-    def release(self, ex: messages.Exchange) -> None:
-        """Free the held blocks no scheme holds resident at this step any more."""
-        due = [x for x in self.held if not ex.resident(x[1].block_id, self.at(ex))]
-        self.held = [x for x in self.held if not any(x is d for d in due)]
-        for pool, b, free in due:
-            free(pool, [b])
-            self.freed(pool, [b], ex)
-
     def install(self) -> None:
         from vllm.v1.core.block_pool import BlockPool
         from vllm.v1.core.kv_cache_manager import KVCacheManager
@@ -194,7 +182,7 @@ class _Hook:
         import importlib.util
 
         h, hook = Hooks(tag=TAG), self
-        self.hooks, self.scheduling, self.request, self.held, self.released, self.scheduled = h, False, None, [], [], []
+        self.hooks, self.scheduling, self.request, self.released, self.scheduled = h, False, None, [], []
 
         def allocate(orig):
             def allocate_slots(manager, request, *a, **kw):
@@ -223,13 +211,9 @@ class _Hook:
 
         def free(orig):
             def free_blocks(pool, ordered):
-                blocks, ex = list(ordered), messages.current()
-                keep = [b for b in blocks if not b.is_null and ex.resident(b.block_id, hook.at(ex))]
-                if keep:
-                    hook.held += [(pool, b, orig) for b in keep]
-                    blocks = [b for b in blocks if not any(b is k for k in keep)]
+                blocks = list(ordered)
                 orig(pool, blocks)
-                hook.freed(pool, blocks, ex)
+                hook.freed(pool, blocks, messages.current())
             return free_blocks
 
         def schedule(orig):
@@ -237,7 +221,6 @@ class _Hook:
                 ex = messages.current()
                 hook.scheduling = True
                 try:
-                    hook.release(ex)
                     so = orig(sched, *a, **kw)
                     hook.scheduled = [*hook.scheduled[-(SCHEDULED - 1):], (so, ex.next_step)]
                     if ex.wants("memory"):

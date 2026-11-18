@@ -1,11 +1,11 @@
 module
 
 public import Proofs.Core.Circuit
-public import Proofs.Core.LevelsMiss
+public import Proofs.Core.LevelsLate
 public import Proofs.Core.CircuitLevels
 
 /-!
-# Committing late does not help, at a circuit's two levels
+# Committing late does not help, at a circuit's levels
 
 Two levels drawn over a circuit's nested partitions: the inner blocks are the units of `Pf`, the outer blocks those of
 `Pc`, and `Pf` refines `Pc` (`r`). The levels' blocks are sets of gates of some type `G`, and `blk`, `oblk` place the
@@ -22,6 +22,14 @@ inner blocks are its incorrect units with those having an outer committed wire o
 * `Levels.prCoin_accept_le_late`: the sampling step of soundness at a miss `δ` with interiors committed late. A run
   accepted only where the inner samples miss the late interiors' incorrect inner blocks, or a break occurs, is
   accepted while the largest miss over the interiors is at most `δ` with probability at most `δ` plus the break's.
+* `Levels.ofChain_late_le_missProb_opened`: at the levels of a chain of partitions, any number of them, the prover
+  commits a trace after each level's draw, by any rule, keeping the first trace's opened gates `O` and, from the second
+  level on, each level's committed gates. Every sample misses the last trace's incorrect last-level blocks, with the
+  unopened ones, with probability at most `missProb` of one trace's, fixed in advance and agreeing with the first on
+  `O`. It is `Levels.late_le_missProb_levels` with traces near a block when they agree on the gates it holds or reads
+  (`Partition.region`) that are opened or not first-level committed.
+* `Levels.ofChain_late_le_missProb`: the same with every first-level committed wire opened.
+* `Levels.ofChain_prCoin_accept_le_late`: the sampling step of soundness at a miss `δ` at those levels.
 -/
 
 @[expose] public section
@@ -198,6 +206,226 @@ theorem ofPartitions_prCoin_accept_le_late {P : Type} [Fintype P] [Nonempty P]
         brk x.1 x.2) :=
   prCoin_accept_le_late (l₁ := ⟨Pc.blocks, Rc.design rule₁⟩) (l₂ := ⟨Pf.blocks, r.design rule₂⟩) _ rfl r
     Pf.block Pc.block (r.block_subset_iff) (fun _ hX => (Partition.mem_blocks.1 hX).2) τ₁ O R hR acc brk h δ
+
+end Levels
+
+/-- The chain's partition at level `i`, the first below the root at `0`, and the last past its end. -/
+def Partition.Chain.part {C : Circuit} : {nc : ℕ} → {Pc : Partition C nc} → Partition.Chain C Pc → ℕ →
+    Σ n, Partition C n
+  | nc, Pc, .nil, _ => ⟨nc, Pc⟩
+  | _, _, .cons Pf _ _ .nil, _ => ⟨_, Pf⟩
+  | _, _, .cons Pf _ _ (.cons _ _ _ _), 0 => ⟨_, Pf⟩
+  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1 => (Partition.Chain.cons Pg Rg rg rest).part i
+
+/-- Each level's committed gates are committed at every level below it. -/
+theorem Partition.Chain.committed_part_subset {C : Circuit} :
+    {nc : ℕ} → {Pc : Partition C nc} → (ch : Partition.Chain C Pc) → (k : ℕ) →
+      (ch.part k).2.committed ⊆ (ch.part (k + 1)).2.committed
+  | _, _, .nil, _ => subset_rfl
+  | _, _, .cons _ _ _ .nil, _ => subset_rfl
+  | _, _, .cons _ _ _ (.cons _ Rg _ rest), 0 => by
+    cases rest <;> exact Rg.committed_subset
+  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1 =>
+    Partition.Chain.committed_part_subset (.cons Pg Rg rg rest) i
+
+/-- The chain's `k`-th level's blocks are its `k`-th partition's. -/
+theorem Partition.Chain.levels_get_blocks {C : Circuit} :
+    {nc : ℕ} → {Pc : Partition C nc} → (ch : Partition.Chain C Pc) → (k : ℕ) → (hk : k < ch.levels.length) →
+      (ch.levels.get ⟨k, hk⟩).blocks = (ch.part k).2.blocks
+  | _, _, .nil, _, hk => absurd hk (Nat.not_lt_zero _)
+  | _, _, .cons _ _ _ .nil, 0, _ => rfl
+  | _, _, .cons _ _ _ .nil, _ + 1, hk => absurd hk (by simp [Partition.Chain.levels])
+  | _, _, .cons _ _ _ (.cons _ _ _ _), 0, _ => rfl
+  | _, _, .cons _ _ _ (.cons Pg Rg rg rest), i + 1, hk =>
+    Partition.Chain.levels_get_blocks (.cons Pg Rg rg rest) i (by simpa [Partition.Chain.levels] using hk)
+
+namespace Partition
+
+variable {C : Circuit} {n : ℕ}
+
+/-- The gates a block of computed gates holds or reads. -/
+def region (X : Finset C.Computed) : Finset (Fin C.N) :=
+  X.image Subtype.val ∪ X.biUnion fun x => C.reads x.1
+
+theorem region_mono {X Y : Finset C.Computed} (h : X ⊆ Y) : region X ⊆ region Y :=
+  Finset.union_subset_union (Finset.image_subset_image h) (Finset.biUnion_subset_biUnion_of_subset_left _ h)
+
+theorem unit_of_mem_block {P : Partition C n} {u : Fin n} {x : C.Computed} (hx : x ∈ P.block u) :
+    P.unit x.1 = some u :=
+  (Finset.mem_filter.1 hx).2
+
+/-- Two blocks of a partition share only committed gates in their regions. -/
+theorem mem_committed_of_region (P : Partition C n) {X Y : Finset C.Computed} (hX : X ∈ P.blocks.parts)
+    (hY : Y ∈ P.blocks.parts) (hne : X ≠ Y) {g : Fin C.N} (hgX : g ∈ region X) (hgY : g ∈ region Y) :
+    g ∈ P.committed := by
+  obtain ⟨-, u, rfl⟩ := mem_blocks.1 hX
+  obtain ⟨-, v, rfl⟩ := mem_blocks.1 hY
+  have hsome : (some u : Option (Fin n)) ≠ some v := fun h => hne (by rw [Option.some_inj.1 h])
+  simp only [region, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion] at hgX hgY
+  rcases hgX with ⟨x, hx, rfl⟩ | ⟨x, hx, hgx⟩ <;> rcases hgY with ⟨y, hy, hyg⟩ | ⟨y, hy, hgy⟩
+  · exact absurd ((unit_of_mem_block hx).symm.trans (by rw [← hyg]; exact unit_of_mem_block hy)) hsome
+  · exact P.mem_committed_of_read hgy (by rw [unit_of_mem_block hy, unit_of_mem_block hx]; exact hsome.symm)
+  · exact P.mem_committed_of_read hgx (by rw [unit_of_mem_block hx, ← hyg, unit_of_mem_block hy]; exact hsome)
+  · by_cases hg : P.unit g = some u
+    · exact P.mem_committed_of_read hgy (by rw [unit_of_mem_block hy, hg]; exact hsome.symm)
+    · exact P.mem_committed_of_read hgx (by rw [unit_of_mem_block hx]; exact Ne.symm hg)
+
+theorem io_subset_region (P : Partition C n) (u : Fin n) : P.io u ⊆ region (P.block u) := by
+  classical
+  have hin : ∀ g, P.unit g = some u → C.isInput g = false := fun g hg => by
+    cases h : C.isInput g
+    · rfl
+    · exact absurd ((P.input_iff g).2 h) (by rw [hg]; exact Option.some_ne_none u)
+  intro g hg
+  simp only [io, Finset.mem_filter] at hg
+  simp only [region, Finset.mem_union, Finset.mem_image, Finset.mem_biUnion]
+  rcases hg.2 with hu | ⟨h, hu, hgh⟩
+  · exact Or.inl ⟨⟨g, hin g hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, rfl⟩
+  · exact Or.inr ⟨⟨h, hin h hu⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩, hgh⟩
+
+/-- Whether a block is bad, its units unopened from `S` at `O` counted bad, reads a trace only in the block's region
+outside `S` or inside `O`. -/
+theorem mem_image_unopened_incorrect_of_region (P : Partition C n) (S O : Finset (Fin C.N)) {X : Finset C.Computed}
+    {a b : C.Trace} (h : ∀ g ∈ region X, g ∉ S ∨ g ∈ O → a g = b g)
+    (hX : X ∈ (P.unopened S O ∪ P.incorrect a).image P.block) :
+    X ∈ (P.unopened S O ∪ P.incorrect b).image P.block := by
+  classical
+  obtain ⟨u, hu, rfl⟩ := Finset.mem_image.1 hX
+  refine Finset.mem_image.2 ⟨u, ?_, rfl⟩
+  by_cases hU : u ∈ P.unopened S O
+  · exact Finset.mem_union_left _ hU
+  · refine Finset.mem_union_right _ (P.mem_incorrect.2 fun hb =>
+      P.mem_incorrect.1 ((Finset.mem_union.1 hu).resolve_left hU) ?_)
+    refine P.correct_congr (fun g hg => h g (P.io_subset_region u hg) ?_) hb
+    by_contra hc
+    rw [not_or, not_not] at hc
+    exact hU (Finset.mem_filter.2 ⟨Finset.mem_univ _, g, hg, hc.1, hc.2⟩)
+
+end Partition
+
+theorem Partition.Chain.committed_zero_subset {C : Circuit} {nc : ℕ} {Pc : Partition C nc}
+    (ch : Partition.Chain C Pc) : ∀ k, (ch.part 0).2.committed ⊆ (ch.part k).2.committed
+  | 0 => subset_rfl
+  | k + 1 => (ch.committed_zero_subset k).trans (ch.committed_part_subset k)
+
+namespace Levels
+
+variable {C : Circuit}
+
+/-- **Committing late does not help, at any number of levels, from a partly opened first trace.** At the levels of a
+circuit's partitions, the trace `τ k` is committed after `Q_k` is drawn, by any rule. Each keeps the opened gates `O`
+of the one before, and from the second level on its committed gates too. Every sample misses the last trace's
+incorrect last-level blocks, with those of units having a first-level committed wire outside `O`
+(`Partition.unopened`), with probability at most the miss of those of one trace fixed in advance that agrees with
+`τ 0` on `O`. It is `Levels.late_le_missProb_levels` with traces near a block when they agree on the gates it holds or
+reads (`Partition.region`) that are opened or not first-level committed. -/
+theorem ofChain_late_le_missProb_opened (ch : Partition.Chain C (Partition.whole C)) (O : Finset (Fin C.N))
+    (τ : ℕ → (Levels.ofPartitions ch).Coins → C.Trace) (hτ : ∀ k, (Levels.ofPartitions ch).ReadsBelow k (τ k))
+    (hstep : ∀ k ω, (∀ g ∈ O, τ (k + 1) ω g = τ k ω g) ∧
+      (0 < k → ∀ g ∈ (ch.part k).2.committed, τ (k + 1) ω g = τ k ω g)) :
+    ∃ τ' : C.Trace, (∀ g ∈ O, τ' g = τ 0 (Classical.arbitrary _) g) ∧
+      prCoin (fun ω => Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
+          (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed O ∪
+            (ch.part (ch.levels.length - 1)).2.incorrect (τ (ch.levels.length - 1) ω)).image
+              (ch.part (ch.levels.length - 1)).2.block)) ≤
+        (Levels.ofPartitions ch).design.missProb
+          (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed O ∪
+            (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block) := by
+  classical
+  set K₀ := (ch.part 0).2.committed
+  refine Exists.imp (fun _ h => ⟨h.1.1, h.2⟩) <| (Levels.ofPartitions ch).late_le_missProb_levels
+    (fun θ => ((ch.part (ch.levels.length - 1)).2.unopened K₀ O ∪
+      (ch.part (ch.levels.length - 1)).2.incorrect θ).image (ch.part (ch.levels.length - 1)).2.block)
+    (fun k a b => (∀ g ∈ O, b g = a g) ∧ (0 < k → ∀ g ∈ (ch.part k).2.committed, b g = a g))
+    (fun X a b => ∀ g ∈ Partition.region X, g ∉ K₀ ∨ g ∈ O → a g = b g)
+    (fun _ _ => ⟨fun _ _ => rfl, fun _ _ _ => rfl⟩)
+    (fun k _ _ _ hab hbc => ⟨fun g hg => (hbc.1 g hg).trans (hab.1 g hg),
+      fun hk g hg => (hbc.2 (Nat.succ_pos k) g (ch.committed_part_subset k hg)).trans (hab.2 hk g hg)⟩)
+    (fun _ _ _ h g hg ho => (h g hg ho).symm) (fun _ _ _ _ hXY h g hg ho => h g (Partition.region_mono hXY hg) ho)
+    (fun X a b h => ⟨Partition.mem_image_unopened_incorrect_of_region _ _ _ h,
+      Partition.mem_image_unopened_incorrect_of_region _ _ _ fun g hg ho => (h g hg ho).symm⟩)
+    (fun k X a b a' h ha => ⟨fun g => if g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O) then a' g else b g,
+      ⟨fun g hg => ?_, fun hk g hg => ?_⟩, fun g hg ho => by simp only [hg, ho, and_self, ite_true]⟩) ?_ τ hτ hstep
+  · by_cases hc : g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O)
+    · simp only [hc, ite_true]
+      exact (ha.1 g hg).trans (h g hc.1 hc.2)
+    · simp only [hc, ite_false]
+  · by_cases hc : g ∈ Partition.region X ∧ (g ∉ K₀ ∨ g ∈ O)
+    · simp only [hc, ite_true]
+      exact (ha.2 hk g hg).trans (h g hc.1 hc.2)
+    · simp only [hc, ite_false]
+  · intro k hk θ θX hθX
+    rw [show ((Levels.ofPartitions ch).levels.get ⟨k, by omega⟩).blocks = (ch.part k).2.blocks from
+      ch.levels_get_blocks k _]
+    refine ⟨fun g => if h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X then θX h.choose g else θ g,
+      ⟨fun g hg => ?_, fun hk g hg => ?_⟩, fun X hX g hg ho => ?_⟩
+    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
+      · simp only [h, dite_true]
+        exact (hθX _).1 g hg
+      · simp only [h, dite_false]
+    · by_cases h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X
+      · simp only [h, dite_true]
+        exact (hθX _).2 hk g hg
+      · simp only [h, dite_false]
+    · have h : ∃ X ∈ (ch.part k).2.blocks.parts, g ∈ Partition.region X := ⟨X, hX, hg⟩
+      simp only [h, dite_true]
+      obtain ⟨hX₀, hg₀⟩ := h.choose_spec
+      by_cases hXX : h.choose = X
+      · rw [hXX]
+      · have hc := (ch.part k).2.mem_committed_of_region hX₀ hX hXX hg₀ hg
+        by_cases hk0 : k = 0
+        · subst hk0
+          have hgO : g ∈ O := ho.resolve_left (not_not.2 hc)
+          rw [(hθX _).1 g hgO, (hθX X).1 g hgO]
+        · rw [(hθX _).2 (Nat.pos_of_ne_zero hk0) g hc, (hθX X).2 (Nat.pos_of_ne_zero hk0) g hc]
+
+/-- **Committing late does not help, at any number of levels.** At the levels of a circuit's partitions, the trace
+`τ k` is committed after `Q_k` is drawn, by any rule, and agrees with `τ (k - 1)` on the committed gates of level
+`k - 1`. Every sample misses the incorrect last-level blocks of the last trace with probability at most the miss of
+those of one trace fixed in advance that agrees with `τ 0` on the first level's committed gates. -/
+theorem ofChain_late_le_missProb (ch : Partition.Chain C (Partition.whole C))
+    (τ : ℕ → (Levels.ofPartitions ch).Coins → C.Trace) (hτ : ∀ k, (Levels.ofPartitions ch).ReadsBelow k (τ k))
+    (hstep : ∀ k ω, ∀ g ∈ (ch.part k).2.committed, τ (k + 1) ω g = τ k ω g) :
+    ∃ τ' : C.Trace, (∀ g ∈ (ch.part 0).2.committed, τ' g = τ 0 (Classical.arbitrary _) g) ∧
+      prCoin (fun ω => Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
+          (((ch.part (ch.levels.length - 1)).2.incorrect (τ (ch.levels.length - 1) ω)).image
+            (ch.part (ch.levels.length - 1)).2.block)) ≤
+        (Levels.ofPartitions ch).design.missProb
+          (((ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block) := by
+  obtain ⟨τ', h, hle⟩ := ofChain_late_le_missProb_opened ch (ch.part 0).2.committed τ hτ fun k ω =>
+    ⟨fun g hg => hstep k ω g (ch.committed_zero_subset k hg), fun _ g hg => hstep k ω g hg⟩
+  simp only [Partition.unopened_self, Finset.empty_union] at hle
+  exact ⟨τ', h, hle⟩
+
+/-- **The sampling step of soundness at a miss `δ`, interiors committed late, at any number of levels.** The prover's
+coins `p`, drawn before the samples and independently of them, fix its rule `τ p` and the opened gates `O p` of its
+first trace. Where every accepted run's sample misses the last trace's incorrect last-level blocks, with the unopened
+ones, or a break occurs, the run is accepted while the largest miss over the traces agreeing with the first on `O p`
+is at most `δ` with probability at most `δ` plus the break's. -/
+theorem ofChain_prCoin_accept_le_late (ch : Partition.Chain C (Partition.whole C)) {P : Type} [Fintype P]
+    [Nonempty P] (O : P → Finset (Fin C.N)) (τ : P → ℕ → (Levels.ofPartitions ch).Coins → C.Trace)
+    (hτ : ∀ p k, (Levels.ofPartitions ch).ReadsBelow k (τ p k))
+    (hstep : ∀ p k ω, (∀ g ∈ O p, τ p (k + 1) ω g = τ p k ω g) ∧
+      (0 < k → ∀ g ∈ (ch.part k).2.committed, τ p (k + 1) ω g = τ p k ω g))
+    (acc brk : P → (Levels.ofPartitions ch).Coins → Prop)
+    (h : ∀ p ω, acc p ω → Disjoint ((Levels.ofPartitions ch).drawTo ω ch.levels.length)
+        (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O p) ∪
+          (ch.part (ch.levels.length - 1)).2.incorrect (τ p (ch.levels.length - 1) ω)).image
+            (ch.part (ch.levels.length - 1)).2.block) ∨ brk p ω) (δ : ℝ≥0∞) :
+    prCoin (fun x : P × (Levels.ofPartitions ch).Coins => acc x.1 x.2 ∧
+        (⨆ (τ' : C.Trace) (_ : ∀ g ∈ O x.1, τ' g = τ x.1 0 (Classical.arbitrary _) g),
+          (Levels.ofPartitions ch).design.missProb
+            (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O x.1) ∪
+              (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)) ≤ δ) ≤
+      δ + prCoin (fun x : P × (Levels.ofPartitions ch).Coins => brk x.1 x.2) := by
+  let m : P → C.Trace → ℝ≥0∞ := fun p τ' => (Levels.ofPartitions ch).design.missProb
+    (((ch.part (ch.levels.length - 1)).2.unopened (ch.part 0).2.committed (O p) ∪
+      (ch.part (ch.levels.length - 1)).2.incorrect τ').image (ch.part (ch.levels.length - 1)).2.block)
+  refine prCoin_accept_le_of _ acc brk
+    (fun p => ⨆ (τ' : C.Trace) (_ : ∀ g ∈ O p, τ' g = τ p 0 (Classical.arbitrary _) g), m p τ') (fun p => ?_) h δ
+  obtain ⟨τ', hτ', hle⟩ := ofChain_late_le_missProb_opened ch (O p) (τ p) (hτ p) (hstep p)
+  exact hle.trans (le_iSup₂ (f := fun (τ' : C.Trace) (_ : ∀ g ∈ O p, τ' g = τ p 0 (Classical.arbitrary _) g) =>
+    m p τ') τ' hτ')
 
 end Levels
 
