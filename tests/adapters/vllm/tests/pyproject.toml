@@ -89,11 +89,12 @@ untraced = [
 # commits (tools/verity/cli/verity_cli/configurations.toml).
 # tests/program/predict/test_window_rows.py serves through network accounting's tests' driver (its scan_traffic.py).
 # A TargetProfile that names its card reads the card's architecture file (target_profile.card_facts).
+# tests/test_serve_order_smoke.py reads each application's `protocols` list (applications/*.toml).
 inputs_only = true
 inputs = ["adapters/vllm", "verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/verity_torch", "calibration/hardware/cards",
           "calibration/hardware/architectures", "verity/README.md",
           "tools/config/verity_config", "artifacts.json", "adapters/vllm/tools/served_run/workloads/SHA256SUMS",
-          "applications/remote.toml", "applications/onsite_network.toml",
+          "applications",
           "benchmarks/one_stage/served_verdicts.sh",
           ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/resource_accounting/compute/pouw/verifier/lean/check/lakefile.toml",
