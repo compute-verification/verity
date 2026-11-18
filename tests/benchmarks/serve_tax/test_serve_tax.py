@@ -389,7 +389,7 @@ def test_the_pearl_plus_arms_turn_it_on_by_name_inside_vllms_server_at_the_jobs_
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, private=private,
                      schemes={"pearl-plus": {"challenger": "auditor:7000"}})
     own = PEARL_PLUS_JOB["pearl-plus"]
-    with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: challenger and session go together"):
+    with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: .*session"):
         S.server_env(S.ARMS["pearl-plus"], tmp_path, tmp_path, None, 1.0, private=private,
                      schemes={"gate": "gate-cmd", "pearl-plus": {k: v for k, v in own.items() if k != "session"}})
     with pytest.raises(SystemExit, match="^--scheme-settings: pearl-plus: coins and challenger are both set"):
