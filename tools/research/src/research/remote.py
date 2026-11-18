@@ -2673,6 +2673,10 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
         raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
+    if rec and rec.get("provider") == "slurm":
+        from .pods import slurm
+
+        return slurm.fetch(local_dir, rec)
     if not rec or not rec.get("remote_run_dir"):
         raise Refused(f"{local_dir} is not a launched remote run")
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
@@ -2737,6 +2741,27 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
             rec["fetched_marker"] = _mark_fetched(ssh, rd, local_dir, manifest)
     write_json_atomic(local_dir / "remote.json", rec)
     return rec
+
+
+#: the head of a run's stderr.log that `slot_lines` reads: slot.py and lean_slot.py write there before the job's own output
+SLOT_HEAD = 1 << 18
+
+
+def slot_lines(local_dir: Path, *, timeout: float = 30) -> list[str]:
+    """What slot.py (`slot:`) and lean_slot.py (`lean-slot:`) have said in the head of the run's stderr.log on its machine, in
+    order; none for a run not launched on one or a machine that doesn't answer."""
+    rec = _read_json(local_dir / "remote.json") or {}
+    if not rec.get("remote_run_dir"):
+        return []
+    log = shlex.quote(f"{rec['remote_run_dir']}/stderr.log")
+    try:
+        ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
+        r = ssh_run(ssh, ["sh", "-c", f"head -c {SLOT_HEAD} {log} 2>/dev/null | grep -E '^(lean-)?slot:'"], timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError, KeyError) as e:
+        why = f"in {e.timeout:.0f} s" if isinstance(e, subprocess.TimeoutExpired) else f"({e})"
+        print(f"research: its stderr.log was not read {why}, so what its slot says is not known", file=sys.stderr)
+        return []
+    return r.stdout.decode(errors="replace").splitlines() if r.returncode == 0 else []
 
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py

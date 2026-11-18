@@ -245,3 +245,26 @@ def canonical(files: dict[str, Path], source: str) -> str | None:
             rec = record(a, True)
             h.update(_U64.pack(len(rec)) + rec)
     return h.hexdigest()
+
+
+def main(argv: list[str]) -> int:
+    """`--canonical`: `canonical` of each job read from stdin as JSON (`[[source, {part: file}], ...]`), written to stdout as
+    `{"graphs": [digest or null, ...], "seconds": the walks' own time}`. `check.py`'s `walk_graphs` runs it so that the
+    walks, pure Python, run in processes of their own rather than under one interpreter lock."""
+    import json
+    import sys
+    import time
+
+    if argv != ["--canonical"]:
+        print("usage: olean_graph.py --canonical < [[source, {part: file}], ...]", file=sys.stderr)
+        return 2
+    jobs, s = json.load(sys.stdin), time.monotonic()
+    graphs = [canonical({p: Path(f) for p, f in files.items()}, source) for source, files in jobs]
+    json.dump({"graphs": graphs, "seconds": round(time.monotonic() - s, 3)}, sys.stdout)
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main(sys.argv[1:]))

@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +18,7 @@ import pytest
 import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
-from research import carry, vqueue, vqueue_records, vqueue_slim
+from research import carry, landing, vqueue, vqueue_records, vqueue_slim
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.landing import PREFLIGHT
 from research.queue import DRIVE_FLAGS, merge_main
@@ -162,10 +163,11 @@ class Env:
         self.graph2.list_graph(f"ready:{sha}", graph)
         return {t["id"]: t.get("key", "") for t in graph["tasks"]}
 
-    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None) -> None:
+    def result(self, key: str, task: str, status: str, infra: bool = False, tests: list[str] | None = None,
+               run: str | None = None) -> None:
         detail = {**({"infra": True} if infra else {}), **({"failed_tests": tests} if tests is not None else {})}
         self.graph2.finish_result({"key": key, "task": task, "status": status, "outputs": {"out": "sha512:o"},
-                                   **({"detail": detail} if detail else {})})
+                                   **({"run": run} if run else {}), **({"detail": detail} if detail else {})})
 
     def graph2_script(self, loop: Loop, verdict: dict | None = None) -> Path:
         """A graph2 with `verdict`, `cancel` and `rerun` for ``loop``: its verdict on a check `<script>.verdict.<check>`'s,
@@ -2393,6 +2395,60 @@ def test_a_lone_member_s_failure_its_files_dont_meet_is_rerun_once_afresh_and_th
     assert script is None or Path(f"{script}.rerun").read_text().count("\n") == 1
 
 
+def test_an_unreached_failure_of_several_members_is_rerun_and_a_pass_is_recorded_and_rung(env):
+    """A pass is a `cured` line (the test, the candidate, the run ids) and a ring to the test's owner, and the candidate
+    lands.  The same test failing again within 24 hours is not rerun: it is red, and the owner is told to delete it."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(vqueue.decide, batch=2)
+    env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha = built["sha"]
+    assert built["members"] == [1, 2]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"})
+    z = keys["pytest:z"]
+    test = "tests/test_z.py::test_once"
+    fail_run, pass_run = "r20261118-090000-aaa1", "r20261118-090500-bbb2"
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    env.result(keys["pytest:b"], "pytest:b", "pass")
+    env.result(z, "pytest:z", "fail", tests=[test], run=fail_run)
+    (rerun,) = loop.tick()
+    assert (rerun["action"], rerun["sha"], rerun["keys"], rerun["done"]) == ("rerun", sha, [z], True), rerun
+    assert loop.tick() == []
+    env.result(z, "pytest:z", "pass", run=pass_run)
+
+    def own() -> None:
+        loop.world.driver()._reg = {"handles": [{"handle": "zz", "owns": ["tools/zz/"]}]}
+
+    own()
+    logged = loop.tick()
+    cured = next(r for r in logged if r["action"] == "cured")
+    ring = next(r for r in logged if r["action"] == "ring")
+    assert (cured["test"], cured["sha"], cured["runs"]) == (test, sha, [fail_run, pass_run])
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "cures or deletes it within 24 hours" in ring["text"]
+    assert _acts(logged) == ["cured", "ring", "advance", "on_main", "drop"] and env.main() == sha
+    assert "deleted" not in ring["text"] and env.withdrawn == []
+    env.clock = T0 + 3600
+    env.put(3, {"c.txt": "3\n"})
+    env.put(4, {"d.txt": "4\n"})
+    (again,) = loop.tick()
+    assert again["members"] == [3, 4]
+    keys = env.listed(again["sha"], {"pytest:c": ["c.txt"], "pytest:d": ["d.txt"], "pytest:z": ["z.txt"]},
+                      suites={"pytest:z": "tools/zz"}, keys={"pytest:z": "sha512:z2"})
+    env.result(keys["pytest:c"], "pytest:c", "pass")
+    env.result(keys["pytest:d"], "pytest:d", "pass")
+    env.result(keys["pytest:z"], "pytest:z", "fail", tests=[test], run="r20261118-100000-ccc3")
+    own()                                               # main moved, so the loop read the registry again
+    logged = loop.tick()
+    assert "rerun" not in _acts(logged)
+    ring = next(r for r in logged if r["action"] == "ring")
+    drop = next(r for r in logged if r["action"] == "drop" and r.get("outcome"))
+    assert ring["to"] == ["@zz"] and ring["test"] == test and "flakes and must be deleted" in ring["text"]
+    assert drop["outcome"]["state"] == "fail" and drop["outcome"]["suspects"] == [3, 4]
+    assert not any(r["action"] == "cured" for r in logged)
+
+
 def test_a_rerun_sets_its_key_s_results_aside_for_the_candidate_above_too_as_graph2_drops_its_cached_result(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(vqueue.decide)
@@ -3651,6 +3707,25 @@ def _checks(env: Env) -> list[str]:
     return [e["check"] for e in env.graph2.enqueued()]
 
 
+def test_a_plain_pr_that_conflicts_with_the_staged_batch_s_members_is_left_out_of_the_batch_beside_it_its_owner_told(env):
+    """#1, a Lean change, is staged; #2 merges onto `main` but not under #1, which `Commit` merges again onto main's chain's
+    top above the batch built beside it: the build leaves #2 out, naming #1 and the file, and tells its owner, and builds #3.
+    The next tick takes #2 into no batch while that batch stays staged and #2's head is the same, saying why."""
+    loop, records, sha, one, first = _records_loop(env, files={**LEAN, "shared.txt": "one\n"}, left_out=vqueue.left_out)
+    two = env.put(2, {"shared.txt": "two\n"})
+    env.put(3, {"c.txt": "3\n"})
+    skip, built = [r for r in loop.tick() if r["action"] != "leave"]
+    assert (skip["action"], skip["number"], skip["heads"], skip["by"], skip["staged"], skip["done"]) == (
+        "skip", 2, [two], [1], sha, True), skip
+    assert skip["why"] == (f"conflicts with #1, of the Lean batch staged at {sha[:12]}, which goes onto main's chain's top "
+                           "above it, in shared.txt"), skip
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [3], True), built
+    (post,) = env.posts
+    assert "#2 at" in post and "once #1 is on it" in post, post
+    assert [(r["action"], r["number"], r["cause"]) for r in loop.tick()] == [("leave", 2, "conflicts with staged batch")]
+    assert len(env.posts) == 1
+
+
 def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_records_commit_when_it_regenerated_some(env):
     """Its build starts its records run on its tree, and not its check: nothing is enqueued on it, and the next batch is built
     on its base beside it, not on it.  Once the run passed having regenerated records, it goes onto main's chain's top: its
@@ -4134,7 +4209,7 @@ def test_a_staged_batch_none_of_whose_members_merges_onto_the_chain_s_top_is_dro
     env.put(2, {"b.txt": "2\n"})
     (two,) = loop.tick()
     records.verdicts["regen-1"] = RecordsRun(PASS)
-    loop.world.build = lambda prs, base, main=None: (base, [], [])       # #1 merges onto main's chain's top no more
+    loop.world.build = lambda prs, base, main=None, staged=None: (base, [], [])       # #1 merges onto main's chain's top no more
     judged, drop = loop.tick()
     assert (drop["action"], drop["sha"], drop["why"]) == (
         "drop", sha, f"no member of it merges onto {two['sha'][:12]}, main's chain's top: its members are built again")
@@ -6244,6 +6319,104 @@ def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypa
     with pytest.raises(L.QueueError, match="can't be read.*or remove it"):
         w.cancel_runs(["r-4"], "dropped")
     assert cancelled[-1] == ["r-2"]
+
+
+def test_a_drops_cancels_all_begin_before_any_ends_each_failure_kept_by_its_run(monkeypatch):
+    """`landing.cancel_runs` starts every `research cancel` of its runs before any ends (up to `landing.CANCEL_JOBS`): one at
+    a time, a drop of a check's shards and their twins held a tick a minute.  Each one that failed is kept by its run."""
+    started, go = [], threading.Event()
+
+    def run(argv, **kw):
+        if threading.current_thread() is threading.main_thread():
+            return subprocess.CompletedProcess(argv, 1, "", "one at a time")
+        started.append(rid := argv[4])
+        if len(started) == 3:
+            go.set()
+        go.wait()
+        return subprocess.CompletedProcess(argv, int(rid == "r-2"), "", "no such run" if rid == "r-2" else "")
+
+    monkeypatch.setattr(landing.subprocess, "run", run)
+    assert landing.cancel_runs(Path("."), ["r-1", "r-2", "r-3"], "dropped") == {"r-2": "no such run"}
+    assert sorted(started) == ["r-1", "r-2", "r-3"] and landing.cancel_runs(Path("."), [], "dropped") == {}
+
+
+def _two_drops(env: Env, monkeypatch) -> tuple[Loop, Runs, str, str]:
+    """Four candidates stacked, one PR each, under the sharded check: the third one's fails next, which drops it and the
+    one above it in one tick."""
+    env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(4, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=4)
+    loop.tick()
+    _, three, four = (loop.tick()[0]["sha"] for _ in range(3))
+    return loop, runs, three, four
+
+
+def test_a_cascade_whose_keep_file_cant_be_read_refuses_before_any_branch_goes_or_run_is_cancelled(env, monkeypatch, tmp_path):
+    """The keep file a drop's cancels read (`KEEP_RUNS`) is read while the drop can still refuse: unreadable, the tick's first
+    drop refuses with the fix, and the rest of the tick waits, with every branch on origin and no run cancelled."""
+    loop, runs, three, four = _two_drops(env, monkeypatch)
+    (keep := tmp_path / "keep-runs").mkdir()
+    loop.world.keep_file = keep
+    runs.fail(three, 1, rows=(_row(NEW),))
+    logged = loop.tick()
+    assert [(r["action"], r.get("sha")) for r in logged][1] == ("drop", three) and "or remove it" in logged[1]["error"], logged
+    assert "drop" not in _acts(logged)[2:] and {branch(three), branch(four)} <= set(env.queued()) and env.cancelled == []
+
+
+@pytest.mark.parametrize("refused", [False, True])
+def test_a_ticks_drops_delete_their_branches_in_one_push_then_cancel_their_runs_side_by_side(env, monkeypatch, refused):
+    """A red that drops two candidates in one tick (the failing one, and the one above it as a base failure): their branches
+    go in one atomic push, then their runs are cancelled side by side, each drop's cancel begun before the other's ended
+    rather than one drop after another, and each drop's line keeps its own runs and reason in the tick's order.  With that
+    push refused, each drop deletes its own branch and then cancels its runs, as a drop alone does, so no candidate left
+    on origin has its runs cancelled."""
+    loop, runs, three, four = _two_drops(env, monkeypatch)
+    w, started, go, pushed, deleted = loop.world, [], threading.Event(), [], []
+    push = w.push
+
+    def pushing(sha, ref, lease=None):
+        if not sha:
+            pushed.append(ref)
+        return push(sha, ref, lease)
+    monkeypatch.setattr(w, "push", pushing)
+    if refused:
+        def delete(refs):
+            raise Q.QueueError("git push --atomic: refused")
+
+        def cancel_runs(ids, why):
+            started.append((list(ids), why, pushed[-1]))
+            return {}
+    else:
+        delete = getattr(w, "delete", None)
+
+        def cancel_runs(ids, why):
+            if threading.current_thread() is threading.main_thread():
+                return {i: "one drop after another" for i in ids}
+            started.append((list(ids), why, None))
+            if len(started) == 2:
+                go.set()
+            go.wait()
+            return {}
+    monkeypatch.setattr(w, "delete", lambda refs: deleted.append(refs) or delete(refs), raising=False)
+    monkeypatch.setattr(w, "cancel_runs", cancel_runs)
+    runs.fail(three, 1, rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "drop", "drop", "build", "slim"], logged
+    held, above = logged[1:3]
+    assert (held["sha"], held["beside_cancelled"], above["sha"], above["beside_cancelled"]) == (
+        three, ["c-10", "c-11", "c-12"], four, ["c-13", "c-14", "c-15"])
+    assert "beside_cancel_failed" not in held and "beside_cancel_failed" not in above
+    assert deleted == [{branch(three): three, branch(four): four}]
+    assert sorted((ids, why) for ids, why, _ in started) == [
+        (["c-10", "c-11", "c-12"], f"vqueue: candidate {three[:12]} was dropped: {held['why']}"),
+        (["c-13", "c-14", "c-15"], f"vqueue: candidate {four[:12]} was dropped: {above['why']}")]
+    assert pushed == ([branch(three), branch(four)] if refused else [])
+    if refused:
+        assert [at for _, _, at in started] == [branch(three), branch(four)]
+    assert branch(three) not in env.queued() and branch(four) not in env.queued()
 
 
 def test_under_gate_check_graph2_s_reading_of_a_candidate_stands_g2_read_s_between_ticks_and_is_read_again_once_its_check_ended(

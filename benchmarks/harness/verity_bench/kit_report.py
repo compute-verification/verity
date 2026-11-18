@@ -24,6 +24,13 @@ from typing import Any, NamedTuple
 
 from verity_bench import settings
 
+#: the version of each metric whose `metrics.toml` row gives one above 1, by id; every other name's is 1. A literal: the
+#: registry's test (`tests/test_metrics_registry.py`) reads it without importing the kit and holds it equal to the rows
+VERSIONS: dict[str, int] = {}
+#: what each metric whose row gives `needs` needs its measurements to name, by id, as the row lists it: `"parameter"`,
+#: the security parameters its value depends on (`parameters`), and `"calibration"`, the calibration numbers it uses
+#: (`calibration`). A literal the registry's test holds equal to the rows, as `VERSIONS`
+NEEDS: dict[str, tuple[str, ...]] = {}
 #: who drew the verifier's coins: the auditor's deployed challenger, a challenger as its own process on this machine,
 #: or the serve itself holding the challenger
 COINS = ("deployed challenger", "local challenger", "in-process")

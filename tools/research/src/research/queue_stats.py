@@ -1,4 +1,4 @@
-"""Times and quantiles the timing reports share (`run_times`, `lean_times`, `vqueue_compare`)."""
+"""Times and quantiles the timing reports share (`run_times`, `lean_times`)."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
