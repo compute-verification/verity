@@ -3364,8 +3364,6 @@
   "ResourceAccounting.SecurityProofs.Remote.SketchBoundDeployed",
   "ResourceAccounting.SecurityProofs.RemoteRunConservationDeployed",
   "ResourceAccounting.SecurityProofs.RemoteRunConservationSketchDeployed",
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned",
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed",
   "ResourceAccounting.SecurityProofs.StackedRequirementSketchDeployed",
   "ResourceAccounting.SecurityProofs.StackedRunConservationSketchDeployed"
  ],
@@ -3409,22 +3407,6 @@
    "ResourceAccounting.Assumptions.SketchHashBudget",
    "ResourceAccounting.Assumptions.SketchRank",
    "ResourceAccounting.Assumptions.SquaringFloor"
-  ],
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSketchDeployed": [
-   "ResourceAccounting.Assumptions.KeyBinding",
-   "ResourceAccounting.Assumptions.SketchHashBudget",
-   "ResourceAccounting.Assumptions.SketchRank"
-  ],
-  "ResourceAccounting.SecurityProofs.RefreshedRunConservationSeasoned": [
-   "ResourceAccounting.Assumptions.KeyBinding",
-   "ResourceAccounting.Assumptions.SeasonedRebuilds",
-   "ResourceAccounting.Assumptions.SketchHashBudget",
-   "ResourceAccounting.Assumptions.SketchRank",
-   "ResourceAccounting.RateSketch.ChoosesBefore",
-   "ResourceAccounting.RateSketch.JoinsInOrder",
-   "ResourceAccounting.RateSketch.LifetimeCappedAll",
-   "ResourceAccounting.RateSketch.OriginsFixed",
-   "ResourceAccounting.RateSketch.Seasoned"
   ]
  },
  "meaning": [
