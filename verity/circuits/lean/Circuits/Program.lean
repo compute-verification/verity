@@ -727,6 +727,7 @@ levels `lv` (a strided part is the lane of runs of `inner` with one level), wher
 def laneRes (b : Int) (off run : Nat) (e : Int) (lv : List (Nat × Int)) (L cap : Nat) : Option (List Nat) := do
   let O ← residues e run L cap
   let G ← levelRes L cap lv
+  dbgTrace s!"LANERES\t{L}\t{run}\t{e}\t{lv}\t{O.length}\t{G.length}" fun _ =>
   if O.length * G.length ≤ cap then
     some ((sumMod L O G).map fun x => (((b - (off : Int)) % (L : Int)).toNat + x) % L)
   else none
