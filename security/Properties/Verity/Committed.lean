@@ -24,7 +24,7 @@ statement's roots, as `Sessions.opens` opens every read: one value at one positi
 writer's row and no comparison of two rows is left.
 
 Two more, each a named `Prop` stated and not proved, are what Flock's checks give `ReadsByPath`: `LinksExact`, that a
-link's leaves are one writer unit's outputs from the offset the program gives (`Flock.HmLinks.checkUnit`), and
+link's leaves are one whole return field of one writer unit, from its first word (`Flock.HmLinks.checkUnit`), and
 `LinkRowsByPath`, that each link row opens the registered root at its writer's leaf in the writer template's tree
 (`Flock.Registered.check` on the reads `Flock.Registered.withTrees` gives).
 -/
@@ -79,8 +79,8 @@ end Vocab
 open Flock.HmLinks (nodes unitAt ownerAt count outGates writerOf treeLeaf) in
 /-- **A link reads its writer's outputs exactly** (`Flock.HmLinks.checkUnit`): where a circuit's links parse and
 `checkUnit` accepts reader `i` of the public file, every parameter leaf of the reader's unit that the program wires to
-another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one writer unit's
-outputs, leaf for leaf, from the link's offset, which is so the program's. -/
+another unit's output lies in exactly one link, and every link's leaves are circuit inputs, or one whole return field
+of one writer unit (`Flock.HmLinks.fieldSpans`), leaf for leaf, from the field's first word. -/
 def LinksExact : Prop :=
   ∀ (c : Flock.Circuit) (P : Flock.Program.Prog) (links : Array Flock.HmLinks.Link) (popIdx : Array Nat) (i w : Nat),
     Flock.HmLinks.parse c = .ok links →
@@ -91,8 +91,8 @@ def LinksExact : Prop :=
       ∀ l ∈ links, l.hi ≤ ops.size ∧
         ((∀ t, l.lo ≤ t → t < l.hi → ownerAt (nodes P) ops[t]! = none) ∨
           ∃ (v kv mv : Nat) (og : Array Nat), ownerAt (nodes P) ops[l.lo]! = some v ∧
-            unitAt (nodes P) v = some (kv, mv) ∧ outGates P kv mv = .ok og ∧ l.off + (l.hi - l.lo) ≤ og.size ∧
-            ops.extract l.lo l.hi = og.extract l.off (l.off + (l.hi - l.lo)))
+            unitAt (nodes P) v = some (kv, mv) ∧ outGates P kv mv = .ok og ∧
+            (l.off, l.hi - l.lo) ∈ Flock.HmLinks.fieldSpans P kv ∧ ops.extract l.lo l.hi = og.extract l.off (l.off + (l.hi - l.lo)))
 
 open Flock.HmLinks (nodes writerOf treeLeaf) in
 /-- **Every link row is read by path at its writer's leaf** (`Flock.Registered.check`): where the verifier's registered
