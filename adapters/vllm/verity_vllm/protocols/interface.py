@@ -12,9 +12,8 @@ An adapter is one module of this package (`spot`, `pouw`) that defines:
   row's Build requires the profile's kernels (`BUILD_BOUND`, with ``fixes``);
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
-  is the protocol package's circuit (`scheme.register_circuits`, `protocol_options.traced_as`), and an executor whose
-  scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
+  outside (`protocol_options.SITES`).  An executor is refused beside SPOT, since SPOT would trace it as the stock
+  computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
 * optionally ``commit_weights(scheme, target) -> Mapping``: its commitment to the plaintext weights of record, made in
   the composition's first phase, before any option changes the model or reads a beacon (`install`).  ``install`` then

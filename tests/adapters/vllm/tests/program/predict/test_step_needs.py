@@ -9,6 +9,7 @@ import pytest
 from verity_vllm.config import row_file
 from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.program.predict import step_needs
+from verity_vllm.program.predict.common import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
 
@@ -43,12 +44,12 @@ def test_a_row_that_pins_no_revision_has_no_snapshot_dir_to_write(tmp_path, monk
 
 def test_a_target_that_names_no_card_names_no_tuned_file(S):
     """The cuBLAS route pin and the tuned fused-MoE file a step's GEMMs take their routes and tiles from are named by the
-    target's card's `device_name`: a target that names no card has no name to put in either, an AttributeError, and is no
-    missing file's refusal."""
+    target's card's `device_name`: a target that names no card has no name to put in either, and `dsa.Net` refuses it by
+    name before any step."""
     doc = S.phi.to_json()
-    uncarded = StepNeeds(Phi.from_json({**doc, "target": {k: v for k, v in doc["target"].items() if k != "card"}}))
-    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'replace'"):
-        uncarded.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
+    uncarded = Phi.from_json({**doc, "target": {k: v for k, v in doc["target"].items() if k != "card"}})
+    with pytest.raises(Unexpressible, match="a target without a device name"):
+        StepNeeds(uncarded)
 
 
 def test_a_cublas_gemm_reads_the_pin_of_the_device_phi_names(S, monkeypatch):

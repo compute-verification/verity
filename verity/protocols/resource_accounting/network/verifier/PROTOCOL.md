@@ -1625,10 +1625,14 @@ memory operations as records, sorted once, as `verity_vllm.compiler.advice_check
 `CompileSlice_v1` is the compile slice's proof block's pieces ("Advice v1" above) composed whole for one execution phase, each
 hit ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the attested tokens from the empty cache. Its circuit,
 verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are
-`verity_vllm.compiler.compile_slice`'s docstring. Its step rows are held to the committed ``srv`` row, which the
-verifier holds by b‖c to the served rows the Commit side registers before the sample
-(`verity_vllm.compiler.served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
-blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its
+`verity_vllm.compiler.compile_slice`'s docstring. It states that its step rows are the committed ``srv`` row, which the
+design has the verifier hold by b‖c to the served rows the Commit side registers before the sample
+(`verity_vllm.compiler.served_rows`); at G < P, the served rows' blocks, its P / G rows (`CompileSliceRowGroups_v1`,
+[protocol/served-statics.md](protocol/served-statics.md)). Today nothing that runs refuses the phase-10 attack's six
+passes. No session of the compile slice runs; only its tests call the b‖c check; and the check that runs in the slice's
+place, `records_audit.py audit`'s recompile of the advice opened in the clear (`records_audit.compile_check`), reads no
+served rows. Under the slice, with the served rows in ``srv``, ``rows`` would refuse them, but the served rows are the
+prover's registration, tied to nothing the server ran, and a prover that registers the passes' own rows passes both. Its
 charge is `ChargeLink_v1{D}` over the decisions the execution phase commits, from its carry-in to its carry-out in the session's
 carry chain. `CompileSlice_v7` (`verity_vllm.compiler.compile_slice_v7`), the served execution phases' slice except under the
 attested tick, is v1 charging the length terms too: `ChargeLink_v2{D, 0, 0, K}`, a length slot for each attested
