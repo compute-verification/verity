@@ -1,4 +1,4 @@
-# The circuit format and its decoder as executable Lean: the program format `verity-ir/descriptor/v1` as a verifier
+# The circuit format and its decoder as executable Lean: the program format `verity-ir/descriptor/v2` as a verifier
 # reads its own copy of a Program (`Program`, with `Steps`, the bounded walk of its call hierarchy, and `Gate`, a gate
 # of the canonical layout), the partition invariant and the partition query (`Partition`, `Qword`, `Extract`,
 # `Evaluated`), and annotations as queries over a Program's description, with their per-gate reference (`Annot`,

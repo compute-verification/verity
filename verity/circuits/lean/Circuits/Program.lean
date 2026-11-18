@@ -1,8 +1,8 @@
 /-
-`Flock.Partition`: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
+`Flock.Partition`: the program format `verity-ir/descriptor/v2` (`verity/circuits/PROTOCOL.md`), as the verifier
 reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
-resolution (§7).
+resolution (§7), with each word primitive's one Boolean Definition (§4.9, `Prog.boolean`).
 
 The verifier evaluates no primitive, so it holds no registry: a primitive is taken as the descriptor declares it (its parameters
 and return type are under the program's SHA-512), and an input (`Input<w>_v1`, bound per run, or `RegisteredInput<w>_v1`,
@@ -28,7 +28,7 @@ namespace Flock.Program
 
 open Lean (Json JsonNumber)
 
-def SCHEMA : String := "verity-ir/descriptor/v1"
+def SCHEMA : String := "verity-ir/descriptor/v2"
 @[noinline] def MAX_SAFE_INT : Nat := 2 ^ 53 - 1
 
 private def natJ? : Json → Option Nat
@@ -178,6 +178,32 @@ def axisDims : Ty → Nat → Option (Nat × Nat)
   | .array n e, 0 => some (n, leaves e)
   | .array _ e, ax + 1 => axisDims e ax
   | _, _ => none
+
+/-- `boolean.bit_type` (§9): each `Value<w>` an `Array<w, Value<1>>`, a `Value<1>` kept a bit. -/
+def bitType : Ty → Ty
+  | .value w => if w == 1 then .value 1 else .array w (.value 1)
+  | .array n e => .array n (bitType e)
+  | .tuple fs => .tuple (fs.attach.map fun x => bitType x.1)
+  | .record fs => .record (fs.attach.map fun x => (x.1.1, bitType x.1.2))
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem x.2
+  · exact sizeOf_snd_lt_of_mem x.2
+
+/-- Every leaf one bit wide (`width_set() <= {1}`); a type without leaves too. -/
+def bits : Ty → Bool
+  | .value w => w == 1
+  | .array _ e => bits e
+  | .tuple fs => fs.attach.all fun x => bits x.1
+  | .record fs => fs.attach.all fun x => bits x.1.2
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem x.2
+  · exact sizeOf_snd_lt_of_mem x.2
 
 end Ty
 
@@ -512,6 +538,8 @@ structure Prog where
   programFn : String
   /-- SHA-512 of the canonical descriptor without `annotations` (`partition_object.program_sha512`) -/
   sha512 : ByteArray
+  /-- §4.9: each word primitive's key to its one Boolean Definition's key, both in `defs` -/
+  boolean : Std.HashMap String String := {}
   deriving Inhabited
 
 def RUN : String := "run"
@@ -532,6 +560,38 @@ def inputId? (id : String) : Option (String × Nat) :=
 def inputWidth? (id : String) : Option Nat := (inputId? id).map (·.2)
 
 def isInputId (id : String) : Bool := (inputId? id).isSome
+
+/-- A gate or a constant bit of the Boolean profile (§9). -/
+inductive GateKind where
+  | and (n : Nat) | xor (n : Nat) | not | const (b : Bool)
+  deriving Inhabited, BEq, Repr
+
+/-- §9, by id with no registry: `And<n>_v1` and `Xor<n>_v1` for n ≥ 2 in decimal without leading zeros, `Not_v1`, and
+`Const1[0x0]_v1` and `Const1[0x1]_v1`; none for any other id. -/
+def gateKind? (id : String) : Option GateKind :=
+  if id == "Not_v1" then some .not
+  else if id == "Const1[0x0]_v1" then some (.const false)
+  else if id == "Const1[0x1]_v1" then some (.const true)
+  else match widthAfter? "And" id, widthAfter? "Xor" id with
+    | some n, _ => if n ≥ 2 then some (.and n) else none
+    | _, some n => if n ≥ 2 then some (.xor n) else none
+    | _, _ => none
+
+/-- §9's signature of a gate or constant bit: its parameters and its return. -/
+def GateKind.signature : GateKind → Array (String × Ty) × Ty
+  | .and n | .xor n => (#[("x", .array n (.value 1))], .value 1)
+  | .not => (#[("a", .value 1)], .value 1)
+  | .const _ => (#[], .value 1)
+
+/-- A primitive a Boolean Definition may reach (§9): a gate, a constant bit, or a 1-bit input. -/
+def isBooleanPrim (id : String) : Bool :=
+  (gateKind? id).isSome || id == "Input1_v1" || id == "RegisteredInput1_v1"
+
+/-- §4.9's word primitive: a primitive that is no gate, constant bit or input. -/
+def isWordPrim (prim : Bool) (id : String) : Bool := prim && !isInputId id && !isBooleanPrim id
+
+/-- The place in `P.defs` of word primitive `w`'s Boolean Definition (§4.9). -/
+def Prog.bodyOf? (P : Prog) (w : String) : Option Nat := P.boolean[w]? >>= (P.index[·]?)
 
 /-- The `k=<canonical json>` pairs' keys of a specialization id `Name_vN{k1=..,k2=..}`, in id order (`codec._split_record`). -/
 def recordPairs (fid : String) : Array (String × String) := Id.run do
@@ -1171,6 +1231,72 @@ private def staticFns (fuel : Nat) (desc : Desc) (v : Json) : D Unit := do
 
 end
 
+/-- §5.2 on the Definitions from place `lo`: an input node appears only in the root's body. -/
+private def inputOutsideRoot (defs : Array Defn) (rootKey : String) (lo : Nat) : Option String := Id.run do
+  for i in [lo:defs.size] do
+    let d := defs[i]!
+    if d.prim || d.key == rootKey then continue
+    for k in [0:d.body.nodes.size] do
+      let c := defs[d.body.nodes[k]!.fn]!
+      if c.prim && isInputId c.key then
+        return some s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  return none
+
+/-- `reach` extended to every Definition of `defs`: whether each primitive it reaches through node callees is a gate, a
+constant bit or a 1-bit input (§9). A callee has a smaller place than its callers, so one pass in order suffices. -/
+private def extendReach (defs : Array Defn) (reach : Array Bool) : Array Bool := Id.run do
+  let mut r := reach
+  for i in [reach.size:defs.size] do
+    let d := defs[i]!
+    let here := r
+    r := r.push (if d.prim then isBooleanPrim d.key else d.body.nodes.all fun x =>
+      let c := defs[x.fn]!
+      if c.prim then isBooleanPrim c.key else here[x.fn]?.getD false)
+  return r
+
+/-- §4.9's Boolean map (`codec._decode_boolean`), after the root and `program_fn`'s functions: each primitive entry
+`prims` names decoded, each gate's signature §9's, then the refusals in the format's order, each body decoded by
+`getDef` in key order. -/
+private def booleanMap (desc : Desc) (prims : Array String) (bm : Json) (rootKey : String) :
+    D (Std.HashMap String String) := do
+  for f in prims do discard (getDef Steps.FUEL desc f)
+  for d in (← get).defs do
+    if let some g := gateKind? d.key then
+      let (ps, r) := g.signature
+      if !(d.params == ps && d.ret == r) then throw s!"primitive {d.key} signature differs from the registry"
+  let .obj kvs := bm | throw "E_BODY_KEY: `boolean` is not an object of descriptor ids"
+  let some pairs := kvs.toArray.mapM (fun (k, v) => match v with | .str s => some (k, s) | _ => none)
+    | throw "E_BODY_KEY: `boolean` is not an object of descriptor ids"
+  let st ← get
+  let word := prims.filter fun f => (st.index[f]?.map fun i => isWordPrim st.defs[i]!.prim f).getD false
+  let keys : Std.HashSet String := pairs.foldl (fun s p => s.insert p.1) {}
+  let missing := word.filter (!keys.contains ·)
+  if !missing.isEmpty then
+    throw s!"E_BODY_MISSING: the word primitives {missing.toList.take 4} have no Boolean body in `boolean`"
+  let words : Std.HashSet String := word.foldl (·.insert ·) {}
+  let extra := (pairs.filter (!words.contains ·.1)).map (·.1)
+  if !extra.isEmpty then
+    throw s!"E_BODY_KEY: `boolean` names {extra.toList.take 4}, which are no word primitive among `definitions`"
+  let mut reach : Array Bool := #[]
+  for (w, b) in pairs do
+    if !desc.ddefs.contains b then throw s!"E_BODY_NOT_BOOLEAN: {w}'s body '{b}' is no definition"
+    let lo := (← get).defs.size
+    let bi ← getDef Steps.FUEL desc b
+    let st ← get
+    if let some e := inputOutsideRoot st.defs rootKey lo then throw e
+    reach := extendReach st.defs reach
+    let bd := st.defs[bi]!
+    let wd := st.defs[st.index[w]?.getD 0]!
+    let boolean := if bd.prim then isBooleanPrim bd.key
+      else bd.params.all (·.2.bits) && bd.ret.bits && reach[bi]!
+    if !(boolean && bd.params.map (·.2) == wd.params.map (·.2.bitType) && bd.ret == wd.ret.bitType) then
+      throw s!"E_BODY_NOT_BOOLEAN: {w}'s body {b} is not a Boolean Definition of its bit signature"
+  return pairs.foldl (fun m p => m.insert p.1 p.2) {}
+
+/-- The primitive entries of `definitions`, in key order. -/
+private def primEntries (dkv : Array (String × Json)) : Array String :=
+  dkv.filterMap fun (k, d) => if (d.getObjValAs? String "form").toOption == some "primitive" then some k else none
+
 /-- `decode_program` on a descriptor's bytes: the refusals of PROTOCOL.md §4.6 (a primitive's signature is the descriptor's own,
 see the module docstring), then the program's SHA-512. -/
 def decode (bytes : ByteArray) : V Prog := do
@@ -1180,8 +1306,8 @@ def decode (bytes : ByteArray) : V Prog := do
     | .error e => throw s!"program: not JSON: {e}"
   let .obj top := j | throw "program: not an object"
   match (j.getObjValAs? String "schema").toOption with
-  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
-  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
+  | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
+  | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1216,8 +1342,9 @@ def decode (bytes : ByteArray) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  let (boolean, st) ← (booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
 
 /-- A descriptor's bytes read as JSON: none for bytes that are not UTF-8, else `JsonParse.parse`'s verdict on their text. Every
 reader of a descriptor starts with it (`decode_eq_of`). -/
@@ -1231,8 +1358,8 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
     | .error e => throw s!"program: not JSON: {e}"
   let .obj top := j | throw "program: not an object"
   match (j.getObjValAs? String "schema").toOption with
-  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
-  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
+  | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
+  | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1267,8 +1394,9 @@ def decodeOf (read : Option (Except String Json)) : V Prog := do
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  let (boolean, st) ← (booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8 }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := Sha512.hash (← canon bare).toUTF8, boolean }
 
 set_option maxRecDepth 20000 in
 theorem decode_eq_of (bytes : ByteArray) : decode bytes = decodeOf (readJson bytes) := by
@@ -1286,8 +1414,8 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
     | .error e => throw s!"program: not JSON: {e}"
   let .obj top := j | throw "program: not an object"
   match (j.getObjValAs? String "schema").toOption with
-  | some s => if s != SCHEMA then throw s!"unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
-  | none => throw s!"unexpected descriptor schema (this verifier reads {SCHEMA})"
+  | some s => if s != SCHEMA then throw s!"E_SCHEMA: unexpected descriptor schema '{s}' (this verifier reads {SCHEMA})"
+  | none => throw s!"E_SCHEMA: unexpected descriptor schema (this verifier reads {SCHEMA})"
   let .ok (.obj dkv) := j.getObjVal? "definitions" | throw "program: definitions"
   for (fid, d) in dkv.toArray do
     let .obj _ := d | throw s!"definition '{fid}': not an object"
@@ -1319,8 +1447,9 @@ def decodeWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLift
       let c := st.defs[d.body.nodes[k]!.fn]!
       if c.prim && (isInputId c.key || (c.key.startsWith "Registered" && isInputId (c.key.drop 10).toString)) then
         throw s!"definition '{d.key}' node {k}: an input node ({c.key}) appears only in the root's body"
+  let (boolean, st) ← ((booleanMap desc (primEntries dkv.toArray) ((j.getObjVal? "boolean").toOption.getD .null) rootId).run st : V _)
   let bare := Json.mkObj (top.toArray.filter (·.1 != "annotations")).toList
-  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8 }
+  return { defs := st.defs, index := st.index, root, programFn, sha512 := ← sha512 (← canon bare).toUTF8, boolean }
 
 /-! ### §6 The canonical layout and §7 scope resolution -/
 
