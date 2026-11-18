@@ -294,7 +294,7 @@ Tile leaves for the slice: A (8192 x 4096 int8) at R = 64 is 16384 leaves of 2 K
 it unchanged), salted as before. A spot check at rows m0 .. m0 + 127 and 32-step j opens leaves 128 j + m0/64 and the next
 one (one level-1 node), and its statement's 128 `a[r]` rows of 256 bits become those two 16384-bit rows. If B's (n x k)
 check tile is 128 of its rows at one 32-step, B takes the same layout with n for M. On the GPU: write the parameter file
-with `reference.params(n, 256 R, ks, key, domain_id=domain(label, n).domain_id)` (the slice's own label), then `init`,
+with `reference.params(n, 256 R, key, domain_id=domain(label, n).domain_id)` (the slice's own label), then `init`,
 `salts`, `tiles`, `nodes`, and copy the levels (paths) and b || c (openings) back, as `check()` does.
 
 ## The leaf format (a recommendation)
