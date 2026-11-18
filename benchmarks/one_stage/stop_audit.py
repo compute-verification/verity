@@ -107,6 +107,7 @@ import a0  # noqa: E402
 import prove_subprotocol as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
 import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ports import free_port  # noqa: E402
@@ -115,7 +116,7 @@ from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.periods import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P  # noqa: E402
 from verity.commitments import registered_value as RV  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
@@ -312,7 +313,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
     root = TS.first_root(handoff)
     first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
-    layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
+    layout, logged = first.layout, {DD.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
@@ -327,7 +328,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
     want = BS.stop_record(handoff["commit"], check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
-    if R.digest(want) != R.digest(s["record"]):
+    if DD.digest(want) != DD.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
                           schemas=held.schemas, window_root=root)
@@ -349,7 +350,7 @@ def reads(r: Resumed) -> dict[str, Any]:
     mine = L.stop_ports()[BR.STOP]
     ports = dict(r.held.file["ports"])
     ports[OUT] = {"value": CS.own_value(BR.STOP), "root": stop["root"], "leaves": mine["leaves"], "words": L.words(BR.STOP),
-                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], REG.SCHEMA_KEY: BR.SCHEMA,
+                  "word_bits": RV.WORD_BITS, "domain": mine["domain"], RV.SCHEMA_KEY: BR.SCHEMA,
                   "reads": list(range(L.spans))}
     return {**r.held.file, "ports": dict(sorted(ports.items()))}
 

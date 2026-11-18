@@ -34,12 +34,12 @@ from fractions import Fraction
 from typing import Any
 
 from verity.commitments import domains
-from verity.protocol import Channel
+from verity.protocol import VERIFIER, Channel
 from verity.protocols.resource_accounting.memory.pous.attester import challenger_session as CS
 from verity.protocols.resource_accounting.memory.pous.prover import workload
 from verity.protocols.resource_accounting.memory.pous.verifier import period, wipe_period
 from verity.protocols.resource_accounting.memory.pous.verifier import wipe_parties as WP
-from verity.protocols.resource_accounting.scheme import VERIFIER, Charge, Lacks, Order, Reading, Scheme, register
+from verity.protocols.resource_accounting.scheme import Charge, Lacks, Launch, Order, Reading, Scheme, register
 
 TRUSTED_DEVICE = "Verity.Assumptions.TrustedDevice"
 #: PoUS's own term, `δscheme`: P2's ideal-model ε, `Pous.Params.εMax` = 2^-λ at λ = `Pous.Params.secParam` = 128, beside
@@ -121,6 +121,7 @@ POUS = register(Scheme(
     colocated=(),
     needs=frozenset({"store"}),
     depends=(),
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
     record="space",
     symbol="S0",
     published=("bits", Fraction(1)),
@@ -174,6 +175,7 @@ WIPE = register(Scheme(
     colocated=(),
     needs=frozenset(),
     depends=(),
+    pieces={"prover": Launch(optional=("address", "host", "command"), development="address")},
     record="wipe",
     symbol="foreign_bits",
     published=("bits", Fraction(1)),

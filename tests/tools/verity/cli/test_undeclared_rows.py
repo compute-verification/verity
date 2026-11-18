@@ -15,8 +15,7 @@ from verity_cli import run as R
 REG = R.registry()
 T = sys.modules["served_table"]
 #: who declares each undeclared row's scheme, and then deletes the row
-OWNERS = {"sampled-proofs": "proofs", "pouw": "compute-accounting", "inference-only": "proofs (workload classification)",
-          "certifier": "network-accounting"}
+OWNERS = {"pouw": "compute-accounting"}
 
 
 def test_the_undeclared_rows_only_shrink() -> None:
@@ -43,7 +42,7 @@ def test_the_bandwidth_audit_without_storage_is_refused_by_name() -> None:
 
 
 @pytest.mark.parametrize(("name", "why"), [("nonesuch", "nonesuch is no declared scheme"),
-                                           ("dither", "dither is declared, but served_table.PARTIES has no pieces")])
+                                           ("dither", "dither is declared, but served_table.PIECES has no pieces")])
 def test_the_launch_data_refuses_a_name_it_has_no_pieces_for_by_name(name: str, why: str) -> None:
     cfg = R.load(R.ROOT / "applications" / "onsite_full.toml", REG)
     cfg["protocols"] = [*cfg["protocols"], name]
@@ -62,3 +61,25 @@ def test_a_declared_schemes_parameters_are_its_settings_refused_by_name(given: d
     with pytest.raises(Refused) as e:
         pous.params({**pous.default_params, **given})
     assert (e.value.name, e.value.detail) == (name, detail)
+
+
+def test_every_declared_piece_has_an_entry_and_every_entry_a_declared_piece() -> None:
+    declared = {(n, p) for n in T.MANIFESTS for p in T.launches(n)}
+    assert declared == set(T.ENTRIES), (f"declared without an entry: {sorted(declared - set(T.ENTRIES))}; an entry "
+                                        f"without a declared piece: {sorted(set(T.ENTRIES) - declared)}")
+
+
+def test_a_piece_reaches_its_declared_channels_gate_party_and_says_one_only_where_none_joins() -> None:
+    from dataclasses import replace
+
+    from verity.protocol import Channel
+    pous = T.MANIFESTS["pous"]
+    assert T._reaches(pous, T.PROVER, "") == T.MEMORY_ATTESTER
+    with pytest.raises(ValueError, match="by its declared channels, so its piece says no reaches"):
+        T._reaches(pous, T.PROVER, T.MEMORY_ATTESTER)
+    spot = T.MANIFESTS["sampled-proofs"]
+    assert T._reaches(spot, T.WORKERS, "") == "" and T.PIECES["sampled-proofs"][T.WORKERS].reaches == T.CHALLENGER
+    joined = replace(spot, channels=(*spot.channels, Channel(T.CHALLENGER, T.WORKERS, ("Sample",))))
+    with pytest.raises(ValueError, match="so its piece says no reaches"):
+        T._reaches(joined, T.WORKERS, T.CHALLENGER)
+    assert T.PIECES["bandwidth"][T.PROVER].follows == "pous" and not T.PIECES["network-attester"][T.WORKERS].follows

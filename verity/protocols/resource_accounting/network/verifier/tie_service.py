@@ -71,6 +71,8 @@ from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -81,7 +83,7 @@ from verity.protocols.resource_accounting.network.verifier import service as SVC
 from verity.protocols.resource_accounting.network.verifier.certificate import Direction
 from verity.protocols.resource_accounting.network.verifier.network_attester import NetworkAttesterParams
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.commitments import registered_value as RV
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
@@ -365,7 +367,7 @@ class IngressTie:
 
     @cached_property
     def _program(self) -> Program:
-        return P.population_program(self.unit, self.T)
+        return PN.population_program(self.unit, self.T)
 
     @cached_property
     def _partition(self) -> dict[str, Any]:
@@ -464,7 +466,7 @@ class IngressTie:
             return None
         ports = {REGISTERED: WR.bucket_port(head, self.params, reads_from)}
         for p, v in known.items():
-            ports[p] = produced.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
+            ports[p] = RV.port(v.value, v.entry(), v.root.hex(), list(range(self.T)), SCHEMA) \
                 | ({RV.READS_FROM: int(reads_from)} if reads_from else {}) \
                 | {KNOWN_KEY: {"rows": [list(r) for r in v.rows], "salts": [s.hex() for s in v.salts]}}
         return WR.reads_file(ports)
@@ -633,13 +635,13 @@ class IngressTie:
             reg = log[w] if w < len(log) else None
             if reg is None or reg.get("window") != self.provenance(w):
                 break
-            body = outcomes.get(R.digest(reg))
+            body = outcomes.get(DD.digest(reg))
             verdict = ((body or {}).get("audit") or {}).get("verdicts", {}).get(VERIFIER) or {}
             ok.append(body is not None and body["symbol"] == S.ACCEPT and body["public"].get("inputs") == name
                       and verdict.get("decided_by") == "proof")
         held = len(log) == len(ok) == n and framed and released
         accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
-        return IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
+        return IoTieVerdict(self.link, tuple(DD.digest(r) for r in log), name, accepted)
 
 
 @dataclass(frozen=True)
@@ -667,7 +669,7 @@ class Ties:
 
     def registrations(self, link: str) -> tuple[str, ...]:
         self._on(link)
-        return tuple(R.digest(r) for r in self.stream.log)
+        return tuple(DD.digest(r) for r in self.stream.log)
 
     def verdict(self, link: str, inputs: IngressInputs, profile: AdvisedProfile) -> IoTieVerdict:
         self._on(link)

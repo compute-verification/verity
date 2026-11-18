@@ -313,6 +313,14 @@ def test_an_input_a_scheme_refuses_on_arrival_is_answered_400_and_never_reaches_
         "r1", len(GREEDY["body"]), "POST /v1/completions HTTP/1.1", H.OutputsComplete("r1", 0))
 
 
+@pytest.mark.parametrize("body,user", [(b'{"temperature": 0, "user": "u-7"}', "u-7"), (b'{"temperature": 0}', None),
+                                       (b'{"temperature": 0, "user": 7}', None)])
+def test_an_arrival_carries_the_user_its_body_names_and_none_without_one(front_scheme, body, user):
+    front = SP.Front(lambda *a: pytest.fail("the server saw a refused input"), FRONT_ENV)
+    drive(front, http("/v1/completions", [("x-bad", "1"), ("x-request-id", "r1")]), [{"type": "http.request", "body": body}])
+    assert front_scheme["events"][0].user == user
+
+
 @pytest.mark.parametrize("path,body,why", [
     ("/v1/responses", b"", "/v1/responses is not served under a scheme"),
     ("/v1/completions", b'{"temperature": 0.7}', "needs an integer seed"),

@@ -342,7 +342,7 @@ def references(q: int, out: Path) -> dict:
         with open(d / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
         reads = LK.reads_file({p: {"value": names[LINKS[k][1]] if p == link(k) else window.tree(m, p), "words": int(words),
-                                   "word_bits": RV.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
+                                   "word_bits": RV.WORD_BITS, RV.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
         named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header,
                       "registered": reads})

@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.circuits import population as PN
 from verity.commitments import domains as DM
 from verity.commitments import hm96
 from verity_flock import circuit as FC
@@ -73,7 +74,7 @@ def partitioned(s):
     ``verity/partition/v1`` object, as `rec_inner.stage` binds it; the program and the object."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
-    program = P.population_program(s.template, N)
+    program = PN.population_program(s.template, N)
     part = P.partition(program, P.template_instance_query(s.template))
     head_, line, rest = s.text.split("\n", 2)
     meta = dict(s.meta, program_sha512=part["program"], partition={"rule": P.FORMAT, "digest": P.digest(part)})
@@ -124,7 +125,8 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
+    from verity.commitments import docket_digest as DD
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     text, program, part = partitioned(staged)
     d = stage(staged, "bound", text=text)
@@ -132,7 +134,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     got = IR.register(d, program=program, partition=part)
     rec, now = IR.bound(d), (d / "circuit.txt").read_text()
     meta = IR.meta(d)
-    assert meta[IR.REGISTRATION_KEY] == R.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
+    assert meta[IR.REGISTRATION_KEY] == DD.digest(rec) and {k: v for k, v in meta.items() if k != IR.REGISTRATION_KEY} == \
         json.loads(text.split("\n", 2)[1][5:])
     assert rec == IR.registration_record(program, part, rec["registered"]) and rec["format"] == DM.REGISTRATION
     assert [(e["value"], e["root"]) for e in rec["registered"]] == [(IR.VALUE, got["cs"]["root"])]
@@ -141,7 +143,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     assert h["circuit_sha512"] == FC.digest(now) and h["units"]["classes"] == [FC.class_digest(now)] * N
     other = stage(staged, "bound-other", text=text)
     with pytest.raises(ValueError, match="META binds program"):
-        smaller = P.population_program(staged.template, N - 1)
+        smaller = PN.population_program(staged.template, N - 1)
         IR.register(other, program=smaller, partition=P.partition(smaller, P.template_instance_query(staged.template)))
     with pytest.raises(ValueError, match="program and its partition object together"):
         IR.register(other, program=program)

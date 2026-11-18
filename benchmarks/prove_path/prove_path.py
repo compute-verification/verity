@@ -207,6 +207,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from verity.commitments import docket_digest as DD
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -1140,10 +1141,10 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
     import a5 as A5
 
     w = rec.get("window") or {}
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
+    ok = {"after-the-draw": receipt.get("registration") == DD.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
           "compiler": w.get("compiler") == bound["compiler"], "advice": w.get("advice") == bound["advice"]}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
-            "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
+            "detail": {"drawn_after": receipt.get("registration"), "registration": DD.digest(rec), "received": receipt.get("received")}}
 
 
 def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
@@ -1396,7 +1397,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     if first is not None:
         Path(a.deployment_record).write_text(json.dumps(first, indent=1) + "\n")
     return {"roots": len(roots), "unrooted": sorted(doc["unrooted"]), "out": a.out,
-            **({"deployment": R.digest(first)} if first is not None else {})}
+            **({"deployment": DD.digest(first)} if first is not None else {})}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1443,7 +1444,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     circuit reads H1's tables, the circuit an H1-tied window-commit commits."""
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.program.predict.window_circuit import PearlTables, window_circuit
+    from verity_vllm.program.predict.window_circuit import PearlTables, check_provable, window_circuit
 
     compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
     compile_advice(compiler, data)
@@ -1455,6 +1456,7 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     t0 = time.time()
     try:
         circuit = window_circuit(registered, compile_steps(registered, data, compiler.inner.ingress), cls, tables=tables)
+        check_provable(circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lowered = time.time() - t0
@@ -1498,13 +1500,14 @@ def class_circuit_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     circuit), so it can be written, and a period opened on it, before the serve. -> the record's input count at the pins
     (``--pin``, ``--pins``), and the seconds."""
     from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.window_circuit import PearlTables, class_circuit
+    from verity_vllm.program.predict.window_circuit import PearlTables, check_provable, class_circuit
 
     serve, pins = json.loads(Path(a.serve).read_text()), pins_of(a.pin, a.pins)
     registered, cls = registered_of_serve(serve, a.hf_config, a.target, a.cap_bits), window_class_of(a.window_class)
     t0 = time.time()
     try:
         circuit = class_circuit(registered, cls, tables=PearlTables(a.pearl_tables) if a.pearl_tables else None)
+        check_provable(circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's class circuit refuses φ: {e}") from None
     lowered = time.time() - t0
@@ -1696,6 +1699,7 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     retained aren't the class's outputs, round s the window's s-th step, whose calls the circuit cut at its linears reads."""
     if not getattr(a, "pearl_passes", None):
         return None
+    from verity.protocols.resource_accounting.compute.pouw.verifier.kernel_schemes import BY_NAME
     from verity_vllm.program.predict import window_circuit as WC
     if not a.window_registration:
         raise ValueError("--pearl-passes: give --window-registration W, Pearl+'s window record of the passes "
@@ -1704,8 +1708,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
         raise ValueError("--h1-key is H1's prover key: a window tied to Pearl+'s W takes its salts from the passes' manifests")
     w, d = json.loads(Path(a.window_registration).read_text()), Path(a.pearl_passes)
     scheme = str(((w if isinstance(w, dict) else {}).get("window") or {}).get("scheme"))
-    if not scheme.startswith("pearl-c-"):
-        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme is {scheme}")
+    if getattr(BY_NAME.get(scheme), "family", None) != "pearl-c":
+        raise ValueError(f"{a.window_registration} is no Pearl+ window record: its scheme {scheme} is of no Pearl-C family")
     held = [p for p in json.loads((d / "served.json").read_text())["passes"] if p.get("units")]
     rounds = (json.loads((d / "retention.json").read_text())["rounds"] if (d / "retention.json").exists()
               else list(range(len(held))))
@@ -1786,6 +1790,7 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         compiled = compile_steps(registered, data, compiler.inner.ingress)
         WC.takes(compiled, cls, tables=tables)
         low = WC.lower(registered, cls, tables=tables)
+        WC.check_provable(low.circuit)
     except Unexpressible as e:
         raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
     lap("lower")
@@ -1840,12 +1845,12 @@ def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | N
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.h1 import commit as CT
         h1w, meta, _tables = tie
         values |= CT.reuse(h1w, meta["layout"], int(meta["steps"]), Path(a.h1_key).read_bytes(), filled.value)
-        previous = R.digest(h1w)
+        previous = DD.digest(h1w)
     elif pearl is not None:
         from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import window as PWR
         pw, manifests, rounds, _tables = pearl
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
-        previous = R.digest(pw)
+        previous = DD.digest(pw)
     lap("rows")
     win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply()

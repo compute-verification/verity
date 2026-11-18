@@ -242,6 +242,7 @@ SETTINGS: dict[str, Setting] = _declare(
       "its fields to the record (diagnostic only, never on a workload of record)"),
     # ---- the native builds
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
+    S("VERITY_BUILD_ROOT", str, None, WHERE, "the pod's build root: the collector's and the taps' builds are under it (config.BUILT)"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),

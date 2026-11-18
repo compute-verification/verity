@@ -1,21 +1,20 @@
-"""The protocol options of a vLLM run: PoUW, POUS and SPOT, each enabled on its own, any of them in one run.
+"""The protocol options of a vLLM run: PoUW and SPOT, each enabled on its own, both in one run.
 
 A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off by default.  `verity_vllm.LLM` takes it as
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts, and the Commit before its engine exists, both by
 `commit_context`.  Each protocol has one adapter module here (`config.PROTOCOLS`, `interface`), imported only when it is enabled; PoUB, which
-serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`).  The
-protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
+serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`), and PoUS
+attaches by its scheme's name on the build's exchange (`verity.protocols.compose.schemes`, `verity_vllm.messages`), not here.  The
+protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
 
 1. ``pouw`` executes at each linear layer's ``quant_method.apply``: it replaces the GEMM, reading the weight from the
    layer it is called with;
-2. ``pous`` wraps the same ``apply`` around it: it decodes the weight from its encoded store and calls the inner
-   ``apply`` with a layer holding the decoded weight, so the GEMMs read what POUS stores; its responder starts last;
-3. ``sampled-proofs`` is outermost: the Commit's committer and taps commit the values the model produced.
+2. ``sampled-proofs`` is outermost: the Commit's committer and taps commit the values the model produced.
 
 **Phases.**  First every enabled option commits to the plaintext weights of record (``commit_weights``), with the model
 untouched and no beacon read; then each installs.  A Commit installs its composition after its committers registered the
@@ -27,7 +26,7 @@ not wired); two executors at one site; beside SPOT, an executor whose protocol p
 scheme (`circuit_registry`, `traced_as`: every PoUW scheme but ``ncp-v2``); and
 whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
-**Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
+**Weights of record.**  An option that releases weights from the model returns their plaintext from
 ``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
 `register_weights`, which is the model itself when no option released any.
 
@@ -35,7 +34,7 @@ whatever an adapter refuses for its context (SPOT outside the Commit stage, for 
 protocol, its entry and what it commits to, with the SHA-256 of its canonical JSON.  It is a placeholder: each protocol's
 verifier checks its own claims, and nothing checks the links between them yet.  A Commit's verdict carries the set and the
 record's digest (`Composition.verdict`); it is of record like any other, because every option a Commit admits is one the
-Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until its
+Program describes: an executor is refused until its
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What SPOT traces an executor's computation as is what its protocol package registers under the
@@ -73,10 +72,10 @@ __all__ = ["RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Opt
 
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
-#: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
+#: linear layer's ``apply`` PoUW replaces the GEMM.  SPOT commits at the
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
-SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
+SITES = {"LinearBase.quant_method.apply": ("pouw",)}
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 
 parse = config.parse_protocols
@@ -225,15 +224,15 @@ def refusals(ctx: Context) -> tuple[str, ...]:
         scheme = entry.partition(":")[2]
         if (declared := messages.option(entry)) is not None:
             out.append(f"{entry}: names the declared scheme {declared.name}, which is attached by name on the build "
-                       "(messages.option: verity_vllm.LLM and serve-openai attach it), never installed as a protocol option")
+                       f"(verity_vllm.LLM takes {declared.name!r}), never installed as a protocol option")
             continue
         try:
             mod = adapter(name)
         except _refused() as r:
             out.extend(r.reasons)
             continue
-        if name == "pouw" and releasing:
-            out.append(f"{entry}: the first-stage hash scheme commits its weights from each layer's weight, which "
+        if releasing and getattr(mod, "READS_LAYER_WEIGHT", False):
+            out.append(f"{entry}: commits its weights from each layer's weight at install (READS_LAYER_WEIGHT), which "
                        f"{', '.join(releasing)} releases on this build (ReleaseValue): they don't run in one process")
             continue
         known = tuple(mod.schemes())

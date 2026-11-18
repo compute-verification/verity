@@ -18,6 +18,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from verity.circuits import population as PN
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits.defs import CompositeDefinition, bind
@@ -165,7 +166,7 @@ BLOCK = _block(N_RHO)
 
 def _boundary_window(n: int, block=BLOCK) -> CS.Binding:
     """The stand-in boundary: ``n`` request spans, each its certified prompt ids in and its sampled tokens out."""
-    return CS.Binding(P.population_program(block, n), P.template_instance_query(block), {"law": "subset", "k": Q}, "b0" * 64,
+    return CS.Binding(PN.population_program(block, n), P.template_instance_query(block), {"law": "subset", "k": Q}, "b0" * 64,
                       (CS.Member(P.template_id(block), (("ingress", 64),), (("egress", 64),), n),))
 
 
@@ -541,7 +542,7 @@ def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piec
     assert all(dict(m.tables) == {p: m.n for p, _ in m.rows} for m in w.members)
     assert all(np.array_equal(it.committed.refs[j], np.tile(np.arange(m.n)[:, None], (1, len(m.all_rows))))
                for j, m in enumerate(w.members))
-    mixed = P.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
+    mixed = PN.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
     assert w.program.root.id == mixed.root.id
     assert it.ports == IR.interior_ports([s.member for s in per[0]], (12, 6), "aa" * 64, [0, 2])
     with pytest.raises(ValueError, match="not the same templates'"):

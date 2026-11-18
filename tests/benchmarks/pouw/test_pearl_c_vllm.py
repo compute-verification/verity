@@ -26,9 +26,9 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.resource_accounting.compute.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 from verity_torch.pouw.pearl_c import ends as ENDS
 from verity_torch.pouw.pearl_c import host as PH
 from verity_torch.pouw.pearl_c import served_y_device as SYD
@@ -284,6 +284,25 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert run.commits["transcript_root"] == out["transcript_root"]
 
 
+def test_the_transcripts_leaves_are_hashed_under_its_salts_with_their_length_stated(device_run, monkeypatch):
+    """A pass's end hands `hm_level0` the transcript's salts buffer and its length, `HM_SALT` bytes a tile, so the kernels'
+    own refusal of a wrong length guards it, and its hm_leaves launch reads that buffer."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    given, level0 = [], R.Pipeline.hm_level0
+
+    def spy(p, tag, *a, **kw):
+        given.append((tag, kw))
+        return level0(p, tag, *a, **kw)
+    monkeypatch.setattr(R.Pipeline, "hm_level0", staticmethod(spy))
+    kernel.dev.log.clear()
+    tiles = run.end()["tiles"]
+    (tag, kw), = given
+    assert tag == "t" and kw["salt_bytes"] == R.HM_SALT * tiles
+    assert [p[2] for n, _, p, _ in kernel.dev.log if n == "hm_leaves"] == [kw["salts"]]
+
+
 def test_a_call_over_whole_128_row_tiles_runs_the_128_tile_chain(device_run):
     """At m a multiple of 128 the chain runs on 128 x 128 tiles (gemm_pearlc, on the mainloop), writing C~, U and y, and the
     tile leaves read them."""
@@ -384,6 +403,41 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], split_salts((tmp_path / u["y"]["salts"]["path"]).read_bytes()))
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_pass_refuses_a_weight_tree_whose_root_moved_after_the_build(device_run, tmp_path):
+    """A retained pass writes each weight's tree from the device beside the build's root: a tree_b whose root bytes were
+    written after the build is refused by the weight's name before any of the pass's last files is written, and an
+    untouched one is retained."""
+    make, _, weights, roots, _ = device_run
+    for touched in (True, False):
+        run = make()
+        d = tmp_path / str(touched)
+        run.begin(retain=str(d))
+        run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+        if touched:
+            run.weights[1].b["tree_b"][-64:] ^= 0x5A
+            with pytest.raises(ValueError, match=r"weight 1's tree on the device roots at [0-9a-f]{16}, not its build's "
+                                                  f"{roots[1].hex()[:16]}: its tree_b was written after the build"):
+                run.end()
+            assert not (d / "weights").exists() and not (d / "leaves").exists()
+        else:
+            man = json.loads(Path(run.end()["manifest"]).read_text())
+            assert (d / man["weights"]["1"]["tree"]["path"]).read_bytes()[-64:] == roots[1]
+
+
+@pytest.mark.parametrize("dtype", ["float16", "float32"])
+def test_the_weight_build_refuses_a_weight_that_is_not_bfloat16(device_run, dtype):
+    """Pearl+ commits a weight's FP32 words and retains its rows as BF16, so a weight in another format (whose words BF16
+    does not hold) is refused by name and dtype, by `weight_roots` and by a run's own build, before either allocates."""
+    make, kernel, weights, roots, _ = device_run
+    bad = {0: weights[0].to(getattr(torch, dtype)), 1: weights[1]}
+    refusal = f"weight 0 is torch.{dtype}: Pearl\\+ commits a weight's FP32 words and retains its rows as BF16"
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.weight_roots(kernel, bad, SCHEME, weight_salts=salts_b(bad))
+    with pytest.raises(ValueError, match=refusal):
+        PPDR.PearlCDeviceRun(pouw_schemes.get(SCHEME), f"pouw:{SCHEME}", kernel, bad, roots, *salt_coin(roots),
+                             capacity=1 << 12, weight_salts=salts_b(bad))
 
 
 def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
@@ -1853,8 +1907,8 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 6}, doc["line"]
-    assert f"tied to W {REG.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 6}, doc["line"]
+    assert f"tied to W {DD.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
     b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
     n1 = b1["leaves"]
@@ -1896,7 +1950,7 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_
     (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
     rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
     assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
-    untied = {"record": REG.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
+    untied = {"record": DD.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
     r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=old, test_instance=True)
     assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == untied, r["line"]
     (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
@@ -1939,9 +1993,9 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     first.write_text(json.dumps({"format": DM.REGISTRATION, "protocol": DM.ONE_STAGE_PROTOCOL, "registered": [], "previous": None}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
     wc = json.loads(chained.read_text())
-    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
-    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
-    assert REG.digest(wc) != REG.digest(w)
+    assert w["previous"] is None and wc == {**w, "previous": DD.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wc), "tables": 10}
+    assert DD.digest(wc) != DD.digest(w)
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
@@ -1952,14 +2006,14 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
                     "--day-declaration", str(declared)]) == 0
     wn = json.loads(named.read_text())
     assert wn == {**wc, "window": {**wc["window"], "day": 3, "declaration": "5d" * 64}}
-    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wn), "tables": 10}
+    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": DD.digest(wn), "tables": 10}
     with pytest.raises(SystemExit):
         SP.main(["retain", "--passes", str(d), "--day-declaration", str(declared)])
     declared.write_text(json.dumps({"day": 3}))
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
                     "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
+    assert rc == 0 and answer["public"]["tie"] == {"record": DD.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
@@ -2305,7 +2359,7 @@ def test_a_tied_run_is_held_to_its_classs_fixed_load(tmp_path, monkeypatch):
 
     r = run([a, b], window_class=cls)
     assert r["answer"]["verdict"] == "accept", r["line"]
-    assert r["answer"]["public"]["tie"] == {"record": REG.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
+    assert r["answer"]["public"]["tie"] == {"record": DD.digest(w), "tables": 10, "load": [2, 8, 2]} == r["tie"]
     assert "on its 10 tables, at its class's fixed load (2, 8, 2)" in r["line"]
     # held to the class, the work is in the grid form and the exact credit is the profile's; a test instance's credits 0
     passes = [VR.load(x, coins) for x in (a, b)]
@@ -2567,7 +2621,7 @@ def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weig
     passes = [VR.load(p, coins) for p in paths]
     assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
     tied, seconds = timed(lambda: VR.tie(w, passes))
-    assert tied == {"record": REG.digest(w), "tables": 576}
+    assert tied == {"record": DD.digest(w), "tables": 576}
     want = VR.tie_entries(passes)
     assert list(want) == names
     for x in range(64):

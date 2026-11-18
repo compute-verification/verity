@@ -80,6 +80,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
+from verity.commitments import docket_digest as DD
+from verity.circuits import population as PN
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
@@ -673,7 +675,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
         S = Ss[at[0]]
         specs.append({"template": f"opening{leaf}", "defn": bind(BC.BlockOpeningCheck, **vars(S)), "S": S,
                       "rows": BC.opening_rows(S), "args": [wits[u] for u in at], "draw": at})
-    program = P.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
+    program = PN.mixed_population_program([(s["defn"], len(s["args"])) for s in specs])
     query = P.template_instances_query([s["defn"] for s in specs])
     part = P.partition(program, query)
     n_all, ranges = P.units(program, query), P.ranges(program, query)
@@ -922,7 +924,7 @@ def main() -> int:
     salts = {j: canons["payload"]["salts"][u] for u, j in enumerate(written)}
 
     # the program, its partition and the sampling design
-    program = P.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
+    program = PN.mixed_population_program([(plan_def, a.steps), (map_def, a.steps)])
     query = P.template_instances_query([plan_def, map_def])
     part = P.partition(program, query)
     pd = P.digest(part)
@@ -978,7 +980,7 @@ def main() -> int:
         checks[f"bindings/{m['name']}"] = bindings(m, canons, pub_args, m["S"])
     receipt = R.receipt(rec, "one-stage-e2e verifier (a7.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    summary.update(population=n_all, partition=pd, registration=R.digest(rec), law=rec["law"],
+    summary.update(population=n_all, partition=pd, registration=DD.digest(rec), law=rec["law"],
                    checks_before_draw={c: v["ok"] for c, v in checks.items()})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -989,7 +991,7 @@ def main() -> int:
     # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
     # stratum, --zk
     p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+                                    "--stratified", str(a.k)], rec["law"], n_all, DD.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, counts, session_roots, opened = [], [], 0, {}, {}, [], {}, {}, {}

@@ -1066,7 +1066,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
         v = values.get(q.get("value"))
         if v is None or not isinstance(q.get("position"), int):
             return False
-        schema = v.get("row_schema", REG.SCHEMA)
+        schema = v.get("row_schema", RV.SCHEMA)
         bc = bytes.fromhex(q["string"])
         d = RV.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", RV.WORD_BITS))
         return string_of(schema, crow, csalt) == bc and REG.verify_read(d, bytes.fromhex(v["root"]), q["position"], bc,
@@ -1108,7 +1108,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, docket: Mapping[str, Any] |
                 v = values.get(r["registered"]["value"])
                 d = v and RV.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", RV.WORD_BITS))
                 if v is None or not REG.verify_read(d, bytes.fromhex(v["root"]), r["registered"]["position"], bc,
-                                                    bytes.fromhex(r["registered"]["path"]), v.get("row_schema", REG.SCHEMA)):
+                                                    bytes.fromhex(r["registered"]["path"]), v.get("row_schema", RV.SCHEMA)):
                     bad[key] = "its registered path does not reach the value's root"
             elif com is None:
                 bad[key] = "the commitment it opens against can't be read"
