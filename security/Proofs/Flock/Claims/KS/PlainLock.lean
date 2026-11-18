@@ -52,11 +52,11 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Acceptance reads the verifier's last answer only for acceptance**: two verifiers that agree before the `K`-th
 message and agree on accepting at it accept the same runs of `K` rounds. -/
-theorem stepWith_acc_iff {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
-    (v₁ v₂ : List Claims.Msg → Claims.OC Claims.Out) (K : ℕ)
-    (hlt : ∀ bs : List Claims.Msg, bs.length < K → v₁ bs = v₂ bs)
-    (heq : ∀ bs : List Claims.Msg, bs.length = K → (((v₁ bs).eval H).1 = .acc ↔ ((v₂ bs).eval H).1 = .acc)) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
+theorem stepWith_acc_iff {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
+    (v₁ v₂ : List Hash.Msg → Claims.OC Claims.Out) (K : ℕ)
+    (hlt : ∀ bs : List Hash.Msg, bs.length < K → v₁ bs = v₂ bs)
+    (heq : ∀ bs : List Hash.Msg, bs.length = K → (((v₁ bs).eval H).1 = .acc ↔ ((v₂ bs).eval H).1 = .acc)) :
+    ∀ (n : ℕ) (hist : List (Hash.Msg × Hash.Msg)) (as : List Hash.Msg) (t : Claims.Transcript),
       as.length + n = K →
       ((Claims.stepWith H P x ω v₁ n hist as t).out = .acc ↔ (Claims.stepWith H P x ω v₂ n hist as t).out = .acc) := by
   intro n
@@ -85,9 +85,9 @@ theorem range_map_ends {α : Type} (f : ℕ → α) {K : ℕ} (hK : 2 ≤ K) :
 
 /-- **The deployed verifier decides without its last coin**: at coins that differ in the last only, a decision at one
 is the same decision at the other. -/
-theorem act_last_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c₀ : Coin} {l : List Coin} {c : Coin}
+theorem act_last_decide {zk : Bool} {x : Hash.Msg} {as : List Hash.Msg} {c₀ : Coin} {l : List Coin} {c : Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : Final}
+    {mids : List (Hash.Msg × Coin)} {f : Final}
     (h : act zk x as (c₀ :: (l ++ [c])) = .decide s spec sts link c₁ mids f) (c' : Coin) :
     act zk x as (c₀ :: (l ++ [c'])) = .decide s spec sts link c₁ mids f := by
   have e₁ : (c₀ :: (l ++ [c])).getLast? = some c := by rw [← List.cons_append, List.getLast?_concat]
@@ -124,7 +124,7 @@ theorem act_last_decide {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {c�
     · cases h
 
 /-- **The deployed verifier accepts without its last coin.** -/
-theorem next_acc_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} (c₀ : Coin)
+theorem next_acc_last {zk : Bool} (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg} (c₀ : Coin)
     (l : List Coin) (c c' : Coin) :
     ((next zk x as (c₀ :: (l ++ [c]))).eval H).1 = .acc ↔ ((next zk x as (c₀ :: (l ++ [c']))).eval H).1 = .acc := by
   have key : ∀ c c' : Coin, ((next zk x as (c₀ :: (l ++ [c]))).eval H).1 = .acc →
@@ -141,13 +141,13 @@ theorem next_acc_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {x : Claims.Ms
       exact h
   exact ⟨key c c', key c' c⟩
 
-theorem act_none {zk : Bool} {x : Claims.Msg} (hs : setupOf zk x = none) (as : List Claims.Msg) (cs : List Coin) :
+theorem act_none {zk : Bool} {x : Hash.Msg} (hs : setupOf zk x = none) (as : List Hash.Msg) (cs : List Coin) :
     act zk x as cs = .rej := by
   unfold act
   rw [hs]
 
 /-- **A deployed run's acceptance does not read its last coin.** -/
-theorem run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+theorem run_acc_iff_last {zk : Bool} (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg)
     (ω : Ω) (r₁ r₂ : Fin ((V zk).k x) → Coin)
     (h : ∀ i, i + 1 < (V zk).k x → Claims.coinSeq r₁ i = Claims.coinSeq r₂ i) :
     (Claims.run H P (V zk) x ω r₁).out = .acc ↔ (Claims.run H P (V zk) x ω r₂).out = .acc := by
@@ -171,7 +171,7 @@ theorem run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type}
       exact next_acc_last H _ _ _ _
 
 /-- **`VK keep`'s acceptance does not read its last coin** (`next_acc_last`'s proof, at `nextK keep`). -/
-theorem nextK_acc_last (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+theorem nextK_acc_last (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {x : Hash.Msg} {as : List Hash.Msg}
     (c₀ : Coin) (l : List Coin) (c c' : Coin) :
     ((nextK keep x as (c₀ :: (l ++ [c]))).eval H).1 = .acc ↔
       ((nextK keep x as (c₀ :: (l ++ [c']))).eval H).1 = .acc := by
@@ -190,8 +190,8 @@ theorem nextK_acc_last (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x
   exact ⟨key c c', key c' c⟩
 
 /-- **A run of `VK keep` accepts regardless of its last coin** (`run_acc_iff_last`'s proof, at `nextK keep`). -/
-theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) (r₁ r₂ : Fin ((V false).k x) → Coin)
+theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Hash.Msg) (ω : Ω) (r₁ r₂ : Fin ((V false).k x) → Coin)
     (h : ∀ i, i + 1 < (V false).k x → Claims.coinSeq r₁ i = Claims.coinSeq r₂ i) :
     (Claims.run H P (VK keep) x ω r₁).out = .acc ↔ (Claims.run H P (VK keep) x ω r₂).out = .acc := by
   replace h : ∀ i, i + 1 < (V false).k x →
@@ -218,9 +218,9 @@ theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg)
 
 /-- **A run's messages are `P`'s along its coins**: each message `P` sends at the history of the coins' bytes
 before it (`depMsg`), wherever the verifier answers each round with its coin's bytes. -/
-theorem stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
-    (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
+theorem stepWith_dep {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
+    (x : Hash.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
+    ∀ (n : ℕ) (hist : List (Hash.Msg × Hash.Msg)) (as : List Hash.Msg) (t : Claims.Transcript),
       hist = depHist H P x ω c as.length → as = (List.range as.length).map (depMsg H P x ω c) →
       t.msgs.map Prod.fst = as →
       (Claims.stepWith H P x ω (fun as => V'.next x as ((List.range as.length).map c)) n hist as t).msgs.map
@@ -267,20 +267,20 @@ theorem stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pro
       exact ha'
 
 /-- **A deployed run's messages are `P`'s along its coins** (`stepWith_dep`). -/
-theorem run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem run_dep {zk : Bool} (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     (r : Fin ((V zk).k x) → Coin) :
     (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
       (List.range (Claims.run H P (V zk) x ω r).msgs.length).map (depMsg H P x ω (Claims.coinSeq r)) :=
   stepWith_dep H P (V zk) x ω _ (Claims.Bridge.answersCoin_deploy zk H x) _ [] [] _ rfl rfl rfl
 
 /-- **A run of `VK keep`'s messages are `P`'s along its coins** (`stepWith_dep`). -/
-theorem run_depK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+theorem run_depK (keep : Bool → Bool) (H : Hash.Msg → Hash.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg)
     (ω : Ω) (r : Fin ((V false).k x) → Coin) :
     (Claims.run H P (VK keep) x ω r).msgs.map Prod.fst =
       (List.range (Claims.run H P (VK keep) x ω r).msgs.length).map (depMsg H P x ω (Claims.coinSeq r)) :=
   stepWith_dep H P (VK keep) x ω _ (Claims.Bridge.answersCoin_VK keep H x) _ [] [] _ rfl rfl rfl
 
-theorem depHist_congr {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem depHist_congr {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     {c₁ c₂ : ℕ → Coin} : ∀ j, (∀ i < j, c₁ i = c₂ i) → depHist H P x ω c₁ j = depHist H P x ω c₂ j
   | 0, _ => rfl
   | j + 1, h => by
@@ -289,7 +289,7 @@ theorem depHist_congr {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Pr
     rw [e, h j (by omega)]
 
 /-- **`P`'s message after `j` rounds reads the coins before `j` only.** -/
-theorem depMsg_congr {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+theorem depMsg_congr {Ω : Type} (H : Hash.Msg → Hash.Msg) (P : Claims.Prover Ω) (x : Hash.Msg) (ω : Ω)
     {c₁ c₂ : ℕ → Coin} {j : ℕ} (h : ∀ i < j, c₁ i = c₂ i) : depMsg H P x ω c₁ j = depMsg H P x ω c₂ j := by
   unfold depMsg
   rw [depHist_congr H P x ω j h]
@@ -310,14 +310,14 @@ theorem fnC_agree {K M : ℕ} {α D : Type} {n : Fin K → ℕ} {key : Fin K →
   · rfl
 
 theorem liveH_length {J mPts : ℕ} (w : Wire 65536 J mPts) :
-    ∀ (k : ℕ) (b : ℕ → Claims.Msg) (S : ℕ → SubmitJ J) (r : ℕ → LCoin 65536), (liveH w b S r k).length = k
+    ∀ (k : ℕ) (b : ℕ → Hash.Msg) (S : ℕ → SubmitJ J) (r : ℕ → LCoin 65536), (liveH w b S r k).length = k
   | 0, _, _, _ => rfl
   | k + 1, b, S, r => by
     simp only [liveH, List.length_cons]
     rw [liveH_length w k]
 
 theorem liveH_getD {J mPts : ℕ} (w : Wire 65536 J mPts) :
-    ∀ (k : ℕ) (b : ℕ → Claims.Msg) (S : ℕ → SubmitJ J) (r : ℕ → LCoin 65536) (i : ℕ), i < k →
+    ∀ (k : ℕ) (b : ℕ → Hash.Msg) (S : ℕ → SubmitJ J) (r : ℕ → LCoin 65536) (i : ℕ), i < k →
       (liveH w b S r k).getD i default = (b i, w.encRd (S i).n (takeE (S i).n (r i)))
   | 0, _, _, _, i, hi => absurd hi (Nat.not_lt_zero _)
   | k + 1, b, S, r, 0, _ => rfl
@@ -332,19 +332,19 @@ theorem plainRep_lt (spec : SessionSpec) (st : Stmt) (i : ℕ) : plainRep spec s
 
 /-- **The simulator's submission `k`**: deployed round `k + 1`'s rep and count, and the bytes of `P`'s message
 `dm (k + 1)` after its tag. -/
-def plainS (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (dm : ℕ → Claims.Msg) (k : ℕ) : SubmitJ 1 :=
+def plainS (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (dm : ℕ → Hash.Msg) (k : ℕ) : SubmitJ 1 :=
   ⟨0, ⟨plainRep spec st (k + 1), plainRep_lt spec st (k + 1)⟩, ⟨(dm (k + 1)).tail.toArray⟩, plainCnt x spec st (k + 1)⟩
 
 /-- **The live history after `k` submissions**, at the first message `a₀` and the messages `b`. -/
-noncomputable def plainHl {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg) (r' : Fin (plainN x + 2) → LCoin 65536) (k : ℕ) :
-    List (Claims.Msg × Claims.Msg) :=
+noncomputable def plainHl {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Hash.Msg) (r' : Fin (plainN x + 2) → LCoin 65536) (k : ℕ) :
+    List (Hash.Msg × Hash.Msg) :=
   [(((P.next x [] ω).eval sha512).1,
       (plainWire spec.mPts hw).encPts ((ptsIf (plainWire spec.mPts hw)).proj (Claims.coinSeq r' 0)))] ++
     liveH (plainWire spec.mPts hw) b (plainS x spec st dm) (fun i => Claims.coinSeq r' (i + 1)) k
 
-theorem plainHl_length {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Claims.Msg) (r' : Fin (plainN x + 2) → LCoin 65536) (k : ℕ) :
+theorem plainHl_length {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (dm b : ℕ → Hash.Msg) (r' : Fin (plainN x + 2) → LCoin 65536) (k : ℕ) :
     (plainHl P x spec st ω hw dm b r' k).length = k + 1 := by
   rw [plainHl, List.length_append, liveH_length, List.length_singleton, Nat.add_comm]
 
@@ -356,8 +356,8 @@ theorem coinSeq_cast {K L : ℕ} {β : Type} [Inhabited β] (hL : L = K) (r : Fi
 
 /-- **The revealed entries along the live history are the live coins'**: before `k + 1`, the simulator reads back
 the first `plainNOf` entries of each live coin. -/
-theorem plainRecon_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (dm b : ℕ → Claims.Msg) (r' : Fin (plainN x + 2) → LCoin 65536)
+theorem plainRecon_agree {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (dm b : ℕ → Hash.Msg) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) (k : ℕ) (i : Fin ((V false).k x)) (hi : i.val < k + 1) :
     Claims.Flock.FnFork.AgreeAt (plainNOf x spec st i) (plainRecon x spec st (plainHl P x spec st ω hw dm b r' k) i)
       (r' (Fin.cast hL.symm i)) := by
@@ -391,8 +391,8 @@ theorem plainRecon_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (sp
     rw [ite_eq_right (Nat.succ_ne_zero i'), finDecode_code, padE_takeE _ _ _ (by omega)]
 
 /-- **The simulator's coins are `plainΦ`'s at every deployed coin the live history has revealed.** -/
-theorem simCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (dm b : ℕ → Claims.Msg) (u : plainTape x)
+theorem simCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (dm b : ℕ → Hash.Msg) (u : plainTape x)
     (r' : Fin (plainN x + 2) → LCoin 65536) (hL : plainN x + 2 = (V false).k x) (k : ℕ) (i : ℕ) (hi : i < k + 1) :
     Claims.coinSeq (simCoins x spec st u (plainHl P x spec st ω hw dm b r' k)) i =
       Claims.coinSeq (plainΦ x spec st (u, r')) i := by
@@ -405,28 +405,28 @@ theorem simCoins_agree {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec
 
 /-- **The simulator's messages**: deployed round `k + 1`'s on the plain wire before the last, and at the last `P`'s
 last message where `V false` accepts at `plainΦ`, else nothing. -/
-noncomputable def plainB (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (dm : ℕ → Claims.Msg) (acc : Bool) (k : ℕ) :
-    Claims.Msg :=
+noncomputable def plainB (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (dm : ℕ → Hash.Msg) (acc : Bool) (k : ℕ) :
+    Hash.Msg :=
   if k < plainN x then plainRound (plainRep spec st (k + 1)) (plainCnt x spec st (k + 1)) (dm (k + 1))
   else if acc then dm (k + 1) else []
 
 /-- `P`'s messages at `plainΦ`'s coins. -/
-noncomputable def plainDm {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
-    (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : ℕ → Claims.Msg :=
+noncomputable def plainDm {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : ℕ → Hash.Msg :=
   depMsg sha512 P x ω (Claims.coinSeq (plainΦ x spec st (u, r')))
 
 /-- Whether `V false` accepts `P` at `plainΦ`'s coins. -/
-noncomputable def plainAcc {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+noncomputable def plainAcc {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : Bool :=
   decide ((Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
 
 /-- Whether `VK keep` accepts `P` at `plainΦ`'s coins. -/
-noncomputable def plainAccK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+noncomputable def plainAccK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : Bool :=
   decide ((Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc)
 
 /-- **The simulator sends `plainB` along the live history.** -/
-theorem plainSim_msgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_msgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) (k : ℕ) (hk : k ≤ plainN x) :
     (((plainSimK keep P x spec st).next x (plainHl P x spec st ω hw (plainDm P x spec st ω u r')
@@ -454,7 +454,7 @@ theorem plainSim_msgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) 
       rfl
 
 /-- `plainSim_msgK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) (k : ℕ) (hk : k ≤ plainN x) :
     (((plainSim P x spec st).next x (plainHl P x spec st ω hw (plainDm P x spec st ω u r')
@@ -463,7 +463,7 @@ theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec :
   plainSim_msgK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL) (k := k) (hk := hk)
 
 /-- **A round on the plain wire reads back as its submission.** -/
-theorem plainSub_round (rep n : ℕ) (a : Claims.Msg) (hr : rep < 2) (hn : n ≤ 65536) :
+theorem plainSub_round (rep n : ℕ) (a : Hash.Msg) (hr : rep < 2) (hn : n ≤ 65536) :
     plainSub (plainRound rep n a) = some ⟨0, ⟨rep, hr⟩, ⟨a.tail.toArray⟩, n⟩ := by
   have h₀ : (UInt8.ofNat rep).toNat = rep := by rw [UInt8.toNat_ofNat']; omega
   have h₁ : (UInt8.ofNat (n % 256)).toNat = n % 256 := by rw [UInt8.toNat_ofNat']; omega
@@ -484,7 +484,7 @@ theorem plainSub_round (rep n : ℕ) (a : Claims.Msg) (hr : rep < 2) (hn : n ≤
   · rename_i hne
     exact (hne _ _ _ _ _ rfl).elim
 
-theorem plainCnt_le (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) {i : ℕ} (h0 : i ≠ 0) :
+theorem plainCnt_le (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) {i : ℕ} (h0 : i ≠ 0) :
     plainCnt x spec st i ≤ 65536 := by
   unfold plainCnt
   rw [ite_eq_right h0]
@@ -492,7 +492,7 @@ theorem plainCnt_le (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) {i : ℕ} 
 
 /-- **The simulator's live outcome**: `P`'s roots, the live link points, the rounds of its submissions and the proof
 files of its last message. -/
-theorem plainSim_liveOutK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_liveOutK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) :
     liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
@@ -523,7 +523,7 @@ theorem plainSim_liveOutK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover 
   rfl
 
 /-- `plainSim_liveOutK` at the deployed plain verifier (`keep := id`). -/
-theorem plainSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Hash.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) :
     liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x

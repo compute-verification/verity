@@ -8,6 +8,7 @@ import hashlib
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -18,6 +19,7 @@ from verity.device import gpu_card_reporting
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import circuit as PC
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import device as PD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import native as PN
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import row_table_kernels as RTK
 
 #: Under `check` (`tools/check/suites.py` sets VERITY_SUITE_ROOT) the CPU build always runs: without a compiler these tests
 #: fail there instead of skipping. nvcc and a GPU stay optional (their tests skip by name).
@@ -116,6 +118,31 @@ def test_the_build_is_keyed_by_its_sources(tmp_path, monkeypatch):
     before = PD.source_digest()
     monkeypatch.setattr(PD, "CFLAGS", PD.CFLAGS + ("-DNCP2_KEYED",))
     assert PD.source_digest() != before
+
+
+def test_the_row_table_libraries_build_with_the_configured_toolchain(monkeypatch):
+    built: list[str] = []
+
+    def build(tool, sources, flags, name):
+        built.append(tool)
+        return SimpleNamespace(rt_step_host=SimpleNamespace(), rt_midstates=SimpleNamespace(), rt_step=SimpleNamespace())
+
+    monkeypatch.setattr(PD.TOOLCHAIN, "cxx", "/opt/toolchain/bin/g++")
+    monkeypatch.setattr(PD.TOOLCHAIN, "nvcc", "/opt/toolchain/bin/nvcc")
+    monkeypatch.setattr(RTK, "_build", build)
+    RTK.host_lib.__wrapped__()
+    RTK.device_lib.__wrapped__("120")
+    assert built == ["/opt/toolchain/bin/g++", "/opt/toolchain/bin/nvcc"]
+    assert RTK.nvcc() == PD.nvcc() == "/opt/toolchain/bin/nvcc"
+
+
+@pytest.mark.parametrize("reader, lib, what", [("compiler", lambda: RTK.host_lib.__wrapped__(), "C\\+\\+ compiler"),
+                                               ("nvcc", lambda: RTK.device_lib.__wrapped__("120"), "nvcc")])
+def test_no_toolchain_builds_no_row_table_library(monkeypatch, reader, lib, what):
+    monkeypatch.setattr(PD, reader, lambda: None)
+    monkeypatch.setattr(RTK, "_build", lambda *a: pytest.fail("built with no toolchain"))
+    with pytest.raises(RuntimeError, match=f"no {what} configured or on the path"):
+        lib()
 
 
 CARDS = Path(__file__).resolve().parents[7] / "calibration" / "hardware" / "cards"

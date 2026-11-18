@@ -74,7 +74,7 @@ def test_a_served_table_prints_neither_its_rows_nor_its_salts(tmp_path):
 
 def test_a_private_directory_inside_what_leaves_the_node_is_refused_with_both_paths(tmp_path):
     run = tmp_path.resolve() / "run"
-    why = (f"the history tables' private directory {run / 'private'} is inside {run}, which leaves the node: put it "
+    why = (f"the private directory {run / 'private'} is inside {run}, which leaves the node: put it "
            f"outside every run directory")
     with pytest.raises(ValueError, match=f"^{re.escape(why)}$"):
         BT.private_root(run / "private", None, run)

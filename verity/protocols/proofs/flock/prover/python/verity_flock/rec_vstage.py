@@ -200,11 +200,11 @@ def message_rounds(public: dict, private: dict, sh: A.Shape, streams: list[str] 
 def messages(program: str, mrs: list[dict], ports: list[tuple[str, str]] | None = None) -> tuple[dict, dict]:
     """The prover's registrations of the message rounds and the verifier's own entries of them (from the ``c_k`` alone), by
     port: ``ports`` (port, value) a round, default ``m<i>`` as ``rec-c<i>``."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     regs, own = {}, {}
     for i, ((port, value), mr) in enumerate(zip(ports or [(f"m{i}", f"rec-c{i}") for i in range(len(mrs))], mrs, strict=True)):
-        reg = RG.Registered.commit(program, value, mr["rows"], mr["salts"])
+        reg = RV.Registered.commit(program, value, mr["rows"], mr["salts"])
         own[port] = RR.commits_entry(program, value, len(mr["rows"][0]), mr["commits"])
         if own[port]["root"] != reg.entry()["root"]:
             raise ValueError(f"round {i}: the prover's rows are not the rows its c_k commit")
@@ -508,6 +508,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+    from verity.commitments import registered_value as RV
     from verity.circuits.codec import canonical_json, encode_program
 
     from . import circuit as FC
@@ -581,7 +582,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i][0] + ref[i][1] for i in range(N)]
     in_rows, in_salts, in_entry = rin.statement(range(N))
     out_rows, out_salts, out_entry = rout.statement(range(N))
-    private = {p: G.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
+    private = {p: RV.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
     read = lambda e: {**e, "word_bits": 16, "reads": list(range(N))}  # noqa: E731
     own = {"format": G.READS, "ports": {"trow": read(reg.entry()), **{p: read(r.entry()) for p, r in private.items()},
                                         "rin": read(rin.entry()), "rout": read(rout.entry())}}
@@ -639,11 +640,11 @@ def acc_salts(path: Path, n: int) -> list[bytes]:
 
 def forge_chain(chain: O.Chain, row: int) -> O.Chain:
     """The prover's running sums with row ``row`` one bit off (its first word), every other row and every salt honest."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+    from verity.commitments import registered_value as RV
 
     rows = [list(r) for r in chain.reg.rows]
     rows[row][0] ^= 1
-    return O.Chain(RG.Registered.commit(chain.reg.program, O.ACC_VALUE, rows, list(chain.reg.salts)), dict(chain.at))
+    return O.Chain(RV.Registered.commit(chain.reg.program, O.ACC_VALUE, rows, list(chain.reg.salts)), dict(chain.at))
 
 
 def _offsets(data: bytes, circuit_text: str, port: str, row: int) -> tuple[int, int]:

@@ -204,17 +204,17 @@ section
 
 variable {rel : Readable.Parsed → Readable.Relation}
 
-theorem run_sch {H : Claims.Msg → Claims.Msg} (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) :
+theorem run_sch {H : Hash.Msg → Hash.Msg} (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) :
     o.sch i = (fast100 o.tabs[i]!.m).getD default := by
   unfold Run.sch schedsOf
   simp [hi]
 
-theorem run_tabs_size {H : Claims.Msg → Claims.Msg} (o : Run H rel) : o.tabs.size = o.sts.size := by
+theorem run_tabs_size {H : Hash.Msg → Hash.Msg} (o : Run H rel) : o.tabs.size = o.sts.size := by
   unfold Run.tabs tabsOf
   rw [Array.size_map]
 
 /-- **Rep `k`'s decoded proof is the session's file's**, where the record's points are the first coin's. -/
-theorem run_proof_rec {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) (o : Run H rel) {k : ℕ}
+theorem run_proof_rec {H : Hash.Msg → Hash.Msg} (h64 : Claims.Out64 H) (o : Run H rel) {k : ℕ}
     (hex : (tabsOf o.sts)[k / 2]!.extra (pointsOf o.spec o.recC₁) = .ok (o.extras (k / 2)))
     (hk : k < 2 * o.sts.size) : o.proof (k / 2) (k % 2) = o.recPs[k]! := by
   obtain ⟨-, hts⟩ := setup_tables o.setup
@@ -311,8 +311,8 @@ theorem arrays_offset {α : Type} : ∀ (L : List (Array α)) (i : ℕ) (hi : i 
 
 /-- **The deployed verifier's coin at a recorded round's offset opens to the round's coins**: the sends after the link
 are the recorded rounds, each answered by the run's coin. -/
-theorem hs_coins {H : Claims.Msg → Claims.Msg} (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
-    {HS : Array (Array Flock.Round)} {bs : List Claims.Msg} (hrl : repLens o.spec o.sts = HS.toList.map Array.size)
+theorem hs_coins {H : Hash.Msg → Hash.Msg} (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
+    {HS : Array (Array Flock.Round)} {bs : List Hash.Msg} (hrl : repLens o.spec o.sts = HS.toList.map Array.size)
     (hrecs : JsonRT.Recs o.resp 1 (HS.toList.flatMap Array.toList) bs) {q : ℕ} (hq : q < HS.size) {j : ℕ}
     (hj : j < HS[q].size) :
     (cs.tail.dropLast.getD (((HS.toList.take q).map Array.size).sum + j) default).vals HS[q][j].n = HS[q][j].coins := by
@@ -461,7 +461,7 @@ theorem rep_facts (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relatio
 proofs' framed bytes and the deployed verifier's coins is the recorded stream `k` as `liveOf` reads it. -/
 theorem recStreams_eq (h64 : Claims.Out64 sha512) (g : Goals sha512 Readable.relation)
     (o : Run sha512 Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {st : Stmt} {rb : ByteArray}
-    {HS : Array (Array Flock.Round)} {bs : List Claims.Msg}
+    {HS : Array (Array Flock.Round)} {bs : List Hash.Msg}
     (hsts : o.sts = #[st]) (htab : o.spec.tables = #[st.tags.table]) (hss : HS.size = o.spec.repStreams.size)
     (hsess : o.sess = JsonRT.sessOf o.spec (Claims.hOf sha512) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) HS
       o.proofs)

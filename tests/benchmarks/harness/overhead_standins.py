@@ -241,9 +241,14 @@ def scheme(tmp_path, monkeypatch):
     return sch
 
 
-def node_points(tmp: Path, node: Node, run: str = "r20261104-020000-0001", model: str = O.KERNEL_MODEL) -> Path:
+#: each card's device name, as nvidia-smi reports it
+CARD_NAMES = {"h200": "NVIDIA H200", "h100": "NVIDIA H100 80GB HBM3"}
+
+
+def node_points(tmp: Path, node: Node, run: str = "r20261104-020000-0001", model: str = O.KERNEL_MODEL,
+                card: str = "h200") -> Path:
     out, run_dir = tmp / run / "out", tmp / run
-    rc = overhead_node.main(["points", "--card", "h200", "--model", model, "--uuid", UUID, "--out", str(out),
+    rc = overhead_node.main(["points", "--card", card, "--model", model, "--uuid", UUID, "--out", str(out),
                              "--run-dir", str(run_dir), "--run-id", run], run=node)
     assert rc == 0, (out / "points.json").read_text()
     return out / "points.json"
@@ -251,7 +256,7 @@ def node_points(tmp: Path, node: Node, run: str = "r20261104-020000-0001", model
 
 def node_run(tmp: Path, node: Node, points: Path, scheme: str, art: str | None = None,
              run: str = "r20261104-030000-0002", cubin: bytes | None = CUBIN, cubin_art: str = CUBIN_ART,
-             extra: Sequence[str] = ()) -> tuple[int, Path]:
+             extra: Sequence[str] = (), card: str = "h200") -> tuple[int, Path]:
     """The node side's timed run, sent `cubin` (in the run's inputs/, as `--send` puts it) from the art `cubin_art`."""
 
     out, run_dir = tmp / run / "out", tmp / run
@@ -260,7 +265,7 @@ def node_run(tmp: Path, node: Node, points: Path, scheme: str, art: str | None =
     if cubin is not None:
         (run_dir / "inputs").mkdir(parents=True)
         (run_dir / "inputs" / "arm.cubin").write_bytes(cubin)
-    rc = overhead_node.main(["run", "--card", "h200", "--scheme", scheme, "--points", str(points), "--point", "all",
+    rc = overhead_node.main(["run", "--card", card, "--scheme", scheme, "--points", str(points), "--point", "all",
                              "--uuid", UUID, "--out", str(out), "--run-dir", str(run_dir), "--run-id", run,
                              "--commit", SHA, "--scratch", str(scratch), *(["--points-art", art] if art else []),
                              *(["--cubin", "arm.cubin", "--cubin-art", cubin_art] if cubin is not None else []), *extra],
@@ -315,20 +320,21 @@ class Store:
         (self.remote / "attempts" / f"{run}.json").write_bytes(canon.dumps(attempt))
 
 
-def stored_points(tmp: Path, s: Store, run: str, model: str = O.KERNEL_MODEL) -> str:
-    node_points(tmp, Node(tmp), run, model)
-    s.ran(run, tmp / run, sub="points", argv=[*LEASE, "bash", R.NODE_JOB, "points", "--card", "h200", "--model", model])
+def stored_points(tmp: Path, s: Store, run: str, model: str = O.KERNEL_MODEL, card: str = "h200") -> str:
+    node_points(tmp, Node(tmp, card=CARD_NAMES[card]), run, model, card)
+    s.ran(run, tmp / run, sub="points", argv=[*LEASE, "bash", R.NODE_JOB, "points", "--card", card, "--model", model])
     return R.store_points(s.store, run)
 
 
 def timed(tmp: Path, s: Store, art: str, scheme: str, run: str, node: Node | None = None, cubin: bytes = CUBIN,
-          cubin_art: str | None = None, edit: Callable[[dict], None] | None = None, extra: Sequence[str] = ()) -> str:
+          cubin_art: str | None = None, edit: Callable[[dict], None] | None = None, extra: Sequence[str] = (),
+          card: str = "h200") -> str:
     """A timed run of the door in the store; `edit` changes its `overhead.json` first, for a made-up record."""
 
     points = tmp / f"{run}-points.json"
     points.write_bytes(Path(s.store.fetch(art)).read_bytes())
-    rc, run_dir = node_run(tmp, node or Node(tmp), points, scheme, art, run=run, cubin=cubin,
-                           cubin_art=cubin_art or s.cubin, extra=extra)
+    rc, run_dir = node_run(tmp, node or Node(tmp, card=CARD_NAMES[card]), points, scheme, art, run=run, cubin=cubin,
+                           cubin_art=cubin_art or s.cubin, extra=extra, card=card)
     assert rc == 0
     if edit is not None:
         record = run_dir / "out" / "overhead.json"
