@@ -11,7 +11,7 @@ reads them (a peer's row, an unlowered node's row, the prompt). A row no source 
 undeclared: zeros, counted, and the unit's mismatch counted apart. A unit's expected words are the Program's at the frame's
 pieces (`NodeWindow.outs`), a gather's the concatenation of the rows it holds (`NodeWindow.wholes`, ``chunks``), an
 opening's verdict 1; a writer row with none is recomputed from its own inputs. Tables are committed by
-`h1.registered.commit` from the made-up weights as `pipeline.expert_rows.table_words` cuts them, under a run-local key.
+`h1.registered.commit` from the made-up weights as `pipeline.expert_rows.table_words` cuts them, under fresh OS salts.
 
 This is completeness evidence: the check is of what a verifier would read (the emitted circuit), not of the lowering's
 own lists, and it samples (`check`)."""
@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import bisect
 import dataclasses
-import hashlib
 import math
+import os
 import re
 import time
 from collections import Counter
@@ -270,21 +270,21 @@ _TABLE = re.compile(r"^weights/(?P<label>.+)@(?P<words>\d+)/b(?P<b>\d+)/(?P<kind
 
 class Tables:
     """Each table the circuit declares, committed on first use from the made-up weights (an expert table's rows by
-    `expert_rows.table_words`, an embedding shard's column block's by `node_window_embed.table_words`) under a run-local key,
-    by parameter."""
+    `expert_rows.table_words`, an embedding shard's column block's by `node_window_embed.table_words`) under fresh OS
+    salts, by parameter."""
 
     def __init__(self, circuit: IF.Circuit, values: Values, w: NodeWindow, program: str):
         self.by = {t.name: t for t in circuit.registered.tables}
         self.values, self.program = values, program
         self.fields = {label: (first, words) for label, first, words in w.b.weights}
         self.types = dict(dict(values.fn.signature()[0])[WEIGHTS].fields)
-        self.key = hashlib.sha512(b"node-window values check: a test committer's key").digest()[:32]
         self.held: dict[str, Any] = {}
 
     def __call__(self, name: str) -> Any:
         got = self.held.get(name)
         if got is not None:
             return got
+        from verity.commitments import salt_file as SF
         from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
         from verity.protocols.resource_accounting.compute.pouw.prover.serving import (
             registered_commit,
@@ -313,8 +313,8 @@ class Tables:
                 rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
-        got = self.held[name] = registered_commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
-                                           schema=SCHEMA_HM96_SHA512_ROW_SEG)
+        got = self.held[name] = registered_commit(self.program, t.param, rows, os.urandom(t.rows * SF.SALT_BYTES),
+                                                  keep_rows=True, schema=SCHEMA_HM96_SHA512_ROW_SEG)
         return got
 
     def _vocab(self, name: str, stack: np.ndarray, width: int, b: int, V: int) -> np.ndarray:

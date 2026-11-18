@@ -38,9 +38,11 @@ untraced = ["test_bench.py", "test_booked_card.py", "test_bench_engines.py", "te
 # Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
 # directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
-# put on its path, which a test checks is that script of the tree.
+# put on its path, which a test checks is that script of the tree. env.sh takes the workspace's import roots from
+# research's reader of them (research.pythonpath), which a test sources it through.
 inputs = [
     "tools/research/src/research/store/labels_sync.py",
+    "tools/research/src/research/pythonpath.py",
     "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/pouw/pearl_c_vllm/served_passes.py",
@@ -135,6 +137,8 @@ inputs = [
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
     "benchmarks/served_units/stage.py", "benchmarks/one_stage/server_rate.py",
+    # `checked_by`'s runners are proofs' (`RAN_BY`), which a test reads from their source
+    "benchmarks/one_stage/served_verdicts.py",
     # the harness and the benchmarks whose doors it runs import the vLLM adapter through its public interface only, which a
     # test checks against the interface's list of public modules
     "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",

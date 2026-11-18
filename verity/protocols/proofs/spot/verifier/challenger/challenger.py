@@ -225,6 +225,9 @@ from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Openin
 from verity.commitments import claim_ids
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
+from verity.commitments.live_coin import (
+    _HEX, KEY_FORM, OPENING_FORM, PUBLIC_BYTES, ChallengerKey, CoinError, LiveOpening, Verify, _hex,
+)
 from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
 from verity.commitments.domains import (
     CHALLENGER_AUDITOR_ENTRY_V1, CHALLENGER_AUDITOR_ENTRY_V2, CHALLENGER_AUDITOR_RECORD, CHALLENGER_AUDITOR_V1,
@@ -239,20 +242,13 @@ KEY = HM96.default_key
 #: the most coins one commitment holds
 MAX_COINS = 1 << 24
 _NAME = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-/")
-_HEX = re.compile(r"(?:[0-9a-f]{2})*")
 COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: families a list of [label, count], root "
                    "lowercase hex")
-OPENING_FORM = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex "
-                "and a path of SHA-512 digests")
 RECORD_ROLE = CHALLENGER_RECORD
 COMMITMENT_TAG = CHALLENGER_COMMITMENT
-#: an LMS public key over SHA-512: I (16 bytes) || T[1] (64)
-PUBLIC_BYTES = 80
 _HOST = frozenset(string.ascii_letters + string.digits + "-._")
 RECORD_FORM = ("a challenger record is {commitment, host, signature}: a live coin commitment, a host of ASCII letters, "
                "digits, '-', '.' and '_', and lowercase hex")
-KEY_FORM = ("a challenger key is {H, W, public}: LMS over SHA-512 (N = 64) with W in 1, 2, 4, 8 and 1 <= H <= 30, and its "
-            "80-byte public key in lowercase hex")
 KEY_RECORD_SCHEMA = CHALLENGER_KEY
 KEY_RECORD_FORM = (f"a challenger key record is {KEY_RECORD_SCHEMA} {{H, W, pubkey, pubkey_sha512, schema, ...}}: a "
                    "challenger key's parameters, its public key in lowercase hex and that public key's SHA-512")
@@ -379,10 +375,6 @@ NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim 
             "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
-class CoinError(ValueError):
-    """A layout, a coin commitment or an opening the challenger refuses, or a coin its commitment doesn't hold."""
-
-
 def coin_claim(entropy: Any) -> str | None:
     """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` claim id of
     `verity.commitments.claim_ids`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
@@ -463,10 +455,6 @@ def live_leaf(scheme: str, coin: bytes, salt: bytes) -> bytes:
     return HM96.tree_leaf(KEY, HM96.commit_string(KEY, hashlib.sha512(scheme.encode() + b"\0" + coin).digest(), salt))
 
 
-def _hex(s: Any) -> bytes | None:
-    return bytes.fromhex(s) if type(s) is str and _HEX.fullmatch(s) else None
-
-
 @dataclass(frozen=True, slots=True)
 class LiveCommitment:
     """What the challenger publishes before epoch `epoch`: its coins' layout under `scheme`, families `(label, count)` in
@@ -513,35 +501,6 @@ class LiveCommitment:
         if type(families) is not list or not all(type(f) is list for f in families) or root is None:
             raise CoinError(COMMITMENT_FORM)
         return cls(doc["scheme"], doc["epoch"], tuple(tuple(f) for f in families), root)
-
-
-@dataclass(frozen=True, slots=True)
-class LiveOpening:
-    """Coin (`label`, `index`) of epoch `epoch`, opened by the challenger after the verifier recorded `after`: the coin, its
-    hm96 salt and its path."""
-
-    epoch: int
-    label: str
-    index: int
-    after: bytes
-    coin: bytes
-    salt: bytes
-    path: tuple[bytes, ...]
-
-    def to_json(self) -> dict:
-        return {"after": self.after.hex(), "coin": self.coin.hex(), "epoch": self.epoch, "index": self.index,
-                "label": self.label, "path": [p.hex() for p in self.path], "salt": self.salt.hex()}
-
-    @classmethod
-    def from_json(cls, doc: Any) -> LiveOpening:
-        if not isinstance(doc, dict) or sorted(doc) != ["after", "coin", "epoch", "index", "label", "path", "salt"]:
-            raise CoinError(OPENING_FORM)
-        hexes = [_hex(doc[k]) for k in ("after", "coin", "salt")]
-        path = [_hex(p) for p in doc["path"]] if type(doc["path"]) is list else None
-        if (type(doc["epoch"]) is not int or type(doc["index"]) is not int or type(doc["label"]) is not str
-                or None in hexes or path is None or any(p is None or len(p) != 64 for p in path)):
-            raise CoinError(OPENING_FORM)
-        return cls(doc["epoch"], doc["label"], doc["index"], *hexes, tuple(path))
 
 
 def live_reason(commitment: LiveCommitment, opening: LiveOpening, label: str, index: int, after: bytes) -> str | None:
@@ -605,29 +564,6 @@ def record_message(I: bytes, host: str, commitment: LiveCommitment) -> bytes:
     return hashlib.sha512(_field(RECORD_ROLE.encode()) + I + _field(_field(host.encode())) + _field(digest)).digest()
 
 
-@dataclass(frozen=True, slots=True)
-class ChallengerKey:
-    """The verifier's key for its own challenger: LMS over SHA-512 at (64, `W`, `H`), and the public key `public`."""
-
-    W: int
-    H: int
-    public: bytes
-
-    def __post_init__(self) -> None:
-        if (type(self.W) is not int or self.W not in (1, 2, 4, 8) or type(self.H) is not int or not 1 <= self.H <= 30
-                or type(self.public) is not bytes or len(self.public) != PUBLIC_BYTES):
-            raise CoinError(KEY_FORM)
-
-    def to_json(self) -> dict:
-        return {"H": self.H, "W": self.W, "public": self.public.hex()}
-
-    @classmethod
-    def from_json(cls, doc: Any) -> ChallengerKey:
-        if not isinstance(doc, dict) or sorted(doc) != ["H", "W", "public"] or _hex(doc["public"]) is None:
-            raise CoinError(KEY_FORM)
-        return cls(doc["W"], doc["H"], _hex(doc["public"]))
-
-
 def key_of_record(doc: Any) -> ChallengerKey:
     """The challenger key a published key record pins (`KEY_RECORD_SCHEMA`, the store artifact the auditor's operator
     labels ``challenger-key current``; the caller reads only one the operator published): its `W`, `H` and public key,
@@ -661,11 +597,6 @@ class ChallengerRecord:
         if not _host(doc["host"]) or signature is None:
             raise CoinError(RECORD_FORM)
         return cls(LiveCommitment.from_json(doc["commitment"]), doc["host"], signature)
-
-
-#: `verify(key, message, signature)`: whether `signature` signs `message` under LMS at `key`'s parameters
-#: (`verity.commitments.crypto.lms.verify` over `Params(64, key.W, key.H)`), false for a signature that doesn't decode.
-Verify = Callable[[ChallengerKey, bytes, bytes], bool]
 
 
 def record_reason(key: ChallengerKey, record: Any, verify: Verify) -> str | None:

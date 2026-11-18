@@ -15,7 +15,7 @@ from pathlib import Path
 from verity.circuits import codec
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 
 HERE = Path(__file__).resolve().parent
 
@@ -31,7 +31,7 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
     design = design or {"law": "stratified", "k": 1}
-    rec = R.record(program, query, design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = DK.record(program, query, design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
     values = program.fn.bindings.get("values", ())

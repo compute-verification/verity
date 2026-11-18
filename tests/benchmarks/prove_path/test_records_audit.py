@@ -48,6 +48,7 @@ import settings
 from verity.commitments import docket_digest as DD
 from verity.commitments import domains as DM
 from verity.protocols.proofs.spot.verifier.one_stage import caller as C, registered as REG, docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import registered_value as RV
 from verity.commitments import randomness as RND
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -128,7 +129,7 @@ def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dic
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)], {"unit": 0})
-    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "test"}, registrar=DK)
     doc = json.loads((d / "circuit.json").read_text())
     return SimpleNamespace(dir=d, doc=doc, rec=json.loads((d / "registration.json").read_text()),
                            opening=IF.advice_opening(ADVICE, reg), bound=bound)
@@ -559,7 +560,7 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     assert PP.main([*base, "--out", str(tmp_path / "t.json"), "--window-registration", str(tmp_path / "w.json")]) == 0
     assert seen == [(2, None), (2, WC.Tables(64, 8, 2))]
     with pytest.raises(SystemExit):
-        PP.main([*base, "--out", str(tmp_path / "k.json"), "--window-registration", str(tmp_path / "w.json"), "--h1-key", "k"])
+        PP.main([*base, "--out", str(tmp_path / "k.json"), "--window-registration", str(tmp_path / "w.json"), "--h1-prover", "k"])
     capsys.readouterr()
     assert PP.main([*base, "--out", str(tmp_path / "o.json"), "--window-registration", str(tmp_path / "other.json")]) == RA.REFUSED
     assert "is no registration under the serve's H1 window Program" in capsys.readouterr().err
@@ -596,7 +597,7 @@ def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = 
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     entry = {"program": program, "values": {name: value.entry()}}
-    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    win.write(win.close(), d, {"label": "test"}, registrar=DK)
     return SimpleNamespace(dir=d, value=value, pin=entry)
 
 
@@ -863,7 +864,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(), d, {"label": "test"}, registrar=R, previous=DD.digest(w))
+    win.write(win.close(), d, {"label": "test"}, registrar=DK, previous=DD.digest(w))
     (d.parent / "w.json").write_text(json.dumps(w))
     return SimpleNamespace(dir=d, w=w, w_file=d.parent / "w.json", name=name, entry=theirs.entry(),
                            rec=json.loads((d / "registration.json").read_text()))
@@ -1215,7 +1216,7 @@ def _history(d: Path, n: int = 4) -> SimpleNamespace:
                          registered=IF.Registered({}, histories=(IF.History("latent", "program", gid, "o0", 8, runs, 16),)))
     win = IF.Window(circuit, RUN, RND.parse_design(SAMPLING_DESIGN), 2, registered={"latent": table})
     win.record(g8, [x, w], [y])
-    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    win.write(win.close(), d, {"label": "test"}, registrar=DK)
     return SimpleNamespace(dir=d, table=table, rec=json.loads((d / "registration.json").read_text()),
                            publics={m.key: (d / f"m{k}-public.bin").read_bytes() for k, m in enumerate(win.window.members)})
 
@@ -1356,7 +1357,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
     win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
     assert win.mismatches() == {}
-    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    win.write(win.close(), d, {"label": "test"}, registrar=DK)
     return SimpleNamespace(dir=d, shell=fn)
 
 

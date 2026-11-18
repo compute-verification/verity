@@ -131,7 +131,7 @@ inputs = ["applications/onsite_full.toml", "tools/config/verity_config", "verity
           "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           "verity/protocols/workload_classification/training_detection/inference_only/verifier/lean/lakefile.toml", "adapters/vllm/verity_vllm",
-          "tests/benchmarks/one_stage/test_two_stage_driver.py",
+          "tests/benchmarks/one_stage/test_two_stage_driver.py", "benchmarks/kernels/machine.py",
           "adapters/torch/verity_torch", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/store.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/tensors.py", "verity/protocols/resource_accounting/memory/pous/prover/p2/p2_store/gpu.py", "verity/protocols/resource_accounting/memory/pous/verifier/p2_v1/reference.py",

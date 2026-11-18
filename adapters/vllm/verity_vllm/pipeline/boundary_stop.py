@@ -39,7 +39,7 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.commitments.periods import rows as CS
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+from verity.protocols.proofs.spot.prover import docket as DK
 from verity.protocols.proofs.spot.prover import served as RS
 
 from verity_vllm.pipeline.boundary_rows import (
@@ -206,7 +206,7 @@ def stop_record(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop
     reg = stop_registration(pub, check, stop, boundary)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.stop_ports().items()]
     w = {**boundary["window"], **(window or {}), "population": "stop"}
-    return R.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=DD.digest(boundary),
+    return DK.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=DD.digest(boundary),
                     registered=reg.registered)
 
 

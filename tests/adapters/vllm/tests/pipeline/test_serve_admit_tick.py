@@ -525,7 +525,7 @@ def test_watermark_lines_as_the_network_attester_sends_them():
     bad: list[dict] = []
     w = na.Watermark("ab", bad.append)
     assert not w.feed(line(0, 0) + line(2, 0)) and not w.feed(line(3, 0))
-    assert bad[-1]["error"].startswith("watermark (2, 0) after (0, 0)")
+    assert bad[-1]["error"].startswith("watermark-tick: watermark (2, 0) after (0, 0)")
     cut: list[dict] = []
     w = na.Watermark("ab", cut.append)
     w.feed(line(0, 0) + line(1, 0)[:1])
@@ -538,8 +538,8 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     bucket (at least 5, below its n), named once, in rising order."""
     last, good = (2, 5), line(3, 9, [6, 8])
     assert na.watermark_line(good, last) == (3, 9, (6, 8))
-    outside = "watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
-    form = "a watermark line is 't n', any lost releases and a newline"
+    outside = "watermark-lost: watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
+    form = "watermark-form: a watermark line is 't n', any lost releases and a newline"
     for bad, why in ((good[:-1] + b" 9\n", outside.format("\\[6, 8, 9\\]")),           # a lost release at n
                      (good[:-1] + b" 12\n", outside.format("\\[6, 8, 12\\]")),         # above n
                      (line(3, 9, [4, 6]), outside.format("\\[4, 6\\]")),               # below the n of the line before
@@ -559,7 +559,7 @@ def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_th
     g.mark(1)
     assert not g.watermark.feed(line(1, 3, [0]))     # release 0 is bucket 0's, which line 0 counted as not lost
     assert g.gate.counts["watermark_errors"] == 1 and g.gate.lost == set() and g.sched.added == ["r0"]
-    assert g.gate.opened == "the watermark broke: watermark (1, 3) after (0, 1): its lost releases [0] rise from 1 below n"
+    assert g.gate.opened == "the watermark broke: watermark-lost: watermark (1, 3) after (0, 1): its lost releases [0] rise from 1 below n"
     assert not g.watermark.feed(line(1, 3))          # the stream is closed: nothing after the refused line is read
 
 
@@ -648,7 +648,7 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
     assert admit.key(head(2)) == (RUN, 2) and admit.key(head(1, "cd")) == ("cd", 1)
     assert len(q) == 4 and admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 2, "watermarks": 1, "runs": 2}
     assert not w.feed(line(1, 3, [1]))                   # release 1 is bucket 0's: the watermark breaks, and the gate opens
-    assert q[4:] == [("tick", {"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"})]
+    assert q[4:] == [("tick", {"run": RUN, "error": "watermark-lost: watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"})]
     assert admit.key(head(1)) == (RUN, 1) and len(got) == 1     # the open gate adds every request at once, so it comes in
 
 
@@ -682,6 +682,23 @@ def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
     with pytest.raises(ValueError, match="run 'ab' has had its watermark stream"):
         admit.watermark(own)
     assert admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 1, "watermarks": 2, "runs": 2}
+
+
+def test_a_malformed_release_is_refused_by_the_formats_name_and_takes_nothing():
+    """`TickAdmit.key` reads a release as `verity.release.release_fields` does: a head with none is no release, and a
+    malformed N, run or bucket is refused by its header's name, with nothing taken or seen."""
+    q: list[Any] = []
+    admit = na.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
+    assert admit.key({"host": "s"}) is None
+    for fields, name in (({"x-verity-release": "1x"}, "x-verity-release"),
+                         ({"x-verity-release": "1", "x-verity-release-run": "a"}, "x-verity-release-run"),
+                         ({"x-verity-release": "1", "x-verity-release-run": RUN, "x-verity-release-bucket": "-1"},
+                          "x-verity-release-bucket")):
+        with pytest.raises(ValueError, match=f"^{name}: "):
+            admit.key(fields)
+    assert q == [] and admit.seen == {}
+    assert admit.key({"x-verity-release": "1", "x-verity-release-run": RUN, "x-verity-release-bucket": "4"}) == (RUN, 1)
+    assert admit.key({"x-verity-release": "2"}) == ("", 2)
 
 
 @contextlib.contextmanager
@@ -908,7 +925,7 @@ def test_serve_openai_names_a_header_as_the_network_attester_does():
         for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
             line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
             assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
-            assert na.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
+            assert REL.release_fields(hd.header_fields(fields)) == (3, RUN, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times_under_the_schemes_name(tmp_path):

@@ -34,7 +34,8 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.periods import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF, docket as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, proofs as PF  # noqa: E402
+from verity.protocols.proofs.spot.prover import docket as DK  # noqa: E402
 from verity.commitments import randomness as RND  # noqa: E402
 
 
@@ -67,7 +68,7 @@ def window(d: Path, members: int) -> Path:
         sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
         ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
         win.record(t, ins, [np.asarray(evaluate_batch(t, *ins, kernel="reference"), dtype=np.uint16)])
-    win.write(win.close(salts_of=fixed(win)), d, {"label": "standin"}, registrar=R)
+    win.write(win.close(salts_of=fixed(win)), d, {"label": "standin"}, registrar=DK)
     return d
 
 

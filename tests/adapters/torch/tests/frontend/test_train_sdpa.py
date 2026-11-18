@@ -21,6 +21,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry.cublas_bf16 import TRAIN_CC
 from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 
 from tests.frontend.test_train_step import (
@@ -137,7 +138,7 @@ def test_flash_backward_is_one_batch_of_the_captured_head(shape) -> None:
     backward is one batch over the B * H heads of `train_sdpa_backward`'s head, after the forward's."""
     prog = _program(_sdpa_backward(), *_meta(shape, shape, shape, shape), rules=training_rules(cc=CC, deterministic=True))
     calls = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
-    assert calls == [(FT.train_sdpa(*shape).id, shape[0] * shape[1]), (FTB.train_sdpa_backward(*shape).id, shape[0] * shape[1])]
+    assert calls == [(FT.train_sdpa(*shape).id, shape[0] * shape[1]), (FTB.train_sdpa_backward(*shape, TRAIN_CC).id, shape[0] * shape[1])]
 
 
 def test_flash_backward_wires_each_heads_dq_dk_dv(monkeypatch) -> None:
@@ -153,7 +154,7 @@ def test_flash_backward_wires_each_heads_dq_dk_dv(monkeypatch) -> None:
     prog = _program(_sdpa_backward(scale=scale), q, k, v, g, rules=training_rules(cc=CC, deterministic=True))
     tab = materialize(prog, [_bits(x) for x in (q, k, v, g)])
     got = [int(tab[w]) for w in prog.circuit.root_outputs()]
-    forward, backward = FT.train_sdpa(*SMALL), FTB.train_sdpa_backward(*SMALL)
+    forward, backward = FT.train_sdpa(*SMALL), FTB.train_sdpa_backward(*SMALL, TRAIN_CC)
     want: list[list[int]] = [[], [], []]
     for b in range(B):
         for h in range(H):

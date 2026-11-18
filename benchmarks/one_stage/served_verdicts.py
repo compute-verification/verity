@@ -731,8 +731,9 @@ def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one `public_files.PUBLIC` doesn't list
     under ``OUT/``, one whose path names a window, or that `PUBLISH_MAX` keeps from being read, held whole, and one whose
     text names or counts a window or holds a load's own field, Pearl+'s exclusion tiles, its exact credit or its prover's
-    give-up (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
-    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    give-up (`public_doc`), or holds a field `public_files.WITHOUT` keeps private, held in full, under ``private`` at its
+    path under ``out``, its public form left in its place. A file that isn't UTF-8 text is held whole. Only
+    `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     import public_files as PF
 
     held: list[str] = []
@@ -756,6 +757,10 @@ def publish(out: Path, private: Path) -> list[str]:
             held.append(rel)
             continue
         pub = public_doc(text)
+        if drop := PF.without("OUT/" + rel):
+            with contextlib.suppress(ValueError):
+                if isinstance(doc := json.loads(pub), dict) and set(drop) & doc.keys():
+                    pub = json.dumps({k: v for k, v in doc.items() if k not in drop}, sort_keys=True) + "\n"
         if pub != text:
             dst.write_bytes(data)
             p.write_text(pub)
@@ -860,18 +865,29 @@ def _class(lines: Sequence[str]) -> str:
     return found[-1] if found else "no exception"
 
 
+def _refused(lines: Sequence[str]) -> str | None:
+    import public_files as PF
+
+    return PF.refusal(next((line for line in reversed(lines) if line.strip()), ""))
+
+
 def failed(rc: object, logs: Sequence[str]) -> str:
-    """A tool's failure by its last exception's class and its exit status alone (``-`` is stdin): a tool's log holds
-    paths, hosts and its inputs' values, so no line of it is said."""
-    return f"({_class(_logs(logs))}, exit {rc}): its log is in the run's private directory"
+    """A tool's failure by its refusal's name where its log's last line is one of our tools' fixed refusals
+    (`public_files.REFUSALS`), else by its last exception's class, and its exit status (``-`` is stdin): a tool's log
+    holds paths, hosts and its inputs' values, so no line of it is said."""
+    lines = _logs(logs)
+    if name := _refused(lines):
+        return f"(refused {name}, exit {rc}): its log is in the run's private directory"
+    return f"({_class(lines)}, exit {rc}): its log is in the run's private directory"
 
 
 def tool_said(rc: object, logs: Sequence[str]) -> str:
-    """Our tool's own last line where it passed (its verdict), else its last exception's class alone, for a line that
-    says the exit status itself."""
+    """Our tool's own last line where it passed (its verdict), else its refusal's name (`failed`) or its last exception's
+    class alone, for a line that says the exit status itself."""
     lines = _logs(logs)
     if str(rc) != "0":
-        return f"{_class(lines)}; its log is in the run's private directory"
+        name = _refused(lines)
+        return f"{f'refused {name}' if name else _class(lines)}; its log is in the run's private directory"
     return next((line for line in reversed(lines) if line.strip()), "")
 
 
@@ -1352,25 +1368,48 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
 
 
-#: who runs each premise's check, by the record's product: on both paths the served node's PoUW piece (the developer's);
-#: the compose node's Lean re-run reaches only the sampled proofs' row, which carries no premise
-PREMISE_RUNNERS: Mapping[str, Mapping[str, str]] = {"onsite": {p: "piece" for p in PREMISES},
-                                                    "remote": {p: "piece" for p in PREMISES}}
-#: what a premise's ``why`` says of who ran its check (`ran_by`)
-RAN_BY = {"piece": "run by the developer's piece; no auditor-side entry runs it",
-          "lean": "recomputed on the compose node by the Lean verifier",
-          "device": "run by an auditor's device"}
+#: a check only the developer's piece runs, as a premise's ``why`` ends (`RAN_BY`)
+PIECE = "run by the developer's piece; no auditor-side entry runs it"
+#: what the onsite path adds to a check only the developer's piece runs: the command line's onsite check
+#: (`verity_cli.served_table`) is where each accept the served node wrote becomes undecided
+ONSITE_UNDECIDED = "the command line's onsite check (verity_cli served_table) holds each accept the served node wrote as undecided"
+#: true of what the verifier accepts today (its main form): the sampled proofs' and the inference-only rows say both
+MAIN_FORM = True
+BLOCKS_ALONE = ("each sampled proof block is proved alone; that a block's inputs are the outputs of the blocks before it "
+                "is assumed, not checked")
+TIED_BY_CONSTRUCTION = ("the circuit the policy was checked on and the circuit the proofs are about are tied by "
+                        "construction only")
+#: who graded a row's answer, where it is the developer's piece's and no auditor-side entry runs it (`RAN_BY`)
+GRADED_BY = {
+    "space": ("graded by the developer's piece (benchmarks/pous/served_piece.py: period.answer, with setup's tie, and "
+              "pous-run-protocol) on the served node; no auditor-side entry runs it"),
+    "bandwidth": ("graded by the developer's piece (benchmarks/pous/held_bandwidth.py: poub-p2-protocol's replay of the "
+                  "case) on the served node; no auditor-side entry runs it; a live verdict on the auditor's device exists "
+                  "(poub-verifier, its bandwidth party) and is not the one this row reads"),
+    "wipe": ("graded by the developer's piece (wipe_on_node.py: wipe_period.answer and wipe-protocol, verity/wipe/v0 "
+             "uncounted) on the served node; no auditor-side entry runs it; not certified: survivors bounded by nothing"),
+}
+_MAIN_FORM_SAYS = f"{BLOCKS_ALONE}; {TIED_BY_CONSTRUCTION}"
+#: who ran the check behind what a row shows, by the record's product, then by premise (`PREMISES`, ending its ``why``)
+#: or by row (ending its ``answer_from``); the compose node's Lean re-run reaches only the sampled proofs' row, which
+#: carries no premise, so every premise is the developer's piece's on both paths
+RAN_BY: Mapping[str, Mapping[str, str]] = {
+    product: {**{n: PIECE + tail for n in PREMISES}, **{k: why + tail for k, why in GRADED_BY.items()},
+              **({"integrity": _MAIN_FORM_SAYS, INFERENCE_ONLY_ROW: _MAIN_FORM_SAYS} if MAIN_FORM else {})}
+    for product, tail in (("onsite", f"; {ONSITE_UNDECIDED}"), ("remote", ""))}
 
 
-def ran_by(row: Mapping[str, Any], product: str) -> dict[str, Any]:
-    """``row`` with each premise its development document states (`premises`) saying, at the end of its ``why``, who ran
-    its check on ``product``'s path (`PREMISE_RUNNERS`, `RAN_BY`)."""
-    doc = row.get("development")
-    if not isinstance(doc, Mapping) or not any(isinstance(doc.get(n), Mapping) for n in PREMISES):
-        return dict(row)
-    runners = PREMISE_RUNNERS[product]
-    return {**row, "development": {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {RAN_BY[runners[n]]}"}
-                                             for n in PREMISES if isinstance(doc.get(n), Mapping)}}}
+def ran_by(key: str, row: Mapping[str, Any], product: str) -> dict[str, Any]:
+    """Row ``key`` saying who ran its checks on ``product``'s path (`RAN_BY`): each premise its development document
+    states (`premises`) at the end of its ``why``, the row's own at the end of its ``answer_from``."""
+    said, out = RAN_BY[product], dict(row)
+    if key in said and "answer_from" in out:
+        out["answer_from"] = f"{out['answer_from']}; {said[key]}"
+    doc = out.get("development")
+    if isinstance(doc, Mapping) and any(isinstance(doc.get(n), Mapping) for n in PREMISES):
+        out["development"] = {**doc, **{n: {**doc[n], "why": f"{doc[n].get('why')}; {said[n]}"}
+                                        for n in PREMISES if isinstance(doc.get(n), Mapping)}}
+    return out
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
@@ -2378,7 +2417,8 @@ def auditor_device(host: str, manifest: Path | None, served_node: bool = False) 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at, or, where its scheme's bound is refused
+    (``unbounded``), with that refusal's sentence. Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2389,6 +2429,9 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     no = [d for d, x in entry["at"].items() if not x["holds"]]
     if no and "members" in entry["quantity"]:
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
+    if no and "unbounded" in entry:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: {entry['unbounded']['why']}",
+                *([f"its error reads {error}"] if named else [])]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
@@ -2492,8 +2535,7 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None, err: Path | 
     except ValueError as e:
         return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
     said = line.get("composed") if isinstance(line, dict) else None
-    where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
-             + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
+    where = f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) and said == "accept" else 1
     return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
                 f"{len(files)} files of its $OUT in the run's compose/" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
@@ -2636,13 +2678,14 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
-    rows = {k: dropped_row(k, product) if k in drops else ran_by(r, product) for k, r in rows.items()}
+    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
     apart = {"communication"} & set(rows) - set(drops) if front_group else set()
     for k in apart:
         rows[k]["requests"] = FRONT_GROUP
     for k, r in rows.items():
         if k not in drops and "answer_from" not in r and (r.get("verdict") != "missing" or "development" in r):
             r["answer_from"] = f"{AS_WRITTEN} ({WRITTEN.get(k) or f'its piece files in {PIECES.get(k, WIPE)[1]}/'})"
+    rows = {k: r if k in drops else ran_by(k, r, product) for k, r in rows.items()}
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -2671,9 +2714,11 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev,
              **({"not_covered": {NAMES[k]: FRONT_GROUP for k in apart}} if apart else {})}
-    io = {} if inference_only is None else {INFERENCE_ONLY_ROW: inference_only_row(inference_only)}
+    io = {} if inference_only is None else {
+        INFERENCE_ONLY_ROW: ran_by(INFERENCE_ONLY_ROW, inference_only_row(inference_only), product)}
     if io:
         named["not_combined"] = {"the inference-only verifier": io[INFERENCE_ONLY_ROW]["verdict"]}
+        answers["the inference-only verifier"] = io[INFERENCE_ONLY_ROW]["answer_from"]
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped", BR.REFUSED) and NAMES[k] not in elsewhere)
     if bad:
