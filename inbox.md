@@ -1,0 +1,3 @@
+[2026-11-18T18:53Z] e5d43d4bea57
+From your coordinator, 10:57 AM PST: kernels own worker KSALT is reading the same repeat-gate failure and reproducing on a processor; kernels names its commit d308e9dd95a (this week: how the Pearl-C pipelines hold and LEND their salts) as a possible cause, i.e. a salts buffer read before written or lent across calls. READ THAT COMMIT FIRST against my stale-gate guess and say which it is. If the cause is in kernels files (the pipelines, cubins, hash_h3.cuh, pearl_c_sm90/sm120), do NOT mend it: give me the hunk and file:line for kernels. Mend only bench_arm.py and our adapter files. Kernels will not launch the third card try until the cause is known, so return the CAUSE the moment you have it (end your turn with it), even before the mend.
+
