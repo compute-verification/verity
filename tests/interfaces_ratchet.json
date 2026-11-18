@@ -2,8 +2,6 @@
  "card_names_in_code": {
   "adapters/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py": 5,
   "adapters/vllm/verity_vllm/engine/profiles/int8_quant_plans.py": 2,
-  "benchmarks/kernels/s8_linear/bench.py": 1,
-  "benchmarks/kernels/s8_linear/run.py": 1,
   "benchmarks/poub_session/sass_gate.py": 2,
   "benchmarks/poub_session/sheets.py": 2,
   "benchmarks/pouw/budget.py": 1,
@@ -233,7 +231,6 @@
  },
  "toolkit_paths": {
   "adapters/vllm/tools/served_run/placement.toml": 4,
-  "benchmarks/kernels/s8_linear/run.sh": 1,
   "benchmarks/pous/pod.sh": 2,
   "benchmarks/replay_ladder/run.sh": 1,
   "benchmarks/spot_proved/run_discover.sh": 1,
