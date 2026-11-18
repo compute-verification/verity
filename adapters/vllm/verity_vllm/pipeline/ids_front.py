@@ -4,12 +4,12 @@
 
 The network attester's id egress form takes from the server only the scan's id events: no HTTP head, one
 `workload.id_event` of P bytes an output id, then `workload.TRAILER`. `serve-openai --protocol ids` writes them itself
-(`serve_protocol.IdsProtocol`). vLLM's own server, which serves the tensor-parallel workloads under the certified tick
+(`ids_protocol.IdsProtocol`). vLLM's own server, which serves the tensor-parallel workloads under the certified tick
 (`tick_plugin`), answers in HTTP, and a middleware can't take a response's head off. This relay does it for that server:
 a process of the server's side, on its host, between the network attester and the server.
 
 * **An id request** (a connection's first request, exactly `id_form.id_request` in the network attester's P + 9-byte cells, its
-  release headers aside: `serve_protocol.id_request_fields`) goes to the server as a ``POST /v1/completions`` of the same
+  release headers aside: `ids_protocol.id_request_fields`) goes to the server as a ``POST /v1/completions`` of the same
   fields with ``return_token_ids``, on a connection of its own, under the release headers it came with, which the tick's
   feed reads. Of the server's streamed chunks only the token ids come back, each one id event written as its chunk
   arrives, then the trailer at ``data: [DONE]``. A stream that doesn't get there (the server refused the request, sent an
@@ -52,7 +52,7 @@ from verity.protocols.resource_accounting.network.prover.workload import (
 from verity.protocols.resource_accounting.network.verifier import release as REL
 
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.serve_protocol import ID_PAYLOAD, id_request_fields
+from verity_vllm.pipeline.ids_protocol import ID_PAYLOAD, id_request_fields
 
 __all__ = ["BODY_BYTES", "GONE", "Broken", "Front", "Options", "address", "chunk_ids", "main", "serve", "server_request",
            "token_ids"]
