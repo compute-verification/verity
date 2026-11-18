@@ -255,7 +255,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
     else Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program :
       V (Flock.SessionSpec × Array Flock.Stmt))
   for st in r.2 do
-    Flock.checkRegistered st registered
+    Flock.checkRegistered st (← Flock.Registered.withTrees st.c st.pub program registered)
     checkIdentifier st
   Flock.Registered.checkFull registered draw
   return r
