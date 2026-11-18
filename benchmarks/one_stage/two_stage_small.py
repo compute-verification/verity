@@ -84,7 +84,7 @@ def layout(v: int, outputs: int, spans: int, inline: bool = False, nonce: str = 
     where ``tables``. Its record commits the ids its replay block returns wherever round 2 derives that return's link: a
     class of whole instances, and an inlined class of the greedy select in units (``units``); with ``logits``, the
     select's inputs beside them."""
-    return BR.Layout(BR.check_template(template(v, units)), 0, 1, BR.cap(len(PROMPT)), outputs, spans, BR.run_root(nonce, 0),
+    return BR.Layout(BR.check_template(template(v, units)), 0, 1, len(PROMPT), outputs, spans, BR.run_root(nonce, 0),
                      inline, (TABLE_LAYER,) if tables else (), TABLE_LEAVES if tables else HT.CAPACITY,
                      ids=bool(units) or not inline, stop=stop, logits=logits)
 

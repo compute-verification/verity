@@ -1317,6 +1317,12 @@ def _unwritable_in_sandbox(d: Path) -> bool:
 UNREAD_FACTS = ("security", "security/Proofs")
 
 
+def writes_unread(pkg: Path, trees: tuple[Path, ...]) -> bool:
+    """Whether ``pkg`` is one of `UNREAD_FACTS` in one of ``trees``."""
+    p = pkg.resolve()
+    return any(p.is_relative_to(t.resolve()) and p.relative_to(t.resolve()).as_posix() in UNREAD_FACTS for t in trees)
+
+
 def unread_facts(pkg: Path, modules: list[str], work: Path, sealed: "Sealed | None" = None) -> dict:
     """`Unread.lean`'s facts (each constant with what it mentions, from the `.olean` files as data) of ``modules`` (the
     package's modules under its roots, the facts' `modules`) and of every module of the packages it requires by path that
@@ -6673,7 +6679,7 @@ def renamed_current(policy: dict, moved: dict[str, str] | Callable[[str], str] |
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
+          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all", write_unread: bool = False,
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
           store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False,
           matched=lambda ok: None, sample_matched=lambda q: None, base: list[dict] | None = None,
@@ -6710,7 +6716,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     sealed, lets a sealed audit store its verdicts (keyed on the sealed copies) and keeps an unsealed one, whose keys are
     from the live `.lake`, from writing the shared cache a sealed run reuses; a caller whose cache is a throwaway private
     directory passes ``store=True``.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
-    documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
+    documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.  A package of
+    `UNREAD_FACTS` writes `Unread.lean`'s facts beside its replay, and with ``write_unread`` (`--unread-facts`) without one too.
     ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
     copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
     one (a control or a stubbed test, neither of which runs a dependent's build beside the audit) the
@@ -6934,8 +6941,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     try:
         facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none", sealed=sealed)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
-        if replay and not lifts and pkg.resolve().is_relative_to(ROOT) and \
-                pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
+        if not lifts and (replay and writes_unread(pkg, (ROOT,)) or write_unread and writes_unread(pkg, (ROOT, TREE))):
             unread = background.submit(timed, unread_facts, pkg, facts["modules"], work, sealed)
         if early:
             replayed = background.submit(timed, final_replay, pkg, policy, facts, rep["toolchain"], work, replay_cache,
@@ -7446,6 +7452,9 @@ def main(argv: list[str]) -> int:
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--unread-facts", action="store_true", help="write `Unread.lean`'s facts of each package of "
+                    f"{', '.join(UNREAD_FACTS)} it audits, in this checkout or in --tree, with --no-replay too, for "
+                    "`unread.py --facts`")
     ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, a whole "
                     "number alone on stdout, and on stderr the GiB that holds and the step that needs it, then exit: the "
                     "largest need (`reserve.py`) among the steps it takes (the build with --build, the replay without "
@@ -7677,7 +7686,7 @@ def main(argv: list[str]) -> int:
                             ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                            bookkeeping=due, seals=run_seals,
+                            bookkeeping=due, seals=run_seals, write_unread=a.unread_facts and a.facts_only is None,
                             facts_cache=(a.facts_only or a.facts_cache).resolve()
                             if (a.facts_only or a.facts_cache) and mine else None,
                             facts_reuse=a.facts_cache is not None,
