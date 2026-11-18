@@ -93,12 +93,14 @@ def lean(exe: Path, paths: list[Path], draws: int, source: bytes | None = SOURCE
 def answer(out: dict) -> dict:
     """`verify_passes`' (or a served verify document's) outcome in the Lean's terms.  A document written before
     ``over_cap`` ran under ``reject``, where an accepted run has no sample over the inert-work bound."""
-    work = (out["answer"]["public"] or {}).get("work")
+    public = out["answer"]["public"] or {}
+    work = public.get("work")
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
             "work": None if work is None else {"over_cap_draws": 0, **work},
-            "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie")}
+            "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie"),
+            "salts": [p["salt"] for p in public["passes"]] if "passes" in public else None}
 
 
 def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None,

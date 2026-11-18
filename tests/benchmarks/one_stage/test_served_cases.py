@@ -962,7 +962,8 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
     manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
     dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
-    the Lean verdict of record's verdict, tiles sampled and work, in the grid form with the exact work beside it."""
+    the Lean verdict of record's verdict, tiles sampled, work, in the grid form with the exact work beside it, and the
+    pass's salt."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
@@ -978,7 +979,7 @@ def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
              "lean": {"verdict": "accept", "reason": None, "drawn": 3,
                       "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
                                "over_cap_draws": 0, "give_up": 8},
-                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}}}
+                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}, "salts": ["5b" * 32]}}
     (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     return piece, parts
 
@@ -1014,7 +1015,8 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100",
+                   "salts": ["5b" * 32]},
         "profile": {"draws": 3, "drawn": 3, "passes": 1}}
     assert "5a" * 32 not in out and case["commitment"] not in out
     (piece / "blobs" / h).unlink()

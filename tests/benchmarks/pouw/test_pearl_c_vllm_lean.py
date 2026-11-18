@@ -124,6 +124,7 @@ def test_a_lean_verdict_that_differs_on_any_held_field_writes_no_answer_and_remo
     cases = [({"work": {**work, "credited": work["credited"] + 1}}, ["work"]),
              ({"source": "00" * 32}, ["source"]),
              ({"commitment": "00" * 64, "verdicts": []}, ["commitment", "verdicts"]),
+             ({"salts": ["00" * 32] * 2}, ["salts"]),
              ({"drawn": 4}, ["drawn"]),
              ({"public": {"tie": "ab" * 64}}, ["tie"])]
     out = tmp_path / "piece" / "pearlplus-lean.json"
@@ -247,7 +248,7 @@ def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_pri
     assert parts["window"] == {"dropped": coin["dropped"], "record": w, "rounds": coin["rounds"]}
     assert (coin["rounds"], coin["dropped"]) == ([0, 1], [])
     assert parts["lean"] == {"verdict": "accept", "reason": None, "drawn": 3, "work": doc["answer"]["public"]["work"],
-                             "exact_work": None}
+                             "exact_work": None, "salts": [p["salt"] for p in doc["answer"]["public"]["passes"]]}
     coins = T.VR.epoch_coins(d / "coins.json")
     passes, want = [T.VR.load(p, coins) for p in paths], [{} for _ in paths]
     for v in doc["verdicts"]:

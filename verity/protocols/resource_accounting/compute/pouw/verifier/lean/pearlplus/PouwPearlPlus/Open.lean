@@ -130,7 +130,8 @@ def jopt (s : Option String) : Json := s.map jstr |>.getD .null
 
 /-- The verdict as `pouw-pearlplus` prints it: `pub` is the accepted run's work as printed (`published`; by default
 `check`'s work as it is), `work` with its `give_up` in the grid form, and `exact_work` the exact credit that form
-replaces (its credit, credited tiles and MACs), null where the work is the exact one. -/
+replaces (its credit, credited tiles and MACs), null where the work is the exact one; `salts` each retained pass's salt
+(hex) on an accepted run, the public part's (`Protocol.publicJson`). -/
 def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { work := w }) : Json :=
   Json.mkObj [
     ("verdict", jstr (if ans.accept then "accept" else "reject")),
@@ -154,6 +155,9 @@ def output (ans : RunAnswer) (pub : Option Published := ans.work.map fun w => { 
       | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat))]
       | none => .null),
+    ("salts", match ans.accept, ans.plan with
+      | true, some pl => .arr (pl.passes.map fun p => jstr (hex p.salt)).toArray
+      | _, _ => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++
           (t.weights.map fun u => [("weights", jstr u)]).getD [] ++
