@@ -902,13 +902,13 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     rows = _rows(_accepted(), tmp_path)
     report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                  servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
-    assert rec["legs"]["pous"]["at"] == {d: {"holds": False, "why": f"the run established it except with {eps}, more than {d}"}
-                                         for d in ("1/100", "1/1000000")}
+    refusal = BR._bound(BR._scheme("pous"), json.loads((d / "answer.json").read_text())["profile"])["unbounded"]["why"]
+    assert rec["legs"]["pous"]["answer"]["verdict"] == "accept" and rec["legs"]["pous"]["unbounded"]["why"] == refusal
+    assert rec["legs"]["pous"]["at"] == {x: {"holds": False, "why": refusal} for x in ("1/100", "1/1000000")}
     clause = line["reason"].split("; PoUS: ", 1)[1]
     assert clause.startswith(f"accept (its weights {held}, not concurrently with the block; they are 64.9% of the "
                              "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
-                             "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-                             "it except with 1/100 + 2^-128)")
+                             f"its claim; its quantity is not established at δ = 1/100 or 1/1000000: {refusal})")
     assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
     assert line["reason"].startswith(f"{SPOT_ACCEPT}; ")
 
@@ -948,15 +948,19 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     sums = rec["composed"]["joint_horizon"]
     assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
     assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
-    assert all(x["not_established"] == [] for x in sums["at"].values())
-    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    refusal = BR._bound(BR._scheme("bandwidth"), a["profile"])["unbounded"]["why"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept" and rec["legs"]["bandwidth"]["unbounded"]["why"] == refusal
+    assert all(x["not_established"] == ["bandwidth"] for x in sums["at"].values())
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/1099511627776{beside}); ") in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
     _, rec, line = composed(written("1/100", 1))
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
-    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
-            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+    assert rec["legs"]["bandwidth"]["answer"]["verdict"] == "accept"
+    assert (f"; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: {refusal}; "
+            f"its error reads 1/100 + 2^-64{beside}); ") in line["reason"]
 
     silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
     report, rec, line = composed(silent)
@@ -1186,10 +1190,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
-        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)",
-                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})",
-                "sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
+        comp = {S.NAMES[k]: v[1] for k, v in S.PIECES.items()} | {S.NAMES["wipe"]: "wipe"}
+        refused = {n: why for n, c in comp.items() if c not in BR.BY_NAME
+                   and (why := BR._bound(BR._scheme(c), ACCEPTS[c]["profile"]).get("unbounded", {}).get("why"))}
+        assert {"the bandwidth audit", "PoUS", "the network certifier"} <= set(refused), refused
+        assert {n: rec["legs"][comp[n]]["unbounded"]["why"] for n in refused} == refused
+        assert all(rec["legs"][comp[n]]["at"][x] == {"holds": False, "why": refused[n]} for n in refused for x in rec["legs"][comp[n]]["at"])
+        beside = {"the bandwidth audit": f"; its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')}"}
+        late = {n: f" (its quantity is not established at δ = 1/100 or 1/1000000: {why}{beside.get(n, '')})"
+                for n, why in refused.items()} | {"sampled proofs": SPOT_ACCEPT.removeprefix("sampled proofs: accept")}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return

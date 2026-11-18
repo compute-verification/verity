@@ -2383,7 +2383,8 @@ def auditor_device(host: str, manifest: Path | None, served_node: bool = False) 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
     """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
-    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    is not established, with the error the run established it at, or, where its scheme's bound is refused
+    (``unbounded``), with that refusal's sentence. Where the error leaves terms out (the bandwidth
     audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
     for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
     quantity is established at every δ."""
@@ -2394,6 +2395,9 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
     no = [d for d, x in entry["at"].items() if not x["holds"]]
     if no and "members" in entry["quantity"]:
         return [f"at δ = {d}: {entry['at'][d]['why']}" for d in no]
+    if no and "unbounded" in entry:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: {entry['unbounded']['why']}",
+                *([f"its error reads {error}"] if named else [])]
     if no:
         return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
     return [f"its error reads {error}"] if named else []
