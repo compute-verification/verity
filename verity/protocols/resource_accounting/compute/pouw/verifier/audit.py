@@ -17,9 +17,9 @@ Commitments are `verity.commitments.merkle` trees under the scheme's frame hash,
 hashing format h3's; a scheme on SHA-256 trees, Pearl-C's h0 or NCP, names ``"sha256"``).  `HM96` is
 ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage
 followed by a 192-byte salt, a row's leaf ``hm96-sha512/row-seg/v1`` over the row's ``sha512/row-seg/v1`` digest and a tile's
-over its 64-byte digest itself; `commit_rows`' salts are a ChaCha20 stream under the prover's key (`hm96_salt`), Pearl+'s
-served rows' fresh bytes from the OS a leaf (`fresh_salts`), and an opening's value carries its salt, so `opened_value`
-strips it before a scheme reads the value.
+over its 64-byte digest itself; the prover's salts are fresh bytes from the OS, one a leaf (`fresh_salts`), which it keeps
+and hands `commit_rows` as data, and an opening's value carries its salt, so `opened_value` strips it before a scheme reads
+the value.
 """
 
 from __future__ import annotations
@@ -134,21 +134,40 @@ def activation_binding(salt: bytes, index: int) -> bytes:
     return tagged(domains.POUW_ACTIVATION_ROWS, salt, index)
 
 
-def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = HM96, salt_key: bytes | None = None,
-                nonce: int = 0, digests: bool = False, public: bool = False) -> MerkleTree:
-    """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's 32-byte run key `salt_key`: each
-    value is followed by its salt, `hm96_salt(salt_key, nonce, i)`, so no one without the key recomputes the root from
-    candidate values.  A plain ``sha256`` or ``sha512`` tree is not hiding, and is refused unless ``public``, the caller's
-    statement that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference
-    tool or a recorded run replays, which no served commitment is."""
+def _salted(rows: Sequence[bytes], salts: Sequence[bytes] | None) -> list[bytes]:
+    if salts is None:
+        raise ProtocolError(f"an {HM96} tree takes the prover's salts, one a row")
+    if len(salts) != len(rows):
+        raise ProtocolError(f"an {HM96} tree of {len(rows)} rows takes {len(rows)} salts, not {len(salts)}")
+    for i, y in enumerate(salts):
+        if len(y) != HM96_SALT:
+            raise ProtocolError(f"row {i}'s salt is {len(y)} bytes, not {HM96_SALT}")
+    return [bytes(r) + bytes(y) for r, y in zip(rows, salts)]
+
+
+def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = HM96, salts: Sequence[bytes] | None = None,
+                digests: bool = False, public: bool = False) -> MerkleTree:
+    """`rows` in one tree.  Values are committed hiding, under `HM96` with the committer's ``salts``, one `HM96_SALT`-byte
+    salt a row in rank order (`fresh_salts`), which it keeps: each value is followed by its salt, so no one without the
+    salts recomputes the root from candidate values; a missing salt or one of another size is refused.  A plain
+    ``sha256`` or ``sha512`` tree (``salts`` None) is not hiding, and is refused unless ``public``, the caller's statement
+    that its rows need no hiding: rows the protocol makes public, or a plain format's tree (h0's) that a reference tool or
+    a recorded run replays, which no served commitment is."""
     if hash == HM96:
-        if salt_key is None:
-            raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
-        rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+        rows = _salted(rows, salts)
     elif not public:
         raise ProtocolError(f"a plain {hash} tree is not hiding: values are committed under {HM96} with the committer's "
-                            "salt key, and public=True is for rows the protocol makes public")
+                            "salts, and public=True is for rows the protocol makes public")
     return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
+
+
+def transcript_root(salt: bytes, weights_root: bytes, digests: Sequence[bytes], hash: str = HM96,
+                    salts: Sequence[bytes] | None = None) -> bytes:
+    """The transcript's root over the tiles' digests in order (`transcript_domain` of the execution phase's ``salt`` and
+    ``weights_root``): under `HM96` digest i is followed by ``salts[i]``, as `commit_rows` salts a row."""
+    values = _salted(digests, salts) if hash == HM96 else list(digests)
+    d = rows_domain(tagged(domains.POUW_TRANSCRIPT, salt, weights_root), -1, len(values), hash, digests=True)
+    return MerkleTree(d, dict(enumerate(values)), lambda _: TILE_SCHEMA).commitment.root
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
@@ -260,5 +279,5 @@ def transcript_domain(epoch: Epoch, count: int, hash: str = HM96) -> CommitmentD
 
 __all__ = ["EPOCH_SALT_DOMAIN", "HM96", "HM96_KEY", "HM96_SALT", "HM96_TRANSCRIPT", "HM96_WEIGHTS", "ROW_SCHEMA", "SALT_DOMAIN",
            "TILE_SCHEMA", "Epoch", "Hm96Domain", "TileRef", "Workload", "activation_binding", "chacha20_block", "commit_rows",
-           "fresh_salts", "hm96_kernel_constants", "hm96_salt", "opened_value", "rows_domain", "salt_of", "tile_refs", "transcript_binding",
+           "fresh_salts", "hm96_kernel_constants", "hm96_salt", "opened_value", "rows_domain", "salt_of", "tile_refs", "transcript_binding", "transcript_root",
            "transcript_domain", "weight_binding", "weights_root"]

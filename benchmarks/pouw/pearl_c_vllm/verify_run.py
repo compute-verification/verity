@@ -20,7 +20,7 @@
   (-h3's) a node is 64 bytes and each value is followed by its salt, the opened leaf's alone: an A row's, a tile's and a
   y row's from the salts the pass kept beside its rows (a call's ``salts``, the manifest's ``salts_t``, a y's ``salts``),
   a B row's from the copy the pass kept beside the fixed operand's rows (its ``salts``) of the salts the weights'
-  registration committed them under (`pearl_c.weight_row_salt`), 192 bytes a leaf, and the scheme reads the value less
+  registration committed them under (`pearl_c.weight_row_salts`), 192 bytes a leaf, and the scheme reads the value less
   its salt.
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J

@@ -50,6 +50,8 @@ inputs = ["verity/protocols/proofs/spot/verifier/challenger/coins.py", "verity/p
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "verity/hooks.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/records/schema_ids.py",
+          # the adapter's pous.py reads its option from PoUS's declaration (memory/pous/scheme.py), which imports these
+          "verity/hooks.py", "verity/protocols/resource_accounting/scheme.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's subprotocol
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",

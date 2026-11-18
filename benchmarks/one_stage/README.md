@@ -256,13 +256,19 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow the circuit prover's block into its gather and
   block-coordinate proof blocks, and saves the proof blocks for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
-  saved directory without the values stage.
+  saved directory (an input tar made outside any run's output) without the values stage. The saved units' values are witness: a9.sh
+  keeps them in the job's scratch directory only.
 - `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
   in place of the capture's: `a10.py values` opens rank 0's replay bundle from the Commit (`--replay-deferred`,
   `retain=host`) against its run root of record, reads each Call's operands and returns through its Program row as the
   deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
   and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
-  docket window naming the committed values.
+  docket window naming the committed values. a10.sh keeps the two saved directories (witness) under
+  `$A10_SAVED_ROOT/<run id>/` on the values node, mode 0700, never under the run's output; its audit mode reads
+  `A10_VALUES` as that run id on the same machine and refuses by name where the directory is absent.
+- `public_files.py`: the one rule for what a launcher copies under its run's output (`filter`): a served run's witness
+  (`served_verdicts.witness`) and private, salt, key and saved-value names are never copied; every copy loop of
+  `benchmarks/one_stage` and `benchmarks/prove_path` pipes its `find` through it (`tests/benchmarks/one_stage/test_public_files.py`).
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the proof-block families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's

@@ -15,6 +15,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.resource_accounting.compute.pouw.prover.serving import PEARL_C_SCHEMES, pearl_c_scheme
 from verity.protocols.resource_accounting.compute.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import kernel as PK
 from verity.protocols.resource_accounting.compute.pouw.prover.serving.pearl_c import manifest as PM
@@ -244,7 +245,7 @@ def test_a_retained_passes_end_of_a_run_without_a_salt_key_fails_at_the_manifest
     d = tmp_path / "pass"
     cur, tree = PPDR._Pass(d, run="a run"), torch.arange(64, dtype=torch.uint8)
     run = SimpleNamespace(nb=64, leaves=torch.ones(128, dtype=torch.uint8), weights={}, _weight_files={}, entry="an entry",
-                          scheme=SimpleNamespace(name=PPD.SCHEMES[0]), coins=SimpleNamespace(to_json=dict),
+                          scheme=SimpleNamespace(name=PEARL_C_SCHEMES[0]), coins=SimpleNamespace(to_json=dict),
                           opening=SimpleNamespace(to_json=dict), salt=bytes(32), commits={}, details={"schedule": {}},
                           kernel=SimpleNamespace(cubin_sha256="", source_sha256="", files={}), salt_key=None)
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'hex'"):
@@ -393,7 +394,7 @@ def test_a_pearl_c_scheme_whose_settings_name_no_kernel_hands_the_kernels_load_n
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(load))
     monkeypatch.setattr(P, "_SALT_KEYS", {})
     monkeypatch.setattr(P, "_layers",
-                        lambda scheme, target: (PPD.scheme_of(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
+                        lambda scheme, target: (pearl_c_scheme(scheme), [SimpleNamespace(weight=None)], {0: (128, 1024)}))
     committed = {entry: {"weight_roots": {"0": "05" * 64}, "shapes": {"0": [128, 1024]}}}
     for call, target in ((P.commit_weights, SimpleNamespace(model=None, context=ctx)),
                          (P.install, SimpleNamespace(model=None, context=ctx, weight_commitments=committed))):

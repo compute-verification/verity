@@ -140,7 +140,7 @@ def _write(s, name: str, reads: dict) -> Path:
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered-bit-rows", subcircuit=SimpleNamespace(id=sub))
     out = s.dir / f"{name}.bin"
-    FC.write(s.text, inputs, 0, N, None, out, None, list(range(N)), share_rows=True,
+    FC.write(s.text, inputs, 0, N, None, out, list(range(N)), share_rows=True,
              outs={"out": np.asarray(out_rows, np.uint16)}, tables=tabs, refs=refs, salts=salts, registered=entries)
     return out
 

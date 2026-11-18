@@ -212,13 +212,14 @@ def test_h200_session_runs_the_tables_shapes():
         assert {tuple(map(int, x.split("x"))) for x in listed[model][0].split()} == set(mod.in_domain()), model
     assert listed["llama32_1b"][1] == llama.CONFIG["L"] and listed["glm53"][1] == 1
     assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
-    assert '"$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes"' in sh
+    assert '"$D/glm53_passes.py" capture --model "$MODEL" --retain "$KEPT" --out "$O/passes"' in sh
+    assert "KEPT=$(mktemp -d /tmp/pearlplus-glm53.XXXXXX)" in sh and """trap 'rm -rf "$S" "$KEPT"' EXIT""" in sh
     assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a >' in sh
     assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
-    assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
-    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)"')
-    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}"')
+    assert sh.index('"$D/glm53_passes.py" full --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)"')
+    verify = sh.index('"$D/glm53_passes.py" verify --retain "$KEPT" --out "$O/passes" --fast --draws "${DRAWS:-459}"')
     assert lease < volunteer < verify and _served_passes().DRAWS == 459
     assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
     lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
@@ -684,7 +685,7 @@ def test_full_checks_every_tile_and_every_served_y_word(retained, tmp_path):
     """`full` takes every tile of prefill and decode through the verifier's check_tile (openings, then C~ and U against the
     leaf) and every real row's served y against y_unit, on the batch forms with the scalar reference on every 2nd tile too."""
     out = _copy(retained, tmp_path)
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "2", "--cross-check", "2"]) == 0
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(out), "--jobs", "2", "--cross-check", "2"]) == 0
     res = json.loads((out / "full.json").read_text())
     for name in retained.GP.FULL:
         r = res[name]
@@ -708,7 +709,7 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     raw = bytearray(a.read_bytes())
     raw[2 * 128 * 4] ^= 0x40
     a.write_bytes(bytes(raw))
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--cross-check", "0"]) == 1
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(out), "--jobs", "1", "--cross-check", "0"]) == 1
     res = json.loads((out / "full.json").read_text())
     dec, pre = res["decode"], res["prefill"]
     assert dec["failed"] == 1 and "served y differs at 1 of 256 words, first row 3 column 17" in dec["failures"][0]["reason"]
@@ -724,7 +725,7 @@ def test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcri
 
     out = _copy(retained, tmp_path)
     before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
-    assert retained.GP.main(["volunteer", "--out", str(out), "--jobs", "1"]) == 0
+    assert retained.GP.main(["volunteer", "--retain", str(out), "--out", str(out), "--jobs", "1"]) == 0
     import verify_run as VR
 
     res, coins = json.loads((out / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -745,9 +746,9 @@ def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_
     out = _copy(retained, tmp_path)
     for name in retained.GP.FULL:
         shutil.rmtree(out / name / "y")
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1"]) == 1
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(out), "--jobs", "1"]) == 1
     res = json.loads((out / "full.json").read_text())
     assert all("call 0: no served y of 20 x 16 BF16 words" in res[x]["error"] for x in retained.GP.FULL) and not res["ok"]
-    assert retained.GP.main(["full", "--out", str(out), "--jobs", "1", "--without-y"]) == 0
+    assert retained.GP.main(["full", "--retain", str(out), "--out", str(out), "--jobs", "1", "--without-y"]) == 0
     res = json.loads((out / "full.json").read_text())
     assert all(res[x]["y_words"] == 0 and "served y not retained" in res[x]["line"] for x in retained.GP.FULL)

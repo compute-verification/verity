@@ -14,7 +14,6 @@ checked on instead, and the build's seconds).
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import resource
 import sys
@@ -69,9 +68,8 @@ def main() -> None:
         st = CS.UnitStager(defn, f"unit/a11-{K.family(defn.id)}", kv["rows_spec"], K.out_rows(len(kv["outs"])),
                            circuit=work / "circuit.txt", bind=bound, layout=a.layout, structural=a.structural)
     t1 = time.time()
-    salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{defn.id}".encode()).digest()
     d = work / "stmt"
-    got = st.stage(kv["rows"], d, salt_key, indices=range(base, base + n), set_name=f"{st.iset.name}-{a.kind}")
+    got = st.stage(kv["rows"], d, indices=range(base, base + n), set_name=f"{st.iset.name}-{a.kind}")
     (d / "inst.bin").rename(d / f"inst-{n}.bin")
     (d / "pub.bin").rename(d / f"pub-{n}.bin")
     with open(work / "circuit.txt", "rb") as f:

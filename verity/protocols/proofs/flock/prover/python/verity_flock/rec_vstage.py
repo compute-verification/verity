@@ -595,7 +595,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     (d / "registered.json").write_text(json.dumps(own))
     rec_links = f"{reg.root.hex()}:{N}"
     (d / "rec-links.txt").write_text(rec_links + "\n")
-    FC.write(text, SimpleNamespace(name=LK.TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
+    FC.write(text, SimpleNamespace(name=LK.TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", list(range(N)),
              share_rows=True, outs={"rin": np.asarray(in_rows, np.uint16), "rout": np.asarray(out_rows, np.uint16)},
              tables=tables, refs={p: list(range(N)) for p in LK.ROWS},
              salts=salts_, registered=entries)

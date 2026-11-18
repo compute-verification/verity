@@ -11,7 +11,9 @@
 # in-domain linears every step below runs at (this directory's <MODEL>.py; glm53_passes.py and glm53_timing.py --model).
 # Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its
 # diagnostic timing at MODEL's in-domain linears at M = 64 and 8192 (`SHAPES`), then, only if the check passed,
-# glm53_passes.py capture (the gate and the prefill, decode and control passes, into $OUT/passes) and glm53_timing.py: every
+# glm53_passes.py capture (the gate and the prefill, decode and control passes, retained in a 0700 scratch directory
+# /tmp/pearlplus-glm53.* removed on exit, never under $OUT, with only the public coins, verdicts, counts and roots in
+# $OUT/passes) and glm53_timing.py: every
 # in-domain linear at decode's and prefill's M under the serial schedule, its decode calls graphed and eager, and under
 # deferred-a, prefill's again under run.py's h3 chain (PEARLC_CHAIN=h3, into $OUT/timing-h3), and decode's forward captured
 # whole, serial, deferred and as served, over LAYERS layers' linears (--whole --layers, into $OUT/whole; default MODEL's
@@ -28,8 +30,8 @@
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
 # `served_passes.DRAWS`), and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
-# leaf, every real row's served y): about 17 CPU-hours for glm53 (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it
-# to a run elsewhere on the published passes.
+# leaf, every real row's served y): about 17 CPU-hours for glm53 (13 min on a CPU pod at --jobs 96); the passes are
+# private and leave no copy, so FULL=0 leaves them unchecked in full.
 # With LOCK_MHZ the timing steps run with the leased card's SM clock locked there (`sudo -n nvidia-smi -lgc`, reset with
 # -rgc when the lease ends), where the node allows it: the lock's outcome goes to $OUT/clock.txt, not rc.txt, so a node
 # that refuses it times unlocked; either way $OUT/smi.csv samples the card's clocks every 200 ms through the timing.
@@ -50,8 +52,9 @@ SHAPES=""
 for nk in $NKS; do
   SHAPES="$SHAPES 64x$nk 8192x$nk"
 done
-export O D K PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-} TIMING=${TIMING:-1}
-S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
+KEPT=$(mktemp -d /tmp/pearlplus-glm53.XXXXXX)
+export O D K PY SHAPES MODEL LAYERS KEPT LOCK_MHZ=${LOCK_MHZ:-} TIMING=${TIMING:-1}
+S=$(mktemp -d); trap 'rm -rf "$S" "$KEPT"' EXIT
 : > "$O/rc.txt"
 NEEDED=$("$PY" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer-needed --verdict pass 2> "$O/volunteer-needed.log")
 case ${NEEDED%% *} in
@@ -83,7 +86,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
   PEARLC_EXPECT_UUID=$GPU_LEASE_UUID SHAPES="$SHAPES" REPS=5 "$PY" "$K/run.py" "$K/check/check.json" > "$O/run.jsonl" 2> "$O/run.err"
   rc=$?; echo "run.py rc $rc" >> "$O/rc.txt"
   [ "$rc" = 0 ] || exit "$rc"
-  "$PY" "$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes" > "$O/capture.log" 2>&1
+  "$PY" "$D/glm53_passes.py" capture --model "$MODEL" --retain "$KEPT" --out "$O/passes" > "$O/capture.log" 2>&1
   echo "capture rc $?" >> "$O/rc.txt"
   [ "$TIMING" = 1 ] || exit 0
   U=$GPU_LEASE_UUID
@@ -109,25 +112,25 @@ if [ "${PIN:-1}" = 1 ]; then
   bash benchmarks/pouw/harness/jobs/pin_target.sh "${TK:-13.0.1-sm_90a}" > "$O/pin.log" 2>&1
   echo "pin rc $?" >> "$O/rc.txt"
 fi
-if [ "$VOLUNTEER" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
-  "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" > "$O/volunteer.log" 2>&1
+if [ "$VOLUNTEER" = 1 ] && [ -f "$KEPT/decode/manifest.json" ]; then
+  "$PY" "$D/glm53_passes.py" volunteer --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)" > "$O/volunteer.log" 2>&1
   echo "volunteer rc $?" >> "$O/rc.txt"
-elif [ "$VOLUNTEER" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
+elif [ "$VOLUNTEER" = device ] && [ -f "$KEPT/decode/manifest.json" ]; then
   # shellcheck disable=SC2016
   gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
     "$PY" "$D/debit.py" --cubin "$DEBIT" --out "$O/debit.json" > "$O/debit.log" 2>&1
     rc=$?; echo "debit rc $rc" >> "$O/rc.txt"
     [ "$rc" = 0 ] || exit "$rc"
-    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$DEBIT" \
+    "$PY" "$D/glm53_passes.py" volunteer --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)" --device "$DEBIT" \
       --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1'
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
-if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then
-  "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
+if [ "${VERIFY:-1}" = 1 ] && [ -f "$KEPT/control/manifest.json" ]; then
+  "$PY" "$D/glm53_passes.py" verify --retain "$KEPT" --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
   echo "verify rc $?" >> "$O/rc.txt"
 fi
-if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
-  "$PY" "$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)" > "$O/full.log" 2>&1
+if [ "${FULL:-1}" = 1 ] && [ -f "$KEPT/decode/manifest.json" ]; then
+  "$PY" "$D/glm53_passes.py" full --retain "$KEPT" --out "$O/passes" --jobs "$(nproc)" > "$O/full.log" 2>&1
   echo "full rc $?" >> "$O/rc.txt"
 fi
 cat "$O/rc.txt"

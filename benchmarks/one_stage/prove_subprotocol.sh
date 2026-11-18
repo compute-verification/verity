@@ -16,6 +16,7 @@
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
+PUBF=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/public_files.py
 # a job written for prove_leg.sh (LEG_*) or before the ZK server's rename sets keys nothing reads: refused by name
 for o in LEG_FIREWALL:SUBPROTOCOL_ZK_SERVER SUBPROTOCOL_FIREWALL:SUBPROTOCOL_ZK_SERVER \
     LEG_CACHE:SUBPROTOCOL_CACHE LEG_CENSUS:SUBPROTOCOL_CENSUS LEG_DEFS:SUBPROTOCOL_DEFS LEG_KS:SUBPROTOCOL_KS \
@@ -29,7 +30,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 keep_subprotocol() {
   [ -d "$W/leg" ] || return 0
   mkdir -p "$OUT/leg"
-  (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
+  (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | python3 "$PUBF" filter | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
   [ -f "$W/leg/summary.json" ] && cp "$W/leg/summary.json" "$OUT/summary.json"
   return 0
 }
