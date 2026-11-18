@@ -1,6 +1,7 @@
 """A kv session's serving trace under refresh, driven as the prover's session loop drives it over the reference backend:
-each window's due re-keys go out with their origins at its first step and are recorded as memory-map re-keys, pages
-are committed and never encoded under their own coin, and every pass's plan and opening keep the refresh rules."""
+each window's due re-keys go out in their slots with their origins at its first step and are recorded as memory-map
+re-keys, pages take a fresh slot when sent and wait while the window's are used, are committed and never encoded under
+their own coin, and every pass's plan and opening keep the refresh rules."""
 
 from __future__ import annotations
 
@@ -17,13 +18,13 @@ sys.path.insert(0, str(HERE.parents[2] / "verity/protocols/resource_accounting/m
 from verity.commitments import Commitment, verify_opening  # noqa: E402
 from verity.commitments import Opening as MerkleOpening  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Rota  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, codec, receipts as rb  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier.session import wire  # noqa: E402
 
 import prover  # noqa: E402
 
-N, LIFETIME, WINDOWS, PASSES, PAGES = 16, 2, 6, 3, 2
+N, LIFETIME, WINDOWS, PASSES, PAGES, FRESH = 16, 2, 6, 3, 2, 2
 NODE = b"refresh-node"
 
 
@@ -37,17 +38,20 @@ def backend() -> prover.CpuBackend:
 
 def run(refresh: bool):
     """The session loop's moves for a kv:2 session at every pass: a step before each pass but the session's first,
-    the plan, the step's appends sent and each re-key encoded under its coin, then the pass and every opening."""
+    its pages only while the window has a fresh slot left, the plan, the step's appends sent, each in its slot, and
+    each re-key encoded under its coin, then the pass and every opening."""
     b = backend()
     store, coins, joined = b.store, {}, {}
-    r = audit_prover.Refresh(store, Rota(N, LIFETIME, WINDOWS)) if refresh else None
+    r = audit_prover.Refresh(store, Schedule(N, LIFETIME, WINDOWS, FRESH)) if refresh else None
     trace = prover.ServingTrace(b, store.registration, PAGES, 8, random.Random(9), LIFETIME, 0, r)
     sent, n, out = 0, 0, []
     for t in range(WINDOWS):
         for i in range(PASSES):
             if n > 0:
-                trace.step(n - 1, t, True)
+                trace.step(n - 1, t, r is None or r.fresh_left(t))
             plan = trace.plan(t) if refresh else trace.plan()
+            if refresh:
+                trace.appends[sent:] = [r.sent(a, t) for a in trace.appends[sent:]]
             for a in trace.appends[sent:]:
                 coins[a.first] = hashlib.sha512(b"coin %d" % a.first).digest()[:codec.COIN_BYTES]
                 joined[a.first] = t
@@ -81,7 +85,7 @@ def test_under_refresh_every_plan_and_opening_keeps_the_refresh_rules():
             else:
                 a = append_of(store, j)
                 assert a.origin is not None and joined[a.first] <= t < joined[a.first] + LIFETIME
-                born = None if a.origin[0] == "registered" else joined[store.appends[a.origin[1]].first]
+                born = None if a.origin[0] == "registered" else joined[store.in_slot(a.origin[1]).first]
                 assert born is None or born + LIFETIME <= t
                 payload = codec.decode(block, j, reg.key, d, coins[a.first])
                 assert at == store.origin_position(j)
@@ -95,18 +99,27 @@ def test_under_refresh_every_plan_and_opening_keeps_the_refresh_rules():
             assert verify_opening(domain, root, leaf, audit.PAYLOAD_SCHEMA, rb.LIMITS)
     rekeys = [a for a in store.appends if a.origin is not None]
     assert {a.origin[0] for a in rekeys} == {"registered", "append"}
-    assert all(a.root == audit.rekey_root(reg.digest, a.first, a.count, a.origin) for a in rekeys)
+    assert all(a.root == audit_prover.rekey_root(reg.digest, a.first, a.count, a.origin) for a in rekeys)
+    schedule = trace.refresh.schedule
+    assert all(schedule.slot_at(a.slot)[0] == joined[a.first] for a in store.appends)
+    assert [a.slot for a in store.appends] == sorted({a.slot for a in store.appends})
+    fresh = [schedule.slot_at(a.slot)[0] for a in store.appends if a.origin is None]
+    assert max(fresh.count(t) for t in fresh) == FRESH and all(a.count <= 512 for a in store.appends if a.origin is None)
     assert all(store.blocks[j] is None for a in store.appends if a.origin is None for j in range(a.first, a.first + a.count))
     assert any(j >= N for _, plan, _ in out for j in plan)
 
 
 def test_under_refresh_the_memory_map_records_each_rekey_once_in_its_chunk_s_slot():
+    """A re-key is of its origin whole: the block of a chunk still kept is recorded re-keyed with its origin, and the
+    block of one serving has since freed or overwritten is withdrawn, never planned."""
     b, trace, *_ = run(True)
     store = b.store
-    for j, origin in ((j, store.origin_position(j)) for a in store.appends if a.origin is not None
-                      for j in range(a.first, a.first + a.count)):
-        assert trace.replay.origin[j] == origin
-    assert trace.rekeyed == sum(a.count for a in store.appends if a.origin is not None)
+    blocks = [(j, store.origin_position(j)) for a in store.appends if a.origin is not None
+              for j in range(a.first, a.first + a.count)]
+    withdrawn = set(trace.withdrawn)
+    for j, origin in blocks:
+        assert (j in withdrawn) != (trace.replay.origin.get(j) == origin), j
+    assert withdrawn and trace.rekeyed == len(blocks) - len(withdrawn)
 
 
 def test_with_refresh_off_the_trace_rekeys_as_before_and_sends_no_origin():
@@ -126,9 +139,9 @@ def test_a_refresh_session_is_refused_outside_an_honest_or_kv_session_over_a_bac
 
 
 def test_an_origin_is_named_on_the_wire_as_the_append_message_carries_it_and_read_back():
-    for origin, named in ((("registered", 4), {"registered": 4}), (("append", 3, 512), {"append": 3, "at": 512})):
+    for origin, named in ((("registered", 4), {"registered": 4}), (("append", 3), {"append": 3})):
         assert wire.origin_json(origin) == named and wire.origin_of(named) == origin
     assert wire.origin_of(None) is None
-    for bad in ({"append": 3}, {"registered": 1, "at": 0}, [0, 1], "registered"):
+    for bad in ({"append": 3, "at": 0}, {"registered": 1, "at": 0}, [0, 1], "registered"):
         with pytest.raises(ValueError, match="an append's origin"):
             wire.origin_of(bad)

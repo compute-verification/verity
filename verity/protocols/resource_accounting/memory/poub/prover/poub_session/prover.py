@@ -66,10 +66,11 @@ sent, never dropped at a boundary, since a coin no root follows rejects the sess
 went out sends nothing, and the next pass sends its appends and changes too.
 
 Under refresh (the session message's `refresh`, absent off), an honest, kv or kvdrop session over the reference backend,
-without serving ahead, re-keys on the rota (`audit_prover.Refresh`; an honest session as a trace that writes no pages):
-the trace's step at a window's first pass sends that
-window's due re-keys, each append message naming its `origin`, before its pages; a page's own coin encodes nothing,
-its first encode its first re-key's; and each pass's plan is the rota's for its window, every opening of a re-key's
+without serving ahead, re-keys on the schedule of the session message's `lifetime` and `fresh_slots` (`rota.Schedule`, `audit_prover.Refresh`;
+an honest session as a trace that writes no pages): the trace's step at a window's first pass sends that window's due
+re-keys, each whole, before its pages, each append message naming its `slot` and a re-key its `origin`; the pages of a
+step take the window's next fresh slot when they are sent, and wait while the window's are used; a page's own coin encodes nothing,
+its first encode its first re-key's; and each pass's plan is the schedule's for its window, every opening of a re-key's
 block naming its origin's position.  The session's entry in prover.json then has `refresh`: the re-key appends sent
 (`appends`), the blocks they re-keyed (`blocks`), the blocks encoded under an append's coin (`encoded`) and the
 host time those encodes took (`encode_ns`).
@@ -114,7 +115,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[7]))
 
 from verity.protocols.resource_accounting.memory.poub.prover import audit_prover  # noqa: E402
-from verity.protocols.resource_accounting.memory.poub.prover.rota import Rota  # noqa: E402
+from verity.protocols.resource_accounting.memory.poub.prover.rota import Schedule  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.resource_accounting.memory.poub.verifier import store as rstore  # noqa: E402
@@ -134,7 +135,7 @@ BANDWIDTH = ("honest", "skip")
 """The modes whose sessions read the registered store and append nothing: a plan of only these says so in its hello
 (`appends: false`), and its sessions reserve no append coins (`verifier.Verifier.register`) unless they refresh."""
 REFRESHED = ("honest", "kv", "kvdrop")
-"""The modes a refresh session may run: an honest one's only appends are the rota's re-keys."""
+"""The modes a refresh session may run: an honest one's only appends are the schedule's re-keys."""
 
 
 @dataclass
@@ -447,8 +448,9 @@ class ServingTrace:
 
     def _refreshed(self, s: int, window: int, freed, writes) -> memory_map.Change | None:
         """Step s's record under refresh: serving's frees and writes, its pages committed and never encoded under
-        their own append's coin, and at the window's first step its due re-keys (`audit_prover.Refresh.due`) of the
-        chunks still kept, each in its chunk's slot and recorded as the line's `rekeyed`."""
+        their own append's coin, and at the window's first step its due re-keys (`audit_prover.Refresh.due`), each in
+        its slot of the schedule and of its origin whole: a kept chunk's block in that chunk's slot, recorded as the
+        line's `rekeyed`, and the block of a chunk no longer kept withdrawn."""
         r, store = self.refresh, self.backend.store
         slots, payloads = [x for x, _ in writes], [m for _, m in writes]
         for x in [*freed, *slots]:
@@ -462,27 +464,31 @@ class ServingTrace:
             return None
         self.steps += bool(slots)
         place = getattr(self.backend, "place", lambda first, slots, step: None)
-        rekeys, rekeyed = [], []
-        for origin, count in due:
-            a = self.backend.rekey(origin, count)
-            at = [self.slot_of.get(p, p) for p in (store.origin_position(j) for j in range(a.first, a.first + a.count))]
-            rekeyed += [memory_map.Rekeyed(x, a.first + u) for u, x in enumerate(at)]
-            place(a.first, at, s)
-            r.appended(a, window)
+        rekeys, rekeyed, withdrawn = [], [], []
+        for k, origin, count in due:
+            a = self.backend.rekey(origin, count, k)
+            kept = {j: self.slot_of.get(p, p) for j in range(a.first, a.first + a.count)
+                    if (p := store.origin_position(j)) in r.held}
+            _, gone = r.appended(a)
+            rekeyed += [memory_map.Rekeyed(x, j) for j, x in kept.items()]
+            withdrawn += gone
+            for j, x in kept.items():
+                place(j, [x], s)
             rekeys.append(a)
-            self.rekeyed += a.count
+            self.rekeyed += len(kept)
             if a.origin[0] == "append":
-                self.appended.extend(range(a.first, a.first + a.count))
+                self.appended.extend(kept)
         first = self.replay.extent + sum(a.count for a in rekeys)
         written = tuple(memory_map.Written(x, first + u, rcodec.digest(m)) for u, (x, m) in enumerate(zip(slots, payloads)))
-        change = self.replay.apply(memory_map.Step(s, tuple(freed), written, (), tuple(rekeyed)))
+        change = self.replay.apply(memory_map.Step(s, tuple(freed), written, tuple(withdrawn), tuple(rekeyed)))
         self.appends.extend(rekeys)
+        self.withdrawn.extend(withdrawn)
         if slots:
             a = self.backend.append(payloads, [self.salts.randbytes(rb.SALT_BYTES) for _ in payloads])
             if a.first != first or a.digests != change.digests:
                 raise AssertionError("the store's append is not the memory map's")
             place(a.first, slots, s)
-            r.appended(a, window)
+            r.appended(a)
             self.slot_of.update((a.first + u, x) for u, x in enumerate(slots))
             self.appends.append(a)
             self.appended.extend(range(a.first, a.first + a.count))
@@ -510,7 +516,7 @@ class ServingTrace:
         return s
 
     def plan(self, window: int | None = None) -> rb.Plan:
-        """Every live block, or under refresh the plan the rota gives `window`, its re-keys encoded before the pass."""
+        """Every live block, or under refresh the plan the schedule gives `window`, its re-keys encoded before the pass."""
         if self.refresh is not None:
             return self.refresh.plan(window, pending=True)
         return rb.Plan(runs_of(sorted(self.live)), self.replay.extent)
@@ -572,8 +578,8 @@ class CpuBackend:
     def append(self, payloads, salts) -> audit_prover.Append:
         return self.store.append(payloads, salts)
 
-    def rekey(self, origin, count: int) -> audit_prover.Append:
-        return self.store.rekey(origin, count)
+    def rekey(self, origin, count: int, slot: int) -> audit_prover.Append:
+        return self.store.rekey(origin, count, slot)
 
     def place(self, first: int, slots, step: int) -> None:
         """The slots of the blocks step `step` appended from `first`, in order."""
@@ -796,9 +802,11 @@ class ProverSide:
                                  f"that re-keys (--cpu), without --ahead, not {mode}")
             if type(head.get("lifetime")) is not int:
                 raise ValueError("a refresh session's period is its lifetime cap, which the session message names")
-            refresh = audit_prover.Refresh(self.backend.store, Rota(N, head["lifetime"], W))
+            if type(head.get("fresh_slots")) is not int:
+                raise ValueError("a refresh session's fresh slots a window, F, are the session message's fresh_slots")
+            refresh = audit_prover.Refresh(self.backend.store, Schedule(N, head["lifetime"], W, head["fresh_slots"]))
         if mode == "honest" and refresh is not None:
-            # serving that writes nothing: the trace's steps are the rota's re-keys alone
+            # serving that writes nothing: the trace's steps are the schedule's re-keys alone
             trace = ServingTrace(self.backend, self.registration, 0, self.kv_pool,
                                  random.Random(self.rng.getrandbits(64)), head["lifetime"], 0, refresh)
         elif mode in TRACED:
@@ -893,7 +901,8 @@ class ProverSide:
                 trace.advance(t)
                 t, i, after, start = moved(t, i, after, start)
             else:
-                due = n > 0 and n % self.kv_every == 0
+                # Under refresh, pages past the window's F fresh slots wait for the next window.
+                due = n > 0 and n % self.kv_every == 0 and (trace.refresh is None or trace.refresh.fresh_left(t))
                 if due or (n > 0 and (trace.rekeys_due(t) if trace.refresh is not None else trace.stale(t))):
                     trace.step(n - 1, t, due)
             if mode == "kvdrop":
@@ -940,8 +949,13 @@ class ProverSide:
             if (gone := next((m for m, _, _ in pending if m["type"] == "end"), None)) is not None:
                 return gone
             todo = trace.appends[sent_appends:x.upto[0]]
+            if refresh is not None:
+                todo = [refresh.sent(a, x.t) for a in todo]
+                trace.appends[sent_appends:x.upto[0]] = todo
             for a in todo:
                 msg = {"type": "append", "root": a.root.hex(), "count": a.count}
+                if a.slot is not None:
+                    msg["slot"] = a.slot
                 if a.origin is not None:
                     msg["origin"] = wire.origin_json(a.origin)
                 self.conn.send(msg)
