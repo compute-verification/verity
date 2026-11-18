@@ -295,8 +295,9 @@ private def poolValues (pool : Option Docket.Pool) (program : String) (log : Arr
     else (withField supplied p.pin (.arr #[.arr #[Json.mkObj [("bytes", .str p.genesis)]]]), outputs, schemas)
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
-refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). Given a wired Program (`wired`), the
-`program` is refused by name unless it is the wired one's cut (`Cut.checkWith`). -/
+refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). Given a wired Program and its circuit
+record (`wired`: `{"program", "record"}`), the `program` is refused by name unless it is the wired one's cut under that
+record (`Cut.checkWith`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
@@ -323,7 +324,9 @@ def paramsParsed (j : Json) : V Params := do
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
   if let some w := field? j "wired" then
-    Cut.checkWith (← Program.parse (← Flock.canon (← obj w "wired")).toUTF8) program query
+    exactly (← obj w "wired") #["program", "record"] "wired"
+    let wp ← Program.parse (← Flock.canon (← obj (getD w "program") "wired program")).toUTF8
+    Cut.checkWith (← obj (getD w "record") "wired record") wp program query
   let workTable ← match getD j "work_table" with
     | .null => pure none
     | t => some <$> obj t "work_table"

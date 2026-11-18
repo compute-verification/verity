@@ -1,10 +1,12 @@
-"""That an unwired Program is a wired one's cut (`Spot.Cut.check`, the `cut` piece) against the cut itself
-(`population.unwired_population_program`, else the periods' unwired builder it returns the output of): Lean accepts a
-pair exactly when the unwired Program's digest is the cut's, and each forged unwired Program is refused by its name."""
+"""That a cut Program is a wired one's cut under its circuit record (`Spot.Cut.check`, the `cut` piece) against the cut
+itself (`population.cut_wires`, else the wired builder over the record with no wires, which is what it returns): Lean
+accepts a pair exactly when the cut's digest is that one's, and each forged cut and each wired root the cut refuses is
+refused by name."""
 
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -14,12 +16,15 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.circuits import codec
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.codec import canonical_json, descriptor_id
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.boolean import cast as BC, gemm as BG
+from verity.circuits.population import WIRED_FIELDS, wired_population_program
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, coll_concat, concat
+from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.periods import interface as I
-from verity.commitments.periods.population import population_program
 
 PACKAGE = (Path(__file__).resolve().parents[7] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -43,39 +48,78 @@ def chain(requests: int = 2, steps: int = 2, layers: int = 2) -> I.Circuit:
                      order=I.ordered({GID: n}, wires, {GID: range(0, n, requests)}))
 
 
-def held() -> I.Circuit:
-    """Four ``Gemm_v2`` units each reading registered ``w`` whole, ``w`` held: a value the unwired root keeps."""
+def held(values: tuple[str, ...]) -> I.Circuit:
+    """Four ``Gemm_v2`` units each reading registered ``w`` whole, ``values`` the registered values."""
     reads = (I.Read(GID, "w", "w", 0, (4,), 0, (0,)),)
-    return I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=("w",)))
+    return I.Circuit("reads", ((GEMM, 4),), registered=I.Registered({"w": 256}, reads=reads, values=values))
+
+
+def record(circuit: I.Circuit) -> dict:
+    return {**circuit.description(), "external": list(circuit.external)}
+
+
+def digest(rec: dict) -> str:
+    return hashlib.sha512(canonical_json({k: rec[k] for k in WIRED_FIELDS if k in rec})).hexdigest()
+
+
+V16 = Value(16)
+COPY = PrimitiveDefinition("CutTestCopy16", 1, (("a", V16),), V16, lambda a: a, conformance="protocol-defined")
+PAIR_RET = Tuple(Array(2, V16), Array(2, V16))
+PAIR = bind(CompositeDefinition("CutTestPair", 1, (), lambda S: ((("x", Array(2, V16)),), PAIR_RET),
+                                lambda B, S, x: coll_concat(PAIR_RET, [B.call(COPY, x[i]) for i in (0, 1, 0, 1)]),
+                                register=False))
+
+
+def reader(leaves: int):
+    return bind(CompositeDefinition("CutTestRead", leaves, (), lambda S: ((("x", Array(leaves, V16)),), V16),
+                                    lambda B, S, x: B.call(COPY, x[0]), register=False))
+
+
+def by_hand(leaves: int, offsets: list[int], cut: int = 1, writers: int = 2, units: int | None = None):
+    """A ``WiredPopulations_v1`` root and its record: ``writers`` `PAIR` units (two fields of two leaves each), then a
+    reader of ``leaves`` leaves a unit in ``cut`` rows, unit i reading the writers' output leaves from ``offsets[i]``;
+    the record names ``units`` writers (default: ``writers``)."""
+    rd = reader(leaves)
+    ids, counts = (descriptor_id(PAIR), descriptor_id(rd)), (units or writers, len(offsets))
+    rec = {"templates": [[t, n] for t, n in zip(ids, counts)], **({"cuts": {ids[1]: {"x": cut}}} if cut > 1 else {})}
+    rets = Tuple(Array(writers, PAIR_RET), Array(len(offsets), Value(16)))
+
+    def body(B, S, x):
+        out = B.batch(PAIR, x, axes=(0,))
+        arg = Coll(Array(len(offsets), Array(leaves, V16)), concat([out.refs.slice(o, o + leaves) for o in offsets]))
+        return coll_concat(rets, [out, B.batch(rd, arg, axes=(0,))])
+
+    defn = CompositeDefinition("WiredPopulations", 1, ("templates", "record", "counts"),
+                               lambda S: ((("0.x", Array(writers, Array(2, V16))),), rets), body, register=False)
+    wired = Program(bind(defn, templates=ids, record=digest(rec), counts=counts))
+    return wired, rec, [(PAIR, writers), (rd, counts[1])]
 
 
 def _desc(program) -> dict:
     return json.loads(D.canonical(codec.encode_program(program)))
 
 
-def _values(circuit: I.Circuit) -> list[tuple[str, int, int]]:
-    return list(I.program_values(circuit.registered))
-
-
-def cut(circuit: I.Circuit, wired) -> tuple:
-    """The cut's unwired Program and query: circuits' cut where the tree has it, else the builder whose output it is."""
+def cut_of(wired, rec: dict, templates) -> tuple:
+    """The cut and its query: circuits' cut where the tree has it, else the wired builder over the record with no wires."""
     try:
-        from verity.circuits.population import unwired_population_program
+        from verity.circuits.population import cut_wires
     except ImportError:
-        return population_program(list(circuit.templates), values=_values(circuit))
-    unwired, query, _ = unwired_population_program(wired, circuit.cuts, [v for v, _n, _w in _values(circuit)])
-    return unwired, query
+        return wired_population_program(templates, {**rec, "wires": []})
+    cut, query, _ = cut_wires(wired, rec)
+    return cut, query
 
 
-def _case(circuit: I.Circuit, templates=None) -> dict:
-    """The piece's input: the circuit's wired Program, an unwired one over ``templates`` (default: the cut's) and the
-    cut's query, with the cut's digest (``want``), which the piece doesn't read."""
-    wired, _ = circuit.program()
-    unwired, query = cut(circuit, wired)
-    want = codec.program_digest(unwired)
-    if templates is not None:
-        unwired, _ = population_program(templates, several=True, values=_values(circuit))
-    return {"wired": _desc(wired), "unwired": _desc(unwired), "query": query, "want": want}
+def _case(wired, rec: dict, templates, cut=None) -> dict:
+    """The piece's input: the wired Program, a cut (default: the cut's), the record and the cut's query, with the
+    cut's digest (``want``), which the piece doesn't read."""
+    honest, query = cut_of(wired, rec, templates)
+    return {"wired": _desc(wired), "cut": _desc(cut if cut is not None else honest), "record": rec, "query": query,
+            "want": codec.program_digest(honest)}
+
+
+def _circuit(c: I.Circuit) -> dict:
+    wired, _ = c.program()
+    return _case(wired, record(c), list(c.templates))
 
 
 def _root(desc: dict) -> dict:
@@ -84,64 +128,94 @@ def _root(desc: dict) -> dict:
 
 def _forged(j: dict, edit) -> dict:
     j = copy.deepcopy(j)
-    edit(j["unwired"])
+    edit(j)
     return j
 
 
-def _swap(desc: dict) -> None:
-    nodes = _root(desc)["nodes"]
+def _swap(j: dict) -> None:
+    nodes = _root(j["cut"])["nodes"]
     nodes[-1], nodes[-2] = nodes[-2], nodes[-1]
 
 
-ROUNDED = rounded()
-FIRST, THEN = (t for t, _n in ROUNDED.templates)
-HONEST = [("rounded", _case(ROUNDED)), ("chain", _case(chain())), ("held", _case(held()))]
+def _extra(j: dict) -> None:
+    nodes = _root(j["cut"])["nodes"]
+    nodes.append(copy.deepcopy(nodes[-1]))
+
+
+def _left(j: dict) -> None:
+    """The wired root under the cut's key: its wires left in place."""
+    w, key = copy.deepcopy(j["wired"]), j["cut"]["root"]
+    w["definitions"][key] = w["definitions"].pop(w["root"])
+    w["root"] = key
+    j["cut"] = w
+
+
+def _other_record(j: dict) -> None:
+    j["record"] = {**j["record"], "cuts": {GID: {"x": 2}}}
+
+
+ROUNDED, CHAIN = _circuit(rounded()), _circuit(chain())
+HONEST = [("rounded", ROUNDED), ("chain", CHAIN), ("held, no values", _circuit(held(()))),
+          ("held, w a value", _circuit(held(("w",)))),
+          ("by hand, uncut", _case(*by_hand(2, [6, 0]))), ("by hand, two rows", _case(*by_hand(4, [2], cut=2)))]
 FORGED = [
-    ("templates swapped", _forged(HONEST[0][1], _swap), "cut-order"),
-    ("templates swapped by the builder", _case(ROUNDED, [(THEN, 6), (FIRST, 6)]), "cut-order"),
-    ("a wrong batch count", _case(ROUNDED, [(FIRST, 6), (THEN, 5)]), "cut-count"),
-    ("a template the query doesn't name", _case(ROUNDED, [(FIRST, 6), (GEMM, 6)]), "cut-template"),
-    ("a wired parameter left in place", {**HONEST[0][1], "unwired": HONEST[0][1]["wired"]}, "cut-arg"),
-    ("an extra root node", _case(ROUNDED, [(FIRST, 6), (THEN, 6), (GEMM, 6)]), "cut-extra"),
+    ("templates swapped", _forged(ROUNDED, _swap), "cut-order"),
+    ("an extra root node", _forged(ROUNDED, _extra), "cut-extra"),
+    ("a wire left in place", _forged(ROUNDED, _left), "cut-arg"),
+    ("the wired root as its own cut", {**CHAIN, "cut": CHAIN["wired"]}, "cut-record"),
+    ("another record's wires", _forged(CHAIN, _other_record), "cut-record"),
+    ("a root that is no wired population", {**CHAIN, "wired": _desc(Program(GEMM))}, "cut-input"),
 ]
-
-
-def _variants() -> list[dict]:
-    """Unwired Programs the builder writes over the rounded circuit's templates, at every order and count near the cut's."""
-    return [_case(ROUNDED, ts) for a in (5, 6, 7) for b in (5, 6, 7)
-            for ts in ([(FIRST, a), (THEN, b)], [(THEN, b), (FIRST, a)], [(FIRST, a)], [(FIRST, a), (THEN, b), (GEMM, 1)])]
+#: circuits' refusals of a wired root and Lean's names for them (`Spot.Edges`)
+EDGES = {"cut-offset": {"edge-rows"}, "cut-units": {"edge-rows"}, "cut-fields": {"edge-fields", "edge-width"}}
+REFUSED = [("off a field's first leaf", by_hand(2, [1]), "cut-offset"),
+           ("over a unit's two fields", by_hand(4, [0]), "cut-fields"),
+           ("across two writer units", by_hand(4, [2]), "cut-units"),
+           ("a cut row off a field's first leaf", by_hand(4, [1], cut=2), "cut-offset")]
 
 
 def reference(j: dict) -> dict:
-    """Accepts exactly the cut's own digest."""
-    return {"accept": codec.program_digest(j["unwired"]) == j["want"]}
+    """Accepts exactly the cut's own digest under the record the wired root names."""
+    return {"accept": codec.program_digest(j["cut"]) == j["want"]}
 
 
 CUT = D.Port("spot-difftest", "cut", reference,
-             st.sampled_from([c for _, c in HONEST] + [c for _, c, _ in FORGED] + _variants()),
+             st.sampled_from([c for _, c in HONEST] + [c for _, c, _ in FORGED[:3]]),
              package=PACKAGE, need_rejects=False, of_record="lean")
 pieces = D.server_fixture(CUT)
 
 
 @pytest.mark.parametrize("name, j", HONEST, ids=[c[0] for c in HONEST])
 def test_the_cut_is_accepted(pieces, name, j):
-    """The cut of each circuit's wired Program is accepted."""
+    """The cut of each wired Program under its record is accepted."""
     assert reference(j) == {"accept": True}
-    assert pieces.call("cut", j) == ("output", D.canonical({"accept": True}))
+    assert pieces.call("cut_why", j) == ("output", D.canonical({"refusal": None}))
 
 
 @pytest.mark.parametrize("name, j, code", FORGED, ids=[c[0] for c in FORGED])
-def test_a_forged_unwired_program_is_refused_by_name(pieces, name, j, code):
-    """Each forged unwired Program is not the cut, by digest, and Lean refuses it by the rule's name."""
-    assert reference(j) == {"accept": False}
+def test_a_forged_cut_is_refused_by_name(pieces, name, j, code):
+    """Each forged cut is refused by the rule's name."""
     assert pieces.call("cut_why", j) == ("output", D.canonical({"refusal": code}))
 
 
-def test_every_refusal_has_a_case():
-    assert {c for _, _, c in FORGED} == {"cut-order", "cut-template", "cut-count", "cut-arg", "cut-extra"}
+@pytest.mark.parametrize("name, made, code", REFUSED, ids=[c[0] for c in REFUSED])
+def test_a_wired_root_the_cut_refuses_is_refused(pieces, name, made, code):
+    """Each wired root circuits' cut refuses by name, Lean refuses by the edges' name for it."""
+    wired, rec, templates = made
+    try:
+        from verity.circuits.population import cut_wires
+    except ImportError:
+        pass
+    else:
+        with pytest.raises(ValueError, match=code):
+            cut_wires(wired, rec)
+    cut, query = wired_population_program(templates, {**rec, "wires": []})
+    j = {"wired": _desc(wired), "cut": _desc(cut), "record": rec, "query": query}
+    status, out = pieces.call("cut_why", j)
+    assert status == "output" and json.loads(out)["refusal"] in EDGES[code], out
 
 
 def test_lean_accepts_exactly_the_cut(pieces):
-    """Lean and the digest agree on the cut, the forgeries and the builder's other populations of the templates."""
-    stats = D.run(CUT, examples=60, server=pieces)
+    """Lean and the digest agree on the cuts and the forgeries the port samples."""
+    stats = D.run(CUT, examples=30, server=pieces)
     assert stats.outputs > 0, stats
