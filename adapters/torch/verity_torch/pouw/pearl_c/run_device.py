@@ -10,8 +10,9 @@ build.sh's (setting ``cubin``, default the directory's cubin).  This module owns
 torch's current stream, in the device's primary context:
 
 * **The trees** are -h3's (the kernel schemes' ``pearl-c`` family): `audit.HM96`, frame-v3-sha512 over hm96-sha512 leaves (64-byte nodes), each leaf
-  over a row's SHA-512 row digest, salted by the prover's hm96 salt key (the install's, `weight_roots`' and the run's
-  ``salt_key``, which a retained manifest records for the reference verifier).
+  over a row's SHA-512 row digest and the row's salt.  The kernels still derive A's, B's and the tiles' salts from the
+  install's key (`weight_roots`' and the run's ``salt_key``) until hash_h3.cuh's leaves take fresh salts as data; a
+  retained pass ends at that seam (`ends`), and y's salts are fresh and kept beside its tree (`served_y_device`).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
   into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
   and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
