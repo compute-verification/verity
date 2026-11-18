@@ -48,7 +48,7 @@ def test_products_are_read_lane_by_lane():
 
 
 def test_honest_int8_products():
-    """`Int8Linear_v1`, `Int8KvQuant_v1` and `Int8LutAttentionRow_v1` at `SHAPES`: nothing refused and property/v1's own
+    """`Int8Linear_v3`, `Int8KvQuant_v1` and `Int8LutAttentionRow_v1` at `SHAPES`: nothing refused and property/v1's own
     class counts. The linear's MACs are activations by registered weights, a linear map, so it has no data product;
     the KV quantizers have no family step; the attention row's `Q′K′ᵀ` and `P V′` are `S·D` data products each."""
     got = T.int8_census()

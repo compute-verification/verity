@@ -36,10 +36,11 @@ coin not yet released, and soundness takes no hiding premise on the root.  One-s
 session's coins (`withheld_on`, in `coins.draw_coins`).
 
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
-recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
-coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
-coin, and logs both on its clock.  `record_many` does that for several families' next coins at once, asked in one
-`open_many` (one round trip to a remote challenger).
+recorded, in order: the i-th opening after the i-th root, each coin the one its opening names and opened once, none
+before its root is recorded, and every recorded root's coin opened.  `LiveRecord` is the verifier's side of one family:
+it records a root and only then asks for the coin it names, by slot, and logs both on its clock, or commits a root with
+no coin.  `record_many` does that for several families' next coins at once, asked in one `open_many` (one round trip to
+a remote challenger).
 
 **The challenger's record** is the verifier's trusted coin commitment.  Before any coin opens, the challenger signs its
 commitment with its LMS key over SHA-512 (`LiveChallenger.sign_record`) and writes the record on its own host
@@ -301,6 +302,9 @@ NO_CLOSE = ("no challenger close record: a session the challenger didn't close a
 LOG_FORM = "the challenger's release log is a list of its lines"
 LOG_MALFORMED = "the challenger's release log is malformed"
 RELEASED_BEFORE_RECEIVED = "the challenger's release log stamps a coin's release before its root's receipt"
+SLOT_TWICE = "the challenger's release log opens one coin twice: a retry never redraws"
+COMMITTED_RELEASED = "the challenger's release log releases a coin after a root it committed with no coin"
+UNRELEASED = "the challenger's release log holds a root its coin's release does not follow"
 SESSION_FORM = ("a challenger session is {close, hellos, log, record}: its close record, its refused hellos' lines, its "
                 "release log's lines and its record")
 LOG_FILE = "releases.jsonl"
@@ -557,8 +561,9 @@ def live_reason(commitment: LiveCommitment, opening: LiveOpening, label: str, in
 
 def order_reason(commitment: LiveCommitment, label: str, roots: Sequence[bytes], openings: Sequence[LiveOpening]
                  ) -> str | None:
-    """Why `openings` are not family `label`'s coins in order, coin i opened once after `roots[i]`, the i-th root the
-    verifier recorded, with every recorded root's coin opened; None when they are."""
+    """Why `openings` are not family `label`'s coins in order, the i-th opened after `roots[i]`, the i-th root the
+    verifier recorded, each the coin it names and opened once, with every recorded root's coin opened; None when they
+    are."""
     count = commitment.family(label)
     if count is None:
         raise CoinError(f"the epoch's coins have no {label} family")
@@ -570,12 +575,12 @@ def order_reason(commitment: LiveCommitment, label: str, roots: Sequence[bytes],
             return f"the epoch's {o.label} coin {o.index} is opened twice: a retry never redraws"
         seen.add((o.label, o.index))
         if i >= len(roots):
-            return f"{label} coin {i} was opened before its root was recorded"
-        why = live_reason(commitment, o, label, i, roots[i])
+            return f"{label} coin {o.index} was opened with no root recorded before it"
+        why = live_reason(commitment, o, label, o.index, roots[i])
         if why is not None:
-            return f"{label} coin {i}: {why}"
+            return f"{label} coin {o.index}: {why}"
     if len(openings) < len(roots):
-        return f"{label} coin {len(openings)} was never opened"
+        return f"{label} root {len(openings)} has no coin opened after it"
     return None
 
 
@@ -793,8 +798,9 @@ def tree_line(line: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Entry:
-    """`Challenger.Entry`: a root ``recorded`` or a coin ``released`` at line ``pos`` of the release log (the head is
-    line 0); ``root`` the root recorded or the root the coin is released after, ``time`` its ``received_at`` or
+    """`Challenger.Entry`: a root ``recorded`` for coin ``index``, coin ``index`` ``released``, or a root ``committed``
+    with no coin, the family's ``index``-th commit, at line ``pos`` of the release log (the head is line 0); ``root`` the
+    root recorded or committed or the root the coin is released after, ``time`` its ``received_at`` or
     ``released_at``."""
 
     kind: str
@@ -810,7 +816,8 @@ class Entry:
 
 
 def before(a: Entry, b: Entry) -> bool:
-    """`Challenger.before`: `a` stands earlier than `b` in the release log."""
+    """`Challenger.before`: `a` stands earlier than `b` in the release log, the order `Verity.Challenger.Log.RecordedBefore`
+    and `Verity.Challenger.Log.ReleasedBefore` read."""
     return a.pos < b.pos
 
 
@@ -820,44 +827,75 @@ def by_family(commitment: LiveCommitment, log: Sequence[Entry]) -> dict[str, tup
             for label, _ in commitment.families}
 
 
+def released_after(log: Sequence[Entry], label: str, after: bytes) -> list[int]:
+    """`Challenger.releasedAfter`: the coins of family `label` that `log` shows released after `after`, by index, in its
+    order."""
+    return [e.index for e in log if e.kind == "released" and e.label == label and e.root == bytes(after)]
+
+
 def cut(log: Sequence[Entry], payloads: Sequence[str], keys: Sequence[str]) -> bool:
-    """`Challenger.cut`, lean's cut as a check: every root of a family in `payloads` stands before every release of a
-    family in `keys`."""
-    last = max((e.pos for e in log if e.kind == "recorded" and e.label in payloads), default=None)
+    """`Challenger.cut`, `Verity.Challenger.Log.Cut` as a check over the log's entries: every root, recorded or
+    committed, of a family in `payloads` stands before every release of a family in `keys`."""
+    last = max((e.pos for e in log if e.kind != "released" and e.label in payloads), default=None)
     first = min((e.pos for e in log if e.kind == "released" and e.label in keys), default=None)
     return last is None or first is None or last < first
 
 
 def released_log_of(commitment: LiveCommitment, log: Sequence[str]) -> tuple[Entry, ...]:
-    """The roots and releases of every family in the one order its release log's lines `log` hold them, its head naming
-    `commitment`, each root followed by its coin's release, released no earlier than its root's receipt, its coin trees'
-    lines aside (`tree_line`).  A malformed log, or another commitment's, raises `CoinError`; a release stamped before
-    its root's receipt raises `RELEASED_BEFORE_RECEIVED`."""
+    """The roots, releases and commits of every family in the one order its release log's lines `log` hold them, its
+    head naming `commitment`, its coin trees' lines aside (`tree_line`).  A root names a coin of its family, by index
+    below the family's count, each at most once (`SLOT_TWICE`) and in any order, and that coin's release follows it
+    (`UNRELEASED`), no earlier than its receipt (`RELEASED_BEFORE_RECEIVED`); a commit is its family's next and nothing
+    is released after it (`COMMITTED_RELEASED`).  A coin no root names is never released.  Raises `CoinError`."""
     if not log or log[0] != canonical_json_text({"event": "commitment", "root": commitment.root.hex()}):
         raise CoinError(f"the challenger's release log is not coin commitment {commitment.root.hex()[:16]}'s")
-    counts: dict[str, int] = {label: 0 for label, _ in commitment.families}
-    pairs = [(pos, line) for pos, line in enumerate(log) if pos and not tree_line(line)]
-    if len(pairs) % 2:
-        raise CoinError("the challenger's release log ends on a root without its release")
+    counts = dict(commitment.families)
+    commits: dict[str, int] = {label: 0 for label in counts}
+    opened: set[tuple[str, int]] = set()
     out: list[Entry] = []
-    for k in range(0, len(pairs), 2):
-        (i, a), (j, b) = pairs[k], pairs[k + 1]
-        root, release = _event(a), _event(b)
-        if (not isinstance(root, dict) or not isinstance(release, dict) or sorted(root) != _ROOT_EVENT
-                or sorted(release) != _RELEASE_EVENT or root["event"] != "root" or release["event"] != "release"
-                or type(root["label"]) is not str or root["label"] not in counts or type(root["index"]) is not int
-                or root["index"] != counts[root["label"]] or type(release["index"]) is not int
-                or release["label"] != root["label"] or release["index"] != root["index"]
-                or release["after"] != root["root"] or type(root["root"]) is not str
-                or len(root["root"]) != 128 or _hex(root["root"]) is None or not _time(root["received_at"])
-                or not _time(release["released_at"])):
+    pending: Entry | None = None
+    for pos, line in enumerate(log):
+        if not pos or tree_line(line):
+            continue
+        doc = _event(line)
+        if isinstance(doc, dict) and doc.get("event") == "release":
+            if pending is None:
+                raise CoinError(COMMITTED_RELEASED if out and out[-1].kind == "committed" else LOG_MALFORMED)
+            if (not _time(doc.get("released_at")) or sorted(doc) != _RELEASE_EVENT or type(doc["index"]) is not int
+                    or doc["index"] != pending.index or doc["label"] != pending.label
+                    or doc["after"] != pending.root.hex()):
+                raise CoinError(LOG_MALFORMED)
+            if doc["released_at"] < pending.time:
+                raise CoinError(RELEASED_BEFORE_RECEIVED)
+            out += [pending, Entry("released", pending.label, pending.index, pending.root, doc["released_at"], pos)]
+            pending = None
+            continue
+        if pending is not None:
+            raise CoinError(UNRELEASED)
+        if not isinstance(doc, dict):
             raise CoinError(LOG_MALFORMED)
-        if release["released_at"] < root["received_at"]:
-            raise CoinError(RELEASED_BEFORE_RECEIVED)
-        label, n, r = root["label"], root["index"], bytes.fromhex(root["root"])
-        counts[label] += 1
-        out += [Entry("recorded", label, n, r, root["received_at"], i), Entry("released", label, n, r,
-                                                                              release["released_at"], j)]
+        label, root, index = doc.get("label"), doc.get("root"), doc.get("index")
+        if (type(label) is not str or label not in counts or type(root) is not str or _hex(root) is None
+                or not _time(doc.get("received_at")) or not _time(index) or sorted(doc) != _ROOT_EVENT
+                or len(root) != 128):
+            raise CoinError(LOG_MALFORMED)
+        entry = (label, index, bytes.fromhex(root), doc["received_at"], pos)
+        if doc["event"] == "root":
+            if index >= counts[label]:
+                raise CoinError(LOG_MALFORMED)
+            if (label, index) in opened:
+                raise CoinError(SLOT_TWICE)
+            opened.add((label, index))
+            pending = Entry("recorded", *entry)
+        elif doc["event"] == "commit":
+            if index != commits[label]:
+                raise CoinError(LOG_MALFORMED)
+            commits[label] += 1
+            out.append(Entry("committed", *entry))
+        else:
+            raise CoinError(LOG_MALFORMED)
+    if pending is not None:
+        raise CoinError(UNRELEASED)
     return tuple(out)
 
 
@@ -2040,6 +2078,14 @@ class LiveChallenger:
         coin, salt = self._coins[position]
         return LiveOpening(self.commitment.epoch, label, index, bytes(after), coin, salt, self._tree.open(position).path)
 
+    def commit(self, label: str, index: int, root: bytes) -> None:
+        """Take `root` as family `label`'s commit `index`: it opens no coin, so the challenger keeps nothing of it but
+        its release log's line (`LiveRecord.commit`)."""
+        if self.commitment.family(label) is None:
+            raise CoinError(f"the epoch's coins have no {label} family")
+        if type(index) is not int or index < 0 or len(root) != 64:
+            raise CoinError("a commit is its family's index and a 64-byte root")
+
     def open_many(self, requests: Sequence[tuple[str, int, bytes]]) -> list[LiveOpening]:
         """`open` of each (label, index, after) of `requests`, in order: the in-process twin of
         `remote.RemoteChallenger.open_many`, so a caller asks either challenger for several coins at once."""
@@ -2110,55 +2156,65 @@ def _count(challenger: Any, label: str) -> int | None:
 
 
 class LiveRecord:
-    """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
-    only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record.  `clock` is
-    the record's clock in seconds, and `log` the release order on it.  On a withheld session (`remote.serve`) its openings
-    are the coins' raw bytes until the session closes, and `reason` waits for the close."""
+    """The verifier's record of one family of an epoch's coins, in order: `record_slot(slot, root)` records `root` and
+    only then asks the challenger for coin `slot`, after that root, each slot at most once and in any order, an unused
+    slot's coin never opened; `record(root)` does so for the lowest slot not yet asked; `commit(root)` logs a root with
+    no coin after it.  `reason` is `order_reason` over the record.  `clock` is the record's clock in seconds, and `log`
+    the release order on it.  On a withheld session (`remote.serve`) its openings are the coins' raw bytes until the
+    session closes, and `reason` waits for the close."""
 
     def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
         if _count(challenger, label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
         self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
+        self.slots: list[int] = []
         self.openings: list[LiveOpening] = []
+        self.commits = 0
         self._log: list[dict[str, Any]] = []
 
     @property
     def log(self) -> tuple[dict[str, Any], ...]:
-        """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
-        "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-device`'s."""
+        """The release order with the record's time: a coin's root, `{"event": "root", "label", "index", "root": <hex>,
+        "received_at"}`, then coin `index`'s release after it, `{"event": "release", "label", "index", "after": <hex>,
+        "released_at"}`; a commit, `{"event": "commit", "label", "index", "root": <hex>, "received_at"}`, the family's
+        `index`-th, with no release.  It records the order; that the challenger kept it is `trusted-device`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:
-        request = self._root(root)
-        opening = self.challenger.open(*request)
-        self._release(request[1], opening)
-        return opening
+        return self.record_slot(self._next(), root)
 
     def record_slot(self, slot: int, root: bytes) -> LiveOpening:
-        """`record` of the family's coin `slot` rather than its next: each slot opened at most once and in any order, an
-        unused slot's coin never opened."""
-        raise NotImplementedError("a coin opened by slot: waits on `released_log_of` and `Challenger.releasedLogOf` "
-                                  "taking a family's coins in any order, each slot once (both refuse an index other "
-                                  "than the family's next), and on `order_reason` and the session reads reading a "
-                                  "coin's slot from its entry's index rather than its place in the family")
+        request = self._root(root, slot)
+        opening = self.challenger.open(*request)
+        self._release(slot, opening)
+        return opening
 
     def commit(self, root: bytes) -> None:
-        """Log `root` as the family's next commitment, with no coin after it: the one log's third entry."""
-        raise NotImplementedError("a root logged with no coin after it: waits on the challenger writing a `commit` "
-                                  "event to its release log and `released_log_of` and `Challenger.releasedLogOf` "
-                                  "reading it as an entry `committed`, which `before` orders and `cut` counts among "
-                                  "the payloads' roots")
-
-    def _root(self, root: bytes) -> tuple[str, int, bytes]:
-        if len(self.roots) == _count(self.challenger, self.label):
-            raise CoinError(f"every {self.label} coin of the epoch is open")
-        i = len(self.roots)
-        self.roots.append(bytes(root))
-        self._log.append({"event": "root", "label": self.label, "index": i, "root": bytes(root).hex(),
+        """Log `root` as the family's next commit, with no coin after it, once the challenger has taken it."""
+        if len(root) != 64:
+            raise CoinError("a commit is a 64-byte root")
+        self.challenger.commit(self.label, self.commits, bytes(root))
+        self._log.append({"event": "commit", "label": self.label, "index": self.commits, "root": bytes(root).hex(),
                           "received_at": self._clock()})
-        return self.label, i, bytes(root)
+        self.commits += 1
+
+    def _next(self) -> int:
+        return next((i for i in range(_count(self.challenger, self.label)) if i not in self.slots), len(self.slots))
+
+    def _root(self, root: bytes, slot: int) -> tuple[str, int, bytes]:
+        count = _count(self.challenger, self.label)
+        if len(self.slots) == count:
+            raise CoinError(f"every {self.label} coin of the epoch is open")
+        if type(slot) is not int or not 0 <= slot < count:
+            raise CoinError(f"the epoch's {self.label} family has no coin {ascii(slot)}")
+        if slot in self.slots:
+            raise CoinError(f"the epoch's {self.label} coin {slot} is opened twice: a retry never redraws")
+        self.roots.append(bytes(root))
+        self.slots.append(slot)
+        self._log.append({"event": "root", "label": self.label, "index": slot, "root": bytes(root).hex(),
+                          "received_at": self._clock()})
+        return self.label, slot, bytes(root)
 
     def _release(self, i: int, opening: LiveOpening) -> None:
         self.openings.append(opening)
@@ -2186,7 +2242,7 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     for r, _ in asks:
         if len(r.roots) + sum(q is r for q, _ in asks) > _count(challenger, r.label):
             raise CoinError(f"every {r.label} coin of the epoch is open")
-    requests = [r._root(root) for r, root in asks]
+    requests = [r._root(root, r._next()) for r, root in asks]
     openings = challenger.open_many(requests)
     for (r, _), (_, i, _), opening in zip(asks, requests, openings):
         r._release(i, opening)
@@ -2275,7 +2331,8 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_log_of", "root_of",
-           "Entry", "RELEASED_BEFORE_RECEIVED", "before", "by_family", "cut", "families_problem", "layout",
+           "COMMITTED_RELEASED", "Entry", "RELEASED_BEFORE_RECEIVED", "SLOT_TWICE", "UNRELEASED", "before", "by_family",
+           "cut", "families_problem", "layout", "released_after",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
            "CLOSING_ROUND", "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",

@@ -81,7 +81,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
     "network-accounting": {
         # Needs: network attestation's release and io-tie headers and ids, the replay step's
         # reference; PoUB's receipt plan (`Plan`, `PER_LEAF`, salts), codec and memory-map format outside poub's verifier/.
-        "verity_vllm/pipeline/serve_admit.py": ("resource_accounting.network.verifier.release.read_watermark",),
         "verity_vllm/program/predict/scan_state.py": ("resource_accounting.network.verifier.blocks",),
         "verity_vllm/protocols/poub/remote.py": (
             "resource_accounting.memory.poub.verifier.audit", "resource_accounting.memory.poub.verifier.codec",

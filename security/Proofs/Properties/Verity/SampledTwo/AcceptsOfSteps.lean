@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 # The two-stage check accepts where each of its steps passes
 
 `Steps` reads an accepted check as its steps. This is the other direction: the check
-(`VStar.Recursive.SampledTwo.checkBlobsAtWith`, at the switch on) accepts wherever each step passes on the values the
+(`VStar.Recursive.SampledTwo.checkBlobsAtInner`, at the switch on) accepts wherever each step passes on the values the
 step before it returned, so no step holds the evidence to anything the listed ones do not.
 
 * `readBack_of`: `readBack` returns a record where the verifier's parser reads it from the record's canonical text
@@ -142,10 +142,10 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run samplingDesign : Json}
     (hb : stmtsBytesFit p e bs = .ok ()) (hss : stmtsSessions p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
-    (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
+    (hr : Spot.Run.run i = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
     (hl : secondDesignOf p run = .ok samplingDesign) :
-    prepare true p c ξ e bs =
+    prepare p c ξ e bs =
       .ok (secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂
         { e.interior.base with verdicts := r.out }, run) := by
   unfold prepare
@@ -168,36 +168,36 @@ theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {pub : OneStage.Public} {prof : Core.Integrity}
     (hb : stmtsBytesFit p e bs = .ok ()) (hss : stmtsSessions p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
-    (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
+    (hr : Spot.Run.run i = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
     (hl : secondDesignOf p run = .ok samplingDesign)
     (hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true)
     (htwo : secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂
       { e.interior.base with verdicts := r.out } = .accept pub prof) :
-    checkBlobsAtWith true p c ξ e bs = .accept pub prof := by
+    checkBlobsAtInner p c ξ e bs = .accept pub prof := by
   have hp := prepare_of_steps hb hss hi hfit hr hs hu ho ht hq hl
-  unfold checkBlobsAtWith
+  unfold checkBlobsAtInner
   first
     | (rw [hp]
-       simp [finishWith, htwo, hj]
+       simp [finish, htwo, hj]
        done)
     | (rw [hp]
        dsimp only
-       unfold finishWith
+       unfold finish
        rw [htwo]
        simp [hj]
        done)
-    | (simp [hp, finishWith, htwo, hj]
+    | (simp [hp, finish, htwo, hj]
        done)
 
 /-- **The two-stage check accepts exactly where each of its steps passes**, at the switch on: `accepts_of_steps` and
 its converse, the steps on the values the step before returned. -/
 theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} :
-    checkBlobsAtWith true p c ξ e bs = .accept pub prof ↔
+    checkBlobsAtInner p c ξ e bs = .accept pub prof ↔
       stmtsBytesFit p e bs = .ok () ∧ stmtsSessions p e bs = .ok () ∧
       ∃ c₂ ξ₂ r i run samplingDesign, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ stagesFit ξ ξ₂ = .ok () ∧
-        Spot.Run.run i true = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
+        Spot.Run.run i = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
         stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ repStreamsOrdered p e = .ok () ∧
         secondDesignOf p run = .ok samplingDesign ∧
         Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
@@ -205,13 +205,13 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
           { e.interior.base with verdicts := r.out } = .accept pub prof := by
   constructor
   · intro h
-    unfold checkBlobsAtWith at h
-    cases hp : prepare true p c ξ e bs with
+    unfold checkBlobsAtInner at h
+    cases hp : prepare p c ξ e bs with
     | error err => simp [hp] at h
     | ok v =>
       obtain ⟨two, run⟩ := v
       simp only [hp] at h
-      obtain ⟨-, hj, htwo⟩ := finishWith_accept h
+      obtain ⟨hj, htwo⟩ := finish_accept h
       have hss := prepare_sessions hp
       obtain ⟨hp, hb⟩ := prepare_ok hp
       unfold prepareRun at hp

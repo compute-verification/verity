@@ -5191,7 +5191,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
              "sampled-proofs-served/window/registration.json": {"format": "toy"},
              "sampled-proofs-served/runs.json": ["r0"], "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
-             "windows/w7/rows.bin": {}, "private/weights.key": {}, "sampled-proofs-served/window/sessions/0.json": {}}
+             "windows/w7/rows.bin": {}, "weights_registration.salts/0.bin": {}, "sampled-proofs-served/window/sessions/0.json": {}}
     for f, body in files.items():
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(json.dumps(body))
@@ -5592,10 +5592,10 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
 BLOBS = tuple(f"sampled-proofs-served/window/m0/{f}" for f in (
     "circuit.txt", "pub-0.bin", "tables/t0.bin", "session-m0/sessions/s0/session.json", "session-m0/sessions/s0/p0.bin"))
 #: what `_handed`'s serve dir holds that no hand-off may carry: the a5 member's prover files beside its blobs, a value
-#: file, V3c's index salts, H1's prover state, a key, a row dir, the advice and the requests
+#: file, V3c's index salts, H1's prover state, a key, the weights' salt file, a row dir, the advice and the requests
 HELD_BACK = ("sampled-proofs-served/window/m0/inst-0.bin", "sampled-proofs-served/window/m0/prover/rows.bin",
              f"v3c-w7-{VTAG}/window/values/a.bin", f"v3c-w7-{VTAG}/window/index-salt.bin", "private/h1/key",
-             "private/weights.key", "windows/w7/rows.bin",
+             "private/weights.key", "weights_registration.salts/0.bin", "windows/w7/rows.bin",
              "advice/w7/private/advice.bin", "requests.jsonl")
 #: what the composite and the final record read in `_handed`'s serve dir, but for the blobs and the hand-off's own files
 HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/pouw/period/answer.json",
@@ -7675,7 +7675,7 @@ SERVE_OPENAI = (
 WEIGHTS_REGISTRATION = (
     "benchmarks/prove_path/prove_path.py weights-registration --serve-run TMP/serve --checkpoint-dir "
     "/workspace/hf/hub/models--verity-int8--Llama-3.2-1B-INT8/snapshots/15b0976d400d796ee589e7737d03a919526bf800 "
-    "--key TMP/serve/private/weights.key --out TMP/serve/weights_registration.json --deployment-record "
+    "--out TMP/serve/weights_registration.json --deployment-record "
     "TMP/serve/deployment-registration.json")
 NEW_RELEASE_RUN = "-c import uuid; print(uuid.uuid4().hex)"
 SERVE_LOAD = ("TMP/tree/adapters/vllm/tools/served_run/serve_load.py --port 18190 --model verity-int8/Llama-3.2-1B-INT8 "

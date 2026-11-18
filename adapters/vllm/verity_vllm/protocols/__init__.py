@@ -5,7 +5,7 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
-serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
+serving drives by flag rather than as an option, is a process its scheme registers (`pipeline.poub_session`).  The
 protocol logic is its package's (`verity.protocols.resource_accounting.compute.pouw.verifier`, `verity.protocols.resource_accounting.memory.pous.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
@@ -69,8 +69,8 @@ from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 if TYPE_CHECKING:
     from verity_vllm.errors import Refused
 
-__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
-           "adapter", "driver",
+__all__ = ["ADAPTERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
+           "adapter",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "refused", "register_weights", "requests", "undeclared", "weights_view",
@@ -78,9 +78,6 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
-#: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
-#: (``--remote-verifier``)
-DRIVERS = {"poub": "poub"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
@@ -127,14 +124,6 @@ def adapter(name: str) -> ModuleType:
     if name not in ADAPTERS:
         raise refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
     return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
-
-
-def driver(name: str, part: str) -> ModuleType:
-    """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
-    be imported on this tree."""
-    if name not in DRIVERS:
-        raise refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
-    return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
 
 
 def load_settings(value: str | Path | Mapping[str, Any] | None) -> dict[str, dict[str, Any]]:

@@ -22,7 +22,7 @@ from .defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinitio
 from .partition_object import template_instances_query
 from .ports import In, Leaves, Out, Ports, port_types
 from .program import Program
-from .refs import Affine, Coll, Refs, Strided, coll_concat, concat
+from .refs import Affine, Coll, Concat, Grid, Refs, Strided, coll_concat, concat, spell
 from .types import Array, RecordType, Tuple, Value
 
 #: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
@@ -347,13 +347,13 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
                         widths.append(w)
                 for w in sorted({w for w in widths if w != r}):
                     at = [i for i, x in enumerate(widths) if x == w]
-                    bits = _strided([parts[i] for i in at])
+                    bits = _grid([parts[i] for i in at], 1 if r == 1 else r)
                     out = (B.batch(bind(WordBits, W=w), Coll(Array(len(at) * rt.leaves // w, Value(w)), bits), axes=(0,))
                            if r == 1 else
                            B.batch(bind(BitsWord, W=r), Coll(Array(len(at) * rt.leaves, Array(r, BIT)), bits), axes=(0,)))
                     for q, i in enumerate(at):
                         parts[i] = out.refs.slice(q * rt.leaves, (q + 1) * rt.leaves)
-                argv.append(Coll(Array(n, t), _strided(parts)))
+                argv.append(Coll(Array(n, t), _grid(parts, t.leaves)))
             i = bisect.bisect_right(starts[j], lo)
             starts[j].insert(i, lo)
             made[j].insert(i, (lo, B.batch(templates[j][0], *argv, axes=(0,) * len(argv))))
@@ -370,25 +370,93 @@ def wired_population_program(templates: Sequence[tuple[SpecializedDefinition, in
             template_instances_query([t for t, _ in templates] + wiring))
 
 
-def _strided(parts: Sequence[Refs]) -> Refs:
-    runs: list[Refs] = []
+def _chunks(parts: Sequence[Refs]) -> Iterator[tuple[int, str, int, int, int]]:
     for p in parts:
-        q = runs[-1] if runs else None
-        if (isinstance(p, Affine) and isinstance(q, Affine) and (q.space, q.idx) == (p.space, p.idx)
-                and q.base + q.count == p.base):
-            runs[-1] = Affine(p.space, p.idx, q.base, q.count + p.count)
-        elif p.count:
-            runs.append(p)
-    out: list[Refs] = []
-    for p in runs:
-        q = out[-1] if out else None
-        if isinstance(p, Affine) and isinstance(q, Affine) and (q.space, q.idx) == (p.space, p.idx) and q.count == p.count:
-            out[-1] = Strided(p.space, p.idx, q.base, p.count, p.base - q.base, 1, 2 * p.count)
-        elif (isinstance(p, Affine) and isinstance(q, Strided) and (q.space, q.idx) == (p.space, p.idx) and q.inner == p.count
-              and q.inner_stride == 1 and q.count % q.inner == 0 and p.base == q.base + q.count // q.inner * q.outer_stride):
-            out[-1] = Strided(p.space, p.idx, q.base, q.inner, q.outer_stride, 1, q.count + p.count)
+        if isinstance(p, Concat):
+            yield from _chunks(p.parts)
+        elif isinstance(p, Grid):
+            yield from _chunks(p.pieces())
+        elif isinstance(p, Affine):
+            if p.count:
+                yield p.count, p.space, p.idx, p.base, 1
+        elif isinstance(p, Strided):
+            for b in range(0, p.count, p.inner):
+                n = min(p.inner, p.count - b)
+                yield n, p.space, p.idx, p.base + b // p.inner * p.outer_stride, p.inner_stride if n > 1 else 1
         else:
-            out.append(p)
+            yield from ((1, s, i, j, 1) for s, i, j in p)
+
+
+def _rows(parts: Sequence[Refs], period: int) -> list[list[list]]:
+    rows: list[list[list]] = []
+    pos = 0
+    for n, s, i, b, e in _chunks(parts):
+        while n:
+            t, o = divmod(pos, period)
+            m = min(n, period - o)
+            if t == len(rows):
+                rows.append([])
+            row = rows[t]
+            q = row[-1] if row else None
+            if q and (q[2], q[3]) == (s, i) and q[0] + q[1] == o and (q[1] == 1 or m == 1 or q[5] == e) \
+                    and q[4] + q[1] * (q[5] if q[1] > 1 else e) == b:
+                q[5] = q[5] if q[1] > 1 else e
+                q[1] += m
+            else:
+                row.append([o, m, s, i, b, e])
+            pos, n, b = pos + m, n - m, b + m * e
+    return rows
+
+
+def _levels(b: Sequence[int], whole: bool = True) -> list[tuple[int, int]] | None:
+    n = len(b)
+    if n == 1:
+        return []
+    s0, r = b[1] - b[0], 2
+    while r < n and b[r] - b[r - 1] == s0:
+        r += 1
+    if r == n and not whole:
+        return [(n, s0)]
+    for r0 in (d for d in range(r, 1, -1) if not whole or n % d == 0):
+        starts = b[::r0]
+        if all(b[t] == starts[t // r0] + t % r0 * s0 for t in range(n)):
+            rest = _levels(starts, whole)
+            if rest is not None:
+                return [(r0, s0), *rest]
+    return None
+
+
+def _fits(seqs: Sequence[Sequence[int]], t: int, T: int) -> int:
+    if all(_levels(b[t:T]) is not None for b in seqs):
+        return T - t
+    lo, hi = 1, T - t
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if all(_levels(b[t:t + mid], whole=False) is not None for b in seqs):
+            lo = mid
+        else:
+            hi = mid - 1
+    return next((m for m in range(lo, max(1, lo - 64), -1) if all(_levels(b[t:t + m]) is not None for b in seqs)), 1)
+
+
+def _grid(parts: Sequence[Refs], period: int) -> Refs:
+    rows, out = _rows(parts, period), []
+    t0 = 0
+    while t0 < len(rows):
+        sig = [(o, m, s, i, e) for o, m, s, i, _b, e in rows[t0]]
+        t1 = t0 + 1
+        while t1 < len(rows) and [(o, m, s, i, e) for o, m, s, i, _b, e in rows[t1]] == sig:
+            t1 += 1
+        L = math.gcd(*(m for _o, m, *_x in sig))
+        slots = [(k, q) for k, (_o, m, *_x) in enumerate(sig) for q in range(m // L)]
+        seqs = [[rows[t][k][4] + q * L * sig[k][4] for t in range(t0, t1)] for k, q in slots]
+        t = 0
+        while t < t1 - t0:
+            n = _fits(seqs, t, t1 - t0)
+            lanes = [(sig[k][2], sig[k][3], b[t], sig[k][4], tuple(_levels(b[t:t + n]) or ())) for (k, _q), b in zip(slots, seqs)]
+            out.append(spell(L, lanes))
+            t += n
+        t0 = t1
     return concat(out)
 
 
