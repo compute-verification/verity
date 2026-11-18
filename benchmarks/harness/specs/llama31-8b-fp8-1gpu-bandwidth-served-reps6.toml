@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
-id = "llama31-8b-fp8-1gpu-bandwidth-served-r6"
-cards = ["rtx-pro-6000"]
+id = "llama31-8b-fp8-1gpu-bandwidth-served-reps6"
+cards = ["rtx-pro-6000", "h200"]
 # PoUS's bandwidth audit on served inference: the bandwidth audit's plain stack (bandwidth-plain) and its encoded,
 # receipted stack (bandwidth-audit, gated against bandwidth-plain), each with the fill-sk16 filler over the paged KV pool,
 # beside stock FP8 on the same graph path and stock FP8 as vLLM serves it, so the audit has a ratio to compiled serving as
@@ -9,7 +9,8 @@ cards = ["rtx-pro-6000"]
 # harness README's "How a point is timed"). The graph arms replay decode-only CUDA graphs at capture_sizes with no
 # torch.compile (compilation mode 0, FULL_DECODE_ONLY); `stock-fp8@compiled` builds at vLLM's serving defaults
 # (torch.compile, vLLM's own CUDA-graph mode and capture sizes). Compiled and graph-path FP8 tokens differ, so the compiled
-# arm is uncontrolled and timed on its own gated tokens.
+# arm is uncontrolled and timed on its own gated tokens. On an H200 its rows differ from the RTX PRO 6000's in the device
+# alone; only the RTX PRO 6000 builds FlashInfer for its own target (`[card_settings.rtx-pro-6000]`).
 arms = ["stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled"]
 arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT"]
 sweep = "quick"
@@ -26,13 +27,12 @@ setup = "benchmarks/harness/setup/vllm_encoded.sh"
 control = "none"
 
 [env]
-FLASHINFER_CUDA_ARCH_LIST = "12.0f"
 VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
 
 # A node-local checkpoint bound by its `model_digest` (a point refuses files that hash otherwise). The KV pin holds
 # on both paths, a local checkpoint's and a revision-pinned one's (`kv_cache_memory_bytes`, `engine.engine_args`).
 [preset]
-id = "llama31-8b-fp8-1gpu-bandwidth-served-r6"
+id = "llama31-8b-fp8-1gpu-bandwidth-served-reps6"
 model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
 model_digest = "98e25b0ecbb3eff924ea9fad4673feea9ea6457d2f45db5b5b60e88205de1daa"
 precision = "fp8"
@@ -51,3 +51,6 @@ block_kv_cache_memory_bytes = 60129542144
 
 [admission]
 max_minutes = 120
+
+[card_settings.rtx-pro-6000.env]
+FLASHINFER_CUDA_ARCH_LIST = "12.0f"

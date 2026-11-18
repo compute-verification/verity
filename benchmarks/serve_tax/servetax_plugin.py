@@ -361,7 +361,7 @@ def launch_rows(edge: int, rows: Any) -> Any:
 
     ids = [("kv", i) for i in range(rows.shape[0])]
     scales = rows.new_zeros(rows.shape[0], dtype=torch.float32)
-    return RTD.step_roots(bytes(64), edge, {"kv": (ids, rows, scales)}, bytes(32), timing=True)
+    return RTD.step_roots(bytes(64), edge, {"kv": (ids, rows, scales)}, timing=True)
 
 
 def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: Callable[[], bool] | None = None,
@@ -642,7 +642,7 @@ def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
                "state_s": t2 - t1, "dump_s": t3 - t2, "write_wait_s": t4 - t3, "kv_s": t5 - t4,
                "pause_s": t5 - info["drained_t"], "pause_production_s": (t5 - info["drained_t"]) - (t3 - t2) - (t4 - t3),
                "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
-               "sizes": B.sizes(st), "kv": kvr, "since_last": {"from_step": last["step"], "busy_s": busy_s,
+               "sizes": B.sizes(st), "kv": {k: v for k, v in kvr.items() if k not in ("root", "tables")}, "since_last": {"from_step": last["step"], "busy_s": busy_s,
                                                               "busy_steps": busy_steps, "busy_steps_s": busy_steps_s,
                                                               "wall_s": (info["drained_t"] - last["resumed_t"])
                                                               if last["resumed_t"] is not None else None},
@@ -701,14 +701,14 @@ def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: li
         t1 = clock()
         ranks = sorted(rpc(B.rank_take, args=(key(),)), key=lambda r: r["rank"])
         t2 = clock()
-        roots = {r["root"] for r in ranks}
+        roots = {r.pop("root") for r in ranks}
         copied = [r["copy_ms"] for r in ranks if r["copy_ms"] is not None]
         rec = {"edge": k, "load": load[0], "next_step": trace.scheduled, "at_s": at[k] if at else None,
                "drained_unix": time.time() - (clock() - info["drained_t"]),
                "drain_s": info["drained_t"] - info["due_t"], "drain_calls": info["drain_calls"],
                "state_s": t1 - t0, "kv_s": t2 - t1,
                "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
-               "kv": {"root": min(roots), "roots_equal": len(roots) == 1, "bytes": pool_bytes,
+               "kv": {"roots_equal": len(roots) == 1, "bytes": pool_bytes,
                       "copied_bytes": sum(r["copied_bytes"] for r in ranks),
                       "hash_kernel_ms": max(r["hash_kernel_ms"] for r in ranks), "copy_ms": max(copied, default=None),
                       "rank_kv_s": max(r["kv_s"] for r in ranks), "runner_s": max(r["runner_s"] for r in ranks)},

@@ -1,6 +1,6 @@
 """`capture_loopback.sh` with stand-ins for what it starts: a `tcpdump` that says it listens and waits for the job's
-SIGINT, or copies a capture read back; an interpreter that records the rehearsal's and the reader's command lines and
-leaves the rehearsal's deployment; and a `sleep` that returns at once. What the job gives the rehearsal for the egress
+SIGINT, or copies a capture read back; an interpreter that records the rehearsal's, the publisher's and the reader's
+command lines, leaves the rehearsal's deployment, record heads and cells' lines, and runs the publisher; and a `sleep` that returns at once. What the job gives the rehearsal for the egress
 form the launch names, and for none; that a form that isn't one, or a flag that names one, ends the job before any
 capture; and that a run in another form than the launch's isn't read."""
 from __future__ import annotations
@@ -40,6 +40,8 @@ if args[0] == "-m":
     args = args[1:]
 with open(os.environ["STUB_LOG"], "a") as f:
     f.write(json.dumps([os.path.basename(args[0]), *args[1:]]) + "\\n")
+if args[0].endswith(".auditor"):
+    os.execv({python!r}, [{python!r}, "-m", *args])
 if args[1:2] == ["rehearse"]:
     run = args[args.index("--out") + 1]
     os.makedirs(run)
@@ -49,6 +51,10 @@ if args[1:2] == ["rehearse"]:
     json.dump({{"params": {{"egress": form}}}}, open(os.path.join(run, "deployment.json"), "w"))
     for private in ("cells.salts", "ingress.records"):
         open(os.path.join(run, private), "wb").write(b"the prover's")
+    json.dump({{"head": {{"root": "ab" * 64, "counts": [1]}}, "salt_c": "cd" * 64, "certificate": {{}}}},
+              open(os.path.join(run, "certified.jsonl"), "w"))
+    json.dump({{"registration": {{"root": "ef" * 64, "wiring": "01" * 64}}, "cost": {{"rows": 1}}}},
+              open(os.path.join(run, "cells.jsonl"), "w"))
 else:
     print("the reader's table")
 """
@@ -78,11 +84,12 @@ def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_
     form; with `id` it gets `--ids` before the launch's. Either way the capture is the loopback's TCP kept at 54
     bytes a packet, which holds no content, what is kept of it is its packets on the deployment's two ports, and the
     reader gets the kept file, the front's address with its port, the relay's and the run. The run is in the job's
-    temporary directory, deleted with it, and $OUT/run keeps its public files alone. The exit is the reader's."""
+    temporary directory, deleted with it, and $OUT/run is what the gate's publisher gives of it, with no head, salt,
+    wiring or cost. The exit is the reader's."""
     for env, form in (({}, []), ({"EGRESS": "bytes"}, []), ({"EGRESS": "id"}, ["--ids"])):
         p, calls, out = job(tmp_path, "--requests", "3", "--lanes", "64", **env)
         assert p.returncode == 0, p.stdout + p.stderr
-        capture, rehearsal, kept, reader = calls
+        capture, rehearsal, publish, kept, reader = calls
         assert capture[:7] == ["tcpdump", "-i", "lo", "-U", "-s", "54", "-w"] and capture[8:] == ["tcp"]
         run = rehearsal[rehearsal.index("--out") + 1]
         assert rehearsal[1:] == ["rehearse", "--fake", "--watermark", "--out", run, *form,
@@ -91,7 +98,10 @@ def test_the_rehearsal_is_in_the_launchs_egress_form_and_in_bytes_when_it_gives_
         assert kept == ["tcpdump", "-r", capture[7], "-w", f"{out}/run.pcap", f"tcp port {FRONT} or tcp port {RELAY}"]
         assert reader == ["capture_flows.py", "--capture", f"{out}/run.pcap", "--server", f"127.0.0.1:{FRONT}",
                           "--certifier", "127.0.0.1", "--run", run, "--out", f"{out}/capture_flows.json"]
-        assert sorted(p.name for p in (out / "run").iterdir()) == ["deployment.json", "endpoints.json"]
+        assert publish == ["verity.protocols.compose.verifier.live_challenger.auditor", "publish", run, f"{out}/run"]
+        assert sorted(p.name for p in (out / "run").iterdir()) == ["deployment.json", "outcome.json"]
+        published = " ".join(p.read_text() for p in (out / "run").iterdir())
+        assert not any(s in published for s in ("head", "salt_c", "wiring", "cost", "ab" * 64, "cd" * 64, "01" * 64))
         assert (out / "run.pcap").read_bytes() == b"packets" and not Path(capture[7]).exists()
         assert (out / "capture_flows.txt").read_text() == p.stdout == "the reader's table\n"
 
@@ -111,5 +121,5 @@ def test_a_run_in_another_form_than_the_launchs_isnt_read(tmp_path):
     ran in, and the job reads a run only in the launch's."""
     p, calls, out = job(tmp_path, "--requests", "3", STUB_FORM="id")
     assert p.returncode == 1 and "the run's egress form is id, not EGRESS's (bytes)" in p.stdout, p.stdout + p.stderr
-    assert len(calls) == 2 and calls[0][0] == "tcpdump" and calls[1][1] == "rehearse"
+    assert len(calls) == 3 and calls[0][0] == "tcpdump" and calls[1][1] == "rehearse" and calls[2][1] == "publish"
     assert not (out / "run.pcap").exists() and not (out / "capture_flows.json").exists()

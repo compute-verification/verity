@@ -687,6 +687,8 @@ def _slices(root: Path) -> tuple[dict, Path]:
     assert got.returncode == 0, got.stderr
     rep, cut = json.loads(got.stdout.strip().splitlines()[-1]), root.parent / f"{root.name}-slices"
     assert "why" not in rep and rep["slices"]["bindings"] == len(json.loads((cut / "index.json").read_text())["bindings"]), rep
+    for f in cut.glob("*.json"):
+        assert f.read_bytes() == json.dumps(json.loads(f.read_bytes()), sort_keys=True, separators=(",", ":")).encode(), f
     return rep, cut
 
 

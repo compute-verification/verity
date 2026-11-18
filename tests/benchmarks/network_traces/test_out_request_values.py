@@ -1,12 +1,14 @@
 """No request value reaches a job's $OUT, which custody uploads. Each script's copy into $OUT runs on stand-in records,
 with a prompt planted in every file a request's values are in (a rehearsal's plan.json, probe.json, io.json and
-out-witness.jsonl, a network attester rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
-fields. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
+out-witness.jsonl, a network attester rehearsal's traffic.json and client.json): $OUT gets the public records and no
+file holding the prompt or a request's id fields. A network attester run reaches $OUT only through the gate's
+publisher. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
 the files that hold one on its private side."""
 from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 HERE = (Path(__file__).resolve().parents[3] / "benchmarks" / "network_traces")
@@ -70,34 +72,44 @@ def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
         "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 
 
-def test_n2_zk_publishes_a_network_attester_runs_public_files_and_not_its_traffic_or_responses(tmp_path):
+#: a network attester run's files, the gate's publisher's input: a record head with its frames' root and the
+#: attester's salt, a registration with its wiring and a line's cost, the attester's own records, and the run's
+#: request values
+NETWORK_ATTESTER_RUN = {
+    "deployment.json": {"windows": 2, "origin_raw": 7}, "groups.json": {"groups": []},
+    "cells.jsonl": [{"registration": {"root": "ab" * 64, "wiring": "17" * 64}, "cost": {"rows": 1}}],
+    "certified.jsonl": [{"window": 0, "head": {"root": "cd" * 64}, "salt_c": "ef" * 64}],
+    "check.json": {"accepted": True}, "warden.json": {"process": {}}, "endpoints.json": {"listen": ["127.0.0.1", 1]},
+    "serve.log": "serving\n", "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
+    "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]},
+}
+
+
+def holds_none_of_the_run(out: Path, at: str) -> None:
+    """$OUT holds what the gate's publisher gives of a run with no accepted lines, and no head, salt, wiring, cost or
+    deployment key the gate keeps."""
+    assert published(out) == [f"{at}/deployment.json", f"{at}/groups.json", f"{at}/outcome.json"]
+    assert json.loads((out / at / "deployment.json").read_text()) == {"windows": 2}
+    text = "".join(p.read_text() for p in (out / at).iterdir())
+    assert not any(v in text for v in ("cd" * 64, "ef" * 64, "17" * 64, "salt_c", "wiring", "cost", "head"))
+
+
+def test_n2_zk_publishes_what_the_gate_publishes_of_a_network_attester_run(tmp_path):
     r, out = tmp_path / "run", tmp_path / "OUT"
-    public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
-              "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
-              "warden.json": {"process": {}}}
-    put(r, {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
-            "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
+    put(r, NETWORK_ATTESTER_RUN)
     out.mkdir()
-    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', "done"), RUN=r, OUT=out)
+    got = run(block("n2_zk.sh", 'mkdir -p "$OUT/run"', '"$PY" -m'), RUN=r, OUT=out, PY=sys.executable)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"run/{f}" for f in public)
+    holds_none_of_the_run(out, "run")
 
 
-def test_scan_zk_copies_six_files_of_its_own_rehearsal_and_not_its_traffic_or_responses(tmp_path):
-    """The six files the scan's job copies of its own rehearsal hold no request value. They are not public files:
-    `cells.jsonl` holds each registration whole with its cost, which a gate's run keeps on its private side (the
-    wiring and the cost's two times are private), and `certified.jsonl`, `check.json`, `warden.json` and `serve.log`
-    are the network attester's own records."""
+def test_scan_zk_publishes_what_the_gate_publishes_of_its_own_rehearsal(tmp_path):
     w, out = tmp_path / "W", tmp_path / "OUT"
-    copied = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
-              "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
-              "warden.json": {"process": {}}, "serve.log": "serving\n"}
-    put(w / "warden", {**copied, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
-                       "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
+    put(w / "warden", NETWORK_ATTESTER_RUN)
     out.mkdir()
-    got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  done"), W=w, OUT=out)
+    got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', '  "$PY" -m'), W=w, OUT=out, PY=sys.executable)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"warden/{f}" for f in copied)
+    holds_none_of_the_run(out, "warden")
 
 
 def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_path):
