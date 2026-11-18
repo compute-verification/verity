@@ -197,8 +197,9 @@ class NodeWindow:
         #: each gathered row by the writer rows it holds, and each first-level chunk by its first writer row
         self.wholes: dict[tuple[Row, ...], Row] = {}
         self.chunks: dict[Row, tuple[tuple[Row, ...], Row]] = {}
-        #: each port `feed_rows` fed, by template and port: its cut and the rows it fed, ``(row, first unit, end unit, how)``
-        self.row_fed: dict[tuple[str, str], tuple[int, list[tuple[int, int, int, str]]]] = {}
+        #: each port `feed_rows` fed, by template and port: the rows it fed, ``(row, first unit, end unit, how)``; its cut is
+        #: in ``b.cuts``
+        self.row_fed: dict[tuple[str, str], list[tuple[int, int, int, str]]] = {}
         #: each allocation's node, by template and first unit
         self.node_of: dict[tuple[str, int], int] = {}
         #: with ``stand_ins``: each port left free over a stand-in row, ``(tid, port, at, count, (first, rows, of), grid)``, its
@@ -392,10 +393,11 @@ class NodeWindow:
         words, n = dict(lay.rows)[port], dict(zip((p for p, _ in lay.rows), lay.outer))[port]
         if words % k or n % k:
             raise Unexpressible(f"{tid} {port}: {n} elements, {words} words, cut {k} ways")
-        cut, fed = self.row_fed.setdefault((tid, port), (k, []))
-        if cut != k:
-            raise Unexpressible(f"{tid} {port}: row-fed cut {k} ways, and {cut} ways before; a port is cut one way")
-        self.b.cuts.setdefault(tid, {})[port] = k
+        cuts = self.b.cuts.setdefault(tid, {})
+        if (tid, port) in self.row_fed and cuts[port] != k:
+            raise Unexpressible(f"{tid} {port}: row-fed cut {k} ways, and {cuts[port]} ways before; a port is cut one way")
+        fed = self.row_fed.setdefault((tid, port), [])
+        cuts[port] = k
         for i, grid in enumerate(grids):
             stood = self.stand_ins and not isinstance(grid, _Free) and any(_stands(rows) for rows in grid)
             fed.append((i, at, at + count, "free" if isinstance(grid, _Free) or stood else "wired"))
@@ -574,8 +576,6 @@ class NodeWindow:
             raise Unexpressible(f"{self.name}: stand-in rows reached `_Builder.feed` for {bad}: a lowering fed a take to the "
                                 "builder itself, which ``stand_ins`` can't follow")
         b.settle()
-        if bad := [f"{tid} {port} {k}" for (tid, port), (k, _) in self.row_fed.items() if b.cuts.get(tid, {}).get(port) != k]:
-            raise Unexpressible(f"{self.name}: {len(bad)} row-fed ports' cuts changed after `feed_rows`: " + "; ".join(bad))
         roots, openings = b.merged()
         wide = {r.param for r in b.reads if dict(b.fns[r.reader].signature()[0])[r.port].homogeneous_width() == 32}
         reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)),
@@ -593,9 +593,9 @@ class NodeWindow:
         """Refuse, naming each, a port `feed_rows` fed that is also fed whole (`_Builder.feed`, or left free whole by
         `feed`), and a row of a unit it fed twice (wired twice, free twice, or wired and free)."""
         whole = set(self.b.read_rows) | {(f.tid, f.port) for f in self.free if f.rows[2] == 1}
-        why = [f"{tid} {port}: fed row by row, cut {k} ways, and whole" for (tid, port), (k, _) in self.row_fed.items()
+        why = [f"{tid} {port}: fed row by row, cut {self.b.cuts[tid][port]} ways, and whole" for tid, port in self.row_fed
                if (tid, port) in whole]
-        for (tid, port), (_k, fed) in self.row_fed.items():
+        for (tid, port), fed in self.row_fed.items():
             end: dict[int, tuple[int, str]] = {}
             for i, lo, hi, how in sorted(fed):
                 if i in end and lo < end[i][0]:

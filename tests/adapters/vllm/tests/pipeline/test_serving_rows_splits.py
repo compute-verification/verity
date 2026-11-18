@@ -17,11 +17,10 @@ in blocks of 16, 16 and 8, in two splits, two heads, DV = 32: one column block):
 A row's key blocks are served as scores and values units instead where the partition names those templates (``UNITS``, the cut
 `sparse_mla_split.split_chain` at ``cols``): per key block a ``SparseMlaHeadScoresCols_v1``, a ``SparseMlaHeadValues_v1`` per
 column block and a ``SparseMlaHeadKeysWire_v1`` per column block of its key rows, which every head's scores and values units
-read, each split's end on each column block (``SparseMlaSplitEnd_v1``) and the combines of those.  The same checks hold of that
-window at DV = 64 and DR = 32 in column blocks of 32 (``HALF``): what each unit reads and returns, the wires, the Boolean
-bodies, and the commitment.  Every scores and values unit reads its keys from one committed row a column block, its writer's,
-so a unit whose key rows are not its writer's is refused: when the window is committed, at registration where they are a
-tree of its own, and when the unit is sampled where its reference names another row of its writer's table.
+read, each split's end on each column block (``SparseMlaSplitEnd_v1``) and the combines of those.  At DV = 64 and DR = 32 in
+column blocks of 32 (``HALF``) what each unit reads and returns and its Boolean body hold as above; its window's split
+ends read the scores units of two templates, a port reading two templates' trees, which `chain_rows.pieces` refuses by
+name, so that window is not built.
 
 `test_a_window_of_one_row_commits_and_its_wires_hold` takes minutes, all of it the window's population program lowering the
 five templates: it is the one test of the committed window and its public bodies, which the others reach only through the rows.
@@ -32,14 +31,12 @@ Boolean body (``SparseMlaHeadBlock_v2``): the same units, rows and wires, staged
 from __future__ import annotations
 
 import re
-from dataclasses import replace
 
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
 from verity.commitments.periods import interface as IF
 from verity.commitments.periods import rows as CS
-from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
@@ -53,12 +50,9 @@ from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.program_view import spec_statics
 
-from verity.protocols.proofs.spot.verifier.one_stage import docket as R
-from verity.protocols.proofs.spot.prover import docket as DK
 from verity.commitments import randomness as RND
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Tuple, field_types
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
@@ -222,12 +216,6 @@ def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
     return SRW.read_all(ms, [s.rows] * len(tmpls), s, None)
 
 
-def held_values(w: CS.Binding, got: list[tuple[dict, list]]) -> list[dict]:
-    """``w``'s members' values ``got`` (`read`'s) as serving commits them: each port a member holds in its writer's tree given
-    as its writer's (`chain_rows.held_rows`)."""
-    return CH.held_rows(w, [g for g, _e in got])
-
-
 @pytest.fixture(autouse=True)
 def _slices(monkeypatch):
     """`serving_rows._slices` back after each test, which `read` replaces."""
@@ -240,46 +228,8 @@ def stager(t: str) -> UnitStager:
     return st
 
 
-def committed(ms, got) -> dict:
-    """Every port's words of ``ms`` as read (``got``), each wired row held to its writer's output row (`chain_rows.check_held`)."""
-    ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
-    CH.check_held(ms, [g for g, _e in got])
-    return ws
-
-
 def is_keys(t: str) -> bool:
     return CH.kind(SRW.template(t)) == "keys"
-
-
-def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = int(TOY["NH"]), rows: int = 1) -> dict[tuple, int]:
-    """The global unit of each (row, head, place) in its head's chain: a template's units row by row, then head, then its
-    places; a key rows' writer's (`key_units`) are not a head's."""
-    out: dict[tuple, int] = {}
-    for t in tmpls:
-        if is_keys(t):
-            continue
-        u = min(m.base for m in ms if m.template == t)
-        for p in range(rows):
-            for h in range(NH):
-                for j in places[t]:
-                    out[(p, h, j)], u = u, u + 1
-    return out
-
-
-def key_units(ms, tmpls, places: dict[str, list[int]], rows: int = 1) -> dict[tuple, int]:
-    """The global unit of each (row, place) of a key rows' writer in its row (`chain_rows.key_places`): a template's units row
-    by row, then its places."""
-    out: dict[tuple, int] = {}
-    for t in filter(is_keys, tmpls):
-        u = min(m.base for m in ms if m.template == t)
-        for p in range(rows):
-            for j in places[t]:
-                out[(p, j)], u = u, u + 1
-    return out
-
-
-def words(x) -> list[int]:
-    return np.asarray(x, dtype=np.uint32).reshape(-1).view("<u2").tolist()
 
 
 def test_a_split_row_holds_each_split_s_chain_its_column_ends_and_the_combines():
@@ -442,120 +392,6 @@ def test_every_served_scores_and_values_unit_composes_and_verify_zk_takes_it():
     assert floors == [26, 25, *(23,) * 8, *(22,) * 8, 22, 22, *(24,) * 9, *(22,) * 9]
 
 
-def other_keys(s: Served, w: CS.Binding) -> tuple[list[dict], int]:
-    """``s``'s rows read for ``w`` (over ``UNITS``) with head 0's values unit of split 1's first block on the keys' other 32
-    columns, as its column block of the keys, and its O, its split's end and the combine recomputed from them, so that every
-    unit's outputs are its Definition's on its own rows and the combines' row is not the served one; and that unit's
-    member."""
-    got = [g for g, _e in read(s, w.members, UNITS)]
-    unit = units(w.members, UNITS, UNITS_PLACES)
-
-    def held(t: str, at: int) -> tuple[int, int]:
-        u = unit[(0, 0, UNITS_PLACES[t][at])]
-        k = next(k for k, m in enumerate(w.members) if m.base <= u < m.base + m.n)
-        return k, u - w.members[k].base
-
-    def put(k: int, i: int, **ports) -> None:
-        for q, a in ports.items():
-            x = "rows" if q.startswith("in") else "outs"
-            got[k] = {**got[k], x: {**got[k][x], q: got[k][x][q].copy()}}
-            got[k][x][q][i] = np.asarray(a).reshape(-1)
-
-    def f32(a) -> np.ndarray:
-        return np.ascontiguousarray(a).view("<u4")
-
-    (sc, i), (va, j), (en, e), (co, c) = held(UNITS[2], 0), held(UNITS[5], 0), held(UNITS[6], 2), held(UNITS[7], 0)
-    assert np.array_equal(got[va]["rows"]["in1"][j], got[sc]["rows"]["in2"][i])
-    other = got[sc]["rows"]["in3"][i]
-    o = evaluate_batch(SRW.template(UNITS[5]).fn, got[va]["rows"]["in0"][j:j + 1], other.reshape(1, -1)).astype(np.uint32)
-    part, _lse = TW.split_end_rows(f32(got[en]["rows"]["in0"][e]), f32(got[en]["rows"]["in1"][e]).reshape(1, 4), o,
-                                   scale=HALF["SCALE"])
-    y = TW.combine_rows(np.stack([f32(got[co]["rows"][f"in0.{sp}"][c]) for sp in range(2)], axis=1),
-                        np.stack([f32(got[co]["rows"]["in1.0"][c]).reshape(1, 32), part], axis=1))
-    put(va, j, in1=other, o0=words(o))
-    put(en, e, in2=words(o), o0=words(part))
-    put(co, c, **{"in1.1": words(part), "o0": y})
-    for m, g in zip(w.members, got):
-        stager(m.template).reference_check(g["rows"], g["outs"])
-    assert not np.array_equal(got[va]["rows"]["in1"][j], got[sc]["rows"]["in2"][i])
-    served = np.concatenate([g["outs"]["o0"].reshape(-1) for m, g in zip(w.members, got) if m.template == UNITS[7]])
-    assert served.tolist() != s.y.tolist()
-    return got, va
-
-
-def test_a_values_unit_on_other_keys_than_its_block_s_scores_unit_is_refused():
-    """Every head's scores and values units of a key block read its keys from one committed row a column block, its writer's
-    (`chain_rows.wire`): their key ports have no tree of their own.  A values unit on other keys than its block's scores unit
-    (`other_keys`) is refused before anything is committed, since its key rows are not its writer's output rows; a prover that
-    commits them in a tree of their own is refused at registration, and one whose reference names another row of its writer's
-    table when the unit is sampled (the two tests after this one)."""
-    s = Served(row(HALF))
-    w = window(s, UNITS, UNITS_CHUNK)
-    got, va = other_keys(s, w)
-    m = w.members[va]
-    writer = w.held(m, "in1").rsplit("/", 1)[0]
-    with pytest.raises(ValueError, match=re.escape(f"{m.key}: its 'in1' rows are not the 'o0' rows of the {writer} units that "
-                                                   "write them")):
-        CH.held_rows(w, got)
-
-
-def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registration():
-    """The copies a prover could commit instead of its writers' rows: the window with every scores and values unit's key rows
-    a tree of its own and wired to nothing, one values unit on other keys than its block's scores unit (`other_keys`).  It
-    commits, and its registration is refused on the ports the verifier derives, which hold no tree of a unit's key rows
-    (``R3-ports``); the window's own registers on them."""
-    s, design = Served(row(HALF)), RND.parse_design("stratified:1")
-    w = window(s, UNITS, UNITS_CHUNK, design)
-    at, keyed = WI.bases(w.members), {m.key for m in w.members if is_keys(m.template)}
-    copies = replace(w, members=tuple(replace(m, wired=tuple(x for x in m.wired if WI.writers(w.members, x[2], at)[0][0].key
-                                                              not in keyed), wired_trees=True, tables=()) for m in w.members))
-    assert sum(len(m.wired) for m in copies.members) < sum(len(m.wired) for m in w.members)
-
-    def codes(win: CS.Binding, data: list[dict]) -> tuple[str, ...]:
-        c = CS.commit(win, data)
-        rec = CS.registration(c, {"by": "test"}, None, registrar=DK)
-        return tuple(R.check(rec, w.program, w.query, design, CS.SCHEME, CS.expected_ports(w),
-                             leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
-
-    assert "R3-ports" in codes(copies, other_keys(s, copies)[0])
-    assert "R3-ports" not in codes(w, held_values(w, read(s, w.members, UNITS)))
-
-
-def test_a_unit_in_the_sample_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
-    """A scores or values unit's key rows are its reference into its writer member's table (its public body, which the leaf
-    layer binds).  Head 0's values unit of split 0's first block, on column block 0, with its reference to the next row of
-    the table, another key block's, or with its port wired to the writer of column block 1 of its own key block, a member
-    of another template: the wiring check on the sample refuses it when the sample holds that unit, and not when it holds
-    only the member's other units."""
-    s = Served(row(HALF))
-    w = window(s, UNITS, UNITS_CHUNK)
-    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)))
-    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
-    kp = CH.key_places(HALF)
-    writer = {(kp[j].split, kp[j].block, kp[j].col): u for (_p, j), u in key_units(w.members, UNITS, UNITS_PLACES).items()}
-    u = units(w.members, UNITS, UNITS_PLACES)[(0, 0, UNITS_PLACES[UNITS[3]][0])]
-    m = next(m for m in w.members if m.base <= u < m.base + m.n)
-    wm = next(x for x in w.members if x.port("o0") == w.held(m, "in1"))
-    i, names = u - m.base, [q for q, _ in m.all_rows]
-    assert wm.base + w.held_leaves(m, "in1")[i] == writer[(0, 0, 0)] and not wm.base <= writer[(0, 0, 1)] < wm.base + wm.n
-
-    def ref(r: int) -> dict[str, bytes]:
-        at = WI.BC_BYTES * sum(dict(m.tables).get(q, m.n) for q in names) + 4 * (i * len(names) + names.index("in1"))
-        body = bytearray(publics[m.key])
-        body[at:at + 4] = int(r).to_bytes(4, "little")
-        return {**publics, m.key: bytes(body)}
-
-    on_sample = WI.check_drawn
-    assert on_sample(w.members, ref(writer[(0, 0, 0)] - wm.base), [u]) == {}
-    w1 = next(x for x in w.members if x.base <= writer[(0, 0, 1)] < x.base + x.n)
-    rewired = [replace(x, wired=tuple((q, o, tuple(writer[(0, 0, 1)] if k == i else v for k, v in enumerate(ws)) if q == "in1"
-                                       else ws) for q, o, ws in x.wired)) if x is m else x for x in w.members]
-    for ms, bodies, who in ((w.members, ref((writer[(0, 0, 0)] - wm.base + 1) % wm.n), wm), (rewired, publics, w1)):
-        got = on_sample(ms, bodies, [u])
-        assert list(got) == [m.key] and got[m.key].endswith(f" in1 strings are not the o0 strings of the {who.key} units that wrote them")
-        assert on_sample(ms, bodies, [x for x in range(m.base, m.base + m.n) if x != u]) == {}
-
-
 def test_a_key_rows_writer_whose_return_is_not_its_input_is_refused_by_its_definition():
     """A key rows' writer returns its input: an output row that is not its input row is not its Definition's output (the
     Boolean body's own refusal is the Definitions' test)."""
@@ -575,3 +411,13 @@ def test_a_split_end_reading_two_block_templates_is_refused_by_name():
     reading two templates' trees, which `chain_rows.pieces` refuses by name."""
     with pytest.raises(ValueError, match=NAME):
         members(Served(n=2))
+
+
+def test_a_split_end_reading_two_scores_templates_is_refused_by_name():
+    """With its key blocks served as scores and values units (``UNITS``), a split's end reads the scores units of its first
+    block and of the full block after it, two templates: one port reading two templates' trees, which `chain_rows.pieces`
+    refuses by name. The window has no cut of that port per writer template, so neither its key rows' checks (a values unit
+    on other keys, a copy of its key rows, a reference to another row of its writer's table) nor its commitment is built.
+    `chain_rows`' wiring goes when the verifier derives positions from the registered circuit."""
+    with pytest.raises(ValueError, match=NAME):
+        window(Served(row(HALF)), UNITS, UNITS_CHUNK)
