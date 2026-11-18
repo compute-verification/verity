@@ -8,13 +8,13 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Poub.RemoteHeld
 
 /-!
-# The certifiers' observation against the receipts' sketch bound and its derivation
+# The network attesters' observation against the receipts' sketch bound and its derivation
 
 Where nothing but the verifier's messages entered the node over the credited passes of an accepting outcome, the
-certifiers' coverage of its uplinks (`Covered`) leaves no device outside the node computing for it then, so a block on
+network attesters' coverage of its uplinks (`Covered`) leaves no device outside the node computing for it then, so a block on
 the node or computed on outside it for the node at a tick of a pass was on the node (`onNode_of_covered`). So:
 
-* `SketchBoundAt` and `Covered` give the receipts' sketch bound where the certifiers observed nothing else entering
+* `SketchBoundAt` and `Covered` give the receipts' sketch bound where the network attesters observed nothing else entering
   (`Quiet` at `Ingress.counted`), at `δ + δ_net` with their count (`IngressCounted`, `sketchBound_of_covered`), and
   `SketchBound` gives `SketchBoundAt` at every record of outside computation (`sketchBoundAt_of_sketchBound`);
 * the sketch model's `Present` is `PresentAt`, the same with outside computation allowed, under `Covered` where nothing
@@ -43,8 +43,8 @@ theorem onNode_of_covered (hC : Covered T O I) {ω : Ω} (ha : T.accepts ω) (hq
 
 variable [Fintype Ω]
 
-/-- `SketchBoundAt` at `δ`, `Covered` and the certifiers' count at `δnet` give the receipts' sketch bound where the
-certifiers observed nothing but the verifier's messages entering, at `δ + δnet`. -/
+/-- `SketchBoundAt` at `δ`, `Covered` and the network attesters' count at `δnet` give the receipts' sketch bound where the
+network attesters observed nothing but the verifier's messages entering, at `δ + δnet`. -/
 theorem sketchBound_of_covered {δ δnet : ℝ} (hk : SketchBoundAt T O δ) (hC : Covered T O I)
     (hI : IngressCounted T I δnet) :
     T.Holds (δ + δnet) fun ω => Quiet T I.counted ω →
